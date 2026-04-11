@@ -1,0 +1,661 @@
+import taskRepository from './task.repository.js';
+import taskListRepository from './taskList.repository.js';
+import TaskListMember from './taskListMember.model.js';
+import cacheManager from '../../shared/cache/CacheManager.js';
+import eventBus from '../../shared/events/EventBus.js';
+import EVENT_TYPES from '../../shared/events/eventTypes.js';
+import auditService from '../auth/audit.service.js';
+import { AppError, NotFoundError } from '../../shared/errors/AppError.js';
+import ERROR_CODES from '../../shared/errors/errorCodes.js';
+import { TASK_STATUSES, MAX_SUBTASK_DEPTH } from './task.model.js';
+import config from '../../config/index.js';
+import logger from '../../shared/logger/index.js';
+
+const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
+const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
+
+class TaskService {
+  async create(data, userId, meta = {}) {
+    let { listId } = data;
+
+    // Default list if none provided
+    if (!listId) {
+      const taskListService = (await import('./taskList.service.js')).default;
+      const defaultList = await taskListService.ensureDefaultList(userId);
+      listId = defaultList._id;
+    } else {
+      // Validate list exists and user has access
+      const list = await taskListRepository.findById(listId);
+      if (!list) throw new NotFoundError('TaskList', listId);
+      await this._checkListAccess(list, userId);
+    }
+
+    // Default assignee to creator
+    const assigneeId = data.assigneeId || userId;
+
+    // Validate projectId and orderId are not both set
+    if (data.projectId && data.orderId) {
+      throw new AppError(
+        'Task cannot be linked to both a project and an order',
+        400,
+        ERROR_CODES.TASK_PROJECT_ORDER_CONFLICT,
+      );
+    }
+
+    const task = await taskRepository.create({
+      ...data,
+      listId,
+      assigneeId,
+      createdBy: userId,
+    });
+
+    await this._invalidateListTasksCache(listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_CREATED, {
+      taskId: task._id,
+      listId,
+      createdBy: userId,
+      assigneeId,
+      title: task.title,
+    });
+
+    if (String(assigneeId) !== String(userId)) {
+      eventBus.publish(EVENT_TYPES.TASK_ASSIGNED, {
+        taskId: task._id,
+        assigneeId,
+        assignedBy: userId,
+        title: task.title,
+      });
+    }
+
+    auditService.logEvent({
+      eventType: 'task.created',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: task._id, title: task.title, listId, assigneeId },
+      module: 'tasks',
+    });
+
+    logger.info('Task created', { module: 'tasks', action: 'create', taskId: task._id, userId });
+
+    return taskRepository.findById(task._id);
+  }
+
+  async getById(id, userId) {
+    const cacheKey = `tasks:task:${id}`;
+    const task = await cacheManager.getOrSet(
+      cacheKey,
+      async () => {
+        const t = await taskRepository.findById(id);
+        if (!t) return null;
+
+        // Lazy aggregation for counts
+        const [subtasks, notes, attachments] = await Promise.all([
+          taskRepository.findByParentId(id),
+          this._countNotes(id),
+          this._countAttachments(id),
+        ]);
+
+        return {
+          ...t,
+          subtaskCount: subtasks.length,
+          noteCount: notes,
+          attachmentCount: attachments,
+        };
+      },
+      ENTITY_TTL,
+    );
+
+    if (!task) throw new NotFoundError('Task', id);
+
+    await this._checkTaskAccess(task, userId);
+
+    return task;
+  }
+
+  async list(queryParams, userId) {
+    const { cursor, limit, sortBy, sortOrder, ...filters } = queryParams;
+    const filterKey = Object.entries(filters)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&');
+    const cacheKey = `tasks:tasks:list:${userId}:${cursor || ''}:${limit}:${sortBy}:${sortOrder}:${filterKey}`;
+
+    return cacheManager.getOrSet(
+      cacheKey,
+      () => taskRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters }),
+      LIST_TTL,
+    );
+  }
+
+  async update(id, data, userId, meta = {}) {
+    const existing = await taskRepository.findById(id);
+    if (!existing) throw new NotFoundError('Task', id);
+
+    await this._checkTaskAccess(existing, userId);
+
+    const updated = await taskRepository.updateById(id, { ...data, updatedBy: userId });
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(existing.listId);
+
+    // Publish events for specific field changes
+    if (data.assigneeId && String(data.assigneeId) !== String(existing.assigneeId)) {
+      eventBus.publish(EVENT_TYPES.TASK_ASSIGNED, {
+        taskId: id,
+        assigneeId: data.assigneeId,
+        previousAssigneeId: existing.assigneeId,
+        assignedBy: userId,
+        title: existing.title,
+      });
+    }
+
+    if (data.dueDate && String(data.dueDate) !== String(existing.dueDate)) {
+      eventBus.publish(EVENT_TYPES.TASK_DUE_DATE_CHANGED, {
+        taskId: id,
+        previousDueDate: existing.dueDate,
+        newDueDate: data.dueDate,
+        changedBy: userId,
+      });
+    }
+
+    auditService.logEvent({
+      eventType: 'task.updated',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, changedFields: Object.keys(data) },
+      module: 'tasks',
+    });
+
+    logger.info('Task updated', { module: 'tasks', action: 'update', taskId: id, userId });
+
+    return updated;
+  }
+
+  async remove(id, userId, meta = {}) {
+    const task = await taskRepository.findById(id);
+    if (!task) throw new NotFoundError('Task', id);
+
+    await this._checkTaskAccess(task, userId);
+
+    // Soft delete the task
+    await taskRepository.softDelete(id);
+
+    // Soft delete all subtasks
+    const subtasks = await taskRepository.findByParentId(id);
+    for (const subtask of subtasks) {
+      await taskRepository.softDelete(subtask._id);
+      await this._invalidateTaskCache(subtask._id);
+    }
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(task.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_DELETED, {
+      taskId: id,
+      listId: task.listId,
+      deletedBy: userId,
+      title: task.title,
+    });
+
+    auditService.logEvent({
+      eventType: 'task.deleted',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, title: task.title, subtasksDeleted: subtasks.length },
+      module: 'tasks',
+    });
+
+    logger.info('Task deleted', { module: 'tasks', action: 'remove', taskId: id, userId });
+
+    return { deleted: true };
+  }
+
+  async changeStatus(id, status, userId, meta = {}) {
+    const task = await taskRepository.findById(id);
+    if (!task) throw new NotFoundError('Task', id);
+
+    await this._checkTaskAccess(task, userId);
+
+    const previousStatus = task.status;
+    const updateData = { status, updatedBy: userId };
+
+    // Handle completion
+    if (status === 'COMPLETED') {
+      updateData.completedAt = new Date();
+      updateData.completedBy = userId;
+    }
+
+    // Handle cancellation
+    if (status === 'CANCELLED') {
+      updateData.cancelledAt = new Date();
+    }
+
+    // Handle reopening from completed
+    if (previousStatus === 'COMPLETED' && status !== 'COMPLETED') {
+      updateData.completedAt = null;
+      updateData.completedBy = null;
+    }
+
+    const updated = await taskRepository.updateById(id, updateData);
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(task.listId);
+
+    if (status === 'COMPLETED') {
+      eventBus.publish(EVENT_TYPES.TASK_COMPLETED, {
+        taskId: id,
+        completedBy: userId,
+        title: task.title,
+      });
+    } else if (previousStatus === 'COMPLETED') {
+      eventBus.publish(EVENT_TYPES.TASK_REOPENED, {
+        taskId: id,
+        reopenedBy: userId,
+        title: task.title,
+      });
+    } else {
+      eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+        taskId: id,
+        previousStatus,
+        newStatus: status,
+        changedBy: userId,
+      });
+    }
+
+    auditService.logEvent({
+      eventType: 'task.status_changed',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, previousStatus, newStatus: status },
+      module: 'tasks',
+    });
+
+    logger.info('Task status changed', { module: 'tasks', action: 'changeStatus', taskId: id, previousStatus, newStatus: status, userId });
+
+    return updated;
+  }
+
+  async complete(id, userId, meta = {}, { completeSubtasks = false } = {}) {
+    const task = await taskRepository.findById(id);
+    if (!task) throw new NotFoundError('Task', id);
+
+    await this._checkTaskAccess(task, userId);
+
+    if (task.status === 'COMPLETED') {
+      throw new AppError('Task is already completed', 400, ERROR_CODES.TASK_ALREADY_COMPLETED);
+    }
+
+    const now = new Date();
+    const updated = await taskRepository.updateById(id, {
+      status: 'COMPLETED',
+      completedAt: now,
+      completedBy: userId,
+      updatedBy: userId,
+    });
+
+    // Optionally complete all subtasks
+    if (completeSubtasks) {
+      const subtasks = await taskRepository.findByParentId(id);
+      for (const subtask of subtasks) {
+        if (subtask.status !== 'COMPLETED') {
+          await taskRepository.updateById(subtask._id, {
+            status: 'COMPLETED',
+            completedAt: now,
+            completedBy: userId,
+            updatedBy: userId,
+          });
+          await this._invalidateTaskCache(subtask._id);
+        }
+      }
+    }
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(task.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_COMPLETED, {
+      taskId: id,
+      completedBy: userId,
+      title: task.title,
+      subtasksCompleted: completeSubtasks,
+    });
+
+    auditService.logEvent({
+      eventType: 'task.completed',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, title: task.title, completeSubtasks },
+      module: 'tasks',
+    });
+
+    logger.info('Task completed', { module: 'tasks', action: 'complete', taskId: id, userId, completeSubtasks });
+
+    return updated;
+  }
+
+  async reopen(id, userId, meta = {}) {
+    const task = await taskRepository.findById(id);
+    if (!task) throw new NotFoundError('Task', id);
+
+    await this._checkTaskAccess(task, userId);
+
+    if (task.status !== 'COMPLETED') {
+      throw new AppError('Only completed tasks can be reopened', 400, ERROR_CODES.TASK_NOT_COMPLETED);
+    }
+
+    const updated = await taskRepository.updateById(id, {
+      status: 'OPEN',
+      completedAt: null,
+      completedBy: null,
+      updatedBy: userId,
+    });
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(task.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_REOPENED, {
+      taskId: id,
+      reopenedBy: userId,
+      title: task.title,
+    });
+
+    auditService.logEvent({
+      eventType: 'task.reopened',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, title: task.title },
+      module: 'tasks',
+    });
+
+    logger.info('Task reopened', { module: 'tasks', action: 'reopen', taskId: id, userId });
+
+    return updated;
+  }
+
+  async moveToList(id, listId, userId, meta = {}) {
+    const task = await taskRepository.findById(id);
+    if (!task) throw new NotFoundError('Task', id);
+
+    await this._checkTaskAccess(task, userId);
+
+    // Validate target list access
+    const targetList = await taskListRepository.findById(listId);
+    if (!targetList) throw new NotFoundError('TaskList', listId);
+    await this._checkListAccess(targetList, userId);
+
+    const previousListId = task.listId;
+    const updated = await taskRepository.updateById(id, { listId, updatedBy: userId });
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(previousListId);
+    await this._invalidateListTasksCache(listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_MOVED, {
+      taskId: id,
+      previousListId,
+      newListId: listId,
+      movedBy: userId,
+      title: task.title,
+    });
+
+    auditService.logEvent({
+      eventType: 'task.moved',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, previousListId, newListId: listId },
+      module: 'tasks',
+    });
+
+    logger.info('Task moved to list', { module: 'tasks', action: 'moveToList', taskId: id, previousListId, newListId: listId, userId });
+
+    return updated;
+  }
+
+  async bulkOperation(action, taskIds, data, userId, meta = {}) {
+    if (taskIds.length > 100) {
+      throw new AppError('Bulk operation limited to 100 tasks', 400, ERROR_CODES.TASK_BULK_LIMIT_EXCEEDED);
+    }
+
+    let result;
+
+    switch (action) {
+      case 'updateStatus': {
+        result = await taskRepository.bulkUpdate(taskIds, { status: data.status, updatedBy: userId });
+        break;
+      }
+      case 'reassign': {
+        result = await taskRepository.bulkUpdate(taskIds, { assigneeId: data.assigneeId, updatedBy: userId });
+        break;
+      }
+      case 'updatePriority': {
+        result = await taskRepository.bulkUpdate(taskIds, { priority: data.priority, updatedBy: userId });
+        break;
+      }
+      case 'moveToList': {
+        const targetList = await taskListRepository.findById(data.listId);
+        if (!targetList) throw new NotFoundError('TaskList', data.listId);
+        await this._checkListAccess(targetList, userId);
+        result = await taskRepository.bulkUpdate(taskIds, { listId: data.listId, updatedBy: userId });
+        break;
+      }
+      case 'delete': {
+        result = await taskRepository.bulkUpdate(taskIds, { isDeleted: true, deletedAt: new Date() });
+        break;
+      }
+      default: {
+        throw new AppError(`Unknown bulk action: ${action}`, 400, ERROR_CODES.VALIDATION_ERROR);
+      }
+    }
+
+    // Invalidate caches for all affected tasks
+    for (const taskId of taskIds) {
+      await this._invalidateTaskCache(taskId);
+    }
+
+    auditService.logEvent({
+      eventType: 'task.bulk_operation',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { action, taskCount: taskIds.length, data },
+      module: 'tasks',
+    });
+
+    logger.info('Bulk task operation', { module: 'tasks', action: 'bulkOperation', bulkAction: action, taskCount: taskIds.length, userId });
+
+    return { action, modifiedCount: result };
+  }
+
+  async createSubtask(parentId, data, userId, meta = {}) {
+    const parent = await taskRepository.findById(parentId);
+    if (!parent) throw new NotFoundError('Task', parentId);
+
+    await this._checkTaskAccess(parent, userId);
+
+    if (parent.depth >= MAX_SUBTASK_DEPTH) {
+      throw new AppError(
+        `Maximum subtask depth of ${MAX_SUBTASK_DEPTH} exceeded`,
+        400,
+        ERROR_CODES.TASK_DEPTH_EXCEEDED,
+      );
+    }
+
+    const subtaskData = {
+      ...data,
+      parentTaskId: parentId,
+      depth: parent.depth + 1,
+      listId: parent.listId,
+      projectId: parent.projectId,
+      orderId: parent.orderId,
+      assigneeId: data.assigneeId || userId,
+      createdBy: userId,
+    };
+
+    const subtask = await taskRepository.create(subtaskData);
+
+    await this._invalidateTaskCache(parentId);
+    await this._invalidateListTasksCache(parent.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_CREATED, {
+      taskId: subtask._id,
+      parentTaskId: parentId,
+      listId: parent.listId,
+      createdBy: userId,
+      title: subtask.title,
+    });
+
+    auditService.logEvent({
+      eventType: 'task.subtask_created',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { subtaskId: subtask._id, parentTaskId: parentId, title: subtask.title },
+      module: 'tasks',
+    });
+
+    logger.info('Subtask created', { module: 'tasks', action: 'createSubtask', subtaskId: subtask._id, parentTaskId: parentId, userId });
+
+    return taskRepository.findById(subtask._id);
+  }
+
+  async getSubtasks(parentId) {
+    const parent = await taskRepository.findById(parentId);
+    if (!parent) throw new NotFoundError('Task', parentId);
+
+    return taskRepository.findByParentId(parentId);
+  }
+
+  async promote(id, userId, meta = {}) {
+    const task = await taskRepository.findById(id);
+    if (!task) throw new NotFoundError('Task', id);
+
+    await this._checkTaskAccess(task, userId);
+
+    const updated = await taskRepository.updateById(id, {
+      parentTaskId: null,
+      depth: 0,
+      updatedBy: userId,
+    });
+
+    await this._invalidateTaskCache(id);
+    if (task.parentTaskId) {
+      await this._invalidateTaskCache(task.parentTaskId);
+    }
+    await this._invalidateListTasksCache(task.listId);
+
+    auditService.logEvent({
+      eventType: 'task.promoted',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, previousParentId: task.parentTaskId },
+      module: 'tasks',
+    });
+
+    logger.info('Task promoted', { module: 'tasks', action: 'promote', taskId: id, userId });
+
+    return updated;
+  }
+
+  async reorderSubtasks(parentId, orderedIds, userId) {
+    const parent = await taskRepository.findById(parentId);
+    if (!parent) throw new NotFoundError('Task', parentId);
+
+    await this._checkTaskAccess(parent, userId);
+
+    for (let i = 0; i < orderedIds.length; i++) {
+      await taskRepository.updateById(orderedIds[i], { sortOrder: i });
+    }
+
+    await this._invalidateTaskCache(parentId);
+    await this._invalidateListTasksCache(parent.listId);
+
+    logger.info('Subtasks reordered', { module: 'tasks', action: 'reorderSubtasks', parentId, userId, count: orderedIds.length });
+
+    return { reordered: true };
+  }
+
+  async _checkTaskAccess(task, userId) {
+    const uid = String(userId);
+
+    // Creator or assignee has access
+    if (String(task.createdBy) === uid) return;
+    if (task.assigneeId && String(task.assigneeId) === uid) return;
+
+    // Check list-level access (ownership or membership with EDITOR/ADMIN role)
+    const list = await taskListRepository.findById(task.listId);
+    if (list && String(list.ownerId) === uid) return;
+
+    const membership = await TaskListMember.findOne({ listId: task.listId, userId }).lean();
+    if (membership && (membership.role === 'EDITOR' || membership.role === 'ADMIN')) return;
+
+    throw new AppError('Access denied to this task', 403, ERROR_CODES.TASK_ACCESS_DENIED);
+  }
+
+  async _checkListAccess(list, userId) {
+    const uid = String(userId);
+
+    if (String(list.ownerId) === uid) return;
+
+    if (list.type === 'PERSONAL') {
+      throw new AppError('Access denied to this task list', 403, ERROR_CODES.TASK_ACCESS_DENIED);
+    }
+
+    const membership = await TaskListMember.findOne({ listId: list._id, userId }).lean();
+    if (!membership) {
+      throw new AppError('Access denied to this task list', 403, ERROR_CODES.TASK_ACCESS_DENIED);
+    }
+
+    const roleHierarchy = { VIEWER: 0, EDITOR: 1, ADMIN: 2 };
+    if (roleHierarchy[membership.role] < roleHierarchy['EDITOR']) {
+      throw new AppError('Insufficient role for this action', 403, ERROR_CODES.TASK_ACCESS_DENIED);
+    }
+  }
+
+  async _countNotes(taskId) {
+    try {
+      const TaskNote = (await import('./taskNote.model.js')).default;
+      return TaskNote.countDocuments({ taskId, isDeleted: false });
+    } catch {
+      return 0;
+    }
+  }
+
+  async _countAttachments(taskId) {
+    try {
+      const TaskAttachment = (await import('./taskAttachment.model.js')).default;
+      return TaskAttachment.countDocuments({ taskId, isDeleted: false });
+    } catch {
+      return 0;
+    }
+  }
+
+  async _invalidateTaskCache(id) {
+    await cacheManager.del(`tasks:task:${id}`);
+  }
+
+  async _invalidateListTasksCache(listId) {
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}tasks:tasks:list:*`);
+  }
+}
+
+const taskService = new TaskService();
+export default taskService;

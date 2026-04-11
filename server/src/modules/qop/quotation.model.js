@@ -1,0 +1,163 @@
+import mongoose from 'mongoose';
+
+export const QUOTATION_STATUSES = [
+  'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED',
+];
+
+export const LINE_ITEM_TYPES = ['service', 'material', 'text', 'subtotal', 'optional'];
+
+const lineItemSchema = new mongoose.Schema(
+  {
+    position: { type: Number, required: true },
+    type: {
+      type: String,
+      enum: LINE_ITEM_TYPES,
+      required: true,
+    },
+    catalogItemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    description: {
+      type: String,
+      required: true,
+      maxlength: 2000,
+    },
+    unit: { type: String, maxlength: 20, default: null },
+    quantity: { type: Number, default: 0 },
+    unitPrice: { type: Number, default: 0 },
+    discountPercent: { type: Number, default: 0, min: 0, max: 100 },
+    vatRate: { type: Number, default: 8.1 },
+    lineTotal: { type: Number, default: 0 },
+  },
+  { _id: true },
+);
+
+const vatBreakdownSchema = new mongoose.Schema(
+  {
+    rate: { type: Number },
+    base: { type: Number },
+    amount: { type: Number },
+  },
+  { _id: false },
+);
+
+const quotationSchema = new mongoose.Schema(
+  {
+    quotationNumber: {
+      type: String,
+      unique: true,
+      required: true,
+      trim: true,
+    },
+    customerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Customer',
+      required: true,
+    },
+    customerName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 255,
+    },
+    contactId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    projectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Project',
+      default: null,
+    },
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    status: {
+      type: String,
+      enum: QUOTATION_STATUSES,
+      default: 'DRAFT',
+      index: true,
+    },
+    language: {
+      type: String,
+      enum: ['de', 'fr', 'it', 'en'],
+      default: 'de',
+    },
+    title: { type: String, maxlength: 500, default: '' },
+    introduction: { type: String, maxlength: 5000, default: '' },
+    validFrom: { type: Date, default: Date.now },
+    validUntil: { type: Date, required: true },
+    currency: {
+      type: String,
+      enum: ['CHF', 'EUR'],
+      default: 'CHF',
+    },
+    lineItems: [lineItemSchema],
+    globalDiscountPercent: { type: Number, default: 0, min: 0, max: 100 },
+    subtotal: { type: Number, default: 0 },
+    vatBreakdown: [vatBreakdownSchema],
+    grandTotal: { type: Number, default: 0 },
+    roundingAmount: { type: Number, default: 0 },
+    grandTotalRounded: { type: Number, default: 0 },
+    paymentTerms: { type: String, maxlength: 1000, default: '' },
+    notes: { type: String, maxlength: 5000, default: '' },
+    termsAndConditions: { type: String, maxlength: 10000, default: '' },
+    assignedUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    sentAt: { type: Date, default: null },
+    acceptedAt: { type: Date, default: null },
+    declinedAt: { type: Date, default: null },
+    declineReason: { type: String, maxlength: 2000, default: null },
+    convertedOrderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    sourceQuotationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    version: { type: Number, default: 1 },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+  },
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
+
+// --- Indexes ---
+quotationSchema.index({ customerId: 1, status: 1 });
+quotationSchema.index({ status: 1, validUntil: 1 });
+quotationSchema.index({ assignedUserId: 1, status: 1 });
+quotationSchema.index({ projectId: 1 });
+quotationSchema.index({ isDeleted: 1, createdAt: -1 });
+quotationSchema.index(
+  { quotationNumber: 'text', title: 'text', customerName: 'text' },
+  { weights: { quotationNumber: 10, title: 5, customerName: 3 } },
+);
+
+// --- Soft-delete pre-hook ---
+quotationSchema.pre(/^find/, function () {
+  if (this.getOptions().includeDeleted) return;
+  this.where({ isDeleted: false });
+});
+
+const Quotation = mongoose.model('Quotation', quotationSchema);
+export default Quotation;

@@ -1,0 +1,25 @@
+import { Router } from 'express';
+import templateController from './template.controller.js';
+import { validate } from '../../shared/validation/validate.js';
+import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
+import {
+  listTemplatesSchema, templateIdParamSchema, updateTemplateSchema,
+  versionParamSchema, previewSchema,
+} from './template.validation.js';
+
+const router = Router();
+
+// List & detail
+router.get('/', authenticate, requirePermission('templates:read'), validate(listTemplatesSchema), (req, res, next) => templateController.list(req, res, next));
+router.get('/:id', authenticate, requirePermission('templates:read'), validate(templateIdParamSchema), (req, res, next) => templateController.getById(req, res, next));
+router.put('/:id', authenticate, requirePermission('templates:write'), validate(updateTemplateSchema), (req, res, next) => templateController.update(req, res, next));
+
+// Versions
+router.get('/:id/versions', authenticate, requirePermission('templates:read'), validate(templateIdParamSchema), (req, res, next) => templateController.listVersions(req, res, next));
+router.get('/:id/versions/:version', authenticate, requirePermission('templates:read'), validate(versionParamSchema), (req, res, next) => templateController.getVersion(req, res, next));
+router.post('/:id/versions/:version/revert', authenticate, requirePermission('templates:admin'), validate(versionParamSchema), (req, res, next) => templateController.revertToVersion(req, res, next));
+
+// Preview
+router.post('/:id/preview', authenticate, requirePermission('templates:read'), validate(previewSchema), (req, res, next) => templateController.preview(req, res, next));
+
+export default router;

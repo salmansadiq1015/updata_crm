@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Order Assigned</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+    .header { background-color: #1a365d; padding: 30px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+    .content { padding: 30px; color: #333333; line-height: 1.6; }
+    .details { background-color: #f0f4f8; border-left: 4px solid #38a169; padding: 16px; margin: 16px 0; }
+    .details table { width: 100%; border-collapse: collapse; }
+    .details td { padding: 6px 0; vertical-align: top; }
+    .details td:first-child { font-weight: bold; width: 140px; color: #555; }
+    .priority-URGENT { color: #e53e3e; font-weight: bold; }
+    .priority-HIGH { color: #d69e2e; font-weight: bold; }
+    .priority-NORMAL { color: #38a169; }
+    .btn { display: inline-block; background-color: #2b6cb0; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+    .footer { padding: 20px 30px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1><%= appName %></h1>
+    </div>
+    <div class="content">
+      <h2>New Order Assigned</h2>
+      <p>Hello <%= technicianName %>,</p>
+      <p>A new order has been assigned to you:</p>
+      <div class="details">
+        <table>
+          <tr><td>Order Number:</td><td><%= orderNumber %></td></tr>
+          <tr><td>Customer:</td><td><%= customerName %></td></tr>
+          <tr><td>Type:</td><td><%= orderType %></td></tr>
+          <tr><td>Priority:</td><td><span class="priority-<%= priority %>"><%= priority %></span></td></tr>
+          <% if (scheduledDate) { %><tr><td>Scheduled Date:</td><td><%= scheduledDate %></td></tr><% } %>
+          <% if (timeWindow) { %><tr><td>Time Window:</td><td><%= timeWindow %></td></tr><% } %>
+          <% if (serviceAddress) { %><tr><td>Service Address:</td><td><%= serviceAddress %></td></tr><% } %>
+          <% if (description) { %><tr><td>Description:</td><td><%= description %></td></tr><% } %>
+        </table>
+      </div>
+      <div style="text-align: center;">
+        <a href="<%= clientUrl %>/orders/<%= orderId %>" class="btn">View Order Details</a>
+      </div>
+      <p>Please review the order details and prepare accordingly.</p>
+      <p>Kind regards,<br><%= appName %></p>
+    </div>
+    <div class="footer">
+      <p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offerte</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+    .header { background-color: #1a365d; padding: 30px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+    .content { padding: 30px; color: #333333; line-height: 1.6; }
+    .details { background-color: #f0f4f8; border-left: 4px solid #2b6cb0; padding: 16px; margin: 16px 0; }
+    .details table { width: 100%; border-collapse: collapse; }
+    .details td { padding: 6px 0; vertical-align: top; }
+    .details td:first-child { font-weight: bold; width: 140px; color: #555; }
+    .amount { font-size: 18px; font-weight: bold; color: #1a365d; }
+    .footer { padding: 20px 30px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header"><h1><%= appName %></h1></div>
+    <div class="content">
+      <h2>Offerte <%= quotationNumber %></h2>
+      <p>Guten Tag <%= customerName %>,</p>
+      <p>Anbei erhalten Sie unsere Offerte:</p>
+      <div class="details">
+        <table>
+          <tr><td>Offerte-Nr.:</td><td><%= quotationNumber %></td></tr>
+          <tr><td>Titel:</td><td><%= title %></td></tr>
+          <tr><td>Datum:</td><td><%= quotationDate %></td></tr>
+          <tr><td>Gueltig bis:</td><td><%= validUntil %></td></tr>
+          <tr><td>Betrag:</td><td class="amount"><%= currency %> <%= grandTotal %></td></tr>
+        </table>
+      </div>
+      <p>Die Offerte finden Sie als PDF im Anhang. Bei Fragen stehen wir Ihnen gerne zur Verfuegung.</p>
+      <p>Freundliche Gruesse<br><%= salesPersonName %><br><%= appName %></p>
+    </div>
+    <div class="footer"><p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p></div>
+  </div>
+</body>
+</html>

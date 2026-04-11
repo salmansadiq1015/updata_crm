@@ -1,0 +1,1423 @@
+{
+  "info": {
+    "name": "MB Boiler - Module 02 - Authentication & Users",
+    "description": "Complete API collection for Module 02: Authentication, User Management, Roles & Permissions, Sessions, Audit Logs.\n\nBase URL: {{baseUrl}}\nDefault: http://localhost:9097/api/v1\n\n**Quick Start:**\n1. Import this collection + environment file\n2. Run \"Login (Admin)\" — tokens & IDs auto-save\n3. Run \"List All Roles\" — captures {{roleId}}\n4. Run \"List Permissions\" — captures {{permissionId}}\n5. All authenticated requests use {{accessToken}} automatically\n\n**Total: 38 requests across 5 modules**",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:9097/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "createdUserId", "value": "" },
+    { "key": "createdUserId2", "value": "" },
+    { "key": "roleId", "value": "" },
+    { "key": "customRoleId", "value": "" },
+    { "key": "sessionId", "value": "" },
+    { "key": "permissionId", "value": "" },
+    { "key": "permissionId2", "value": "" },
+    { "key": "activationToken", "value": "" },
+    { "key": "resetToken", "value": "" },
+    { "key": "adminEmail", "value": "admin@mbboiler.ch" },
+    { "key": "adminPassword", "value": "Admin@12345!" },
+    { "key": "technikerRoleId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 — Authentication",
+      "description": "Login, logout, token refresh, account activation, password management.\nAll core auth flows with sample data.",
+      "item": [
+        {
+          "name": "Login (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data) {",
+                  "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "  if (res.data.user) {",
+                  "    pm.collectionVariables.set('userId', res.data.user._id || res.data.user.id);",
+                  "  }",
+                  "}",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has accessToken', () => pm.expect(res.data.accessToken).to.be.a('string'));",
+                  "pm.test('Has refreshToken', () => pm.expect(res.data.refreshToken).to.be.a('string'));",
+                  "pm.test('Token type Bearer', () => pm.expect(res.data.tokenType).to.eql('Bearer'));",
+                  "pm.test('ExpiresIn is 900s', () => pm.expect(res.data.expiresIn).to.eql(900));",
+                  "pm.test('User object returned', () => {",
+                  "  pm.expect(res.data.user).to.be.an('object');",
+                  "  pm.expect(res.data.user.email).to.be.a('string');",
+                  "  pm.expect(res.data.user.firstName).to.be.a('string');",
+                  "  pm.expect(res.data.user.role).to.be.an('object');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "**POST /api/v1/auth/login**\n\nAuthenticate with email & password.\n\n**Returns:** JWT access token (15min) + refresh token (7d) + user profile.\n\n**Rate limit:** 5 req/min per IP\n**Lockout:** 5 failed attempts in 15 min → account locked 30 min\n**Security:** Timing-safe (no email enumeration via response time)"
+          }
+        },
+        {
+          "name": "Login (Wrong Password — 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "const res = pm.response.json();",
+                  "pm.test('Generic error message', () => pm.expect(res.error.message).to.include('Invalid'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"WrongPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test invalid credentials → 401.\nError message is generic \"Invalid email or password\" (no email enumeration)."
+          }
+        },
+        {
+          "name": "Login (Non-existent Email — 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Same generic error', () => {",
+                  "  const res = pm.response.json();",
+                  "  pm.expect(res.error.message).to.include('Invalid');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"doesnotexist@example.com\",\n  \"password\": \"SomePass@12345\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test non-existent email → same 401 as wrong password.\nPrevents email enumeration: attacker cannot distinguish \"email not found\" from \"wrong password\"."
+          }
+        },
+        {
+          "name": "Login (Missing Fields — 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@mbboiler.ch\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test validation: missing password field → 400 with field-level error details."
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.success && res.data) {",
+                  "  pm.collectionVariables.set('accessToken', res.data.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', res.data.refreshToken);",
+                  "}",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('New tokens returned', () => {",
+                  "  pm.expect(res.data.accessToken).to.be.a('string');",
+                  "  pm.expect(res.data.refreshToken).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "refresh"]
+            },
+            "description": "**POST /api/v1/auth/refresh**\n\nExchange refresh token for new access + refresh tokens.\n\n**Token rotation:** Old refresh token is invalidated on every use.\nIf the same refresh token is used twice, the session is revoked (replay detection)."
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "**POST /api/v1/auth/logout**\n\nRevoke the current session's refresh token from Redis.\n**Note:** Run Login again after this to get fresh tokens."
+          }
+        },
+        {
+          "name": "Activate Account",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{activationToken}}\",\n  \"password\": \"SecureNewPass@1\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "activate"]
+            },
+            "description": "**POST /api/v1/auth/activate**\n\nActivate a new account using the token from the activation email.\nSets the initial password and changes status from `pending_activation` → `active`.\n\n**Token validity:** 48 hours, single-use\n**Password policy:** Min 10 chars, 1 upper, 1 lower, 1 digit, 1 special char\n\n**How to test:**\n1. Create a user → check server logs/email for activation token\n2. Use the token here"
+          }
+        },
+        {
+          "name": "Request Password Reset",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Always returns 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password/request",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "reset-password", "request"]
+            },
+            "description": "**POST /api/v1/auth/reset-password/request**\n\nRequest a password reset email.\n\n**ALWAYS returns 200** regardless of whether the email exists.\nThis prevents email enumeration attacks.\n\n**Rate limited:** 5 req/min per IP"
+          }
+        },
+        {
+          "name": "Confirm Password Reset",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"password\": \"ResetSecure@Pass1\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/reset-password/confirm",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "reset-password", "confirm"]
+            },
+            "description": "**POST /api/v1/auth/reset-password/confirm**\n\nSet new password using the token from the reset email.\n\n**Token:** Valid 1 hour, single-use, SHA-256 hashed in DB\n**After reset:** ALL active sessions are revoked\n**Password history:** Cannot reuse any of the last 5 passwords"
+          }
+        },
+        {
+          "name": "Change Password (Authenticated)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{adminPassword}}\",\n  \"newPassword\": \"NewAdmin@99887!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "change-password"]
+            },
+            "description": "**POST /api/v1/auth/change-password**\n\nChange own password while logged in.\n\n**Requires:** Current password verification\n**After change:** All OTHER sessions revoked (current stays active)\n**History:** Last 5 passwords cannot be reused\n**Email:** Notification sent to user"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 — Sessions",
+      "description": "Multi-device session management. List, revoke individual sessions, or revoke all others.",
+      "item": [
+        {
+          "name": "List My Sessions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns array', () => pm.expect(res.data).to.be.an('array'));",
+                  "if (res.data && res.data.length > 0) {",
+                  "  const nonCurrent = res.data.find(s => !s.isCurrent);",
+                  "  if (nonCurrent) pm.collectionVariables.set('sessionId', nonCurrent.sessionId);",
+                  "  else pm.collectionVariables.set('sessionId', res.data[0].sessionId);",
+                  "  pm.test('Has metadata fields', () => {",
+                  "    const s = res.data[0];",
+                  "    pm.expect(s).to.have.property('sessionId');",
+                  "    pm.expect(s).to.have.property('deviceType');",
+                  "    pm.expect(s).to.have.property('browser');",
+                  "    pm.expect(s).to.have.property('os');",
+                  "    pm.expect(s).to.have.property('ipAddress');",
+                  "    pm.expect(s).to.have.property('createdAt');",
+                  "    pm.expect(s).to.have.property('lastActiveAt');",
+                  "    pm.expect(s).to.have.property('isCurrent');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions"]
+            },
+            "description": "**GET /api/v1/auth/sessions**\n\nList all active sessions for the logged-in user.\n\n**Response fields per session:**\n- `sessionId` — UUID\n- `deviceType` — desktop/mobile/tablet\n- `browser` — Chrome, Firefox, etc.\n- `os` — Windows, macOS, etc.\n- `ipAddress`\n- `createdAt` — login timestamp\n- `lastActiveAt` — last API call\n- `isCurrent` — true for the session making this request"
+          }
+        },
+        {
+          "name": "Revoke Specific Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/sessions/{{sessionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions", "{{sessionId}}"]
+            },
+            "description": "**DELETE /api/v1/auth/sessions/:id**\n\nRevoke a specific session.\n\n**Own sessions:** Any user can revoke\n**Other users' sessions:** Admin only\n**Effect:** Refresh token is deleted from Redis immediately"
+          }
+        },
+        {
+          "name": "Revoke All Other Sessions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test('Returns revokedCount', () => pm.expect(res.data.revokedCount).to.be.a('number'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/sessions/revoke-others",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "sessions", "revoke-others"]
+            },
+            "description": "**POST /api/v1/auth/sessions/revoke-others**\n\nRevoke all sessions EXCEPT the current one.\nUseful after a password change or security incident."
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 — Users",
+      "description": "Complete user lifecycle: CRUD, bulk operations, profile, avatar, admin session management.",
+      "item": [
+        {
+          "name": "Self-Service (My Profile)",
+          "description": "Any authenticated user can view and edit their own profile.",
+          "item": [
+            {
+              "name": "Get My Profile",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "const res = pm.response.json();",
+                      "pm.test('Has user fields', () => {",
+                      "  pm.expect(res.data.email).to.be.a('string');",
+                      "  pm.expect(res.data.firstName).to.be.a('string');",
+                      "  pm.expect(res.data.lastName).to.be.a('string');",
+                      "  pm.expect(res.data.role).to.be.an('object');",
+                      "  pm.expect(res.data.status).to.eql('active');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/me",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "me"]
+                },
+                "description": "**GET /api/v1/users/me**\n\nGet own profile with populated role."
+              }
+            },
+            {
+              "name": "Update My Profile",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Hans\",\n  \"lastName\": \"Muster\",\n  \"language\": \"de\",\n  \"phone\": \"+41 79 123 45 67\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/me",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "me"]
+                },
+                "description": "**PATCH /api/v1/users/me**\n\nUpdate own profile. **Allowed fields only:**\n- `firstName`\n- `lastName`\n- `language` (de, en, fr, it)\n- `phone`\n\nCannot change: email, role, status."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin — Single User Operations",
+          "description": "Requires `users:read`, `users:write`, or `users:admin` permission.",
+          "item": [
+            {
+              "name": "List Users (Default)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has data array', () => pm.expect(res.data).to.be.an('array'));",
+                      "pm.test('Has pagination', () => pm.expect(res.pagination).to.be.an('object'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"]
+                },
+                "description": "**GET /api/v1/users**\n\nList all users with default pagination (25 per page, newest first).\nPermission: `users:read`"
+              }
+            },
+            {
+              "name": "List Users (With Search)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users?search=admin&limit=10",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"],
+                  "query": [
+                    { "key": "search", "value": "admin" },
+                    { "key": "limit", "value": "10" }
+                  ]
+                },
+                "description": "**GET /api/v1/users?search=admin**\n\nSearch users by firstName, lastName, or email.\nCase-insensitive regex match."
+              }
+            },
+            {
+              "name": "List Users (Filter by Status)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users?status=active&limit=25",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"],
+                  "query": [
+                    { "key": "status", "value": "active" },
+                    { "key": "limit", "value": "25" }
+                  ]
+                },
+                "description": "**GET /api/v1/users?status=active**\n\nFilter by status: `active`, `pending_activation`, `deactivated`, `locked`."
+              }
+            },
+            {
+              "name": "List Users (Filter by Role)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users?role={{roleId}}&limit=25",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"],
+                  "query": [
+                    { "key": "role", "value": "{{roleId}}" },
+                    { "key": "limit", "value": "25" }
+                  ]
+                },
+                "description": "**GET /api/v1/users?role={{roleId}}**\n\nFilter by role ObjectId."
+              }
+            },
+            {
+              "name": "List Users (Filter by Language)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users?language=de&limit=25",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"],
+                  "query": [
+                    { "key": "language", "value": "de" },
+                    { "key": "limit", "value": "25" }
+                  ]
+                },
+                "description": "**GET /api/v1/users?language=de**\n\nFilter by language: `de`, `en`, `fr`, `it`."
+              }
+            },
+            {
+              "name": "List Users (Sort by Name ASC)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users?sortBy=firstName&sortOrder=asc&limit=25",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"],
+                  "query": [
+                    { "key": "sortBy", "value": "firstName" },
+                    { "key": "sortOrder", "value": "asc" },
+                    { "key": "limit", "value": "25" }
+                  ]
+                },
+                "description": "**Sortable fields:** `createdAt`, `firstName`, `lastName`, `email`\n**Sort order:** `asc` or `desc`"
+              }
+            },
+            {
+              "name": "List Users (Cursor Pagination — Next Page)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users?limit=5&cursor={{nextCursor}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"],
+                  "query": [
+                    { "key": "limit", "value": "5" },
+                    { "key": "cursor", "value": "{{nextCursor}}", "description": "Copy from pagination.nextCursor of previous response" }
+                  ]
+                },
+                "description": "**Cursor pagination:**\n1. First request: omit `cursor`\n2. Copy `pagination.nextCursor` from response\n3. Pass as `cursor` param for next page\n4. When `pagination.hasNext` is false, you're at the end"
+              }
+            },
+            {
+              "name": "List Users (Combined Filters)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users?status=active&language=de&search=max&sortBy=lastName&sortOrder=asc&limit=10",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"],
+                  "query": [
+                    { "key": "status", "value": "active" },
+                    { "key": "language", "value": "de" },
+                    { "key": "search", "value": "max" },
+                    { "key": "sortBy", "value": "lastName" },
+                    { "key": "sortOrder", "value": "asc" },
+                    { "key": "limit", "value": "10" }
+                  ]
+                },
+                "description": "All filters can be combined: status + language + search + sort."
+              }
+            },
+            {
+              "name": "Create User",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                      "if (res.success && res.data) {",
+                      "  pm.collectionVariables.set('createdUserId', res.data._id || res.data.id);",
+                      "  pm.test('Status is pending_activation', () => pm.expect(res.data.status).to.eql('pending_activation'));",
+                      "  pm.test('Has email', () => pm.expect(res.data.email).to.eql('techniker@mbboiler.ch'));",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"techniker@mbboiler.ch\",\n  \"firstName\": \"Max\",\n  \"lastName\": \"Technik\",\n  \"roleId\": \"{{roleId}}\",\n  \"language\": \"de\",\n  \"phone\": \"+41 79 999 88 77\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"]
+                },
+                "description": "**POST /api/v1/users**\n\nAdmin creates a new user. Permission: `users:write`\n\n**Required:** email, firstName, lastName, roleId\n**Optional:** language (default 'de'), phone\n\n**Flow:**\n1. Temp password generated\n2. Activation email sent (48h link)\n3. Status: `pending_activation`\n4. User must activate via `/auth/activate`"
+              }
+            },
+            {
+              "name": "Create User (Second — for Bulk Tests)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res.success && res.data) {",
+                      "  pm.collectionVariables.set('createdUserId2', res.data._id || res.data.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"disponent@mbboiler.ch\",\n  \"firstName\": \"Anna\",\n  \"lastName\": \"Disponentin\",\n  \"roleId\": \"{{roleId}}\",\n  \"language\": \"de\",\n  \"phone\": \"+41 79 555 44 33\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users"]
+                },
+                "description": "Create a second user for bulk operation testing."
+              }
+            },
+            {
+              "name": "Get User by ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "const res = pm.response.json();",
+                      "pm.test('Has user data', () => {",
+                      "  pm.expect(res.data._id || res.data.id).to.be.a('string');",
+                      "  pm.expect(res.data.email).to.be.a('string');",
+                      "  pm.expect(res.data.role).to.be.an('object');",
+                      "});"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{createdUserId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{createdUserId}}"]
+                },
+                "description": "**GET /api/v1/users/:id**\n\nGet a specific user by ID. Permission: `users:read`\nReturns user with populated role."
+              }
+            },
+            {
+              "name": "Update User (Name & Phone)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "const res = pm.response.json();",
+                      "pm.test('Name updated', () => pm.expect(res.data.firstName).to.eql('Max Updated'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Max Updated\",\n  \"phone\": \"+41 79 111 22 33\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{createdUserId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{createdUserId}}"]
+                },
+                "description": "**PATCH /api/v1/users/:id**\n\nAdmin updates user fields. Permission: `users:write`\n\n**Updatable:** email, firstName, lastName, roleId, language, phone, status"
+              }
+            },
+            {
+              "name": "Update User (Change Role)",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"roleId\": \"{{technikerRoleId}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{createdUserId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{createdUserId}}"]
+                },
+                "description": "Change user's role. Permission cache is instantly invalidated.\nPublishes `user.role_changed` event."
+              }
+            },
+            {
+              "name": "Update User (Change Language)",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"language\": \"en\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{createdUserId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{createdUserId}}"]
+                },
+                "description": "Change user language preference. Valid: `de`, `en`, `fr`, `it`."
+              }
+            },
+            {
+              "name": "Update User (Change Status)",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"active\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{createdUserId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{createdUserId}}"]
+                },
+                "description": "Change user status directly. Valid: `active`, `deactivated`, `locked`."
+              }
+            },
+            {
+              "name": "Deactivate User (Soft Delete)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{createdUserId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{createdUserId}}"]
+                },
+                "description": "**DELETE /api/v1/users/:id**\n\nSoft-delete a user. Permission: `users:admin`\n\n**Effects:**\n- Status → `deactivated`, `isDeleted` → true\n- All sessions revoked\n- User cannot login\n- Data retained (soft delete)\n\n**Protections:**\n- Cannot deactivate last admin\n- Cannot self-deactivate (if admin)"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin — Bulk Operations",
+          "description": "Bulk update or deactivate multiple users. Requires `users:admin` permission. Max 100 users per request.",
+          "item": [
+            {
+              "name": "Bulk Update Users (Change Language)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "const res = pm.response.json();",
+                      "pm.test('Returns modifiedCount', () => pm.expect(res.data.modifiedCount).to.be.a('number'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ids\": [\n    \"{{createdUserId}}\",\n    \"{{createdUserId2}}\"\n  ],\n  \"data\": {\n    \"language\": \"en\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/bulk-update",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "bulk-update"]
+                },
+                "description": "**PATCH /api/v1/users/bulk-update**\n\nUpdate multiple users with the same data. Permission: `users:admin`\n\n**Body:**\n- `ids`: Array of user ObjectIds (min 1, max 100)\n- `data`: Fields to update — `roleId`, `language`, `status`\n\n**Example use cases:**\n- Change language for all users\n- Assign same role to multiple users\n- Lock multiple accounts"
+              }
+            },
+            {
+              "name": "Bulk Update Users (Change Role)",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ids\": [\n    \"{{createdUserId}}\",\n    \"{{createdUserId2}}\"\n  ],\n  \"data\": {\n    \"roleId\": \"{{technikerRoleId}}\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/bulk-update",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "bulk-update"]
+                },
+                "description": "Bulk reassign role for multiple users.\nPermission caches invalidated for all affected users."
+              }
+            },
+            {
+              "name": "Bulk Update Users (Lock Accounts)",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ids\": [\n    \"{{createdUserId}}\",\n    \"{{createdUserId2}}\"\n  ],\n  \"data\": {\n    \"status\": \"locked\"\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/bulk-update",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "bulk-update"]
+                },
+                "description": "Lock multiple accounts at once (e.g., security incident)."
+              }
+            },
+            {
+              "name": "Bulk Delete Users (Deactivate)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "const res = pm.response.json();",
+                      "pm.test('Returns deactivatedCount', () => pm.expect(res.data.deactivatedCount).to.be.a('number'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ids\": [\n    \"{{createdUserId}}\",\n    \"{{createdUserId2}}\"\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/bulk-delete",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "bulk-delete"]
+                },
+                "description": "**POST /api/v1/users/bulk-delete**\n\nSoft-delete multiple users at once. Permission: `users:admin`\n\n**Body:** `ids` — Array of user ObjectIds (min 1, max 100)\n\n**Effects per user:**\n- Status → deactivated, isDeleted → true\n- All sessions revoked from Redis\n- Caches invalidated\n\n**Protections:**\n- Cannot include yourself\n- Cannot deactivate if it would remove the last admin\n- Validates all IDs exist before proceeding"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Avatar",
+          "description": "Upload and remove user avatar images (max 5MB, stored in S3).",
+          "item": [
+            {
+              "name": "Upload Avatar (Own)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "avatar", "type": "file", "src": "", "description": "Image file (JPG/PNG, max 5MB)" }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{userId}}/avatar",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{userId}}", "avatar"]
+                },
+                "description": "**POST /api/v1/users/:id/avatar**\n\nUpload avatar image. Rate limited.\n\n**Own avatar:** Any authenticated user\n**Other user's avatar:** Admin only\n\nMax 5MB. Stored via S3 file service."
+              }
+            },
+            {
+              "name": "Upload Avatar (For Another User — Admin)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "avatar", "type": "file", "src": "", "description": "Image file (JPG/PNG, max 5MB)" }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{createdUserId}}/avatar",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{createdUserId}}", "avatar"]
+                },
+                "description": "Admin uploads avatar for another user."
+              }
+            },
+            {
+              "name": "Remove Avatar",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{userId}}/avatar",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{userId}}", "avatar"]
+                },
+                "description": "**DELETE /api/v1/users/:id/avatar**\n\nRemove avatar. Deletes file from S3 and clears `avatarFileId`.\n\n**Own avatar:** Any authenticated user\n**Other user's avatar:** Admin only"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin — User Sessions",
+          "description": "Admin views or force-revokes sessions of any user. Requires `users:admin`.",
+          "item": [
+            {
+              "name": "List User Sessions (Admin)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{createdUserId}}/sessions",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{createdUserId}}", "sessions"]
+                },
+                "description": "**GET /api/v1/users/:id/sessions**\n\nAdmin lists all active sessions for a specific user.\nPermission: `users:admin`"
+              }
+            },
+            {
+              "name": "Revoke All User Sessions (Admin)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "const res = pm.response.json();",
+                      "pm.test('Returns revokedCount', () => pm.expect(res.data.revokedCount).to.be.a('number'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/{{createdUserId}}/sessions",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "{{createdUserId}}", "sessions"]
+                },
+                "description": "**DELETE /api/v1/users/:id/sessions**\n\nAdmin force-revokes ALL sessions for a user.\nPermission: `users:admin`\n\nThe user is immediately logged out of all devices."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 — Roles & Permissions",
+      "description": "RBAC role management. System roles are seeded on first boot. Custom roles can be created.",
+      "item": [
+        {
+          "name": "List All Permissions (Grouped by Module)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Grouped by module', () => {",
+                  "  pm.expect(res.data).to.be.an('array');",
+                  "  pm.expect(res.data[0]).to.have.property('module');",
+                  "  pm.expect(res.data[0]).to.have.property('actions');",
+                  "  pm.expect(res.data[0].actions).to.be.an('array');",
+                  "});",
+                  "if (res.data && res.data.length > 0) {",
+                  "  const first = res.data[0].actions[0];",
+                  "  if (first) pm.collectionVariables.set('permissionId', first._id);",
+                  "  if (res.data[0].actions[1]) pm.collectionVariables.set('permissionId2', res.data[0].actions[1]._id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["permissions"]
+            },
+            "description": "**GET /api/v1/permissions**\n\nReturns all permissions grouped by module.\nPermission: `roles:read`\n\n**Response shape:**\n```json\n[\n  { \"module\": \"crm\", \"actions\": [{ \"_id\": \"...\", \"action\": \"read\", \"description\": \"...\" }] },\n  { \"module\": \"projects\", \"actions\": [...] }\n]\n```\n\n**Modules:** users, roles, audit, crm, projects, field-service, scheduling, quotations, invoicing, accounting, reports, time-tracking, settings"
+          }
+        },
+        {
+          "name": "List All Roles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns roles', () => pm.expect(res.data).to.be.an('array'));",
+                  "if (res.data && res.data.length > 0) {",
+                  "  pm.collectionVariables.set('roleId', res.data[0]._id || res.data[0].id);",
+                  "  const techRole = res.data.find(r => r.slug === 'techniker');",
+                  "  if (techRole) pm.collectionVariables.set('technikerRoleId', techRole._id || techRole.id);",
+                  "  pm.test('Role has permissions', () => pm.expect(res.data[0].permissions).to.be.an('array'));",
+                  "  pm.test('Role has slug', () => pm.expect(res.data[0].slug).to.be.a('string'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/roles",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles"]
+            },
+            "description": "**GET /api/v1/roles**\n\nList all roles with populated permissions.\nPermission: `roles:read`\n\n**System roles (seeded):**\n- Admin — all permissions\n- Projektleiter — CRM, projects, quotations, scheduling, reports\n- Techniker — CRM (read), field-service, time-tracking\n- Buchhalter — invoicing, accounting, reports, quotations (read)\n- Disponent — scheduling, CRM (read), field-service (read)\n- Lehrling — field-service (read), time-tracking"
+          }
+        },
+        {
+          "name": "Get Role by ID",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test('Has role data', () => {",
+                  "  pm.expect(res.data.name).to.be.a('string');",
+                  "  pm.expect(res.data.permissions).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{roleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles", "{{roleId}}"]
+            },
+            "description": "**GET /api/v1/roles/:id**\n\nGet a specific role with all populated permissions.\nPermission: `roles:read`"
+          }
+        },
+        {
+          "name": "Create Custom Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (res.success && res.data) {",
+                  "  pm.collectionVariables.set('customRoleId', res.data._id || res.data.id);",
+                  "  pm.test('Not a system role', () => pm.expect(res.data.isSystem).to.eql(false));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Custom Manager\",\n  \"description\": \"Custom role with selected CRM and project permissions\",\n  \"permissions\": [\n    \"{{permissionId}}\",\n    \"{{permissionId2}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roles",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles"]
+            },
+            "description": "**POST /api/v1/roles**\n\nCreate a custom role. Permission: `roles:admin`\n\n**Required:** name, permissions (array of Permission ObjectIds)\n**Optional:** description\n\n**Get permission IDs from:** \"List All Permissions\" endpoint\n**Slug auto-generated** from name (e.g., \"Custom Manager\" → \"custom_manager\")"
+          }
+        },
+        {
+          "name": "Update Role (Change Permissions)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated custom role with more permissions\",\n  \"permissions\": [\n    \"{{permissionId}}\",\n    \"{{permissionId2}}\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{customRoleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles", "{{customRoleId}}"]
+            },
+            "description": "**PATCH /api/v1/roles/:id**\n\nUpdate role name, description, or permissions.\nPermission: `roles:admin`\n\n**System roles:** Can be modified (flagged as `isCustomized: true`)\n**Cache:** Permission cache for all affected users is invalidated"
+          }
+        },
+        {
+          "name": "Update Role (Rename)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Senior Manager\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{customRoleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles", "{{customRoleId}}"]
+            },
+            "description": "Rename a role. Slug is auto-regenerated from the new name."
+          }
+        },
+        {
+          "name": "Delete Custom Role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/roles/{{customRoleId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["roles", "{{customRoleId}}"]
+            },
+            "description": "**DELETE /api/v1/roles/:id**\n\nSoft-delete a role. Permission: `roles:admin`\n\n**Protections:**\n- Cannot delete system roles → 409\n- Cannot delete roles with assigned users → 409 \"Role assigned to N user(s)\""
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 — Audit Log",
+      "description": "Immutable audit trail. Query with filters, export as JSON or CSV.\nAll auth/security events are logged automatically.",
+      "item": [
+        {
+          "name": "Query Audit Log (Default)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "pm.test('Has data array', () => pm.expect(res.data).to.be.an('array'));",
+                  "pm.test('Has pagination', () => pm.expect(res.pagination).to.be.an('object'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/audit?limit=25&sortOrder=desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "audit"],
+              "query": [
+                { "key": "limit", "value": "25" },
+                { "key": "sortOrder", "value": "desc" }
+              ]
+            },
+            "description": "**GET /api/v1/auth/audit**\n\nQuery audit log with cursor pagination.\nPermission: `audit:read`\n\n**Logged event types:**\nlogin.success, login.failed, logout, password.changed, password.reset_requested, role.changed, user.created, user.updated, user.deactivated, session.revoked, permission.denied, account.locked, account.activated"
+          }
+        },
+        {
+          "name": "Query Audit — Filter by Event Type",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/audit?eventType=login.success&limit=25",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "audit"],
+              "query": [
+                { "key": "eventType", "value": "login.success" },
+                { "key": "limit", "value": "25" }
+              ]
+            },
+            "description": "Filter by event type. See parent description for all valid event types."
+          }
+        },
+        {
+          "name": "Query Audit — Filter by Result",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/audit?result=failure&limit=25",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "audit"],
+              "query": [
+                { "key": "result", "value": "failure" },
+                { "key": "limit", "value": "25" }
+              ]
+            },
+            "description": "Show only failed events (failed logins, permission denials, etc.)."
+          }
+        },
+        {
+          "name": "Query Audit — Filter by User ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/audit?userId={{userId}}&limit=25",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "audit"],
+              "query": [
+                { "key": "userId", "value": "{{userId}}" },
+                { "key": "limit", "value": "25" }
+              ]
+            },
+            "description": "Show all audit events for a specific user."
+          }
+        },
+        {
+          "name": "Query Audit — Filter by Date Range",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/audit?startDate=2026-01-01T00:00:00Z&endDate=2026-12-31T23:59:59Z&limit=25",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "audit"],
+              "query": [
+                { "key": "startDate", "value": "2026-01-01T00:00:00Z" },
+                { "key": "endDate", "value": "2026-12-31T23:59:59Z" },
+                { "key": "limit", "value": "25" }
+              ]
+            },
+            "description": "Filter by date range. Both ISO 8601 format."
+          }
+        },
+        {
+          "name": "Query Audit — Combined Filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/audit?eventType=login.failed&result=failure&startDate=2026-01-01T00:00:00Z&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "audit"],
+              "query": [
+                { "key": "eventType", "value": "login.failed" },
+                { "key": "result", "value": "failure" },
+                { "key": "startDate", "value": "2026-01-01T00:00:00Z" },
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Combine multiple filters. All filters are AND-combined."
+          }
+        },
+        {
+          "name": "Export Audit Log (JSON)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/audit/export?format=json",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "audit", "export"],
+              "query": [
+                { "key": "format", "value": "json" }
+              ]
+            },
+            "description": "**GET /api/v1/auth/audit/export?format=json**\n\nExport full audit log as JSON download.\nPermission: `audit:read`\n\nReturns `Content-Disposition: attachment; filename=audit-log.json`"
+          }
+        },
+        {
+          "name": "Export Audit Log (CSV)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/audit/export?format=csv",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "audit", "export"],
+              "query": [
+                { "key": "format", "value": "csv" }
+              ]
+            },
+            "description": "**GET /api/v1/auth/audit/export?format=csv**\n\nExport audit log as CSV download.\nColumns: timestamp, eventType, userId, email, ipAddress, result, module, details"
+          }
+        },
+        {
+          "name": "Export Audit Log (Filtered CSV)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/audit/export?format=csv&eventType=login.failed&startDate=2026-01-01T00:00:00Z",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "audit", "export"],
+              "query": [
+                { "key": "format", "value": "csv" },
+                { "key": "eventType", "value": "login.failed" },
+                { "key": "startDate", "value": "2026-01-01T00:00:00Z" }
+              ]
+            },
+            "description": "Export filtered audit data as CSV.\nSame filters as query endpoint: eventType, result, userId, startDate, endDate."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report Revision Required</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+    .header { background-color: #1a365d; padding: 30px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+    .content { padding: 30px; color: #333333; line-height: 1.6; }
+    .alert { background-color: #fed7d7; border-left: 4px solid #e53e3e; padding: 16px; margin: 16px 0; }
+    .details { background-color: #f0f4f8; border-left: 4px solid #2b6cb0; padding: 16px; margin: 16px 0; }
+    .details table { width: 100%; border-collapse: collapse; }
+    .details td { padding: 6px 0; vertical-align: top; }
+    .details td:first-child { font-weight: bold; width: 140px; color: #555; }
+    .btn { display: inline-block; background-color: #2b6cb0; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+    .footer { padding: 20px 30px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1><%= appName %></h1>
+    </div>
+    <div class="content">
+      <h2>Report Requires Revision</h2>
+      <p>Hello <%= technicianName %>,</p>
+      <p>Your report has been reviewed and requires revision:</p>
+      <div class="details">
+        <table>
+          <tr><td>Report Number:</td><td><%= reportNumber %></td></tr>
+          <tr><td>Order Number:</td><td><%= orderNumber %></td></tr>
+          <tr><td>Customer:</td><td><%= customerName %></td></tr>
+          <tr><td>Reviewed by:</td><td><%= reviewerName %></td></tr>
+        </table>
+      </div>
+      <div class="alert">
+        <strong>Reason for revision:</strong><br>
+        <%= rejectionReason %>
+      </div>
+      <p>Please review the feedback and update your report accordingly.</p>
+      <div style="text-align: center;">
+        <a href="<%= clientUrl %>/reports/<%= reportId %>" class="btn">Open Report</a>
+      </div>
+      <p>If you have questions about the required changes, please contact <%= reviewerName %>.</p>
+      <p>Kind regards,<br><%= appName %></p>
+    </div>
+    <div class="footer">
+      <p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p>
+    </div>
+  </div>
+</body>
+</html>

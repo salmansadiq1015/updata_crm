@@ -1,0 +1,114 @@
+import mongoose from 'mongoose';
+
+/**
+ * File metadata schema.
+ *
+ * Stores metadata about uploaded files. Actual file content lives in S3.
+ * Uses polymorphic reference (entityType + entityId) so any module
+ * can associate files without schema changes here.
+ *
+ * Soft delete: isDeleted flag + deletedAt timestamp.
+ * Cleanup job processes soft-deleted files after retention period.
+ */
+const fileMetadataSchema = new mongoose.Schema(
+  {
+    bucket: {
+      type: String,
+      required: true,
+      index: true,
+      enum: ['images', 'documents', 'photos', 'general'],
+      default: 'general',
+    },
+    key: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    originalName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 255,
+    },
+    mimeType: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    sizeBytes: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    module: {
+      type: String,
+      required: true,
+      trim: true,
+      index: true,
+    },
+    entityType: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    entityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    storageBackend: {
+      type: String,
+      enum: ['local', 'minio', 's3'],
+      default: 's3',
+    },
+    checksumSha256: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  {
+    timestamps: true, // createdAt, updatedAt
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
+
+// --- Indexes ---
+// Unique S3 key per bucket
+fileMetadataSchema.index({ bucket: 1, key: 1 }, { unique: true });
+
+// Primary lookup: "all files for entity X"
+fileMetadataSchema.index({ module: 1, entityType: 1, entityId: 1 });
+
+// User's upload history
+fileMetadataSchema.index({ uploadedBy: 1, createdAt: -1 });
+
+// Cleanup job: find soft-deleted files past retention
+fileMetadataSchema.index({ isDeleted: 1, deletedAt: 1 });
+
+// Recent files listing
+fileMetadataSchema.index({ createdAt: -1 });
+
+// Default query scope: exclude soft-deleted files
+fileMetadataSchema.pre(/^find/, function () {
+  // Allow explicit queries for deleted files (e.g., cleanup job)
+  if (this.getOptions().includeDeleted) return;
+  this.where({ isDeleted: false });
+});
+
+const FileMetadata = mongoose.model('FileMetadata', fileMetadataSchema);
+export default FileMetadata;

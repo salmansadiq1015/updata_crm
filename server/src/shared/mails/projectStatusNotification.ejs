@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Projektstatus</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+    .header { background-color: #1a365d; padding: 30px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+    .content { padding: 30px; color: #333333; line-height: 1.6; }
+    .status-change { background-color: #f0f4f8; border-left: 4px solid #2b6cb0; padding: 16px; margin: 16px 0; }
+    .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: bold; color: #fff; }
+    .status-DRAFT { background-color: #718096; }
+    .status-PLANNING { background-color: #3182ce; }
+    .status-IN_PROGRESS { background-color: #38a169; }
+    .status-ON_HOLD { background-color: #d69e2e; }
+    .status-COMPLETED { background-color: #2f855a; }
+    .status-ARCHIVED { background-color: #a0aec0; }
+    .btn { display: inline-block; background-color: #2b6cb0; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0; }
+    .footer { padding: 20px 30px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1><%= appName %></h1>
+    </div>
+    <div class="content">
+      <h2>Projektstatus geaendert</h2>
+      <p>Hallo <%= recipientName %>,</p>
+      <p>Der Status des Projekts <strong><%= projectName %></strong> (<%= projectNumber %>) wurde geaendert:</p>
+      <div class="status-change">
+        <p>
+          <span class="status-badge status-<%= fromStatus %>"><%= fromStatus %></span>
+          &rarr;
+          <span class="status-badge status-<%= toStatus %>"><%= toStatus %></span>
+        </p>
+        <p><strong>Geaendert von:</strong> <%= changedBy %></p>
+        <% if (comment) { %>
+        <p><strong>Kommentar:</strong> <%= comment %></p>
+        <% } %>
+      </div>
+      <% if (projectUrl) { %>
+      <div style="text-align: center;">
+        <a href="<%= projectUrl %>" class="btn">Projekt ansehen</a>
+      </div>
+      <% } %>
+    </div>
+    <div class="footer">
+      <p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p>
+    </div>
+  </div>
+</body>
+</html>

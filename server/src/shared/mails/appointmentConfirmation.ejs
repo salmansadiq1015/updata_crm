@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminbestaetigung</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+    .header { background-color: #1a365d; padding: 30px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+    .content { padding: 30px; color: #333333; line-height: 1.6; }
+    .details { background-color: #f0f4f8; border-left: 4px solid #2b6cb0; padding: 16px; margin: 16px 0; }
+    .details table { width: 100%; border-collapse: collapse; }
+    .details td { padding: 6px 0; vertical-align: top; }
+    .details td:first-child { font-weight: bold; width: 140px; color: #555; }
+    .footer { padding: 20px 30px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header"><h1><%= appName %></h1></div>
+    <div class="content">
+      <h2>Terminbestaetigung</h2>
+      <p>Guten Tag <%= customerName %>,</p>
+      <p>Hiermit bestaetigen wir Ihren Termin:</p>
+      <div class="details">
+        <table>
+          <tr><td>Datum:</td><td><%= appointmentDate %></td></tr>
+          <% if (appointmentWindow) { %><tr><td>Zeitfenster:</td><td><%= appointmentWindow %></td></tr><% } %>
+          <% if (technicianName) { %><tr><td>Techniker:</td><td><%= technicianName %></td></tr><% } %>
+          <% if (serviceAddress) { %><tr><td>Adresse:</td><td><%= serviceAddress %></td></tr><% } %>
+          <% if (assignmentType) { %><tr><td>Art:</td><td><%= assignmentType %></td></tr><% } %>
+          <% if (instructions) { %><tr><td>Hinweise:</td><td><%= instructions %></td></tr><% } %>
+        </table>
+      </div>
+      <% if (contactPhone) { %><p>Bei Fragen erreichen Sie uns unter <strong><%= contactPhone %></strong>.</p><% } %>
+      <p>Freundliche Gruesse<br><%= appName %></p>
+    </div>
+    <div class="footer"><p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p></div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,225 @@
+import userService from './user.service.js';
+import sessionService from './session.service.js';
+import auditService from './audit.service.js';
+import eventBus from '../../shared/events/EventBus.js';
+import EVENT_TYPES from '../../shared/events/eventTypes.js';
+
+/**
+ * User controller — HTTP layer only.
+ */
+class UserController {
+  async create(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const user = await userService.createUser(req.body, req.user._id, meta);
+      return res.success({ data: user, message: 'User created successfully', statusCode: 201 });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async list(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await userService.listUsers(query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getById(req, res, next) {
+    try {
+      const user = await userService.getById(req.params.id);
+      return res.success({ data: user });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async update(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const user = await userService.updateUser(req.params.id, req.body, req.user._id, meta);
+      return res.success({ data: user, message: 'User updated successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async deactivate(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      await userService.deactivateUser(req.params.id, req.user._id, meta);
+      return res.success({ message: 'User deactivated successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getMe(req, res, next) {
+    try {
+      const user = await userService.getMe(req.user._id);
+      return res.success({ data: user });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateMe(req, res, next) {
+    try {
+      const user = await userService.updateMe(req.user._id, req.body);
+      return res.success({ data: user, message: 'Profile updated successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async uploadAvatar(req, res, next) {
+    try {
+      // Delegate to file service (imported lazily to avoid circular deps)
+      const fileService = (await import('../files/file.service.js')).default;
+
+      if (!req.file) {
+        return res.fail({
+          statusCode: 400,
+          code: 'FILE_REQUIRED',
+          message: 'No file provided',
+        });
+      }
+
+      // Determine target user: own avatar or admin changing another user's
+      const targetUserId = req.params.id;
+      const isOwnAvatar = targetUserId === req.user._id.toString();
+
+      if (!isOwnAvatar && req.user.role?.name !== 'Admin') {
+        return res.fail({
+          statusCode: 403,
+          message: 'You can only update your own avatar.',
+          code: 'INSUFFICIENT_PERMISSIONS',
+        });
+      }
+
+      const result = await fileService.upload({
+        buffer: req.file.buffer,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        sizeBytes: req.file.size,
+        module: 'auth',
+        entityType: 'avatar',
+        entityId: targetUserId,
+        uploadedBy: req.user._id,
+        bucket: 'images',
+      });
+
+      // Update user's avatarFileId
+      const { default: userRepository } = await import('./user.repository.js');
+      await userRepository.updateById(targetUserId, { avatarFileId: result._id });
+
+      return res.success({ data: result, message: 'Avatar uploaded successfully', statusCode: 201 });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async removeAvatar(req, res, next) {
+    try {
+      const targetUserId = req.params.id;
+      const isOwnAvatar = targetUserId === req.user._id.toString();
+
+      if (!isOwnAvatar && req.user.role?.name !== 'Admin') {
+        return res.fail({
+          statusCode: 403,
+          message: 'You can only remove your own avatar.',
+          code: 'INSUFFICIENT_PERMISSIONS',
+        });
+      }
+
+      const { default: userRepository } = await import('./user.repository.js');
+      const user = await userRepository.findById(targetUserId);
+      if (user?.avatarFileId) {
+        const fileService = (await import('../files/file.service.js')).default;
+        await fileService.delete(user.avatarFileId);
+      }
+
+      await userRepository.updateById(targetUserId, { avatarFileId: null });
+      return res.success({ message: 'Avatar removed successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Admin: bulk update multiple users.
+   */
+  async bulkUpdate(req, res, next) {
+    try {
+      const { ids, data } = req.body;
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await userService.bulkUpdateUsers(ids, data, req.user._id, meta);
+      return res.success({
+        data: result,
+        message: `${result.modifiedCount} user(s) updated successfully`,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Admin: bulk deactivate (soft delete) multiple users.
+   */
+  async bulkDeactivate(req, res, next) {
+    try {
+      const { ids } = req.body;
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await userService.bulkDeactivateUsers(ids, req.user._id, meta);
+      return res.success({
+        data: result,
+        message: `${result.deactivatedCount} user(s) deactivated successfully`,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Admin: list sessions for a specific user.
+   */
+  async listUserSessions(req, res, next) {
+    try {
+      const sessions = await sessionService.getSessionsByUser(req.params.id);
+      return res.success({ data: sessions });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * Admin: revoke all sessions for a specific user.
+   */
+  async revokeUserSessions(req, res, next) {
+    try {
+      const count = await sessionService.revokeAllUserSessions(req.params.id);
+
+      auditService.logEvent({
+        eventType: 'session.revoked',
+        userId: req.user._id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        result: 'success',
+        details: { targetUserId: req.params.id, revokedCount: count, revokedBy: 'admin' },
+      });
+
+      return res.success({
+        data: { revokedCount: count },
+        message: `${count} session(s) revoked for user.`,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+}
+
+const userController = new UserController();
+export default userController;

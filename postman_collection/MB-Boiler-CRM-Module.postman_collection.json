@@ -1,0 +1,274 @@
+{
+  "info": {
+    "name": "MB Boiler - Module 03 - CRM & Asset Management",
+    "description": "Complete API collection for Module 03: Customers, Contacts, Sites, Installations, Maintenance, Notes, Images.\n\nBase URL: {{baseUrl}} (http://localhost:9097/api/v1)\n\n**Quick Start:**\n1. Run Login from Auth collection first to get {{accessToken}}\n2. Run 'Create Customer' — auto-captures {{customerId}}\n3. Run 'Create Contact' — auto-captures {{contactId}}\n4. Run 'Create Site' — auto-captures {{siteId}}\n5. Run 'Create Installation' — auto-captures {{installationId}}\n\n**Total: 75 requests across 7 groups**",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:9097/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "customerId", "value": "" },
+    { "key": "customerId2", "value": "" },
+    { "key": "contactId", "value": "" },
+    { "key": "siteId", "value": "" },
+    { "key": "installationId", "value": "" },
+    { "key": "maintenanceId", "value": "" },
+    { "key": "noteId", "value": "" },
+    { "key": "imageId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "01 — Customers",
+      "description": "Customer master data: CRUD, search, duplicate detection, archive, merge, bulk operations.",
+      "item": [
+        {
+          "name": "Create Customer (Private)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "pm.test('Status 201', () => pm.response.to.have.status(201));", "if (res.success && res.data) {", "  pm.collectionVariables.set('customerId', res.data._id || res.data.id);", "  pm.test('Has customerNumber', () => pm.expect(res.data.customerNumber).to.match(/^K-/));", "}"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Mueller Familie\",\n  \"type\": \"private\",\n  \"street\": \"Bahnhofstrasse 42\",\n  \"postalCode\": \"8001\",\n  \"city\": \"Zuerich\",\n  \"canton\": \"ZH\",\n  \"country\": \"CH\",\n  \"phone\": \"+41 44 123 45 67\",\n  \"email\": \"mueller@example.ch\",\n  \"notes\": \"Bestandskunde seit 2020\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/customers", "host": ["{{baseUrl}}"], "path": ["crm", "customers"] }, "description": "**POST /api/v1/crm/customers**\n\nCreate a new customer. Auto-generates K-NNNNN number.\nPermission: crm:write" }
+        },
+        {
+          "name": "Create Customer (Business)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data) pm.collectionVariables.set('customerId2', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Heizung AG\",\n  \"type\": \"business\",\n  \"street\": \"Industriestrasse 10\",\n  \"postalCode\": \"3000\",\n  \"city\": \"Bern\",\n  \"canton\": \"BE\",\n  \"phone\": \"+41 31 999 88 77\",\n  \"email\": \"info@heizung-ag.ch\",\n  \"website\": \"https://heizung-ag.ch\",\n  \"newsletterOptIn\": true,\n  \"newsletterChannel\": \"email\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/customers", "host": ["{{baseUrl}}"], "path": ["crm", "customers"] } }
+        },
+        {
+          "name": "List Customers (Default)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/customers", "host": ["{{baseUrl}}"], "path": ["crm", "customers"] }, "description": "Cursor pagination, default 25/page, newest first." }
+        },
+        {
+          "name": "List Customers (Search)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/customers?search=mueller&limit=10", "host": ["{{baseUrl}}"], "path": ["crm", "customers"], "query": [{ "key": "search", "value": "mueller" }, { "key": "limit", "value": "10" }] } }
+        },
+        {
+          "name": "List Customers (Filter by Type)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/customers?type=business&limit=25", "host": ["{{baseUrl}}"], "path": ["crm", "customers"], "query": [{ "key": "type", "value": "business" }, { "key": "limit", "value": "25" }] } }
+        },
+        {
+          "name": "List Customers (Filter by Status + Canton)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/customers?status=active&canton=ZH&sortBy=name&sortOrder=asc", "host": ["{{baseUrl}}"], "path": ["crm", "customers"], "query": [{ "key": "status", "value": "active" }, { "key": "canton", "value": "ZH" }, { "key": "sortBy", "value": "name" }, { "key": "sortOrder", "value": "asc" }] } }
+        },
+        {
+          "name": "Full-Text Search",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/customers/search?q=mueller&limit=10", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "search"], "query": [{ "key": "q", "value": "mueller" }, { "key": "limit", "value": "10" }] }, "description": "MongoDB text index search. Weighted: name > email > city." }
+        },
+        {
+          "name": "Check Duplicates",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/customers/duplicates?name=Mueller&postalCode=8001", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "duplicates"], "query": [{ "key": "name", "value": "Mueller" }, { "key": "postalCode", "value": "8001" }] }, "description": "Returns matching customers by name + postal code. Warning only, doesn't block creation." }
+        },
+        {
+          "name": "Get Customer by ID",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/customers/{{customerId}}", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "{{customerId}}"] } }
+        },
+        {
+          "name": "Update Customer",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"phone\": \"+41 44 999 00 11\",\n  \"notes\": \"Updated contact info\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/customers/{{customerId}}", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "{{customerId}}"] } }
+        },
+        {
+          "name": "Archive Customer",
+          "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/crm/customers/{{customerId2}}/archive", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "{{customerId2}}", "archive"] }, "description": "Sets status to 'archived'. Cannot archive if has active sites." }
+        },
+        {
+          "name": "Merge Customers",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"sourceId\": \"{{customerId2}}\",\n  \"targetId\": \"{{customerId}}\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/customers/merge", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "merge"] }, "description": "Moves all contacts and sites from source to target. Archives source with mergedIntoId breadcrumb." }
+        },
+        {
+          "name": "Bulk Update Customers",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"ids\": [\"{{customerId}}\", \"{{customerId2}}\"],\n  \"data\": {\n    \"newsletterOptIn\": true\n  }\n}" }, "url": { "raw": "{{baseUrl}}/crm/customers/bulk-update", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "bulk-update"] } }
+        },
+        {
+          "name": "Bulk Delete Customers",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"ids\": [\"{{customerId2}}\"]\n}" }, "url": { "raw": "{{baseUrl}}/crm/customers/bulk-delete", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "bulk-delete"] } }
+        }
+      ]
+    },
+    {
+      "name": "02 — Contacts",
+      "description": "Customer contacts: CRUD, primary contact management, global search.",
+      "item": [
+        {
+          "name": "Create Contact",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "pm.test('Status 201', () => pm.response.to.have.status(201));", "if (res.success && res.data) pm.collectionVariables.set('contactId', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Hans\",\n  \"lastName\": \"Mueller\",\n  \"functionTitle\": \"Hausbesitzer\",\n  \"phone\": \"+41 44 123 45 67\",\n  \"mobile\": \"+41 79 123 45 67\",\n  \"email\": \"hans.mueller@example.ch\",\n  \"isPrimary\": true,\n  \"notes\": \"Prefers morning calls\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/customers/{{customerId}}/contacts", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "{{customerId}}", "contacts"] }, "description": "First contact auto-sets as primary." }
+        },
+        {
+          "name": "Create Second Contact",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"Maria\",\n  \"lastName\": \"Mueller\",\n  \"phone\": \"+41 44 123 45 68\",\n  \"email\": \"maria.mueller@example.ch\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/customers/{{customerId}}/contacts", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "{{customerId}}", "contacts"] } }
+        },
+        {
+          "name": "List Contacts for Customer",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/customers/{{customerId}}/contacts", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "{{customerId}}", "contacts"] }, "description": "Sorted: primary first, then by lastName." }
+        },
+        {
+          "name": "Search Contacts (Global)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/contacts/search?q=mueller&limit=10", "host": ["{{baseUrl}}"], "path": ["crm", "contacts", "search"], "query": [{ "key": "q", "value": "mueller" }, { "key": "limit", "value": "10" }] } }
+        },
+        {
+          "name": "Get Contact by ID",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/contacts/{{contactId}}", "host": ["{{baseUrl}}"], "path": ["crm", "contacts", "{{contactId}}"] } }
+        },
+        {
+          "name": "Update Contact",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"phone\": \"+41 44 999 00 11\",\n  \"notes\": \"Updated phone\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/contacts/{{contactId}}", "host": ["{{baseUrl}}"], "path": ["crm", "contacts", "{{contactId}}"] } }
+        },
+        {
+          "name": "Set Contact as Primary",
+          "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/crm/contacts/{{contactId}}/set-primary", "host": ["{{baseUrl}}"], "path": ["crm", "contacts", "{{contactId}}", "set-primary"] }, "description": "Unsets previous primary for the customer, sets this contact." }
+        },
+        {
+          "name": "Delete Contact (non-primary only)",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/crm/contacts/{{contactId}}", "host": ["{{baseUrl}}"], "path": ["crm", "contacts", "{{contactId}}"] }, "description": "Cannot delete primary contact. Reassign primary first." }
+        }
+      ]
+    },
+    {
+      "name": "03 — Sites",
+      "description": "Site/object management: CRUD per customer, deactivation, notes, images.",
+      "item": [
+        {
+          "name": "Create Site",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "pm.test('Status 201', () => pm.response.to.have.status(201));", "if (res.success && res.data) {", "  pm.collectionVariables.set('siteId', res.data._id || res.data.id);", "  pm.test('Has siteNumber', () => pm.expect(res.data.siteNumber).to.match(/^O-/));", "}"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Wohnhaus Mueller\",\n  \"street\": \"Bahnhofstrasse 42\",\n  \"postalCode\": \"8001\",\n  \"city\": \"Zuerich\",\n  \"canton\": \"ZH\",\n  \"siteType\": \"residential\",\n  \"floorUnit\": \"3. OG links\",\n  \"accessInstructions\": \"Klingel bei Mueller, Hund im Garten\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/customers/{{customerId}}/sites", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "{{customerId}}", "sites"] }, "description": "Auto-generates O-XXX site number per customer." }
+        },
+        {
+          "name": "List Sites for Customer",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/customers/{{customerId}}/sites", "host": ["{{baseUrl}}"], "path": ["crm", "customers", "{{customerId}}", "sites"] } }
+        },
+        {
+          "name": "Get Site by ID",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/sites/{{siteId}}", "host": ["{{baseUrl}}"], "path": ["crm", "sites", "{{siteId}}"] } }
+        },
+        {
+          "name": "Update Site",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"accessInstructions\": \"Updated: Ring at Mueller, code 1234\",\n  \"floorUnit\": \"3. OG rechts\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/sites/{{siteId}}", "host": ["{{baseUrl}}"], "path": ["crm", "sites", "{{siteId}}"] } }
+        },
+        {
+          "name": "Deactivate Site",
+          "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/crm/sites/{{siteId}}/deactivate", "host": ["{{baseUrl}}"], "path": ["crm", "sites", "{{siteId}}", "deactivate"] }, "description": "Blocked if active installations exist. Decommission installations first." }
+        },
+        {
+          "name": "Add Note to Site",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data) pm.collectionVariables.set('noteId', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"text\": \"Vorsicht: Aggressiver Hund im Garten!\",\n  \"category\": \"warning\",\n  \"isWarning\": true,\n  \"isPinned\": true\n}" }, "url": { "raw": "{{baseUrl}}/crm/sites/{{siteId}}/notes", "host": ["{{baseUrl}}"], "path": ["crm", "sites", "{{siteId}}", "notes"] } }
+        },
+        {
+          "name": "List Notes for Site",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/sites/{{siteId}}/notes", "host": ["{{baseUrl}}"], "path": ["crm", "sites", "{{siteId}}", "notes"] } }
+        },
+        {
+          "name": "Upload Image to Site",
+          "request": { "method": "POST", "body": { "mode": "formdata", "formdata": [{ "key": "image", "type": "file", "src": "" }, { "key": "caption", "value": "Frontansicht", "type": "text" }, { "key": "category", "value": "general", "type": "text" }] }, "url": { "raw": "{{baseUrl}}/crm/sites/{{siteId}}/images", "host": ["{{baseUrl}}"], "path": ["crm", "sites", "{{siteId}}", "images"] } }
+        },
+        {
+          "name": "List Images for Site",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/sites/{{siteId}}/images", "host": ["{{baseUrl}}"], "path": ["crm", "sites", "{{siteId}}", "images"] } }
+        }
+      ]
+    },
+    {
+      "name": "04 — Installations",
+      "description": "Technical installations per site: boilers, heat pumps, etc. CRUD, decommission, notes, images.",
+      "item": [
+        {
+          "name": "Create Installation (Boiler)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "pm.test('Status 201', () => pm.response.to.have.status(201));", "if (res.success && res.data) {", "  pm.collectionVariables.set('installationId', res.data._id || res.data.id);", "  pm.test('Has installationNumber', () => pm.expect(res.data.installationNumber).to.match(/^A-/));", "}"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"type\": \"boiler\",\n  \"manufacturer\": \"Viessmann\",\n  \"model\": \"Vitodens 200-W\",\n  \"serialNumber\": \"SN-7654321\",\n  \"commissioningDate\": \"2022-03-15\",\n  \"warrantyEndDate\": \"2027-03-15\",\n  \"powerOutputKw\": 26.0,\n  \"fuelType\": \"gas\",\n  \"yearOfManufacture\": 2022,\n  \"technicalNotes\": \"Condensing boiler, wall-mounted\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/sites/{{siteId}}/installations", "host": ["{{baseUrl}}"], "path": ["crm", "sites", "{{siteId}}", "installations"] }, "description": "Auto-generates A-NNNNN installation number." }
+        },
+        {
+          "name": "List Installations for Site",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/sites/{{siteId}}/installations", "host": ["{{baseUrl}}"], "path": ["crm", "sites", "{{siteId}}", "installations"] } }
+        },
+        {
+          "name": "Get Installation by ID",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/installations/{{installationId}}", "host": ["{{baseUrl}}"], "path": ["crm", "installations", "{{installationId}}"] } }
+        },
+        {
+          "name": "Update Installation",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"technicalNotes\": \"Condensing boiler, wall-mounted, last inspected Jan 2026\",\n  \"powerOutputKw\": 26.5\n}" }, "url": { "raw": "{{baseUrl}}/crm/installations/{{installationId}}", "host": ["{{baseUrl}}"], "path": ["crm", "installations", "{{installationId}}"] } }
+        },
+        {
+          "name": "Decommission Installation",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Replaced by newer model Vitodens 300-W\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/installations/{{installationId}}/decommission", "host": ["{{baseUrl}}"], "path": ["crm", "installations", "{{installationId}}", "decommission"] }, "description": "Sets status=decommissioned. Stops all maintenance tracking." }
+        },
+        {
+          "name": "Add Note to Installation",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"text\": \"Brenner zeigt intermittierenden Fehler F28\",\n  \"category\": \"technical\",\n  \"isWarning\": true\n}" }, "url": { "raw": "{{baseUrl}}/crm/installations/{{installationId}}/notes", "host": ["{{baseUrl}}"], "path": ["crm", "installations", "{{installationId}}", "notes"] } }
+        },
+        {
+          "name": "List Notes for Installation",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/installations/{{installationId}}/notes", "host": ["{{baseUrl}}"], "path": ["crm", "installations", "{{installationId}}", "notes"] } }
+        },
+        {
+          "name": "Upload Image to Installation",
+          "request": { "method": "POST", "body": { "mode": "formdata", "formdata": [{ "key": "image", "type": "file", "src": "" }, { "key": "caption", "value": "Typenschild", "type": "text" }, { "key": "category", "value": "nameplate", "type": "text" }] }, "url": { "raw": "{{baseUrl}}/crm/installations/{{installationId}}/images", "host": ["{{baseUrl}}"], "path": ["crm", "installations", "{{installationId}}", "images"] } }
+        },
+        {
+          "name": "List Images for Installation",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/installations/{{installationId}}/images", "host": ["{{baseUrl}}"], "path": ["crm", "installations", "{{installationId}}", "images"] } }
+        },
+        {
+          "name": "Create Maintenance Interval",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data) pm.collectionVariables.set('maintenanceId', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"maintenanceType\": \"annual_service\",\n  \"frequencyMonths\": 12,\n  \"lastServiceDate\": \"2025-06-15\",\n  \"notes\": \"Jaehrliche Wartung inkl. Brennerreinigung\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/installations/{{installationId}}/maintenance", "host": ["{{baseUrl}}"], "path": ["crm", "installations", "{{installationId}}", "maintenance"] }, "description": "Auto-calculates nextDueDate. Determines initial status (ok/due/overdue)." }
+        },
+        {
+          "name": "List Maintenance for Installation",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/installations/{{installationId}}/maintenance", "host": ["{{baseUrl}}"], "path": ["crm", "installations", "{{installationId}}", "maintenance"] } }
+        }
+      ]
+    },
+    {
+      "name": "05 — Maintenance",
+      "description": "Standalone maintenance endpoints: dashboard, due/overdue lists, update, delete.",
+      "item": [
+        {
+          "name": "Maintenance Dashboard",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/maintenance/dashboard", "host": ["{{baseUrl}}"], "path": ["crm", "maintenance", "dashboard"] }, "description": "Returns {total, ok, due, overdue, scheduled} counts." }
+        },
+        {
+          "name": "List Due Maintenance",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/maintenance/due?limit=25", "host": ["{{baseUrl}}"], "path": ["crm", "maintenance", "due"], "query": [{ "key": "limit", "value": "25" }] } }
+        },
+        {
+          "name": "List Overdue Maintenance",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/crm/maintenance/overdue?limit=25", "host": ["{{baseUrl}}"], "path": ["crm", "maintenance", "overdue"], "query": [{ "key": "limit", "value": "25" }] } }
+        },
+        {
+          "name": "Update Maintenance Interval",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"lastServiceDate\": \"2026-03-28\",\n  \"notes\": \"Service durchgefuehrt, Brenner gereinigt\"\n}" }, "url": { "raw": "{{baseUrl}}/crm/maintenance/{{maintenanceId}}", "host": ["{{baseUrl}}"], "path": ["crm", "maintenance", "{{maintenanceId}}"] }, "description": "Recalculates nextDueDate and status when lastServiceDate changes." }
+        },
+        {
+          "name": "Delete Maintenance Interval",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/crm/maintenance/{{maintenanceId}}", "host": ["{{baseUrl}}"], "path": ["crm", "maintenance", "{{maintenanceId}}"] }, "description": "Hard delete (not soft delete)." }
+        }
+      ]
+    },
+    {
+      "name": "06 — Notes (Standalone)",
+      "description": "Update or delete notes by ID. Notes are created via site/installation sub-routes.",
+      "item": [
+        {
+          "name": "Update Note (Within 24h)",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"text\": \"Updated: Vorsicht Hund im Garten! Bellt laut.\",\n  \"isPinned\": true\n}" }, "url": { "raw": "{{baseUrl}}/crm/notes/{{noteId}}", "host": ["{{baseUrl}}"], "path": ["crm", "notes", "{{noteId}}"] }, "description": "Only editable within 24 hours of creation. After that, returns NOTE_EDIT_EXPIRED." }
+        },
+        {
+          "name": "Delete Note",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/crm/notes/{{noteId}}", "host": ["{{baseUrl}}"], "path": ["crm", "notes", "{{noteId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "07 — Images (Standalone)",
+      "description": "Delete images by ID. Images are created via site/installation sub-routes.",
+      "item": [
+        {
+          "name": "Delete Image",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/crm/images/{{imageId}}", "host": ["{{baseUrl}}"], "path": ["crm", "images", "{{imageId}}"] }, "description": "Hard deletes EntityImage record + soft-deletes the file in S3." }
+        }
+      ]
+    }
+  ]
+}

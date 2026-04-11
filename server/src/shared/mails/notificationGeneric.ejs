@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title || 'Benachrichtigung' %></title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { background: #2563eb; color: #fff; padding: 20px 30px; }
+    .header h1 { margin: 0; font-size: 22px; }
+    .content { padding: 30px; }
+    .notification-body { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 20px; margin: 16px 0; }
+    .notification-body p { margin: 0; }
+    .btn { display: inline-block; background: #2563eb; color: #fff; padding: 10px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
+    .footer { padding: 20px 30px; text-align: center; color: #94a3b8; font-size: 12px; border-top: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1><%= appName %></h1>
+    </div>
+    <div class="content">
+      <% if (recipientName) { %>
+        <p>Hallo <%= recipientName %>,</p>
+      <% } %>
+      <% if (title) { %>
+        <h2 style="margin-top: 0; color: #1e293b;"><%= title %></h2>
+      <% } %>
+      <div class="notification-body">
+        <%- body %>
+      </div>
+      <% if (deepLink) { %>
+        <a href="<%= clientUrl %><%= deepLink %>" class="btn">Details ansehen</a>
+      <% } %>
+    </div>
+    <div class="footer">
+      <p>&copy; <%= year %> <%= appName %>. Alle Rechte vorbehalten.</p>
+    </div>
+  </div>
+</body>
+</html>

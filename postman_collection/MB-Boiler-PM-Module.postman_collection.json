@@ -1,0 +1,268 @@
+{
+  "info": {
+    "name": "MB Boiler - Module 04 - Project Management",
+    "description": "Complete API collection for Module 04: Projects, Status Tracking, Preparatory Actions, Construction Schedule, Partner Confirmations, Documents.\n\nBase URL: {{baseUrl}} (http://localhost:9097/api/v1)\n\n**Quick Start:**\n1. Run Login from Auth collection first to get {{accessToken}}\n2. Ensure a customer exists (run CRM Create Customer)\n3. Run 'Create Project' — auto-captures {{projectId}}\n4. Run status transitions, prep actions, schedule entries in order\n\n**Total: 52 requests across 6 groups**",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:9097/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "customerId", "value": "" },
+    { "key": "siteId", "value": "" },
+    { "key": "projectId", "value": "" },
+    { "key": "projectId2", "value": "" },
+    { "key": "actionId", "value": "" },
+    { "key": "entryId", "value": "" },
+    { "key": "milestoneId", "value": "" },
+    { "key": "confirmationId", "value": "" },
+    { "key": "docId", "value": "" },
+    { "key": "projectManagerId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "01 — Projects",
+      "description": "Project CRUD with auto-numbering PRJ-2026-NNNNN, search, duplicate, dashboard, bulk operations.",
+      "item": [
+        {
+          "name": "Create Project (Renovation)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "pm.test('Status 201', () => pm.response.to.have.status(201));", "if (res.success && res.data) {", "  pm.collectionVariables.set('projectId', res.data._id || res.data.id);", "  pm.test('Has projectNumber', () => pm.expect(res.data.projectNumber).to.match(/^PRJ-/));", "  pm.test('Status is DRAFT', () => pm.expect(res.data.status).to.eql('DRAFT'));", "}"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Heizungsanlage Familie Mueller\",\n  \"description\": \"Complete heating system replacement with solar integration\",\n  \"projectType\": \"RENOVATION\",\n  \"customerId\": \"{{customerId}}\",\n  \"siteId\": \"{{siteId}}\",\n  \"projectManagerId\": \"{{projectManagerId}}\",\n  \"plannedStartDate\": \"2026-05-01\",\n  \"plannedEndDate\": \"2026-06-15\",\n  \"estimatedBudget\": 45000,\n  \"currency\": \"CHF\",\n  \"notes\": \"Customer prefers morning appointments\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects", "host": ["{{baseUrl}}"], "path": ["pm", "projects"] }, "description": "**POST /api/v1/pm/projects**\n\nAuto-generates PRJ-{year}-{NNNNN}.\nStatus starts as DRAFT.\nRequires valid customerId from CRM." }
+        },
+        {
+          "name": "Create Project (New Installation)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data) pm.collectionVariables.set('projectId2', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Waermepumpe Neubau Bern\",\n  \"description\": \"Heat pump installation for new construction\",\n  \"projectType\": \"NEW_INSTALLATION\",\n  \"customerId\": \"{{customerId}}\",\n  \"projectManagerId\": \"{{projectManagerId}}\",\n  \"plannedStartDate\": \"2026-07-01\",\n  \"plannedEndDate\": \"2026-08-30\",\n  \"estimatedBudget\": 75000\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects", "host": ["{{baseUrl}}"], "path": ["pm", "projects"] } }
+        },
+        {
+          "name": "List Projects (Default)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects", "host": ["{{baseUrl}}"], "path": ["pm", "projects"] } }
+        },
+        {
+          "name": "List Projects (Filter by Status)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects?status=DRAFT&limit=25", "host": ["{{baseUrl}}"], "path": ["pm", "projects"], "query": [{ "key": "status", "value": "DRAFT" }, { "key": "limit", "value": "25" }] } }
+        },
+        {
+          "name": "List Projects (Filter by Type + Customer)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects?projectType=RENOVATION&customerId={{customerId}}&sortBy=plannedStartDate&sortOrder=asc", "host": ["{{baseUrl}}"], "path": ["pm", "projects"], "query": [{ "key": "projectType", "value": "RENOVATION" }, { "key": "customerId", "value": "{{customerId}}" }, { "key": "sortBy", "value": "plannedStartDate" }, { "key": "sortOrder", "value": "asc" }] } }
+        },
+        {
+          "name": "List Projects (Search)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects?search=Mueller&limit=10", "host": ["{{baseUrl}}"], "path": ["pm", "projects"], "query": [{ "key": "search", "value": "Mueller" }, { "key": "limit", "value": "10" }] } }
+        },
+        {
+          "name": "Full-Text Search",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/search?q=heizung&limit=10", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "search"], "query": [{ "key": "q", "value": "heizung" }, { "key": "limit", "value": "10" }] } }
+        },
+        {
+          "name": "Dashboard Summary",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/dashboard/summary", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "dashboard", "summary"] }, "description": "Returns {total, byStatus: {DRAFT: N, PLANNING: N, ...}, overdue, upcomingMilestones7d}." }
+        },
+        {
+          "name": "Dashboard Upcoming Milestones",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/dashboard/milestones", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "dashboard", "milestones"] }, "description": "Milestones due within 7 days across all projects." }
+        },
+        {
+          "name": "Get Project by ID",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}"] }, "description": "Returns project with populated customer, project manager, and site." }
+        },
+        {
+          "name": "Update Project",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"estimatedBudget\": 48000,\n  \"notes\": \"Budget revised after site inspection\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}"] } }
+        },
+        {
+          "name": "Duplicate Project",
+          "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/duplicate", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "duplicate"] }, "description": "Copies metadata, assigns new number, resets dates to null, status to DRAFT." }
+        },
+        {
+          "name": "Delete Project (DRAFT only)",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId2}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId2}}"] }, "description": "Only DRAFT projects can be deleted. Others must be archived via status transition." }
+        },
+        {
+          "name": "Bulk Update Projects",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"ids\": [\"{{projectId}}\", \"{{projectId2}}\"],\n  \"data\": {\n    \"projectType\": \"RENOVATION\"\n  }\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/bulk-update", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "bulk-update"] } }
+        },
+        {
+          "name": "Bulk Archive Projects",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"ids\": [\"{{projectId2}}\"]\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/bulk-delete", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "bulk-delete"] }, "description": "Sets status to ARCHIVED (not soft-delete for non-DRAFT)." }
+        }
+      ]
+    },
+    {
+      "name": "02 — Status Tracking",
+      "description": "Project lifecycle transitions with precondition checks, override capability, immutable history.",
+      "item": [
+        {
+          "name": "Transition: DRAFT -> PLANNING",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"targetStatus\": \"PLANNING\",\n  \"comment\": \"Project planning started\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/status", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "status"] }, "description": "No preconditions for DRAFT -> PLANNING." }
+        },
+        {
+          "name": "Transition: PLANNING -> IN_PROGRESS (Blocked)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"targetStatus\": \"IN_PROGRESS\",\n  \"comment\": \"Starting construction\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/status", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "status"] }, "description": "Will be BLOCKED if mandatory prep actions are not completed. Returns 409 with list of outstanding actions." }
+        },
+        {
+          "name": "Transition: PLANNING -> IN_PROGRESS (Override)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"targetStatus\": \"IN_PROGRESS\",\n  \"comment\": \"Starting despite pending actions\",\n  \"override\": true,\n  \"overrideReason\": \"Customer urgently needs work started, funding decision expected next week\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/status", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "status"] }, "description": "Override blocked transition. Requires project:status:override permission. Override is logged in history." }
+        },
+        {
+          "name": "Transition: IN_PROGRESS -> ON_HOLD",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"targetStatus\": \"ON_HOLD\",\n  \"comment\": \"Waiting for building permit approval\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/status", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "status"] }, "description": "Comment is REQUIRED for ON_HOLD transitions." }
+        },
+        {
+          "name": "Transition: ON_HOLD -> IN_PROGRESS",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"targetStatus\": \"IN_PROGRESS\",\n  \"comment\": \"Building permit received, resuming work\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/status", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "status"] } }
+        },
+        {
+          "name": "Transition: IN_PROGRESS -> COMPLETED (Blocked)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"targetStatus\": \"COMPLETED\",\n  \"comment\": \"All work finished\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/status", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "status"] }, "description": "Blocked if milestones are not COMPLETED or WAIVED." }
+        },
+        {
+          "name": "Transition: COMPLETED -> ARCHIVED",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"targetStatus\": \"ARCHIVED\",\n  \"comment\": \"Project archived after retention period\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/status", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "status"] } }
+        },
+        {
+          "name": "Transition: Invalid (Should Fail)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"targetStatus\": \"DRAFT\",\n  \"comment\": \"Try to go back to draft\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/status", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "status"] }, "description": "Should return 409 PROJECT_INVALID_TRANSITION." }
+        },
+        {
+          "name": "Get Status History",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/status/history", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "status", "history"] }, "description": "Immutable history: every transition with timestamp, user, comment, override flag." }
+        }
+      ]
+    },
+    {
+      "name": "03 — Preparatory Actions",
+      "description": "Pre-construction actions: funding applications, material orders, scheduling. Mandatory actions block project progression.",
+      "item": [
+        {
+          "name": "Create Funding Application (Mandatory)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data) pm.collectionVariables.set('actionId', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"actionType\": \"FUNDING_APPLICATION\",\n  \"title\": \"ProKlima Foerderantrag\",\n  \"description\": \"Federal funding for heat pump replacement\",\n  \"isMandatory\": true,\n  \"dueDate\": \"2026-04-15\",\n  \"fundingDetails\": {\n    \"fundingBody\": \"ProKlima / Kanton Zuerich\",\n    \"applicationAmount\": 8000,\n    \"fundingStatus\": \"DRAFT\"\n  }\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/prep-actions", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "prep-actions"] }, "description": "Mandatory action — blocks PLANNING -> IN_PROGRESS until completed." }
+        },
+        {
+          "name": "Create Material Order",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"actionType\": \"MATERIAL_ORDER\",\n  \"title\": \"Viessmann Vitocal 250-A\",\n  \"description\": \"Order heat pump unit and accessories\",\n  \"isMandatory\": false,\n  \"dueDate\": \"2026-04-20\",\n  \"materialOrderDetails\": {\n    \"supplier\": \"Viessmann Schweiz AG\",\n    \"deliveryStatus\": \"PENDING\",\n    \"items\": [\n      { \"description\": \"Vitocal 250-A Waermepumpe\", \"quantity\": 1, \"unit\": \"Stk.\" },\n      { \"description\": \"Pufferspeicher 300L\", \"quantity\": 1, \"unit\": \"Stk.\" },\n      { \"description\": \"Kupferrohr 22mm\", \"quantity\": 25, \"unit\": \"m\" }\n    ]\n  }\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/prep-actions", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "prep-actions"] } }
+        },
+        {
+          "name": "Create Scheduling Action",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"actionType\": \"SCHEDULING\",\n  \"title\": \"Koordination mit Elektriker\",\n  \"description\": \"Coordinate electrical work for heat pump connection\",\n  \"isMandatory\": false,\n  \"dueDate\": \"2026-04-25\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/prep-actions", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "prep-actions"] } }
+        },
+        {
+          "name": "List Prep Actions",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/prep-actions", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "prep-actions"] }, "description": "Lists all prep actions for the project, sorted by dueDate." }
+        },
+        {
+          "name": "Get Prep Action by ID",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/prep-actions/{{actionId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "prep-actions", "{{actionId}}"] } }
+        },
+        {
+          "name": "Update Prep Action (Submit Funding)",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"IN_PROGRESS\",\n  \"fundingDetails\": {\n    \"fundingStatus\": \"SUBMITTED\",\n    \"submissionDate\": \"2026-04-05\",\n    \"expectedDecisionDate\": \"2026-04-30\"\n  }\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/prep-actions/{{actionId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "prep-actions", "{{actionId}}"] } }
+        },
+        {
+          "name": "Update Prep Action (Complete Funding)",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"COMPLETED\",\n  \"fundingDetails\": {\n    \"fundingStatus\": \"APPROVED\",\n    \"approvedAmount\": 6500\n  }\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/prep-actions/{{actionId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "prep-actions", "{{actionId}}"] }, "description": "After completing all mandatory actions, project can transition to IN_PROGRESS." }
+        },
+        {
+          "name": "Delete Prep Action",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/prep-actions/{{actionId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "prep-actions", "{{actionId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "04 — Construction Schedule",
+      "description": "Phases, milestones, partner appointment confirmations.",
+      "item": [
+        {
+          "name": "Get Schedule",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule"] }, "description": "Returns all schedule entries sorted by sortOrder." }
+        },
+        {
+          "name": "Add Phase (Demolition)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data) pm.collectionVariables.set('entryId', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Abbruch alte Heizung\",\n  \"entryType\": \"PHASE\",\n  \"startDate\": \"2026-05-01\",\n  \"endDate\": \"2026-05-03\",\n  \"responsibleType\": \"INTERNAL_TEAM\",\n  \"sortOrder\": 1,\n  \"notes\": \"Alte Oelheizung und Tank entfernen\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries"] } }
+        },
+        {
+          "name": "Add Phase (Plumbing — Partner)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Sanitaerinstallation\",\n  \"entryType\": \"PHASE\",\n  \"startDate\": \"2026-05-05\",\n  \"endDate\": \"2026-05-10\",\n  \"responsibleType\": \"PARTNER_COMPANY\",\n  \"partnerCompanyId\": \"{{customerId}}\",\n  \"sortOrder\": 2,\n  \"notes\": \"Rohrleitungen fuer Waermepumpe\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries"] } }
+        },
+        {
+          "name": "Add Milestone (Inspection)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data) pm.collectionVariables.set('milestoneId', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Abnahme durch Kaminkehrer\",\n  \"entryType\": \"MILESTONE\",\n  \"milestoneDate\": \"2026-05-20\",\n  \"responsibleType\": \"PARTNER_COMPANY\",\n  \"sortOrder\": 5,\n  \"notes\": \"Offizielle Abnahme erforderlich\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries"] } }
+        },
+        {
+          "name": "Update Schedule Entry",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"startDate\": \"2026-05-02\",\n  \"endDate\": \"2026-05-04\",\n  \"status\": \"IN_PROGRESS\",\n  \"notes\": \"Started one day later due to weather\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries/{{entryId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries", "{{entryId}}"] } }
+        },
+        {
+          "name": "Complete Schedule Entry",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"COMPLETED\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries/{{entryId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries", "{{entryId}}"] } }
+        },
+        {
+          "name": "Waive Milestone",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"status\": \"WAIVED\",\n  \"notes\": \"Inspection postponed to next month\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries/{{milestoneId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries", "{{milestoneId}}"] }, "description": "Waived milestones don't block project completion." }
+        },
+        {
+          "name": "Delete Schedule Entry",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries/{{entryId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries", "{{entryId}}"] } }
+        },
+        {
+          "name": "Send Partner Confirmation",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data) pm.collectionVariables.set('confirmationId', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"partnerContactEmail\": \"partner@sanitaer-ag.ch\",\n  \"partnerCompanyId\": \"{{customerId}}\",\n  \"partnerName\": \"Sanitaer AG\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries/{{entryId}}/confirmations", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries", "{{entryId}}", "confirmations"] }, "description": "Sends appointment confirmation email. Status set to SENT." }
+        },
+        {
+          "name": "Record Partner Response (Confirmed)",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"confirmationStatus\": \"CONFIRMED\",\n  \"responseNotes\": \"Termin bestaetigt. Wir sind vor Ort.\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries/{{entryId}}/confirmations/{{confirmationId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries", "{{entryId}}", "confirmations", "{{confirmationId}}"] } }
+        },
+        {
+          "name": "Record Partner Response (Declined)",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"confirmationStatus\": \"DECLINED\",\n  \"responseNotes\": \"Termin leider nicht moeglich. Alternativ 12.05. vorgeschlagen.\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/schedule/entries/{{entryId}}/confirmations/{{confirmationId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "schedule", "entries", "{{entryId}}", "confirmations", "{{confirmationId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "05 — Documents",
+      "description": "Project document repository: upload, download, generate from template, categorize.",
+      "item": [
+        {
+          "name": "Upload Document",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data) pm.collectionVariables.set('docId', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": "" }, { "key": "category", "value": "PLANS", "type": "text" }, { "key": "description", "value": "Heizungsschema Neubau", "type": "text" }] }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/documents", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "documents"] }, "description": "Max 50MB. Categories: PLANS, CONTRACTS, PHOTOS, CORRESPONDENCE, REPORTS, OTHER." }
+        },
+        {
+          "name": "Generate Document from Template",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"templateType\": \"completion_certificate\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/documents/generate", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "documents", "generate"] }, "description": "Generates document from template with auto-populated project data. (PDF generation is future work.)" }
+        },
+        {
+          "name": "List Documents",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/documents", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "documents"] } }
+        },
+        {
+          "name": "List Documents (Filter by Category)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/documents?category=PLANS", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "documents"], "query": [{ "key": "category", "value": "PLANS" }] } }
+        },
+        {
+          "name": "Get Document Metadata",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/documents/{{docId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "documents", "{{docId}}"] } }
+        },
+        {
+          "name": "Download Document",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/documents/{{docId}}/download", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "documents", "{{docId}}", "download"] }, "description": "Returns presigned S3 URL for direct download." }
+        },
+        {
+          "name": "Update Document Metadata",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"category\": \"CONTRACTS\",\n  \"description\": \"Updated: Vertrag Sanitaerinstallation\"\n}" }, "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/documents/{{docId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "documents", "{{docId}}"] } }
+        },
+        {
+          "name": "Delete Document",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/pm/projects/{{projectId}}/documents/{{docId}}", "host": ["{{baseUrl}}"], "path": ["pm", "projects", "{{projectId}}", "documents", "{{docId}}"] }, "description": "Soft-delete. Restorable within 30 days." }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anfrage bestätigt</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { background: #0056b3; color: #fff; padding: 20px 30px; }
+    .header h1 { margin: 0; font-size: 22px; }
+    .content { padding: 30px; }
+    .ref-box { background: #f0f7ff; border: 1px solid #b8d4f0; border-radius: 6px; padding: 16px; margin: 16px 0; text-align: center; }
+    .ref-number { font-size: 24px; font-weight: bold; color: #0056b3; }
+    .details { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin: 16px 0; }
+    .details dt { font-weight: bold; color: #64748b; font-size: 13px; margin-top: 8px; }
+    .details dd { margin: 0 0 8px 0; color: #1e293b; }
+    .footer { padding: 20px 30px; text-align: center; color: #94a3b8; font-size: 12px; border-top: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1><%= appName %></h1>
+    </div>
+    <div class="content">
+      <p>Guten Tag <%= contactName %>,</p>
+      <p>Vielen Dank für Ihre Anfrage. Wir haben diese erfolgreich erhalten und werden uns innerhalb von 24 Stunden bei Ihnen melden.</p>
+      <div class="ref-box">
+        <div style="color: #64748b; font-size: 13px;">Ihre Referenznummer</div>
+        <div class="ref-number"><%= referenceNumber %></div>
+      </div>
+      <div class="details">
+        <dl>
+          <dt>Art der Anfrage</dt>
+          <dd><%= requestType %></dd>
+          <dt>Beschreibung</dt>
+          <dd><%= description %></dd>
+          <% if (preferredWindow) { %>
+            <dt>Gewünschtes Zeitfenster</dt>
+            <dd><%= preferredWindow %></dd>
+          <% } %>
+        </dl>
+      </div>
+      <p>Bei dringenden Anliegen erreichen Sie uns telefonisch unter <strong><%= contactPhone || '+41 XX XXX XX XX' %></strong>.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; <%= year %> <%= appName %>. Alle Rechte vorbehalten.</p>
+    </div>
+  </div>
+</body>
+</html>

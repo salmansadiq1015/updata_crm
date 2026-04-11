@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+    .header { background-color: #1a365d; padding: 30px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+    .content { padding: 30px; color: #333333; line-height: 1.6; }
+    .details { background-color: #f0f4f8; border-left: 4px solid #2b6cb0; padding: 16px; margin: 16px 0; }
+    .details table { width: 100%; border-collapse: collapse; }
+    .details td { padding: 6px 0; vertical-align: top; }
+    .details td:first-child { font-weight: bold; width: 160px; color: #555; }
+    .totals { margin-top: 16px; border-top: 2px solid #2b6cb0; padding-top: 12px; }
+    .totals table { width: 100%; border-collapse: collapse; }
+    .totals td { padding: 4px 0; }
+    .totals td:last-child { text-align: right; }
+    .total-row { font-size: 18px; font-weight: bold; color: #1a365d; }
+    .due-date { color: #e53e3e; font-weight: bold; }
+    .footer { padding: 20px 30px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1><%= appName %></h1>
+    </div>
+    <div class="content">
+      <h2>Invoice <%= invoiceNumber %></h2>
+      <p>Dear <%= customerName %>,</p>
+      <p>Please find below the details of your invoice:</p>
+      <div class="details">
+        <table>
+          <tr><td>Invoice Number:</td><td><%= invoiceNumber %></td></tr>
+          <tr><td>Invoice Date:</td><td><%= invoiceDate %></td></tr>
+          <tr><td>Due Date:</td><td class="due-date"><%= dueDate %></td></tr>
+          <% if (paymentTerms) { %><tr><td>Payment Terms:</td><td><%= paymentTerms %></td></tr><% } %>
+        </table>
+        <div class="totals">
+          <table>
+            <tr><td>Subtotal:</td><td><%= currency %> <%= subtotal %></td></tr>
+            <tr><td>Tax (<%= taxRate %>%):</td><td><%= currency %> <%= taxAmount %></td></tr>
+            <tr class="total-row"><td>Total:</td><td><%= currency %> <%= total %></td></tr>
+          </table>
+        </div>
+      </div>
+      <% if (notes) { %>
+      <p><strong>Notes:</strong> <%= notes %></p>
+      <% } %>
+      <p>The invoice is attached as a PDF. Please arrange payment by the due date shown above.</p>
+      <p>If you have any questions regarding this invoice, please don't hesitate to contact us.</p>
+      <p>Kind regards,<br><%= appName %></p>
+    </div>
+    <div class="footer">
+      <p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p>
+    </div>
+  </div>
+</body>
+</html>

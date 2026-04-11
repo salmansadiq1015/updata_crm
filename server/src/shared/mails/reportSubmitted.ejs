@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arbeitsbericht eingereicht</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+    .header { background-color: #1a365d; padding: 30px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+    .content { padding: 30px; color: #333333; line-height: 1.6; }
+    .details { background-color: #f0f4f8; border-left: 4px solid #2b6cb0; padding: 16px; margin: 16px 0; }
+    .details table { width: 100%; border-collapse: collapse; }
+    .details td { padding: 6px 0; vertical-align: top; }
+    .details td:first-child { font-weight: bold; width: 140px; color: #555; }
+    .follow-up { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; margin: 16px 0; font-size: 14px; }
+    .footer { padding: 20px 30px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header"><h1><%= appName %></h1></div>
+    <div class="content">
+      <h2>Arbeitsbericht eingereicht</h2>
+      <p>Hallo <%= recipientName %>,</p>
+      <p>Ein neuer Arbeitsbericht wurde eingereicht:</p>
+      <div class="details">
+        <table>
+          <tr><td>Bericht-Nr.:</td><td><%= reportNumber %></td></tr>
+          <tr><td>Techniker:</td><td><%= technicianName %></td></tr>
+          <tr><td>Auftrag:</td><td><%= orderNumber %></td></tr>
+          <tr><td>Kunde:</td><td><%= customerName %></td></tr>
+          <tr><td>Datum:</td><td><%= reportDate %></td></tr>
+          <tr><td>Arbeiten:</td><td><%= workPerformed %></td></tr>
+        </table>
+      </div>
+      <% if (followUpNeeded) { %>
+      <div class="follow-up">
+        <strong>Folgemassnahme erforderlich!</strong> Der Techniker hat angegeben, dass ein Folgetermin noetig ist.
+      </div>
+      <% } %>
+      <p>Bitte pruefen und genehmigen Sie den Bericht im Backoffice.</p>
+    </div>
+    <div class="footer"><p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p></div>
+  </div>
+</body>
+</html>

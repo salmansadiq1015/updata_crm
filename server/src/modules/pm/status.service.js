@@ -1,0 +1,173 @@
+import ProjectStatusHistory from './projectStatusHistory.model.js';
+import auditService from '../auth/audit.service.js';
+import cacheManager from '../../shared/cache/CacheManager.js';
+import eventBus from '../../shared/events/EventBus.js';
+import EVENT_TYPES from '../../shared/events/eventTypes.js';
+import queueManager from '../../shared/queue/QueueManager.js';
+import logger from '../../shared/logger/index.js';
+import { NotFoundError, ConflictError, AuthorizationError } from '../../shared/errors/AppError.js';
+import config from '../../config/index.js';
+
+const VALID_TRANSITIONS = {
+  DRAFT: ['PLANNING'],
+  PLANNING: ['IN_PROGRESS', 'ON_HOLD'],
+  IN_PROGRESS: ['COMPLETED', 'ON_HOLD'],
+  ON_HOLD: ['PLANNING', 'IN_PROGRESS'],
+  COMPLETED: ['IN_PROGRESS', 'ARCHIVED'],
+  ARCHIVED: [],
+};
+
+class StatusService {
+  async transitionStatus(projectId, targetStatus, { comment = null, override = false, overrideReason = null } = {}, userId, meta = {}) {
+    // Lazy import to avoid circular dependencies
+    const Project = (await import('./project.model.js')).default;
+
+    const project = await Project.findById(projectId);
+    if (!project) throw new NotFoundError('Project', projectId);
+
+    const currentStatus = project.status;
+
+    // Validate transition
+    if (!VALID_TRANSITIONS[currentStatus]?.includes(targetStatus)) {
+      throw new ConflictError(
+        `Cannot transition from ${currentStatus} to ${targetStatus}`,
+      );
+    }
+
+    // ON_HOLD requires a comment
+    if (targetStatus === 'ON_HOLD' && !comment) {
+      throw new ConflictError('A comment is required when placing a project on hold');
+    }
+
+    // IN_PROGRESS from PLANNING or ON_HOLD — check mandatory prep actions
+    if (targetStatus === 'IN_PROGRESS' && (currentStatus === 'PLANNING' || currentStatus === 'ON_HOLD')) {
+      const PreparatoryAction = (await import('./preparatoryAction.model.js')).default;
+      const incompleteCount = await PreparatoryAction.countDocuments({
+        projectId,
+        isMandatory: true,
+        status: { $nin: ['COMPLETED'] },
+        isDeleted: false,
+      });
+
+      if (incompleteCount > 0 && !override) {
+        throw new ConflictError(
+          `Cannot transition to IN_PROGRESS: ${incompleteCount} mandatory preparatory action(s) are not completed`,
+        );
+      }
+
+      if (override && !overrideReason) {
+        throw new ConflictError('An override reason is required when overriding preconditions');
+      }
+    }
+
+    // COMPLETED — check milestones
+    if (targetStatus === 'COMPLETED') {
+      const ScheduleEntry = (await import('./scheduleEntry.model.js')).default;
+      const incompleteMilestones = await ScheduleEntry.countDocuments({
+        projectId,
+        entryType: 'MILESTONE',
+        status: { $nin: ['COMPLETED', 'WAIVED', 'CANCELLED'] },
+        isDeleted: false,
+      });
+
+      if (incompleteMilestones > 0 && !override) {
+        throw new ConflictError(
+          `Cannot complete project: ${incompleteMilestones} milestone(s) are not completed, waived, or cancelled`,
+        );
+      }
+
+      if (override && !overrideReason) {
+        throw new ConflictError('An override reason is required when overriding preconditions');
+      }
+    }
+
+    // Reopen from COMPLETED — requires override
+    if (targetStatus === 'IN_PROGRESS' && currentStatus === 'COMPLETED') {
+      if (!override || !overrideReason) {
+        throw new ConflictError('Reopening a completed project requires an override with a reason');
+      }
+    }
+
+    // Update project status
+    project.status = targetStatus;
+    await project.save();
+
+    // Create history record
+    const historyRecord = await ProjectStatusHistory.create({
+      projectId,
+      fromStatus: currentStatus,
+      toStatus: targetStatus,
+      comment,
+      isOverride: override,
+      overrideReason,
+      changedAt: new Date(),
+      changedBy: userId,
+    });
+
+    // Invalidate caches
+    await cacheManager.del(`pm:project:${projectId}`);
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}pm:dashboard:*`);
+
+    // Publish event
+    const eventType = override
+      ? EVENT_TYPES.PROJECT_STATUS_OVERRIDDEN
+      : EVENT_TYPES.PROJECT_STATUS_CHANGED;
+
+    eventBus.publish(eventType, {
+      projectId,
+      fromStatus: currentStatus,
+      toStatus: targetStatus,
+      comment,
+      isOverride: override,
+      overrideReason,
+      changedBy: userId,
+    }, { source: 'pm:status' });
+
+    // Enqueue status notification email
+    await queueManager.addJob('auth-email', 'send-status-notification', {
+      projectId,
+      fromStatus: currentStatus,
+      toStatus: targetStatus,
+      comment,
+      changedBy: userId,
+    });
+
+    // Audit log
+    auditService.logEvent({
+      eventType: override ? 'project.status.overridden' : 'project.status.changed',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { projectId, fromStatus: currentStatus, toStatus: targetStatus, isOverride: override },
+      module: 'pm',
+    });
+
+    logger.info('Project status changed', {
+      module: 'pm',
+      action: 'transitionStatus',
+      projectId,
+      fromStatus: currentStatus,
+      toStatus: targetStatus,
+      isOverride: override,
+    });
+
+    return {
+      projectId,
+      fromStatus: currentStatus,
+      toStatus: targetStatus,
+      changedAt: historyRecord.changedAt,
+      preconditionsMet: !override,
+    };
+  }
+
+  async getStatusHistory(projectId) {
+    return ProjectStatusHistory.find({ projectId })
+      .sort({ changedAt: -1 })
+      .populate('changedBy', 'firstName lastName')
+      .lean();
+  }
+}
+
+const statusService = new StatusService();
+export default statusService;

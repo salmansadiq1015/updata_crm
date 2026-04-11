@@ -1,0 +1,246 @@
+{
+  "info": {
+    "name": "MB Boiler - Module 05 - Field Deployment Planning",
+    "description": "Complete API collection for Module 05: Calendar, Assignments, Appointments, Conflicts, Dashboard, Coarse Scheduling (OF-Bau), Mobile.\n\nBase URL: {{baseUrl}} (http://localhost:9097/api/v1)\n\n**Quick Start:**\n1. Run Login from Auth collection first to get {{accessToken}}\n2. Ensure a customer + site exists (CRM module)\n3. Run 'Create Assignment' — auto-captures {{assignmentId}}\n\n**Total: 55 requests across 7 groups**",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:9097/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "assignmentId", "value": "" },
+    { "key": "assignmentId2", "value": "" },
+    { "key": "employeeId", "value": "" },
+    { "key": "employeeId2", "value": "" },
+    { "key": "projectId", "value": "" },
+    { "key": "customerId", "value": "" },
+    { "key": "siteId", "value": "" },
+    { "key": "conflictId", "value": "" },
+    { "key": "coarseId", "value": "" },
+    { "key": "orderId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "01 — Calendar",
+      "description": "Calendar view data: employees with assignments, availability, and coarse allocations for a date range.",
+      "item": [
+        {
+          "name": "Get Calendar (Week View)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/calendar?startDate=2026-04-06&endDate=2026-04-12", "host": ["{{baseUrl}}"], "path": ["scheduling", "calendar"], "query": [{ "key": "startDate", "value": "2026-04-06" }, { "key": "endDate", "value": "2026-04-12" }] }, "description": "**GET /api/v1/scheduling/calendar**\n\nReturns employees with their assignments, availability, and coarse allocations for the date range.\nResponse grouped by employee: { employeeId, employeeName, availability[], assignments[], coarseAllocations[] }\n\nCache: 15s L1 / 60s L2 (short — scheduling data changes frequently)." }
+        },
+        {
+          "name": "Get Calendar (Filter by Employee)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/calendar?startDate=2026-04-06&endDate=2026-04-12&employeeIds={{employeeId}},{{employeeId2}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "calendar"], "query": [{ "key": "startDate", "value": "2026-04-06" }, { "key": "endDate", "value": "2026-04-12" }, { "key": "employeeIds", "value": "{{employeeId}},{{employeeId2}}" }] } }
+        },
+        {
+          "name": "Get Calendar (Filter by Type + Status)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/calendar?startDate=2026-04-06&endDate=2026-04-12&type=SERVICE_CALL&status=PLANNED", "host": ["{{baseUrl}}"], "path": ["scheduling", "calendar"], "query": [{ "key": "startDate", "value": "2026-04-06" }, { "key": "endDate", "value": "2026-04-12" }, { "key": "type", "value": "SERVICE_CALL" }, { "key": "status", "value": "PLANNED" }] } }
+        },
+        {
+          "name": "Get Calendar (Month View)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/calendar?startDate=2026-04-01&endDate=2026-04-30&view=MONTH", "host": ["{{baseUrl}}"], "path": ["scheduling", "calendar"], "query": [{ "key": "startDate", "value": "2026-04-01" }, { "key": "endDate", "value": "2026-04-30" }, { "key": "view", "value": "MONTH" }] } }
+        }
+      ]
+    },
+    {
+      "name": "02 — Assignments",
+      "description": "Employee assignment CRUD with multi-employee support, drag-and-drop move, resize, optimistic locking.",
+      "item": [
+        {
+          "name": "Create Assignment (Single Employee — Service Call)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "pm.test('Status 201', () => pm.response.to.have.status(201));", "if (res.success && res.data && res.data.assignments) {", "  pm.collectionVariables.set('assignmentId', res.data.assignments[0].id);", "  pm.test('Has ASN number', () => pm.expect(res.data.assignments[0].id).to.be.a('string'));", "}"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"employeeIds\": [\"{{employeeId}}\"],\n  \"assignmentType\": \"SERVICE_CALL\",\n  \"title\": \"Heizungswartung Mueller\",\n  \"startDatetime\": \"2026-04-07T08:00:00Z\",\n  \"endDatetime\": \"2026-04-07T12:00:00Z\",\n  \"priority\": \"NORMAL\",\n  \"instructions\": \"Customer has a dog, ring bell twice. Parking in courtyard.\",\n  \"customerId\": \"{{customerId}}\",\n  \"siteId\": \"{{siteId}}\",\n  \"colorCode\": \"#4CAF50\",\n  \"isCustomerAppointment\": true,\n  \"appointment\": {\n    \"customerContactName\": \"Frau Mueller\",\n    \"customerContactPhone\": \"+41 44 123 45 67\",\n    \"customerContactEmail\": \"mueller@example.ch\",\n    \"appointmentWindow\": \"08:00-12:00\",\n    \"confirmationMethod\": \"EMAIL\",\n    \"customerNotes\": \"Parking available in courtyard\"\n  }\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments"] }, "description": "**POST /api/v1/scheduling/assignments**\n\nCreates assignment with auto-generated ASN-{year}-{NNNNN} number.\nMulti-employee: pass multiple IDs in employeeIds array → creates N separate assignments.\nConflict detection runs automatically — response includes any detected conflicts.\nWhen isCustomerAppointment=true, pass appointment sub-object." }
+        },
+        {
+          "name": "Create Assignment (Multi-Employee — Project Work)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data && res.data.assignments && res.data.assignments.length > 1) {", "  pm.collectionVariables.set('assignmentId2', res.data.assignments[1].id);", "}"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"employeeIds\": [\"{{employeeId}}\", \"{{employeeId2}}\"],\n  \"projectId\": \"{{projectId}}\",\n  \"assignmentType\": \"PROJECT_WORK\",\n  \"title\": \"Umbau Heizungsanlage\",\n  \"startDatetime\": \"2026-04-08T07:00:00Z\",\n  \"endDatetime\": \"2026-04-08T16:00:00Z\",\n  \"priority\": \"HIGH\",\n  \"instructions\": \"Bring PPE. Access via side entrance.\",\n  \"isCustomerAppointment\": false\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments"] }, "description": "Creates one assignment per employee (2 employees → 2 assignments). Each has its own lifecycle. Response includes per-assignment conflict detection." }
+        },
+        {
+          "name": "Create Assignment (Full Day — Maintenance)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"employeeIds\": [\"{{employeeId}}\"],\n  \"assignmentType\": \"MAINTENANCE\",\n  \"title\": \"Jaehrliche Kesselwartung Schulhaus\",\n  \"startDatetime\": \"2026-04-09T00:00:00Z\",\n  \"endDatetime\": \"2026-04-09T23:59:59Z\",\n  \"isFullDay\": true,\n  \"priority\": \"NORMAL\",\n  \"customerId\": \"{{customerId}}\",\n  \"siteId\": \"{{siteId}}\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments"] } }
+        },
+        {
+          "name": "Create Assignment (URGENT — Installation)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"employeeIds\": [\"{{employeeId}}\"],\n  \"assignmentType\": \"INSTALLATION\",\n  \"title\": \"Notfall Waermepumpe\",\n  \"startDatetime\": \"2026-04-07T14:00:00Z\",\n  \"endDatetime\": \"2026-04-07T18:00:00Z\",\n  \"priority\": \"URGENT\",\n  \"instructions\": \"Urgent replacement needed\",\n  \"colorCode\": \"#F44336\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments"] }, "description": "Creates overlapping with first assignment (14:00 vs 08:00-12:00 gap < 60min) → should trigger TRAVEL_TIME soft conflict in response." }
+        },
+        {
+          "name": "Get Assignment by ID",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}"] }, "description": "Returns assignment with populated employee and project data." }
+        },
+        {
+          "name": "Update Assignment",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"version\": 1,\n  \"title\": \"Heizungswartung Mueller (updated)\",\n  \"instructions\": \"Updated: Use side entrance, code 4567\",\n  \"priority\": \"HIGH\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}"] }, "description": "**Optimistic locking:** version field required. If another dispatcher changed it first, returns 409 ASSIGNMENT_VERSION_MISMATCH." }
+        },
+        {
+          "name": "Update Assignment (Version Mismatch — Should Fail)",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"version\": 1,\n  \"title\": \"Stale update attempt\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}"] }, "description": "Should fail with 409 — version is now 2 after previous update." }
+        },
+        {
+          "name": "Move Assignment (Drag-and-Drop — Same Employee)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"newEmployeeId\": \"{{employeeId}}\",\n  \"newStartDatetime\": \"2026-04-07T13:00:00Z\",\n  \"newEndDatetime\": \"2026-04-07T17:00:00Z\",\n  \"overrideConflicts\": false\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/move", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "move"] }, "description": "**Drag-and-drop reschedule.** Changes time and/or employee.\nConflict detection runs on new position.\nIf conflicts detected and overrideConflicts=false, returns conflict details.\nSet overrideConflicts=true + overrideReason to force." }
+        },
+        {
+          "name": "Move Assignment (Different Employee)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"newEmployeeId\": \"{{employeeId2}}\",\n  \"newStartDatetime\": \"2026-04-07T08:00:00Z\",\n  \"newEndDatetime\": \"2026-04-07T12:00:00Z\",\n  \"overrideConflicts\": false\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/move", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "move"] }, "description": "Reassign to different employee. Old employee freed up, new employee gets the assignment." }
+        },
+        {
+          "name": "Move Assignment (Override Conflicts)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"newEmployeeId\": \"{{employeeId}}\",\n  \"newStartDatetime\": \"2026-04-08T08:00:00Z\",\n  \"newEndDatetime\": \"2026-04-08T12:00:00Z\",\n  \"overrideConflicts\": true,\n  \"overrideReason\": \"Customer urgently needs morning slot, accepted double-booking\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/move", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "move"] }, "description": "Force move despite soft conflicts. Override reason is logged in ConflictRecord." }
+        },
+        {
+          "name": "Resize Assignment",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"newEndDatetime\": \"2026-04-08T14:00:00Z\",\n  \"overrideConflicts\": false\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/resize", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "resize"] }, "description": "Extend or shorten duration by changing endDatetime. Conflict detection runs on the extended range." }
+        },
+        {
+          "name": "Cancel Assignment",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId2}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId2}}"] }, "description": "Sets status=CANCELLED + soft-deletes. Publishes SCHEDULE_ASSIGNMENT_CANCELLED event." }
+        }
+      ]
+    },
+    {
+      "name": "03 — Appointments",
+      "description": "Customer appointment management: confirmation flow, cancel, reschedule with email notifications.",
+      "item": [
+        {
+          "name": "Get Appointment Details",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/appointment", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "appointment"] }, "description": "Returns appointment details (contact, window, confirmation status) for a customer-facing assignment." }
+        },
+        {
+          "name": "Update Appointment Details",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"customerContactPhone\": \"+41 44 999 88 77\",\n  \"appointmentWindow\": \"Vormittags (08:00-12:00)\",\n  \"customerNotes\": \"Updated: Ring at side entrance\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/appointment", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "appointment"] } }
+        },
+        {
+          "name": "Send Confirmation Email",
+          "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/appointment/confirm", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "appointment", "confirm"] }, "description": "Sends confirmation email to customer. Sets confirmationStatus=SENT.\nGuards: must have email, must not already be SENT/CONFIRMED.\nEmail enqueued via BullMQ auth-email queue." }
+        },
+        {
+          "name": "Send Confirmation (Already Sent — Should Fail)",
+          "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/appointment/confirm", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "appointment", "confirm"] }, "description": "Should return 409 APPOINTMENT_ALREADY_CONFIRMED." }
+        },
+        {
+          "name": "Reschedule Appointment",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"newStartDatetime\": \"2026-04-10T09:00:00Z\",\n  \"newEndDatetime\": \"2026-04-10T13:00:00Z\",\n  \"appointmentWindow\": \"09:00-13:00\",\n  \"customerNotes\": \"Rescheduled per customer request\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/appointment/reschedule", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "appointment", "reschedule"] }, "description": "Sets confirmationStatus=RESCHEDULED. Sends updated notification email to customer." }
+        },
+        {
+          "name": "Cancel Appointment",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Customer requested cancellation due to travel\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/assignments/{{assignmentId}}/appointment/cancel", "host": ["{{baseUrl}}"], "path": ["scheduling", "assignments", "{{assignmentId}}", "appointment", "cancel"] }, "description": "Sets confirmationStatus=CANCELLED. Sends cancellation notification. Records reason." }
+        }
+      ]
+    },
+    {
+      "name": "04 — Conflict Detection",
+      "description": "4-tier conflict engine: double-booking, absence, working hours, travel time. HARD blocks, SOFT warns.",
+      "item": [
+        {
+          "name": "Check Conflicts (Preview)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "pm.test('Status 200', () => pm.response.to.have.status(200));", "pm.test('Has hasConflicts', () => pm.expect(res.data).to.have.property('hasConflicts'));", "pm.test('Has conflicts array', () => pm.expect(res.data).to.have.property('conflicts'));"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"startDatetime\": \"2026-04-07T08:00:00Z\",\n  \"endDatetime\": \"2026-04-07T12:00:00Z\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/conflicts/check", "host": ["{{baseUrl}}"], "path": ["scheduling", "conflicts", "check"] }, "description": "**Preview-only** — does NOT create assignment, just checks.\n\n**4 checks in sequence:**\n1. DOUBLE_BOOKING (SOFT): overlapping assignments\n2. ABSENCE (HARD): employee on vacation/sick\n3. WORKING_HOURS (SOFT): outside configured hours\n4. TRAVEL_TIME (SOFT): <60min gap to adjacent assignment" }
+        },
+        {
+          "name": "Check Conflicts (With Exclude)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"startDatetime\": \"2026-04-07T09:00:00Z\",\n  \"endDatetime\": \"2026-04-07T13:00:00Z\",\n  \"excludeAssignmentId\": \"{{assignmentId}}\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/conflicts/check", "host": ["{{baseUrl}}"], "path": ["scheduling", "conflicts", "check"] }, "description": "Exclude an assignment ID from conflict check (useful when validating a move)." }
+        },
+        {
+          "name": "List Active Conflicts",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "if (res.success && res.data && res.data.length > 0) {", "  pm.collectionVariables.set('conflictId', res.data[0]._id || res.data[0].id);", "}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/conflicts", "host": ["{{baseUrl}}"], "path": ["scheduling", "conflicts"] }, "description": "Returns all unresolved conflicts, sorted by detectedAt DESC.\nUsed by dashboard alerts." }
+        },
+        {
+          "name": "Resolve Conflict",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"overrideReason\": \"Discussed with team lead, double-booking accepted for this date\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/conflicts/{{conflictId}}/resolve", "host": ["{{baseUrl}}"], "path": ["scheduling", "conflicts", "{{conflictId}}", "resolve"] }, "description": "Marks conflict as resolved. Override reason is required and logged in audit trail.\nCannot resolve an already-resolved conflict (returns 409)." }
+        }
+      ]
+    },
+    {
+      "name": "05 — Dashboard",
+      "description": "Dispatcher dashboard: today's summary, employee utilization, alerts.",
+      "item": [
+        {
+          "name": "Dashboard Summary",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/dashboard/summary", "host": ["{{baseUrl}}"], "path": ["scheduling", "dashboard", "summary"] }, "description": "**GET /api/v1/scheduling/dashboard/summary**\n\nReturns:\n```json\n{\n  \"date\": \"2026-04-07\",\n  \"assignmentsToday\": { \"total\": 24, \"planned\": 8, \"inProgress\": 12, \"completed\": 4, \"cancelled\": 0 },\n  \"unassignedOrders\": 5,\n  \"activeConflicts\": 2,\n  \"upcoming7Days\": [18, 22, 20, 19, 15, 8, 0]\n}\n```\nCache: 15s L1 / 30s L2 for near-real-time feel." }
+        },
+        {
+          "name": "Dashboard Summary (Specific Date)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/dashboard/summary?date=2026-04-10", "host": ["{{baseUrl}}"], "path": ["scheduling", "dashboard", "summary"], "query": [{ "key": "date", "value": "2026-04-10" }] } }
+        },
+        {
+          "name": "Employee Utilization",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/dashboard/utilization?startDate=2026-04-06&endDate=2026-04-12", "host": ["{{baseUrl}}"], "path": ["scheduling", "dashboard", "utilization"], "query": [{ "key": "startDate", "value": "2026-04-06" }, { "key": "endDate", "value": "2026-04-12" }] }, "description": "Returns per-employee utilization percentage (assigned hours / working hours)." }
+        },
+        {
+          "name": "Employee Utilization (Filtered)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/dashboard/utilization?startDate=2026-04-06&endDate=2026-04-12&employeeIds={{employeeId}},{{employeeId2}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "dashboard", "utilization"], "query": [{ "key": "startDate", "value": "2026-04-06" }, { "key": "endDate", "value": "2026-04-12" }, { "key": "employeeIds", "value": "{{employeeId}},{{employeeId2}}" }] } }
+        },
+        {
+          "name": "Dashboard Alerts",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/dashboard/alerts", "host": ["{{baseUrl}}"], "path": ["scheduling", "dashboard", "alerts"] }, "description": "Returns active conflicts + unconfirmed appointments within 48 hours." }
+        }
+      ]
+    },
+    {
+      "name": "06 — Coarse Scheduling (OF-Bau)",
+      "description": "Week-level resource allocation for construction projects. Employees allocated to projects by calendar week with percentage (25/50/75/100%). Sum per employee per week must not exceed 100%.",
+      "item": [
+        {
+          "name": "Get Coarse Matrix (Employee View)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/coarse?year=2026&weekFrom=14&weekTo=20&view=EMPLOYEE_CENTRIC", "host": ["{{baseUrl}}"], "path": ["scheduling", "coarse"], "query": [{ "key": "year", "value": "2026" }, { "key": "weekFrom", "value": "14" }, { "key": "weekTo", "value": "20" }, { "key": "view", "value": "EMPLOYEE_CENTRIC" }] }, "description": "**Rows:** Employees | **Columns:** Calendar weeks\n**Cells:** Project allocation with color + percentage" }
+        },
+        {
+          "name": "Get Coarse Matrix (Project View)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/coarse?year=2026&weekFrom=14&weekTo=20&view=PROJECT_CENTRIC&projectId={{projectId}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "coarse"], "query": [{ "key": "year", "value": "2026" }, { "key": "weekFrom", "value": "14" }, { "key": "weekTo", "value": "20" }, { "key": "view", "value": "PROJECT_CENTRIC" }, { "key": "projectId", "value": "{{projectId}}" }] }, "description": "Shows all employees allocated to a specific project across weeks." }
+        },
+        {
+          "name": "Create Allocation (50%)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["const res = pm.response.json();", "pm.test('Status 201', () => pm.response.to.have.status(201));", "if (res.success && res.data) pm.collectionVariables.set('coarseId', res.data._id || res.data.id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"calendarYear\": 2026,\n  \"calendarWeek\": 15,\n  \"allocationPercent\": 50,\n  \"notes\": \"Heizungsumbau Phase 1\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/coarse/allocations", "host": ["{{baseUrl}}"], "path": ["scheduling", "coarse", "allocations"] }, "description": "Allocates employee 50% to project for CW15.\nValidation: sum of all allocations for this employee+year+week must not exceed 100%." }
+        },
+        {
+          "name": "Create Allocation (Another 50% — Same Employee Same Week)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"calendarYear\": 2026,\n  \"calendarWeek\": 15,\n  \"allocationPercent\": 50,\n  \"notes\": \"Second project same week\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/coarse/allocations", "host": ["{{baseUrl}}"], "path": ["scheduling", "coarse", "allocations"] }, "description": "Total becomes 100% — should succeed." }
+        },
+        {
+          "name": "Create Allocation (Exceeds 100% — Should Fail)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"calendarYear\": 2026,\n  \"calendarWeek\": 15,\n  \"allocationPercent\": 25\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/coarse/allocations", "host": ["{{baseUrl}}"], "path": ["scheduling", "coarse", "allocations"] }, "description": "Would make total 125% → returns 409 COARSE_ALLOCATION_EXCEEDED." }
+        },
+        {
+          "name": "Update Allocation",
+          "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"allocationPercent\": 75,\n  \"notes\": \"Increased allocation for Phase 2\"\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/coarse/allocations/{{coarseId}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "coarse", "allocations", "{{coarseId}}"] }, "description": "Re-validates sum won't exceed 100% (excludes current allocation from sum)." }
+        },
+        {
+          "name": "Delete Allocation",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/scheduling/coarse/allocations/{{coarseId}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "coarse", "allocations", "{{coarseId}}"] }, "description": "Hard delete (not soft delete). Frees up percentage for the employee's week." }
+        },
+        {
+          "name": "Bulk Create/Update Allocations",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"allocations\": [\n    {\n      \"employeeId\": \"{{employeeId}}\",\n      \"projectId\": \"{{projectId}}\",\n      \"calendarYear\": 2026,\n      \"calendarWeek\": 16,\n      \"allocationPercent\": 100\n    },\n    {\n      \"employeeId\": \"{{employeeId}}\",\n      \"projectId\": \"{{projectId}}\",\n      \"calendarYear\": 2026,\n      \"calendarWeek\": 17,\n      \"allocationPercent\": 75\n    },\n    {\n      \"employeeId\": \"{{employeeId2}}\",\n      \"projectId\": \"{{projectId}}\",\n      \"calendarYear\": 2026,\n      \"calendarWeek\": 16,\n      \"allocationPercent\": 50\n    }\n  ]\n}" }, "url": { "raw": "{{baseUrl}}/scheduling/coarse/allocations/bulk", "host": ["{{baseUrl}}"], "path": ["scheduling", "coarse", "allocations", "bulk"] }, "description": "Multi-week allocation in one request. Upserts on (employeeId, projectId, year, week).\nMax 100 allocations per request." }
+        }
+      ]
+    },
+    {
+      "name": "07 — Mobile",
+      "description": "Technician-facing endpoints for the mobile app. Ownership-checked: technicians see only their own assignments.",
+      "item": [
+        {
+          "name": "Get My Assignments (Today)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/mobile/assignments", "host": ["{{baseUrl}}"], "path": ["scheduling", "mobile", "assignments"] }, "description": "Returns assignments for the logged-in technician.\nDefaults to today + 7 days if no date params." }
+        },
+        {
+          "name": "Get My Assignments (Date Range)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/mobile/assignments?dateFrom=2026-04-06&dateTo=2026-04-12", "host": ["{{baseUrl}}"], "path": ["scheduling", "mobile", "assignments"], "query": [{ "key": "dateFrom", "value": "2026-04-06" }, { "key": "dateTo", "value": "2026-04-12" }] } }
+        },
+        {
+          "name": "Sync Assignments (Delta)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/mobile/assignments/sync?since=2026-04-01T00:00:00Z", "host": ["{{baseUrl}}"], "path": ["scheduling", "mobile", "assignments", "sync"], "query": [{ "key": "since", "value": "2026-04-01T00:00:00Z" }] }, "description": "Returns only assignments modified since the given timestamp.\nUsed for offline sync — mobile app stores last sync time and requests delta." }
+        },
+        {
+          "name": "Get Assignment Detail (Mobile)",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/scheduling/mobile/assignments/{{assignmentId}}", "host": ["{{baseUrl}}"], "path": ["scheduling", "mobile", "assignments", "{{assignmentId}}"] }, "description": "Returns full assignment detail. **Ownership check:** returns 403 if assignment's employeeId doesn't match the logged-in user." }
+        }
+      ]
+    }
+  ]
+}

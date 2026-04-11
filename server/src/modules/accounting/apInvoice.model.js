@@ -1,0 +1,121 @@
+import mongoose from 'mongoose';
+
+export const AP_STATUSES = ['RECORDED', 'APPROVED', 'PAID', 'PARTIALLY_PAID', 'DISPUTED', 'CANCELLED'];
+
+const lineItemSchema = new mongoose.Schema(
+  {
+    position: { type: Number },
+    description: { type: String, required: true, trim: true, maxlength: 1000 },
+    quantity: { type: Number, min: 0 },
+    unit: { type: String, trim: true, maxlength: 20, default: 'pcs' },
+    unitPrice: { type: Number, min: 0 },
+    lineTotal: { type: Number },
+    vatRate: { type: Number, min: 0 },
+    accountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Account',
+      default: null,
+    },
+    costCenter: { type: String, trim: true, maxlength: 50 },
+  },
+  { _id: false },
+);
+
+const apInvoiceSchema = new mongoose.Schema(
+  {
+    apInvoiceNumber: {
+      type: String,
+      unique: true,
+      required: true,
+      trim: true,
+    },
+    supplierId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+    supplierName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 255,
+    },
+    supplierInvoiceNumber: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 50,
+    },
+    invoiceDate: { type: Date, required: true },
+    dueDate: { type: Date, required: true },
+    paymentTermsDays: { type: Number, default: 30 },
+    lineItems: [lineItemSchema],
+    subtotal: { type: Number, default: 0 },
+    vatAmount: { type: Number, default: 0 },
+    totalAmount: { type: Number, default: 0 },
+    paidAmount: { type: Number, default: 0 },
+    outstandingAmount: { type: Number, default: 0 },
+    currency: {
+      type: String,
+      enum: ['CHF', 'EUR'],
+      default: 'CHF',
+    },
+    status: {
+      type: String,
+      enum: AP_STATUSES,
+      default: 'RECORDED',
+      index: true,
+    },
+    documentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AccountingDocument',
+      default: null,
+    },
+    projectReference: { type: String, trim: true, maxlength: 100 },
+    orderReference: { type: String, trim: true, maxlength: 100 },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    approvedAt: { type: Date, default: null },
+    secondApproverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    secondApprovedAt: { type: Date, default: null },
+    version: { type: Number, default: 1 },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+  },
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
+
+// --- Indexes ---
+apInvoiceSchema.index({ supplierId: 1, supplierInvoiceNumber: 1 }, { unique: true });
+apInvoiceSchema.index({ dueDate: 1 });
+apInvoiceSchema.index({ supplierId: 1 });
+apInvoiceSchema.index({ isDeleted: 1, createdAt: -1 });
+
+// --- Soft-delete pre-hook ---
+apInvoiceSchema.pre(/^find/, function () {
+  if (this.getOptions().includeDeleted) return;
+  this.where({ isDeleted: false });
+});
+
+const ApInvoice = mongoose.model('ApInvoice', apInvoiceSchema);
+export default ApInvoice;

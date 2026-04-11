@@ -1,0 +1,60 @@
+export const ENDPOINTS = Object.freeze({
+  HEALTH: {
+    LIVE: '/health/live',
+    READY: '/health/ready',
+  },
+  DASHBOARD: {
+    STATS: '/dashboard/stats',
+  },
+  AUTH: {
+    LOGIN: '/auth/login',
+    REFRESH: '/auth/refresh',
+    LOGOUT: '/auth/logout',
+    ME: '/users/me',
+    CHANGE_PASSWORD: '/auth/change-password',
+    ACTIVATE: '/auth/activate',
+    RESET_REQUEST: '/auth/reset-password/request',
+    RESET_CONFIRM: '/auth/reset-password/confirm',
+    SESSIONS: '/auth/sessions',
+    SESSION_BY_ID: (id) => `/auth/sessions/${id}`,
+    SESSIONS_REVOKE_OTHERS: '/auth/sessions/revoke-others',
+    AUDIT: '/auth/audit',
+    AUDIT_EXPORT: '/auth/audit/export',
+  },
+  USERS: {
+    LIST: '/users',
+    BY_ID: (id) => `/users/${id}`,
+    ME: '/users/me',
+    ACTIVATE: (id) => `/users/${id}/activate`,
+    DEACTIVATE: (id) => `/users/${id}/deactivate`,
+    AVATAR: (id) => `/users/${id}/avatar`,
+    BULK_UPDATE: '/users/bulk-update',
+    BULK_DELETE: '/users/bulk-delete',
+    SESSIONS: (id) => `/users/${id}/sessions`,
+  },
+  ROLES: {
+    LIST: '/roles',
+    BY_ID: (id) => `/roles/${id}`,
+    PERMISSIONS: '/permissions',
+  },
+  CRM: {
+    CUSTOMERS: '/crm/customers',
+    CONTACTS: '/crm/contacts',
+    SITES: '/crm/sites',
+    INSTALLATIONS: '/crm/installations',
+  },
+  PROJECTS: {
+    LIST: '/pm/projects',
+    BY_ID: (id) => `/pm/projects/${id}`,
+  },
+  TASKS: {
+    LIST: '/tasks',
+    BY_ID: (id) => `/tasks/${id}`,
+  },
+  NOTIFICATIONS: {
+    FEED: '/users/me/notifications',
+    UNREAD_COUNT: '/users/me/notifications/unread-count',
+    MARK_READ: (id) => `/users/me/notifications/${id}/read`,
+    MARK_ALL_READ: '/users/me/notifications/mark-all-read',
+  },
+});

@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { LayoutDashboard, Users, Shield, ScrollText, ArrowRight } from 'lucide-react';
-import { useIntersection } from '@/hooks/use-intersection';
+import { useIntersection } from '@/shared/hooks/use-intersection';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 
 const cards = [
-  { key: 'dashboard', icon: LayoutDashboard, href: '/dashboard', gradient: 'from-sky-500 to-blue-600' },
+  { key: 'dashboard', icon: LayoutDashboard, href: '/dashboard', gradient: 'from-[#7B61FF] to-[#5B3FD4]' },
   { key: 'users', icon: Users, href: '/settings/users', gradient: 'from-violet-500 to-purple-600' },
   { key: 'roles', icon: Shield, href: '/settings/roles', gradient: 'from-emerald-500 to-green-600' },
   { key: 'audit', icon: ScrollText, href: '/settings/audit', gradient: 'from-amber-500 to-orange-600' },

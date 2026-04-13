@@ -35,7 +35,7 @@ export function LandingNavbar() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-[72px] items-center justify-between">
           <Link href="/" className="group flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-sky-500 shadow-md shadow-primary/25 transition-transform duration-200 group-hover:scale-105">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br bg-primary-gradient shadow-md shadow-primary/25 transition-transform duration-200 group-hover:scale-105">
               <Zap className="h-4.5 w-4.5 text-white" />
             </div>
             <span className="text-[1.1rem] font-bold tracking-tight">
@@ -88,7 +88,7 @@ export function LandingNavbar() {
                 <div className="flex flex-col h-full">
                   <div className="p-6 pb-2">
                     <Link href="/" className="flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-sky-500">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br bg-primary-gradient">
                         <Zap className="h-4.5 w-4.5 text-white" />
                       </div>
                       <span className="text-lg font-bold tracking-tight">

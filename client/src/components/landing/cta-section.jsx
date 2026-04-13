@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight, Headphones } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useIntersection } from '@/hooks/use-intersection';
+import { useIntersection } from '@/shared/hooks/use-intersection';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 
@@ -20,7 +20,7 @@ export function CtaSection() {
             isInView ? 'animate-in fade-in slide-in-from-bottom-8' : 'opacity-0'
           )}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-sky-600 via-primary to-blue-700 animate-gradient" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#7B61FF] via-primary to-[#5B3FD4] animate-gradient" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent_50%)]" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(255,255,255,0.08),transparent_50%)]" />
 

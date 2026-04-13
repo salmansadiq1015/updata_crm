@@ -6,7 +6,7 @@ import {
   ArrowRight, Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useIntersection } from '@/hooks/use-intersection';
+import { useIntersection } from '@/shared/hooks/use-intersection';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -21,14 +21,14 @@ function CrmMockup({ t }) {
   return (
     <div className="rounded-2xl border border-border/40 bg-card shadow-xl shadow-black/5 overflow-hidden">
       <div className="border-b bg-muted/30 px-5 py-3.5 flex items-center gap-2.5">
-        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center">
+        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-[#7B61FF] to-[#5B3FD4] flex items-center justify-center">
           <Building2 className="h-3.5 w-3.5 text-white" />
         </div>
         <span className="text-sm font-semibold">{t('mockup.crm.name')}</span>
       </div>
       <div className="p-5 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/10 to-sky-500/10 flex items-center justify-center">
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary/10 to-[#9F7AEA]/10 flex items-center justify-center">
             <Users className="h-6 w-6 text-primary" />
           </div>
           <div>
@@ -92,7 +92,7 @@ function ProjectMockup({ t }) {
         </div>
         <div className="mt-4 flex items-center gap-2.5">
           <div className="flex-1 rounded-full bg-muted h-2 overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-primary to-sky-500 w-3/5 transition-all" />
+            <div className="h-full rounded-full bg-gradient-to-r bg-primary-gradient w-3/5 transition-all" />
           </div>
           <span className="text-xs font-bold text-primary">60%</span>
         </div>
@@ -128,7 +128,7 @@ function AccountingMockup({ t }) {
         <div className="flex items-end gap-1 h-16 px-1">
           {[35, 60, 40, 75, 50, 65, 85, 55, 70, 80, 45, 90].map((h, i) => (
             <div key={i} className="flex-1 rounded-sm overflow-hidden bg-primary/10" style={{ height: `${h}%` }}>
-              <div className="w-full h-full rounded-sm bg-gradient-to-t from-primary to-sky-400" />
+              <div className="w-full h-full rounded-sm bg-gradient-to-t from-primary to-[#9F7AEA]" />
             </div>
           ))}
         </div>

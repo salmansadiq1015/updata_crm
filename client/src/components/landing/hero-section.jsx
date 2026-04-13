@@ -29,7 +29,7 @@ export function HeroSection() {
       {/* Animated background */}
       <div className="absolute inset-0 -z-10 bg-grid" />
       <div className="absolute top-20 right-[10%] w-[600px] h-[600px] rounded-full bg-primary/6 blur-[100px] animate-pulse-glow" />
-      <div className="absolute bottom-20 left-[5%] w-[500px] h-[500px] rounded-full bg-sky-400/5 blur-[80px] animate-pulse-glow" style={{ animationDelay: '1.5s' }} />
+      <div className="absolute bottom-20 left-[5%] w-[500px] h-[500px] rounded-full bg-primary/4 blur-[80px] animate-pulse-glow" style={{ animationDelay: '1.5s' }} />
 
       {/* Noise texture */}
       <div className="absolute inset-0 -z-10 opacity-[0.015]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 256 256\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'4\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")' }} />
@@ -82,7 +82,7 @@ export function HeroSection() {
                 onMouseLeave={handleMouseLeave}
                 style={{ perspective: '1000px' }}
               >
-                <div className="absolute -inset-8 rounded-3xl bg-gradient-to-br from-primary/15 via-sky-400/10 to-transparent blur-2xl animate-pulse-glow" />
+                <div className="absolute -inset-8 rounded-3xl bg-gradient-to-br from-primary/15 via-[#9F7AEA]/10 to-transparent blur-2xl animate-pulse-glow" />
 
                 <div
                   className="relative rounded-2xl border border-border/50 bg-card shadow-2xl shadow-black/5 overflow-hidden transition-transform duration-200 ease-out"
@@ -105,7 +105,7 @@ export function HeroSection() {
                   <div className="p-5 space-y-4 bg-gradient-to-b from-background to-muted/20">
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { label: t('hero.mockup.customers'), value: '2,847', icon: Users, color: 'from-primary to-sky-500' },
+                        { label: t('hero.mockup.customers'), value: '2,847', icon: Users, color: 'bg-primary-gradient' },
                         { label: t('hero.mockup.projects'), value: '184', icon: BarChart3, color: 'from-emerald-500 to-green-500' },
                         { label: t('hero.mockup.appointments'), value: '23', icon: Calendar, color: 'from-amber-500 to-orange-500' },
                       ].map((stat) => (

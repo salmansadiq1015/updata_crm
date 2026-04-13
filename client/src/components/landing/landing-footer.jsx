@@ -41,7 +41,7 @@ export function LandingFooter() {
         <div className="grid grid-cols-2 gap-8 py-14 sm:py-16 lg:grid-cols-4">
           <div className="col-span-2 lg:col-span-1 lg:pr-4">
             <Link href="/" className="inline-flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-sky-500 shadow-md shadow-primary/20">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br bg-primary-gradient shadow-md shadow-primary/20">
                 <Zap className="h-4 w-4 text-white" />
               </div>
               <span className="text-lg font-bold tracking-tight">

@@ -3,13 +3,20 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
-import { Sidebar } from '@/components/layout/sidebar';
-import { Header } from '@/components/layout/header';
-import { FullPageSpinner } from '@/components/common/loading-spinner';
+import { useDrawerStore } from '@/stores/drawer-store';
+import { Sidebar } from '@/layout/sidebar';
+import { Header } from '@/layout/header';
+import { RightDrawer } from '@/layout/right-drawer';
+import { FullPageSpinner } from '@/shared/components/loading-spinner';
+import { useKeyboardShortcuts } from '@/shared/hooks/use-keyboard-shortcuts';
+import { cn } from '@/lib/utils';
 
 export default function PlatformLayout({ children }) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
+  const isDrawerOpen = useDrawerStore((s) => s.isOpen);
+
+  useKeyboardShortcuts();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -21,14 +28,25 @@ export default function PlatformLayout({ children }) {
   if (!isAuthenticated) return null;
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
+      {/* Sidebar — hidden on mobile, shown on md+ */}
+      <div className="hidden md:block shrink-0">
+        <Sidebar />
+      </div>
+
+      {/* Main content area */}
+      <div className={cn(
+        'flex flex-1 flex-col overflow-hidden min-w-0',
+        'transition-all duration-300'
+      )}>
         <Header />
-        <main className="flex-1 overflow-auto p-6 bg-muted/30">
+        <main className="flex-1 overflow-auto p-4 sm:p-6 bg-muted/30 scrollbar-thin">
           {children}
         </main>
       </div>
+
+      {/* Right drawer */}
+      <RightDrawer />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+/** @param {{ title: string, description?: string, children?: React.ReactNode }} props */
 export function PageHeader({ title, description, children }) {
   return (
     <div className="flex items-center justify-between">

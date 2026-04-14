@@ -1,6 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
+import morgan from "morgan";
 
 // Middleware
 import { requestIdMiddleware } from './shared/middleware/requestId.js';
@@ -70,7 +71,7 @@ export function createApp() {
   const app = express();
 
   // --- Trust proxy (for correct IP behind LB) ---
-  app.set('trust proxy', 1);
+  app.set("trust proxy", 1);
 
   // --- Pre-route middleware ---
   app.use(requestIdMiddleware);
@@ -78,9 +79,13 @@ export function createApp() {
   app.use(corsMiddleware);
   app.use(compressionMiddleware);
 
+  // Logging
+  app.use(morgan("dev"));
+  // app.use(morgan('combined'));
+
   // Body parsing — 10MB for JSON, 50MB handled at multer level for files
-  app.use(bodyParser.json({ limit: '10mb' }));
-  app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(bodyParser.json({ limit: "10mb" }));
+  app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
   app.use(cookieParser());
 
   // NoSQL injection prevention
@@ -99,59 +104,62 @@ export function createApp() {
   app.use(globalLimiter);
 
   // Static files (preserve existing behavior)
-  app.use('/uploads', express.static('uploads'));
+  app.use("/uploads", express.static("uploads"));
 
   // --- Routes ---
 
   // Root status endpoint (no auth)
-  app.get('/', (req, res) => {
+  app.get("/", (req, res) => {
     res.success({
-      service: 'mb-boiler-api',
-      status: 'running',
-      version: process.env.npm_package_version || '1.0.0',
+      service: "mb-boiler-api",
+      status: "running",
+      version: process.env.npm_package_version || "1.0.0",
       uptime: Math.floor(process.uptime()),
-      environment: process.env.NODE_ENV || 'development',
+      environment: process.env.NODE_ENV || "development",
     });
   });
 
   // Health probes (no auth, no rate limit)
-  app.use('/health', healthRoutes);
+  app.use("/health", healthRoutes);
 
   // Metrics endpoint (internal network only in production)
-  app.get('/metrics', metricsEndpoint);
+  app.get("/metrics", metricsEndpoint);
 
   // API v1 routes
-  app.use('/api/v1/auth', authRoutes);
-  app.use('/api/v1/users', userRoutes);
-  app.use('/api/v1/roles', roleRoutes);
-  app.use('/api/v1/permissions', permissionRouter);
-  app.use('/api/v1/crm', crmRoutes);
-  app.use('/api/v1/pm', pmRoutes);
-  app.use('/api/v1/scheduling', deployRoutes);
-  app.use('/api/v1/mobile', mobileRoutes);
-  app.use('/api/v1/qop', qopRoutes);
-  app.use('/api/v1/doctpl', doctplRoutes);
-  app.use('/api/v1/catalog', catalogRoutes);
-  app.use('/api/v1/accounting', accountingRoutes);
-  app.use('/api/v1/tasks', tasksRoutes);
-  app.use('/api/v1/task-lists', taskListRoutes);
-  app.use('/api/v1/projects/:projectId/tasks', projectTaskRouter);
-  app.use('/api/v1/orders/:orderId/tasks', orderTaskRouter);
-  app.use('/api/v1/projects/tasks', crossProjectRouter);
-  app.use('/api/v1/notifications', notificationsRoutes);
-  app.use('/api/v1/users/me/notifications', notificationFeedRoutes);
-  app.use('/api/v1/users/me/notification-preferences', notificationPreferenceRoutes);
-  app.use('/api/v1/admin/notification-templates', notificationTemplateRoutes);
-  app.use('/api/v1/scheduled-notifications', scheduledNotificationRoutes);
-  app.use('/api/v1/admin/notification-metrics', notificationMetricsRoutes);
-  app.use('/api/v1/webhooks/notification', notificationWebhookRoutes);
-  app.use('/api/v1/ai', aiRoutes);
-  app.use('/api/v1/admin/integrations', integrationsRoutes);
-  app.use('/api/v1/public/widget', widgetPublicRoutes);
-  app.use('/api/v1/users/me/calendar', calendarSyncRoutes);
-  app.use('/api/v1/webhooks/email', webhookRoutes);
-  app.use('/api/v1/files', fileRoutes);
-  app.use('/api/v1/system', systemRoutes);
+  app.use("/api/v1/auth", authRoutes);
+  app.use("/api/v1/users", userRoutes);
+  app.use("/api/v1/roles", roleRoutes);
+  app.use("/api/v1/permissions", permissionRouter);
+  app.use("/api/v1/crm", crmRoutes);
+  app.use("/api/v1/pm", pmRoutes);
+  app.use("/api/v1/scheduling", deployRoutes);
+  app.use("/api/v1/mobile", mobileRoutes);
+  app.use("/api/v1/qop", qopRoutes);
+  app.use("/api/v1/doctpl", doctplRoutes);
+  app.use("/api/v1/catalog", catalogRoutes);
+  app.use("/api/v1/accounting", accountingRoutes);
+  app.use("/api/v1/tasks", tasksRoutes);
+  app.use("/api/v1/task-lists", taskListRoutes);
+  app.use("/api/v1/projects/:projectId/tasks", projectTaskRouter);
+  app.use("/api/v1/orders/:orderId/tasks", orderTaskRouter);
+  app.use("/api/v1/projects/tasks", crossProjectRouter);
+  app.use("/api/v1/notifications", notificationsRoutes);
+  app.use("/api/v1/users/me/notifications", notificationFeedRoutes);
+  app.use(
+    "/api/v1/users/me/notification-preferences",
+    notificationPreferenceRoutes,
+  );
+  app.use("/api/v1/admin/notification-templates", notificationTemplateRoutes);
+  app.use("/api/v1/scheduled-notifications", scheduledNotificationRoutes);
+  app.use("/api/v1/admin/notification-metrics", notificationMetricsRoutes);
+  app.use("/api/v1/webhooks/notification", notificationWebhookRoutes);
+  app.use("/api/v1/ai", aiRoutes);
+  app.use("/api/v1/admin/integrations", integrationsRoutes);
+  app.use("/api/v1/public/widget", widgetPublicRoutes);
+  app.use("/api/v1/users/me/calendar", calendarSyncRoutes);
+  app.use("/api/v1/webhooks/email", webhookRoutes);
+  app.use("/api/v1/files", fileRoutes);
+  app.use("/api/v1/system", systemRoutes);
 
   // --- Post-route middleware ---
   app.use(notFoundHandler);

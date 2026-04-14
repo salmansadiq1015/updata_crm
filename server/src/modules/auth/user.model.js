@@ -42,6 +42,42 @@ const userSchema = new mongoose.Schema(
       maxlength: 30,
       default: null,
     },
+    department: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: null,
+    },
+    position: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: null,
+    },
+    street: {
+      type: String,
+      trim: true,
+      maxlength: 200,
+      default: null,
+    },
+    city: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: null,
+    },
+    zip: {
+      type: String,
+      trim: true,
+      maxlength: 20,
+      default: null,
+    },
+    country: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: 'Schweiz',
+    },
     language: {
       type: String,
       enum: ['de', 'en', 'fr', 'it'],

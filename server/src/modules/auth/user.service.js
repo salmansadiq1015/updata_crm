@@ -21,7 +21,7 @@ const USER_CACHE_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_CACHE_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 // Fields users can edit on their own profile
-const SELF_EDITABLE_FIELDS = ['firstName', 'lastName', 'language', 'phone'];
+const SELF_EDITABLE_FIELDS = ['firstName', 'lastName', 'language', 'phone', 'department', 'position', 'street', 'city', 'zip', 'country'];
 
 class UserService {
   /**
@@ -53,6 +53,12 @@ class UserService {
       firstName: data.firstName,
       lastName: data.lastName,
       phone: data.phone || null,
+      department: data.department || null,
+      position: data.position || null,
+      street: data.street || null,
+      city: data.city || null,
+      zip: data.zip || null,
+      country: data.country || 'Schweiz',
       language: data.language || 'de',
       role: data.roleId,
       status: 'pending_activation',

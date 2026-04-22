@@ -2,7 +2,7 @@
   "$schema": "https://ui.shadcn.com/schema.json",
   "style": "radix-nova",
   "rsc": true,
-  "tsx": false,
+  "tsx": true,
   "tailwind": {
     "config": "",
     "css": "src/app/globals.css",
@@ -19,7 +19,7 @@
     "utils": "@/lib/utils",
     "ui": "@/components/ui",
     "lib": "@/lib",
-    "hooks": "@/hooks"
+    "hooks": "@/shared/hooks"
   },
   "registries": {
     "@skiper-ui": "https://skiper-ui.com/registry/{name}.json"

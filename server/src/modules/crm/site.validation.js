@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { objectId } from '../../shared/validation/commonSchemas.js';
+import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
 export const createSiteSchema = {
   body: Joi.object({
@@ -40,4 +40,15 @@ export const siteIdParamSchema = {
 
 export const customerIdParamSchema = {
   params: Joi.object({ customerId: objectId.required() }),
+};
+
+export const listSitesSchema = {
+  query: cursorPagination.keys({
+    status: Joi.string().valid('active', 'inactive'),
+    siteType: Joi.string().valid('residential', 'commercial', 'industrial'),
+    canton: Joi.string().trim().max(2),
+    postalCode: Joi.string().trim().max(10),
+    customerId: objectId,
+    search: Joi.string().trim().max(100),
+  }),
 };

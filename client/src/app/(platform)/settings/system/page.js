@@ -1,8 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { healthService } from '@/services/health-service';
-import { PageHeader } from '@/components/common/page-header';
+import { healthService } from '@/modules/platform/services/health-service';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { PageHeader } from '@/shared/components/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,19 +13,21 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const statusIcon = {
-  healthy: { icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10', label: 'Gesund' },
-  degraded: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10', label: 'Eingeschraenkt' },
-  unhealthy: { icon: XCircle, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Nicht verfuegbar' },
-};
-
-const dependencies = [
-  { key: 'database', label: 'Datenbank', icon: Database, desc: 'MongoDB Atlas' },
-  { key: 'redis', label: 'Cache', icon: HardDrive, desc: 'Redis' },
-  { key: 'queue', label: 'Job Queue', icon: Radio, desc: 'BullMQ' },
-];
-
 export default function SystemPage() {
+  const { t } = useLanguage();
+
+  const statusIcon = {
+    healthy: { icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10', label: t('dashboard.healthy') },
+    degraded: { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10', label: t('dashboard.degraded') },
+    unhealthy: { icon: XCircle, color: 'text-destructive', bg: 'bg-destructive/10', label: t('dashboard.unhealthy') },
+  };
+
+  const dependencies = [
+    { key: 'database', label: t('system.database') || 'Datenbank', icon: Database, desc: 'MongoDB Atlas' },
+    { key: 'redis', label: t('system.cache') || 'Cache', icon: HardDrive, desc: 'Redis' },
+    { key: 'queue', label: t('system.queue') || 'Job Queue', icon: Radio, desc: 'BullMQ' },
+  ];
+
   const { data: health, isLoading, refetch, dataUpdatedAt } = useQuery({
     queryKey: ['health', 'status'],
     queryFn: healthService.getStatus,
@@ -39,12 +42,12 @@ export default function SystemPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Systemstatus"
-        description="Ueberwachung der Systemkomponenten und Abhaengigkeiten."
+        title={t('system.title') || 'Systemstatus'}
+        description={t('system.desc') || 'Ueberwachung der Systemkomponenten und Abhaengigkeiten.'}
       >
         <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
           <RefreshCw className="h-3.5 w-3.5" />
-          Aktualisieren
+          {t('system.refresh') || 'Aktualisieren'}
         </Button>
       </PageHeader>
 
@@ -60,7 +63,7 @@ export default function SystemPage() {
             <div>
               <p className={`text-lg font-bold ${config.color}`}>{config.label}</p>
               <p className="text-sm text-muted-foreground">
-                Zuletzt geprueft: {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('de-CH') : '—'}
+                {t('dashboard.lastChecked')}: {dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('de-CH') : '—'}
               </p>
             </div>
             <Badge variant="outline" className="ml-auto">

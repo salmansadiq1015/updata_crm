@@ -7,7 +7,7 @@ import { SocketProvider } from './socket-provider';
 import { ToastProvider } from './toast-provider';
 import { LanguageProvider } from '@/lib/i18n/language-context';
 import { useAuthStore } from '@/stores/auth-store';
-import { authService } from '@/services/auth-service';
+import { authService } from '@/modules/auth/services/auth-service';
 import Cookies from 'js-cookie';
 
 function AuthInitializer({ children }) {

@@ -1,25 +1,7 @@
-import { Inter, DM_Sans, JetBrains_Mono } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import { AppProviders } from "@/providers/app-providers";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const dmSans = DM_Sans({
-  variable: "--font-heading",
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["500", "600", "700", "800"],
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const metadata = {
   title: "MB Boiler ERP",
@@ -31,9 +13,10 @@ export default function RootLayout({ children }) {
     <html
       lang="de"
       suppressHydrationWarning
-      className={`${inter.variable} ${dmSans.variable} ${jetbrainsMono.variable} h-full`}
+      data-scroll-behavior="smooth"
+      className={`${GeistSans.variable} ${GeistMono.variable} h-full`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col font-sans antialiased">
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

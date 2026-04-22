@@ -1,5 +1,5 @@
-import { AuthLayout } from '@/components/layout/auth-layout';
-import { ResetPasswordRequestForm } from '@/components/forms/reset-password-request-form';
+import { AuthLayout } from '@/modules/auth/components/auth-layout';
+import { ResetPasswordRequestForm } from '@/modules/auth/components/reset-password-request-form';
 
 export const metadata = {
   title: 'Passwort zuruecksetzen — MB Boiler ERP',

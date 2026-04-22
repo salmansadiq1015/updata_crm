@@ -44,7 +44,7 @@ export function HeroSection() {
                 {t('hero.badge')}
               </div>
 
-              <h1 className="text-[2.75rem] leading-[1.1] font-extrabold tracking-tight sm:text-[3.5rem] lg:text-[3.75rem]">
+              <h1 className="text-2xl leading-[1.1] font-extrabold tracking-tight sm:text-3xl lg:text-[2.25rem] 2xl:text-[2.75rem]">
                 {t('hero.title.line1')}{' '}
                 <span className="text-gradient">
                   {t('hero.title.line2')}

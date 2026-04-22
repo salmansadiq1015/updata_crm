@@ -38,7 +38,7 @@ export function AuthLayout({ children }) {
           {/* Middle content */}
           <div className="space-y-8">
             <div>
-              <h2 className="text-3xl font-extrabold text-white tracking-tight leading-tight xl:text-4xl">
+              <h2 className="text-xl font-extrabold text-white tracking-tight leading-tight lg:text-2xl 2xl:text-3xl">
                 Ihr zentrales
                 <br />
                 Werkzeug fuer

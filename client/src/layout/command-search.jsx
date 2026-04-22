@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Command } from 'cmdk';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useTheme } from 'next-themes';
 import {
   Search, LayoutDashboard, Users, Shield, Monitor, ScrollText,
@@ -85,6 +85,7 @@ export function CommandSearch() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="p-0 gap-0 max-w-lg overflow-hidden rounded-2xl shadow-theme-lg" hideClose>
+          <DialogTitle className="sr-only">Suche</DialogTitle>
           <Command className="[&_[cmdk-group-heading]]:px-4 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[0.65rem] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground">
             <div className="flex items-center gap-2 border-b border-border/40 px-4 py-3">
               <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />

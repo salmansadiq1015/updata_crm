@@ -1,18 +1,7 @@
-import { PageHeader } from '@/components/common/page-header';
-import { RolesTable } from '@/components/tables/roles-table';
+'use client';
 
-export const metadata = {
-  title: 'Rollen \u2014 MB Boiler ERP',
-};
+import { RolesTable } from '@/modules/roles/components/roles-table';
 
 export default function RolesPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Rollenverwaltung"
-        description="Rollen erstellen, Berechtigungen konfigurieren und Zugriff steuern."
-      />
-      <RolesTable />
-    </div>
-  );
+  return <RolesTable />;
 }

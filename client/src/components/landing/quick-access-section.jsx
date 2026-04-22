@@ -31,7 +31,7 @@ export function QuickAccessSection() {
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/8 border border-primary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-primary mb-6">
             {t('quickAccess.label')}
           </div>
-          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+          <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl 2xl:text-3xl">
             {t('quickAccess.title')}
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">

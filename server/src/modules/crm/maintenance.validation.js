@@ -38,3 +38,11 @@ export const maintenanceListSchema = {
     maintenanceType: Joi.string().valid('annual_service', 'filter_change', 'chimney_sweep', 'general_inspection', 'other'),
   }),
 };
+
+export const maintenanceExportSchema = {
+  query: Joi.object({
+    status: Joi.string().valid('due', 'overdue', 'all').default('all'),
+    maintenanceType: Joi.string().valid('annual_service', 'filter_change', 'chimney_sweep', 'general_inspection', 'other'),
+    format: Joi.string().valid('csv').default('csv'),
+  }),
+};

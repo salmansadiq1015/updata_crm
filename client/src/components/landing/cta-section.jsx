@@ -25,7 +25,7 @@ export function CtaSection() {
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(255,255,255,0.08),transparent_50%)]" />
 
           <div className="relative px-8 py-20 sm:px-16 sm:py-24 text-center">
-            <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl lg:text-5xl max-w-3xl mx-auto leading-tight">
+            <h2 className="text-xl font-extrabold tracking-tight text-white sm:text-2xl lg:text-3xl 2xl:text-4xl max-w-3xl mx-auto leading-tight">
               {t('cta.title')}
             </h2>
             <p className="mt-6 text-lg text-white/75 max-w-2xl mx-auto leading-relaxed">

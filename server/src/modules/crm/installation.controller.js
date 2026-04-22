@@ -16,6 +16,14 @@ class InstallationController {
     } catch (err) { next(err); }
   }
 
+  async list(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await installationService.list(query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
+
   async getById(req, res, next) {
     try {
       const installation = await installationService.getById(req.params.id);

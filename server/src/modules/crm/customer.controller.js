@@ -79,6 +79,26 @@ class CustomerController {
       return res.success({ data: result, message: `${result.deactivatedCount} customer(s) deactivated` });
     } catch (err) { next(err); }
   }
+
+  async exportCsv(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const { format, ...filters } = query;
+      const csv = await customerService.exportCsv(filters);
+      const filename = `customers-${new Date().toISOString().split('T')[0]}.csv`;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(csv);
+    } catch (err) { next(err); }
+  }
+
+  async getActivity(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await customerService.getActivity(req.params.id, query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
 }
 
 const customerController = new CustomerController();

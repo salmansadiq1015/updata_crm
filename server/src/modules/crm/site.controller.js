@@ -16,6 +16,14 @@ class SiteController {
     } catch (err) { next(err); }
   }
 
+  async list(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await siteService.list(query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
+
   async getById(req, res, next) {
     try {
       const site = await siteService.getById(req.params.id);

@@ -216,6 +216,78 @@ class CustomerService {
     return { deactivatedCount };
   }
 
+  /**
+   * Stream matching customers as CSV text.
+   * Uses the same filter set as list() but bypasses pagination (capped at 50k rows).
+   * Swiss-friendly encoding: UTF-8 with BOM so Excel opens umlauts correctly.
+   */
+  async exportCsv(queryParams) {
+    const { search, ...filters } = queryParams;
+    const result = await customerRepository.findWithCursor({
+      cursor: null,
+      limit: 50000,
+      sortBy: 'customerNumber',
+      sortOrder: 'asc',
+      filters,
+      search,
+    });
+
+    const rows = result.data || [];
+    const escape = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n;]/.test(s) ? `"${s}"` : s;
+    };
+    const header = [
+      'CustomerNumber', 'Name', 'Type', 'Status',
+      'Street', 'PostalCode', 'City', 'Canton', 'Country',
+      'Phone', 'Mobile', 'Email', 'Website',
+      'NewsletterOptIn', 'NewsletterChannel', 'CreatedAt',
+    ].join(';');
+    const body = rows.map((c) => [
+      c.customerNumber, c.name, c.type, c.status,
+      c.street, c.postalCode, c.city, c.canton, c.country,
+      c.phone, c.mobile, c.email, c.website,
+      c.newsletterOptIn ? 'true' : 'false', c.newsletterChannel,
+      c.createdAt ? new Date(c.createdAt).toISOString() : '',
+    ].map(escape).join(';')).join('\n');
+
+    return `﻿${header}\n${body}`;
+  }
+
+  /**
+   * Customer activity timeline — audit events for this customer plus merge events where it's the source/target.
+   */
+  async getActivity(customerId, { cursor, limit = 25, eventType } = {}) {
+    const exists = await customerRepository.findById(customerId);
+    if (!exists) throw new NotFoundError('Customer', customerId);
+
+    const AuditLog = (await import('../auth/auditLog.model.js')).default;
+    const {
+      buildCursorQuery,
+      buildCursorSort,
+      buildCursorResponse,
+    } = await import('../../shared/utils/pagination.js');
+
+    const filter = {
+      module: 'crm',
+      $or: [
+        { 'details.customerId': customerId },
+        { 'details.sourceId': customerId },
+        { 'details.targetId': customerId },
+      ],
+      ...buildCursorQuery(cursor, 'timestamp', 'desc'),
+    };
+    if (eventType) filter.eventType = eventType;
+
+    const sort = buildCursorSort('timestamp', 'desc');
+    const docs = await AuditLog.find(filter)
+      .sort(sort)
+      .limit(limit + 1)
+      .lean();
+    return buildCursorResponse(docs, limit, 'timestamp');
+  }
+
   async _invalidateCustomerCache(id) {
     await cacheManager.del(`crm:customer:${id}`);
   }

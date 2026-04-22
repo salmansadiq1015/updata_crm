@@ -7,7 +7,7 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   createSiteSchema, updateSiteSchema, siteIdParamSchema,
-  customerIdParamSchema,
+  customerIdParamSchema, listSitesSchema,
 } from './site.validation.js';
 import { createNoteSchema } from './note.validation.js';
 import { createImageSchema } from './image.validation.js';
@@ -17,6 +17,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 
 // Middleware to set entityType for polymorphic note/image controllers
 const setSiteEntity = (req, res, next) => { req.entityType = 'site'; next(); };
+
+// Standalone list (all sites across customers, cursor-paginated)
+router.get('/', authenticate, requirePermission('crm:read'), validate(listSitesSchema), (req, res, next) => siteController.list(req, res, next));
 
 // Standard CRUD
 router.get('/:id', authenticate, requirePermission('crm:read'), validate(siteIdParamSchema), (req, res, next) => siteController.getById(req, res, next));

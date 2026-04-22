@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDrawerStore } from '@/stores/drawer-store';
-import { Sidebar } from '@/layout/sidebar';
+import { Sidebar, MobileSidebar } from '@/layout/sidebar';
 import { Header } from '@/layout/header';
 import { RightDrawer } from '@/layout/right-drawer';
 import { FullPageSpinner } from '@/shared/components/loading-spinner';
@@ -29,10 +29,13 @@ export default function PlatformLayout({ children }) {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* Sidebar — hidden on mobile, shown on md+ */}
+      {/* Desktop sidebar */}
       <div className="hidden md:block shrink-0">
         <Sidebar />
       </div>
+
+      {/* Mobile sidebar (Sheet overlay) */}
+      <MobileSidebar />
 
       {/* Main content area */}
       <div className={cn(

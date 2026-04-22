@@ -54,6 +54,18 @@ class MaintenanceController {
       return res.success({ data: result.data, pagination: result.pagination });
     } catch (err) { next(err); }
   }
+
+  async exportCsv(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const { format, ...filters } = query;
+      const csv = await maintenanceIntervalService.exportCsv(filters);
+      const filename = `maintenance-${filters.status || 'all'}-${new Date().toISOString().split('T')[0]}.csv`;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(csv);
+    } catch (err) { next(err); }
+  }
 }
 
 const maintenanceController = new MaintenanceController();

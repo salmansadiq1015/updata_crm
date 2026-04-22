@@ -93,3 +93,22 @@ export const bulkDeleteCustomersSchema = {
     ids: Joi.array().items(objectId).min(1).max(100).required(),
   }),
 };
+
+export const exportCustomersSchema = {
+  query: Joi.object({
+    status: Joi.string().valid('active', 'archived'),
+    type: Joi.string().valid('private', 'business'),
+    postalCode: Joi.string().trim().max(10),
+    canton: Joi.string().trim().max(2),
+    newsletterOptIn: Joi.string().valid('true', 'false'),
+    search: Joi.string().trim().max(100),
+    format: Joi.string().valid('csv').default('csv'),
+  }),
+};
+
+export const customerActivitySchema = {
+  params: Joi.object({ id: objectId.required() }),
+  query: cursorPagination.keys({
+    eventType: Joi.string().trim().max(100),
+  }),
+};

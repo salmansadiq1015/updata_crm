@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { objectId } from '../../shared/validation/commonSchemas.js';
+import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
 export const createInstallationSchema = {
   body: Joi.object({
@@ -45,4 +45,15 @@ export const installationIdParamSchema = {
 
 export const siteIdParamSchema = {
   params: Joi.object({ siteId: objectId.required() }),
+};
+
+export const listInstallationsSchema = {
+  query: cursorPagination.keys({
+    status: Joi.string().valid('active', 'decommissioned'),
+    type: Joi.string().valid('boiler', 'heat_pump', 'solar_thermal', 'radiator_system', 'ventilation', 'hot_water', 'other'),
+    fuelType: Joi.string().valid('gas', 'oil', 'electric', 'pellet', 'other'),
+    siteId: objectId,
+    manufacturer: Joi.string().trim().max(100),
+    search: Joi.string().trim().max(100),
+  }),
 };

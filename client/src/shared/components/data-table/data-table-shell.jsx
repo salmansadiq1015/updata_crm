@@ -43,6 +43,20 @@ export function DataTableShell({
   onRowSelectionChange,
   getRowId,
   onRowClick,
+  /**
+   * Optional cursor pagination mode. When provided, replaces the numeric
+   * pagination footer with Prev / Next buttons.
+   * Shape: {
+   *   hasPrev: boolean,
+   *   hasNext: boolean,
+   *   isFetching: boolean,
+   *   onPrev: () => void,
+   *   onNext: () => void,
+   *   pageSize: number,
+   *   onPageSizeChange?: (size: number) => void,
+   * }
+   */
+  cursorPagination,
 }) {
   const columns = useMemo(() => {
     const cols = rawColumns.map((col) => ({
@@ -85,11 +99,11 @@ export function DataTableShell({
         id: 'actions',
         header: '',
         cell: ({ row }) => (
-          <div className="flex items-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity duration-150">
+          <div className="flex items-center justify-end gap-0.5">
             {renderRowActions({ row })}
           </div>
         ),
-        size: 100,
+        size: 56,
         enableSorting: false,
       });
     }
@@ -124,25 +138,29 @@ export function DataTableShell({
 
   const currentPage = (pagination?.pageIndex ?? 0) + 1;
 
+  const showToolbar = !!renderTopToolbarCustomActions || enableGlobalFilter;
+
   return (
     <div className="rounded-xl border border-border/40 bg-card overflow-hidden shadow-theme-sm">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border/40">
-        <div className="flex items-center gap-2">
-          {renderTopToolbarCustomActions && renderTopToolbarCustomActions({ table })}
-        </div>
-        {enableGlobalFilter && (
-          <div className="relative w-56">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Suchen..."
-              value={globalFilter}
-              onChange={(e) => onGlobalFilterChange?.(e.target.value)}
-              className="h-8 pl-9 rounded-lg bg-muted/40 border-border/50 text-sm"
-            />
+      {/* Toolbar — only when there's something to show (avoids an empty strip) */}
+      {showToolbar && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border/40">
+          <div className="flex items-center gap-2">
+            {renderTopToolbarCustomActions && renderTopToolbarCustomActions({ table })}
           </div>
-        )}
-      </div>
+          {enableGlobalFilter && (
+            <div className="relative w-56">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Suchen..."
+                value={globalFilter}
+                onChange={(e) => onGlobalFilterChange?.(e.target.value)}
+                className="h-8 pl-9 rounded-lg bg-muted/40 border-border/50 text-sm"
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -229,44 +247,91 @@ export function DataTableShell({
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-muted/10">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Zeilen</span>
-          <Select
-            value={String(pagination?.pageSize || 25)}
-            onValueChange={(val) => {
-              onPaginationChange?.({ pageIndex: 0, pageSize: Number(val) });
-            }}
-          >
-            <SelectTrigger className="h-7 w-[60px] rounded-lg text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[10, 25, 50, 100].map((size) => (
-                <SelectItem key={size} value={String(size)}>{size}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      {cursorPagination ? (
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-muted/10">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Zeilen</span>
+            <Select
+              value={String(cursorPagination.pageSize || 25)}
+              onValueChange={(val) => cursorPagination.onPageSizeChange?.(Number(val))}
+            >
+              <SelectTrigger className="h-7 w-16 rounded-md text-xs data-[size=default]:h-7">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" side="top" align="start" sideOffset={6}>
+                {[10, 25, 50, 100].map((size) => (
+                  <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {cursorPagination.isFetching && (
+              <span className="ml-2 text-xs text-muted-foreground/60 italic">Laden...</span>
+            )}
+          </div>
 
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground mr-2">
-            {currentPage} / {pageCount || 1}
-          </span>
-          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => onPaginationChange?.({ ...(pagination || {}), pageIndex: 0 })} disabled={currentPage <= 1}>
-            <ChevronsLeft className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => onPaginationChange?.({ ...(pagination || {}), pageIndex: (pagination?.pageIndex || 0) - 1 })} disabled={currentPage <= 1}>
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => onPaginationChange?.({ ...(pagination || {}), pageIndex: (pagination?.pageIndex || 0) + 1 })} disabled={currentPage >= pageCount}>
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => onPaginationChange?.({ ...(pagination || {}), pageIndex: (pageCount || 1) - 1 })} disabled={currentPage >= pageCount}>
-            <ChevronsRight className="h-3.5 w-3.5" />
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 rounded-md text-xs"
+              onClick={cursorPagination.onPrev}
+              disabled={!cursorPagination.hasPrev || cursorPagination.isFetching}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Zurueck
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 rounded-md text-xs"
+              onClick={cursorPagination.onNext}
+              disabled={!cursorPagination.hasNext || cursorPagination.isFetching}
+            >
+              Weiter
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-muted/10">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Zeilen</span>
+            <Select
+              value={String(pagination?.pageSize || 25)}
+              onValueChange={(val) => {
+                onPaginationChange?.({ pageIndex: 0, pageSize: Number(val) });
+              }}
+            >
+              <SelectTrigger className="h-7 w-16 rounded-md text-xs data-[size=default]:h-7">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" side="top" align="start" sideOffset={6}>
+                {[10, 25, 50, 100].map((size) => (
+                  <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground mr-2">
+              {currentPage} / {pageCount || 1}
+            </span>
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => onPaginationChange?.({ ...(pagination || {}), pageIndex: 0 })} disabled={currentPage <= 1}>
+              <ChevronsLeft className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => onPaginationChange?.({ ...(pagination || {}), pageIndex: (pagination?.pageIndex || 0) - 1 })} disabled={currentPage <= 1}>
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => onPaginationChange?.({ ...(pagination || {}), pageIndex: (pagination?.pageIndex || 0) + 1 })} disabled={currentPage >= pageCount}>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => onPaginationChange?.({ ...(pagination || {}), pageIndex: (pageCount || 1) - 1 })} disabled={currentPage >= pageCount}>
+              <ChevronsRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

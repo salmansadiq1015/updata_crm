@@ -38,7 +38,7 @@ export function FeaturesSection() {
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/8 border border-primary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-primary mb-6">
             {t('features.label')}
           </div>
-          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-[2.75rem]">
+          <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl lg:text-[1.5rem] 2xl:text-[2rem]">
             {t('features.title')}
           </h2>
           <p className="mt-5 text-lg text-muted-foreground leading-relaxed">

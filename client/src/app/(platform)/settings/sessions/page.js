@@ -1,12 +1,20 @@
-import { PageHeader } from '@/components/common/page-header';
-import { SessionsTable } from '@/components/tables/sessions-table';
+'use client';
 
-export const metadata = { title: 'Sitzungen — MB Boiler ERP' };
+import { Suspense } from 'react';
+import { PageHeader } from '@/shared/components/page-header';
+import { SessionsTable } from '@/modules/sessions/components/sessions-table';
+import { SessionsSkeleton } from '@/shared/components/page-skeletons';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export default function SessionsPage() {
+  const { t } = useLanguage();
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Aktive Sitzungen" description="Verwalten Sie Ihre angemeldeten Geräte und Sitzungen." />
+      <PageHeader
+        title={t('sessions.title')}
+        description={t('sessions.titleDesc') || 'Verwalten Sie Ihre angemeldeten Geraete und Sitzungen.'}
+      />
       <SessionsTable />
     </div>
   );

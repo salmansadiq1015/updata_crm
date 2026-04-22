@@ -52,21 +52,8 @@ import { metricsMiddleware, metricsEndpoint } from './metrics/index.js';
  * Express app factory.
  *
  * Middleware pipeline order is CRITICAL:
- * 1. Request ID (first — every subsequent log/response needs it)
- * 2. Security headers
- * 3. CORS
- * 4. Compression
- * 5. Body parsing
- * 6. Cookie parsing
- * 7. NoSQL sanitization (BEFORE business logic)
- * 8. Response envelope helpers
- * 9. Metrics collection
- * 10. Request logging
- * 11. Rate limiting
- * 12. Routes
- * 13. 404 handler
- * 14. Error handler (LAST)
  */
+
 export function createApp() {
   const app = express();
 

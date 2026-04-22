@@ -8,7 +8,7 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   createInstallationSchema, updateInstallationSchema, decommissionSchema,
-  installationIdParamSchema, siteIdParamSchema,
+  installationIdParamSchema, siteIdParamSchema, listInstallationsSchema,
 } from './installation.validation.js';
 import { createNoteSchema } from './note.validation.js';
 import { createImageSchema } from './image.validation.js';
@@ -19,6 +19,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 
 // Middleware to set entityType for polymorphic note/image controllers
 const setInstallationEntity = (req, res, next) => { req.entityType = 'installation'; next(); };
+
+// Standalone list (all installations across sites, cursor-paginated)
+router.get('/', authenticate, requirePermission('crm:read'), validate(listInstallationsSchema), (req, res, next) => installationController.list(req, res, next));
 
 // Standard CRUD
 router.get('/:id', authenticate, requirePermission('crm:read'), validate(installationIdParamSchema), (req, res, next) => installationController.getById(req, res, next));

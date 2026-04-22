@@ -174,6 +174,47 @@ class MaintenanceIntervalService {
     });
   }
 
+  async exportCsv({ status = 'all', maintenanceType } = {}) {
+    const filter = {};
+    if (status === 'due') filter.maintenanceStatus = 'due';
+    else if (status === 'overdue') filter.maintenanceStatus = 'overdue';
+    if (maintenanceType) filter.maintenanceType = maintenanceType;
+
+    const MaintenanceInterval = (await import('./maintenanceInterval.model.js')).default;
+    const rows = await MaintenanceInterval.find(filter)
+      .populate({ path: 'installationId', select: 'installationNumber type manufacturer model siteId status' })
+      .sort({ nextDueDate: 1 })
+      .limit(50000)
+      .lean();
+
+    const escape = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n;]/.test(s) ? `"${s}"` : s;
+    };
+
+    const header = [
+      'InstallationNumber', 'InstallationType', 'Manufacturer', 'Model',
+      'MaintenanceType', 'FrequencyMonths', 'LastServiceDate', 'NextDueDate',
+      'Status', 'Notes',
+    ].join(';');
+
+    const body = rows.map((r) => [
+      r.installationId?.installationNumber || '',
+      r.installationId?.type || '',
+      r.installationId?.manufacturer || '',
+      r.installationId?.model || '',
+      r.maintenanceType + (r.customTypeLabel ? ` (${r.customTypeLabel})` : ''),
+      r.frequencyMonths,
+      r.lastServiceDate ? new Date(r.lastServiceDate).toISOString().split('T')[0] : '',
+      r.nextDueDate ? new Date(r.nextDueDate).toISOString().split('T')[0] : '',
+      r.maintenanceStatus,
+      r.notes,
+    ].map(escape).join(';')).join('\n');
+
+    return `﻿${header}\n${body}`;
+  }
+
   async _invalidateInstallationMaintenanceCache(installationId) {
     await cacheManager.del(`crm:maintenance:installation:${installationId}`);
   }

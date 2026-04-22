@@ -71,6 +71,11 @@ class SiteService {
     );
   }
 
+  async list(queryParams) {
+    const { cursor, limit, sortBy, sortOrder, search, ...filters } = queryParams;
+    return siteRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters, search });
+  }
+
   async update(id, data, updatedBy, meta = {}) {
     const existing = await siteRepository.findById(id);
     if (!existing) throw new NotFoundError('Site', id);

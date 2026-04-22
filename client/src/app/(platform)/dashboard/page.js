@@ -1,13 +1,13 @@
 'use client';
 
-import { useAuth } from '@/hooks/use-auth';
-import { usePermissions } from '@/hooks/use-permissions';
+import { useAuth } from '@/shared/hooks/use-auth';
+import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { PageHeader } from '@/components/common/page-header';
-import { PermissionGate } from '@/components/common/permission-gate';
-import { StatsGrid } from '@/components/dashboard/stats-grid';
-import { RecentActivity } from '@/components/dashboard/recent-activity';
-import { SystemHealth } from '@/components/dashboard/system-health';
+import { PageHeader } from '@/shared/components/page-header';
+import { PermissionGate } from '@/shared/components/permission-gate';
+import { StatsGrid } from '@/modules/dashboard/components/stats-grid';
+import { RecentActivity } from '@/modules/dashboard/components/recent-activity';
+import { SystemHealth } from '@/modules/dashboard/components/system-health';
 import { Card, CardContent } from '@/components/ui/card';
 import { Users, Shield, Clock, ScrollText } from 'lucide-react';
 import Link from 'next/link';

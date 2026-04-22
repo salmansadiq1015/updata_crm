@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
-import { AuthLayout } from '@/components/layout/auth-layout';
-import { LoginForm } from '@/components/forms/login-form';
+import { AuthLayout } from '@/modules/auth/components/auth-layout';
+import { LoginForm } from '@/modules/auth/components/login-form';
 
 export const metadata = {
   title: 'Anmelden — MB Boiler ERP',

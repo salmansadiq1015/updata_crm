@@ -157,7 +157,7 @@ function ModuleBlock({ config, index }) {
           <config.icon className="h-3.5 w-3.5" />
           {t(`modules.${config.key}.tag`)}
         </div>
-        <h3 className="text-2xl font-extrabold tracking-tight sm:text-3xl lg:text-[2rem]">
+        <h3 className="text-lg font-extrabold tracking-tight sm:text-xl lg:text-[1.375rem]">
           {t(`modules.${config.key}.title`)}
         </h3>
         <p className="mt-4 text-muted-foreground leading-relaxed text-[0.95rem]">
@@ -207,7 +207,7 @@ export function ModulesShowcase() {
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/8 border border-primary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-primary mb-6">
             {t('modules.label')}
           </div>
-          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-[2.75rem]">
+          <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl lg:text-[1.5rem] 2xl:text-[2rem]">
             {t('modules.title')}
           </h2>
           <p className="mt-5 text-lg text-muted-foreground leading-relaxed">

@@ -8,7 +8,8 @@ import { createNoteSchema } from '@/modules/crm/validations/note';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { Controller } from 'react-hook-form';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, FileText } from 'lucide-react';
@@ -20,7 +21,7 @@ const BLANK = { text: '', category: 'general', isPinned: false, isWarning: false
 export function NoteForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, setValue, watch, control, formState: { errors } } = useForm({
     resolver: zodResolver(createNoteSchema),
     defaultValues: BLANK,
   });
@@ -63,7 +64,20 @@ export function NoteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
         <form onSubmit={handleSubmit(submit)} className="space-y-4 pt-2">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">{t('crm.notes.text', 'Text')}*</Label>
-            <Textarea rows={4} {...register('text')} autoFocus placeholder={t('crm.notes.textPlaceholder', 'Notiz...')} />
+            <Controller
+              name="text"
+              control={control}
+              render={({ field }) => (
+                <RichTextEditor
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder={t('crm.notes.textPlaceholder', 'Notiz...')}
+                  maxLength={5000}
+                  minHeight={120}
+                  error={errors.text}
+                />
+              )}
+            />
             {errors.text && <p className="text-xs text-destructive">{errors.text.message}</p>}
           </div>
 

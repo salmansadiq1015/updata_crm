@@ -13,7 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { Controller } from 'react-hook-form';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
@@ -61,7 +62,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
     { id: 'preferences', label: t('crm.stepPreferences', 'Einstellungen'), icon: Bell },
   ], [t]);
 
-  const { register, handleSubmit, reset, setValue, watch, trigger, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, setValue, watch, trigger, control, formState: { errors } } = useForm({
     resolver: zodResolver(createCustomerSchema),
     defaultValues: BLANK_VALUES,
   });
@@ -429,11 +430,19 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                 </div>
 
                 <Field label={t('crm.notes', 'Notizen')} error={errors.notes}>
-                  <Textarea
-                    rows={4}
-                    placeholder={t('crm.notesPlaceholder', 'Allgemeine Notizen zum Kunden...')}
-                    className="resize-none"
-                    {...register('notes')}
+                  <Controller
+                    name="notes"
+                    control={control}
+                    render={({ field }) => (
+                      <RichTextEditor
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder={t('crm.notesPlaceholder', 'Allgemeine Notizen zum Kunden...')}
+                        maxLength={5000}
+                        minHeight={120}
+                        error={errors.notes}
+                      />
+                    )}
                   />
                 </Field>
               </div>

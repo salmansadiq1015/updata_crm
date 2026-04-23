@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { Controller } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Wrench } from 'lucide-react';
 import { INSTALLATION_TYPE_META, FUEL_TYPE_META } from '@/modules/crm/constants/crm-constants';
@@ -38,7 +39,7 @@ const toDateInput = (v) => {
 export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, setValue, watch, control, formState: { errors } } = useForm({
     resolver: zodResolver(createInstallationSchema),
     defaultValues: BLANK,
   });
@@ -160,7 +161,19 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
           </div>
 
           <FormField label={t('crm.installations.technicalNotes', 'Technische Notizen')} error={errors.technicalNotes?.message}>
-            <Textarea rows={3} {...register('technicalNotes')} />
+            <Controller
+              name="technicalNotes"
+              control={control}
+              render={({ field }) => (
+                <RichTextEditor
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder={t('crm.installations.technicalNotesPlaceholder', 'Technische Notizen...')}
+                  maxLength={5000}
+                  minHeight={100}
+                />
+              )}
+            />
           </FormField>
 
           <DialogFooter className="gap-2">

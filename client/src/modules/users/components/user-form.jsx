@@ -8,8 +8,8 @@ import { createUserSchema } from '@/modules/users/validations/user';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FormField } from '@/components/ui/form-field';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {
@@ -175,11 +175,11 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {/* Step 1: Personal */}
             {currentStep === 0 && (
               <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                <FormField label={t('users.firstName')} error={errors.firstName} required>
-                  <Input placeholder="Max" className={inputStyles} {...register('firstName')} autoFocus />
+                <FormField label={t('users.firstName')} error={errors.firstName?.message} required>
+                  <Input placeholder="Max" {...register('firstName')} autoFocus />
                 </FormField>
-                <FormField label={t('users.lastName')} error={errors.lastName} required>
-                  <Input placeholder="Muster" className={inputStyles} {...register('lastName')} />
+                <FormField label={t('users.lastName')} error={errors.lastName?.message} required>
+                  <Input placeholder="Muster" {...register('lastName')} />
                 </FormField>
               </div>
             )}
@@ -187,11 +187,11 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {/* Step 2: Contact */}
             {currentStep === 1 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                <FormField label={t('users.email')} error={errors.email} required>
-                  <Input type="email" placeholder="max.muster@mbboiler.ch" className={inputStyles} {...register('email')} autoFocus />
+                <FormField label={t('users.email')} error={errors.email?.message} required>
+                  <Input type="email" placeholder="max.muster@mbboiler.ch" {...register('email')} autoFocus />
                 </FormField>
                 <FormField label={`${t('users.phone')} (optional)`}>
-                  <Input placeholder="+41 79 123 45 67" className={inputStyles} {...register('phone')} />
+                  <Input placeholder="+41 79 123 45 67" {...register('phone')} />
                 </FormField>
               </div>
             )}
@@ -200,10 +200,10 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {currentStep === 2 && (
               <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <FormField label={t('users.department') || 'Abteilung'}>
-                  <Input placeholder={t('users.departmentPlaceholder') || 'z.B. Technik'} className={inputStyles} {...register('department')} autoFocus />
+                  <Input placeholder={t('users.departmentPlaceholder') || 'z.B. Technik'} {...register('department')} autoFocus />
                 </FormField>
                 <FormField label={t('users.position') || 'Position'}>
-                  <Input placeholder={t('users.positionPlaceholder') || 'z.B. Projektleiter'} className={inputStyles} {...register('position')} />
+                  <Input placeholder={t('users.positionPlaceholder') || 'z.B. Projektleiter'} {...register('position')} />
                 </FormField>
               </div>
             )}
@@ -212,18 +212,18 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {currentStep === 3 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <FormField label={t('users.street') || 'Strasse'}>
-                  <Input placeholder="Musterstrasse 1" className={inputStyles} {...register('street')} autoFocus />
+                  <Input placeholder="Musterstrasse 1" {...register('street')} autoFocus />
                 </FormField>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-3 gap-4">
                   <FormField label={t('users.zip') || 'PLZ'}>
-                    <Input placeholder="3000" className={inputStyles} {...register('zip')} />
+                    <Input placeholder="3000" {...register('zip')} />
                   </FormField>
                   <FormField label={t('users.city') || 'Ort'} className="col-span-2">
-                    <Input placeholder="Bern" className={inputStyles} {...register('city')} />
+                    <Input placeholder="Bern" {...register('city')} />
                   </FormField>
                 </div>
                 <FormField label={t('users.country') || 'Land'}>
-                  <Input placeholder="Schweiz" className={inputStyles} {...register('country')} />
+                  <Input placeholder="Schweiz" {...register('country')} />
                 </FormField>
               </div>
             )}
@@ -231,9 +231,9 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {/* Step 5: Access */}
             {currentStep === 4 && (
               <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                <FormField label={t('users.role')} error={errors.roleId} required>
+                <FormField label={t('users.role')} error={errors.roleId?.message} required>
                   <Select value={watch('roleId')} onValueChange={(val) => setValue('roleId', val)}>
-                    <SelectTrigger className={selectStyles}>
+                    <SelectTrigger>
                       <SelectValue placeholder={t('users.selectRole')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -245,7 +245,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                 </FormField>
                 <FormField label={t('users.language')}>
                   <Select value={watch('language')} onValueChange={(val) => setValue('language', val)}>
-                    <SelectTrigger className={selectStyles}>
+                    <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -263,7 +263,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
           <Separator className="shrink-0" />
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 shrink-0 bg-muted/20">
+          <div className="flex items-center justify-between px-6 py-4 shrink-0 bg-muted/40 border-t border-border/60 rounded-b-2xl">
             <div>
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 rounded-lg h-9" onClick={goBack}>
@@ -318,18 +318,3 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   );
 }
 
-const inputStyles = 'h-10 rounded-lg bg-muted/40 border-border/60 focus:bg-background transition-colors';
-const selectStyles = 'h-10 rounded-lg bg-muted/40 border-border/60';
-
-function FormField({ label, error, required, className, children }) {
-  return (
-    <div className={cn('space-y-1.5', className)}>
-      <Label className="text-xs font-medium">
-        {label}
-        {required && <span className="text-destructive ml-0.5">*</span>}
-      </Label>
-      {children}
-      {error && <p className="text-xs text-destructive animate-in fade-in slide-in-from-top-1 duration-200">{error.message}</p>}
-    </div>
-  );
-}

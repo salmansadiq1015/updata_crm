@@ -8,9 +8,9 @@ import { createMaintenanceSchema } from '@/modules/crm/validations/maintenance';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FormField, FormBody } from '@/components/ui/form-field';
 import { Loader2, Wrench } from 'lucide-react';
 import { MAINTENANCE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { cn } from '@/lib/utils';
@@ -73,7 +73,7 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-primary" />
+            <Wrench className="h-4.5 w-4.5 text-primary" />
             {isEdit ? t('crm.maintenance.editInterval', 'Wartungsintervall bearbeiten') : t('crm.maintenance.newIntervalTitle', 'Neues Wartungsintervall')}
           </DialogTitle>
           <DialogDescription>
@@ -81,51 +81,53 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)} className="space-y-4 pt-2">
-          <FormField label={`${t('crm.maintenance.maintenanceType', 'Wartungsart')}*`} error={errors.maintenanceType?.message}>
-            <Select value={type} onValueChange={(v) => setValue('maintenanceType', v, { shouldDirty: true })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(MAINTENANCE_TYPE_META).map(([key, meta]) => {
-                  const Icon = meta.icon;
-                  return (
-                    <SelectItem key={key} value={key}>
-                      <span className="flex items-center gap-2">
-                        <Icon className={cn('h-3.5 w-3.5', meta.color)} />
-                        {t(`crm.maintenance.type.${key}`, meta.label)}
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </FormField>
-
-          {type === 'other' && (
-            <FormField label={t('crm.maintenance.customLabel', 'Eigene Bezeichnung')} error={errors.customTypeLabel?.message}>
-              <Input {...register('customTypeLabel')} placeholder={t('crm.maintenance.customLabelPlaceholder', 'z.B. Kesselreinigung')} />
+        <form onSubmit={handleSubmit(submit)}>
+          <FormBody>
+            <FormField label={t('crm.maintenance.maintenanceType', 'Wartungsart')} required error={errors.maintenanceType?.message}>
+              <Select value={type} onValueChange={(v) => setValue('maintenanceType', v, { shouldDirty: true })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(MAINTENANCE_TYPE_META).map(([key, meta]) => {
+                    const Icon = meta.icon;
+                    return (
+                      <SelectItem key={key} value={key}>
+                        <span className="flex items-center gap-2">
+                          <Icon className={cn('h-3.5 w-3.5', meta.color)} />
+                          {t(`crm.maintenance.type.${key}`, meta.label)}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </FormField>
-          )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={`${t('crm.maintenance.frequencyMonths', 'Intervall (Monate)')}*`} error={errors.frequencyMonths?.message}>
-              <Input
-                type="number"
-                min="1"
-                max="120"
-                {...register('frequencyMonths', { valueAsNumber: true })}
-              />
+            {type === 'other' && (
+              <FormField label={t('crm.maintenance.customLabel', 'Eigene Bezeichnung')} error={errors.customTypeLabel?.message}>
+                <Input {...register('customTypeLabel')} placeholder={t('crm.maintenance.customLabelPlaceholder', 'z.B. Kesselreinigung')} />
+              </FormField>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label={t('crm.maintenance.frequencyMonths', 'Intervall (Monate)')} required error={errors.frequencyMonths?.message}>
+                <Input
+                  type="number"
+                  min="1"
+                  max="120"
+                  {...register('frequencyMonths', { valueAsNumber: true })}
+                />
+              </FormField>
+              <FormField label={t('crm.maintenance.lastServiceDate', 'Letzter Service')} error={errors.lastServiceDate?.message}>
+                <Input type="date" {...register('lastServiceDate')} />
+              </FormField>
+            </div>
+
+            <FormField label={t('crm.notes', 'Notizen')} error={errors.notes?.message}>
+              <Textarea rows={2} {...register('notes')} />
             </FormField>
-            <FormField label={t('crm.maintenance.lastServiceDate', 'Letzter Service')} error={errors.lastServiceDate?.message}>
-              <Input type="date" {...register('lastServiceDate')} />
-            </FormField>
-          </div>
+          </FormBody>
 
-          <FormField label={t('crm.notes', 'Notizen')} error={errors.notes?.message}>
-            <Textarea rows={2} {...register('notes')} />
-          </FormField>
-
-          <DialogFooter className="gap-2">
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               {t('common.cancel', 'Abbrechen')}
             </Button>
@@ -137,15 +139,5 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function FormField({ label, error, children }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium">{label}</Label>
-      {children}
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
   );
 }

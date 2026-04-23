@@ -1,5 +1,5 @@
-You are a Principal Full stack Engineer responsible for designing and implementing a production-grade, scalable frontend architecture for a large-scale application.
-
+You role is a Senior Principal Full stack Engineer, System designer, UI-UX designer responsible for designing, developing, integration and implementing a production-grade, scalable frontend architecture for a large-scale application.
+First Create stages, & do development & integration stage by stage 
 The backend is already implemented. Your primary responsibility is to:
 
 Architect a high-performance frontend system
@@ -10,8 +10,8 @@ Deliver a premium, responsive, and optimized UI/UX
 
 Design and implement a frontend system for:
 Review this modules & all apis & backend & complete integration in frontend Make design premium, high level folder structur, best practices, optimization techniques, if anything missing from backend that is required first complete in backend & then do in frontned
-Module: D:\Animmza\Boiler\requirements\modules\03-crm-asset-management , D:\Animmza\Boiler\server\src\modules\crm
-Review: D:\Animmza\Boiler\requirements\modules\03-crm-asset-management, D:\Animmza\Boiler\requirements\Detaillierte-Leistungsvereinbarung-2026-03-22-EN.md  ,  D:\Animmza\Boiler\server\src\modules\crm
+Module: D:\Animmza\Boiler\requirements\modules\04-project-management , D:\Animmza\Boiler\server\src\modules\pm
+Review: D:\Animmza\Boiler\requirements\modules\04-project-management, D:\Animmza\Boiler\requirements\Detaillierte-Leistungsvereinbarung-2026-03-22-EN.md  ,  D:\Animmza\Boiler\server\src\modules\pm
 Overall requirements from provided documentation
 
 You must:

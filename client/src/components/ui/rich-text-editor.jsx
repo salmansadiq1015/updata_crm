@@ -230,11 +230,12 @@ export function RichTextEditor({
   onChange,
   placeholder = '',
   maxLength = 5000,
-  minHeight = 120,
+  minHeight = 192,
   disabled = false,
   error,
 }) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
@@ -290,10 +291,10 @@ export function RichTextEditor({
         editor={editor}
         className={cn(
           'prose prose-sm dark:prose-invert max-w-none px-3 py-2 text-sm',
-          '[&_.tiptap]:outline-none',
+          '[&_.tiptap]:outline-none [&_.tiptap]:min-h-[inherit]',
           '[&_.tiptap_p.is-editor-empty:first-child::before]:text-muted-foreground [&_.tiptap_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.tiptap_p.is-editor-empty:first-child::before]:float-left [&_.tiptap_p.is-editor-empty:first-child::before]:pointer-events-none [&_.tiptap_p.is-editor-empty:first-child::before]:h-0',
         )}
-        style={{ minHeight }}
+        style={{ minHeight: 192 }}
       />
       {maxLength && (
         <div className={cn(

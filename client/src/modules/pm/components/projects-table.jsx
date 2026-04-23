@@ -228,7 +228,7 @@ export function ProjectsTable() {
         rowSelection={rowSelection}
         onRowSelectionChange={setRowSelection}
         getRowId={(row) => row._id}
-        onRowClick={(row) => router.push(`/projects/${row.original._id}`)}
+        onRowClick={(row) => router.push(`/projects/${row._id}`)}
         cursorPagination={{
           hasPrev,
           hasNext,

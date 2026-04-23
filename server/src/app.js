@@ -44,6 +44,7 @@ import notificationsRoutes, {
 import integrationsRoutes, { calendarSyncRoutes } from './modules/integrations/integrations.routes.js';
 import widgetPublicRoutes from './modules/integrations/widgetPublic.routes.js';
 import aiRoutes from './modules/ai/ai.routes.js';
+import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 
 // Metrics
 import { metricsMiddleware, metricsEndpoint } from './metrics/index.js';
@@ -146,6 +147,7 @@ export function createApp() {
   app.use("/api/v1/users/me/calendar", calendarSyncRoutes);
   app.use("/api/v1/webhooks/email", webhookRoutes);
   app.use("/api/v1/files", fileRoutes);
+  app.use("/api/v1/dashboard", dashboardRoutes);
   app.use("/api/v1/system", systemRoutes);
 
   // --- Post-route middleware ---

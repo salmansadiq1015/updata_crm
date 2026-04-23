@@ -16,12 +16,13 @@ import {
 } from '@/modules/pm/constants/pm-constants';
 import { EmptyState } from '@/shared/components/empty-state';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { FormField, FormBody } from '@/components/ui/form-field';
 import { Controller } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
@@ -432,105 +433,95 @@ export function ScheduleTab({ projectId }) {
 
       {/* ── Entry form dialog ──────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={(v) => { if (!v) { setFormOpen(false); setEditEntry(null); } else setFormOpen(v); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-4.5 w-4.5 text-primary" />
               {isEdit ? t('pm.editEntry', 'Edit Entry') : t('pm.addPhase', 'Add Entry')}
             </DialogTitle>
+            <DialogDescription>
+              {language === 'de' ? 'Phase oder Meilenstein für den Bauzeitenplan.' : 'Add a phase or milestone to the construction schedule.'}
+            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={entryForm.handleSubmit(onEntrySubmit)} className="space-y-4 pt-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">{language === 'de' ? 'Typ' : 'Type'}</Label>
-                <Select value={watchEntryType} onValueChange={(v) => entryForm.setValue('entryType', v)} disabled={isEdit}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(SCHEDULE_ENTRY_TYPE_CONFIG).map(([key, cfg]) => (
-                      <SelectItem key={key} value={key}>{language === 'de' ? cfg.label : cfg.labelEn}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <form onSubmit={entryForm.handleSubmit(onEntrySubmit)}>
+            <FormBody>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label={language === 'de' ? 'Typ' : 'Type'}>
+                  <Select value={watchEntryType} onValueChange={(v) => entryForm.setValue('entryType', v)} disabled={isEdit}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(SCHEDULE_ENTRY_TYPE_CONFIG).map(([key, cfg]) => (
+                        <SelectItem key={key} value={key}>{language === 'de' ? cfg.label : cfg.labelEn}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+                <FormField label={language === 'de' ? 'Verantwortlich' : 'Responsible'}>
+                  <Select value={entryForm.watch('responsibleType')} onValueChange={(v) => entryForm.setValue('responsibleType', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(RESPONSIBLE_TYPE_CONFIG).map(([key, cfg]) => (
+                        <SelectItem key={key} value={key}>{language === 'de' ? cfg.label : cfg.labelEn}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">{language === 'de' ? 'Verantwortlich' : 'Responsible'}</Label>
-                <Select value={entryForm.watch('responsibleType')} onValueChange={(v) => entryForm.setValue('responsibleType', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(RESPONSIBLE_TYPE_CONFIG).map(([key, cfg]) => (
-                      <SelectItem key={key} value={key}>{language === 'de' ? cfg.label : cfg.labelEn}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">
-                {language === 'de' ? 'Name' : 'Name'}<span className="text-destructive ml-0.5">*</span>
-              </Label>
-              <Input {...entryForm.register('name')} />
-              {entryForm.formState.errors.name && <p className="text-xs text-destructive">{entryForm.formState.errors.name.message}</p>}
-            </div>
+              <FormField label={language === 'de' ? 'Name' : 'Name'} required error={entryForm.formState.errors.name?.message}>
+                <Input {...entryForm.register('name')} placeholder={language === 'de' ? 'z.B. Rohbauphase' : 'e.g. Foundation Phase'} />
+              </FormField>
 
-            {/* Date fields based on entry type */}
-            {watchEntryType === 'PHASE' ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{t('pm.startDate', 'Start Date')}<span className="text-destructive ml-0.5">*</span></Label>
-                  <Input type="date" {...entryForm.register('startDate')} />
-                  {entryForm.formState.errors.startDate && <p className="text-xs text-destructive">{entryForm.formState.errors.startDate.message}</p>}
+              {watchEntryType === 'PHASE' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label={t('pm.startDate', 'Start Date')} required error={entryForm.formState.errors.startDate?.message}>
+                    <Input type="date" {...entryForm.register('startDate')} />
+                  </FormField>
+                  <FormField label={t('pm.endDate', 'End Date')} required error={entryForm.formState.errors.endDate?.message}>
+                    <Input type="date" {...entryForm.register('endDate')} />
+                  </FormField>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">{t('pm.endDate', 'End Date')}<span className="text-destructive ml-0.5">*</span></Label>
-                  <Input type="date" {...entryForm.register('endDate')} />
-                  {entryForm.formState.errors.endDate && <p className="text-xs text-destructive">{entryForm.formState.errors.endDate.message}</p>}
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t('pm.milestoneDate', 'Milestone Date')}<span className="text-destructive ml-0.5">*</span></Label>
-                <Input type="date" {...entryForm.register('milestoneDate')} />
-                {entryForm.formState.errors.milestoneDate && <p className="text-xs text-destructive">{entryForm.formState.errors.milestoneDate.message}</p>}
-              </div>
-            )}
+              ) : (
+                <FormField label={t('pm.milestoneDate', 'Milestone Date')} required error={entryForm.formState.errors.milestoneDate?.message}>
+                  <Input type="date" {...entryForm.register('milestoneDate')} />
+                </FormField>
+              )}
 
-            {isEdit && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t('pm.status', 'Status')}</Label>
-                <Select value={entryForm.watch('status')} onValueChange={(v) => entryForm.setValue('status', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(SCHEDULE_STATUS_CONFIG).map(([key, cfg]) => (
-                      <SelectItem key={key} value={key}>{language === 'de' ? cfg.label : cfg.labelEn}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+              {isEdit && (
+                <FormField label={t('pm.status', 'Status')}>
+                  <Select value={entryForm.watch('status')} onValueChange={(v) => entryForm.setValue('status', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(SCHEDULE_STATUS_CONFIG).map(([key, cfg]) => (
+                        <SelectItem key={key} value={key}>{language === 'de' ? cfg.label : cfg.labelEn}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+              )}
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t('pm.notes', 'Notes')}</Label>
-              <Controller
-                name="notes"
-                control={entryForm.control}
-                render={({ field }) => (
-                  <RichTextEditor
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder={language === 'de' ? 'Notizen...' : 'Notes...'}
-                    maxLength={5000}
-                    minHeight={80}
-                  />
-                )}
-              />
-            </div>
+              <FormField label={t('pm.notes', 'Notes')}>
+                <Controller
+                  name="notes"
+                  control={entryForm.control}
+                  render={({ field }) => (
+                    <RichTextEditor
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder={language === 'de' ? 'Notizen...' : 'Notes...'}
+                      maxLength={5000}
+                      minHeight={80}
+                    />
+                  )}
+                />
+              </FormField>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">{language === 'de' ? 'Sortierung' : 'Sort Order'}</Label>
-              <Input type="number" min={0} {...entryForm.register('sortOrder')} />
-            </div>
+              <FormField label={language === 'de' ? 'Sortierung' : 'Sort Order'}>
+                <Input type="number" min={0} {...entryForm.register('sortOrder')} />
+              </FormField>
+            </FormBody>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setFormOpen(false); setEditEntry(null); }}>
                 {t('common.cancel', 'Cancel')}
               </Button>
@@ -538,47 +529,47 @@ export function ScheduleTab({ projectId }) {
                 {(addEntry.isPending || updateEntry.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEdit ? t('common.save', 'Save') : t('common.create', 'Create')}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* ── Send confirmation dialog ───────────────────────── */}
       <Dialog open={confirmSendOpen} onOpenChange={(v) => { if (!v) { setConfirmSendOpen(false); setConfirmSendEntry(null); } else setConfirmSendOpen(v); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('pm.sendConfirmation', 'Send Confirmation')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4.5 w-4.5 text-primary" />
+              {t('pm.sendConfirmation', 'Send Confirmation')}
+            </DialogTitle>
           </DialogHeader>
-          <form onSubmit={sendForm.handleSubmit(onSendConfirmationSubmit)} className="space-y-4 pt-2">
-            {confirmSendEntry && (
-              <div className="rounded-lg bg-muted/50 p-3 text-sm">
-                <p className="font-medium">{confirmSendEntry.name}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {confirmSendEntry.entryType === 'PHASE'
-                    ? `${formatDate(confirmSendEntry.startDate)} – ${formatDate(confirmSendEntry.endDate)}`
-                    : formatDate(confirmSendEntry.milestoneDate)}
-                </p>
-              </div>
-            )}
+          <form onSubmit={sendForm.handleSubmit(onSendConfirmationSubmit)}>
+            <FormBody>
+              {confirmSendEntry && (
+                <div className="rounded-xl bg-muted/50 border border-border/50 p-3.5 text-sm">
+                  <p className="font-medium">{confirmSendEntry.name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {confirmSendEntry.entryType === 'PHASE'
+                      ? `${formatDate(confirmSendEntry.startDate)} – ${formatDate(confirmSendEntry.endDate)}`
+                      : formatDate(confirmSendEntry.milestoneDate)}
+                  </p>
+                </div>
+              )}
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">{language === 'de' ? 'Partner E-Mail' : 'Partner Email'}<span className="text-destructive ml-0.5">*</span></Label>
-              <Input type="email" {...sendForm.register('partnerContactEmail')} />
-              {sendForm.formState.errors.partnerContactEmail && <p className="text-xs text-destructive">{sendForm.formState.errors.partnerContactEmail.message}</p>}
-            </div>
+              <FormField label={language === 'de' ? 'Partner E-Mail' : 'Partner Email'} required error={sendForm.formState.errors.partnerContactEmail?.message}>
+                <Input type="email" {...sendForm.register('partnerContactEmail')} />
+              </FormField>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t('pm.partnerName', 'Partner Name')}</Label>
-              <Input {...sendForm.register('partnerName')} />
-            </div>
+              <FormField label={t('pm.partnerName', 'Partner Name')}>
+                <Input {...sendForm.register('partnerName')} />
+              </FormField>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">{language === 'de' ? 'Partner-ID' : 'Partner Company ID'}<span className="text-destructive ml-0.5">*</span></Label>
-              <Input {...sendForm.register('partnerCompanyId')} placeholder="ObjectId" />
-              {sendForm.formState.errors.partnerCompanyId && <p className="text-xs text-destructive">{sendForm.formState.errors.partnerCompanyId.message}</p>}
-            </div>
+              <FormField label={language === 'de' ? 'Partner-ID' : 'Partner Company ID'} required error={sendForm.formState.errors.partnerCompanyId?.message}>
+                <Input {...sendForm.register('partnerCompanyId')} placeholder="ObjectId" />
+              </FormField>
+            </FormBody>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setConfirmSendOpen(false); setConfirmSendEntry(null); }}>
                 {t('common.cancel', 'Cancel')}
               </Button>
@@ -587,42 +578,45 @@ export function ScheduleTab({ projectId }) {
                 <Send className="h-4 w-4 mr-1.5" />
                 {t('pm.send', 'Send')}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* ── Update confirmation response dialog ────────────── */}
       <Dialog open={confirmResponseOpen} onOpenChange={(v) => { if (!v) { setConfirmResponseOpen(false); setConfirmResponseEntry(null); setConfirmResponseConf(null); } else setConfirmResponseOpen(v); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('pm.recordResponse', 'Record Response')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-4.5 w-4.5 text-primary" />
+              {t('pm.recordResponse', 'Record Response')}
+            </DialogTitle>
           </DialogHeader>
-          <form onSubmit={responseForm.handleSubmit(onResponseSubmit)} className="space-y-4 pt-2">
-            {confirmResponseConf && (
-              <div className="rounded-lg bg-muted/50 p-3 text-sm">
-                <p className="text-xs text-muted-foreground">{confirmResponseConf.partnerContactEmail}</p>
-              </div>
-            )}
+          <form onSubmit={responseForm.handleSubmit(onResponseSubmit)}>
+            <FormBody>
+              {confirmResponseConf && (
+                <div className="rounded-xl bg-muted/50 border border-border/50 p-3.5 text-sm">
+                  <p className="text-xs text-muted-foreground">{confirmResponseConf.partnerContactEmail}</p>
+                </div>
+              )}
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t('pm.status', 'Status')}</Label>
-              <Select value={responseForm.watch('confirmationStatus')} onValueChange={(v) => responseForm.setValue('confirmationStatus', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CONFIRMED">{language === 'de' ? 'Bestätigt' : 'Confirmed'}</SelectItem>
-                  <SelectItem value="DECLINED">{language === 'de' ? 'Abgelehnt' : 'Declined'}</SelectItem>
-                  <SelectItem value="ALTERNATIVE_PROPOSED">{language === 'de' ? 'Alternative vorgeschlagen' : 'Alternative Proposed'}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+              <FormField label={t('pm.status', 'Status')}>
+                <Select value={responseForm.watch('confirmationStatus')} onValueChange={(v) => responseForm.setValue('confirmationStatus', v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CONFIRMED">{language === 'de' ? 'Bestätigt' : 'Confirmed'}</SelectItem>
+                    <SelectItem value="DECLINED">{language === 'de' ? 'Abgelehnt' : 'Declined'}</SelectItem>
+                    <SelectItem value="ALTERNATIVE_PROPOSED">{language === 'de' ? 'Alternative vorgeschlagen' : 'Alternative Proposed'}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t('pm.notes', 'Notes')}</Label>
-              <Textarea {...responseForm.register('responseNotes')} rows={3} />
-            </div>
+              <FormField label={t('pm.notes', 'Notes')}>
+                <Textarea {...responseForm.register('responseNotes')} rows={3} />
+              </FormField>
+            </FormBody>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setConfirmResponseOpen(false); setConfirmResponseEntry(null); setConfirmResponseConf(null); }}>
                 {t('common.cancel', 'Cancel')}
               </Button>
@@ -630,7 +624,7 @@ export function ScheduleTab({ projectId }) {
                 {updateConfirmation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {t('common.save', 'Save')}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

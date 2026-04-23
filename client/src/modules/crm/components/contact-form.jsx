@@ -11,8 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { FormField, FormBody } from '@/components/ui/form-field';
 import { Loader2, User } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 const BLANK = {
   firstName: '',
@@ -88,46 +88,48 @@ export function ContactForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)} className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={`${t('crm.contacts.firstName', 'Vorname')}*`} error={errors.firstName?.message}>
-              <Input {...register('firstName')} autoFocus />
-            </FormField>
-            <FormField label={`${t('crm.contacts.lastName', 'Nachname')}*`} error={errors.lastName?.message}>
-              <Input {...register('lastName')} />
-            </FormField>
-          </div>
-
-          <FormField label={t('crm.contacts.functionTitle', 'Funktion / Position')} error={errors.functionTitle?.message}>
-            <Input {...register('functionTitle')} placeholder={t('crm.contacts.functionPlaceholder', 'z.B. Hausverwaltung')} />
-          </FormField>
-
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={t('crm.phone', 'Telefon')} error={errors.phone?.message}>
-              <Input {...register('phone')} />
-            </FormField>
-            <FormField label={t('crm.mobile', 'Mobil')} error={errors.mobile?.message}>
-              <Input {...register('mobile')} />
-            </FormField>
-          </div>
-
-          <FormField label={t('crm.email', 'E-Mail')} error={errors.email?.message}>
-            <Input type="email" {...register('email')} />
-          </FormField>
-
-          <FormField label={t('crm.notes', 'Notizen')} error={errors.notes?.message}>
-            <Textarea rows={2} {...register('notes')} />
-          </FormField>
-
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5">
-            <div>
-              <Label className="text-sm font-medium">{t('crm.contacts.isPrimary', 'Primärkontakt')}</Label>
-              <p className="text-xs text-muted-foreground">{t('crm.contacts.isPrimaryHint', 'Als Hauptansprechpartner markieren')}</p>
+        <form onSubmit={handleSubmit(submit)}>
+          <FormBody>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label={t('crm.contacts.firstName', 'Vorname')} required error={errors.firstName?.message}>
+                <Input {...register('firstName')} autoFocus />
+              </FormField>
+              <FormField label={t('crm.contacts.lastName', 'Nachname')} required error={errors.lastName?.message}>
+                <Input {...register('lastName')} />
+              </FormField>
             </div>
-            <Switch checked={isPrimary} onCheckedChange={(v) => setValue('isPrimary', v, { shouldDirty: true })} />
-          </div>
 
-          <DialogFooter className="gap-2">
+            <FormField label={t('crm.contacts.functionTitle', 'Funktion / Position')} error={errors.functionTitle?.message}>
+              <Input {...register('functionTitle')} placeholder={t('crm.contacts.functionPlaceholder', 'z.B. Hausverwaltung')} />
+            </FormField>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label={t('crm.phone', 'Telefon')} error={errors.phone?.message}>
+                <Input {...register('phone')} />
+              </FormField>
+              <FormField label={t('crm.mobile', 'Mobil')} error={errors.mobile?.message}>
+                <Input {...register('mobile')} />
+              </FormField>
+            </div>
+
+            <FormField label={t('crm.email', 'E-Mail')} error={errors.email?.message}>
+              <Input type="email" {...register('email')} />
+            </FormField>
+
+            <FormField label={t('crm.notes', 'Notizen')} error={errors.notes?.message}>
+              <Textarea rows={2} {...register('notes')} />
+            </FormField>
+
+            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+              <div>
+                <Label className="text-[13px] font-medium">{t('crm.contacts.isPrimary', 'Primärkontakt')}</Label>
+                <p className="text-xs text-muted-foreground/70">{t('crm.contacts.isPrimaryHint', 'Als Hauptansprechpartner markieren')}</p>
+              </div>
+              <Switch checked={isPrimary} onCheckedChange={(v) => setValue('isPrimary', v, { shouldDirty: true })} />
+            </div>
+          </FormBody>
+
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               {t('common.cancel', 'Abbrechen')}
             </Button>
@@ -142,12 +144,3 @@ export function ContactForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
   );
 }
 
-function FormField({ label, error, children }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium">{label}</Label>
-      {children}
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
-  );
-}

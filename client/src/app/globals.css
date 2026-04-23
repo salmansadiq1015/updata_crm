@@ -396,3 +396,7 @@
   background: linear-gradient(90deg, #1F2937 0%, #374151 40%, #1F2937 100%);
   background-size: 200% 100%;
 }
+
+*::-webkit-scrollbar{
+  display: none;
+}

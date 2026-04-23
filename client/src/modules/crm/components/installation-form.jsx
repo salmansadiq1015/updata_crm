@@ -8,10 +8,10 @@ import { createInstallationSchema } from '@/modules/crm/validations/installation
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Controller } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FormField, FormBody } from '@/components/ui/form-field';
 import { Loader2, Wrench } from 'lucide-react';
 import { INSTALLATION_TYPE_META, FUEL_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { cn } from '@/lib/utils';
@@ -91,7 +91,7 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-primary" />
+            <Wrench className="h-4.5 w-4.5 text-primary" />
             {isEdit ? t('crm.installations.editInstallation', 'Installation bearbeiten') : t('crm.installations.newInstallation', 'Neue Installation')}
           </DialogTitle>
           <DialogDescription>
@@ -99,84 +99,86 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)} className="space-y-4 pt-2">
-          <FormField label={`${t('crm.installations.type', 'Typ')}*`} error={errors.type?.message}>
-            <Select value={type} onValueChange={(v) => setValue('type', v, { shouldDirty: true })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(INSTALLATION_TYPE_META).map(([key, meta]) => {
-                  const Icon = meta.icon;
-                  return (
-                    <SelectItem key={key} value={key}>
-                      <span className="flex items-center gap-2">
-                        <Icon className={cn('h-3.5 w-3.5', meta.color)} />
-                        {t(`crm.installations.type.${key}`, meta.label)}
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </FormField>
-
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={t('crm.installations.manufacturer', 'Hersteller')} error={errors.manufacturer?.message}>
-              <Input {...register('manufacturer')} />
-            </FormField>
-            <FormField label={t('crm.installations.model', 'Modell')} error={errors.model?.message}>
-              <Input {...register('model')} />
-            </FormField>
-          </div>
-
-          <FormField label={t('crm.installations.serialNumber', 'Seriennummer')} error={errors.serialNumber?.message}>
-            <Input {...register('serialNumber')} className="font-mono" />
-          </FormField>
-
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label={t('crm.installations.commissioningDate', 'Inbetriebnahme')} error={errors.commissioningDate?.message}>
-              <Input type="date" {...register('commissioningDate')} />
-            </FormField>
-            <FormField label={t('crm.installations.warrantyEndDate', 'Garantie bis')} error={errors.warrantyEndDate?.message}>
-              <Input type="date" {...register('warrantyEndDate')} />
-            </FormField>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <FormField label={t('crm.installations.powerOutput', 'Leistung (kW)')} error={errors.powerOutputKw?.message}>
-              <Input type="number" step="0.1" {...register('powerOutputKw', { valueAsNumber: true })} />
-            </FormField>
-            <FormField label={t('crm.installations.yearOfManufacture', 'Baujahr')} error={errors.yearOfManufacture?.message}>
-              <Input type="number" min="1900" max="2100" {...register('yearOfManufacture', { valueAsNumber: true })} />
-            </FormField>
-            <FormField label={t('crm.installations.fuelType', 'Energietraeger')} error={errors.fuelType?.message}>
-              <Select value={fuelType || ''} onValueChange={(v) => setValue('fuelType', v || null, { shouldDirty: true })}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+        <form onSubmit={handleSubmit(submit)}>
+          <FormBody>
+            <FormField label={t('crm.installations.type', 'Typ')} required error={errors.type?.message}>
+              <Select value={type} onValueChange={(v) => setValue('type', v, { shouldDirty: true })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(FUEL_TYPE_META).map(([key, meta]) => (
-                    <SelectItem key={key} value={key}>{t(`crm.installations.fuel.${key}`, meta.label)}</SelectItem>
-                  ))}
+                  {Object.entries(INSTALLATION_TYPE_META).map(([key, meta]) => {
+                    const Icon = meta.icon;
+                    return (
+                      <SelectItem key={key} value={key}>
+                        <span className="flex items-center gap-2">
+                          <Icon className={cn('h-3.5 w-3.5', meta.color)} />
+                          {t(`crm.installations.type.${key}`, meta.label)}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </FormField>
-          </div>
 
-          <FormField label={t('crm.installations.technicalNotes', 'Technische Notizen')} error={errors.technicalNotes?.message}>
-            <Controller
-              name="technicalNotes"
-              control={control}
-              render={({ field }) => (
-                <RichTextEditor
-                  value={field.value}
-                  onChange={field.onChange}
-                  placeholder={t('crm.installations.technicalNotesPlaceholder', 'Technische Notizen...')}
-                  maxLength={5000}
-                  minHeight={100}
-                />
-              )}
-            />
-          </FormField>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label={t('crm.installations.manufacturer', 'Hersteller')} error={errors.manufacturer?.message}>
+                <Input {...register('manufacturer')} />
+              </FormField>
+              <FormField label={t('crm.installations.model', 'Modell')} error={errors.model?.message}>
+                <Input {...register('model')} />
+              </FormField>
+            </div>
 
-          <DialogFooter className="gap-2">
+            <FormField label={t('crm.installations.serialNumber', 'Seriennummer')} error={errors.serialNumber?.message}>
+              <Input {...register('serialNumber')} className="font-mono" />
+            </FormField>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label={t('crm.installations.commissioningDate', 'Inbetriebnahme')} error={errors.commissioningDate?.message}>
+                <Input type="date" {...register('commissioningDate')} />
+              </FormField>
+              <FormField label={t('crm.installations.warrantyEndDate', 'Garantie bis')} error={errors.warrantyEndDate?.message}>
+                <Input type="date" {...register('warrantyEndDate')} />
+              </FormField>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <FormField label={t('crm.installations.powerOutput', 'Leistung (kW)')} error={errors.powerOutputKw?.message}>
+                <Input type="number" step="0.1" {...register('powerOutputKw', { valueAsNumber: true })} />
+              </FormField>
+              <FormField label={t('crm.installations.yearOfManufacture', 'Baujahr')} error={errors.yearOfManufacture?.message}>
+                <Input type="number" min="1900" max="2100" {...register('yearOfManufacture', { valueAsNumber: true })} />
+              </FormField>
+              <FormField label={t('crm.installations.fuelType', 'Energietraeger')} error={errors.fuelType?.message}>
+                <Select value={fuelType || ''} onValueChange={(v) => setValue('fuelType', v || null, { shouldDirty: true })}>
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(FUEL_TYPE_META).map(([key, meta]) => (
+                      <SelectItem key={key} value={key}>{t(`crm.installations.fuel.${key}`, meta.label)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+            </div>
+
+            <FormField label={t('crm.installations.technicalNotes', 'Technische Notizen')} error={errors.technicalNotes?.message}>
+              <Controller
+                name="technicalNotes"
+                control={control}
+                render={({ field }) => (
+                  <RichTextEditor
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder={t('crm.installations.technicalNotesPlaceholder', 'Technische Notizen...')}
+                    maxLength={5000}
+                    minHeight={100}
+                  />
+                )}
+              />
+            </FormField>
+          </FormBody>
+
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               {t('common.cancel', 'Abbrechen')}
             </Button>
@@ -188,15 +190,5 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function FormField({ label, error, children }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium">{label}</Label>
-      {children}
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
   );
 }

@@ -231,7 +231,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
         onOpenChange(isOpen);
       }
     }}>
-      <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto scrollbar-hide">
+      <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto scrollbar-hide p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">

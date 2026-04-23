@@ -99,7 +99,7 @@ function StepFooter({ currentStep, totalSteps, onBack, onNext, onCancel, isLoadi
   const isLast = currentStep === totalSteps - 1;
 
   return (
-    <div className="flex justify-between items-center pt-4 border-t">
+    <div className="flex justify-between items-center pt-4 border-t border-border/60">
       <div>
         {isFirst ? (
           <Button type="button" variant="ghost" onClick={onCancel}>

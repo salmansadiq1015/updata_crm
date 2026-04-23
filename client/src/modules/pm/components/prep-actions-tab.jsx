@@ -21,7 +21,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { Controller } from 'react-hook-form';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
@@ -250,7 +251,19 @@ export function PrepActionsTab({ projectId }) {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">{t('pm.description', 'Description')}</Label>
-              <Textarea {...register('description')} rows={2} />
+              <Controller
+                name="description"
+                control={control}
+                render={({ field }) => (
+                  <RichTextEditor
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder={language === 'de' ? 'Beschreibung...' : 'Description...'}
+                    maxLength={5000}
+                    minHeight={80}
+                  />
+                )}
+              />
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={watch('isMandatory')} onCheckedChange={(v) => setValue('isMandatory', v)} />

@@ -1,25 +1,30 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
-import { createProjectSchema } from '@/modules/pm/validations/project';
+import {
+  createProjectSchema,
+  projectStep1Schema,
+  projectStep2Schema,
+  projectStep3Schema,
+  projectStep4Schema,
+} from '@/modules/pm/validations/project';
 import { customerService } from '@/modules/crm/services/customer-service';
 import { queryKeys } from '@/lib/query/keys';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useDebounce } from '@/shared/hooks/use-debounce';
-import { PROJECT_TYPE_CONFIG } from '@/modules/pm/constants/pm-constants';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
-import { Loader2, FolderKanban, Search, Check, ChevronsUpDown } from 'lucide-react';
+import { FormStepper } from '@/components/ui/form-stepper';
+import {
+  Step1Overview,
+  Step2CustomerSite,
+  Step3ManagerDates,
+  Step4BudgetNotes,
+  Step5Review,
+} from '@/modules/pm/components/project-form-steps';
+import { FolderKanban, FileText, Building2, CalendarClock, Wallet, ClipboardCheck } from 'lucide-react';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import apiClient from '@/lib/api/client';
 
@@ -38,32 +43,24 @@ const BLANK_VALUES = {
   notes: '',
 };
 
-function Field({ label, error, required, children }) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-muted-foreground">
-        {label}{required && <span className="text-destructive ml-0.5">*</span>}
-      </Label>
-      {children}
-      {error && (
-        <p className="text-xs text-destructive animate-in fade-in slide-in-from-left-1">{error.message}</p>
-      )}
-    </div>
-  );
-}
+const STEP_SCHEMAS = [projectStep1Schema, projectStep2Schema, projectStep3Schema, projectStep4Schema, null];
 
 export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
   const { t, language } = useLanguage();
   const isEdit = !!defaultValues?._id;
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
+  const [currentStep, setCurrentStep] = useState(0);
+  const [direction, setDirection] = useState(1);
+
+  const form = useForm({
     resolver: zodResolver(createProjectSchema),
     defaultValues: BLANK_VALUES,
   });
 
+  const { reset, watch, setValue, getValues, trigger } = form;
   const watchedCustomerId = watch('customerId');
 
-  // Customer search
+  // ── Customer search state ────────────────────────────────────
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerOpen, setCustomerOpen] = useState(false);
   const debouncedCustomerSearch = useDebounce(customerSearch, 300);
@@ -74,7 +71,25 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
     enabled: debouncedCustomerSearch.length >= 2,
   });
 
-  // Sites for selected customer
+  const selectedCustomer = useMemo(() => {
+    if (!watchedCustomerId) return null;
+    return customers?.find((c) => c._id === watchedCustomerId)
+      || defaultValues?.customerId?._id === watchedCustomerId
+        ? (defaultValues?.customerId?.name ? defaultValues.customerId : null)
+        : null;
+  }, [watchedCustomerId, customers, defaultValues]);
+
+  // ── Users for review display ─────────────────────────────────
+  const { data: usersData } = useQuery({
+    queryKey: queryKeys.users.list({ status: 'active', limit: 100 }),
+    queryFn: async () => {
+      const res = await apiClient.get(ENDPOINTS.USERS.LIST, { params: { status: 'active', limit: 100 } });
+      return res.data;
+    },
+  });
+  const users = Array.isArray(usersData) ? usersData : [];
+
+  // ── Sites for review display ─────────────────────────────────
   const { data: sitesData } = useQuery({
     queryKey: queryKeys.crm.sites.byCustomer(watchedCustomerId),
     queryFn: async () => {
@@ -85,37 +100,15 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
   });
   const sites = Array.isArray(sitesData) ? sitesData : [];
 
-  // Users for project manager
-  const { data: usersData } = useQuery({
-    queryKey: queryKeys.users.list({ status: 'active', limit: 100 }),
-    queryFn: async () => {
-      const res = await apiClient.get(ENDPOINTS.USERS.LIST, { params: { status: 'active', limit: 100 } });
-      return res.data;
-    },
-  });
-  const users = Array.isArray(usersData) ? usersData : [];
-
-  // Selected customer display
-  const selectedCustomer = useMemo(() => {
-    if (!watchedCustomerId) return null;
-    return customers?.find((c) => c._id === watchedCustomerId)
-      || defaultValues?.customerId?._id === watchedCustomerId
-        ? (defaultValues?.customerId?.name ? defaultValues.customerId : null)
-        : null;
-  }, [watchedCustomerId, customers, defaultValues]);
-
+  // ── Reset on open/close ──────────────────────────────────────
   useEffect(() => {
     if (!open) return;
+    setCurrentStep(0);
+    setDirection(1);
     if (defaultValues) {
-      const cId = typeof defaultValues.customerId === 'object'
-        ? defaultValues.customerId?._id
-        : defaultValues.customerId;
-      const sId = typeof defaultValues.siteId === 'object'
-        ? defaultValues.siteId?._id
-        : defaultValues.siteId;
-      const pmId = typeof defaultValues.projectManagerId === 'object'
-        ? defaultValues.projectManagerId?._id
-        : defaultValues.projectManagerId;
+      const cId = typeof defaultValues.customerId === 'object' ? defaultValues.customerId?._id : defaultValues.customerId;
+      const sId = typeof defaultValues.siteId === 'object' ? defaultValues.siteId?._id : defaultValues.siteId;
+      const pmId = typeof defaultValues.projectManagerId === 'object' ? defaultValues.projectManagerId?._id : defaultValues.projectManagerId;
       reset({
         ...BLANK_VALUES,
         name: defaultValues.name || '',
@@ -140,19 +133,90 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
     }
   }, [open, defaultValues, reset]);
 
-  const onFormSubmit = (data) => {
-    const cleaned = { ...data };
-    if (!cleaned.siteId) delete cleaned.siteId;
-    if (!cleaned.teamId) delete cleaned.teamId;
-    if (!cleaned.estimatedBudget && cleaned.estimatedBudget !== 0) delete cleaned.estimatedBudget;
-    if (!cleaned.notes) delete cleaned.notes;
-    if (!cleaned.description) delete cleaned.description;
-    onSubmit(cleaned);
-  };
+  // ── Steps config ─────────────────────────────────────────────
+  const steps = useMemo(() => [
+    { label: language === 'de' ? 'Uebersicht' : 'Overview', icon: FileText },
+    { label: language === 'de' ? 'Kunde & Objekt' : 'Customer & Site', icon: Building2 },
+    { label: language === 'de' ? 'Leiter & Termine' : 'Manager & Dates', icon: CalendarClock },
+    { label: language === 'de' ? 'Budget & Notizen' : 'Budget & Notes', icon: Wallet },
+    { label: language === 'de' ? 'Ueberpruefung' : 'Review', icon: ClipboardCheck },
+  ], [language]);
+
+  // ── Navigation ───────────────────────────────────────────────
+  const goToStep = useCallback((idx) => {
+    setDirection(idx > currentStep ? 1 : -1);
+    setCurrentStep(idx);
+  }, [currentStep]);
+
+  const handleNext = useCallback(async () => {
+    const schema = STEP_SCHEMAS[currentStep];
+    if (schema) {
+      const fields = Object.keys(schema.shape);
+      const valid = await trigger(fields);
+      if (!valid) return;
+    }
+
+    if (currentStep === steps.length - 1) {
+      const values = getValues();
+      const cleaned = { ...values };
+      if (!cleaned.siteId) delete cleaned.siteId;
+      if (!cleaned.teamId) delete cleaned.teamId;
+      if (!cleaned.estimatedBudget && cleaned.estimatedBudget !== 0) delete cleaned.estimatedBudget;
+      if (!cleaned.notes) delete cleaned.notes;
+      if (!cleaned.description) delete cleaned.description;
+      onSubmit(cleaned);
+      return;
+    }
+
+    setDirection(1);
+    setCurrentStep((s) => s + 1);
+  }, [currentStep, steps.length, trigger, getValues, onSubmit]);
+
+  const handleBack = useCallback(() => {
+    setDirection(-1);
+    setCurrentStep((s) => Math.max(0, s - 1));
+  }, []);
+
+  // ── Resolve display names for review ─────────────────────────
+  const resolvers = useMemo(() => {
+    const vals = getValues();
+    const cust = customers?.find((c) => c._id === vals.customerId) || selectedCustomer;
+    const site = sites?.find((s) => s._id === vals.siteId);
+    const user = users?.find((u) => u._id === vals.projectManagerId);
+    return {
+      customerName: cust?.name || vals.customerId || null,
+      siteName: site?.name || site?.address || null,
+      managerName: user ? `${user.firstName} ${user.lastName}` : null,
+    };
+  }, [customers, selectedCustomer, sites, users, getValues]);
+
+  // ── Customer state bundle ────────────────────────────────────
+  const customerState = useMemo(() => ({
+    customerSearch,
+    setCustomerSearch,
+    customerOpen,
+    setCustomerOpen,
+    customers,
+    debouncedCustomerSearch,
+    selectedCustomer,
+  }), [customerSearch, customerOpen, customers, debouncedCustomerSearch, selectedCustomer]);
+
+  // ── Render current step ──────────────────────────────────────
+  const stepContent = useMemo(() => {
+    const props = { form, language, t };
+    switch (currentStep) {
+      case 0: return <Step1Overview {...props} />;
+      case 1: return <Step2CustomerSite {...props} customerState={customerState} />;
+      case 2: return <Step3ManagerDates {...props} />;
+      case 3: return <Step4BudgetNotes {...props} />;
+      case 4: return <Step5Review {...props} onGoToStep={goToStep} resolvers={resolvers} />;
+      default: return null;
+    }
+  }, [currentStep, form, language, t, customerState, goToStep, resolvers]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
@@ -162,169 +226,24 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6 pt-2">
-          {/* General Info */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground">{t('pm.overview', 'General')}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label={t('pm.projectName', 'Project Name')} error={errors.name} required>
-                <Input {...register('name')} placeholder={language === 'de' ? 'z.B. Heizungssanierung Muster' : 'e.g. Heating renovation'} />
-              </Field>
-              <Field label={t('pm.projectType', 'Project Type')} error={errors.projectType} required>
-                <Select value={watch('projectType')} onValueChange={(v) => setValue('projectType', v, { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(PROJECT_TYPE_CONFIG).map(([key, cfg]) => (
-                      <SelectItem key={key} value={key}>
-                        {language === 'de' ? cfg.label : cfg.labelEn}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-            <Field label={t('pm.description', 'Description')} error={errors.description}>
-              <Textarea {...register('description')} rows={2} />
-            </Field>
-          </div>
-
-          <Separator />
-
-          {/* Customer & Site */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground">{t('pm.customer', 'Customer')} & {t('pm.site', 'Site')}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label={t('pm.customer', 'Customer')} error={errors.customerId} required>
-                <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" role="combobox" className={cn('w-full justify-between font-normal', !watchedCustomerId && 'text-muted-foreground')}>
-                      {selectedCustomer?.name || (watchedCustomerId ? watchedCustomerId : (language === 'de' ? 'Kunde waehlen...' : 'Select customer...'))}
-                      <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[320px] p-0" align="start">
-                    <div className="p-2">
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input
-                          placeholder={language === 'de' ? 'Kunde suchen...' : 'Search customers...'}
-                          value={customerSearch}
-                          onChange={(e) => setCustomerSearch(e.target.value)}
-                          className="pl-8 h-8"
-                        />
-                      </div>
-                    </div>
-                    <div className="max-h-[200px] overflow-y-auto">
-                      {customers?.length === 0 && debouncedCustomerSearch.length >= 2 && (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          {language === 'de' ? 'Keine Kunden gefunden' : 'No customers found'}
-                        </p>
-                      )}
-                      {customers?.map((c) => (
-                        <button
-                          key={c._id}
-                          type="button"
-                          className={cn(
-                            'flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors',
-                            watchedCustomerId === c._id && 'bg-accent',
-                          )}
-                          onClick={() => {
-                            setValue('customerId', c._id, { shouldValidate: true });
-                            setValue('siteId', '', { shouldValidate: false });
-                            setCustomerSearch(c.name);
-                            setCustomerOpen(false);
-                          }}
-                        >
-                          {watchedCustomerId === c._id && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-                          <span className="truncate">{c.name}</span>
-                          {c.customerNumber && <span className="ml-auto text-xs text-muted-foreground">{c.customerNumber}</span>}
-                        </button>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </Field>
-              <Field label={t('pm.site', 'Site')} error={errors.siteId}>
-                <Select
-                  value={watch('siteId') || 'none'}
-                  onValueChange={(v) => setValue('siteId', v === 'none' ? '' : v, { shouldValidate: true })}
-                  disabled={!watchedCustomerId}
-                >
-                  <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Objekt waehlen...' : 'Select site...'} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{language === 'de' ? 'Kein Objekt' : 'No site'}</SelectItem>
-                    {sites.map((s) => (
-                      <SelectItem key={s._id} value={s._id}>{s.name || s.address || s._id}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Responsibility & Dates */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground">{t('pm.projectManager', 'Project Manager')} & {language === 'de' ? 'Termine' : 'Dates'}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label={t('pm.projectManager', 'Project Manager')} error={errors.projectManagerId} required>
-                <Select value={watch('projectManagerId')} onValueChange={(v) => setValue('projectManagerId', v, { shouldValidate: true })}>
-                  <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Projektleiter waehlen...' : 'Select PM...'} /></SelectTrigger>
-                  <SelectContent>
-                    {users.map((u) => (
-                      <SelectItem key={u._id} value={u._id}>
-                        {u.firstName} {u.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <div />
-              <Field label={t('pm.plannedStart', 'Planned Start')} error={errors.plannedStartDate}>
-                <Input type="date" {...register('plannedStartDate')} />
-              </Field>
-              <Field label={t('pm.plannedEnd', 'Planned End')} error={errors.plannedEndDate}>
-                <Input type="date" {...register('plannedEndDate')} />
-              </Field>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Budget & Notes */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-foreground">{t('pm.budget', 'Budget')}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label={t('pm.budget', 'Budget')} error={errors.estimatedBudget}>
-                <Input type="number" step="0.01" min="0" {...register('estimatedBudget')} placeholder="0.00" />
-              </Field>
-              <Field label={t('pm.currency', 'Currency')} error={errors.currency}>
-                <Select value={watch('currency')} onValueChange={(v) => setValue('currency', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CHF">CHF</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-            <Field label={t('pm.notes', 'Notes')} error={errors.notes}>
-              <Textarea {...register('notes')} rows={2} />
-            </Field>
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEdit ? t('common.save', 'Save') : t('common.create', 'Create')}
-            </Button>
-          </div>
-        </form>
+        <FormStepper
+          steps={steps}
+          currentStep={currentStep}
+          direction={direction}
+          onStepClick={goToStep}
+          onBack={handleBack}
+          onNext={handleNext}
+          onCancel={() => onOpenChange(false)}
+          isLoading={isLoading}
+          labels={{
+            next: language === 'de' ? 'Weiter' : 'Next',
+            back: language === 'de' ? 'Zurueck' : 'Back',
+            cancel: t('common.cancel', 'Cancel'),
+            submit: isEdit ? t('common.save', 'Save') : t('common.create', 'Create'),
+          }}
+        >
+          {stepContent}
+        </FormStepper>
       </DialogContent>
     </Dialog>
   );

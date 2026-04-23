@@ -51,6 +51,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
 
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(1);
+  const [initialFormValues, setInitialFormValues] = useState(BLANK_VALUES);
 
   const form = useForm({
     resolver: zodResolver(createProjectSchema),
@@ -109,7 +110,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
       const cId = typeof defaultValues.customerId === 'object' ? defaultValues.customerId?._id : defaultValues.customerId;
       const sId = typeof defaultValues.siteId === 'object' ? defaultValues.siteId?._id : defaultValues.siteId;
       const pmId = typeof defaultValues.projectManagerId === 'object' ? defaultValues.projectManagerId?._id : defaultValues.projectManagerId;
-      reset({
+      const editValues = {
         ...BLANK_VALUES,
         name: defaultValues.name || '',
         description: defaultValues.description || '',
@@ -123,12 +124,15 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
         estimatedBudget: defaultValues.estimatedBudget ?? '',
         currency: defaultValues.currency || 'CHF',
         notes: defaultValues.notes || '',
-      });
+      };
+      reset(editValues);
+      setInitialFormValues(editValues);
       if (typeof defaultValues.customerId === 'object' && defaultValues.customerId?.name) {
         setCustomerSearch(defaultValues.customerId.name);
       }
     } else {
       reset(BLANK_VALUES);
+      setInitialFormValues(BLANK_VALUES);
       setCustomerSearch('');
     }
   }, [open, defaultValues, reset]);
@@ -209,7 +213,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
       case 1: return <Step2CustomerSite {...props} customerState={customerState} />;
       case 2: return <Step3ManagerDates {...props} />;
       case 3: return <Step4BudgetNotes {...props} />;
-      case 4: return <Step5Review {...props} onGoToStep={goToStep} resolvers={resolvers} />;
+      case 4: return <Step5Review {...props} onGoToStep={goToStep} resolvers={resolvers} initialValues={initialFormValues} isEdit={isEdit} />;
       default: return null;
     }
   }, [currentStep, form, language, t, customerState, goToStep, resolvers]);

@@ -224,10 +224,13 @@ const REVIEW_SECTIONS = [
   { key: 'budget', stepIndex: 3, icon: Wallet, labelEn: 'Budget & Notes', labelDe: 'Budget & Notizen' },
 ];
 
-function ReviewRow({ label, value }) {
+function ReviewRow({ label, value, isChanged }) {
   return (
     <div className="flex items-start justify-between py-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+        {label}
+        {isChanged && <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />}
+      </span>
       <span className="text-sm font-medium text-right max-w-[60%] truncate">
         {value || <span className="text-muted-foreground/50">—</span>}
       </span>
@@ -235,7 +238,7 @@ function ReviewRow({ label, value }) {
   );
 }
 
-export function Step5Review({ form, language, t, onGoToStep, resolvers }) {
+export function Step5Review({ form, language, t, onGoToStep, resolvers, initialValues, isEdit }) {
   const values = form.getValues();
   const { customerName, siteName, managerName } = resolvers;
 
@@ -248,35 +251,42 @@ export function Step5Review({ form, language, t, onGoToStep, resolvers }) {
     try { return new Date(d).toLocaleDateString(language === 'de' ? 'de-CH' : 'en-GB'); } catch { return null; }
   };
 
+  const isChanged = (field) => {
+    if (!isEdit || !initialValues) return false;
+    const current = values[field];
+    const initial = initialValues[field];
+    return String(current ?? '') !== String(initial ?? '');
+  };
+
   const sections = [
     {
       ...REVIEW_SECTIONS[0],
       rows: [
-        { label: t('pm.projectName', 'Project Name'), value: values.name },
-        { label: t('pm.projectType', 'Project Type'), value: typeLabel },
-        { label: t('pm.description', 'Description'), value: values.description },
+        { label: t('pm.projectName', 'Project Name'), value: values.name, changed: isChanged('name') },
+        { label: t('pm.projectType', 'Project Type'), value: typeLabel, changed: isChanged('projectType') },
+        { label: t('pm.description', 'Description'), value: values.description, changed: isChanged('description') },
       ],
     },
     {
       ...REVIEW_SECTIONS[1],
       rows: [
-        { label: t('pm.customer', 'Customer'), value: customerName },
-        { label: t('pm.site', 'Site'), value: siteName },
+        { label: t('pm.customer', 'Customer'), value: customerName, changed: isChanged('customerId') },
+        { label: t('pm.site', 'Site'), value: siteName, changed: isChanged('siteId') },
       ],
     },
     {
       ...REVIEW_SECTIONS[2],
       rows: [
-        { label: t('pm.projectManager', 'Project Manager'), value: managerName },
-        { label: t('pm.plannedStart', 'Planned Start'), value: formatDate(values.plannedStartDate) },
-        { label: t('pm.plannedEnd', 'Planned End'), value: formatDate(values.plannedEndDate) },
+        { label: t('pm.projectManager', 'Project Manager'), value: managerName, changed: isChanged('projectManagerId') },
+        { label: t('pm.plannedStart', 'Planned Start'), value: formatDate(values.plannedStartDate), changed: isChanged('plannedStartDate') },
+        { label: t('pm.plannedEnd', 'Planned End'), value: formatDate(values.plannedEndDate), changed: isChanged('plannedEndDate') },
       ],
     },
     {
       ...REVIEW_SECTIONS[3],
       rows: [
-        { label: t('pm.budget', 'Budget'), value: values.estimatedBudget ? `${values.estimatedBudget} ${values.currency || 'CHF'}` : null },
-        { label: t('pm.notes', 'Notes'), value: values.notes },
+        { label: t('pm.budget', 'Budget'), value: values.estimatedBudget ? `${values.estimatedBudget} ${values.currency || 'CHF'}` : null, changed: isChanged('estimatedBudget') || isChanged('currency') },
+        { label: t('pm.notes', 'Notes'), value: values.notes, changed: isChanged('notes') },
       ],
     },
   ];
@@ -305,7 +315,7 @@ export function Step5Review({ form, language, t, onGoToStep, resolvers }) {
             </div>
             <div className="divide-y divide-border/50">
               {section.rows.map((row) => (
-                <ReviewRow key={row.label} label={row.label} value={row.value} />
+                <ReviewRow key={row.label} label={row.label} value={row.value} isChanged={row.changed} />
               ))}
             </div>
           </div>

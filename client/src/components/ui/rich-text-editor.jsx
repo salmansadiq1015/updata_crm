@@ -1,16 +1,13 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
-import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
+import { useEffect } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Highlight from '@tiptap/extension-highlight';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import Table from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableCell from '@tiptap/extension-table-cell';
-import TableHeader from '@tiptap/extension-table-header';
+import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import TextAlign from '@tiptap/extension-text-align';
@@ -289,29 +286,6 @@ export function RichTextEditor({
       )}
     >
       <EditorToolbar editor={editor} />
-      {editor && (
-        <BubbleMenu editor={editor} tippyOptions={{ duration: 150 }} className="flex items-center gap-0.5 rounded-lg border bg-popover p-1 shadow-lg">
-          <ToolbarButton pressed={editor.isActive('bold')} onPressedChange={() => editor.chain().focus().toggleBold().run()} title="Bold">
-            <Bold className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton pressed={editor.isActive('italic')} onPressedChange={() => editor.chain().focus().toggleItalic().run()} title="Italic">
-            <Italic className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton pressed={editor.isActive('underline')} onPressedChange={() => editor.chain().focus().toggleUnderline().run()} title="Underline">
-            <UnderlineIcon className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton pressed={editor.isActive('link')} onPressedChange={() => {
-            if (editor.isActive('link')) {
-              editor.chain().focus().unsetLink().run();
-            } else {
-              const url = window.prompt('URL');
-              if (url) editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-            }
-          }} title="Link">
-            <LinkIcon className="h-3.5 w-3.5" />
-          </ToolbarButton>
-        </BubbleMenu>
-      )}
       <EditorContent
         editor={editor}
         className={cn(

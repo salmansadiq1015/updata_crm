@@ -17,6 +17,29 @@ export const createProjectSchema = z.object({
   notes: z.string().max(5000).nullable().optional(),
 });
 
+export const projectStep1Schema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(255),
+  projectType: z.enum(['NEW_INSTALLATION', 'RENOVATION', 'MAINTENANCE', 'SERVICE_CONTRACT', 'OTHER']),
+  description: z.string().max(5000).nullable().optional(),
+});
+
+export const projectStep2Schema = z.object({
+  customerId: objectId,
+  siteId: objectId.nullable().optional(),
+});
+
+export const projectStep3Schema = z.object({
+  projectManagerId: objectId,
+  plannedStartDate: z.coerce.date().nullable().optional(),
+  plannedEndDate: z.coerce.date().nullable().optional(),
+});
+
+export const projectStep4Schema = z.object({
+  estimatedBudget: z.coerce.number().min(0).nullable().optional(),
+  currency: z.string().trim().max(3).optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
 export const updateProjectSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   description: z.string().max(5000).nullable().optional(),

@@ -32,10 +32,20 @@ export const projectStep3Schema = z.object({
   projectManagerId: objectId,
   plannedStartDate: z.coerce.date().nullable().optional(),
   plannedEndDate: z.coerce.date().nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.plannedStartDate && data.plannedEndDate) {
+    if (new Date(data.plannedEndDate) <= new Date(data.plannedStartDate)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'End date must be after start date',
+        path: ['plannedEndDate'],
+      });
+    }
+  }
 });
 
 export const projectStep4Schema = z.object({
-  estimatedBudget: z.coerce.number().min(0).nullable().optional(),
+  estimatedBudget: z.coerce.number().min(0).max(999999999, 'Budget too large').nullable().optional(),
   currency: z.string().trim().max(3).optional(),
   notes: z.string().max(5000).nullable().optional(),
 });

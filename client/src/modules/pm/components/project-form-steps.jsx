@@ -185,6 +185,9 @@ export function Step3ManagerDates({ form, language, t }) {
           <Input type="date" {...register('plannedEndDate')} />
         </Field>
       </div>
+      {watch('plannedStartDate') && new Date(watch('plannedStartDate')) < new Date(new Date().toISOString().split('T')[0]) && (
+        <p className="text-xs text-amber-500">{language === 'de' ? 'Startdatum liegt in der Vergangenheit' : 'Start date is in the past'}</p>
+      )}
     </div>
   );
 }

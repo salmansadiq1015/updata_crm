@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -374,6 +375,15 @@
 }
 .scrollbar-dark::-webkit-scrollbar-thumb:hover {
   background: rgb(255 255 255 / 0.18);
+}
+
+/* Hidden scrollbar — scrollable but no visible bar */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 /* Skeleton shimmer */

@@ -9,6 +9,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { NoteForm } from './note-form';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
+import { RichTextContent } from '@/components/ui/rich-text-content';
 import { PermissionGate } from '@/shared/components/permission-gate';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -161,7 +162,7 @@ function NoteItem({ note: n, canWrite, canDelete, onEdit, onDelete, t }) {
             {n.isWarning && <AlertTriangle className="h-3 w-3 text-red-500" />}
             <span className="text-[10px] text-muted-foreground ml-auto">{date}</span>
           </div>
-          <p className="text-sm whitespace-pre-wrap break-words">{n.text}</p>
+          <RichTextContent html={n.text} className="text-sm break-words" />
         </div>
 
         <div className="flex items-start gap-0.5">

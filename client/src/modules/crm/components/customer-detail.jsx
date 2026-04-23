@@ -15,6 +15,7 @@ import { ContactsPanel } from '@/modules/crm/components/contacts-panel';
 import { SitesPanel } from '@/modules/crm/components/sites-panel';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
+import { RichTextContent } from '@/components/ui/rich-text-content';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -295,7 +296,15 @@ export function CustomerDetail() {
                   <OverviewInfoCard icon={MapPin} iconBg="bg-amber-500/10" iconColor="text-amber-500" label={t('crm.address', 'Address')} value={fullAddress} className="sm:col-span-2" />
                 )}
                 {customer.notes && (
-                  <OverviewInfoCard icon={FileText} iconBg="bg-rose-500/10" iconColor="text-rose-500" label={t('crm.notes', 'Notes')} value={customer.notes} className="sm:col-span-2" />
+                  <div className={cn('rounded-xl border border-border bg-card ring-1 ring-foreground/5 hover:border-border transition-all p-4 flex items-start gap-3.5 sm:col-span-2')}>
+                    <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-rose-500/10">
+                      <FileText className="h-4.5 w-4.5 text-rose-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground mb-0.5">{t('crm.notes', 'Notes')}</p>
+                      <RichTextContent html={customer.notes} className="text-sm" />
+                    </div>
+                  </div>
                 )}
               </div>
             </TabsContent>

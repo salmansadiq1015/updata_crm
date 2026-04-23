@@ -18,6 +18,7 @@ import { StatusHistoryTimeline } from './status-history-timeline';
 import { PrepActionsTab } from './prep-actions-tab';
 import { ScheduleTab } from './schedule-tab';
 import { DocumentsTab } from './documents-tab';
+import { RichTextContent } from '@/components/ui/rich-text-content';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
 import { Button } from '@/components/ui/button';
@@ -230,7 +231,7 @@ export function ProjectDetail() {
                 <Separator />
                 <div className="p-4">
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">{t('pm.description', 'Description')}</p>
-                  <p className="text-sm text-muted-foreground">{project.description}</p>
+                  <RichTextContent html={project.description} className="text-sm text-muted-foreground" />
                 </div>
               </>
             )}
@@ -295,7 +296,7 @@ export function ProjectDetail() {
                 {project.notes && (
                   <div>
                     <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{t('pm.notes', 'Notes')}</p>
-                    <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{project.notes}</p>
+                    <RichTextContent html={project.notes} className="text-sm text-muted-foreground mt-1" />
                   </div>
                 )}
               </div>

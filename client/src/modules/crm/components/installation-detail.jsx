@@ -10,6 +10,7 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { InstallationForm } from './installation-form';
 import { MaintenancePanel } from './maintenance-panel';
+import { RichTextContent } from '@/components/ui/rich-text-content';
 import { NotesPanel } from './notes-panel';
 import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
@@ -177,7 +178,7 @@ export function InstallationDetail() {
             <Separator className="my-4" />
             <div className="rounded-lg border border-border bg-muted/20 p-3">
               <p className="text-xs font-semibold mb-1 text-muted-foreground uppercase tracking-wider">{t('crm.installations.technicalNotes', 'Technische Notizen')}</p>
-              <p className="text-sm whitespace-pre-wrap">{installation.technicalNotes}</p>
+              <RichTextContent html={installation.technicalNotes} className="text-sm" />
             </div>
           </>
         )}

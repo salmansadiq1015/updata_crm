@@ -215,7 +215,15 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
   }, [currentStep, form, language, t, customerState, goToStep, resolvers]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!isOpen && form.formState.isDirty) {
+        if (window.confirm(language === 'de' ? 'Aenderungen verwerfen?' : 'Discard changes?')) {
+          onOpenChange(false);
+        }
+      } else {
+        onOpenChange(isOpen);
+      }
+    }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

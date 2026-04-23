@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { htmlToPlainText } from '@/lib/utils/html';
 import { Search, Check, ChevronsUpDown, FileText, Building2, CalendarClock, Wallet, Pencil } from 'lucide-react';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import apiClient from '@/lib/api/client';
@@ -294,7 +295,7 @@ export function Step5Review({ form, language, t, onGoToStep, resolvers, initialV
       rows: [
         { label: t('pm.projectName', 'Project Name'), value: values.name, changed: isChanged('name') },
         { label: t('pm.projectType', 'Project Type'), value: typeLabel, changed: isChanged('projectType') },
-        { label: t('pm.description', 'Description'), value: values.description, changed: isChanged('description') },
+        { label: t('pm.description', 'Description'), value: htmlToPlainText(values.description), changed: isChanged('description') },
       ],
     },
     {
@@ -316,7 +317,7 @@ export function Step5Review({ form, language, t, onGoToStep, resolvers, initialV
       ...REVIEW_SECTIONS[3],
       rows: [
         { label: t('pm.budget', 'Budget'), value: values.estimatedBudget ? `${values.estimatedBudget} ${values.currency || 'CHF'}` : null, changed: isChanged('estimatedBudget') || isChanged('currency') },
-        { label: t('pm.notes', 'Notes'), value: values.notes, changed: isChanged('notes') },
+        { label: t('pm.notes', 'Notes'), value: htmlToPlainText(values.notes), changed: isChanged('notes') },
       ],
     },
   ];

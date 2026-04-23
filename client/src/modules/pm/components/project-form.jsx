@@ -25,6 +25,7 @@ import {
   Step5Review,
 } from '@/modules/pm/components/project-form-steps';
 import { FolderKanban, FileText, Building2, CalendarClock, Wallet, ClipboardCheck } from 'lucide-react';
+import { stripEmptyHtml } from '@/lib/utils/html';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import apiClient from '@/lib/api/client';
 
@@ -163,6 +164,8 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
     if (currentStep === steps.length - 1) {
       const values = getValues();
       const cleaned = { ...values };
+      cleaned.description = stripEmptyHtml(cleaned.description);
+      cleaned.notes = stripEmptyHtml(cleaned.notes);
       if (!cleaned.siteId) delete cleaned.siteId;
       if (!cleaned.teamId) delete cleaned.teamId;
       if (!cleaned.estimatedBudget && cleaned.estimatedBudget !== 0) delete cleaned.estimatedBudget;
@@ -228,7 +231,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
         onOpenChange(isOpen);
       }
     }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto scrollbar-hide">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">

@@ -5,7 +5,8 @@ import { queryKeys } from '@/lib/query/keys';
 import { PROJECT_TYPE_CONFIG } from '@/modules/pm/constants/pm-constants';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { Controller } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -52,7 +53,20 @@ export function Step1Overview({ form, language, t }) {
         </Field>
       </div>
       <Field label={t('pm.description', 'Description')} error={errors.description}>
-        <Textarea {...register('description')} rows={3} />
+        <Controller
+          name="description"
+          control={form.control}
+          render={({ field }) => (
+            <RichTextEditor
+              value={field.value}
+              onChange={field.onChange}
+              placeholder={language === 'de' ? 'Projektbeschreibung...' : 'Project description...'}
+              maxLength={5000}
+              minHeight={100}
+              error={errors.description}
+            />
+          )}
+        />
       </Field>
     </div>
   );
@@ -213,7 +227,20 @@ export function Step4BudgetNotes({ form, language, t }) {
         </Field>
       </div>
       <Field label={t('pm.notes', 'Notes')} error={errors.notes}>
-        <Textarea {...register('notes')} rows={3} />
+        <Controller
+          name="notes"
+          control={form.control}
+          render={({ field }) => (
+            <RichTextEditor
+              value={field.value}
+              onChange={field.onChange}
+              placeholder={language === 'de' ? 'Notizen...' : 'Notes...'}
+              maxLength={5000}
+              minHeight={100}
+              error={errors.notes}
+            />
+          )}
+        />
       </Field>
     </div>
   );

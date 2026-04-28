@@ -24,7 +24,7 @@ export function FieldOpsTimeTable() {
 
   const { data: entries = [], isFetching } = useFieldOpsTimeEntries({});
 
-  const { releaseBatch, override } = useFieldOpsTimeMutations({
+  const { release, releaseBatch, override } = useFieldOpsTimeMutations({
     onRelease: () => { setRowSelection({}); setReleaseOpen(false); },
     onOverride: () => setOverrideTarget(null),
   });
@@ -115,8 +115,8 @@ export function FieldOpsTimeTable() {
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2 text-xs"
-                  onClick={() => releaseBatch.mutate([row.original._id])}
-                  disabled={releaseBatch.isPending}
+                  onClick={() => release.mutate(row.original._id)}
+                  disabled={release.isPending}
                 >
                   <Unlock className="h-3.5 w-3.5 mr-1" />
                   {t('fieldOps.time.release', 'Release')}
@@ -158,7 +158,7 @@ export function FieldOpsTimeTable() {
       <FieldOpsTimeOverrideDialog
         open={!!overrideTarget}
         onOpenChange={(v) => { if (!v) setOverrideTarget(null); }}
-        onConfirm={() => override.mutate(overrideTarget)}
+        onConfirm={(justification) => override.mutate({ id: overrideTarget, justification })}
         isLoading={override.isPending}
       />
     </div>

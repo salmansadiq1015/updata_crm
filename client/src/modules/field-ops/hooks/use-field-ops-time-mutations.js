@@ -44,14 +44,14 @@ export function useFieldOpsTimeMutations({ onRelease, onOverride } = {}) {
         showError(`${failed.length} ${t('fieldOps.time.releaseFailed', 'entries could not be released (report not submitted).')}`);
       } else {
         showSuccess(t('fieldOps.time.released', 'Time entries released.'));
+        onRelease?.(results);
       }
-      onRelease?.(results);
     },
     onError: (err) => showError(err.message),
   });
 
   const override = useMutation({
-    mutationFn: (entryId) => timeService.releaseTimeEntry(entryId),
+    mutationFn: ({ id, justification }) => timeService.releaseTimeEntry(id),
     onSuccess: (res) => {
       invalidate();
       showSuccess(t('fieldOps.time.overrideSuccess', 'Time entry manually released.'));

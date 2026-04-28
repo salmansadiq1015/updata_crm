@@ -21,9 +21,9 @@ export const REPORT_STATUS_CONFIG = {
 };
 
 export const RELEASE_STATUS_CONFIG = {
-  PENDING:  { label: 'Ausstehend',  labelEn: 'Pending',  badge: 'bg-amber-100 text-amber-700' },
-  RELEASED: { label: 'Freigegeben', labelEn: 'Released', badge: 'bg-emerald-100 text-emerald-700' },
-  LOCKED:   { label: 'Gesperrt',    labelEn: 'Locked',   badge: 'bg-red-100 text-red-700' },
+  PENDING:  { label: 'Ausstehend',  labelEn: 'Pending',  dot: 'bg-amber-400',   badge: 'bg-amber-100 text-amber-700' },
+  RELEASED: { label: 'Freigegeben', labelEn: 'Released', dot: 'bg-emerald-400', badge: 'bg-emerald-100 text-emerald-700' },
+  LOCKED:   { label: 'Gesperrt',    labelEn: 'Locked',   dot: 'bg-red-400',     badge: 'bg-red-100 text-red-700' },
 };
 
 export const ACTIVITY_TYPE_LABELS = {

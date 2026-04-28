@@ -1,4 +1,5 @@
 'use client';
+import { FieldOpsTimeTable } from '@/modules/field-ops/components/time/field-ops-time-table';
 export default function FieldOpsTimePage() {
-  return <div className="p-6 text-muted-foreground">Time entries — coming soon</div>;
+  return <FieldOpsTimeTable />;
 }

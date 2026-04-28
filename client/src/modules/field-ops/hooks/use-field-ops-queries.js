@@ -1,0 +1,117 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query/keys';
+import { orderService } from '@/modules/mobile/services/order-service';
+import { reportService } from '@/modules/mobile/services/report-service';
+import { timeService } from '@/modules/mobile/services/time-service';
+import { photoService } from '@/modules/mobile/services/photo-service';
+import { installationService } from '@/modules/mobile/services/installation-service';
+import { catalogService } from '@/modules/mobile/services/catalog-service';
+import { notificationService } from '@/modules/mobile/services/notification-service';
+
+export function useFieldOpsOrders(filters = {}) {
+  return useQuery({
+    queryKey: queryKeys.mobile.orders.list(filters),
+    queryFn: () => orderService.getOrders(filters),
+    staleTime: 30_000,
+  });
+}
+
+export function useFieldOpsOrderDetail(id) {
+  return useQuery({
+    queryKey: queryKeys.mobile.orders.detail(id),
+    queryFn: () => orderService.getOrderById(id),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+}
+
+export function useFieldOpsOrderReports(orderId) {
+  return useQuery({
+    queryKey: queryKeys.mobile.reports.byOrder(orderId),
+    queryFn: () => reportService.getReportsByOrder(orderId),
+    enabled: !!orderId,
+    staleTime: 30_000,
+  });
+}
+
+export function useFieldOpsReportDetail(reportId) {
+  return useQuery({
+    queryKey: queryKeys.mobile.reports.detail(reportId),
+    queryFn: () => reportService.getReport(reportId),
+    enabled: !!reportId,
+    staleTime: 30_000,
+  });
+}
+
+export function useFieldOpsTimeEntries(filters = {}) {
+  return useQuery({
+    queryKey: queryKeys.mobile.timeEntries.list(filters),
+    queryFn: () => timeService.getTimeEntries(filters),
+    staleTime: 30_000,
+  });
+}
+
+export function useFieldOpsOrderTimeEntries(orderId) {
+  return useQuery({
+    queryKey: queryKeys.mobile.timeEntries.byOrder(orderId),
+    queryFn: () => timeService.getTimeEntries({ orderId }),
+    enabled: !!orderId,
+    staleTime: 30_000,
+  });
+}
+
+export function useFieldOpsOrderPhotos(orderId) {
+  return useQuery({
+    queryKey: queryKeys.mobile.photos.byOrder(orderId),
+    queryFn: () => photoService.getPhotos(orderId),
+    enabled: !!orderId,
+    staleTime: 60_000,
+  });
+}
+
+export function useFieldOpsInstallations(siteId) {
+  return useQuery({
+    queryKey: queryKeys.mobile.installations.bySite(siteId),
+    queryFn: () => installationService.getInstallations(siteId),
+    enabled: !!siteId,
+    staleTime: 60_000,
+  });
+}
+
+export function useFieldOpsInstallationDetail(id) {
+  return useQuery({
+    queryKey: queryKeys.mobile.installations.detail(id),
+    queryFn: () => installationService.getInstallationById(id),
+    enabled: !!id,
+    staleTime: 60_000,
+  });
+}
+
+export function useFieldOpsNotifications(params = {}) {
+  return useQuery({
+    queryKey: queryKeys.mobile.notifications.list(),
+    queryFn: () => notificationService.getNotifications(params),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useFieldOpsOrderQuotation(orderId) {
+  return useQuery({
+    queryKey: queryKeys.mobile.quotation.byOrder(orderId),
+    queryFn: () => orderService.getQuotation(orderId),
+    enabled: !!orderId,
+    staleTime: 120_000,
+  });
+}
+
+export function useFieldOpsCatalogSearch(query, source = 'ALL') {
+  return useQuery({
+    queryKey: queryKeys.mobile.catalog.search(query),
+    queryFn: () => catalogService.search(query, source),
+    enabled: !!query && query.length >= 2,
+    staleTime: 120_000,
+  });
+}

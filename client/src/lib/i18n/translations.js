@@ -995,8 +995,6 @@ export const translations = {
     'deploy.print.assignment': 'Einsatz',
     'deploy.print.type': 'Typ',
     'deploy.print.status': 'Status',
-    'sidebar.scheduling': 'Einsatzplanung',
-    'sidebar.mobile': 'Techniker App',
 
     // Mobile Technician App
     'mobile.nav.orders': 'Aufträge',
@@ -2136,8 +2134,6 @@ export const translations = {
     'deploy.print.assignment': 'Assignment',
     'deploy.print.type': 'Type',
     'deploy.print.status': 'Status',
-    'sidebar.scheduling': 'Scheduling',
-    'sidebar.mobile': 'Technician App',
 
     // Mobile Technician App
     'mobile.nav.orders': 'Orders',

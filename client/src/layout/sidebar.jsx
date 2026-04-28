@@ -14,11 +14,11 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import {
-  LayoutDashboard, Users, Building2, FolderKanban, CalendarClock,
+  LayoutDashboard, Users, FolderKanban, CalendarClock,
   FileText, Receipt, CheckSquare, Boxes, Settings,
   ChevronLeft, ChevronRight, ShieldCheck, Sparkles, MonitorSmartphone, ScrollText, Activity,
   HeartPulse, Cog, Zap, LogOut, User, Wrench, Webhook,
-  Contact, MapPinned, Flame, CalendarCheck, PanelLeftClose, PanelLeftOpen,
+  Contact, MapPinned, Flame, PanelLeftClose, PanelLeftOpen,
   BookOpen, ClipboardList, MessageSquare, Bell, Smartphone,
   FileCheck, Clock4,
 } from 'lucide-react';

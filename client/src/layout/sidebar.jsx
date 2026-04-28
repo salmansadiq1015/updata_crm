@@ -19,6 +19,8 @@ import {
   ChevronLeft, ChevronRight, ShieldCheck, Sparkles, MonitorSmartphone, ScrollText, Activity,
   HeartPulse, Cog, Zap, LogOut, User, Wrench, Webhook,
   Contact, MapPinned, Flame, CalendarCheck, PanelLeftClose, PanelLeftOpen,
+  BookOpen, ClipboardList, MessageSquare, Bell, Smartphone,
+  FileCheck, Clock4,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -40,13 +42,33 @@ const navSectionDefs = [
       { labelKey: 'sidebar.sites', href: '/crm/sites', icon: MapPinned, permission: 'crm:read' },
       { labelKey: 'sidebar.installations', href: '/crm/installations', icon: Flame, permission: 'crm:read' },
       { labelKey: 'sidebar.maintenance', href: '/crm/maintenance', icon: Wrench, permission: 'crm:read' },
+      { labelKey: 'sidebar.addressBook', href: '/crm/address-book', icon: BookOpen, permission: 'crm:read' },
       { labelKey: 'sidebar.projects', href: '/projects', icon: FolderKanban, permission: 'projects:read' },
-      { labelKey: 'sidebar.scheduling', href: '/scheduling', icon: CalendarClock, disabled: true, permission: 'scheduling:read' },
+      { labelKey: 'sidebar.scheduling', href: '/scheduling', icon: CalendarClock, permission: 'scheduling:read' },
       { labelKey: 'sidebar.quotes', href: '/quotes', icon: FileText, disabled: true, permission: 'quotations:read' },
       { labelKey: 'sidebar.accounting', href: '/accounting', icon: Receipt, disabled: true, permission: 'accounting:read' },
       { labelKey: 'sidebar.tasks', href: '/tasks', icon: CheckSquare, disabled: true },
       { labelKey: 'sidebar.catalog', href: '/catalog', icon: Boxes, disabled: true },
       { labelKey: 'sidebar.ai', href: '/ai', icon: Sparkles, disabled: true },
+    ],
+  },
+  {
+    titleKey: 'sidebar.fieldOps',
+    items: [
+      { labelKey: 'sidebar.fieldOpsOrders',        href: '/field-ops/orders',        icon: ClipboardList,  permission: 'mobile:read' },
+      { labelKey: 'sidebar.fieldOpsReports',       href: '/field-ops/reports',       icon: FileCheck,      permission: 'mobile:read' },
+      { labelKey: 'sidebar.fieldOpsTime',          href: '/field-ops/time',          icon: Clock4,         permission: 'mobile:read' },
+      { labelKey: 'sidebar.fieldOpsChat',          href: '/field-ops/chat',          icon: MessageSquare,  permission: 'mobile:read' },
+      { labelKey: 'sidebar.fieldOpsNotifications', href: '/field-ops/notifications', icon: Bell,           permission: 'mobile:read' },
+    ],
+  },
+  {
+    titleKey: 'sidebar.mobile',
+    items: [
+      { labelKey: 'sidebar.mobileOrders', href: '/orders', icon: ClipboardList, permission: 'mobile:read' },
+      { labelKey: 'sidebar.mobileChat', href: '/chat', icon: MessageSquare, permission: 'mobile:read' },
+      { labelKey: 'sidebar.mobileNotifications', href: '/notifications', icon: Bell, permission: 'mobile:read' },
+      { labelKey: 'sidebar.mobileSettings', href: '/settings', icon: Smartphone, permission: 'mobile:read' },
     ],
   },
   {

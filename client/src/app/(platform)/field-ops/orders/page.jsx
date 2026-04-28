@@ -1,4 +1,5 @@
 'use client';
+import { FieldOpsOrdersTable } from '@/modules/field-ops/components/orders/field-ops-orders-table';
 export default function FieldOpsOrdersPage() {
-  return <div className="p-6 text-muted-foreground">Orders — coming soon</div>;
+  return <FieldOpsOrdersTable />;
 }

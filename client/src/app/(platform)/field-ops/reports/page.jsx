@@ -1,4 +1,5 @@
 'use client';
+import { FieldOpsReportsTable } from '@/modules/field-ops/components/reports/field-ops-reports-table';
 export default function FieldOpsReportsPage() {
-  return <div className="p-6 text-muted-foreground">Reports — coming soon</div>;
+  return <FieldOpsReportsTable />;
 }

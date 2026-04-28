@@ -1,4 +1,7 @@
 'use client';
-export default function FieldOpsChatPage() {
-  return <div className="p-6 text-muted-foreground">Chat — coming soon</div>;
+import { use } from 'react';
+import { FieldOpsChatPanel } from '@/modules/field-ops/components/chat/field-ops-chat-panel';
+export default function FieldOpsChatPage({ params }) {
+  const { projectId } = use(params);
+  return <FieldOpsChatPanel projectId={projectId} />;
 }

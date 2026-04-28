@@ -19,7 +19,7 @@ const TYPE_OPTS = [
   ...Object.entries(ORDER_TYPE_LABELS).map(([v, c]) => ({ value: v, de: c.label, en: c.labelEn })),
 ];
 
-const active = 'border-primary/40 bg-primary/5 text-primary';
+const activeFilterClass = 'border-primary/40 bg-primary/5 text-primary';
 
 export function FieldOpsOrderFilters({ search, onSearch, status, onStatus, type, onType, onClear }) {
   const { language: lang } = useLanguage();
@@ -40,7 +40,7 @@ export function FieldOpsOrderFilters({ search, onSearch, status, onStatus, type,
         />
       </div>
       <Select value={status} onValueChange={onStatus}>
-        <SelectTrigger className={cn('h-8 w-auto min-w-[130px] rounded-full border-dashed text-xs', status !== 'all' && active)}>
+        <SelectTrigger className={cn('h-8 w-auto min-w-[130px] rounded-full border-dashed text-xs', status !== 'all' && activeFilterClass)}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -48,7 +48,7 @@ export function FieldOpsOrderFilters({ search, onSearch, status, onStatus, type,
         </SelectContent>
       </Select>
       <Select value={type} onValueChange={onType}>
-        <SelectTrigger className={cn('h-8 w-auto min-w-[140px] rounded-full border-dashed text-xs', type !== 'all' && active)}>
+        <SelectTrigger className={cn('h-8 w-auto min-w-[140px] rounded-full border-dashed text-xs', type !== 'all' && activeFilterClass)}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

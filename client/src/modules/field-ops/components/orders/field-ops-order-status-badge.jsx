@@ -1,3 +1,5 @@
+'use client';
+
 import { cn } from '@/lib/utils';
 import { ORDER_STATUS_CONFIG } from '@/modules/field-ops/constants/field-ops-constants';
 import { useLanguage } from '@/lib/i18n/language-context';

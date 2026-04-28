@@ -37,7 +37,7 @@ export function FieldOpsOrdersTable() {
   const columns = useMemo(() => [
     {
       accessorKey: 'orderNumber',
-      header: t('fieldOps.orders.title', 'Order #'),
+      header: language === 'de' ? 'Auftrag #' : 'Order #',
       size: 120,
       Cell: ({ row }) => (
         <span className="font-mono text-xs text-muted-foreground">{row.original.orderNumber || row.original._id?.slice(-6)}</span>
@@ -84,7 +84,7 @@ export function FieldOpsOrdersTable() {
     },
     {
       accessorKey: 'status',
-      header: language === 'de' ? 'Status' : 'Status',
+      header: 'Status',
       size: 140,
       Cell: ({ row }) => <FieldOpsOrderStatusBadge status={row.original.status} size="sm" />,
     },

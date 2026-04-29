@@ -283,7 +283,10 @@ class AssignmentService {
   }
 
   async listByEmployee(employeeId, startDate, endDate) {
-    return assignmentRepository.findByEmployeeAndDateRange(employeeId, new Date(startDate), new Date(endDate));
+    const now = Date.now();
+    const start = startDate ? new Date(startDate) : new Date(now - 90 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date(now + 365 * 24 * 60 * 60 * 1000);
+    return assignmentRepository.findByEmployeeAndDateRange(employeeId, start, end);
   }
 
   async syncSince(employeeId, since) {

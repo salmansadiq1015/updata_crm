@@ -91,8 +91,11 @@ export function createApp() {
   // Structured request logging (skips health endpoints)
   app.use(requestLogger);
 
-  // Global rate limiting
-  app.use(globalLimiter);
+  // Global rate limiting — skip Socket.IO polling (it would hit 100 req/min instantly)
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/socket.io')) return next();
+    return globalLimiter(req, res, next);
+  });
 
   // Static files (preserve existing behavior)
   app.use("/uploads", express.static("uploads"));

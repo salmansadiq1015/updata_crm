@@ -1,34 +1,67 @@
 'use client';
 
-import { useState } from 'react';
-import { Input } from '@/components/ui/input';
+import { useState, useRef, useCallback } from 'react';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/lib/i18n/language-context';
-import { SendHorizontal } from 'lucide-react';
+import { Send } from 'lucide-react';
+import { useFieldOpsChatTyping } from '@/modules/field-ops/hooks/use-field-ops-chat-typing';
+import { useLanguage } from '@/lib/i18n';
 
-export function FieldOpsChatInput({ onSend, isLoading }) {
+export function FieldOpsChatInput({ onSend, isLoading, projectId }) {
+  const [value, setValue] = useState('');
+  const { onKeystroke } = useFieldOpsChatTyping(projectId);
   const { t } = useLanguage();
-  const [text, setText] = useState('');
+  const textareaRef = useRef(null);
 
-  const handleSend = () => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  const handleSend = useCallback(() => {
+    const trimmed = value.trim();
+    if (!trimmed || isLoading) return;
     onSend({ messageType: 'TEXT', content: trimmed, mentions: [] });
-    setText('');
-  };
+    setValue('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [value, isLoading, onSend]);
+
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+        return;
+      }
+      onKeystroke();
+    },
+    [handleSend, onKeystroke]
+  );
+
+  const handleChange = useCallback((e) => {
+    setValue(e.target.value);
+    // Auto-grow
+    const el = e.target;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
 
   return (
-    <div className="flex gap-2 p-4 border-t bg-background">
-      <Input
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-        placeholder={t('fieldOps.chat.sendPlaceholder', 'Write a message...')}
-        className="flex-1"
+    <div className="flex items-end gap-2 p-3 border-t shrink-0">
+      <Textarea
+        ref={textareaRef}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder={t('fieldOps.chat.messagePlaceholder', 'Type a message…')}
+        rows={1}
+        className="resize-none max-h-24 overflow-y-auto flex-1"
         disabled={isLoading}
       />
-      <Button size="icon" onClick={handleSend} disabled={!text.trim() || isLoading}>
-        <SendHorizontal className="h-4 w-4" />
+      <Button
+        size="icon"
+        onClick={handleSend}
+        disabled={!value.trim() || isLoading}
+        className="shrink-0"
+      >
+        <Send className="h-4 w-4" />
       </Button>
     </div>
   );

@@ -2,6 +2,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
 import morgan from "morgan";
+import Sentry from "./config/sentry.js";
 
 // Middleware
 import { requestIdMiddleware } from './shared/middleware/requestId.js';
@@ -14,6 +15,7 @@ import { globalLimiter } from './shared/middleware/rateLimiter.js';
 import { mongoSanitizeMiddleware } from './shared/utils/sanitize.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 import { notFoundHandler } from './shared/middleware/notFound.js';
+import { setupSwagger } from "./shared/middleware/swagger.js";
 
 // Routes
 import healthRoutes from './modules/health/health.routes.js';
@@ -45,6 +47,7 @@ import integrationsRoutes, { calendarSyncRoutes } from './modules/integrations/i
 import widgetPublicRoutes from './modules/integrations/widgetPublic.routes.js';
 import aiRoutes from './modules/ai/ai.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
+import chatRoutes from './modules/chat/chat.routes.js';
 
 // Metrics
 import { metricsMiddleware, metricsEndpoint } from './metrics/index.js';
@@ -149,8 +152,23 @@ export function createApp() {
   app.use("/api/v1/files", fileRoutes);
   app.use("/api/v1/dashboard", dashboardRoutes);
   app.use("/api/v1/system", systemRoutes);
+  app.use("/api/v1/chat", chatRoutes);
+
+  // --- Swagger API docs (non-production or explicitly enabled) ---
+  if (
+    process.env.NODE_ENV !== "production" ||
+    process.env.ENABLE_SWAGGER === "true"
+  ) {
+    setupSwagger(app);
+  }
 
   // --- Post-route middleware ---
+
+  // Sentry error handler captures exceptions before our error handler responds
+  if (Sentry) {
+    Sentry.setupExpressErrorHandler(app);
+  }
+
   app.use(notFoundHandler);
   app.use(errorHandler);
 

@@ -1,4 +1,5 @@
 'use client';
+import { FieldOpsNotificationList } from '@/modules/field-ops/components/notifications/field-ops-notification-list';
 export default function FieldOpsNotificationsPage() {
-  return <div className="p-6 text-muted-foreground">Notifications — coming soon</div>;
+  return <FieldOpsNotificationList />;
 }

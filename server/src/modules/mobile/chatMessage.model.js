@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-export const MESSAGE_TYPES = ['TEXT', 'PHOTO', 'DOCUMENT'];
+export const MESSAGE_TYPES = ['TEXT', 'PHOTO', 'DOCUMENT', 'AUDIO', 'VIDEO', 'VIEW_ONCE'];
 
 const chatMessageSchema = new mongoose.Schema(
   {
@@ -43,6 +43,15 @@ const chatMessageSchema = new mongoose.Schema(
     sentAt: { type: Date, required: true, default: Date.now },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
+    roomId:            { type: mongoose.Schema.Types.ObjectId, ref: 'ChatRoom', default: null },
+    replyToId:         { type: mongoose.Schema.Types.ObjectId, ref: 'ChatMessage', default: null },
+    replyToSnippet:    { type: String, maxlength: 200, default: null },
+    replyToSenderName: { type: String, maxlength: 100, default: null },
+    reactions:         [{ emoji: { type: String }, userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, userName: { type: String }, createdAt: { type: Date, default: Date.now } }],
+    readBy:            [{ userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, readAt: { type: Date, default: Date.now } }],
+    isViewOnce:        { type: Boolean, default: false },
+    viewedBy:          [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    editedAt:          { type: Date, default: null },
   },
   {
     timestamps: true,
@@ -55,6 +64,7 @@ const chatMessageSchema = new mongoose.Schema(
 chatMessageSchema.index({ projectId: 1, sentAt: -1 });
 chatMessageSchema.index({ senderId: 1 });
 chatMessageSchema.index({ isDeleted: 1 });
+chatMessageSchema.index({ roomId: 1, sentAt: -1 });
 
 // --- Soft-delete pre-hook ---
 chatMessageSchema.pre(/^find/, function () {

@@ -24,7 +24,7 @@ export function FieldOpsChatPanel({ projectId }) {
     (payload) => {
       sendMessage.mutate(payload);
     },
-    [sendMessage]
+    [sendMessage.mutate]
   );
 
   return (

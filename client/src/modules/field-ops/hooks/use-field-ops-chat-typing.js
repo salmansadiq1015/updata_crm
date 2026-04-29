@@ -8,6 +8,8 @@ export function useFieldOpsChatTyping(projectId) {
   const { user } = useAuth();
   const isTypingRef = useRef(false);
   const stopTimerRef = useRef(null);
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; });
 
   useEffect(() => {
     return () => {
@@ -20,7 +22,7 @@ export function useFieldOpsChatTyping(projectId) {
     const socket = getExistingSocket();
     if (!socket) return;
 
-    const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Unknown';
+    const fullName = [userRef.current?.firstName, userRef.current?.lastName].filter(Boolean).join(' ') || 'Unknown';
 
     if (!isTypingRef.current) {
       isTypingRef.current = true;
@@ -32,7 +34,7 @@ export function useFieldOpsChatTyping(projectId) {
       isTypingRef.current = false;
       socket.emit('stop typing', { projectId });
     }, 2500);
-  }, [projectId, user]);
+  }, [projectId]);
 
   return { onKeystroke };
 }

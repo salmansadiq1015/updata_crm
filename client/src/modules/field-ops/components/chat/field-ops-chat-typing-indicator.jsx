@@ -9,7 +9,7 @@ export function FieldOpsChatTypingIndicator({ typingUsers = [] }) {
 
   let label = '';
   if (count === 1) {
-    const name = typingUsers[0];
+    const name = typingUsers[0]?.userName ?? typingUsers[0];
     label = language === 'de' ? `${name} schreibt...` : `${name} is typing...`;
   } else if (count > 1) {
     label = language === 'de' ? 'Mehrere Personen schreiben...' : 'Several people are typing...';

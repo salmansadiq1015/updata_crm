@@ -64,13 +64,13 @@ export function FieldOpsChatMessages({ messages = [], isLoading, currentUserId }
         ts &&
         Math.abs(new Date(ts) - new Date(lastTs)) < FIVE_MIN;
 
+      const nextMsg = messages[idx + 1];
+      const nextSenderId = nextMsg?.sender_id || nextMsg?.senderId;
+      const nextTs = nextMsg?.created_at || nextMsg?.createdAt;
       const isLast =
         idx === messages.length - 1 ||
-        (messages[idx + 1]?.sender_id || messages[idx + 1]?.senderId) !== senderId ||
-        (messages[idx + 1]?.created_at || messages[idx + 1]?.createdAt) &&
-          Math.abs(
-            new Date(messages[idx + 1]?.created_at || messages[idx + 1]?.createdAt) - new Date(ts)
-          ) >= FIVE_MIN;
+        nextSenderId !== senderId ||
+        (nextTs && ts && Math.abs(new Date(nextTs) - new Date(ts)) >= FIVE_MIN);
 
       result.push({
         type: 'message',

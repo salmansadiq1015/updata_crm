@@ -1,0 +1,115 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useStartDm } from '../hooks/use-start-dm';
+import apiClient from '@/lib/api/client';
+
+function useDebounce(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
+
+export function UserSearchDialog({ open, onClose }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebounce(searchTerm.toLowerCase().trim(), 300);
+  const startDm = useStartDm();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['users', 'active'],
+    queryFn: () => apiClient.get('/users?status=active&limit=100').then((r) => r.data?.data ?? r.data),
+    enabled: open,
+    staleTime: 60_000,
+  });
+
+  const users = Array.isArray(data) ? data : [];
+
+  const filtered = debouncedSearch
+    ? users.filter((u) => {
+        const fullName = `${u.firstName ?? ''} ${u.lastName ?? ''}`.toLowerCase();
+        const email = (u.email ?? '').toLowerCase();
+        return fullName.includes(debouncedSearch) || email.includes(debouncedSearch);
+      })
+    : users;
+
+  function handleSelect(user) {
+    startDm.mutate(user._id);
+    onClose();
+  }
+
+  function getInitials(user) {
+    return `${(user.firstName ?? '')[0] ?? ''}${(user.lastName ?? '')[0] ?? ''}`.toUpperCase();
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>New Message</DialogTitle>
+        </DialogHeader>
+
+        <Input
+          autoFocus
+          placeholder="Search by name or email…"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="mt-1"
+        />
+
+        <div className="mt-2 overflow-y-auto" style={{ maxHeight: 400 }}>
+          {isLoading ? (
+            <div className="space-y-3 py-1">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-3 px-1">
+                  <Skeleton className="h-9 w-9 rounded-full" />
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No users found</p>
+          ) : (
+            <ul className="space-y-1 py-1">
+              {filtered.map((user) => (
+                <li key={user._id}>
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(user)}
+                    className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className="text-xs">{getInitials(user)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium leading-none">
+                        {user.firstName} {user.lastName}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                    {user.role && (
+                      <Badge variant="secondary" className="shrink-0 capitalize text-xs">
+                        {user.role}
+                      </Badge>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

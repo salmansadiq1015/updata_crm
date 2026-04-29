@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Search, SquarePen, Users, Hash } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatSidebarItem } from './chat-sidebar-item';
@@ -66,32 +66,34 @@ export function ChatSidebar({ activeRoomId }) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
         <h2 className="text-lg font-bold tracking-tight">Chats</h2>
-        <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDmOpen(true)}>
-                <SquarePen className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New message</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setGroupOpen(true)}>
-                <Users className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New group</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setJoinOpen(true)}>
-                <Hash className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Join by code</TooltipContent>
-          </Tooltip>
-        </div>
+        <TooltipProvider delayDuration={300}>
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDmOpen(true)}>
+                  <SquarePen className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>New message</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setGroupOpen(true)}>
+                  <Users className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>New group</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setJoinOpen(true)}>
+                  <Hash className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Join by code</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </div>
 
       {/* Search */}

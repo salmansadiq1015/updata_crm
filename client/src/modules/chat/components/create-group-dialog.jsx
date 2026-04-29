@@ -7,10 +7,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, X } from 'lucide-react';
+
+function Checkbox({ checked, onCheckedChange }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={() => onCheckedChange(!checked)}
+      className={`h-4 w-4 shrink-0 rounded border transition-colors flex items-center justify-center ${
+        checked ? 'bg-primary border-primary' : 'border-input bg-background'
+      }`}
+    >
+      {checked && <Check className="h-3 w-3 text-primary-foreground" />}
+    </button>
+  );
+}
 import apiClient from '@/lib/api/client';
 
 function useDebounce(value, delay) {

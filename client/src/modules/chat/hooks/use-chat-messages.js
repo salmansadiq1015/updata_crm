@@ -1,14 +1,16 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { queryKeys } from '@/lib/query/keys';
 import { chatService } from '../services/chat-service';
-import { getExistingSocket } from '@/modules/mobile/lib/websocket-client';
+import { onSocketConnect } from '@/lib/socket/client';
 import { useAuth } from '@/shared/hooks/use-auth';
 
 export function useChatMessages(roomId) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [typingUsers, setTypingUsers] = useState([]);
 
   const query = useQuery({
@@ -18,73 +20,100 @@ export function useChatMessages(roomId) {
     staleTime: 0,
   });
 
+  // Stable ref for userId to avoid re-registering on every render
+  const userId = user?._id;
+
   useEffect(() => {
     if (!roomId) return;
-    const socket = getExistingSocket();
-    if (!socket) return;
 
-    socket.emit('join room', { roomId });
+    let cleanupListeners = null;
 
-    const onNewMessage = ({ message }) => {
-      queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) => {
-        if (old.some((m) => m._id === message._id)) return old;
-        return [...old, message];
-      });
-      queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
-    };
+    // onSocketConnect fires immediately if already connected, or waits for
+    // the socket to connect (handles the SocketProvider/child effect race).
+    // It also fires on every subsequent reconnect, re-joining the room.
+    const unsubscribe = onSocketConnect((socket) => {
+      // Remove stale listeners from a previous connection cycle
+      if (cleanupListeners) cleanupListeners();
 
-    const onReactionUpdated = ({ messageId, reactions }) => {
-      queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) =>
-        old.map((m) => (m._id === messageId ? { ...m, reactions } : m))
-      );
-    };
+      socket.emit('join room', { roomId });
 
-    const onMessageDeleted = ({ messageId }) => {
-      queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) =>
-        old.map((m) => (m._id === messageId ? { ...m, isDeleted: true } : m))
-      );
-    };
+      const onNewMessage = ({ message }) => {
+        queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) => {
+          if (old.some((m) => m._id === message._id)) return old;
+          return [...old, message];
+        });
+        queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
+      };
 
-    const onMessageEdited = ({ messageId, content, editedAt }) => {
-      queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) =>
-        old.map((m) => (m._id === messageId ? { ...m, content, editedAt } : m))
-      );
-    };
+      const onReactionUpdated = ({ messageId, reactions }) => {
+        queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) =>
+          old.map((m) => (m._id === messageId ? { ...m, reactions } : m))
+        );
+      };
 
-    const onTyping = ({ userId, userName }) => {
-      if (userId === user?._id) return;
-      setTypingUsers((prev) => {
-        if (prev.some((u) => u.userId === userId)) return prev;
-        return [...prev, { userId, userName }];
-      });
-    };
+      const onMessageDeleted = ({ messageId }) => {
+        queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) =>
+          old.map((m) => (m._id === messageId ? { ...m, isDeleted: true } : m))
+        );
+      };
 
-    const onStopTyping = ({ userId }) => {
-      setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
-    };
+      const onMessageEdited = ({ messageId, content, editedAt }) => {
+        queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) =>
+          old.map((m) => (m._id === messageId ? { ...m, content, editedAt } : m))
+        );
+      };
 
-    const onRoomUpdated = () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
-    };
+      const onTyping = ({ userId: typingId, userName }) => {
+        if (typingId === userId) return;
+        setTypingUsers((prev) => {
+          if (prev.some((u) => u.userId === typingId)) return prev;
+          return [...prev, { userId: typingId, userName }];
+        });
+      };
 
-    socket.on('chat:new_message', onNewMessage);
-    socket.on('chat:reaction_updated', onReactionUpdated);
-    socket.on('chat:message_deleted', onMessageDeleted);
-    socket.on('chat:message_edited', onMessageEdited);
-    socket.on('chat:typing', onTyping);
-    socket.on('chat:stop typing', onStopTyping);
-    socket.on('chat:room_updated', onRoomUpdated);
+      const onStopTyping = ({ userId: stoppedId }) => {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== stoppedId));
+      };
+
+      const onRoomUpdated = () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
+      };
+
+      const onRoomDeleted = ({ roomId: deletedId }) => {
+        if (deletedId === roomId) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
+          router.push('/field-ops/chat');
+        }
+      };
+
+      socket.on('chat:new_message', onNewMessage);
+      socket.on('chat:reaction_updated', onReactionUpdated);
+      socket.on('chat:message_deleted', onMessageDeleted);
+      socket.on('chat:message_edited', onMessageEdited);
+      socket.on('chat:typing', onTyping);
+      socket.on('chat:stop typing', onStopTyping);
+      socket.on('chat:room_updated', onRoomUpdated);
+      socket.on('chat:room_deleted', onRoomDeleted);
+
+      cleanupListeners = () => {
+        socket.off('chat:new_message', onNewMessage);
+        socket.off('chat:reaction_updated', onReactionUpdated);
+        socket.off('chat:message_deleted', onMessageDeleted);
+        socket.off('chat:message_edited', onMessageEdited);
+        socket.off('chat:typing', onTyping);
+        socket.off('chat:stop typing', onStopTyping);
+        socket.off('chat:room_updated', onRoomUpdated);
+        socket.off('chat:room_deleted', onRoomDeleted);
+      };
+    });
 
     return () => {
-      socket.off('chat:new_message', onNewMessage);
-      socket.off('chat:reaction_updated', onReactionUpdated);
-      socket.off('chat:message_deleted', onMessageDeleted);
-      socket.off('chat:message_edited', onMessageEdited);
-      socket.off('chat:typing', onTyping);
-      socket.off('chat:stop typing', onStopTyping);
-      socket.off('chat:room_updated', onRoomUpdated);
+      unsubscribe();
+      if (cleanupListeners) cleanupListeners();
     };
-  }, [roomId, queryClient, user?._id]);
+  // router is a stable reference from useRouter — excluded intentionally
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, queryClient, userId]);
 
   return { ...query, typingUsers };
 }

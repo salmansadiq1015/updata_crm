@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
 import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket/client';
+import { usePresenceStore } from '@/stores/presence-store';
 
 export function SocketProvider({ children }) {
   const { isAuthenticated, accessToken } = useAuthStore();
@@ -52,10 +53,22 @@ export function SocketProvider({ children }) {
         useNotificationStore.getState().setUnreadCount(count);
       });
 
+      // Real-time user presence
+      socket.on('userStatus', ({ userId, isOnline }) => {
+        if (isOnline) usePresenceStore.getState().setOnline(userId);
+        else usePresenceStore.getState().setOffline(userId);
+      });
+
+      socket.on('userStatus:init', ({ onlineUserIds }) => {
+        usePresenceStore.getState().initBulk(onlineUserIds);
+      });
+
       return () => {
         socket.off('pushNotification');
         socket.off('newNotification');
         socket.off('unreadCount');
+        socket.off('userStatus');
+        socket.off('userStatus:init');
       };
     } else {
       disconnectSocket();

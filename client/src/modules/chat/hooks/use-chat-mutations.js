@@ -1,16 +1,25 @@
 'use client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { queryKeys } from '@/lib/query/keys';
 import { chatService } from '../services/chat-service';
 
 export function useChatMutations(roomId) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const invalidateMessages = () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.messages(roomId) });
   const invalidateRooms = () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
 
   const sendMessage = useMutation({
     mutationFn: (data) => chatService.sendMessage(roomId, data),
-    onSuccess: () => { invalidateRooms(); },
+    onSuccess: (newMessage) => {
+      // Immediately add the sent message to the cache — don't wait for socket echo
+      queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) => {
+        if (old.some((m) => m._id === newMessage._id)) return old;
+        return [...old, newMessage];
+      });
+      invalidateRooms();
+    },
   });
 
   const deleteMessage = useMutation({
@@ -47,7 +56,7 @@ export function useChatMutations(roomId) {
   });
 
   const createGroupRoom = useMutation({
-    mutationFn: ({ name, memberIds }) => chatService.createGroupRoom(name, memberIds),
+    mutationFn: ({ name, memberIds, projectId }) => chatService.createGroupRoom(name, memberIds, projectId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() }),
   });
 
@@ -58,12 +67,23 @@ export function useChatMutations(roomId) {
 
   const leaveRoom = useMutation({
     mutationFn: (roomId) => chatService.leaveRoom(roomId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
+      router.push('/field-ops/chat');
+    },
+  });
+
+  const deleteRoom = useMutation({
+    mutationFn: (id) => chatService.deleteRoom(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
+      router.push('/field-ops/chat');
+    },
   });
 
   const refreshJoinCode = useMutation({
     mutationFn: (roomId) => chatService.refreshJoinCode(roomId),
   });
 
-  return { sendMessage, deleteMessage, editMessage, addReaction, removeReaction, markRead, blockUser, unblockUser, createGroupRoom, joinByCode, leaveRoom, refreshJoinCode };
+  return { sendMessage, deleteMessage, editMessage, addReaction, removeReaction, markRead, blockUser, unblockUser, createGroupRoom, joinByCode, leaveRoom, deleteRoom, refreshJoinCode };
 }

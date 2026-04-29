@@ -12,7 +12,7 @@ export function useStartDm() {
     mutationFn: (targetUserId) => chatService.getOrCreateDmRoom(targetUserId),
     onSuccess: (room) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
-      router.push(`/field-ops/chat/${room._id}`);
+      router.push(`/field-ops/chat?chatId=${room._id}`);
     },
   });
 }

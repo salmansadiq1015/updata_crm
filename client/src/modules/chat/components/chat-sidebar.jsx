@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/auth-store';
 import { useChatRooms } from '@/modules/chat/hooks/use-chat-rooms';
 import { queryKeys } from '@/lib/query/keys';
-import { getExistingSocket } from '@/modules/mobile/lib/websocket-client';
+import { getSocket } from '@/lib/socket/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -52,7 +52,7 @@ export function ChatSidebar({ activeRoomId }) {
   // Socket: room_updated → invalidate rooms list
   useEffect(() => {
     if (!currentUserId) return;
-    const socket = getExistingSocket();
+    const socket = getSocket();
     if (!socket) return;
     const handler = () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
     socket.on('chat:room_updated', handler);
@@ -148,7 +148,7 @@ export function ChatSidebar({ activeRoomId }) {
               room={room}
               isActive={room._id === activeRoomId}
               currentUserId={currentUserId}
-              onClick={() => router.push(`/field-ops/chat/${room._id}`)}
+              onClick={() => router.push(`/field-ops/chat?chatId=${room._id}`)}
             />
           ))
         )}

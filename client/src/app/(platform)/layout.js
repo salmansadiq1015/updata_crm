@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDrawerStore } from '@/stores/drawer-store';
 import { Sidebar, MobileSidebar } from '@/layout/sidebar';
@@ -15,6 +15,8 @@ export default function PlatformLayout({ children }) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
   const isDrawerOpen = useDrawerStore((s) => s.isOpen);
+  const pathname = usePathname();
+  const isChatPage = pathname?.includes('/chat');
 
   useKeyboardShortcuts();
 
@@ -43,7 +45,12 @@ export default function PlatformLayout({ children }) {
         'transition-all duration-300'
       )}>
         <Header />
-        <main className="flex-1 overflow-auto p-4 sm:p-6 bg-muted/30 scrollbar-thin">
+        <main className={cn(
+          'flex-1 bg-muted/30',
+          isChatPage
+            ? 'overflow-hidden p-0 flex flex-col'
+            : 'overflow-auto p-4 sm:p-6 scrollbar-thin'
+        )}>
           {children}
         </main>
       </div>

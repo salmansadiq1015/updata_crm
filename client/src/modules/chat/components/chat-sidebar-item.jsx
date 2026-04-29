@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Users } from 'lucide-react';
 import { format, isToday, isThisWeek } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { usePresenceStore } from '@/stores/presence-store';
 
 // Deterministic color from a string
 const COLORS = ['#e53935','#d81b60','#8e24aa','#3949ab','#1e88e5','#00897b','#43a047','#fb8c00','#6d4c41','#546e7a'];
@@ -41,22 +42,23 @@ function getDisplayName(room, currentUserId) {
   return 'Chat';
 }
 
-function isOnlineDm(room, currentUserId) {
-  if (room.roomType !== 'DM') return false;
-  const other = room.members?.find(
-    (m) => String(m.userId?._id || m.userId) !== String(currentUserId)
-  );
-  return other?.userId?.isOnline ?? false;
-}
-
 export function ChatSidebarItem({ room, isActive, currentUserId, onClick }) {
+  const onlineIds = usePresenceStore((s) => s.onlineIds);
   const displayName = getDisplayName(room, currentUserId);
   const timestamp = formatTs(room.lastMessageAt);
   const preview = room.lastMessageText
     ? room.lastMessageText.slice(0, 42) + (room.lastMessageText.length > 42 ? '…' : '')
     : '';
   const unread = room.unreadCount ?? 0;
-  const online = isOnlineDm(room, currentUserId);
+  const online = room.roomType === 'DM'
+    ? (() => {
+        const other = room.members?.find(
+          (m) => String(m.userId?._id || m.userId) !== String(currentUserId)
+        );
+        const otherId = String(other?.userId?._id || other?.userId || '');
+        return otherId ? onlineIds.has(otherId) : false;
+      })()
+    : false;
   const bgColor = nameColor(displayName);
   const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 

@@ -1,6 +1,6 @@
 'use client';
 import { useRef, useEffect, useCallback } from 'react';
-import { getExistingSocket } from '@/modules/mobile/lib/websocket-client';
+import { getSocket } from '@/lib/socket/client';
 import { useAuth } from '@/shared/hooks/use-auth';
 
 export function useChatTyping(roomId) {
@@ -17,7 +17,7 @@ export function useChatTyping(roomId) {
 
   const onKeystroke = useCallback(() => {
     if (!roomId) return;
-    const socket = getExistingSocket();
+    const socket = getSocket();
     if (!socket) return;
     const fullName = [userRef.current?.firstName, userRef.current?.lastName].filter(Boolean).join(' ') || 'Unknown';
     if (!isTypingRef.current) {

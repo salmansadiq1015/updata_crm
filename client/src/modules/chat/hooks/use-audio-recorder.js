@@ -41,11 +41,12 @@ export function useAudioRecorder() {
         const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType });
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('module', 'chat');
         try {
           const uploaded = await chatService.uploadFile(formData);
           setResult({
-            attachmentUrl: uploaded.attachmentUrl || uploaded.url,
-            attachmentFileId: uploaded._id || uploaded.attachmentFileId,
+            attachmentUrl: uploaded.url || uploaded.attachmentUrl,
+            attachmentFileId: uploaded._id || uploaded.id || uploaded.attachmentFileId,
             duration: durationRef.current,
           });
         } catch {

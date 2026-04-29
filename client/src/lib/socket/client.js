@@ -4,8 +4,22 @@ const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:9097'
 
 let socket = null;
 
+// Subscribers notified on every socket connect (initial + reconnects)
+const connectHandlers = new Set();
+
 export function getSocket() {
   return socket;
+}
+
+/**
+ * Register a callback that fires whenever the socket connects.
+ * If the socket is already connected, the callback fires immediately (sync).
+ * Returns an unsubscribe function.
+ */
+export function onSocketConnect(fn) {
+  connectHandlers.add(fn);
+  if (socket?.connected) fn(socket);
+  return () => connectHandlers.delete(fn);
 }
 
 export function connectSocket(accessToken) {
@@ -16,7 +30,7 @@ export function connectSocket(accessToken) {
 
   socket = io(SOCKET_URL, {
     auth: { token: accessToken },
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     autoConnect: true,
     reconnection: true,
     reconnectionDelay: 1000,
@@ -26,6 +40,7 @@ export function connectSocket(accessToken) {
 
   socket.on('connect', () => {
     console.log('[Socket] Connected:', socket.id);
+    connectHandlers.forEach((fn) => fn(socket));
   });
 
   socket.on('connect_error', (err) => {

@@ -30,6 +30,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const senderName = message.senderName || message.sender_name || '?';
   const ts = message.sentAt || message.created_at || message.createdAt;
@@ -88,7 +89,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
     <div
       className={cn('group flex gap-2 px-4 py-0.5', isMine ? 'flex-row-reverse' : 'flex-row')}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => { if (!menuOpen) setHovered(false); }}
     >
       {/* Other's avatar (only for first message in group) */}
       {!isMine && (
@@ -156,29 +157,29 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
         )}
       </div>
 
-      {/* Context menu (hover) */}
-      {hovered && !isDeleted && (
+      {/* Context menu (hover) — keep mounted while menu is open so the portal stays alive */}
+      {(hovered || menuOpen) && !isDeleted && (
         <div className={cn('flex items-center self-center gap-0.5', isMine ? 'mr-1' : 'ml-1')}>
           <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80 shadow-sm" onClick={() => onReply?.(message)}>
             <Reply className="h-3.5 w-3.5" />
           </Button>
-          <DropdownMenu>
+          <DropdownMenu open={menuOpen} onOpenChange={(open) => { setMenuOpen(open); if (!open) setHovered(false); }}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80 shadow-sm">
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align={isMine ? 'end' : 'start'} className="w-36">
-              <DropdownMenuItem onClick={() => setPickerOpen(true)}>
+              <DropdownMenuItem onClick={() => { setMenuOpen(false); setPickerOpen(true); }}>
                 <Smile className="h-3.5 w-3.5 mr-2" /> React
               </DropdownMenuItem>
               {isMine && message.messageType === 'TEXT' && (
-                <DropdownMenuItem onClick={() => onEdit?.(message)}>
+                <DropdownMenuItem onClick={() => { setMenuOpen(false); onEdit?.(message); }}>
                   <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
                 </DropdownMenuItem>
               )}
               {isMine && (
-                <DropdownMenuItem onClick={() => onDelete?.(message._id)} className="text-destructive focus:text-destructive">
+                <DropdownMenuItem onClick={() => { setMenuOpen(false); onDelete?.(message._id); }} className="text-destructive focus:text-destructive">
                   <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
                 </DropdownMenuItem>
               )}

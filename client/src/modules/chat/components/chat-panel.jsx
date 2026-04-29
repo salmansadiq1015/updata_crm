@@ -28,6 +28,7 @@ export function ChatPanel({ roomId }) {
     blockUser,
     unblockUser,
     leaveRoom,
+    deleteRoom,
     refreshJoinCode,
   } = useChatMutations(roomId);
   const { data: room } = useChatRoom(roomId);
@@ -42,19 +43,22 @@ export function ChatPanel({ roomId }) {
   }, [roomId, messages?.length]);
 
   async function handleSend({ content, messageType, attachmentUrl, attachmentFileId, replyToId }) {
-    if (editTarget) {
-      await editMessage.mutateAsync({ msgId: editTarget._id, content });
-      setEditTarget(null);
-    } else {
-      await sendMessage.mutateAsync({
-        roomId,
-        messageType,
-        content,
-        attachmentUrl,
-        attachmentFileId,
-        replyToId,
-      });
-      setReplyTarget(null);
+    try {
+      if (editTarget) {
+        await editMessage.mutateAsync({ msgId: editTarget._id, content });
+        setEditTarget(null);
+      } else {
+        await sendMessage.mutateAsync({
+          messageType,
+          content,
+          attachmentUrl,
+          attachmentFileId,
+          replyToId,
+        });
+        setReplyTarget(null);
+      }
+    } catch {
+      // error is surfaced via sendMessage.error / editMessage.error
     }
   }
 
@@ -67,6 +71,7 @@ export function ChatPanel({ roomId }) {
         onBlock={() => blockUser.mutate(roomId)}
         onUnblock={() => unblockUser.mutate(roomId)}
         onLeave={(id) => leaveRoom.mutate(id)}
+        onDelete={(id) => deleteRoom.mutate(id)}
         onRefreshCode={(id) => refreshJoinCode.mutate(id)}
       />
       <ChatMessages

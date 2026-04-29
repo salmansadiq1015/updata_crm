@@ -40,6 +40,37 @@ class ChatService {
 
     await cacheManager.del(`mobile:chat:${projectId}`);
 
+    // Bridge to new ChatRoom system
+    try {
+      const chatRoomService = (await import('../chat/chatRoom.service.js')).default;
+      const chatRoomRepository = (await import('../chat/chatRoom.repository.js')).default;
+
+      const room = await chatRoomService.getOrCreateProjectRoom(projectId, userId);
+
+      await chatRoomRepository.updateLastMessage(room._id, {
+        messageId: message._id,
+        text: (message.content || '').slice(0, 200),
+        sentAt: message.sentAt || new Date(),
+      });
+
+      const ChatMessage = (await import('./chatMessage.model.js')).default;
+      await ChatMessage.updateOne(
+        { _id: message._id },
+        { $set: { roomId: room._id } },
+      );
+
+      room.members.forEach(m => {
+        global.io?.to(`user:${m.userId}`).emit('chat:room_updated', {
+          roomId: room._id,
+          lastMessageText: (message.content || '').slice(0, 200),
+          lastMessageAt: message.sentAt || new Date(),
+        });
+      });
+    } catch (bridgeErr) {
+      // Non-fatal: don't break existing chat if bridge fails
+      console.error('ChatRoom bridge error:', bridgeErr.message);
+    }
+
     eventBus.publish(EVENT_TYPES.MOBILE_CHAT_MESSAGE_SENT, {
       messageId: message._id,
       projectId,

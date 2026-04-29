@@ -51,3 +51,16 @@ export const editMessageSchema = {
   }),
   body: Joi.object({ content: Joi.string().max(5000).required() }),
 };
+
+export const createGroupRoomSchema = {
+  body: Joi.object({
+    name: Joi.string().max(100).required(),
+    memberIds: Joi.array().items(Joi.string().hex().length(24)).default([]),
+  }),
+};
+
+export const joinByCodeSchema = {
+  body: Joi.object({
+    joinCode: Joi.string().length(4).pattern(/^\d{4}$/).required(),
+  }),
+};

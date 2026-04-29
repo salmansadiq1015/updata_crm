@@ -112,6 +112,36 @@ class ChatController {
       return res.success({ message: 'Unblocked' });
     } catch (err) { next(err); }
   }
+
+  async createGroupRoom(req, res, next) {
+    try {
+      const { name, memberIds = [] } = req.body;
+      const room = await chatRoomService.createGroupRoom(name, req.user._id, memberIds);
+      res.status(201).json(room);
+    } catch (err) { next(err); }
+  }
+
+  async joinByCode(req, res, next) {
+    try {
+      const { joinCode } = req.body;
+      const room = await chatRoomService.joinByCode(joinCode, req.user._id);
+      res.json(room);
+    } catch (err) { next(err); }
+  }
+
+  async leaveRoom(req, res, next) {
+    try {
+      await chatRoomService.leaveRoom(req.params.roomId, req.user._id);
+      res.json({ success: true });
+    } catch (err) { next(err); }
+  }
+
+  async refreshJoinCode(req, res, next) {
+    try {
+      const result = await chatRoomService.refreshJoinCode(req.params.roomId, req.user._id);
+      res.json(result);
+    } catch (err) { next(err); }
+  }
 }
 
 export default new ChatController();

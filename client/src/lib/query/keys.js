@@ -98,6 +98,13 @@ export const queryKeys = {
       bySite: (siteId) => ['crm', 'installations', 'bySite', siteId],
       detail: (id) => ['crm', 'installations', 'detail', id],
     },
+    spareParts: {
+      all: () => ['crm', 'spareParts'],
+      list: (filters) => ['crm', 'spareParts', 'list', filters],
+      detail: (id) => ['crm', 'spareParts', 'detail', id],
+      search: (q) => ['crm', 'spareParts', 'search', q],
+      byInstallation: (installationId) => ['crm', 'spareParts', 'byInstallation', installationId],
+    },
     maintenance: {
       all: () => ['crm', 'maintenance'],
       dashboard: () => ['crm', 'maintenance', 'dashboard'],
@@ -112,6 +119,94 @@ export const queryKeys = {
     images: {
       bySite: (siteId) => ['crm', 'images', 'bySite', siteId],
       byInstallation: (installationId) => ['crm', 'images', 'byInstallation', installationId],
+    },
+    newsletters: {
+      all: () => ['crm', 'newsletters'],
+      list: (filters) => ['crm', 'newsletters', 'list', filters],
+      detail: (id) => ['crm', 'newsletters', 'detail', id],
+      stats: (id) => ['crm', 'newsletters', 'stats', id],
+      recipientCount: (filter) => ['crm', 'newsletters', 'recipientCount', filter],
+    },
+  },
+  mobile: {
+    all: () => ['mobile'],
+    orders: {
+      all: () => ['mobile', 'orders'],
+      list: (filters) => ['mobile', 'orders', 'list', filters],
+      detail: (id) => ['mobile', 'orders', 'detail', id],
+      history: (id) => ['mobile', 'orders', 'history', id],
+    },
+    reports: {
+      byOrder: (orderId) => ['mobile', 'reports', 'byOrder', orderId],
+      detail: (id) => ['mobile', 'reports', 'detail', id],
+    },
+    photos: {
+      byOrder: (orderId) => ['mobile', 'photos', 'byOrder', orderId],
+    },
+    timeEntries: {
+      all: () => ['mobile', 'timeEntries'],
+      byOrder: (orderId) => ['mobile', 'timeEntries', 'byOrder', orderId],
+      list: (filters) => ['mobile', 'timeEntries', 'list', filters],
+    },
+    documents: {
+      byOrder: (orderId) => ['mobile', 'documents', 'byOrder', orderId],
+    },
+    quotation: {
+      byOrder: (orderId) => ['mobile', 'quotation', 'byOrder', orderId],
+    },
+    catalog: {
+      search: (query) => ['mobile', 'catalog', 'search', query],
+      favorites: () => ['mobile', 'catalog', 'favorites'],
+      recent: () => ['mobile', 'catalog', 'recent'],
+    },
+    chat: {
+      byProject: (projectId) => ['mobile', 'chat', 'byProject', projectId],
+    },
+    smallOrders: {
+      byProject: (projectId) => ['mobile', 'smallOrders', 'byProject', projectId],
+    },
+    installations: {
+      bySite: (siteId) => ['mobile', 'installations', 'bySite', siteId],
+      detail: (id) => ['mobile', 'installations', 'detail', id],
+      history: (id) => ['mobile', 'installations', 'history', id],
+    },
+    notifications: {
+      list: () => ['mobile', 'notifications', 'list'],
+      preferences: () => ['mobile', 'notifications', 'preferences'],
+    },
+    sync: {
+      status: () => ['mobile', 'sync', 'status'],
+    },
+  },
+  chat: {
+    rooms:    ()       => ['chat', 'rooms'],
+    room:     (id)     => ['chat', 'room', id],
+    messages: (roomId) => ['chat', 'messages', roomId],
+  },
+  deploy: {
+    all: () => ['deploy'],
+    calendar: {
+      all: () => ['deploy', 'calendar'],
+      data: (params) => ['deploy', 'calendar', 'data', params],
+    },
+    assignments: {
+      all: () => ['deploy', 'assignments'],
+      detail: (id) => ['deploy', 'assignments', 'detail', id],
+      appointment: (id) => ['deploy', 'assignments', 'appointment', id],
+    },
+    conflicts: {
+      all: () => ['deploy', 'conflicts'],
+      list: (params) => ['deploy', 'conflicts', 'list', params],
+    },
+    dashboard: {
+      all: () => ['deploy', 'dashboard'],
+      summary: (date) => ['deploy', 'dashboard', 'summary', date],
+      utilization: (params) => ['deploy', 'dashboard', 'utilization', params],
+      alerts: () => ['deploy', 'dashboard', 'alerts'],
+    },
+    coarse: {
+      all: () => ['deploy', 'coarse'],
+      matrix: (params) => ['deploy', 'coarse', 'matrix', params],
     },
   },
 };

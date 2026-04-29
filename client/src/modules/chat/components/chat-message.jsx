@@ -8,33 +8,38 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Reply, Smile, Trash2, Pencil, MoreHorizontal } from 'lucide-react';
+import { Reply, Smile, Trash2, Pencil, MoreHorizontal, Check, CheckCheck, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useLanguage } from '@/lib/i18n/language-context';
 import { ChatReactionBar } from './chat-reaction-bar';
 import { ChatEmojiPicker } from './chat-emoji-picker';
-import { ChatReplyPreview } from './chat-reply-preview';
 
 function formatTime(ts) {
   if (!ts) return '';
-  const d = new Date(ts);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export function ChatMessage({ message, isMine, showSenderName, showTimestamp, currentUserId, onReply, onReact, onDelete, onEdit }) {
-  const { t } = useLanguage();
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const senderName = message.senderName || message.sender_name || '?';
-  const ts = message.created_at || message.createdAt || message.sentAt;
-  const isDeleted = message.isDeleted || message.is_deleted;
-  const hasReplyQuote = message.replyToId && message.replyToSnippet;
-  const isRead = message.readBy?.some((r) => String(r.userId || r) !== String(currentUserId));
+const SENDER_COLORS = ['#ef5350','#ab47bc','#42a5f5','#26a69a','#66bb6a','#ffa726','#ec407a'];
+function senderColor(name) {
+  if (!name) return SENDER_COLORS[0];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return SENDER_COLORS[h % SENDER_COLORS.length];
+}
 
-  const initials = senderName.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+export function ChatMessage({ message, isMine, showSenderName, showTimestamp, currentUserId, isGroupRoom, onReply, onReact, onDelete, onEdit }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  const senderName = message.senderName || message.sender_name || '?';
+  const ts = message.sentAt || message.created_at || message.createdAt;
+  const isDeleted = message.isDeleted || message.is_deleted;
+  const hasReply = message.replyToId && message.replyToSnippet;
+  const isRead = message.readBy?.some(r => String(r.userId?._id || r.userId || r) !== String(currentUserId));
 
   const renderContent = () => {
     if (isDeleted) {
-      return <span className="italic opacity-50 text-sm">{t('fieldOps.chat.deleted', 'This message was deleted')}</span>;
+      return <span className="italic opacity-50 text-sm">This message was deleted</span>;
     }
     switch (message.messageType) {
       case 'PHOTO':
@@ -43,127 +48,150 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
             <NextImage
               src={message.attachmentUrl}
               alt="Photo"
-              width={240}
-              height={180}
+              width={240} height={180}
               className="rounded-lg cursor-pointer object-cover"
               onClick={() => setLightboxOpen(true)}
               unoptimized
             />
             <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-              <DialogContent className="max-w-3xl p-2 bg-black/90">
+              <DialogContent className="max-w-3xl p-1 bg-black/95">
                 <NextImage src={message.attachmentUrl} alt="Photo" width={900} height={600} className="w-full rounded object-contain" unoptimized />
               </DialogContent>
             </Dialog>
           </>
         );
       case 'AUDIO':
-        return <audio controls src={message.attachmentUrl} className="max-w-[240px]" />;
+        return (
+          <div className="flex flex-col gap-1">
+            <audio controls src={message.attachmentUrl} className="h-10 max-w-[220px]" />
+          </div>
+        );
       case 'VIDEO':
         return <video controls src={message.attachmentUrl} className="max-w-[240px] rounded-lg" />;
       case 'DOCUMENT':
         return (
           <a
             href={message.attachmentUrl}
-            target="_blank"
-            rel="noreferrer"
-            className={cn('flex items-center gap-2 text-sm underline', isMine ? 'text-primary-foreground/90' : 'text-foreground')}
+            download
+            className="flex items-center gap-2 p-2 rounded-lg bg-black/20 hover:bg-black/30 transition-colors text-sm"
           >
-            📄 {message.content || 'Document'}
+            <FileText className="h-5 w-5 shrink-0" />
+            <span className="truncate max-w-[160px]">{message.attachmentFileName || 'Document'}</span>
           </a>
         );
       default:
-        return <span className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</span>;
+        return <span className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</span>;
     }
   };
 
   return (
-    <div className={cn('group flex items-end gap-2 px-3 py-0.5', isMine ? 'flex-row-reverse' : 'flex-row')}>
-      {/* Avatar / spacer for non-mine messages */}
-      {!isMine ? (
-        showSenderName ? (
-          <Avatar className="h-7 w-7 shrink-0 mb-1">
-            <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
-          </Avatar>
-        ) : <div className="w-7 shrink-0" />
-      ) : null}
+    <div
+      className={cn('group flex gap-2 px-4 py-0.5', isMine ? 'flex-row-reverse' : 'flex-row')}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Other's avatar (only for first message in group) */}
+      {!isMine && (
+        <div className="w-8 shrink-0 flex items-end">
+          {showSenderName && (
+            <Avatar className="h-7 w-7">
+              <AvatarFallback className="text-[10px] font-semibold text-white" style={{ backgroundColor: senderColor(senderName) }}>
+                {senderName.split(' ').slice(0,2).map(w=>w[0]?.toUpperCase()??'').join('')}
+              </AvatarFallback>
+            </Avatar>
+          )}
+        </div>
+      )}
 
-      <div className={cn('max-w-[70%] flex flex-col', isMine ? 'items-end' : 'items-start')}>
-        {/* Sender name */}
-        {showSenderName && !isMine && (
-          <span className="text-[11px] font-semibold text-muted-foreground px-1 mb-0.5">{senderName}</span>
-        )}
-
-        {/* Reply quote */}
-        {hasReplyQuote && (
-          <div className={cn('mb-1 rounded-md overflow-hidden max-w-full', isMine ? 'self-end' : 'self-start')}>
-            <ChatReplyPreview message={message} className="text-[11px] opacity-80 rounded-none border-l-primary/50" />
-          </div>
+      <div className={cn('flex flex-col max-w-[70%]', isMine ? 'items-end' : 'items-start')}>
+        {/* Sender name for groups */}
+        {!isMine && isGroupRoom && showSenderName && (
+          <span className="text-[11px] font-semibold mb-0.5 px-1" style={{ color: senderColor(senderName) }}>
+            {senderName}
+          </span>
         )}
 
         {/* Bubble */}
         <div
           className={cn(
-            'relative rounded-2xl px-3 py-2',
+            'relative px-3 py-1.5 rounded-2xl shadow-sm',
             isMine
-              ? 'bg-primary text-primary-foreground rounded-br-sm'
-              : 'bg-muted text-foreground rounded-bl-sm'
+              ? 'bg-[#005c4b] text-white rounded-tr-sm'
+              : 'bg-card dark:bg-[#202c33] text-foreground rounded-tl-sm border border-border/20'
           )}
         >
+          {/* Reply quote */}
+          {hasReply && (
+            <div className={cn('border-l-[3px] pl-2 mb-1.5 py-0.5 rounded-r text-xs opacity-80', isMine ? 'border-white/50 bg-white/10' : 'border-primary bg-muted/40')}>
+              <p className="font-semibold text-[10px]">{message.replyToSenderName || 'Reply'}</p>
+              <p className="truncate">{message.replyToSnippet}</p>
+            </div>
+          )}
+
           {renderContent()}
 
-          {/* Timestamp + read tick */}
-          {showTimestamp && ts && (
-            <div className={cn('flex items-center gap-1 mt-1 justify-end', isMine ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-              <span className="text-[10px]">{formatTime(ts)}</span>
+          {/* Time + read tick */}
+          {showTimestamp && (
+            <div className="flex items-center gap-1 mt-0.5 justify-end">
+              {message.editedAt && <span className="text-[10px] opacity-60">edited</span>}
+              <span className="text-[10px] opacity-70">{formatTime(ts)}</span>
               {isMine && (
-                <span className="text-[10px]">{isRead ? '✓✓' : '✓'}</span>
-              )}
-              {message.editedAt && (
-                <span className="text-[10px] italic">(edited)</span>
+                isRead
+                  ? <CheckCheck className="h-3 w-3 text-blue-400" />
+                  : <Check className="h-3 w-3 opacity-60" />
               )}
             </div>
           )}
         </div>
 
         {/* Reactions */}
-        <ChatReactionBar
-          reactions={message.reactions || []}
-          currentUserId={currentUserId}
-          onToggle={(emoji) => onReact?.(message, emoji)}
-        />
+        {message.reactions?.length > 0 && (
+          <div className="mt-0.5">
+            <ChatReactionBar
+              reactions={message.reactions}
+              currentUserId={currentUserId}
+              onToggle={emoji => onReact?.(message._id, emoji)}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Context menu — visible on group hover */}
-      {!isDeleted && (
-        <div className={cn('opacity-0 group-hover:opacity-100 transition-opacity self-center', isMine ? 'mr-1' : 'ml-1')}>
+      {/* Context menu (hover) */}
+      {hovered && !isDeleted && (
+        <div className={cn('flex items-center self-center gap-0.5', isMine ? 'mr-1' : 'ml-1')}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80 shadow-sm" onClick={() => onReply?.(message)}>
+            <Reply className="h-3.5 w-3.5" />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full">
+              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full bg-background/80 shadow-sm">
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align={isMine ? 'end' : 'start'} side="top">
-              <DropdownMenuItem onClick={() => onReply?.(message)}>
-                <Reply className="h-3.5 w-3.5 mr-2" /> Reply
+            <DropdownMenuContent align={isMine ? 'end' : 'start'} className="w-36">
+              <DropdownMenuItem onClick={() => setPickerOpen(true)}>
+                <Smile className="h-3.5 w-3.5 mr-2" /> React
               </DropdownMenuItem>
-              <ChatEmojiPicker onSelect={(emoji) => onReact?.(message, emoji)}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <Smile className="h-3.5 w-3.5 mr-2" /> React
-                </DropdownMenuItem>
-              </ChatEmojiPicker>
               {isMine && message.messageType === 'TEXT' && (
                 <DropdownMenuItem onClick={() => onEdit?.(message)}>
                   <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
                 </DropdownMenuItem>
               )}
               {isMine && (
-                <DropdownMenuItem onClick={() => onDelete?.(message)} className="text-destructive focus:text-destructive">
+                <DropdownMenuItem onClick={() => onDelete?.(message._id)} className="text-destructive focus:text-destructive">
                   <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      )}
+
+      {pickerOpen && (
+        <ChatEmojiPicker
+          onSelect={emoji => { onReact?.(message._id, emoji); setPickerOpen(false); }}
+          onClose={() => setPickerOpen(false)}
+        />
       )}
     </div>
   );

@@ -2,11 +2,11 @@
 
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronDown } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate } from '@/lib/formatters';
 import { ChatMessage } from './chat-message';
-import { ChatDateSeparator } from './chat-date-separator';
 
 const FIVE_MIN = 5 * 60 * 1000;
 
@@ -21,17 +21,18 @@ function getDayLabel(ts, language) {
   const d = new Date(ts);
   const now = new Date();
   const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
+  yesterday.setDate(now.getDate() - 1);
   if (getDayKey(d) === getDayKey(now)) return language === 'de' ? 'Heute' : 'Today';
   if (getDayKey(d) === getDayKey(yesterday)) return language === 'de' ? 'Gestern' : 'Yesterday';
   return formatDate(d);
 }
 
-export function ChatMessages({ messages = [], isLoading, currentUserId, onReply, onReact, onDelete, onEdit }) {
+export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupRoom, onReply, onReact, onDelete, onEdit }) {
   const { language } = useLanguage();
   const bottomRef = useRef(null);
-  const prevLengthRef = useRef(0);
+  const prevLenRef = useRef(0);
   const [showFab, setShowFab] = useState(false);
+
   const items = useMemo(() => {
     if (!messages.length) return [];
     const result = [];
@@ -40,12 +41,12 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, onReply,
     let lastTs = null;
 
     messages.forEach((msg, idx) => {
-      const ts = msg.created_at || msg.createdAt || msg.sentAt;
+      const ts = msg.sentAt || msg.created_at || msg.createdAt;
       const senderId = msg.senderId || msg.sender_id;
       const dayKey = getDayKey(ts);
 
       if (dayKey !== lastDayKey) {
-        result.push({ type: 'separator', key: `sep-${dayKey}-${idx}`, label: getDayLabel(ts, language) });
+        result.push({ type: 'sep', key: `sep-${dayKey}-${idx}`, label: getDayLabel(ts, language) });
         lastDayKey = dayKey;
         lastSenderId = null;
         lastTs = null;
@@ -55,14 +56,13 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, onReply,
 
       const nextMsg = messages[idx + 1];
       const nextSenderId = nextMsg?.senderId || nextMsg?.sender_id;
-      const nextTs = nextMsg?.created_at || nextMsg?.createdAt || nextMsg?.sentAt;
-      const isLast =
-        idx === messages.length - 1 ||
+      const nextTs = nextMsg?.sentAt || nextMsg?.created_at || nextMsg?.createdAt;
+      const isLast = idx === messages.length - 1 ||
         nextSenderId !== senderId ||
         (nextTs && ts && Math.abs(new Date(nextTs) - new Date(ts)) >= FIVE_MIN);
 
       result.push({
-        type: 'message',
+        type: 'msg',
         key: msg._id || `msg-${idx}`,
         message: msg,
         isMine: String(senderId) === String(currentUserId),
@@ -78,10 +78,10 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, onReply,
 
   useEffect(() => {
     const newLen = messages.length;
-    if (newLen > prevLengthRef.current && !showFab) {
+    if (newLen > prevLenRef.current && !showFab) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-    prevLengthRef.current = newLen;
+    prevLenRef.current = newLen;
   }, [messages.length, showFab]);
 
   useEffect(() => {
@@ -90,29 +90,37 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, onReply,
     }
   }, [isLoading, messages.length]);
 
-  const handleScroll = useCallback((e) => {
+  const handleScroll = useCallback(e => {
     const el = e.currentTarget;
-    setShowFab(el.scrollHeight - el.scrollTop - el.clientHeight > 100);
+    setShowFab(el.scrollHeight - el.scrollTop - el.clientHeight > 150);
   }, []);
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex gap-1">
-          {[0, 1, 2].map((i) => (
-            <span key={i} className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: `${i * 150}ms` }} />
-          ))}
-        </div>
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        {[0,1,2].map(i => (
+          <div key={i} className={`flex gap-2 ${i % 2 === 0 ? '' : 'flex-row-reverse'}`}>
+            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            <Skeleton className={`h-14 rounded-2xl ${i % 2 === 0 ? 'w-48 rounded-tl-sm' : 'w-40 rounded-tr-sm'}`} />
+          </div>
+        ))}
       </div>
     );
   }
 
   return (
     <div className="relative flex-1 overflow-hidden">
-      <div className="h-full overflow-y-auto scrollbar-thin py-2" onScroll={handleScroll}>
-        {items.map((item) =>
-          item.type === 'separator' ? (
-            <ChatDateSeparator key={item.key} label={item.label} />
+      <div
+        className="h-full overflow-y-auto py-2 scrollbar-thin scrollbar-thumb-border"
+        onScroll={handleScroll}
+      >
+        {items.map(item =>
+          item.type === 'sep' ? (
+            <div key={item.key} className="flex items-center justify-center py-2">
+              <span className="bg-muted/70 text-muted-foreground text-[11px] font-medium px-3 py-0.5 rounded-full">
+                {item.label}
+              </span>
+            </div>
           ) : (
             <ChatMessage
               key={item.key}
@@ -121,6 +129,7 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, onReply,
               showSenderName={item.showSenderName}
               showTimestamp={item.showTimestamp}
               currentUserId={currentUserId}
+              isGroupRoom={isGroupRoom}
               onReply={onReply}
               onReact={onReact}
               onDelete={onDelete}
@@ -128,14 +137,14 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, onReply,
             />
           )
         )}
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="h-1" />
       </div>
+
       {showFab && (
-        <div className="absolute bottom-3 right-3">
+        <div className="absolute bottom-3 right-4">
           <Button
             size="icon"
-            variant="secondary"
-            className="h-8 w-8 rounded-full shadow-md"
+            className="h-9 w-9 rounded-full shadow-lg bg-primary hover:bg-primary/90"
             onClick={() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); setShowFab(false); }}
           >
             <ChevronDown className="h-4 w-4" />

@@ -77,6 +77,22 @@ export function registerCrmEvents() {
         action: 'event.maintenance_overdue',
         count,
       });
+
+      // Dispatch notification to responsible users
+      try {
+        const queueManager = (await import('../../shared/queue/QueueManager.js')).default;
+        await queueManager.addJob('notification-dispatch', 'maintenance-overdue-alert', {
+          type: 'maintenance_overdue',
+          count,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (notifErr) {
+        logger.error('Failed to dispatch maintenance overdue notification', {
+          module: 'crm',
+          action: 'event.maintenance_overdue.notify',
+          error: { message: notifErr.message },
+        });
+      }
     } catch (err) {
       logger.error('Failed to handle MAINTENANCE_OVERDUE event', {
         module: 'crm',

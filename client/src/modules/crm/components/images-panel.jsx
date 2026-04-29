@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { imageService } from '@/modules/crm/services/image-service';
 import { queryKeys } from '@/lib/query/keys';
@@ -118,13 +118,7 @@ export function ImagesPanel({ entityType, entityId }) {
                 <DialogTitle>{t('crm.images.uploadTitle', 'Bild hochladen')}</DialogTitle>
               </DialogHeader>
               <div className="space-y-3">
-                <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
-                  <img
-                    src={URL.createObjectURL(pendingFile)}
-                    alt={t('crm.images.preview', 'Vorschau')}
-                    className="w-full max-h-64 object-contain"
-                  />
-                </div>
+                <PendingPreview file={pendingFile} alt={t('crm.images.preview', 'Vorschau')} />
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium">{t('crm.images.caption', 'Beschreibung')}</label>
                   <Input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder={t('crm.images.captionPlaceholder', 'z.B. Typenschild Vorderseite')} />
@@ -261,6 +255,17 @@ function ImageTile({ image: img, canDelete, onDelete, onView, t }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PendingPreview({ file, alt }) {
+  const url = useMemo(() => file ? URL.createObjectURL(file) : null, [file]);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  if (!url) return null;
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
+      <img src={url} alt={alt} className="w-full max-h-64 object-contain" />
     </div>
   );
 }

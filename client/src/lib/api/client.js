@@ -99,6 +99,14 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
+        const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
+        const isNetworkRefreshError = !refreshError?.response && (refreshError?.code === 'ERR_NETWORK' || isOfflineNow);
+
+        if (isNetworkRefreshError) {
+          // Offline: don't clear auth or redirect — queue for retry on reconnect
+          return Promise.reject(normalizeApiError(error));
+        }
+
         const { useAuthStore } = await import('@/stores/auth-store');
         useAuthStore.getState().clearAuth();
         const Cookies = (await import('js-cookie')).default;

@@ -1,5 +1,6 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
+import { downloadBlob } from '@/lib/api/download';
 
 export const projectService = {
   async getProjects(params = {}) {
@@ -52,6 +53,17 @@ export const projectService = {
   async getDashboardSummary() {
     const res = await apiClient.get(ENDPOINTS.PM.DASHBOARD_SUMMARY);
     return res.data;
+  },
+
+  async exportCsv(filters = {}) {
+    const { data } = await apiClient.get(ENDPOINTS.PM.PROJECTS_EXPORT, {
+      params: { ...filters, format: 'csv' },
+      responseType: 'blob',
+      transformResponse: [(x) => x],
+    });
+    const filename = `projects-${new Date().toISOString().split('T')[0]}.csv`;
+    downloadBlob(data, filename, 'text/csv;charset=utf-8');
+    return { filename };
   },
 
   async getDashboardMilestones(days = 14) {

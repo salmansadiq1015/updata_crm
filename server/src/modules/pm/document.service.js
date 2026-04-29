@@ -10,6 +10,22 @@ import logger from '../../shared/logger/index.js';
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 
 class DocumentService {
+  _enrichDocument(doc) {
+    if (!doc) return doc;
+    if (doc.fileId && typeof doc.fileId === 'object') {
+      doc.originalName = doc.fileId.originalName || doc.fileName;
+      doc.mimeType = doc.fileId.mimeType || null;
+      doc.fileSize = doc.fileId.sizeBytes || null;
+      doc.fileId = doc.fileId._id;
+    }
+    return doc;
+  }
+
+  _enrichDocuments(docs) {
+    if (!Array.isArray(docs)) return docs;
+    return docs.map((doc) => this._enrichDocument(doc));
+  }
+
   async upload(projectId, fileData, uploadedBy, meta = {}) {
     // Lazy import to avoid circular dependencies
     const Project = (await import('./project.model.js')).default;
@@ -66,7 +82,7 @@ class DocumentService {
       projectId,
     });
 
-    return documentRepository.findById(doc._id);
+    return this._enrichDocument(await documentRepository.findById(doc._id));
   }
 
   async listByProject(projectId, filters = {}) {
@@ -74,7 +90,7 @@ class DocumentService {
     const cacheKey = `pm:documents:project:${projectId}:${categoryPart}`;
     return cacheManager.getOrSet(
       cacheKey,
-      () => documentRepository.findByProjectId(projectId, filters),
+      async () => this._enrichDocuments(await documentRepository.findByProjectId(projectId, filters)),
       ENTITY_TTL,
     );
   }
@@ -82,7 +98,7 @@ class DocumentService {
   async getById(id) {
     const doc = await documentRepository.findById(id);
     if (!doc) throw new NotFoundError('ProjectDocument', id);
-    return doc;
+    return this._enrichDocument(doc);
   }
 
   async getDownloadUrl(id) {
@@ -99,7 +115,7 @@ class DocumentService {
     const existing = await documentRepository.findById(id);
     if (!existing) throw new NotFoundError('ProjectDocument', id);
 
-    const updated = await documentRepository.updateById(id, data);
+    const updated = this._enrichDocument(await documentRepository.updateById(id, data));
 
     await this._invalidateCache(existing.projectId);
 
@@ -148,17 +164,83 @@ class DocumentService {
     });
   }
 
+  async restore(docId, projectId, userId, meta = {}) {
+    const doc = await documentRepository.findById(docId);
+    if (!doc) throw new NotFoundError('ProjectDocument', docId);
+
+    if (!doc.isDeleted) {
+      const { ConflictError } = await import('../../shared/errors/AppError.js');
+      throw new ConflictError('Document is not deleted');
+    }
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    if (doc.deletedAt && doc.deletedAt < thirtyDaysAgo) {
+      const { ConflictError } = await import('../../shared/errors/AppError.js');
+      throw new ConflictError('Document can only be restored within 30 days of deletion');
+    }
+
+    await documentRepository.restore(docId);
+    await this._invalidateCache(projectId);
+
+    auditService.logEvent({
+      eventType: 'project_document.restored',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: docId, projectId },
+      module: 'pm',
+    });
+
+    return this._enrichDocument(await documentRepository.findById(docId));
+  }
+
   async generate(projectId, templateType, userId, meta = {}) {
-    // Lazy import to avoid circular dependencies
     const Project = (await import('./project.model.js')).default;
-    const project = await Project.findById(projectId);
+    const project = await Project.findById(projectId)
+      .populate('customerId', 'name customerNumber street postalCode city canton')
+      .populate('projectManagerId', 'firstName lastName email phone')
+      .populate('siteId', 'name street postalCode city canton');
     if (!project) throw new NotFoundError('Project', projectId);
 
-    // Placeholder: create a document record with isGenerated=true
-    // Actual PDF generation is future work
+    const templateData = {
+      documentNumber: project.projectNumber,
+      documentDate: new Date().toISOString().split('T')[0],
+      customer: project.customerId ? {
+        name: project.customerId.name,
+        addressLine1: project.customerId.street,
+        plz: project.customerId.postalCode,
+        city: project.customerId.city,
+      } : null,
+      projectName: project.name,
+      projectNumber: project.projectNumber,
+      projectType: project.projectType,
+      projectManager: project.projectManagerId
+        ? `${project.projectManagerId.firstName} ${project.projectManagerId.lastName}`
+        : null,
+      site: project.siteId ? {
+        name: project.siteId.name,
+        address: `${project.siteId.street || ''}, ${project.siteId.postalCode || ''} ${project.siteId.city || ''}`.trim(),
+      } : null,
+      plannedStartDate: project.plannedStartDate?.toISOString().split('T')[0],
+      plannedEndDate: project.plannedEndDate?.toISOString().split('T')[0],
+    };
+
+    const documentGenerationService = (await import('../doctpl/documentGeneration.service.js')).default;
+    const generatedDoc = await documentGenerationService.generate({
+      templateType,
+      sourceModule: 'pm',
+      sourceRecordId: projectId,
+      data: templateData,
+      language: 'de',
+      generatedBy: userId,
+      meta,
+    });
+
     const doc = await documentRepository.create({
       projectId,
-      fileName: `${templateType}-${Date.now()}.pdf`,
+      fileId: generatedDoc.fileId,
+      fileName: generatedDoc.fileName,
       category: 'REPORTS',
       isGenerated: true,
       uploadedBy: userId,
@@ -191,7 +273,7 @@ class DocumentService {
       templateType,
     });
 
-    return documentRepository.findById(doc._id);
+    return this._enrichDocument(await documentRepository.findById(doc._id));
   }
 
   async _invalidateCache(projectId) {

@@ -152,6 +152,25 @@ class InstallationService {
     return updated;
   }
 
+  async getActivity(installationId, { cursor, limit = 25, eventType } = {}) {
+    const exists = await installationRepository.findById(installationId);
+    if (!exists) throw new NotFoundError('Installation', installationId);
+
+    const AuditLog = (await import('../auth/auditLog.model.js')).default;
+    const { buildCursorQuery, buildCursorSort, buildCursorResponse } = await import('../../shared/utils/pagination.js');
+
+    const filter = {
+      module: 'crm',
+      'details.installationId': installationId,
+      ...buildCursorQuery(cursor, 'timestamp', 'desc'),
+    };
+    if (eventType) filter.eventType = eventType;
+
+    const sort = buildCursorSort('timestamp', 'desc');
+    const docs = await AuditLog.find(filter).sort(sort).limit(limit + 1).lean();
+    return buildCursorResponse(docs, limit, 'timestamp');
+  }
+
   async _invalidateInstallationCache(id) {
     await cacheManager.del(`crm:installation:${id}`);
   }

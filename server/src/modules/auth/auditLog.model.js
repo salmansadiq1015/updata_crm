@@ -19,21 +19,6 @@ const auditLogSchema = new mongoose.Schema(
     eventType: {
       type: String,
       required: true,
-      enum: [
-        'login.success',
-        'login.failed',
-        'logout',
-        'password.changed',
-        'password.reset_requested',
-        'role.changed',
-        'user.created',
-        'user.updated',
-        'user.deactivated',
-        'session.revoked',
-        'permission.denied',
-        'account.locked',
-        'account.activated',
-      ],
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,

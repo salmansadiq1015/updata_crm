@@ -21,7 +21,8 @@ export class MaintenanceCheckWorker extends BaseWorker {
 
   async process(job) {
     const now = new Date();
-    const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const lookaheadDays = config.maintenance?.lookaheadDays || 30;
+    const lookaheadDate = new Date(now.getTime() + lookaheadDays * 24 * 60 * 60 * 1000);
 
     // Lazy import to avoid circular dependencies
     const MaintenanceInterval = (await import('../modules/crm/maintenanceInterval.model.js')).default;
@@ -40,7 +41,7 @@ export class MaintenanceCheckWorker extends BaseWorker {
     const dueResult = await MaintenanceInterval.updateMany(
       {
         maintenanceStatus: 'ok',
-        nextDueDate: { $lte: thirtyDays, $gt: now },
+        nextDueDate: { $lte: lookaheadDate, $gt: now },
       },
       { $set: { maintenanceStatus: 'due' } },
     );

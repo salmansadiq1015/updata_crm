@@ -33,7 +33,7 @@ import { formatDate } from '@/lib/formatters';
 import {
   Plus, Pencil, Trash2, Loader2, ArrowRight, Milestone,
   Send, MessageSquare, Calendar, Users, Building2,
-  List, BarChart3, ChevronDown, ChevronRight, Clock,
+  List, BarChart3, ChevronDown, ChevronRight, Clock, Download,
 } from 'lucide-react';
 
 // ── Timeline visualization ──────────────────────────────────────
@@ -246,7 +246,7 @@ export function ScheduleTab({ projectId }) {
     return Array.isArray(raw) ? raw : [];
   }, [scheduleData]);
 
-  const { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation } = useScheduleMutations(projectId, {
+  const { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, exportSchedule } = useScheduleMutations(projectId, {
     onAddEntry: () => { setFormOpen(false); entryForm.reset(defaultEntryValues); },
     onUpdateEntry: () => { setFormOpen(false); setEditEntry(null); },
     onDeleteEntry: () => setDeleteTarget(null),
@@ -381,6 +381,27 @@ export function ScheduleTab({ projectId }) {
         </div>
 
         <div className="flex items-center gap-2">
+          {entries.length > 0 && (
+            <div className="flex items-center rounded-lg border border-border overflow-hidden">
+              <button
+                className="px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
+                onClick={() => exportSchedule.mutate('ical')}
+                disabled={exportSchedule.isPending}
+                title="iCal (.ics)"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+              </button>
+              <button
+                className="px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
+                onClick={() => exportSchedule.mutate('pdf')}
+                disabled={exportSchedule.isPending}
+                title="PDF"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* View toggle */}
           <div className="flex items-center rounded-lg border border-border overflow-hidden">
             <button
@@ -443,7 +464,7 @@ export function ScheduleTab({ projectId }) {
               {language === 'de' ? 'Phase oder Meilenstein für den Bauzeitenplan.' : 'Add a phase or milestone to the construction schedule.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={entryForm.handleSubmit(onEntrySubmit)}>
+          <form onSubmit={entryForm.handleSubmit(onEntrySubmit)} className="flex flex-1 flex-col overflow-hidden">
             <FormBody>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label={language === 'de' ? 'Typ' : 'Type'}>
@@ -543,7 +564,7 @@ export function ScheduleTab({ projectId }) {
               {t('pm.sendConfirmation', 'Send Confirmation')}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={sendForm.handleSubmit(onSendConfirmationSubmit)}>
+          <form onSubmit={sendForm.handleSubmit(onSendConfirmationSubmit)} className="flex flex-1 flex-col overflow-hidden">
             <FormBody>
               {confirmSendEntry && (
                 <div className="rounded-xl bg-muted/50 border border-border/50 p-3.5 text-sm">
@@ -592,7 +613,7 @@ export function ScheduleTab({ projectId }) {
               {t('pm.recordResponse', 'Record Response')}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={responseForm.handleSubmit(onResponseSubmit)}>
+          <form onSubmit={responseForm.handleSubmit(onResponseSubmit)} className="flex flex-1 flex-col overflow-hidden">
             <FormBody>
               {confirmResponseConf && (
                 <div className="rounded-xl bg-muted/50 border border-border/50 p-3.5 text-sm">

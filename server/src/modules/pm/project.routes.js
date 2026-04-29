@@ -5,7 +5,8 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import {
   createProjectSchema, updateProjectSchema, listProjectsSchema,
   searchProjectsSchema, projectIdParamSchema, duplicateProjectSchema,
-  bulkUpdateProjectsSchema, bulkDeleteProjectsSchema,
+  bulkUpdateProjectsSchema, bulkDeleteProjectsSchema, exportProjectsSchema,
+  createFromTemplateSchema,
 } from './project.validation.js';
 
 const router = Router();
@@ -13,6 +14,8 @@ const router = Router();
 // Named routes BEFORE /:id
 router.get('/dashboard/summary', authenticate, requirePermission('projects:read'), (req, res, next) => projectController.dashboardSummary(req, res, next));
 router.get('/dashboard/milestones', authenticate, requirePermission('projects:read'), (req, res, next) => projectController.dashboardMilestones(req, res, next));
+router.get('/export', authenticate, requirePermission('projects:read'), validate(exportProjectsSchema), (req, res, next) => projectController.exportCsv(req, res, next));
+router.post('/from-template', authenticate, requirePermission('projects:write'), validate(createFromTemplateSchema), (req, res, next) => projectController.createFromTemplate(req, res, next));
 router.get('/search', authenticate, requirePermission('projects:read'), validate(searchProjectsSchema), (req, res, next) => projectController.search(req, res, next));
 router.patch('/bulk-update', authenticate, requirePermission('projects:admin'), validate(bulkUpdateProjectsSchema), (req, res, next) => projectController.bulkUpdate(req, res, next));
 router.post('/bulk-delete', authenticate, requirePermission('projects:admin'), validate(bulkDeleteProjectsSchema), (req, res, next) => projectController.bulkDeactivate(req, res, next));

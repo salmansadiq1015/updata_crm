@@ -66,6 +66,19 @@ const EVENT_TYPES = Object.freeze({
   MAINTENANCE_DUE: 'maintenance.due',
   MAINTENANCE_OVERDUE: 'maintenance.overdue',
 
+  // CRM — Spare Parts
+  SPARE_PART_CREATED: 'spare_part.created',
+  SPARE_PART_UPDATED: 'spare_part.updated',
+  SPARE_PART_DELETED: 'spare_part.deleted',
+  SPARE_PART_LINKED: 'spare_part.linked',
+  SPARE_PART_UNLINKED: 'spare_part.unlinked',
+
+  // CRM — Newsletters
+  NEWSLETTER_CREATED: 'newsletter.created',
+  NEWSLETTER_SCHEDULED: 'newsletter.scheduled',
+  NEWSLETTER_SENT: 'newsletter.sent',
+  NEWSLETTER_CANCELLED: 'newsletter.cancelled',
+
   // CRM — Notes & Images
   NOTE_CREATED: 'note.created',
   IMAGE_LINKED: 'image.linked',
@@ -90,6 +103,7 @@ const EVENT_TYPES = Object.freeze({
   SCHEDULE_ENTRY_CREATED: 'schedule_entry.created',
   SCHEDULE_ENTRY_UPDATED: 'schedule_entry.updated',
   SCHEDULE_ENTRY_DELETED: 'schedule_entry.deleted',
+  SCHEDULE_ENTRIES_CASCADED: 'schedule_entries.cascaded',
   PARTNER_CONFIRMATION_SENT: 'partner_confirmation.sent',
   PARTNER_CONFIRMATION_RESPONSE: 'partner_confirmation.response',
 

@@ -13,11 +13,11 @@ import {
 } from './prepAction.validation.js';
 import {
   createEntrySchema, updateEntrySchema, deleteEntrySchema,
-  sendConfirmationSchema, updateConfirmationSchema,
+  sendConfirmationSchema, updateConfirmationSchema, exportScheduleSchema,
 } from './schedule.validation.js';
 import {
   listDocumentsSchema, uploadDocumentSchema, generateDocumentSchema,
-  documentIdParamSchema, updateDocumentSchema,
+  documentIdParamSchema, updateDocumentSchema, restoreDocumentSchema,
 } from './document.validation.js';
 
 /**
@@ -107,6 +107,13 @@ scheduleRouter.get(
   requirePermission('projects:read'),
   (req, res, next) => scheduleController.getSchedule(req, res, next),
 );
+scheduleRouter.get(
+  '/export',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(exportScheduleSchema),
+  (req, res, next) => scheduleController.exportSchedule(req, res, next),
+);
 scheduleRouter.post(
   '/entries',
   authenticate,
@@ -188,6 +195,13 @@ documentRouter.patch(
   requirePermission('projects:write'),
   validate(updateDocumentSchema),
   (req, res, next) => documentController.updateMetadata(req, res, next),
+);
+documentRouter.post(
+  '/:docId/restore',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(restoreDocumentSchema),
+  (req, res, next) => documentController.restore(req, res, next),
 );
 documentRouter.delete(
   '/:docId',

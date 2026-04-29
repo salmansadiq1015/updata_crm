@@ -58,6 +58,15 @@ export const sendConfirmationSchema = {
     partnerContactEmail: Joi.string().email().required().trim().lowercase(),
     partnerCompanyId: objectId.required(),
     partnerName: Joi.string().max(255).allow(null, ''),
+    siteAddress: Joi.string().max(500).allow(null, ''),
+    contactPerson: Joi.string().max(255).allow(null, ''),
+  }),
+};
+
+export const exportScheduleSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  query: Joi.object({
+    format: Joi.string().valid('pdf', 'ical').default('pdf'),
   }),
 };
 

@@ -146,6 +146,25 @@ class SiteService {
     return updated;
   }
 
+  async getActivity(siteId, { cursor, limit = 25, eventType } = {}) {
+    const exists = await siteRepository.findById(siteId);
+    if (!exists) throw new NotFoundError('Site', siteId);
+
+    const AuditLog = (await import('../auth/auditLog.model.js')).default;
+    const { buildCursorQuery, buildCursorSort, buildCursorResponse } = await import('../../shared/utils/pagination.js');
+
+    const filter = {
+      module: 'crm',
+      'details.siteId': siteId,
+      ...buildCursorQuery(cursor, 'timestamp', 'desc'),
+    };
+    if (eventType) filter.eventType = eventType;
+
+    const sort = buildCursorSort('timestamp', 'desc');
+    const docs = await AuditLog.find(filter).sort(sort).limit(limit + 1).lean();
+    return buildCursorResponse(docs, limit, 'timestamp');
+  }
+
   async _invalidateSiteCache(id) {
     await cacheManager.del(`crm:site:${id}`);
   }

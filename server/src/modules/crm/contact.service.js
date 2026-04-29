@@ -152,6 +152,15 @@ class ContactService {
     return updated;
   }
 
+  async listAll(limit = 500) {
+    const cacheKey = `crm:contacts:all:${limit}`;
+    return cacheManager.getOrSet(
+      cacheKey,
+      () => contactRepository.findAll(limit),
+      LIST_TTL,
+    );
+  }
+
   async search(searchTerm, limit = 25) {
     return contactRepository.search(searchTerm, limit);
   }

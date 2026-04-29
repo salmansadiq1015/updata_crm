@@ -3,9 +3,11 @@ import customerRoutes from './customer.routes.js';
 import contactRoutes, { customerContactsRouter } from './contact.routes.js';
 import siteRoutes, { customerSitesRouter } from './site.routes.js';
 import installationRoutes, { siteInstallationsRouter } from './installation.routes.js';
+import sparePartRoutes, { installationSparePartsRouter } from './sparePart.routes.js';
 import maintenanceRoutes from './maintenance.routes.js';
 import noteRoutes from './note.routes.js';
 import imageRoutes from './image.routes.js';
+import newsletterRoutes from './newsletter/newsletter.routes.js';
 
 /**
  * CRM route aggregator.
@@ -44,6 +46,12 @@ router.use('/sites/:siteId/installations', siteInstallationsRouter);
 // Installation standalone routes (includes note/image/maintenance sub-routes)
 router.use('/installations', installationRoutes);
 
+// Installation spare parts sub-routes
+router.use('/installations/:id/spare-parts', installationSparePartsRouter);
+
+// Spare parts standalone routes
+router.use('/spare-parts', sparePartRoutes);
+
 // Maintenance standalone routes (dashboard, due, overdue, update, delete)
 router.use('/maintenance', maintenanceRoutes);
 
@@ -52,5 +60,8 @@ router.use('/notes', noteRoutes);
 
 // Image standalone routes (delete)
 router.use('/images', imageRoutes);
+
+// Newsletter routes (compose, schedule, send, track)
+router.use('/newsletters', newsletterRoutes);
 
 export default router;

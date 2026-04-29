@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
   Activity, FileText, Wrench, Calendar, AlertTriangle, Clock, Info,
+  ShoppingCart, Receipt, CheckCircle, Send, ThumbsUp, ThumbsDown,
 } from 'lucide-react';
 import {
   MAINTENANCE_TYPE_META, NOTE_CATEGORY_META,
@@ -182,6 +183,31 @@ function getTypeConfig(entry) {
   }
   if (entry.type === 'maintenance_scheduled') {
     return { icon: Clock, color: 'text-sky-500', bg: 'bg-sky-500/10' };
+  }
+  // QOP entry types
+  if (entry.type === 'quotation_created') {
+    return { icon: FileText, color: 'text-blue-500', bg: 'bg-blue-500/10' };
+  }
+  if (entry.type === 'quotation_sent') {
+    return { icon: Send, color: 'text-sky-500', bg: 'bg-sky-500/10' };
+  }
+  if (entry.type === 'quotation_accepted') {
+    return { icon: ThumbsUp, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
+  }
+  if (entry.type === 'quotation_declined') {
+    return { icon: ThumbsDown, color: 'text-red-500', bg: 'bg-red-500/10' };
+  }
+  if (entry.type === 'order_created') {
+    return { icon: ShoppingCart, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
+  }
+  if (entry.type === 'invoice_created') {
+    return { icon: Receipt, color: 'text-orange-500', bg: 'bg-orange-500/10' };
+  }
+  if (entry.type === 'invoice_sent') {
+    return { icon: Send, color: 'text-sky-500', bg: 'bg-sky-500/10' };
+  }
+  if (entry.type === 'invoice_paid') {
+    return { icon: CheckCircle, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
   }
   return { icon: Info, color: 'text-slate-500', bg: 'bg-slate-500/10' };
 }

@@ -9,6 +9,9 @@ import {
 
 const router = Router();
 
+// List all contacts (address book)
+router.get('/', authenticate, requirePermission('crm:read'), (req, res, next) => contactController.listAll(req, res, next));
+
 // Named routes BEFORE /:id
 router.get('/search', authenticate, requirePermission('crm:read'), validate(searchContactsSchema), (req, res, next) => contactController.search(req, res, next));
 

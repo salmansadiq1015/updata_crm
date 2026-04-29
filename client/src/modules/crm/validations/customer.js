@@ -1,7 +1,12 @@
 import { z } from 'zod';
+import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 
 // Matches backend Joi schema: server/src/modules/crm/customer.validation.js
 // Fields are lenient to support the "optional or empty string" form pattern.
+
+const SWISS_POSTAL_CODE = /^[1-9]\d{3}$/;
+const PHONE = /^(\+[1-9]\d{0,2}[\s.\-]?)?(\(?\d{1,4}\)?[\s.\-]?){1,5}\d{1,4}$/;
+const VALID_CANTONS = CH_CANTONS.map((c) => c.code);
 
 const optionalStr = (max) =>
   z
@@ -9,6 +14,13 @@ const optionalStr = (max) =>
     .max(max)
     .optional()
     .or(z.literal(''));
+
+const optionalPhone = z
+  .union([
+    z.string().max(30).regex(PHONE, 'Bitte gueltige Telefonnummer eingeben (z.B. +41 44 123 45 67)'),
+    z.literal(''),
+  ])
+  .optional();
 
 const optionalEmail = z
   .union([
@@ -28,17 +40,27 @@ export const createCustomerSchema = z.object({
   }),
   // Address
   street: z.string().max(255, 'Strasse darf maximal 255 Zeichen lang sein').optional().or(z.literal('')),
-  postalCode: z.string().max(10, 'PLZ darf maximal 10 Zeichen lang sein').optional().or(z.literal('')),
+  postalCode: z
+    .union([
+      z.string().regex(SWISS_POSTAL_CODE, 'PLZ muss 4 Ziffern sein (1000-9999)'),
+      z.literal(''),
+    ])
+    .optional(),
   city: z.string().max(100, 'Ort darf maximal 100 Zeichen lang sein').optional().or(z.literal('')),
-  canton: z.string().max(2, 'Bitte gueltigen Kantonscode waehlen (2 Zeichen)').optional().or(z.literal('')),
+  canton: z
+    .union([
+      z.enum(VALID_CANTONS, { errorMap: () => ({ message: 'Bitte gueltigen Kanton waehlen' }) }),
+      z.literal(''),
+    ])
+    .optional(),
   country: z
     .string()
     .length(2, 'Bitte 2-Buchstaben-Laendercode verwenden (z.B. CH, DE)')
     .optional()
     .or(z.literal('')),
   // Contact
-  phone: optionalStr(30),
-  mobile: optionalStr(30),
+  phone: optionalPhone,
+  mobile: optionalPhone,
   email: optionalEmail,
   website: optionalUrl,
   // Newsletter

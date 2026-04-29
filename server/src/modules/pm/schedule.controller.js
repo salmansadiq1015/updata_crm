@@ -47,6 +47,24 @@ class ScheduleController {
       return res.success({ data: confirmation, message: 'Confirmation response updated successfully' });
     } catch (err) { next(err); }
   }
+
+  async exportSchedule(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const format = query.format || 'pdf';
+
+      if (format === 'ical') {
+        const icalData = await scheduleService.exportIcal(req.params.id);
+        res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="schedule.ics"');
+        return res.send(icalData);
+      }
+
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const generatedDoc = await scheduleService.exportPdf(req.params.id, req.user._id, meta);
+      return res.success({ data: generatedDoc, message: 'Schedule PDF generated successfully' });
+    } catch (err) { next(err); }
+  }
 }
 
 const scheduleController = new ScheduleController();

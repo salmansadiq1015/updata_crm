@@ -264,6 +264,35 @@ class SessionService {
   }
 
   /**
+   * Find a session across all users by sessionId (for admin revocation).
+   */
+  async findSessionAcrossUsers(targetSessionId) {
+    const redis = this._getRedis();
+    const prefix = config.redis.keyPrefix || '';
+    const pattern = `${prefix}${SESSION_PREFIX}*:${targetSessionId}`;
+
+    const keys = [];
+    const stream = redis.scanStream({ match: pattern, count: 100 });
+    await new Promise((resolve, reject) => {
+      stream.on('data', (resultKeys) => keys.push(...resultKeys));
+      stream.on('end', resolve);
+      stream.on('error', reject);
+    });
+
+    if (keys.length === 0) return null;
+
+    const data = await redis.get(keys[0]);
+    if (!data) return null;
+
+    const session = JSON.parse(data);
+    const keyWithoutPrefix = keys[0].replace(prefix, '');
+    const parts = keyWithoutPrefix.replace(SESSION_PREFIX, '').split(':');
+    const userId = parts[0];
+
+    return { ...session, userId, sessionId: targetSessionId };
+  }
+
+  /**
    * Get failed login count for an email.
    */
   async getFailedLoginCount(email) {

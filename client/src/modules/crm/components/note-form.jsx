@@ -62,7 +62,7 @@ export function NoteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)}>
+        <form onSubmit={handleSubmit(submit)} className="flex flex-1 flex-col overflow-hidden">
           <FormBody>
             <FormField label={t('crm.notes.text', 'Text')} required error={errors.text?.message}>
               <Controller

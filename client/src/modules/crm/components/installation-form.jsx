@@ -99,7 +99,7 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)}>
+        <form onSubmit={handleSubmit(submit)} className="flex flex-1 flex-col overflow-hidden">
           <FormBody>
             <FormField label={t('crm.installations.type', 'Typ')} required error={errors.type?.message}>
               <Select value={type} onValueChange={(v) => setValue('type', v, { shouldDirty: true })}>

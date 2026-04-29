@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ThemeProvider } from './theme-provider';
 import { QueryProvider } from './query-provider';
 import { SocketProvider } from './socket-provider';
@@ -8,6 +8,7 @@ import { ToastProvider } from './toast-provider';
 import { LanguageProvider } from '@/lib/i18n/language-context';
 import { useAuthStore } from '@/stores/auth-store';
 import { authService } from '@/modules/auth/services/auth-service';
+import { initSentry } from '@/lib/sentry';
 import Cookies from 'js-cookie';
 
 function AuthInitializer({ children }) {
@@ -35,6 +36,14 @@ function AuthInitializer({ children }) {
 }
 
 export function AppProviders({ children }) {
+  const sentryInitialized = useRef(false);
+  useEffect(() => {
+    if (!sentryInitialized.current) {
+      sentryInitialized.current = true;
+      initSentry();
+    }
+  }, []);
+
   return (
     <ThemeProvider>
       <LanguageProvider>

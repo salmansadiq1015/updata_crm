@@ -12,6 +12,10 @@ class ProjectController {
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
+      if (query.myOnly) {
+        query.projectManagerId = req.user._id;
+        delete query.myOnly;
+      }
       const result = await projectService.list(query);
       return res.success({ data: result.data, pagination: result.pagination });
     } catch (err) { next(err); }
@@ -69,6 +73,27 @@ class ProjectController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const result = await projectService.bulkDeactivate(req.body.ids, req.user._id, meta);
       return res.success({ data: result, message: `${result.deactivatedCount} project(s) archived` });
+    } catch (err) { next(err); }
+  }
+
+  async createFromTemplate(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const { templateId, ...overrides } = req.body;
+      const project = await projectService.createFromTemplate(templateId, overrides, req.user._id, meta);
+      return res.success({ data: project, message: 'Project created from template', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  async exportCsv(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const { format, ...filters } = query;
+      const csv = await projectService.exportCsv(filters);
+      const filename = `projects-${new Date().toISOString().split('T')[0]}.csv`;
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(csv);
     } catch (err) { next(err); }
   }
 

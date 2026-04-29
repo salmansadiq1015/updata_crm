@@ -6,7 +6,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-export function useProjectMutations({ onCreate, onUpdate, onDelete, onDuplicate, onBulkUpdate, onBulkDelete } = {}) {
+export function useProjectMutations({ onCreate, onUpdate, onDelete, onDuplicate, onBulkUpdate, onBulkDelete, onExport } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -75,5 +75,14 @@ export function useProjectMutations({ onCreate, onUpdate, onDelete, onDuplicate,
     onError: (err) => showError(err.message),
   });
 
-  return { create, update, remove, duplicate, bulkUpdate, bulkDelete };
+  const exportCsv = useMutation({
+    mutationFn: (filters) => projectService.exportCsv(filters),
+    onSuccess: (res) => {
+      showSuccess(t('pm.exportReady', 'Export ready') + (res?.filename ? ` — ${res.filename}` : ''));
+      onExport?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  return { create, update, remove, duplicate, bulkUpdate, bulkDelete, exportCsv };
 }

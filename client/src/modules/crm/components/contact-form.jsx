@@ -88,7 +88,7 @@ export function ContactForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)}>
+        <form onSubmit={handleSubmit(submit)} className="flex flex-1 flex-col overflow-hidden">
           <FormBody>
             <div className="grid grid-cols-2 gap-4">
               <FormField label={t('crm.contacts.firstName', 'Vorname')} required error={errors.firstName?.message}>

@@ -4,7 +4,12 @@ class DocumentController {
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
-      const docs = await documentService.listByProject(req.params.id, { category: query.category });
+      const docs = await documentService.listByProject(req.params.id, {
+        category: query.category,
+        search: query.search,
+        startDate: query.startDate,
+        endDate: query.endDate,
+      });
       return res.success({ data: docs });
     } catch (err) { next(err); }
   }
@@ -53,6 +58,14 @@ class DocumentController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       await documentService.delete(req.params.docId, req.user._id, meta);
       return res.success({ message: 'Document deleted successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async restore(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const doc = await documentService.restore(req.params.docId, req.params.id, req.user._id, meta);
+      return res.success({ data: doc, message: 'Document restored successfully' });
     } catch (err) { next(err); }
   }
 

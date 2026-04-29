@@ -44,6 +44,7 @@ class UserRepository {
   }
 
   async findByEmail(email, options = {}) {
+    if (!email) return null;
     let query = User.findOne({ email: email.toLowerCase() });
 
     if (options.includeSecrets) {

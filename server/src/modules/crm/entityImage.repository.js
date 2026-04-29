@@ -16,6 +16,10 @@ class EntityImageRepository {
       .lean();
   }
 
+  async countByEntity(entityType, entityId) {
+    return EntityImage.countDocuments({ entityType, entityId });
+  }
+
   async deleteById(id) {
     return EntityImage.findByIdAndDelete(id);
   }

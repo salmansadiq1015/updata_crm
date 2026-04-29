@@ -1,6 +1,7 @@
 import userService from './user.service.js';
 import sessionService from './session.service.js';
 import auditService from './audit.service.js';
+import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 
@@ -112,11 +113,32 @@ class UserController {
         bucket: 'images',
       });
 
-      // Update user's avatarFileId
+      // Remove old avatar file if one exists
       const { default: userRepository } = await import('./user.repository.js');
+      const existingUser = await userRepository.findById(targetUserId);
+      if (existingUser?.avatarFileId) {
+        try {
+          await fileService.delete(existingUser.avatarFileId);
+        } catch {
+          // Old file may already be deleted — continue
+        }
+      }
+
+      // Update user's avatarFileId
       await userRepository.updateById(targetUserId, { avatarFileId: result._id });
 
-      return res.success({ data: result, message: 'Avatar uploaded successfully', statusCode: 201 });
+      // Invalidate user cache so fetchMe returns fresh data with new avatarFileId
+      await cacheManager.del(`auth:user:${targetUserId}`);
+
+      // Return the presigned URL for immediate use
+      const avatarUrl = await fileService.getDownloadUrl(result._id);
+      const fileData = result.toJSON ? result.toJSON() : result;
+
+      return res.success({
+        data: { ...fileData, avatarUrl },
+        message: 'Avatar uploaded successfully',
+        statusCode: 201,
+      });
     } catch (err) {
       next(err);
     }
@@ -143,6 +165,10 @@ class UserController {
       }
 
       await userRepository.updateById(targetUserId, { avatarFileId: null });
+
+      // Invalidate user cache so fetchMe returns fresh data without avatar
+      await cacheManager.del(`auth:user:${targetUserId}`);
+
       return res.success({ message: 'Avatar removed successfully' });
     } catch (err) {
       next(err);

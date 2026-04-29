@@ -62,7 +62,7 @@ export function StatusTransitionDialog({ open, onOpenChange, currentStatus, onSu
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onFormSubmit)}>
+        <form onSubmit={handleSubmit(onFormSubmit)} className="flex flex-1 flex-col overflow-hidden">
           <FormBody>
             <div className="flex items-center gap-3">
               <div className="space-y-1.5">

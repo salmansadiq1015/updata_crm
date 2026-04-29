@@ -7,6 +7,7 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
+import fileService from '../files/file.service.js';
 import { AuthenticationError, ValidationError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import {
@@ -65,6 +66,15 @@ class AuthService {
     if (!user || !passwordValid) {
       // Increment failed counter
       const newCount = await sessionService.incrementFailedLogin(normalizedEmail);
+
+      // Sync DB fields for admin visibility
+      if (user) {
+        const lockoutWindowSeconds = config.auth?.lockoutWindowSeconds || 900;
+        await userRepository.updateById(user._id, {
+          failedLoginAttempts: newCount,
+          ...(newCount >= lockoutThreshold ? { lockedUntil: new Date(Date.now() + lockoutWindowSeconds * 1000) } : {}),
+        });
+      }
 
       // Publish events
       eventBus.publish(EVENT_TYPES.AUTH_LOGIN_FAILED, {
@@ -125,6 +135,14 @@ class AuthService {
     // Success — clear failed counter
     await sessionService.clearFailedLogin(normalizedEmail);
 
+    // Reset DB lockout fields if they were set
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await userRepository.updateById(user._id, {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      });
+    }
+
     // Generate session
     const sessionId = crypto.randomUUID();
     const tokens = generateTokenPair(user, sessionId);
@@ -171,6 +189,16 @@ class AuthService {
       userId: user._id,
     });
 
+    // Resolve avatar URL if user has an avatar
+    let avatarUrl = null;
+    if (user.avatarFileId) {
+      try {
+        avatarUrl = await fileService.getDownloadUrl(user.avatarFileId);
+      } catch {
+        // Avatar file may have been deleted — continue without it
+      }
+    }
+
     // Return sanitized user data
     const sanitizedUser = {
       _id: user._id,
@@ -182,6 +210,7 @@ class AuthService {
       phone: user.phone,
       language: user.language,
       avatarFileId: user.avatarFileId,
+      avatarUrl,
       role: user.role,
       status: user.status,
       lastLoginAt: new Date(),
@@ -364,9 +393,7 @@ class AuthService {
   async confirmPasswordReset(token, newPassword, meta = {}) {
     const hashedToken = hashResetToken(token);
 
-    // Find user with valid token
-    const user = await userRepository.findByEmail(null, { includeSecrets: true });
-    // We need to query by resetTokenHash directly
+    // Find user with valid reset token
     const User = (await import('./user.model.js')).default;
     const userDoc = await User.findOne({
       resetTokenHash: hashedToken,

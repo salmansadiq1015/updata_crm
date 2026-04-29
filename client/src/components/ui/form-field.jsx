@@ -50,7 +50,7 @@ function FormSection({ title, description, children, className }) {
 
 function FormBody({ className, children }) {
   return (
-    <div className={cn('px-6 py-4 space-y-5', className)}>
+    <div className={cn('flex-1 overflow-y-auto px-6 py-4 space-y-5', className)}>
       {children}
     </div>
   );

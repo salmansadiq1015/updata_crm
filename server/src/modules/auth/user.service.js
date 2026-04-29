@@ -16,6 +16,7 @@ import {
 } from '../../shared/utils/crypto.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import fileService from '../files/file.service.js';
 
 const USER_CACHE_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_CACHE_TTL = { l1Ttl: 30, l2Ttl: 120 };
@@ -126,7 +127,7 @@ class UserService {
       USER_CACHE_TTL,
     );
     if (!user) throw new NotFoundError('User', id);
-    return user;
+    return this._enrichWithAvatarUrl(user);
   }
 
   /**
@@ -158,7 +159,7 @@ class UserService {
       updatedBy: userId,
     }, { source: 'auth:users' });
 
-    return updated;
+    return this._enrichWithAvatarUrl(updated);
   }
 
   /**
@@ -424,6 +425,33 @@ class UserService {
     });
 
     return { deactivatedCount };
+  }
+
+  /**
+   * Enrich a user object with avatarUrl (presigned S3 URL) if avatarFileId is set.
+   * Returns the user as-is if no avatar exists.
+   */
+  async _enrichWithAvatarUrl(user) {
+    if (!user) return user;
+
+    if (user.avatarFileId) {
+      try {
+        const url = await fileService.getDownloadUrl(user.avatarFileId);
+        return { ...user, avatarUrl: url };
+      } catch (err) {
+        // Avatar file may have been deleted — return user without avatarUrl
+        logger.warn('Failed to resolve avatar URL', {
+          module: 'auth',
+          action: '_enrichWithAvatarUrl',
+          userId: user._id,
+          avatarFileId: user.avatarFileId,
+          error: { message: err.message },
+        });
+        return { ...user, avatarUrl: null };
+      }
+    }
+
+    return { ...user, avatarUrl: null };
   }
 
   async _invalidateUserCache(userId) {

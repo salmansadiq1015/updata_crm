@@ -127,9 +127,19 @@ class AuthController {
   async revokeSession(req, res, next) {
     try {
       const { id: targetSessionId } = req.params;
+      let targetUserId = req.user._id;
 
-      // Verify ownership (own session) or admin
-      if (req.user.role?.name !== 'Admin') {
+      if (req.user.role?.name === 'Admin') {
+        const session = await sessionService.findSessionAcrossUsers(targetSessionId);
+        if (!session) {
+          return res.fail({
+            statusCode: 404,
+            message: 'Session not found.',
+            code: 'NOT_FOUND',
+          });
+        }
+        targetUserId = session.userId;
+      } else {
         const sessions = await sessionService.getSessionsByUser(req.user._id);
         const owns = sessions.some((s) => s.sessionId === targetSessionId);
         if (!owns) {
@@ -141,10 +151,10 @@ class AuthController {
         }
       }
 
-      await sessionService.revokeSession(req.user._id, targetSessionId);
+      await sessionService.revokeSession(targetUserId, targetSessionId);
 
       eventBus.publish(EVENT_TYPES.AUTH_SESSION_REVOKED, {
-        userId: req.user._id,
+        userId: targetUserId,
         sessionId: targetSessionId,
         revokedBy: req.user._id,
       }, { source: 'auth:controller' });
@@ -155,7 +165,7 @@ class AuthController {
         ipAddress: req.ip,
         userAgent: req.get('user-agent'),
         result: 'success',
-        details: { revokedSessionId: targetSessionId },
+        details: { revokedSessionId: targetSessionId, targetUserId },
       });
 
       return res.success({ message: 'Session revoked successfully.' });

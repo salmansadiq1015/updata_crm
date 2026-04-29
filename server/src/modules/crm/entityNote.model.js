@@ -4,7 +4,7 @@ const entityNoteSchema = new mongoose.Schema(
   {
     entityType: {
       type: String,
-      enum: ['site', 'installation'],
+      enum: ['customer', 'site', 'installation'],
       required: true,
     },
     entityId: {

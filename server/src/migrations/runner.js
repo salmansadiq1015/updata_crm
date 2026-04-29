@@ -88,6 +88,52 @@ async function runPending() {
   }
 }
 
+async function rollbackLast() {
+  const lastExecuted = await Migration.findOne({ rolledBackAt: null })
+    .sort({ version: -1 });
+
+  if (!lastExecuted) {
+    logger.info('No migrations to roll back', { module: 'migration' });
+    return;
+  }
+
+  const files = await getMigrationFiles();
+  const migrationFile = files.find((f) => f.version === lastExecuted.version);
+
+  if (!migrationFile) {
+    throw new Error(
+      `Migration file for version ${lastExecuted.version} (${lastExecuted.name}) not found on disk`,
+    );
+  }
+
+  const start = Date.now();
+  logger.info(`Rolling back migration ${lastExecuted.name}...`, { module: 'migration' });
+
+  try {
+    const mod = await import(migrationFile.path);
+
+    if (typeof mod.down !== 'function') {
+      throw new Error(`Migration ${lastExecuted.name} does not export a down() function`);
+    }
+
+    await mod.down();
+
+    await Migration.findByIdAndUpdate(lastExecuted._id, {
+      rolledBackAt: new Date(),
+    });
+
+    logger.info(`Rollback of ${lastExecuted.name} completed in ${Date.now() - start}ms`, {
+      module: 'migration',
+    });
+  } catch (err) {
+    logger.error(`Rollback of ${lastExecuted.name} failed`, {
+      module: 'migration',
+      error: { message: err.message, stack: err.stack },
+    });
+    throw err;
+  }
+}
+
 async function showStatus() {
   const files = await getMigrationFiles();
   const executed = await Migration.find().sort({ version: 1 });
@@ -119,8 +165,11 @@ const command = process.argv[2] || 'run';
       case 'status':
         await showStatus();
         break;
+      case 'rollback':
+        await rollbackLast();
+        break;
       default:
-        console.log('Usage: node src/migrations/runner.js [run|status]');
+        console.log('Usage: node src/migrations/runner.js [run|status|rollback]');
     }
   } catch (err) {
     logger.error('Migration runner failed', {

@@ -45,5 +45,13 @@ export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onD
     onError: (err) => showError(err.message),
   });
 
-  return { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation };
+  const exportSchedule = useMutation({
+    mutationFn: (format) => scheduleService.exportSchedule(projectId, format),
+    onSuccess: (res) => {
+      showSuccess(t('pm.exportReady', 'Export ready') + (res?.filename ? ` — ${res.filename}` : ''));
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  return { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, exportSchedule };
 }

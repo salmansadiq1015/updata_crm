@@ -1,13 +1,18 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
+import { PHONE_PATTERN } from './crm.constants.js';
+
+const phone = Joi.string().trim().max(30)
+  .pattern(PHONE_PATTERN)
+  .messages({ 'string.pattern.base': 'Please enter a valid phone number (e.g., +41 44 123 45 67)' });
 
 export const createContactSchema = {
   body: Joi.object({
     firstName: Joi.string().required().trim().max(100),
     lastName: Joi.string().required().trim().max(100),
     functionTitle: Joi.string().trim().max(100).allow('', null),
-    phone: Joi.string().trim().max(30).allow('', null),
-    mobile: Joi.string().trim().max(30).allow('', null),
+    phone: phone.allow('', null),
+    mobile: phone.allow('', null),
     email: Joi.string().email().trim().max(255).allow('', null),
     isPrimary: Joi.boolean(),
     notes: Joi.string().max(2000).allow('', null),
@@ -20,8 +25,8 @@ export const updateContactSchema = {
     firstName: Joi.string().trim().max(100),
     lastName: Joi.string().trim().max(100),
     functionTitle: Joi.string().trim().max(100).allow('', null),
-    phone: Joi.string().trim().max(30).allow('', null),
-    mobile: Joi.string().trim().max(30).allow('', null),
+    phone: phone.allow('', null),
+    mobile: phone.allow('', null),
     email: Joi.string().email().trim().max(255).allow('', null),
     isPrimary: Joi.boolean(),
     notes: Joi.string().max(2000).allow('', null),

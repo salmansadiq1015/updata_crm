@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/select';
 import { DotLabel } from '@/shared/components/filter-dot';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { Search, Filter, X } from 'lucide-react';
+import { Search, Filter, X, User } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
@@ -36,6 +36,7 @@ export function ProjectFilterBar({
   search, onSearchChange,
   statusFilter, onStatusFilterChange,
   typeFilter, onTypeFilterChange,
+  myOnly, onMyOnlyChange,
   onClear,
 }) {
   const { language } = useLanguage();
@@ -43,7 +44,8 @@ export function ProjectFilterBar({
 
   const hasActiveFilters = (statusFilter && statusFilter !== 'all')
     || (typeFilter && typeFilter !== 'all')
-    || !!search;
+    || !!search
+    || myOnly;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -85,6 +87,16 @@ export function ProjectFilterBar({
           ))}
         </SelectContent>
       </Select>
+
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onMyOnlyChange?.(!myOnly)}
+        className={cn('h-8 rounded-full border-dashed text-xs gap-1.5', myOnly && activeSelectClass)}
+      >
+        <User className="h-3.5 w-3.5" />
+        {language === 'de' ? 'Meine Projekte' : 'My Projects'}
+      </Button>
 
       {hasActiveFilters && (
         <Button variant="ghost" size="sm" onClick={onClear} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground">

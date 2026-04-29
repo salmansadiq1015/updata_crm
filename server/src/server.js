@@ -1,3 +1,5 @@
+// Sentry must be imported first so it can instrument Node.js modules
+import Sentry from './config/sentry.js';
 import http from 'http';
 import { initializeSocketServer } from './shared/socket/socketServer.js';
 import { createApp } from './app.js';
@@ -207,6 +209,15 @@ async function shutdown(signal) {
       module: 'server',
       error: { message: err.message },
     });
+  }
+
+  // 5. Flush Sentry events before exit
+  if (Sentry) {
+    try {
+      await Sentry.flush(2000);
+    } catch {
+      // Best-effort — don't block shutdown
+    }
   }
 
   logger.info('Graceful shutdown complete', { module: 'server' });

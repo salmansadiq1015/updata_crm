@@ -91,7 +91,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)}>
+        <form onSubmit={handleSubmit(submit)} className="flex flex-1 flex-col overflow-hidden">
           <FormBody>
             <FormField label={t('crm.sites.label', 'Bezeichnung')} required error={errors.name?.message}>
               <Input {...register('name')} autoFocus placeholder={t('crm.sites.labelPlaceholder', 'z.B. Mehrfamilienhaus Mustergasse')} />

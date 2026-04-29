@@ -2,6 +2,10 @@ import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 
 export const contactService = {
+  async listAll(limit = 500) {
+    const res = await apiClient.get(ENDPOINTS.CRM.CONTACTS, { params: { limit } });
+    return res.data;
+  },
   async listByCustomer(customerId) {
     const res = await apiClient.get(ENDPOINTS.CRM.CUSTOMER_CONTACTS(customerId));
     return res.data;

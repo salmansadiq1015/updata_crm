@@ -24,14 +24,45 @@ const upload = multer({
 
 // --- /me routes MUST be before /:id to prevent 'me' matching as an ID ---
 
-// GET /api/v1/users/me
+/**
+ * @swagger
+ * /users/me:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get the currently authenticated user's profile
+ *     responses:
+ *       200:
+ *         description: Current user profile
+ *       401:
+ *         description: Not authenticated
+ *   patch:
+ *     tags: [Users]
+ *     summary: Update the current user's own profile
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstName:
+ *                 type: string
+ *               lastName:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Profile updated
+ *       401:
+ *         description: Not authenticated
+ */
 router.get(
   '/me',
   authenticate,
   (req, res, next) => userController.getMe(req, res, next),
 );
 
-// PATCH /api/v1/users/me
 router.patch(
   '/me',
   authenticate,
@@ -41,7 +72,6 @@ router.patch(
 
 // --- Bulk operations (MUST be before /:id to prevent matching) ---
 
-// PATCH /api/v1/users/bulk-update
 router.patch(
   '/bulk-update',
   authenticate,
@@ -50,7 +80,6 @@ router.patch(
   (req, res, next) => userController.bulkUpdate(req, res, next),
 );
 
-// POST /api/v1/users/bulk-delete
 router.post(
   '/bulk-delete',
   authenticate,
@@ -61,7 +90,63 @@ router.post(
 
 // --- Admin user management ---
 
-// GET /api/v1/users
+/**
+ * @swagger
+ * /users:
+ *   get:
+ *     tags: [Users]
+ *     summary: List all users (admin)
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, inactive]
+ *     responses:
+ *       200:
+ *         description: Paginated list of users
+ *       403:
+ *         description: Missing users:read permission
+ *   post:
+ *     tags: [Users]
+ *     summary: Create a new user (admin)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, firstName, lastName, role]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               firstName:
+ *                 type: string
+ *               lastName:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User created, invitation email sent
+ *       400:
+ *         description: Validation error
+ *       409:
+ *         description: Email already in use
+ */
 router.get(
   '/',
   authenticate,
@@ -70,7 +155,6 @@ router.get(
   (req, res, next) => userController.list(req, res, next),
 );
 
-// POST /api/v1/users
 router.post(
   '/',
   authenticate,
@@ -79,7 +163,52 @@ router.post(
   (req, res, next) => userController.create(req, res, next),
 );
 
-// GET /api/v1/users/:id
+/**
+ * @swagger
+ * /users/{id}:
+ *   get:
+ *     tags: [Users]
+ *     summary: Get a user by ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: User details
+ *       404:
+ *         description: User not found
+ *   patch:
+ *     tags: [Users]
+ *     summary: Update a user (admin)
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: User updated
+ *       404:
+ *         description: User not found
+ *   delete:
+ *     tags: [Users]
+ *     summary: Deactivate a user (soft delete)
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: User deactivated
+ *       404:
+ *         description: User not found
+ */
 router.get(
   '/:id',
   authenticate,
@@ -88,7 +217,6 @@ router.get(
   (req, res, next) => userController.getById(req, res, next),
 );
 
-// PATCH /api/v1/users/:id
 router.patch(
   '/:id',
   authenticate,
@@ -97,7 +225,6 @@ router.patch(
   (req, res, next) => userController.update(req, res, next),
 );
 
-// DELETE /api/v1/users/:id (soft delete / deactivate)
 router.delete(
   '/:id',
   authenticate,
@@ -106,7 +233,46 @@ router.delete(
   (req, res, next) => userController.deactivate(req, res, next),
 );
 
-// POST /api/v1/users/:id/avatar
+/**
+ * @swagger
+ * /users/{id}/avatar:
+ *   post:
+ *     tags: [Users]
+ *     summary: Upload a user avatar image
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Avatar uploaded
+ *       413:
+ *         description: File too large (max 5MB)
+ *   delete:
+ *     tags: [Users]
+ *     summary: Remove a user's avatar
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Avatar removed
+ */
 router.post(
   '/:id/avatar',
   authenticate,
@@ -115,7 +281,6 @@ router.post(
   (req, res, next) => userController.uploadAvatar(req, res, next),
 );
 
-// DELETE /api/v1/users/:id/avatar
 router.delete(
   '/:id/avatar',
   authenticate,

@@ -31,5 +31,27 @@ export async function up() {
 
 export async function down() {
   const db = mongoose.connection.db;
-  await db.collection('filemetadatas').dropIndexes();
+
+  // Drop filemetadatas indexes created in up() (by name to preserve _id index)
+  const fmIndexes = ['idx_bucket_key', 'idx_module_entity', 'idx_uploader_date', 'idx_soft_delete', 'idx_created_desc'];
+  for (const name of fmIndexes) {
+    try {
+      await db.collection('filemetadatas').dropIndex(name);
+    } catch {
+      // Index may not exist — safe to ignore
+    }
+  }
+
+  // Drop eventlogs indexes created in up()
+  const elIndexes = ['idx_type_published', 'idx_correlation', 'idx_status_published'];
+  const collections = await db.listCollections({ name: 'eventlogs' }).toArray();
+  if (collections.length > 0) {
+    for (const name of elIndexes) {
+      try {
+        await db.collection('eventlogs').dropIndex(name);
+      } catch {
+        // Index may not exist — safe to ignore
+      }
+    }
+  }
 }

@@ -33,6 +33,7 @@ import { IntegrationHealthCheckWorker } from './integrationHealthCheck.job.js';
 import { WidgetSubmissionProcessWorker } from './widgetSubmissionProcess.job.js';
 import { AiTranscriptionWorker } from './aiTranscription.job.js';
 import { AiAccuracyAggregationWorker } from './aiAccuracyAggregation.job.js';
+import { NewsletterDispatchWorker } from './newsletterDispatch.job.js';
 import logger from '../shared/logger/index.js';
 
 /**
@@ -497,10 +498,20 @@ export function registerJobs() {
     });
   });
 
+  // Newsletter dispatch — batch email sending for CRM newsletters
+  const newsletterDispatch = new NewsletterDispatchWorker();
+  queueManager.registerQueue('newsletter-dispatch', newsletterDispatch.getHandler(), {
+    concurrency: 2,
+    jobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 30000 },
+    },
+  });
+
   logger.info('Background jobs registered', {
     module: 'jobs',
     action: 'register',
-    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation'],
+    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch'],
   });
 }
 

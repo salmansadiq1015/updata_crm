@@ -14,7 +14,12 @@ export const createProjectSchema = {
     projectManagerId: objectId.required(),
     teamId: objectId.allow(null),
     plannedStartDate: Joi.date().iso(),
-    plannedEndDate: Joi.date().iso(),
+    plannedEndDate: Joi.date().iso().when('plannedStartDate', {
+      is: Joi.exist(),
+      then: Joi.date().greater(Joi.ref('plannedStartDate')).messages({
+        'date.greater': 'Planned end date must be after planned start date',
+      }),
+    }),
     estimatedBudget: Joi.number().min(0),
     currency: Joi.string().trim().max(3),
     notes: Joi.string().max(5000).allow('', null),
@@ -32,7 +37,12 @@ export const updateProjectSchema = {
     projectManagerId: objectId,
     teamId: objectId.allow(null),
     plannedStartDate: Joi.date().iso().allow(null),
-    plannedEndDate: Joi.date().iso().allow(null),
+    plannedEndDate: Joi.date().iso().allow(null).when('plannedStartDate', {
+      is: Joi.date().iso(),
+      then: Joi.date().greater(Joi.ref('plannedStartDate')).messages({
+        'date.greater': 'Planned end date must be after planned start date',
+      }),
+    }),
     estimatedBudget: Joi.number().min(0).allow(null),
     currency: Joi.string().trim().max(3),
     notes: Joi.string().max(5000).allow('', null),
@@ -46,6 +56,7 @@ export const listProjectsSchema = {
     customerId: objectId,
     projectManagerId: objectId,
     search: Joi.string().trim().max(100),
+    myOnly: Joi.boolean().default(false),
   }),
 };
 
@@ -77,5 +88,29 @@ export const bulkUpdateProjectsSchema = {
 export const bulkDeleteProjectsSchema = {
   body: Joi.object({
     ids: Joi.array().items(objectId).min(1).max(100).required(),
+  }),
+};
+
+export const createFromTemplateSchema = {
+  body: Joi.object({
+    templateId: objectId.required(),
+    name: Joi.string().trim().max(255),
+    customerId: objectId,
+    siteId: objectId.allow(null),
+    projectManagerId: objectId,
+    projectType: Joi.string().valid(...PROJECT_TYPES),
+    plannedStartDate: Joi.date().iso(),
+    plannedEndDate: Joi.date().iso(),
+  }),
+};
+
+export const exportProjectsSchema = {
+  query: Joi.object({
+    status: Joi.string().valid(...PROJECT_STATUSES),
+    projectType: Joi.string().valid(...PROJECT_TYPES),
+    customerId: objectId,
+    projectManagerId: objectId,
+    search: Joi.string().trim().max(100),
+    format: Joi.string().valid('csv').default('csv'),
   }),
 };

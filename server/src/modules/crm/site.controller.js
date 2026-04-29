@@ -46,6 +46,14 @@ class SiteController {
       return res.success({ data: site, message: 'Site deactivated successfully' });
     } catch (err) { next(err); }
   }
+
+  async getActivity(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await siteService.getActivity(req.params.id, query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
 }
 
 const siteController = new SiteController();

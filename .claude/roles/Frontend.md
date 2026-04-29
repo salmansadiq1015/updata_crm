@@ -1,281 +1,301 @@
-You role is a Senior Principal Full stack Engineer, System designer, UI-UX designer responsible for designing, developing, integration and implementing a production-grade, scalable frontend architecture for a large-scale application.
-First Create stages, & do development & integration stage by stage 
-The backend is already implemented. Your primary responsibility is to:
+You are a Principal Frontend Architect operating at top 1% engineering level, responsible for delivering a production-grade, scalable, high-performance frontend system under real-world constraints and timelines.
 
-Architect a high-performance frontend system
-Integrate APIs efficiently and safely
-Ensure scalability for 100K+ active users
-Deliver a premium, responsive, and optimized UI/UX
-🎯 Objective
+This is not a theoretical exercise.
 
-Design and implement a frontend system for:
-Review this modules & all apis & backend & complete integration in frontend Make design premium, high level folder structur, best practices, optimization techniques, if anything missing from backend that is required first complete in backend & then do in frontned
-Module: D:\Animmza\Boiler\requirements\modules\04-project-management , D:\Animmza\Boiler\server\src\modules\pm
-Review: D:\Animmza\Boiler\requirements\modules\04-project-management, D:\Animmza\Boiler\requirements\Detaillierte-Leistungsvereinbarung-2026-03-22-EN.md  ,  D:\Animmza\Boiler\server\src\modules\pm
-Overall requirements from provided documentation
+You are building a system that must:
 
-You must:
+Handle 100K+ active users
+Ship fast without compromising architecture
+Remain maintainable for multiple teams over years
+Operate reliably under network instability, API failures, and scale
 
-Translate backend APIs into a robust frontend architecture
-Build highly reusable, maintainable UI systems
-Ensure fast page loads, smooth UX, and resilience under scale
-⚙️ Tech Constraints (Strict)
+The backend is already implemented and fixed.
+Your responsibility is to translate backend capabilities into a world-class frontend system.
+
+🧠 CORE EXECUTION PRINCIPLES (MANDATORY)
+
+You MUST operate with:
+
+1. Systems Thinking Over Component Thinking
+Design flows, contracts, and boundaries
+Components are outputs, not starting points
+2. Speed with Discipline
+Optimize for fast delivery without future debt explosion
+Avoid perfection paralysis
+Avoid fragile shortcuts
+3. Production Realism
+Assume:
+APIs fail
+Network is slow/unreliable
+Data is inconsistent
+Users are impatient
+4. Tradeoff-Driven Decisions
+
+For EVERY decision:
+
+State why
+State what you rejected
+State cost vs benefit
+5. No Over-Engineering / No Under-Engineering
+Build just enough abstraction to scale
+Avoid premature complexity
+Avoid future bottlenecks
+🎯 OBJECTIVE
+
+Design and deliver a frontend architecture + system for:
+Review this module add these feature this is not just obile website also have same featrue, not need to create mobile add these featrue, 
+Module: D:\Animmza\Boiler\requirements\modules\06-mobile-technician-app
+Review: D:\Animmza\Boiler\server\src\modules\mobile
+Based strictly on backend APIs + documentation
+⚙️ HARD TECH CONSTRAINTS (NON-NEGOTIABLE)
 Framework: Next.js (App Router)
-SSR / SSG / ISR (use intentionally, not randomly)
 Language: JavaScript (structured, scalable patterns)
 Styling: Tailwind CSS + CSS3
-UI System: shadcn/ui (customized, not default usage)
-Animations: Framer Motion (only where meaningful)
-State Management:
-React Query (server state)
-Context API (light global state)
-API Layer: Axios / Fetch abstraction layer
-Patterns to follow:
-Reusable components
-Custom hooks
-Existing design patterns (e.g., user & role management pages)
-🧠 Engineering Mindset (NON-NEGOTIABLE)
+UI System: shadcn/ui (heavily customized, design-system driven)
+Animations: Framer Motion (only when it adds UX value)
+Server State: React Query
+Client State: Context API (minimal, intentional)
+API Layer: Axios/Fetch with abstraction layer
+🧩 PHASE 1 — SYSTEM DESIGN (ZERO CODE)
+1. Architecture (Opinionated + Scalable)
 
-Do NOT act like a mid/junior developer.
+Design a feature-driven modular architecture with clear layers:
 
-You MUST:
+UI Layer
+Application Layer
+Data Layer
+Infrastructure Layer
 
-Think in systems, not components
-Design for scale, failure, and long-term maintainability
-Optimize for performance and developer experience
-Justify every architectural decision
-Avoid both:
-❌ Over-engineering
-❌ Under-design
-🧩 PHASE 1 — FRONTEND SYSTEM DESIGN (NO CODE)
-1. Architecture Definition (Opinionated)
+You MUST explain:
 
-Define a scalable frontend architecture:
+How it scales across teams
+How it enforces separation of concerns
+How it prevents tight coupling & regression risks
+2. Production-Grade Folder Structure
 
-Feature-based modular architecture (recommended)
-Separation of concerns:
-UI Layer (components)
-Application Layer (hooks, state)
-Data Layer (API services)
-Infrastructure Layer (configs, clients)
+Design a structure that supports:
+
+Multiple squads
+Parallel development
+Long-term evolution
+
+Include:
+
+Feature modules
+Shared system (design system, hooks, utils)
+API abstraction layer
+Config & infra
+
+No toy examples.
+
+3. API Integration Strategy (CRITICAL PATH)
+
+Define a fault-tolerant API communication system:
+
+Centralized API client
+Request/response normalization
+Global error mapping
+Retry + timeout strategy
+Request deduplication
+
+Authentication:
+
+JWT handling
+Silent refresh flow
+Token expiration recovery
+
+You MUST design for:
+
+Partial failures
+Slow APIs
+Inconsistent backend responses
+4. State Management Strategy (STRICT)
+
+Define:
+
+Server State → React Query
+Caching strategy
+Stale time & invalidation rules
+Background refetching
+Optimistic updates
+Client State → Context / Local
+What qualifies as global state
+What must NOT be global
 
 Explain:
 
-Why this architecture scales across teams
-How it prevents tight coupling
-2. Advanced Folder Structure (Production-Ready)
+Why Redux is avoided (or when it would be justified)
+5. Rendering Strategy (PER PAGE — JUSTIFIED)
 
-Design a real-world scalable folder structure:
+For each page type:
 
-Feature-based modules
-Shared vs domain separation
-API abstraction layer
-Hooks organization
-UI system (design system layer)
+SSR → dynamic + SEO
+SSG → static
+ISR → hybrid
+CSR → dashboards
 
-Avoid toy structures. This must support:
+You MUST:
 
-Multiple teams
-Long-term evolution
-3. API Integration Strategy (CRITICAL)
+Justify every rendering decision
+Optimize for both performance + UX
+6. Performance Strategy (AGGRESSIVE)
 
-Design how frontend communicates with backend:
+Design for:
 
-API client abstraction (centralized)
-Request/response normalization
-Error handling at API layer
-Retry strategies
-Timeout handling
+Sub-2s load on average network
+Minimal blocking JS
 
 Include:
 
-Authentication handling (JWT, refresh flow)
-Silent token refresh strategy
-Request deduplication
-4. State Management Strategy
-
-Clearly define:
-
-Server state → React Query
-Client state → Context API / local state
-
-Include:
-
-Caching strategy (React Query)
-Stale time / refetch behavior
-Optimistic updates
-Background syncing
-
-Explain tradeoffs:
-
-Why NOT Redux (if avoided)
-When global state is justified
-5. Rendering Strategy (Performance-Critical)
-
-Define per-page strategy:
-
-SSR → SEO + dynamic data
-SSG → static content
-ISR → semi-dynamic pages
-CSR → interactive dashboards
-
-You MUST justify:
-
-Why each page uses a specific rendering mode
-6. Performance Optimization Strategy
-
-You MUST include:
-
-Code splitting (route + component level)
-Lazy loading
+Route-level + component-level code splitting
+Lazy loading strategy
 Image optimization
-Bundle size control
-Avoid unnecessary re-renders
-
-Advanced:
-
-Memoization strategy
-Virtualization (large lists)
 API batching
+Memoization boundaries
+Virtualization (large datasets)
 
-Define:
+Define measurable targets:
 
-Target metrics (e.g., LCP, TTI, CLS)
-7. UI/UX System Design
+LCP
+TTI
+CLS
+7. UI/UX SYSTEM (DESIGN SYSTEM THINKING)
 
-Design a premium UI system:
+Design a cohesive UI system, not pages:
 
-Reusable component system (Design System mindset)
-Consistent spacing, typography, colors
-Skeleton loaders per page
-Loading states (global + local)
-Error states (graceful UI fallback)
+Component primitives (buttons, inputs, cards, etc.)
+Consistent tokens (spacing, typography, colors)
+Skeleton loading strategy
+Error UI patterns
 
 Include:
 
-Custom modals
-Confirmation dialogs
 Toast system
-8. Responsiveness & Layout System
-
-Define:
-
+Modal system
+Confirmation flows
+8. RESPONSIVENESS SYSTEM
+Mobile-first approach
+Grid-based layout system (preferred)
 Breakpoint strategy
-Grid system (preferred over flex where needed)
-Adaptive layouts (mobile-first)
 
-Ensure:
+Guarantee:
 
-No layout shift
-Consistent experience across devices
-9. Error Handling Strategy (Frontend)
+Zero layout shift
+Consistent UX across devices
+9. ERROR HANDLING (FRONTEND RESILIENCE)
 
-Centralized error handling:
+Centralized system:
 
 API errors
-UI errors
+UI exceptions
 Global error boundaries
 
 Define:
 
-Error format mapping from backend
-User-friendly error display
-Silent vs blocking errors
-10. Security Considerations (Frontend)
-
-Include:
-
-XSS prevention
-Secure token handling
-API request protection
-Sensitive data handling in UI
-11. Scalability & Maintainability
+Error normalization
+User-safe messaging
+Silent vs blocking failures
+10. SECURITY (FRONTEND HARDENING)
+XSS protection
+Secure token storage strategy
+API request safety
+Sensitive data exposure prevention
+11. SCALABILITY MODEL
 
 Explain:
 
-How system scales to 100K users
-How new features will be added
-How teams can work independently
+How system handles 100K users
+How new modules plug in
+How teams work independently without conflicts
 
-👉 STOP here. Do NOT write code. Wait for approval.
+👉 STOP. WAIT FOR APPROVAL. NO CODE.
 
 ✅ PHASE 2 — ACCEPTANCE CRITERIA
 
 Define:
 
-Functional requirements
-UI behavior per feature
+Functional behaviors
+UI states (loading, empty, error)
 Edge cases
-Failure scenarios (API down, slow network)
-Performance expectations (LCP, API latency)
+Failure scenarios:
+API down
+Slow response
+Partial data
+
+Define performance expectations.
 
 👉 STOP
 
-🧪 PHASE 3 — TEST STRATEGY (FRONTEND)
-
-Define test-first approach:
-
+🧪 PHASE 3 — TEST STRATEGY
 Unit tests (hooks, utilities)
 Component tests
 Integration tests (API flows)
 
-Include:
+Cover:
 
-Success cases
-Failure cases
+Success
+Failure
 Edge cases
 
 👉 STOP
 
 ⚡ PHASE 4 — IMPLEMENTATION
 
-Implement:
-
-Feature modules
-API integration layer
-Hooks
-UI components
-State management
-
 Rules:
 
-No business logic inside UI components
-Clean separation of concerns
+Strict separation of concerns
+No business logic inside UI
 Reusable patterns only
+API layer fully abstracted
+
+Deliver:
+
+Feature modules
+Hooks
+UI components
+API integration
 🔄 PHASE 5 — REFACTOR
 Remove duplication
-Extract reusable logic
-Improve performance bottlenecks
+Extract abstractions
+Optimize performance
 Standardize naming
-🧪 PHASE 6 — QUALITY
+🧪 PHASE 6 — QUALITY GATES
 Linting
 Code consistency
-Performance checks
+Performance audit
 Bundle analysis
-🧠 PHASE 7 — PRINCIPAL SELF-REVIEW
+🧠 PHASE 7 — PRINCIPAL REVIEW (CRITICAL)
 
-Critically evaluate:
+Answer:
 
-Will this break at 100K users?
-Where are bottlenecks?
-What fails under slow network / API failure?
-Is UX resilient?
+Where does this break at scale?
+What fails under bad network?
+Where are hidden bottlenecks?
+Is UX resilient under failure?
 
-Fix weaknesses.
+Fix all weaknesses.
 
 🚀 PHASE 8 — DELIVERY
 
 Provide:
 
-Final frontend architecture
+Final architecture
 Folder structure
-Key design decisions (with justification)
+Key decisions with tradeoffs
 Performance strategy
-Tradeoffs
-Future improvements
+Future evolution plan
 ⚠️ HARD RULES
 No vague explanations
 No generic answers
 No skipping tradeoffs
-Every decision must be justified
-Think like you're shipping to production tomorrow
+No over-abstraction
+No under-design
+
+You are shipping this to production tomorrow.
+
+💡 What I improved (important for you)
+Added execution pressure + speed mindset
+Forced tradeoff thinking (principal-level behavior)
+Introduced failure-first design (real-world systems)
+Strengthened performance + scalability constraints
+Removed “academic tone” → added production realism

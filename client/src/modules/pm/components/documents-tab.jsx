@@ -37,16 +37,14 @@ function DocumentCard({ doc, language, canWrite, onEdit, onDelete, onDownload, o
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
   const CategoryIcon = categoryCfg?.icon || FileText;
-  const previewable = isPreviewable(doc.mimeType);
 
   return (
     <div
       className={cn(
-        'group relative rounded-xl border border-border/60 bg-card p-4 transition-all duration-200',
+        'group relative rounded-xl border border-border/60 bg-card p-4 transition-all duration-200 cursor-pointer',
         'hover:border-border hover:shadow-md hover:shadow-primary/[0.03]',
-        previewable && 'cursor-pointer',
       )}
-      onClick={previewable ? () => onPreview(doc) : undefined}
+      onClick={() => onPreview(doc)}
     >
       <div className="flex items-start gap-3.5">
         <div className={cn(
@@ -96,17 +94,15 @@ function DocumentCard({ doc, language, canWrite, onEdit, onDelete, onDownload, o
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-200">
-          {previewable && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg"
-              onClick={(e) => { e.stopPropagation(); onPreview(doc); }}
-              title={language === 'de' ? 'Vorschau' : 'Preview'}
-            >
-              <Eye className="h-3.5 w-3.5" />
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg"
+            onClick={(e) => { e.stopPropagation(); onPreview(doc); }}
+            title={language === 'de' ? 'Vorschau' : 'Preview'}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -147,16 +143,14 @@ function DocumentCard({ doc, language, canWrite, onEdit, onDelete, onDownload, o
 function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview }) {
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
-  const previewable = isPreviewable(doc.mimeType);
 
   return (
     <div
       className={cn(
-        'group relative rounded-xl border border-border/60 bg-card overflow-hidden transition-all duration-200',
+        'group relative rounded-xl border border-border/60 bg-card overflow-hidden transition-all duration-200 cursor-pointer',
         'hover:border-border hover:shadow-md hover:shadow-primary/[0.03]',
-        previewable && 'cursor-pointer',
       )}
-      onClick={previewable ? () => onPreview(doc) : undefined}
+      onClick={() => onPreview(doc)}
     >
       <div className={cn(
         'h-28 flex items-center justify-center relative',
@@ -180,11 +174,9 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
         )} />
 
         <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200">
-          {previewable && (
-            <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onPreview(doc); }}>
-              <Eye className="h-3 w-3" />
-            </Button>
-          )}
+          <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onPreview(doc); }}>
+            <Eye className="h-3 w-3" />
+          </Button>
           <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onDownload(doc); }}>
             <Download className="h-3 w-3" />
           </Button>
@@ -555,6 +547,8 @@ export function DocumentsTab({ projectId }) {
         onOpenChange={(v) => { if (!v) { setPreviewDoc(null); setPreviewUrl(null); } }}
         doc={previewDoc}
         url={previewUrl}
+        docs={filteredDocs}
+        onNavigate={handlePreview}
       />
 
       {/* ── Metadata edit dialog ──────────────────────────── */}
@@ -570,7 +564,7 @@ export function DocumentsTab({ projectId }) {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={metaForm.handleSubmit(onMetaSubmit)}>
+          <form onSubmit={metaForm.handleSubmit(onMetaSubmit)} className="flex flex-1 flex-col overflow-hidden">
             <FormBody>
               <FormField label={language === 'de' ? 'Kategorie' : 'Category'}>
                 <Select value={metaForm.watch('category')} onValueChange={(v) => metaForm.setValue('category', v)}>

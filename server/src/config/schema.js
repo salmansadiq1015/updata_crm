@@ -82,6 +82,9 @@ const configSchema = Joi.object({
   OPENAI_MODEL: Joi.string().default('gpt-4o'),
   OPENAI_MAX_TOKENS: Joi.number().default(2000),
 
+  // Maintenance
+  MAINTENANCE_LOOKAHEAD_DAYS: Joi.number().integer().min(1).default(30),
+
   // Misc
   AUTO_MIGRATE: Joi.boolean().default(false),
 }).unknown(true); // allow extra env vars we don't manage

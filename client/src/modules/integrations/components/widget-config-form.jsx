@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import { Palette, FormInput, Shield, MessageSquare, Save, Loader2 } from 'lucide-react';
+import { Palette, FormInput, Shield, MessageSquare, Save, Loader2, Code, Copy, Check } from 'lucide-react';
 
 export function WidgetConfigForm() {
   const qc = useQueryClient();
@@ -89,6 +89,7 @@ export function WidgetConfigForm() {
           <TabsTrigger value="fields" className="gap-1.5"><FormInput className="h-3.5 w-3.5" /> Felder</TabsTrigger>
           <TabsTrigger value="captcha" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Anti-Spam</TabsTrigger>
           <TabsTrigger value="messages" className="gap-1.5"><MessageSquare className="h-3.5 w-3.5" /> Nachrichten</TabsTrigger>
+          <TabsTrigger value="embed" className="gap-1.5"><Code className="h-3.5 w-3.5" /> Einbetten</TabsTrigger>
         </TabsList>
 
         <TabsContent value="branding">
@@ -228,6 +229,10 @@ export function WidgetConfigForm() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="embed">
+          <EmbedCodeSection widgetId={config?.widgetId || 'default'} />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -278,6 +283,101 @@ function Field({ label, children }) {
       <Label className="text-xs font-medium">{label}</Label>
       {children}
     </div>
+  );
+}
+
+function EmbedCodeSection({ widgetId }) {
+  const [copied, setCopied] = useState(false);
+
+  const baseUrl = typeof window !== 'undefined'
+    ? window.location.origin
+    : 'https://app.example.com';
+
+  const widgetUrl = `${baseUrl}/widget/${encodeURIComponent(widgetId)}`;
+  const iframeSnippet = `<iframe src="${widgetUrl}" width="100%" height="600" frameborder="0" style="border:none;border-radius:8px;"></iframe>`;
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(iframeSnippet);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = iframeSnippet;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-5 space-y-4">
+        <div>
+          <p className="text-sm font-medium mb-1">Einbettungscode</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Kopieren Sie den folgenden Code und fügen Sie ihn in Ihre Website ein, um das Kontaktformular anzuzeigen.
+          </p>
+        </div>
+
+        <div className="relative">
+          <pre className="bg-muted/50 border border-border rounded-lg p-4 pr-12 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+            {iframeSnippet}
+          </pre>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2 h-8 w-8"
+            onClick={copyToClipboard}
+            title="Code kopieren"
+          >
+            {copied
+              ? <Check className="h-3.5 w-3.5 text-green-600" />
+              : <Copy className="h-3.5 w-3.5" />
+            }
+          </Button>
+        </div>
+
+        <Separator />
+
+        <div>
+          <p className="text-sm font-medium mb-1">Direkter Link</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            Das Formular kann auch direkt über diesen Link aufgerufen werden:
+          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              readOnly
+              value={widgetUrl}
+              className="font-mono text-xs flex-1"
+              onClick={(e) => e.target.select()}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(widgetUrl);
+                  showSuccess('Link kopiert');
+                } catch { /* ignore */ }
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Kopieren
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

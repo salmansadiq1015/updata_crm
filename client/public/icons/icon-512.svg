@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="77" fill="#0f172a"/>
+  <text x="50%" y="45%" text-anchor="middle" dominant-baseline="central" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="154" fill="white">MB</text>
+  <text x="50%" y="70%" text-anchor="middle" dominant-baseline="central" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="51" fill="rgba(255,255,255,0.7)">Techniker</text>
+</svg>

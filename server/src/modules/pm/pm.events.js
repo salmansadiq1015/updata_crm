@@ -75,6 +75,46 @@ export function registerPmEvents() {
     }
   });
 
+  // --- PREP_ACTION_OVERDUE ---
+  eventBus.on(EVENT_TYPES.PREP_ACTION_OVERDUE, async (event) => {
+    try {
+      const { actionId, projectId, title, dueDate, assignedToId } = event.payload;
+
+      try {
+        const queueManager = (await import('../../shared/queue/QueueManager.js')).default;
+        await queueManager.addJob('notification-dispatch', 'prep-action-overdue-alert', {
+          type: 'prep_action_overdue',
+          actionId,
+          projectId,
+          title,
+          dueDate,
+          assignedToId,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (notifErr) {
+        logger.error('Failed to dispatch prep action overdue notification', {
+          module: 'pm',
+          action: 'event.prep_action_overdue.notify',
+          error: { message: notifErr.message },
+        });
+      }
+
+      logger.warn(`Prep action "${title}" is overdue`, {
+        module: 'pm',
+        action: 'event.prep_action_overdue',
+        actionId,
+        projectId,
+        dueDate,
+      });
+    } catch (err) {
+      logger.error('Failed to handle PREP_ACTION_OVERDUE event', {
+        module: 'pm',
+        action: 'event.prep_action_overdue',
+        error: { message: err.message, stack: err.stack },
+      });
+    }
+  });
+
   logger.info('PM event handlers registered', { module: 'pm', action: 'events.register' });
 }
 

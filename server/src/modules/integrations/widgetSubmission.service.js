@@ -199,6 +199,22 @@ class WidgetSubmissionService {
     );
   }
 
+  /**
+   * Return public-safe subset of the widget config (strips secret keys).
+   */
+  async getPublicConfig(widgetId) {
+    const config = await this.getConfig(widgetId || 'default');
+    if (!config) return null;
+    return {
+      widgetId: config.widgetId,
+      branding: config.branding || {},
+      fields: config.fields || {},
+      requestTypes: (config.requestTypes || []).filter((rt) => rt.isActive !== false),
+      confirmationMessageDe: config.confirmationMessageDe || null,
+      languages: config.languages || [],
+    };
+  }
+
   async updateConfig(widgetId, data, userId, meta = {}) {
     const configRepo = await getConfigRepo();
     const updated = await configRepo.upsertByWidgetId(widgetId, {

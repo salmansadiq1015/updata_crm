@@ -14,6 +14,8 @@ const DASHBOARD_TTL = { l1Ttl: 30, l2Ttl: 60 };
 
 class ProjectService {
   async create(data, createdBy, meta = {}) {
+    await this._checkNameUniqueness(data.name, data.customerId);
+
     const projectNumber = await counterService.getNextProjectNumber();
 
     const project = await projectRepository.create({
@@ -82,6 +84,16 @@ class ProjectService {
   async update(id, data, updatedBy, meta = {}) {
     const existing = await projectRepository.findById(id);
     if (!existing) throw new NotFoundError('Project', id);
+
+    const nameChanged = data.name && data.name !== existing.name;
+    const customerChanged = data.customerId && data.customerId.toString() !== existing.customerId?.toString();
+    if (nameChanged || customerChanged) {
+      await this._checkNameUniqueness(
+        data.name || existing.name,
+        data.customerId || existing.customerId,
+        id,
+      );
+    }
 
     const updated = await projectRepository.updateById(id, { ...data, updatedBy });
     await this._invalidateProjectCache(id);
@@ -257,6 +269,152 @@ class ProjectService {
   async _invalidateDashboardCache() {
     await cacheManager.del('pm:dashboard:summary');
     await cacheManager.del('pm:dashboard:milestones');
+  }
+
+  async createFromTemplate(templateId, overrides, createdBy, meta = {}) {
+    const template = await projectRepository.findById(templateId);
+    if (!template) throw new NotFoundError('Template project', templateId);
+
+    const projectNumber = await counterService.getNextProjectNumber();
+
+    const newProject = await projectRepository.create({
+      projectNumber,
+      name: overrides.name || `${template.name} (Copy)`,
+      description: template.description,
+      projectType: overrides.projectType || template.projectType,
+      status: 'DRAFT',
+      customerId: overrides.customerId || template.customerId?._id || template.customerId,
+      siteId: overrides.siteId || template.siteId?._id || template.siteId || null,
+      projectManagerId: overrides.projectManagerId || template.projectManagerId?._id || template.projectManagerId,
+      teamId: overrides.teamId || template.teamId || null,
+      plannedStartDate: overrides.plannedStartDate || null,
+      plannedEndDate: overrides.plannedEndDate || null,
+      estimatedBudget: template.estimatedBudget,
+      currency: template.currency,
+      notes: template.notes,
+      templateId,
+      createdBy,
+    });
+
+    const scheduleRepository = (await import('./schedule.repository.js')).default;
+    const prepActionRepository = (await import('./prepAction.repository.js')).default;
+
+    const templateEntries = await scheduleRepository.findByProjectId(templateId);
+    if (templateEntries.length > 0 && overrides.plannedStartDate) {
+      const templateStart = template.plannedStartDate ? new Date(template.plannedStartDate).getTime() : null;
+      const newStart = new Date(overrides.plannedStartDate).getTime();
+
+      for (const entry of templateEntries) {
+        const offsetMs = templateStart ? newStart - templateStart : 0;
+        const entryData = {
+          projectId: newProject._id,
+          name: entry.name,
+          entryType: entry.entryType,
+          status: 'PLANNED',
+          responsibleType: entry.responsibleType,
+          notes: entry.notes,
+          sortOrder: entry.sortOrder,
+          createdBy,
+        };
+        if (entry.startDate) entryData.startDate = new Date(new Date(entry.startDate).getTime() + offsetMs);
+        if (entry.endDate) entryData.endDate = new Date(new Date(entry.endDate).getTime() + offsetMs);
+        if (entry.milestoneDate) entryData.milestoneDate = new Date(new Date(entry.milestoneDate).getTime() + offsetMs);
+        await scheduleRepository.create(entryData);
+      }
+    } else if (templateEntries.length > 0) {
+      for (const entry of templateEntries) {
+        await scheduleRepository.create({
+          projectId: newProject._id,
+          name: entry.name,
+          entryType: entry.entryType,
+          status: 'PLANNED',
+          responsibleType: entry.responsibleType,
+          notes: entry.notes,
+          sortOrder: entry.sortOrder,
+          createdBy,
+        });
+      }
+    }
+
+    const templateActions = await prepActionRepository.findByProjectId(templateId);
+    for (const action of templateActions) {
+      await prepActionRepository.create({
+        projectId: newProject._id,
+        actionType: action.actionType,
+        name: action.name,
+        description: action.description,
+        sortOrder: action.sortOrder,
+        createdBy,
+      });
+    }
+
+    await this._invalidateListCache();
+    await this._invalidateDashboardCache();
+
+    eventBus.publish(EVENT_TYPES.PROJECT_CREATED, {
+      projectId: newProject._id,
+      projectNumber,
+      name: newProject.name,
+      templateId,
+      createdBy,
+    }, { source: 'pm:projects' });
+
+    auditService.logEvent({
+      eventType: 'project.created_from_template',
+      userId: createdBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { projectId: newProject._id, projectNumber, templateId },
+      module: 'pm',
+    });
+
+    return projectRepository.findById(newProject._id);
+  }
+
+  async exportCsv(queryParams) {
+    const { search, ...filters } = queryParams;
+    const result = await projectRepository.findWithCursor({
+      cursor: null,
+      limit: 50000,
+      sortBy: 'projectNumber',
+      sortOrder: 'asc',
+      filters,
+      search,
+    });
+
+    const rows = result.data || [];
+    const escape = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n;]/.test(s) ? `"${s}"` : s;
+    };
+    const header = [
+      'ProjectNumber', 'Name', 'Type', 'Status',
+      'Customer', 'ProjectManager',
+      'PlannedStartDate', 'PlannedEndDate',
+      'EstimatedBudget', 'Currency', 'CreatedAt',
+    ].join(';');
+    const body = rows.map((p) => [
+      p.projectNumber, p.name, p.projectType, p.status,
+      p.customerId?.name || '', p.projectManagerId ? `${p.projectManagerId.firstName || ''} ${p.projectManagerId.lastName || ''}`.trim() : '',
+      p.plannedStartDate ? new Date(p.plannedStartDate).toISOString().split('T')[0] : '',
+      p.plannedEndDate ? new Date(p.plannedEndDate).toISOString().split('T')[0] : '',
+      p.estimatedBudget ?? '', p.currency || 'CHF',
+      p.createdAt ? new Date(p.createdAt).toISOString() : '',
+    ].map(escape).join(';')).join('\n');
+
+    return `﻿${header}\n${body}`;
+  }
+
+  async _checkNameUniqueness(name, customerId, excludeId = null) {
+    const Project = (await import('./project.model.js')).default;
+    const filter = { name, customerId, isDeleted: false };
+    if (excludeId) filter._id = { $ne: excludeId };
+    const duplicate = await Project.findOne(filter).lean();
+    if (duplicate) {
+      throw new ConflictError('A project with this name already exists for this customer');
+    }
   }
 }
 

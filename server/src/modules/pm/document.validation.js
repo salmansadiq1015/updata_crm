@@ -7,6 +7,9 @@ export const listDocumentsSchema = {
   params: Joi.object({ id: objectId.required() }),
   query: Joi.object({
     category: Joi.string().valid(...DOCUMENT_CATEGORIES),
+    search: Joi.string().trim().max(100),
+    startDate: Joi.date().iso(),
+    endDate: Joi.date().iso(),
   }),
 };
 
@@ -35,4 +38,8 @@ export const updateDocumentSchema = {
     category: Joi.string().valid(...DOCUMENT_CATEGORIES),
     description: Joi.string().max(2000).allow(null, ''),
   }).min(1),
+};
+
+export const restoreDocumentSchema = {
+  params: Joi.object({ docId: objectId.required() }),
 };

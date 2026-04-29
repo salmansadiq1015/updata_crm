@@ -1,19 +1,32 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
+import { SWISS_CANTONS, SWISS_POSTAL_CODE_PATTERN, PHONE_PATTERN } from './crm.constants.js';
+
+const swissPostalCode = Joi.string().trim().max(10)
+  .pattern(SWISS_POSTAL_CODE_PATTERN)
+  .messages({ 'string.pattern.base': 'Swiss postal code must be exactly 4 digits (1000-9999)' });
+
+const canton = Joi.string().trim()
+  .valid(...SWISS_CANTONS)
+  .messages({ 'any.only': 'Must be a valid Swiss canton code (e.g., ZH, BE, GE)' });
+
+const phone = Joi.string().trim().max(30)
+  .pattern(PHONE_PATTERN)
+  .messages({ 'string.pattern.base': 'Please enter a valid phone number (e.g., +41 44 123 45 67)' });
 
 export const createCustomerSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(255),
     type: Joi.string().valid('private', 'business').required(),
     street: Joi.string().trim().max(255).allow('', null),
-    postalCode: Joi.string().trim().max(10).allow('', null),
+    postalCode: swissPostalCode.allow('', null),
     city: Joi.string().trim().max(100).allow('', null),
-    canton: Joi.string().trim().max(2).allow('', null),
+    canton: canton.allow('', null),
     country: Joi.string().trim().max(2).default('CH'),
-    phone: Joi.string().trim().max(30).allow('', null),
-    mobile: Joi.string().trim().max(30).allow('', null),
+    phone: phone.allow('', null),
+    mobile: phone.allow('', null),
     email: Joi.string().email().trim().max(255).allow('', null),
-    website: Joi.string().trim().max(255).allow('', null),
+    website: Joi.string().uri({ scheme: ['http', 'https'] }).trim().max(255).allow('', null),
     newsletterOptIn: Joi.boolean().default(false),
     newsletterChannel: Joi.string().valid('email', 'whatsapp', 'both').default('email'),
     notes: Joi.string().max(5000).allow('', null),
@@ -26,14 +39,14 @@ export const updateCustomerSchema = {
     name: Joi.string().trim().max(255),
     type: Joi.string().valid('private', 'business'),
     street: Joi.string().trim().max(255).allow('', null),
-    postalCode: Joi.string().trim().max(10).allow('', null),
+    postalCode: swissPostalCode.allow('', null),
     city: Joi.string().trim().max(100).allow('', null),
-    canton: Joi.string().trim().max(2).allow('', null),
+    canton: canton.allow('', null),
     country: Joi.string().trim().max(2),
-    phone: Joi.string().trim().max(30).allow('', null),
-    mobile: Joi.string().trim().max(30).allow('', null),
+    phone: phone.allow('', null),
+    mobile: phone.allow('', null),
     email: Joi.string().email().trim().max(255).allow('', null),
-    website: Joi.string().trim().max(255).allow('', null),
+    website: Joi.string().uri({ scheme: ['http', 'https'] }).trim().max(255).allow('', null),
     newsletterOptIn: Joi.boolean(),
     newsletterChannel: Joi.string().valid('email', 'whatsapp', 'both'),
     notes: Joi.string().max(5000).allow('', null),
@@ -44,8 +57,8 @@ export const listCustomersSchema = {
   query: cursorPagination.keys({
     status: Joi.string().valid('active', 'archived'),
     type: Joi.string().valid('private', 'business'),
-    postalCode: Joi.string().trim().max(10),
-    canton: Joi.string().trim().max(2),
+    postalCode: swissPostalCode.allow(''),
+    canton: canton.allow(''),
     newsletterOptIn: Joi.string().valid('true', 'false'),
     search: Joi.string().trim().max(100),
   }),
@@ -61,7 +74,7 @@ export const searchCustomersSchema = {
 export const duplicateCheckSchema = {
   query: Joi.object({
     name: Joi.string().required().trim().max(255),
-    postalCode: Joi.string().trim().max(10).allow('', null),
+    postalCode: swissPostalCode.allow('', null),
   }),
 };
 
@@ -98,8 +111,8 @@ export const exportCustomersSchema = {
   query: Joi.object({
     status: Joi.string().valid('active', 'archived'),
     type: Joi.string().valid('private', 'business'),
-    postalCode: Joi.string().trim().max(10),
-    canton: Joi.string().trim().max(2),
+    postalCode: swissPostalCode.allow(''),
+    canton: canton.allow(''),
     newsletterOptIn: Joi.string().valid('true', 'false'),
     search: Joi.string().trim().max(100),
     format: Joi.string().valid('csv').default('csv'),

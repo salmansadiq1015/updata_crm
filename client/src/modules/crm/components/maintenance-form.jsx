@@ -81,7 +81,7 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)}>
+        <form onSubmit={handleSubmit(submit)} className="flex flex-1 flex-col overflow-hidden">
           <FormBody>
             <FormField label={t('crm.maintenance.maintenanceType', 'Wartungsart')} required error={errors.maintenanceType?.message}>
               <Select value={type} onValueChange={(v) => setValue('maintenanceType', v, { shouldDirty: true })}>

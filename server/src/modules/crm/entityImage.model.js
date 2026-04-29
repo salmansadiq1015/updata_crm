@@ -16,6 +16,16 @@ const entityImageSchema = new mongoose.Schema(
       ref: 'FileMetadata',
       required: true,
     },
+    thumbnailFileId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileMetadata',
+      default: null,
+    },
+    mediumFileId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileMetadata',
+      default: null,
+    },
     caption: {
       type: String,
       trim: true,

@@ -20,12 +20,13 @@ import { ProjectForm } from '@/modules/pm/components/project-form';
 import { ProjectFilterBar } from '@/modules/pm/components/project-filter-bar';
 import { ProjectStatsRow } from '@/modules/pm/components/project-stats-row';
 import { ProjectStatusBadge } from '@/modules/pm/components/project-status-badge';
+import { MilestonesWidget } from '@/modules/pm/components/milestones-widget';
 import { PROJECT_TYPE_CONFIG, pickProjectAccent } from '@/modules/pm/constants/pm-constants';
 import { Button } from '@/components/ui/button';
 import { formatDate, formatCurrency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import {
-  Plus, Eye, Pencil, Copy, Archive, FolderKanban,
+  Plus, Eye, Pencil, Copy, Archive, FolderKanban, Download,
 } from 'lucide-react';
 
 export function ProjectsTable() {
@@ -36,6 +37,7 @@ export function ProjectsTable() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [myOnly, setMyOnly] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
 
   const [formOpen, setFormOpen] = useState(false);
@@ -50,8 +52,9 @@ export function ProjectsTable() {
     if (debouncedSearch) p.search = debouncedSearch;
     if (statusFilter !== 'all') p.status = statusFilter;
     if (typeFilter !== 'all') p.projectType = typeFilter;
+    if (myOnly) p.myOnly = true;
     return p;
-  }, [debouncedSearch, statusFilter, typeFilter]);
+  }, [debouncedSearch, statusFilter, typeFilter, myOnly]);
 
   const {
     items: projects,
@@ -70,7 +73,7 @@ export function ProjectsTable() {
     initialSize: 25,
   });
 
-  const { create, update, remove, duplicate, bulkDelete } = useProjectMutations({
+  const { create, update, remove, duplicate, bulkDelete, exportCsv } = useProjectMutations({
     onCreate: () => setFormOpen(false),
     onUpdate: () => setFormOpen(false),
     onDelete: () => setConfirmArchiveOpen(false),
@@ -92,6 +95,7 @@ export function ProjectsTable() {
     setSearch('');
     setStatusFilter('all');
     setTypeFilter('all');
+    setMyOnly(false);
     resetCursor();
   }, [resetCursor]);
 
@@ -194,6 +198,15 @@ export function ProjectsTable() {
         description={t('pm.projectsDesc', 'Create, manage and track project progress.')}
         count={projects.length}
       >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => exportCsv.mutate(apiParams)}
+          disabled={exportCsv.isPending}
+        >
+          <Download className="h-4 w-4 mr-1.5" />
+          {exportCsv.isPending ? (language === 'de' ? 'Exportiert...' : 'Exporting...') : 'CSV'}
+        </Button>
         <PermissionGate permission="projects:write">
           <Button
             onClick={() => {
@@ -208,7 +221,12 @@ export function ProjectsTable() {
         </PermissionGate>
       </PageHeader>
 
-      <ProjectStatsRow />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <ProjectStatsRow />
+        </div>
+        <MilestonesWidget />
+      </div>
 
       <ProjectFilterBar
         search={search}
@@ -217,6 +235,8 @@ export function ProjectsTable() {
         onStatusFilterChange={(val) => { setStatusFilter(val); resetCursor(); }}
         typeFilter={typeFilter}
         onTypeFilterChange={(val) => { setTypeFilter(val); resetCursor(); }}
+        myOnly={myOnly}
+        onMyOnlyChange={(val) => { setMyOnly(val); resetCursor(); }}
         onClear={clearFilters}
       />
 

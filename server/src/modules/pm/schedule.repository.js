@@ -34,6 +34,10 @@ class ScheduleRepository {
     );
   }
 
+  async findDependents(predecessorId) {
+    return ScheduleEntry.find({ predecessorId, isDeleted: false }).lean();
+  }
+
   async countMilestonesIncomplete(projectId) {
     return ScheduleEntry.countDocuments({
       projectId,

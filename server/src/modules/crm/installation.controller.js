@@ -46,6 +46,14 @@ class InstallationController {
       return res.success({ data: installation, message: 'Installation decommissioned successfully' });
     } catch (err) { next(err); }
   }
+
+  async getActivity(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await installationService.getActivity(req.params.id, query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
 }
 
 const installationController = new InstallationController();

@@ -57,3 +57,10 @@ export const listInstallationsSchema = {
     search: Joi.string().trim().max(100),
   }),
 };
+
+export const installationActivitySchema = {
+  params: Joi.object({ id: objectId.required() }),
+  query: cursorPagination.keys({
+    eventType: Joi.string().trim().max(100),
+  }),
+};

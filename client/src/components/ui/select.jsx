@@ -6,6 +6,15 @@ import { Select as SelectPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
+function extractTextContent(node) {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string') return node;
+  if (typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(extractTextContent).join('');
+  if (typeof node === 'object' && node.props) return extractTextContent(node.props.children);
+  return '';
+}
+
 function Select({
   ...props
 }) {
@@ -114,11 +123,16 @@ function SelectLabel({
 function SelectItem({
   className,
   children,
+  textValue,
   ...props
 }) {
+  const isSimple = typeof children === 'string' || typeof children === 'number';
+  const resolvedTextValue = textValue || extractTextContent(children) || undefined;
+
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      textValue={resolvedTextValue}
       className={cn(
         "relative flex w-full cursor-pointer items-center gap-1.5 rounded-lg py-2 pr-8 pl-2.5 text-sm outline-hidden select-none transition-colors focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className
@@ -130,7 +144,16 @@ function SelectItem({
           <CheckIcon className="pointer-events-none" />
         </SelectPrimitive.ItemIndicator>
       </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {isSimple ? (
+        <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      ) : (
+        <>
+          <SelectPrimitive.ItemText className="sr-only">
+            {resolvedTextValue}
+          </SelectPrimitive.ItemText>
+          {children}
+        </>
+      )}
     </SelectPrimitive.Item>
   );
 }

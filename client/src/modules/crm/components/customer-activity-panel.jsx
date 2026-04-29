@@ -9,14 +9,29 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/shared/components/empty-state';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDateTime, formatDateRelative } from '@/lib/formatters';
-import { Activity, AlertCircle, CheckCircle, Edit3, GitMerge, Archive, UserPlus } from 'lucide-react';
+import {
+  Activity, AlertCircle, CheckCircle, Edit3, GitMerge, Archive, UserPlus,
+  FileText, ShoppingCart, Receipt, Send, ThumbsDown, ThumbsUp,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const EVENT_META = {
+  // CRM events
   'customer.created': { icon: UserPlus, tone: 'emerald', labelKey: 'crm.event.customer.created', fallback: 'Customer created' },
   'customer.updated': { icon: Edit3, tone: 'blue', labelKey: 'crm.event.customer.updated', fallback: 'Customer updated' },
   'customer.archived': { icon: Archive, tone: 'muted', labelKey: 'crm.event.customer.archived', fallback: 'Customer archived' },
   'customer.merged': { icon: GitMerge, tone: 'amber', labelKey: 'crm.event.customer.merged', fallback: 'Customers merged' },
+  // QOP — Quotations
+  'quotation.created': { icon: FileText, tone: 'blue', labelKey: 'crm.event.quotation.created', fallback: 'Quotation created' },
+  'quotation.sent': { icon: Send, tone: 'sky', labelKey: 'crm.event.quotation.sent', fallback: 'Quotation sent' },
+  'quotation.accepted': { icon: ThumbsUp, tone: 'emerald', labelKey: 'crm.event.quotation.accepted', fallback: 'Quotation accepted' },
+  'quotation.declined': { icon: ThumbsDown, tone: 'red', labelKey: 'crm.event.quotation.declined', fallback: 'Quotation declined' },
+  // QOP — Orders
+  'order.created': { icon: ShoppingCart, tone: 'emerald', labelKey: 'crm.event.order.created', fallback: 'Order created' },
+  // QOP — Invoices
+  'invoice.created': { icon: Receipt, tone: 'orange', labelKey: 'crm.event.invoice.created', fallback: 'Invoice created' },
+  'invoice.sent': { icon: Send, tone: 'sky', labelKey: 'crm.event.invoice.sent', fallback: 'Invoice sent' },
+  'invoice.paid': { icon: CheckCircle, tone: 'emerald', labelKey: 'crm.event.invoice.paid', fallback: 'Invoice paid' },
 };
 
 const TONE_CLASSES = {
@@ -25,6 +40,9 @@ const TONE_CLASSES = {
   amber: 'bg-amber-500/10 text-amber-500 ring-amber-500/20',
   muted: 'bg-muted text-muted-foreground ring-border',
   violet: 'bg-violet-500/10 text-violet-500 ring-violet-500/20',
+  sky: 'bg-sky-500/10 text-sky-500 ring-sky-500/20',
+  red: 'bg-red-500/10 text-red-500 ring-red-500/20',
+  orange: 'bg-orange-500/10 text-orange-500 ring-orange-500/20',
 };
 
 export function CustomerActivityPanel({ customerId }) {
@@ -138,5 +156,14 @@ function describeDetails(details, t) {
   if (details.sourceId && details.targetId) {
     fields.push(t('crm.mergedInto', 'merged into target'));
   }
+  // QOP document details
+  if (details.quotationNumber) fields.push(details.quotationNumber);
+  if (details.orderNumber) fields.push(details.orderNumber);
+  if (details.invoiceNumber) fields.push(details.invoiceNumber);
+  if (details.title && !details.name) fields.push(details.title);
+  if (details.amount != null && details.currency) {
+    fields.push(`${details.currency} ${Number(details.amount).toLocaleString('de-CH', { minimumFractionDigits: 2 })}`);
+  }
+  if (details.status) fields.push(details.status);
   return fields.join(' · ');
 }

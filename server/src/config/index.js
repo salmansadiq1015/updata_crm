@@ -130,6 +130,10 @@ const config = Object.freeze({
     maxTokens: envVars.OPENAI_MAX_TOKENS,
   },
 
+  maintenance: {
+    lookaheadDays: envVars.MAINTENANCE_LOOKAHEAD_DAYS,
+  },
+
   autoMigrate: envVars.AUTO_MIGRATE,
 });
 

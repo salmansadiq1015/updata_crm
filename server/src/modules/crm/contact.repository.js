@@ -42,6 +42,14 @@ class ContactRepository {
     );
   }
 
+  async findAll(limit = 500) {
+    return Contact.find()
+      .populate('customerId', 'name customerNumber city postalCode street')
+      .sort({ lastName: 1, firstName: 1 })
+      .limit(limit)
+      .lean();
+  }
+
   async search(searchTerm, limit = 25) {
     return Contact.find({
       $or: [

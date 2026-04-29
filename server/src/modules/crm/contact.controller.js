@@ -47,6 +47,14 @@ class ContactController {
     } catch (err) { next(err); }
   }
 
+  async listAll(req, res, next) {
+    try {
+      const limit = parseInt(req.query.limit, 10) || 500;
+      const data = await contactService.listAll(Math.min(limit, 1000));
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async search(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;

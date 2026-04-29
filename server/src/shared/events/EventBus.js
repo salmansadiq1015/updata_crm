@@ -78,6 +78,14 @@ class EventBus extends EventEmitter {
           eventId: envelope.id,
           error: { message: err.message, stack: err.stack },
         });
+
+        // Persist failed event to Dead-Letter Queue
+        try {
+          const dlqService = (await import('./dlq.service.js')).default;
+          await dlqService.persistFailedEvent(envelope.type, envelope, err);
+        } catch (dlqErr) {
+          logger.error('Failed to persist to DLQ', { error: dlqErr.message });
+        }
       }
     };
 

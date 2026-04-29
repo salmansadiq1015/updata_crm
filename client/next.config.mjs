@@ -1,11 +1,17 @@
+import withSerwistInit from '@serwist/next';
+
+const withSerwist = withSerwistInit({
+  swSrc: 'src/sw.js',
+  swDest: 'public/sw.js',
+  disable: process.env.NODE_ENV === 'development',
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // TypeScript strict checking happens in IDE / `tsc --noEmit`.
-  // Build-time checking is disabled because the codebase is mixed JS/TS
-  // and strict checks on untyped .jsx imports from .tsx produce false positives.
   typescript: {
     ignoreBuildErrors: true,
   },
+  turbopack: {},
 };
 
-export default nextConfig;
+export default withSerwist(nextConfig);

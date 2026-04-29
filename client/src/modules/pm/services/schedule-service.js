@@ -1,5 +1,6 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
+import { downloadBlob } from '@/lib/api/download';
 
 export const scheduleService = {
   async getSchedule(projectId) {
@@ -29,6 +30,23 @@ export const scheduleService = {
 
   async updateConfirmationResponse(projectId, entryId, confId, data) {
     const res = await apiClient.patch(ENDPOINTS.PM.CONFIRMATION_BY_ID(projectId, entryId, confId), data);
+    return res.data;
+  },
+
+  async exportSchedule(projectId, format = 'ical') {
+    if (format === 'ical') {
+      const { data } = await apiClient.get(ENDPOINTS.PM.SCHEDULE_EXPORT(projectId), {
+        params: { format: 'ical' },
+        responseType: 'blob',
+        transformResponse: [(x) => x],
+      });
+      const filename = `schedule-${projectId}.ics`;
+      downloadBlob(data, filename, 'text/calendar;charset=utf-8');
+      return { filename };
+    }
+    const res = await apiClient.get(ENDPOINTS.PM.SCHEDULE_EXPORT(projectId), {
+      params: { format: 'pdf' },
+    });
     return res.data;
   },
 };

@@ -63,15 +63,6 @@ const navSectionDefs = [
     ],
   },
   {
-    titleKey: 'sidebar.mobile',
-    items: [
-      { labelKey: 'sidebar.mobileOrders', href: '/orders', icon: ClipboardList, permission: 'mobile:read' },
-      { labelKey: 'sidebar.mobileChat', href: '/chat', icon: MessageSquare, permission: 'mobile:read' },
-      { labelKey: 'sidebar.mobileNotifications', href: '/notifications', icon: Bell, permission: 'mobile:read' },
-      { labelKey: 'sidebar.mobileSettings', href: '/settings', icon: Smartphone, permission: 'mobile:read' },
-    ],
-  },
-  {
     titleKey: 'sidebar.admin',
     items: [
       { labelKey: 'sidebar.users', href: '/settings/users', icon: Users, permission: 'users:read' },

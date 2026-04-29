@@ -14,13 +14,16 @@ export function JoinGroupDialog({ open, onClose }) {
 
   const { joinByCode } = useChatMutations();
 
+  const prevOpen = useRef(false);
   useEffect(() => {
-    if (open) {
-      setDigits(['', '', '', '']);
-      setError('');
-      // Focus first box after dialog opens
-      setTimeout(() => inputRefs.current[0]?.focus(), 50);
+    if (open && !prevOpen.current) {
+      setTimeout(() => {
+        setDigits(['', '', '', '']);
+        setError('');
+        inputRefs.current[0]?.focus();
+      }, 0);
     }
+    prevOpen.current = open;
   }, [open]);
 
   function handleChange(index, e) {

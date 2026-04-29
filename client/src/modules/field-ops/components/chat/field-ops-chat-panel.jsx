@@ -1,54 +1,45 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import { useChatMessages } from '@/modules/mobile/hooks/use-chat';
 import { useFieldOpsChatMutations } from '@/modules/field-ops/hooks/use-field-ops-chat-mutations';
-import { FieldOpsChatMessage } from './field-ops-chat-message';
+import { useFieldOpsOrders } from '@/modules/field-ops/hooks/use-field-ops-queries';
+import { useAuth } from '@/shared/hooks/use-auth';
+import { FieldOpsChatHeader } from './field-ops-chat-header';
+import { FieldOpsChatMessages } from './field-ops-chat-messages';
+import { FieldOpsChatTypingIndicator } from './field-ops-chat-typing-indicator';
 import { FieldOpsChatInput } from './field-ops-chat-input';
-import { PageHeader } from '@/shared/components/page-header';
-import { useLanguage } from '@/lib/i18n/language-context';
 
 export function FieldOpsChatPanel({ projectId }) {
-  const { t } = useLanguage();
-  const bottomRef = useRef(null);
-
-  const { data: messages = [], isLoading } = useChatMessages(projectId);
+  const { user } = useAuth();
+  const { data: messages = [], isLoading, typingUsers = [] } = useChatMessages(projectId);
   const { sendMessage } = useFieldOpsChatMutations(projectId);
+  const { data: orders = [] } = useFieldOpsOrders({});
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  const order = orders.find(
+    (o) => (o.projectId || o.project_id) === projectId
+  );
+
+  const handleSend = useCallback(
+    (payload) => {
+      sendMessage.mutate(payload);
+    },
+    [sendMessage]
+  );
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
-      <div className="px-6 py-4">
-        <PageHeader
-          title={t('fieldOps.chat.title', 'Project Chat')}
-          description={`Project ${projectId}`}
-        />
-      </div>
-      <div className="flex-1 overflow-y-auto px-6 py-2">
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1,2,3].map((i) => (
-              <div key={i} className="flex gap-2">
-                <div className="h-7 w-7 rounded-full bg-muted animate-pulse" />
-                <div className="h-10 w-48 rounded-2xl bg-muted animate-pulse" />
-              </div>
-            ))}
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            {t('fieldOps.chat.empty', 'No messages yet.')}
-          </div>
-        ) : (
-          messages.map((msg) => <FieldOpsChatMessage key={msg.id || msg._id} message={msg} />)
-        )}
-        <div ref={bottomRef} />
-      </div>
+    <div className="flex flex-col h-full overflow-hidden">
+      <FieldOpsChatHeader order={order} />
+      <FieldOpsChatMessages
+        messages={messages}
+        isLoading={isLoading}
+        currentUserId={user?._id}
+      />
+      <FieldOpsChatTypingIndicator typingUsers={typingUsers} />
       <FieldOpsChatInput
-        onSend={(data) => sendMessage.mutate(data)}
+        onSend={handleSend}
         isLoading={sendMessage.isPending}
+        projectId={projectId}
       />
     </div>
   );

@@ -8,6 +8,8 @@ import { formatDate } from '@/lib/formatters';
 import { ChatMessage } from './chat-message';
 import { ChatDateSeparator } from './chat-date-separator';
 
+const FIVE_MIN = 5 * 60 * 1000;
+
 function getDayKey(ts) {
   if (!ts) return 'unknown';
   const d = new Date(ts);
@@ -30,8 +32,6 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, onReply,
   const bottomRef = useRef(null);
   const prevLengthRef = useRef(0);
   const [showFab, setShowFab] = useState(false);
-  const FIVE_MIN = 5 * 60 * 1000;
-
   const items = useMemo(() => {
     if (!messages.length) return [];
     const result = [];
@@ -88,7 +88,7 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, onReply,
     if (!isLoading && messages.length > 0) {
       bottomRef.current?.scrollIntoView({ behavior: 'instant' });
     }
-  }, [isLoading]);
+  }, [isLoading, messages.length]);
 
   const handleScroll = useCallback((e) => {
     const el = e.currentTarget;

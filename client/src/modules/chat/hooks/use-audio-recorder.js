@@ -6,17 +6,27 @@ export function useAudioRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState(null);
-  const [result, setResult] = useState(null); // { attachmentUrl, attachmentFileId, duration }
+  const [result, setResult] = useState(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
+  const durationRef = useRef(0);
   const MAX_DURATION = 120;
+
+  const stopRecording = useCallback(() => {
+    clearInterval(timerRef.current);
+    if (mediaRecorderRef.current?.state !== 'inactive') {
+      mediaRecorderRef.current?.stop();
+    }
+    setIsRecording(false);
+  }, []);
 
   const startRecording = useCallback(async () => {
     try {
       setError(null);
       setResult(null);
       setDuration(0);
+      durationRef.current = 0;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
@@ -33,32 +43,27 @@ export function useAudioRecorder() {
         formData.append('file', file);
         try {
           const uploaded = await chatService.uploadFile(formData);
-          setResult({ attachmentUrl: uploaded.attachmentUrl || uploaded.url, attachmentFileId: uploaded._id || uploaded.attachmentFileId, duration });
-        } catch (uploadErr) {
+          setResult({
+            attachmentUrl: uploaded.attachmentUrl || uploaded.url,
+            attachmentFileId: uploaded._id || uploaded.attachmentFileId,
+            duration: durationRef.current,
+          });
+        } catch {
           setError('Upload failed');
         }
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
       setIsRecording(true);
-      let secs = 0;
       timerRef.current = setInterval(() => {
-        secs += 1;
-        setDuration(secs);
-        if (secs >= MAX_DURATION) stopRecording();
+        durationRef.current += 1;
+        setDuration(durationRef.current);
+        if (durationRef.current >= MAX_DURATION) stopRecording();
       }, 1000);
-    } catch (err) {
+    } catch {
       setError('Microphone access denied');
     }
-  }, []);
-
-  const stopRecording = useCallback(() => {
-    clearInterval(timerRef.current);
-    if (mediaRecorderRef.current?.state !== 'inactive') {
-      mediaRecorderRef.current?.stop();
-    }
-    setIsRecording(false);
-  }, []);
+  }, [stopRecording]);
 
   const reset = useCallback(() => {
     setResult(null);

@@ -16,7 +16,7 @@ export function ChatAudioRecorder({ onComplete, onCancel }) {
 
   useEffect(() => {
     startRecording();
-  }, []);
+  }, [startRecording]);
 
   useEffect(() => {
     if (result) {

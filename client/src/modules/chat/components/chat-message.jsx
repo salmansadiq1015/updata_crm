@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import NextImage from 'next/image';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -39,15 +40,18 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
       case 'PHOTO':
         return (
           <>
-            <img
+            <NextImage
               src={message.attachmentUrl}
               alt="Photo"
-              className="max-w-[240px] rounded-lg cursor-pointer object-cover"
+              width={240}
+              height={180}
+              className="rounded-lg cursor-pointer object-cover"
               onClick={() => setLightboxOpen(true)}
+              unoptimized
             />
             <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
               <DialogContent className="max-w-3xl p-2 bg-black/90">
-                <img src={message.attachmentUrl} alt="Photo" className="w-full rounded" />
+                <NextImage src={message.attachmentUrl} alt="Photo" width={900} height={600} className="w-full rounded object-contain" unoptimized />
               </DialogContent>
             </Dialog>
           </>

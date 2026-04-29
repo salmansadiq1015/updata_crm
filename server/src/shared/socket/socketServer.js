@@ -167,6 +167,9 @@ export function initializeSocketServer(httpServer) {
     // Join personal notification room
     socket.join(userId);
 
+    // Join personal room for sidebar notifications
+    socket.join(`user:${socket.userId}`);
+
     logger.info('Socket connected', {
       module: 'socket',
       action: 'connect',
@@ -261,6 +264,30 @@ export function initializeSocketServer(httpServer) {
     socket.on('messageUpdated', ({ chatId, messageId, message }) => {
       if (chatId && messageId) {
         io.to(chatId).emit('messageUpdated', { chatId, messageId, message });
+      }
+    });
+
+    // ─── Room-based Chat Events ──────────────────────────
+    socket.on('join room', ({ roomId }) => {
+      if (roomId) socket.join(`room:${roomId}`);
+    });
+
+    socket.on('chat:typing', ({ roomId }) => {
+      if (roomId) {
+        socket.to(`room:${roomId}`).emit('chat:typing', {
+          roomId,
+          userId: socket.userId || socket.user?._id,
+          userName: socket.userName || socket.user?.firstName || 'Unknown',
+        });
+      }
+    });
+
+    socket.on('chat:stop typing', ({ roomId }) => {
+      if (roomId) {
+        socket.to(`room:${roomId}`).emit('chat:stop typing', {
+          roomId,
+          userId: socket.userId || socket.user?._id,
+        });
       }
     });
 

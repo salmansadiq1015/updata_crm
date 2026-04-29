@@ -1,7 +1,7 @@
 'use client';
 
 import { useFieldOpsNotifications } from '@/modules/field-ops/hooks/use-field-ops-queries';
-import { useNotificationMutations } from '@/modules/mobile/hooks/use-notification-queries';
+import { useFieldOpsNotificationMutations } from '@/modules/field-ops/hooks/use-field-ops-notification-mutations';
 import { FieldOpsNotificationItem } from './field-ops-notification-item';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 export function FieldOpsNotificationList() {
   const { t } = useLanguage();
   const { data: notifications = [], isLoading } = useFieldOpsNotifications();
-  const { markRead, markAllRead } = useNotificationMutations();
+  const { markRead, markAllRead } = useFieldOpsNotificationMutations();
 
   const unread = notifications.filter((n) => !n.is_read).length;
 

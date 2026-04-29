@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useChatMessages, useChatMutations } from '@/modules/mobile/hooks/use-chat';
+import { useChatMessages } from '@/modules/mobile/hooks/use-chat';
+import { useFieldOpsChatMutations } from '@/modules/field-ops/hooks/use-field-ops-chat-mutations';
 import { FieldOpsChatMessage } from './field-ops-chat-message';
 import { FieldOpsChatInput } from './field-ops-chat-input';
 import { PageHeader } from '@/shared/components/page-header';
@@ -12,7 +13,7 @@ export function FieldOpsChatPanel({ projectId }) {
   const bottomRef = useRef(null);
 
   const { data: messages = [], isLoading } = useChatMessages(projectId);
-  const { sendMessage } = useChatMutations(projectId);
+  const { sendMessage } = useFieldOpsChatMutations(projectId);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

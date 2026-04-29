@@ -64,7 +64,7 @@ export function FieldOpsPhotoGallery({ orderId }) {
           {lightbox && (
             <div className="space-y-2">
               <img
-                src={lightbox.remote_file_url || lightbox.remoteFileUrl}
+                src={lightbox.remote_file_url || lightbox.remoteFileUrl || lightbox.local_file_path}
                 alt={lightbox.caption || lightbox.category}
                 className="w-full max-h-[70vh] object-contain rounded"
               />

@@ -7,8 +7,10 @@ import { ChatPanel } from '@/modules/chat/components/chat-panel';
 export default function FieldOpsChatRoomPage({ params }) {
   const { roomId } = use(params);
   return (
-    <ChatShell sidebar={<ChatSidebar activeRoomId={roomId} />}>
-      <ChatPanel roomId={roomId} />
-    </ChatShell>
+    <div className="-m-4 sm:-m-6 h-[calc(100%+2rem)] sm:h-[calc(100%+3rem)]">
+      <ChatShell sidebar={<ChatSidebar activeRoomId={roomId} />}>
+        <ChatPanel roomId={roomId} />
+      </ChatShell>
+    </div>
   );
 }

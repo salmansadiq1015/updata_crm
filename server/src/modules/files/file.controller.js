@@ -1,4 +1,5 @@
 import fileService from './file.service.js';
+import storageService from '../../shared/storage/StorageService.js';
 
 /**
  * File controller — HTTP layer only.
@@ -28,8 +29,16 @@ class FileController {
         bucket: req.body.bucket || 'general',
       });
 
+      // Generate a presigned URL so callers can immediately access the file
+      let url = null;
+      try {
+        url = await storageService.getPresignedUrl(result.key, 7 * 24 * 3600); // 7-day expiry
+      } catch {
+        // Non-fatal — caller can fetch via /files/:id/download
+      }
+
       return res.success({
-        data: result,
+        data: { ...result.toObject(), url },
         message: 'File uploaded successfully',
         statusCode: 201,
       });

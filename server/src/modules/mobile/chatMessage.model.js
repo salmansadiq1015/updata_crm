@@ -7,7 +7,7 @@ const chatMessageSchema = new mongoose.Schema(
     projectId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Project',
-      required: true,
+      default: null,
     },
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -30,8 +30,8 @@ const chatMessageSchema = new mongoose.Schema(
     },
     content: {
       type: String,
-      required: true,
       maxlength: 5000,
+      default: '',
     },
     attachmentUrl: { type: String, default: null },
     attachmentFileId: {

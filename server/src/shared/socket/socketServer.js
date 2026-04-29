@@ -185,6 +185,9 @@ export function initializeSocketServer(httpServer) {
         await User.findByIdAndUpdate(userId, { isOnline: true });
       }
       io.emit('userStatus', { userId, isOnline: true });
+      // Hydrate new client with current online roster
+      const onlineUserIds = Array.from(connectedUsers.keys());
+      socket.emit('userStatus:init', { onlineUserIds });
     } catch (err) {
       logger.warn('Failed to update online status', { module: 'socket', userId, error: err.message });
     }
@@ -272,12 +275,12 @@ export function initializeSocketServer(httpServer) {
       if (roomId) socket.join(`room:${roomId}`);
     });
 
-    socket.on('chat:typing', ({ roomId }) => {
+    socket.on('chat:typing', ({ roomId, userName }) => {
       if (roomId) {
         socket.to(`room:${roomId}`).emit('chat:typing', {
           roomId,
-          userId: socket.userId || socket.user?._id,
-          userName: socket.userName || socket.user?.firstName || 'Unknown',
+          userId: socket.userId,
+          userName: userName || 'Unknown',
         });
       }
     });
@@ -303,7 +306,7 @@ export function initializeSocketServer(httpServer) {
           try {
             const User = await getUserModel();
             if (User) {
-              await User.findByIdAndUpdate(userId, { isOnline: false });
+              await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen: new Date() });
             }
             io.emit('userStatus', { userId, isOnline: false });
           } catch (err) {

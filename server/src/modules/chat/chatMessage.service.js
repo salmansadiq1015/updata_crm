@@ -59,7 +59,7 @@ const chatMessageService = {
     // Notify each member's personal room for sidebar refresh
     if (room.members) {
       room.members.forEach((m) => {
-        global.io?.to(`user:${m.userId}`).emit('chat:room_updated', {
+        global.io?.to(`user:${m.userId?._id ?? m.userId}`).emit('chat:room_updated', {
           roomId,
           lastMessageText: message.content?.slice(0, 40) || message.messageType,
           lastMessageAt: message.sentAt,

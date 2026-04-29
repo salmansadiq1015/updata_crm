@@ -56,6 +56,7 @@ export const createGroupRoomSchema = {
   body: Joi.object({
     name: Joi.string().max(100).required(),
     memberIds: Joi.array().items(Joi.string().hex().length(24)).default([]),
+    projectId: Joi.string().hex().length(24).optional().allow(null),
   }),
 };
 

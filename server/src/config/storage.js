@@ -65,6 +65,11 @@ export const ALLOWED_MIME_TYPES = {
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'text/csv', 'text/plain',
+    // Audio (voice messages + uploads)
+    'audio/webm', 'audio/webm;codecs=opus', 'audio/ogg', 'audio/ogg;codecs=opus',
+    'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav',
+    // Video
+    'video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo',
   ],
 };
 

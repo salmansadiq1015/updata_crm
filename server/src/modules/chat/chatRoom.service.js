@@ -38,7 +38,7 @@ const chatRoomService = {
   async assertMembership(roomId, userId) {
     const room = await chatRoomRepository.findById(roomId);
     if (!room) throw new NotFoundError('Chat room');
-    const isMember = room.members.some((m) => String(m.userId) === String(userId));
+    const isMember = room.members.some((m) => String(m.userId?._id ?? m.userId) === String(userId));
     if (!isMember) throw new AuthorizationError('You are not a member of this chat room');
     return room;
   },
@@ -52,7 +52,7 @@ const chatRoomService = {
     await chatRoomRepository.removeBlock(roomId, requesterId);
   },
 
-  async createGroupRoom(name, creatorId, memberIds = []) {
+  async createGroupRoom(name, creatorId, memberIds = [], projectId = null) {
     const joinCode = String(Math.floor(1000 + Math.random() * 9000));
     const joinCodeExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const allMembers = [...new Set([String(creatorId), ...memberIds.map(String)])];
@@ -65,6 +65,7 @@ const chatRoomService = {
       joinCode,
       joinCodeExpiresAt,
       isActive: true,
+      ...(projectId && { projectId }),
     });
     return chatRoomRepository.findById(room._id);
   },
@@ -99,6 +100,19 @@ const chatRoomService = {
       throw err;
     }
     await chatRoomRepository.removeMember(roomId, userId);
+  },
+
+  async deleteRoom(roomId, userId) {
+    const room = await chatRoomRepository.findById(roomId);
+    if (!room) throw new NotFoundError('Chat room');
+    if (room.roomType === 'DM') {
+      await chatRoomRepository.removeMember(roomId, userId);
+    } else {
+      const isAdmin = room.admins?.some(a => String(a._id ?? a) === String(userId));
+      if (!isAdmin) throw new AuthorizationError('Only admins can delete this group');
+      await ChatRoom.findByIdAndUpdate(roomId, { $set: { isActive: false } });
+      global.io?.to(`room:${roomId}`).emit('chat:room_deleted', { roomId });
+    }
   },
 
   async refreshJoinCode(roomId, requesterId) {

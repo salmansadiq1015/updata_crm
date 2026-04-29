@@ -66,6 +66,22 @@ async function start() {
         setTimeout(() => resolve(), 5000); // Don't block startup if Redis is slow
       });
       cacheManager.initL2(redisClient);
+
+      // In development, flush stale rate-limit counters so a server restart
+      // never leaves developers locked out of endpoints like file upload.
+      if (config.isDevelopment) {
+        try {
+          const rlKeys = await redisClient.keys(`${config.redis.keyPrefix}rl:*`);
+          if (rlKeys.length > 0) {
+            // Strip the keyPrefix that ioredis would re-add before issuing DEL
+            const stripped = rlKeys.map(k => k.replace(new RegExp(`^${config.redis.keyPrefix}`), ''));
+            await redisClient.del(...stripped);
+            logger.debug(`Flushed ${rlKeys.length} stale rate-limit key(s) on dev restart`, { module: 'server' });
+          }
+        } catch {
+          // Non-fatal — startup continues
+        }
+      }
     } catch (err) {
       logger.warn('Redis connection failed — running without L2 cache', {
         module: 'server',

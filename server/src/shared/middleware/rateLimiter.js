@@ -72,7 +72,11 @@ export const authLimiter = createLimiter({
 
 export const uploadLimiter = createLimiter({
   windowMs: config.rateLimit.windowMs,
-  max: config.rateLimit.upload,
+  // Separate key namespace so upload counter doesn't share with global limiter
+  keyGenerator: (req, res) =>
+    req.user?._id ? `upload:user:${req.user._id}` : `upload:ip:${ipKeyGenerator(req, res)}`,
+  // In development uploads are frequent during testing; production uses the configured limit
+  max: config.isDevelopment ? 10_000 : config.rateLimit.upload,
   message: 'Too many file uploads, please try again later',
 });
 

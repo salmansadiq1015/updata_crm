@@ -1,11 +1,11 @@
-import { FieldOpsChatShell } from '@/modules/field-ops/components/chat/field-ops-chat-shell';
-import { FieldOpsChatSidebar } from '@/modules/field-ops/components/chat/field-ops-chat-sidebar';
-import { FieldOpsChatEmpty } from '@/modules/field-ops/components/chat/field-ops-chat-empty';
+import { ChatShell } from '@/modules/chat/components/chat-shell';
+import { ChatSidebar } from '@/modules/chat/components/chat-sidebar';
+import { ChatEmpty } from '@/modules/chat/components/chat-empty';
 
 export default function FieldOpsChatPage() {
   return (
-    <FieldOpsChatShell sidebar={<FieldOpsChatSidebar />}>
-      <FieldOpsChatEmpty />
-    </FieldOpsChatShell>
+    <ChatShell sidebar={<ChatSidebar />}>
+      <ChatEmpty />
+    </ChatShell>
   );
 }

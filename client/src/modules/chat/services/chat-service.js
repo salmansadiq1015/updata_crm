@@ -15,4 +15,8 @@ export const chatService = {
   blockUser: (roomId)                     => apiClient.post(ENDPOINTS.CHAT.ROOM_BLOCK(roomId)).then(r => r.data),
   unblockUser: (roomId)                   => apiClient.delete(ENDPOINTS.CHAT.ROOM_BLOCK(roomId)).then(r => r.data),
   uploadFile: (formData)                  => apiClient.post('/files/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data?.data || r.data),
+  createGroupRoom: (name, memberIds)      => apiClient.post(ENDPOINTS.CHAT.GROUP_ROOM, { name, memberIds }).then(r => r.data?.data),
+  joinByCode: (joinCode)                  => apiClient.post(ENDPOINTS.CHAT.JOIN_ROOM, { joinCode }).then(r => r.data?.data),
+  leaveRoom: (roomId)                     => apiClient.post(ENDPOINTS.CHAT.LEAVE_ROOM(roomId)).then(r => r.data),
+  refreshJoinCode: (roomId)               => apiClient.post(ENDPOINTS.CHAT.REFRESH_CODE(roomId)).then(r => r.data?.data),
 };

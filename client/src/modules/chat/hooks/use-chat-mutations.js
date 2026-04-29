@@ -46,5 +46,24 @@ export function useChatMutations(roomId) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.room(roomId) }),
   });
 
-  return { sendMessage, deleteMessage, editMessage, addReaction, removeReaction, markRead, blockUser, unblockUser };
+  const createGroupRoom = useMutation({
+    mutationFn: ({ name, memberIds }) => chatService.createGroupRoom(name, memberIds),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() }),
+  });
+
+  const joinByCode = useMutation({
+    mutationFn: (joinCode) => chatService.joinByCode(joinCode),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() }),
+  });
+
+  const leaveRoom = useMutation({
+    mutationFn: (roomId) => chatService.leaveRoom(roomId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() }),
+  });
+
+  const refreshJoinCode = useMutation({
+    mutationFn: (roomId) => chatService.refreshJoinCode(roomId),
+  });
+
+  return { sendMessage, deleteMessage, editMessage, addReaction, removeReaction, markRead, blockUser, unblockUser, createGroupRoom, joinByCode, leaveRoom, refreshJoinCode };
 }

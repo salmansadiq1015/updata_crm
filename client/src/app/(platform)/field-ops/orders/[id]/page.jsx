@@ -1,4 +1,7 @@
 'use client';
-export default function FieldOpsOrderDetailPage() {
-  return <div className="p-6 text-muted-foreground">Order detail — coming soon</div>;
+import { use } from 'react';
+import { FieldOpsOrderDetailTabs } from '@/modules/field-ops/components/orders/field-ops-order-detail-tabs';
+export default function FieldOpsOrderDetailPage({ params }) {
+  const { id } = use(params);
+  return <FieldOpsOrderDetailTabs orderId={id} />;
 }

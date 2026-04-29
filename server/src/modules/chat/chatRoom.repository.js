@@ -34,12 +34,15 @@ const chatRoomRepository = {
 
   async findRoomsForUser(userId) {
     return ChatRoom.find({ 'members.userId': userId, isActive: true })
+      .populate('members.userId', 'firstName lastName email avatarUrl role')
       .sort({ lastMessageAt: -1 })
       .lean();
   },
 
   async findById(roomId) {
-    return ChatRoom.findById(roomId).lean();
+    return ChatRoom.findById(roomId)
+      .populate('members.userId', 'firstName lastName email avatarUrl role')
+      .lean();
   },
 
   async updateLastMessage(roomId, { messageId, text, sentAt }) {
@@ -60,6 +63,18 @@ const chatRoomRepository = {
 
   async removeBlock(roomId, userId) {
     return ChatRoom.findByIdAndUpdate(roomId, { $pull: { blockedBy: userId } });
+  },
+
+  async findByJoinCode(joinCode) {
+    return ChatRoom.findOne({ joinCode, isActive: true })
+      .populate('members.userId', 'firstName lastName email avatarUrl role')
+      .lean();
+  },
+
+  async removeMember(roomId, userId) {
+    return ChatRoom.findByIdAndUpdate(roomId, {
+      $pull: { members: { userId } },
+    });
   },
 };
 

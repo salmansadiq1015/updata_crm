@@ -1,31 +1,68 @@
 'use client';
 
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/shared/hooks/use-auth';
+import { formatDateTime } from '@/lib/formatters';
 
-export function FieldOpsChatMessage({ message }) {
-  const { user } = useAuth();
-  const isMine = message.sender_id === user?._id || message.senderId === user?._id;
-  const time = new Date(message.sent_at || message.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+export function FieldOpsChatMessage({ message, isMine, showSenderName, showTimestamp }) {
+  const senderName = message.sender_name || message.senderName || '?';
+  const timestamp = message.created_at || message.createdAt;
+  const isDeleted = message.isDeleted || message.is_deleted;
+
+  const initials = senderName
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
 
   return (
-    <div className={cn('flex gap-2 mb-3', isMine ? 'justify-end' : 'justify-start')}>
-      {!isMine && (
-        <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold shrink-0 mt-1">
-          {(message.sender_name || message.senderName || '?')[0].toUpperCase()}
-        </div>
-      )}
-      <div className="max-w-[72%] space-y-0.5">
-        {!isMine && (
-          <p className="text-[11px] font-medium text-muted-foreground px-1">{message.sender_name || message.senderName}</p>
+    <div className={cn('flex items-end gap-2 px-4 py-0.5', isMine ? 'flex-row-reverse' : 'flex-row')}>
+      {/* Avatar spacer / avatar */}
+      {!isMine ? (
+        showSenderName ? (
+          <Avatar className="h-7 w-7 shrink-0 mb-0.5">
+            <AvatarFallback className="text-[10px]">{initials}</AvatarFallback>
+          </Avatar>
+        ) : (
+          <div className="w-7 shrink-0" />
+        )
+      ) : null}
+
+      {/* Bubble */}
+      <div className={cn('max-w-[70%] flex flex-col gap-0.5', isMine ? 'items-end' : 'items-start')}>
+        {showSenderName && !isMine && (
+          <span className="text-[11px] font-medium text-muted-foreground px-1">
+            {senderName}
+          </span>
         )}
-        <div className={cn(
-          'rounded-2xl px-3.5 py-2 text-sm leading-relaxed',
-          isMine ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted text-foreground rounded-bl-sm',
-        )}>
-          {message.content}
+
+        <div
+          className={cn(
+            'rounded-2xl px-3 py-2 text-sm leading-relaxed break-words',
+            isMine
+              ? 'bg-primary text-primary-foreground rounded-br-sm'
+              : 'bg-muted text-foreground rounded-bl-sm'
+          )}
+        >
+          {isDeleted ? (
+            <span className="italic opacity-60">
+              {isMine ? 'You deleted this message' : 'This message was deleted'}
+            </span>
+          ) : (
+            message.content
+          )}
+
+          {showTimestamp && timestamp && (
+            <div
+              className={cn(
+                'text-[10px] mt-1 select-none',
+                isMine ? 'text-primary-foreground/70 text-right' : 'text-muted-foreground text-right'
+              )}
+            >
+              {formatDateTime(timestamp)}
+            </div>
+          )}
         </div>
-        <p className={cn('text-[10px] text-muted-foreground px-1', isMine && 'text-right')}>{time}</p>
       </div>
     </div>
   );

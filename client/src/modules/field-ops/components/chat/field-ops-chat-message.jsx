@@ -3,8 +3,10 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/formatters';
+import { useLanguage } from '@/lib/i18n';
 
 export function FieldOpsChatMessage({ message, isMine, showSenderName, showTimestamp }) {
+  const { t } = useLanguage();
   const senderName = message.sender_name || message.senderName || '?';
   const timestamp = message.created_at || message.createdAt;
   const isDeleted = message.isDeleted || message.is_deleted;
@@ -46,7 +48,7 @@ export function FieldOpsChatMessage({ message, isMine, showSenderName, showTimes
         >
           {isDeleted ? (
             <span className="italic opacity-60">
-              {isMine ? 'You deleted this message' : 'This message was deleted'}
+              {t('fieldOps.chat.deleted', 'This message was deleted')}
             </span>
           ) : (
             message.content

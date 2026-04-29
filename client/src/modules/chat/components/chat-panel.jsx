@@ -27,6 +27,8 @@ export function ChatPanel({ roomId }) {
     markRead,
     blockUser,
     unblockUser,
+    leaveRoom,
+    refreshJoinCode,
   } = useChatMutations(roomId);
   const { data: room } = useChatRoom(roomId);
   const { onKeystroke } = useChatTyping(roomId);
@@ -60,14 +62,18 @@ export function ChatPanel({ roomId }) {
     <div className="flex flex-col h-full">
       <ChatHeader
         room={room}
+        currentUserId={currentUserId}
         isBlocked={isBlocked}
         onBlock={() => blockUser.mutate(roomId)}
         onUnblock={() => unblockUser.mutate(roomId)}
+        onLeave={(id) => leaveRoom.mutate(id)}
+        onRefreshCode={(id) => refreshJoinCode.mutate(id)}
       />
       <ChatMessages
         messages={messages}
         isLoading={isLoading}
         currentUserId={currentUserId}
+        isGroupRoom={room?.roomType === 'GROUP'}
         onReply={setReplyTarget}
         onReact={(messageId, emoji) => addReaction.mutate({ msgId: messageId, emoji })}
         onDelete={(messageId) => deleteMessage.mutate(messageId)}
@@ -81,6 +87,8 @@ export function ChatPanel({ roomId }) {
         replyTarget={replyTarget}
         onClearReply={() => setReplyTarget(null)}
         isBlocked={isBlocked}
+        editTarget={editTarget}
+        onClearEdit={() => setEditTarget(null)}
       />
     </div>
   );

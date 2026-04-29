@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown } from 'lucide-react';
 import { FieldOpsChatMessage } from './field-ops-chat-message';
 import { FieldOpsChatDateSeparator } from './field-ops-chat-date-separator';
-import { useLanguage } from '@/lib/i18n';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate } from '@/lib/formatters';
 
 function getDayKey(ts) {

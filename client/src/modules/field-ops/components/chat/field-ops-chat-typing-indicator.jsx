@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { useLanguage } from '@/lib/i18n';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function FieldOpsChatTypingIndicator({ typingUsers = [] }) {
   const { t, language } = useLanguage();

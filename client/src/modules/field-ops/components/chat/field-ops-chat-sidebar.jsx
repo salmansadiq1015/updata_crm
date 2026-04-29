@@ -2,7 +2,7 @@
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFieldOpsOrders } from '@/modules/field-ops/hooks/use-field-ops-queries';
-import { useLanguage } from '@/lib/i18n';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { FieldOpsChatSidebarItem } from './field-ops-chat-sidebar-item';
 import { MessageSquare } from 'lucide-react';
 

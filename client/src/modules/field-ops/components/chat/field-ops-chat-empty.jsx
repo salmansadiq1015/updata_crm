@@ -1,7 +1,7 @@
 'use client';
 
 import { MessageSquare } from 'lucide-react';
-import { useLanguage } from '@/lib/i18n';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function FieldOpsChatEmpty() {
   const { t } = useLanguage();

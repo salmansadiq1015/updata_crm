@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
 import { useFieldOpsChatTyping } from '@/modules/field-ops/hooks/use-field-ops-chat-typing';
-import { useLanguage } from '@/lib/i18n';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function FieldOpsChatInput({ onSend, isLoading, projectId }) {
   const [value, setValue] = useState('');

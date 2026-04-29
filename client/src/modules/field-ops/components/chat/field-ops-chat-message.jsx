@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/formatters';
-import { useLanguage } from '@/lib/i18n';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function FieldOpsChatMessage({ message, isMine, showSenderName, showTimestamp }) {
   const { t } = useLanguage();

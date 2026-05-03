@@ -82,12 +82,35 @@ export function registerAiEvents() {
     }
   });
 
+  // Agent lifecycle → WebSocket
+  eventBus.subscribe(EVENT_TYPES.AI_AGENT_RUN_STARTED, (data) => {
+    const { agentRunId, userId, workflowType } = data.payload || data;
+    if (global.io) {
+      global.io.to(`user:${userId}`).emit('ai:agent:started', { agentRunId, workflowType });
+    }
+  });
+
+  eventBus.subscribe(EVENT_TYPES.AI_AGENT_AWAITING_CONFIRMATION, (data) => {
+    const { agentRunId, userId, summary } = data.payload || data;
+    if (global.io) {
+      global.io.to(`user:${userId}`).emit('ai:agent:awaiting_confirmation', { agentRunId, summary });
+    }
+  });
+
+  eventBus.subscribe(EVENT_TYPES.AI_AGENT_RUN_CANCELLED, (data) => {
+    const { agentRunId, userId } = data.payload || data;
+    if (global.io) {
+      global.io.to(`user:${userId}`).emit('ai:agent:cancelled', { agentRunId });
+    }
+  });
+
   logger.info('AI event handlers registered', {
     module: 'ai',
     action: 'events.register',
     subscribedEvents: [
       'AI_ORDER_CREATE_REQUESTED', 'AI_SESSION_TRANSCRIBED',
       'AI_SESSION_CORRECTED', 'AI_VOCABULARY_UPDATED',
+      'AI_AGENT_RUN_STARTED', 'AI_AGENT_AWAITING_CONFIRMATION', 'AI_AGENT_RUN_CANCELLED',
     ],
   });
 }

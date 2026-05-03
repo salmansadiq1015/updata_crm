@@ -504,6 +504,29 @@ class VoiceSessionService {
         break;
     }
 
+    // Dispatch autonomous agent execution for actionable intents
+    const AGENT_INTENTS = ['create_order', 'create_report'];
+    if (AGENT_INTENTS.includes(session.intentName)) {
+      try {
+        const { default: agentService } = await import('./agent/agent.service.js');
+        await agentService.runFromSession(
+          sessionId,
+          userId,
+          meta.permissions || [],
+          entityData,
+          session.intentName,
+          { ipAddress: meta.ipAddress, userAgent: meta.userAgent, correlationId: meta.correlationId },
+        );
+      } catch (err) {
+        logger.warn('Failed to dispatch agent run from voice session', {
+          module: 'ai',
+          action: 'session.confirm',
+          sessionId,
+          error: err.message,
+        });
+      }
+    }
+
     // Update session to COMPLETED
     await voiceSessionRepository.updateStatus(sessionId, 'COMPLETED', { result });
 

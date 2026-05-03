@@ -16,28 +16,48 @@ export function createTool({ name, description, schema, requiredPermission, exec
       const startTime = Date.now();
       let toolExec;
 
+      // Fix 3: Wrap ToolExecution create in try/catch so a DB failure does not abort the tool
       if (agentRunId) {
-        toolExec = await toolExecutionRepository.create({
-          agentRunId,
-          toolName: name,
-          input,
-          status: 'PENDING',
-          compensationAction,
-        });
+        try {
+          toolExec = await toolExecutionRepository.create({
+            agentRunId,
+            toolName: name,
+            input,
+            status: 'PENDING',
+            compensationAction,
+          });
+        } catch (dbErr) {
+          logger.warn('ToolExecution create failed — proceeding without audit', {
+            module: 'ai-agent',
+            tool: name,
+            error: dbErr.message,
+          });
+        }
       }
 
       try {
         const output = await execute(input, { userId, permissions, agentRunId });
+
+        // Fix 2: Capture duration immediately after execute(), before any DB write
+        const executionDurationMs = Date.now() - startTime;
+
+        // Fix 1: Produce a valid JSON object when output is too large instead of slicing raw JSON
         const rawJson = JSON.stringify(output);
-        const capped = rawJson.length > MAX_OUTPUT_CHARS
-          ? rawJson.slice(0, MAX_OUTPUT_CHARS) + '...[TRUNCATED]'
-          : rawJson;
+        let safeOutput = output;
+        if (rawJson.length > MAX_OUTPUT_CHARS) {
+          safeOutput = {
+            _truncated: true,
+            _originalLength: rawJson.length,
+            summary: rawJson.slice(0, MAX_OUTPUT_CHARS),
+          };
+        }
+        const capped = JSON.stringify(safeOutput);
 
         if (toolExec) {
           await toolExecutionRepository.updateById(toolExec._id, {
             output,
             status: 'SUCCESS',
-            durationMs: Date.now() - startTime,
+            durationMs: executionDurationMs,
           });
         }
 
@@ -46,7 +66,7 @@ export function createTool({ name, description, schema, requiredPermission, exec
           action: 'tool.execute',
           tool: name,
           agentRunId,
-          durationMs: Date.now() - startTime,
+          durationMs: executionDurationMs,
         });
         return capped;
       } catch (err) {
@@ -57,6 +77,16 @@ export function createTool({ name, description, schema, requiredPermission, exec
             durationMs: Date.now() - startTime,
           });
         }
+
+        // Fix 4: Log tool execution failures before re-throwing
+        logger.warn('Tool execution failed', {
+          module: 'ai-agent',
+          action: 'tool.execute',
+          tool: name,
+          agentRunId,
+          error: err.message,
+        });
+
         throw err;
       }
     },

@@ -34,6 +34,7 @@ import { WidgetSubmissionProcessWorker } from './widgetSubmissionProcess.job.js'
 import { AiTranscriptionWorker } from './aiTranscription.job.js';
 import { AiAccuracyAggregationWorker } from './aiAccuracyAggregation.job.js';
 import { NewsletterDispatchWorker } from './newsletterDispatch.job.js';
+import { registerAiAgentJob } from './aiAgent.job.js';
 import logger from '../shared/logger/index.js';
 
 /**
@@ -508,10 +509,13 @@ export function registerJobs() {
     },
   });
 
+  // AI agent — agentic orchestration (execute + resume with confirmation)
+  registerAiAgentJob(queueManager);
+
   logger.info('Background jobs registered', {
     module: 'jobs',
     action: 'register',
-    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch'],
+    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'ai-agent'],
   });
 }
 

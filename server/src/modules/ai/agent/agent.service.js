@@ -3,7 +3,7 @@ import agentRunRepository from './agentRun.repository.js';
 import agentMemory from './agent.memory.js';
 import { checkRateLimit, sanitizeUserInput } from './agent.guardrails.js';
 import queueManager from '../../../shared/queue/QueueManager.js';
-import { AppError, NotFoundError } from '../../../shared/errors/AppError.js';
+import { AppError } from '../../../shared/errors/AppError.js';
 import ERROR_CODES from '../../../shared/errors/errorCodes.js';
 import auditService from '../../auth/audit.service.js';
 import eventBus from '../../../shared/events/EventBus.js';
@@ -151,9 +151,9 @@ class AgentService {
 
   async confirmRun(agentRunId, userId, decision) {
     const run = await agentRunRepository.findById(agentRunId);
-    if (!run) throw new NotFoundError('Agent run not found', ERROR_CODES.AI_AGENT_NOT_FOUND);
+    if (!run) throw new AppError('Agent run not found', 404, ERROR_CODES.AI_AGENT_NOT_FOUND);
     if (run.userId.toString() !== userId.toString()) {
-      throw new NotFoundError('Agent run not found', ERROR_CODES.AI_AGENT_NOT_FOUND);
+      throw new AppError('Agent run not found', 404, ERROR_CODES.AI_AGENT_NOT_FOUND);
     }
     if (run.status !== 'AWAITING_CONFIRMATION') {
       throw new AppError(`Cannot confirm: status is ${run.status}`, 409, ERROR_CODES.AI_AGENT_INVALID_STATUS);
@@ -174,7 +174,7 @@ class AgentService {
   async getStatus(agentRunId, userId) {
     const run = await agentRunRepository.findById(agentRunId);
     if (!run || run.userId.toString() !== userId.toString()) {
-      throw new NotFoundError('Agent run not found', ERROR_CODES.AI_AGENT_NOT_FOUND);
+      throw new AppError('Agent run not found', 404, ERROR_CODES.AI_AGENT_NOT_FOUND);
     }
     return run;
   }

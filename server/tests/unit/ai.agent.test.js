@@ -126,7 +126,7 @@ describe('AI Agent — task.workflow', () => {
   test('fails when input is too short (< 3 chars)', async () => {
     const result = await taskWorkflow.invoke(baseState({ input: 'Hi' }));
     expect(result.status).toBe('failed');
-    expect(result.error?.code).toBe('MISSING_ENTITY');
+    expect(result.error?.code).toBe('INVALID_INPUT');
   });
 
   test('fails when stepCount already at MAX_STEPS (10)', async () => {

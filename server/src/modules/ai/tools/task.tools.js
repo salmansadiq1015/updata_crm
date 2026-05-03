@@ -10,10 +10,10 @@ export const createTaskTool = createTool({
   name: 'create_task',
   description: 'Creates a new task in the ERP task management system and assigns it to a user.',
   schema: z.object({
-    title: z.string().min(3).max(255).describe('Task title'),
+    title: z.string().min(3).max(500).describe('Task title'),
     description: z.string().max(2000).optional().describe('Task description'),
     assignedTo: z.string().optional().describe('MongoDB ObjectId of assigned user'),
-    dueDate: z.string().optional().describe('ISO date string for due date'),
+    dueDate: z.string().datetime({ offset: true }).optional().describe('ISO 8601 date string for due date'),
     priority: z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
     projectId: z.string().optional().describe('MongoDB ObjectId of the project'),
   }),
@@ -44,22 +44,28 @@ export const createTaskTool = createTool({
 
 export const updateTaskTool = createTool({
   name: 'update_task',
-  description: 'Updates an existing task — status, assignee, or due date.',
+  description: 'Updates an existing task — status, assignee, due date, or priority.',
   schema: z.object({
     taskId: z.string().describe('MongoDB ObjectId of the task'),
     status: z.enum(['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).optional(),
     assignedTo: z.string().optional().describe('MongoDB ObjectId of the user to assign the task to'),
-    dueDate: z.string().optional().describe('ISO date string for new due date'),
+    dueDate: z.string().datetime({ offset: true }).optional().describe('ISO 8601 date string for new due date'),
+    priority: z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
   }),
   requiredPermission: 'tasks:update',
-  execute: async ({ taskId, status, assignedTo, dueDate }, { userId }) => {
+  execute: async ({ taskId, status, assignedTo, dueDate, priority }, { userId }) => {
     const { default: taskService } = await import('../../tasks/task.service.js');
 
     const updates = {
       ...(status !== undefined && { status }),
       ...(assignedTo !== undefined && { assigneeId: assignedTo }),
       ...(dueDate !== undefined && { dueDate: new Date(dueDate) }),
+      ...(priority !== undefined && { priority }),
     };
+
+    if (Object.keys(updates).length === 0) {
+      throw new Error('update_task requires at least one field to update: status, assignedTo, dueDate, or priority');
+    }
 
     const task = await taskService.update(taskId, updates, userId, { source: 'ai-agent' });
 

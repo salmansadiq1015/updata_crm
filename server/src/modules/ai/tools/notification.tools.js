@@ -30,25 +30,18 @@ export const sendNotificationTool = createTool({
 
     const { type: notifType, category } = TYPE_MAP[type];
 
-    const results = await Promise.allSettled(
-      recipientIds.map((recipientId) =>
-        notificationService.create(
-          {
-            type: notifType,
-            category,
-            channels: ['IN_APP'],
-            recipientIds: [recipientId],
-            payload: { title, body },
-          },
-          userId,
-          { source: 'ai-agent' },
-        ),
-      ),
+    await notificationService.create(
+      {
+        type: notifType,
+        category,
+        channels: ['IN_APP'],
+        recipientIds,
+        payload: { title, body },
+      },
+      userId,
+      { source: 'ai-agent' },
     );
 
-    const sent = results.filter((r) => r.status === 'fulfilled').length;
-    const failed = results.filter((r) => r.status === 'rejected').length;
-
-    return { sent, failed };
+    return { sent: recipientIds.length, failed: 0 };
   },
 });

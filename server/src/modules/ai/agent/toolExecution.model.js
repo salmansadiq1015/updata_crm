@@ -16,5 +16,6 @@ const ToolExecutionSchema = new Schema({
 }, { timestamps: true });
 
 ToolExecutionSchema.index({ agentRunId: 1 });
+ToolExecutionSchema.index({ status: 1, createdAt: -1 });
 
 export default mongoose.model('ToolExecution', ToolExecutionSchema);

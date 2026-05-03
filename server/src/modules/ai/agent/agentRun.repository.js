@@ -1,27 +1,28 @@
 import AgentRun from './agentRun.model.js';
 
 class AgentRunRepository {
-  create(data) {
-    return AgentRun.create(data);
+  async create(data) {
+    const run = new AgentRun(data);
+    return run.save();
   }
 
-  findById(id) {
+  async findById(id) {
     return AgentRun.findById(id).lean();
   }
 
-  updateById(id, data) {
-    return AgentRun.findByIdAndUpdate(id, { $set: data }, { new: true }).lean();
+  async updateById(id, data) {
+    return AgentRun.findByIdAndUpdate(id, { $set: data }, { new: true, runValidators: true }).lean();
   }
 
-  pushStep(id, step) {
+  async pushStep(id, step) {
     return AgentRun.findByIdAndUpdate(
       id,
       { $push: { steps: step } },
-      { new: true }
+      { new: true, runValidators: true }
     ).lean();
   }
 
-  findByUserId(userId, { limit = 20, skip = 0 } = {}) {
+  async findByUserId(userId, { limit = 20, skip = 0 } = {}) {
     return AgentRun.find({ userId })
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -29,7 +30,7 @@ class AgentRunRepository {
       .lean();
   }
 
-  findAwaitingConfirmationOlderThan(cutoff) {
+  async findAwaitingConfirmationOlderThan(cutoff) {
     return AgentRun.find({
       status: 'AWAITING_CONFIRMATION',
       updatedAt: { $lt: cutoff },

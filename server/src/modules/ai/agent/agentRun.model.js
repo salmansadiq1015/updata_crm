@@ -35,7 +35,7 @@ const AgentRunSchema = new Schema({
     node: String,
     retryCount: Number,
   },
-  idempotencyKey: { type: String, unique: true, sparse: true },
+  idempotencyKey: { type: String },
   correlationId: String,
   voiceSessionId: { type: Schema.Types.ObjectId, ref: 'VoiceSession' },
   metadata: {
@@ -51,5 +51,7 @@ AgentRunSchema.index({ userId: 1, createdAt: -1 });
 AgentRunSchema.index({ status: 1, createdAt: -1 });
 AgentRunSchema.index({ voiceSessionId: 1 }, { sparse: true });
 AgentRunSchema.index({ correlationId: 1 }, { sparse: true });
+AgentRunSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
+AgentRunSchema.index({ status: 1, updatedAt: 1 });
 
 export default mongoose.model('AgentRun', AgentRunSchema);

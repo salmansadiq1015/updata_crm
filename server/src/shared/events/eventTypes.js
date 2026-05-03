@@ -231,6 +231,16 @@ const EVENT_TYPES = Object.freeze({
   AI_REPORT_CONTENT_CAPTURED: 'ai.report.content_captured',
   AI_ADDRESS_CAPTURED: 'ai.address.captured',
 
+  // AI Agent (agentic execution engine)
+  AI_AGENT_RUN_STARTED: 'ai.agent.run.started',
+  AI_AGENT_STEP_COMPLETED: 'ai.agent.step.completed',
+  AI_AGENT_AWAITING_CONFIRMATION: 'ai.agent.awaiting_confirmation',
+  AI_AGENT_RUN_COMPLETED: 'ai.agent.run.completed',
+  AI_AGENT_RUN_FAILED: 'ai.agent.run.failed',
+  AI_AGENT_RUN_CANCELLED: 'ai.agent.run.cancelled',
+  AI_TOOL_EXECUTED: 'ai.tool.executed',
+  AI_TOOL_FAILED: 'ai.tool.failed',
+
   // Integrations (Module 14)
   INTEGRATION_STATUS_CHANGED: 'integration.status.changed',
   INTEGRATION_SYNC_COMPLETED: 'integration.sync.completed',

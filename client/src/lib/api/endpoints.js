@@ -158,10 +158,11 @@ export const ENDPOINTS = Object.freeze({
     LEAVE: (id) => `/task-lists/${id}/leave`,
   },
   NOTIFICATIONS: {
-    FEED: '/users/me/notifications',
-    UNREAD_COUNT: '/users/me/notifications/unread-count',
-    MARK_READ: (id) => `/users/me/notifications/${id}/read`,
-    MARK_ALL_READ: '/users/me/notifications/mark-all-read',
+    FEED: '/notifications/feed',
+    UNREAD_COUNT: '/notifications/feed/unread-count',
+    MARK_READ: (id) => `/notifications/feed/${id}/read`,
+    MARK_ALL_READ: '/notifications/feed/mark-all-read',
+    DISMISS: (id) => `/notifications/feed/${id}`,
   },
   MOBILE: {
     ORDERS: '/mobile/orders',

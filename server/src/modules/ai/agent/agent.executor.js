@@ -25,6 +25,12 @@ class AgentExecutor {
     try {
       finalState = await workflow.invoke(initialState);
     } catch (err) {
+      const isTimeout =
+        err.message?.includes('timeout') ||
+        err.message?.includes('timed out') ||
+        err.type === 'JobTimeoutError';
+      const errorCode = isTimeout ? 'AGENT_TIMEOUT' : (err.code || 'UNHANDLED_ERROR');
+
       logger.error('Workflow threw unhandled error', {
         module: 'ai-agent',
         action: 'executor.execute',
@@ -34,10 +40,14 @@ class AgentExecutor {
       await agentRunRepository.updateById(agentRunId, {
         status: 'FAILED',
         failedAt: new Date(),
-        error: { message: err.message, code: err.code || 'UNHANDLED_ERROR' },
+        error: { message: err.message, code: errorCode },
       });
-      eventBus.publish(EVENT_TYPES.AI_AGENT_RUN_FAILED, { agentRunId, userId, error: err.message }, { source: 'ai:agent' });
-      this._emitWs(userId, 'ai:agent:failed', { agentRunId, error: { message: err.message } });
+      eventBus.publish(
+        EVENT_TYPES.AI_AGENT_RUN_FAILED,
+        { agentRunId, userId, error: err.message },
+        { source: 'ai:agent' }
+      );
+      this._emitWs(userId, 'ai:agent:failed', { agentRunId, error: { message: err.message, code: errorCode } });
       await this._cleanup(agentRunId);
       throw err;
     }

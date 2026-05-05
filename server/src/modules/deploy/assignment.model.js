@@ -15,7 +15,7 @@ const assignmentSchema = new mongoose.Schema(
     employeeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -111,7 +111,7 @@ const assignmentSchema = new mongoose.Schema(
 );
 
 // --- Indexes ---
-assignmentSchema.index({ employeeId: 1, startDatetime: 1 });
+assignmentSchema.index({ employeeId: 1, startDatetime: 1 }, { sparse: true });
 assignmentSchema.index({ orderId: 1 });
 assignmentSchema.index({ projectId: 1 });
 assignmentSchema.index({ startDatetime: 1 });

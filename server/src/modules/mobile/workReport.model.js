@@ -2,6 +2,15 @@ import mongoose from 'mongoose';
 
 export const REPORT_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'];
 
+const materialItemSchema = new mongoose.Schema({
+  catalogSource: { type: String, enum: ['IGH', 'INTERNAL', 'CUSTOM'], required: true },
+  catalogItemId: { type: String, maxlength: 50, default: null },
+  description: { type: String, maxlength: 300, required: true },
+  quantity: { type: Number, min: 0, required: true },
+  unit: { type: String, maxlength: 20, required: true },
+  sortOrder: { type: Number, default: 0 },
+}, { _id: false });
+
 const workReportSchema = new mongoose.Schema(
   {
     reportNumber: {
@@ -61,8 +70,13 @@ const workReportSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    materialItems: { type: [materialItemSchema], default: [] },
+    rejectionNote: { type: String, maxlength: 2000, default: null },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
+    isArchived: { type: Boolean, default: false, index: true },
+    archivedAt: { type: Date, default: null },
+    archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   {
     timestamps: true,

@@ -19,7 +19,7 @@ export const removeDeviceSchema = {
 export const listNotificationsSchema = {
   query: Joi.object({
     limit: Joi.number().integer().min(1).max(100).default(25),
-    cursor: objectId,
+    cursor: Joi.string().isoDate().allow(null, '').optional(),
   }),
 };
 

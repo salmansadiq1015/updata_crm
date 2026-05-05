@@ -305,6 +305,57 @@ export function registerNotificationsEvents() {
     }
   });
 
+  // --- Field-Ops / Mobile Order & Report Events ---
+  eventBus.subscribe(EVENT_TYPES.MOBILE_REPORT_SUBMITTED, async (data) => {
+    const payload = data.payload || data;
+    const recipients = (payload.managerIds || []).filter((id) => String(id) !== String(payload.submittedBy));
+    if (recipients.length > 0) {
+      await dispatch(payload, {
+        type: 'report_submitted',
+        category: 'ORDER',
+        priority: 'NORMAL',
+        channels: ['IN_APP', 'PUSH'],
+        recipientIds: recipients,
+        payload: {
+          reportId: payload.reportId,
+          orderTitle: payload.orderTitle,
+          technicianName: payload.technicianName || '',
+        },
+        sourceModule: 'mobile',
+        sourceEvent: 'MOBILE_REPORT_SUBMITTED',
+        sourceEntityType: 'WorkReport',
+        sourceEntityId: payload.reportId,
+        idempotencyKey: `report-submitted-${payload.reportId}`,
+      });
+    }
+  });
+
+  eventBus.subscribe(EVENT_TYPES.MOBILE_ORDER_STATUS_UPDATED, async (data) => {
+    const payload = data.payload || data;
+    const recipients = (payload.assignedTo ? [payload.assignedTo] : []).filter(
+      (id) => String(id) !== String(payload.updatedBy),
+    );
+    if (recipients.length > 0) {
+      await dispatch(payload, {
+        type: 'order_status_changed',
+        category: 'ORDER',
+        priority: 'NORMAL',
+        channels: ['IN_APP', 'PUSH'],
+        recipientIds: recipients,
+        payload: {
+          orderId: payload.orderId,
+          orderTitle: payload.orderTitle || '',
+          newStatus: payload.newStatus,
+        },
+        sourceModule: 'mobile',
+        sourceEvent: 'MOBILE_ORDER_STATUS_UPDATED',
+        sourceEntityType: 'Order',
+        sourceEntityId: payload.orderId,
+        idempotencyKey: `order-status-${payload.orderId}-${payload.newStatus}`,
+      });
+    }
+  });
+
   logger.info('Notification event handlers registered', {
     module: 'notifications',
     action: 'events.register',
@@ -313,6 +364,7 @@ export function registerNotificationsEvents() {
       'TASK_LIST_MEMBER_ADDED', 'SCHEDULE_ASSIGNMENT_CREATED', 'SCHEDULE_ASSIGNMENT_UPDATED',
       'SCHEDULE_ASSIGNMENT_CANCELLED', 'MOBILE_CHAT_MESSAGE_SENT', 'QUOTATION_EXPIRED',
       'INVOICE_OVERDUE', 'DOCUMENT_TPL_GENERATED', 'MAINTENANCE_OVERDUE', 'ACCOUNTING_AP_INVOICE_RECORDED',
+      'MOBILE_REPORT_SUBMITTED', 'MOBILE_ORDER_STATUS_UPDATED',
     ],
   });
 }

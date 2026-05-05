@@ -31,7 +31,9 @@ export const createReportSchema = {
 export const updateReportSchema = {
   params: Joi.object({ reportId: objectId.required() }),
   body: Joi.object({
-    version: Joi.number().required(),
+    version: Joi.number(),
+    status: Joi.string().valid('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'),
+    rejectionNote: Joi.string().max(2000).allow('', null),
     reportDate: Joi.date().iso(),
     arrivalTime: Joi.date().iso().allow(null),
     departureTime: Joi.date().iso().allow(null),
@@ -42,6 +44,15 @@ export const updateReportSchema = {
     technicianNotes: Joi.string().max(5000).allow('', null),
     customerSignature: Joi.string().allow('', null),
     customerSignerName: Joi.string().max(255).allow('', null),
+    materialItems: Joi.array().items(
+      Joi.object({
+        catalogSource: Joi.string().valid(...CATALOG_SOURCES).required(),
+        catalogItemId: Joi.string().max(50).allow('', null),
+        description: Joi.string().max(300).required(),
+        quantity: Joi.number().min(0).required(),
+        unit: Joi.string().max(20).required(),
+      }),
+    ),
   }).min(1),
 };
 
@@ -51,4 +62,10 @@ export const reportIdParamSchema = {
 
 export const submitReportSchema = {
   params: Joi.object({ reportId: objectId.required() }),
+};
+
+export const bulkReportIdsSchema = {
+  body: Joi.object({
+    ids: Joi.array().items(objectId).min(1).max(100).required(),
+  }),
 };

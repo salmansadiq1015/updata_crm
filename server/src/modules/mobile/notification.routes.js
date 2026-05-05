@@ -41,6 +41,13 @@ notificationRouter.get(
   (req, res, next) => notificationController.listNotifications(req, res, next),
 );
 
+notificationRouter.post(
+  '/mark-all-read',
+  authenticate,
+  requirePermission('mobile:write'),
+  (req, res, next) => notificationController.markAllRead(req, res, next),
+);
+
 notificationRouter.put(
   '/:id/read',
   authenticate,

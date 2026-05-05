@@ -10,6 +10,13 @@ import {
 
 const router = Router();
 
+router.post(
+  '/',
+  authenticate,
+  requirePermission('mobile:write'),
+  (req, res, next) => orderController.createOrder(req, res, next),
+);
+
 router.get(
   '/',
   authenticate,
@@ -24,6 +31,29 @@ router.get(
   requirePermission('mobile:read'),
   validate(orderIdParamSchema),
   (req, res, next) => orderController.getOrderDetail(req, res, next),
+);
+
+router.put(
+  '/:id',
+  authenticate,
+  requirePermission('mobile:write'),
+  validate(orderIdParamSchema),
+  (req, res, next) => orderController.updateOrder(req, res, next),
+);
+
+router.delete(
+  '/:id',
+  authenticate,
+  requirePermission('mobile:write'),
+  validate(orderIdParamSchema),
+  (req, res, next) => orderController.deleteOrder(req, res, next),
+);
+
+router.post(
+  '/bulk-delete',
+  authenticate,
+  requirePermission('mobile:write'),
+  (req, res, next) => orderController.bulkDeleteOrders(req, res, next),
 );
 
 router.put(

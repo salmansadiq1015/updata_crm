@@ -49,8 +49,8 @@ router.use('/orders', orderRoutes);
 
 // --- Nested order sub-resources ---
 router.use('/orders/:id', reportOrderRouter);
+router.use('/orders/:id', timeEntryOrderRouter);
 router.use('/orders/:id/photos', photoOrderRouter);
-router.use('/orders/:id/time-entries', timeEntryOrderRouter);
 router.use('/orders/:id/documents', documentRoutes);
 router.use('/orders/:id/quotation', quotationRoute);
 

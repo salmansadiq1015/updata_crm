@@ -11,6 +11,14 @@ import logger from '../../shared/logger/index.js';
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 
 class ReportService {
+  async listByOrder(orderId) {
+    return workReportRepository.findByOrderId(orderId);
+  }
+
+  async list(filters = {}) {
+    return workReportRepository.list(filters);
+  }
+
   async create(orderId, data, technicianId, meta = {}) {
     const reportNumber = await counterService.getNextReportNumber();
 
@@ -59,13 +67,18 @@ class ReportService {
     const existing = await workReportRepository.findById(id);
     if (!existing) throw new NotFoundError('WorkReport', id);
 
-    const now = new Date();
-    const isEditable =
-      existing.status === 'DRAFT' ||
-      (existing.status === 'SUBMITTED' && existing.editableUntil && now <= new Date(existing.editableUntil));
+    // Admin status transitions (APPROVED/REJECTED) bypass the editability window
+    const isAdminStatusChange = data.status === 'APPROVED' || data.status === 'REJECTED';
 
-    if (!isEditable) {
-      throw new ConflictError('Work report is not editable. Only DRAFT or recently SUBMITTED reports within the editing window can be modified.');
+    if (!isAdminStatusChange) {
+      const now = new Date();
+      const isEditable =
+        existing.status === 'DRAFT' ||
+        (existing.status === 'SUBMITTED' && existing.editableUntil && now <= new Date(existing.editableUntil));
+
+      if (!isEditable) {
+        throw new ConflictError('Work report is not editable. Only DRAFT or recently SUBMITTED reports within the editing window can be modified.');
+      }
     }
 
     const updated = await workReportRepository.updateById(id, { ...data, updatedBy: userId });
@@ -83,6 +96,121 @@ class ReportService {
     });
 
     return updated;
+  }
+
+  async delete(id, userId, meta = {}) {
+    const existing = await workReportRepository.findById(id);
+    if (!existing) throw new NotFoundError('WorkReport', id);
+
+    if (existing.status === 'APPROVED') {
+      throw new ConflictError('Approved reports cannot be deleted.');
+    }
+
+    await workReportRepository.softDelete(id);
+    await cacheManager.del(`mobile:report:${id}`);
+
+    auditService.logEvent({
+      eventType: 'report.deleted',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { reportId: id, reportNumber: existing.reportNumber },
+      module: 'mobile',
+    });
+
+    logger.info('Work report deleted', { module: 'mobile', action: 'delete', reportId: id });
+  }
+
+  async bulkDelete(ids, userId, meta = {}) {
+    await workReportRepository.bulkSoftDelete(ids);
+
+    await Promise.all(ids.map((id) => cacheManager.del(`mobile:report:${id}`)));
+
+    auditService.logEvent({
+      eventType: 'report.bulk_deleted',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { count: ids.length, reportIds: ids },
+      module: 'mobile',
+    });
+
+    logger.info('Work reports bulk deleted', { module: 'mobile', action: 'bulk_delete', count: ids.length });
+  }
+
+  async archive(id, userId, meta = {}) {
+    const existing = await workReportRepository.findById(id);
+    if (!existing) throw new NotFoundError('WorkReport', id);
+    if (existing.isArchived) throw new ConflictError('Report is already archived.');
+
+    const updated = await workReportRepository.updateById(id, {
+      isArchived: true,
+      archivedAt: new Date(),
+      archivedBy: userId,
+      updatedBy: userId,
+    });
+    await cacheManager.del(`mobile:report:${id}`);
+
+    auditService.logEvent({
+      eventType: 'report.archived',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { reportId: id },
+      module: 'mobile',
+    });
+
+    return updated;
+  }
+
+  async unarchive(id, userId, meta = {}) {
+    const existing = await workReportRepository.findById(id);
+    if (!existing) throw new NotFoundError('WorkReport', id);
+    if (!existing.isArchived) throw new ConflictError('Report is not archived.');
+
+    const updated = await workReportRepository.updateById(id, {
+      isArchived: false,
+      archivedAt: null,
+      archivedBy: null,
+      updatedBy: userId,
+    });
+    await cacheManager.del(`mobile:report:${id}`);
+
+    auditService.logEvent({
+      eventType: 'report.unarchived',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { reportId: id },
+      module: 'mobile',
+    });
+
+    return updated;
+  }
+
+  async bulkArchive(ids, userId, meta = {}) {
+    await workReportRepository.bulkUpdateById(ids, {
+      isArchived: true,
+      archivedAt: new Date(),
+      archivedBy: userId,
+      updatedBy: userId,
+    });
+
+    await Promise.all(ids.map((id) => cacheManager.del(`mobile:report:${id}`)));
+
+    auditService.logEvent({
+      eventType: 'report.bulk_archived',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { count: ids.length, reportIds: ids },
+      module: 'mobile',
+    });
   }
 
   async submit(id, userId, meta = {}) {
@@ -114,11 +242,29 @@ class ReportService {
       { $set: { releaseStatus: 'RELEASED' } },
     );
 
+    // Look up order to get creator/manager for notification recipients
+    let managerIds = [];
+    let orderTitle = '';
+    try {
+      const Assignment = (await import('../deploy/assignment.model.js')).default;
+      const order = await Assignment.findById(existing.orderId).select('createdBy title').lean();
+      if (order?.createdBy) managerIds = [order.createdBy];
+      if (order?.title) orderTitle = order.title;
+    } catch (_) { /* non-critical */ }
+
+    const submitter = await (await import('../auth/user.model.js')).default
+      .findById(userId).select('firstName lastName').lean().catch(() => null);
+    const technicianName = submitter ? `${submitter.firstName || ''} ${submitter.lastName || ''}`.trim() : '';
+
     eventBus.publish(EVENT_TYPES.MOBILE_REPORT_SUBMITTED, {
       reportId: id,
       reportNumber: existing.reportNumber,
       orderId: existing.orderId,
+      orderTitle,
       technicianId: existing.technicianId,
+      technicianName,
+      submittedBy: userId,
+      managerIds,
     }, { source: 'mobile:reports' });
 
     queueManager.addJob('auth-email', 'send-report-submitted', {

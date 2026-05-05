@@ -46,6 +46,13 @@ class NotificationController {
       return res.success({ data, message: 'Preferences updated successfully' });
     } catch (err) { next(err); }
   }
+
+  async markAllRead(req, res, next) {
+    try {
+      await notificationService.markAllRead(req.user._id);
+      return res.success({ message: 'All notifications marked as read' });
+    } catch (err) { next(err); }
+  }
 }
 
 const notificationController = new NotificationController();

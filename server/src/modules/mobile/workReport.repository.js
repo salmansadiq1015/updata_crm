@@ -35,9 +35,7 @@ class WorkReportRepository {
   async findIncomplete(technicianId) {
     return WorkReport.find({
       technicianId,
-      $or: [
-        { status: 'DRAFT' },
-      ],
+      status: 'DRAFT',
     })
       .populate(POPULATE_FIELDS)
       .lean();
@@ -48,6 +46,18 @@ class WorkReportRepository {
       technicianId,
       status: 'DRAFT',
     });
+  }
+
+  async list(filters = {}) {
+    const query = {};
+    if (filters.status) query.status = filters.status;
+    if (filters.orderId) query.orderId = filters.orderId;
+    if (filters.technicianId) query.technicianId = filters.technicianId;
+    if (!filters.includeArchived) query.isArchived = false;
+    return WorkReport.find(query)
+      .populate(POPULATE_FIELDS)
+      .sort({ createdAt: -1 })
+      .lean();
   }
 
   async updateById(id, data) {
@@ -65,6 +75,20 @@ class WorkReportRepository {
       id,
       { isDeleted: true, deletedAt: new Date() },
       { new: true },
+    );
+  }
+
+  async bulkSoftDelete(ids) {
+    return WorkReport.updateMany(
+      { _id: { $in: ids } },
+      { $set: { isDeleted: true, deletedAt: new Date() } },
+    );
+  }
+
+  async bulkUpdateById(ids, data) {
+    return WorkReport.updateMany(
+      { _id: { $in: ids } },
+      { $set: data, $inc: { version: 1 } },
     );
   }
 }

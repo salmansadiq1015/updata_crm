@@ -1,5 +1,6 @@
 import DeviceToken from './deviceToken.model.js';
 import NotificationLog from './notificationLog.model.js';
+import InAppNotification from '../notifications/inAppNotification.model.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import logger from '../../shared/logger/index.js';
 
@@ -81,7 +82,6 @@ class NotificationService {
 
     await this.invalidateNotificationCache(userId);
 
-    // Placeholder for actual push notification (APNS/FCM integration is Phase B)
     logger.info('Notification created (push delivery pending Phase B)', {
       module: 'mobile',
       action: 'notification.sendNotification',
@@ -94,24 +94,29 @@ class NotificationService {
   }
 
   async listNotifications(userId, { limit = 25, cursor } = {}) {
-    const filter = { userId };
+    const filter = { userId, isDismissed: false };
+    if (cursor) filter.sentAt = { $lt: new Date(cursor) };
 
-    if (cursor) {
-      filter.sentAt = { $lt: new Date(cursor) };
-    }
-
-    return NotificationLog.find(filter)
+    const docs = await InAppNotification.find(filter)
       .sort({ sentAt: -1 })
       .limit(limit)
       .lean();
+
+    const nextCursor = docs.length === limit ? docs[docs.length - 1].sentAt.toISOString() : null;
+    return { items: docs, nextCursor };
   }
 
   async markRead(notificationId, userId) {
-    return NotificationLog.findOneAndUpdate(
+    return InAppNotification.findOneAndUpdate(
       { _id: notificationId, userId },
       { isRead: true },
       { new: true },
     ).lean();
+  }
+
+  async markAllRead(userId) {
+    await InAppNotification.updateMany({ userId, isRead: false }, { $set: { isRead: true } });
+    await this.invalidateNotificationCache(userId);
   }
 
   async getPreferences(userId) {

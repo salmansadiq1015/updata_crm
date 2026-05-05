@@ -15,6 +15,10 @@ class TimeEntryService {
     return totalMin - (breakDurationMin || 0);
   }
 
+  async listByOrder(orderId) {
+    return timeEntryRepository.findByOrderId(orderId);
+  }
+
   async create(orderId, data, technicianId, meta = {}) {
     const netDurationMin = this._calculateNetDuration(data.startTime, data.endTime, data.breakDurationMin);
 

@@ -1,6 +1,13 @@
 import timeEntryService from './timeEntry.service.js';
 
 class TimeEntryController {
+  async listByOrder(req, res, next) {
+    try {
+      const entries = await timeEntryService.listByOrder(req.params.id);
+      return res.success({ data: entries });
+    } catch (err) { next(err); }
+  }
+
   async create(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

@@ -10,8 +10,15 @@ import {
   releaseTimeEntrySchema,
 } from './timeEntry.validation.js';
 
-// Nested router for routes under /orders/:id
+// Nested router for routes under /orders/:id  (mounted at /orders/:id — not at /orders/:id/time-entries)
 const timeEntryOrderRouter = Router({ mergeParams: true });
+
+timeEntryOrderRouter.get(
+  '/time-entries',
+  authenticate,
+  requirePermission('mobile:read'),
+  (req, res, next) => timeEntryController.listByOrder(req, res, next),
+);
 
 timeEntryOrderRouter.post(
   '/time-entries',

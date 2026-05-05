@@ -14,7 +14,21 @@ export function useMessageRetry({ onRetry, maxAttempts = 3 }) {
   });
   const timerRef = useRef(null);
   const onRetryRef = useRef(onRetry);
+  const pendingCorrelationIdRef = useRef(null);
   useEffect(() => { onRetryRef.current = onRetry; }, [onRetry]);
+
+  // Reactive timer: fires when nextRetryAt is set
+  useEffect(() => {
+    if (!retryState.nextRetryAt) return;
+    const delay = Math.max(0, retryState.nextRetryAt - Date.now());
+    timerRef.current = setTimeout(() => {
+      setRetryState((s) => ({ ...s, isRetrying: true, nextRetryAt: null }));
+      onRetryRef.current(pendingCorrelationIdRef.current);
+    }, delay);
+    return () => {
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    };
+  }, [retryState.nextRetryAt]);
 
   const cancel = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
@@ -26,19 +40,14 @@ export function useMessageRetry({ onRetry, maxAttempts = 3 }) {
       const { isTransient } = classifyRunError(runError);
       if (!isTransient) return false;
 
+      pendingCorrelationIdRef.current = correlationId;
       setRetryState((prev) => {
         const next = prev.attemptCount + 1;
-        if (next > maxAttempts) return { ...prev, exhausted: true, isRetrying: false, nextRetryAt: null };
-
+        if (next > maxAttempts) {
+          return { ...prev, exhausted: true, isRetrying: false, nextRetryAt: null };
+        }
         const backoffMs = BASE_BACKOFF_MS * Math.pow(2, prev.attemptCount);
-        const nextRetryAt = Date.now() + backoffMs;
-
-        timerRef.current = setTimeout(() => {
-          setRetryState((s) => ({ ...s, isRetrying: true, nextRetryAt: null }));
-          onRetryRef.current(correlationId);
-        }, backoffMs);
-
-        return { attemptCount: next, isRetrying: false, nextRetryAt, exhausted: false };
+        return { attemptCount: next, isRetrying: false, nextRetryAt: Date.now() + backoffMs, exhausted: false };
       });
       return true;
     },
@@ -47,10 +56,9 @@ export function useMessageRetry({ onRetry, maxAttempts = 3 }) {
 
   const reset = useCallback(() => {
     cancel();
+    pendingCorrelationIdRef.current = null;
     setRetryState({ attemptCount: 0, isRetrying: false, nextRetryAt: null, exhausted: false });
   }, [cancel]);
-
-  useEffect(() => () => cancel(), [cancel]);
 
   return { scheduleRetry, cancelRetry: cancel, resetRetry: reset, retryState, maxAttempts };
 }

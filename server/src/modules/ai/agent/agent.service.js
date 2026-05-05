@@ -54,12 +54,28 @@ class AgentService {
   async run(input, userId, permissions, meta = {}) {
     await checkRateLimit(userId);
     const sanitized = sanitizeUserInput(input);
+
+    // Idempotency: reuse existing run if correlationId matches a non-failed run
+    if (meta.correlationId) {
+      const existing = await agentRunRepository.findByCorrelationId(meta.correlationId);
+      if (existing) {
+        if (existing.status === 'COMPLETED') {
+          return { agentRunId: existing._id.toString(), status: 'completed', workflowType: existing.workflowType };
+        }
+        if (['RUNNING', 'PENDING'].includes(existing.status)) {
+          return { agentRunId: existing._id.toString(), status: 'pending', workflowType: existing.workflowType };
+        }
+        // FAILED or CANCELLED — fall through and create a new run
+      }
+    }
+
     const intent = await this._classifyIntent(sanitized);
     const workflowType = INTENT_TO_WORKFLOW[intent] || 'GENERAL';
 
     const agentRun = await agentRunRepository.create({
       userId,
-      workflowType: workflowType === 'GENERAL' ? 'TASK_AUTOMATION' : workflowType,
+      threadId: meta.threadId || randomUUID(),
+      workflowType,
       status: 'PENDING',
       input: sanitized,
       idempotencyKey: `${userId}-${randomUUID()}`,
@@ -67,14 +83,24 @@ class AgentService {
       metadata: { ipAddress: meta.ipAddress, userAgent: meta.userAgent },
     });
 
-    await queueManager.addJob('ai-agent', 'execute', {
-      agentRunId: agentRun._id.toString(),
-      userId: userId.toString(),
-      permissions,
-      workflowType: workflowType === 'GENERAL' ? 'TASK_AUTOMATION' : workflowType,
-      entities: {},
-      input: sanitized,
-    });
+    try {
+      await queueManager.addJob('ai-agent', 'execute', {
+        agentRunId: agentRun._id.toString(),
+        userId: userId.toString(),
+        permissions,
+        workflowType,
+        entities: {},
+        input: sanitized,
+      });
+    } catch (queueErr) {
+      await agentRunRepository.updateById(agentRun._id, {
+        status: 'FAILED',
+        failedAt: new Date(),
+        error: { code: 'QUEUE_UNAVAILABLE', message: 'Failed to enqueue agent job — Redis may be unavailable' },
+      });
+      logger.error('Failed to enqueue agent job', { module: 'ai-agent', action: 'service.run', agentRunId: agentRun._id.toString(), error: queueErr.message });
+      throw new AppError('Service temporarily unavailable. Please try again.', 503, 'QUEUE_UNAVAILABLE');
+    }
 
     eventBus.publish(
       EVENT_TYPES.AI_AGENT_RUN_STARTED,
@@ -130,14 +156,24 @@ class AgentService {
       throw err;
     }
 
-    await queueManager.addJob('ai-agent', 'execute', {
-      agentRunId: agentRun._id.toString(),
-      userId: userId.toString(),
-      permissions,
-      workflowType,
-      entities,
-      input: `Voice session: ${voiceSessionId}`,
-    });
+    try {
+      await queueManager.addJob('ai-agent', 'execute', {
+        agentRunId: agentRun._id.toString(),
+        userId: userId.toString(),
+        permissions,
+        workflowType,
+        entities,
+        input: `Voice session: ${voiceSessionId}`,
+      });
+    } catch (queueErr) {
+      await agentRunRepository.updateById(agentRun._id, {
+        status: 'FAILED',
+        failedAt: new Date(),
+        error: { code: 'QUEUE_UNAVAILABLE', message: 'Failed to enqueue agent job — Redis may be unavailable' },
+      });
+      logger.error('Failed to enqueue agent job from session', { module: 'ai-agent', action: 'service.runFromSession', agentRunId: agentRun._id.toString(), error: queueErr.message });
+      throw new AppError('Service temporarily unavailable. Please try again.', 503, 'QUEUE_UNAVAILABLE');
+    }
 
     logger.info('Agent run dispatched from voice session', {
       module: 'ai-agent',
@@ -162,7 +198,17 @@ class AgentService {
     await agentMemory.storeConfirmation(agentRunId, decision);
 
     if (decision) {
-      await queueManager.addJob('ai-agent', 'resume', { agentRunId, userId: userId.toString() });
+      try {
+        await queueManager.addJob('ai-agent', 'resume', { agentRunId, userId: userId.toString() });
+      } catch (queueErr) {
+        await agentRunRepository.updateById(agentRunId, {
+          status: 'FAILED',
+          failedAt: new Date(),
+          error: { code: 'QUEUE_UNAVAILABLE', message: 'Failed to resume agent job — Redis may be unavailable' },
+        });
+        logger.error('Failed to enqueue agent resume job', { module: 'ai-agent', action: 'service.confirmRun', agentRunId, error: queueErr.message });
+        throw new AppError('Service temporarily unavailable. Please try again.', 503, 'QUEUE_UNAVAILABLE');
+      }
     } else {
       await agentRunRepository.updateById(agentRunId, { status: 'CANCELLED', cancelledAt: new Date() });
       eventBus.publish(EVENT_TYPES.AI_AGENT_RUN_CANCELLED, { agentRunId, userId: userId.toString() }, { source: 'ai:agent' });
@@ -171,12 +217,48 @@ class AgentService {
     return { agentRunId, decision };
   }
 
+  async archiveRun(agentRunId, userId) {
+    const run = await agentRunRepository.archiveById(agentRunId, userId);
+    if (!run) throw new AppError('Agent run not found', 404, ERROR_CODES.AI_AGENT_NOT_FOUND);
+    return { agentRunId, archived: true };
+  }
+
+  async unarchiveRun(agentRunId, userId) {
+    const run = await agentRunRepository.unarchiveById(agentRunId, userId);
+    if (!run) throw new AppError('Agent run not found', 404, ERROR_CODES.AI_AGENT_NOT_FOUND);
+    return { agentRunId, archived: false };
+  }
+
+  async deleteRun(agentRunId, userId) {
+    const run = await agentRunRepository.deleteById(agentRunId, userId);
+    if (!run) throw new AppError('Agent run not found', 404, ERROR_CODES.AI_AGENT_NOT_FOUND);
+    return { agentRunId, deleted: true };
+  }
+
   async getStatus(agentRunId, userId) {
     const run = await agentRunRepository.findById(agentRunId);
     if (!run || run.userId.toString() !== userId.toString()) {
       throw new AppError('Agent run not found', 404, ERROR_CODES.AI_AGENT_NOT_FOUND);
     }
     return run;
+  }
+
+  async listThreads(userId, { limit = 20, skip = 0 } = {}) {
+    return agentRunRepository.findDistinctThreads(userId, { limit, skip });
+  }
+
+  async getThread(userId, threadId) {
+    return agentRunRepository.findByThreadId(userId, threadId);
+  }
+
+  async archiveThread(userId, threadId) {
+    await agentRunRepository.archiveByThreadId(userId, threadId);
+    return { threadId, archived: true };
+  }
+
+  async deleteThread(userId, threadId) {
+    await agentRunRepository.deleteByThreadId(userId, threadId);
+    return { threadId, deleted: true };
   }
 
   async listRuns(userId, { limit = 20, skip = 0 } = {}) {

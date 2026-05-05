@@ -89,6 +89,7 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
     const recognition = new SR();
     recognition.continuous = true;
     recognition.interimResults = true;
+    recognition.lang = '';  // empty string = use browser/OS language preference (accepts any language)
     recognitionRef.current = recognition;
 
     const resetSilence = () => {

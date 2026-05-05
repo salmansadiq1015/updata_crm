@@ -10,6 +10,7 @@ export function useTaskLists() {
     queryKey: queryKeys.tasks.lists(),
     queryFn: () => taskListService.list(),
     staleTime: 60_000,
+    select: (data) => (Array.isArray(data) ? data : (data?.data ?? [])),
   });
 }
 
@@ -21,11 +22,15 @@ export function useTaskListDetail(id) {
   });
 }
 
+const selectArray = (data) => (Array.isArray(data) ? data : (data?.data ?? data?.items ?? []));
+const selectOne = (data) => (data?.data ?? data);
+
 export function useTasks(filters = {}) {
   return useQuery({
     queryKey: queryKeys.tasks.list(filters),
     queryFn: () => taskService.list(filters),
     staleTime: 30_000,
+    select: selectArray,
   });
 }
 
@@ -34,6 +39,7 @@ export function useTaskDetail(id) {
     queryKey: queryKeys.tasks.detail(id),
     queryFn: () => taskService.getById(id),
     enabled: !!id,
+    select: selectOne,
   });
 }
 
@@ -42,6 +48,7 @@ export function useTaskSubtasks(parentId) {
     queryKey: queryKeys.tasks.subtasks(parentId),
     queryFn: () => taskService.getSubtasks(parentId),
     enabled: !!parentId,
+    select: selectArray,
   });
 }
 
@@ -50,6 +57,7 @@ export function useTaskNotes(taskId) {
     queryKey: queryKeys.tasks.notes(taskId),
     queryFn: () => taskService.listNotes(taskId),
     enabled: !!taskId,
+    select: selectArray,
   });
 }
 

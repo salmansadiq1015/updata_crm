@@ -1,52 +1,40 @@
 const MAX_CHARS = 200;
 const MIN_WORDS = 3;
 
+function hardWrap(text) {
+  const result = [];
+  let remaining = text;
+  while (remaining.length > MAX_CHARS) {
+    let cut = remaining.lastIndexOf(' ', MAX_CHARS);
+    if (cut <= 0) cut = MAX_CHARS; // no space found — hard cut at limit
+    result.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+  if (remaining) result.push(remaining);
+  return result;
+}
+
 export function splitIntoChunks(text) {
   if (!text || typeof text !== 'string') return [];
   const trimmed = text.trim();
   if (!trimmed) return [];
 
   const parts = trimmed.split(/(?<=[.!?])\s+(?=[A-Z"'])/);
+  const raw = [];
 
-  // If no split (single sentence), return as-is
-  if (parts.length === 1) return parts;
-
-  // Multiple sentences - each one is a potential chunk
-  // But first, handle any that exceed MAX_CHARS by breaking them up
-  const chunks = [];
-
-  for (let i = 0; i < parts.length; i++) {
-    if (parts[i].length <= MAX_CHARS) {
-      // Fits within limit, add as-is
-      chunks.push(parts[i]);
+  for (const part of parts) {
+    if (part.length > MAX_CHARS) {
+      raw.push(...hardWrap(part));
     } else {
-      // Exceeds MAX_CHARS - this shouldn't normally happen
-      // but if it does, combine with neighbors to spread it out
-      if (i === 0) {
-        // First chunk that's too long - try combining with next
-        if (i + 1 < parts.length) {
-          const combined = `${parts[i]} ${parts[i + 1]}`;
-          chunks.push(combined);
-          i++; // Skip the next part since we combined it
-        } else {
-          // No next part, add it anyway
-          chunks.push(parts[i]);
-        }
-      } else {
-        // Not first, try combining with previous chunk
-        const prev = chunks.pop();
-        const combined = `${prev} ${parts[i]}`;
-        chunks.push(combined);
-      }
+      raw.push(part);
     }
   }
 
-  // If only one chunk, return as-is
-  if (chunks.length === 1) return chunks;
+  if (raw.length === 1) return raw;
 
   // Multiple chunks: filter out very small ones (< MIN_WORDS)
-  const filtered = chunks.filter((c) => c.split(/\s+/).length >= MIN_WORDS);
+  const filtered = raw.filter((c) => c.split(/\s+/).length >= MIN_WORDS);
 
   // Return filtered if any remain, otherwise return original chunks
-  return filtered.length > 0 ? filtered : chunks;
+  return filtered.length > 0 ? filtered : raw;
 }

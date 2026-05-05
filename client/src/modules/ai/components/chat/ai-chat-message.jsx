@@ -23,7 +23,13 @@ export function AiChatMessage({
   const isUser = variant === 'user';
   const [hovered, setHovered] = useState(false);
 
-  const showActions = !isUser && messageId && !isStreaming;
+  const showActions = !isUser && messageId && !isStreaming && hovered;
+
+  // Derive individual TTS props from ttsProps object
+  const ttsActive = ttsProps?.voiceState === 'responding';
+  const onPlay = ttsProps ? () => ttsProps.speak(content) : undefined;
+  const onStop = ttsProps?.stopSpeaking;
+  const showTts = !!ttsProps?.speak;
 
   return (
     <motion.div
@@ -58,10 +64,12 @@ export function AiChatMessage({
             <AiChatMessageActions
               messageId={messageId}
               content={content}
-              visible={hovered}
               copyState={copyState}
               onCopy={onCopy}
-              ttsProps={ttsProps}
+              onPlay={onPlay}
+              onStop={onStop}
+              ttsActive={ttsActive}
+              showTts={showTts}
             />
           )}
         </div>

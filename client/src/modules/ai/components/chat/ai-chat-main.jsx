@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Menu, PenSquare, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,26 @@ export function AiChatMain({
     const input = run?.input ?? '';
     dispatch(typeof input === 'string' ? input : JSON.stringify(input), correlationId);
   }, [threadRuns, dispatch]);
+
+  // Auto-play TTS when AI run completes (hands-free or autoPlay on)
+  const prevRunKeyRef = useRef(null);
+  useEffect(() => {
+    if (!latestRun) return;
+    const key = `${latestRun._id}:${latestRun.status}`;
+    if (key === prevRunKeyRef.current) return;
+    prevRunKeyRef.current = key;
+
+    if (latestRun.status === 'COMPLETED' && (voice.autoPlay || voice.handsFreeModeEnabled)) {
+      const output = latestRun.output;
+      const text =
+        output?.message && typeof output.message === 'string'
+          ? output.message
+          : output
+          ? JSON.stringify(output, null, 2)
+          : '';
+      if (text) voice.speak(text);
+    }
+  }, [latestRun, voice]);
 
   const copyProps = { copyState: copy.copyState, onCopy: copy.copy };
   const ttsProps = {

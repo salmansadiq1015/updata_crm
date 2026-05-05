@@ -21,6 +21,10 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
   const onErrorRef = useRef(onError);
   const startListeningRef = useRef(null);
   const playNextRef = useRef(null);
+  // Tracks live transcript without relying on functional setState inside browser callbacks
+  const transcriptRef = useRef({ partial: '', final: '', confidence: null });
+  // Set to true when stopListening is called so onend doesn't submit
+  const abortedRef = useRef(false);
 
   useEffect(() => { handsFreeRef.current = handsFreeModeEnabled; }, [handsFreeModeEnabled]);
   useEffect(() => { onTranscriptRef.current = onTranscriptFinal; }, [onTranscriptFinal]);
@@ -51,7 +55,6 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
     window.speechSynthesis.speak(utterance);
   }, [isTTSSupported]);
 
-  // Keep ref current so utterance callbacks can call _playNext without stale closure
   useEffect(() => { playNextRef.current = _playNext; }, [_playNext]);
 
   const speak = useCallback(
@@ -78,6 +81,10 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
   const startListening = useCallback(() => {
     if (!isSTTSupported) { onErrorRef.current?.('not-supported'); return; }
 
+    abortedRef.current = false;
+    transcriptRef.current = { partial: '', final: '', confidence: null };
+    setTranscript({ partial: '', final: '', confidence: null });
+
     const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     const recognition = new SR();
     recognition.continuous = true;
@@ -103,11 +110,12 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
           interim += result[0].transcript;
         }
       }
-      setTranscript((prev) => ({
+      transcriptRef.current = {
         partial: interim,
-        final: prev.final + finalText,
-        confidence: confidence ?? prev.confidence,
-      }));
+        final: transcriptRef.current.final + finalText,
+        confidence: confidence ?? transcriptRef.current.confidence,
+      };
+      setTranscript({ ...transcriptRef.current });
     };
 
     recognition.onerror = (e) => {
@@ -119,26 +127,46 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
 
     recognition.onend = () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
+      // Manual cancel — do not submit
+      if (abortedRef.current) {
+        abortedRef.current = false;
+        return;
+      }
+
       setVoiceState((prev) => (prev === 'listening' ? 'processing' : prev));
 
-      setTranscript((prev) => {
-        const text = (prev.final + prev.partial).trim();
-        if (!text) return { partial: '', final: '', confidence: null };
+      const { partial, final, confidence } = transcriptRef.current;
+      const text = (final + partial).trim();
 
-        const lower = text.toLowerCase();
-        if (EXIT_COMMANDS.has(lower)) {
-          onErrorRef.current?.('exit-command');
-          return { partial: '', final: '', confidence: null };
-        }
+      // Clear transcript immediately
+      transcriptRef.current = { partial: '', final: '', confidence: null };
+      setTranscript({ partial: '', final: '', confidence: null });
 
-        const isLowConf = prev.confidence !== null && prev.confidence < LOW_CONFIDENCE_THRESHOLD;
-        if (isLowConf) {
-          setTimeout(() => onTranscriptRef.current?.(text, prev.confidence), LOW_CONFIDENCE_DELAY_MS);
-        } else {
-          onTranscriptRef.current?.(text, prev.confidence);
-        }
-        return { partial: '', final: '', confidence: null };
-      });
+      if (!text) {
+        setVoiceState('idle');
+        return;
+      }
+
+      const lower = text.toLowerCase();
+      if (EXIT_COMMANDS.has(lower)) {
+        onErrorRef.current?.('exit-command');
+        setVoiceState('idle');
+        return;
+      }
+
+      const dispatchTranscript = () => {
+        onTranscriptRef.current?.(text, confidence);
+        // In normal mode, go back to idle — in hands-free, TTS will drive state to 'responding'
+        if (!handsFreeRef.current) setVoiceState('idle');
+      };
+
+      const isLowConf = confidence !== null && confidence < LOW_CONFIDENCE_THRESHOLD;
+      if (isLowConf) {
+        setTimeout(dispatchTranscript, LOW_CONFIDENCE_DELAY_MS);
+      } else {
+        dispatchTranscript();
+      }
     };
 
     recognition.start();
@@ -146,12 +174,14 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
     resetSilence();
   }, [isSTTSupported]);
 
-  // Keep ref current so _playNext can call startListening without stale closure
   useEffect(() => { startListeningRef.current = startListening; }, [startListening]);
 
   const stopListening = useCallback(() => {
+    abortedRef.current = true;
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
     recognitionRef.current?.abort();
+    recognitionRef.current = null;
+    transcriptRef.current = { partial: '', final: '', confidence: null };
     setVoiceState('idle');
     setTranscript({ partial: '', final: '', confidence: null });
   }, []);

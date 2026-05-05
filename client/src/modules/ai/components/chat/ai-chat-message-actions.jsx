@@ -17,7 +17,7 @@ export function AiChatMessageActions({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const isCopied = copyState.copied && copyState.messageId === messageId;
+  const isCopied = copyState?.copied && copyState?.messageId === messageId;
 
   useEffect(() => {
     if (!menuOpen) return;

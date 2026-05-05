@@ -39,8 +39,17 @@ export function useInteractionLayer({ onDispatch }) {
     if (next === 'manual') voice.stopListening();
   }, [handsFreeModeEnabled, setVoiceMode, voice]);
 
+  const toggleAutoPlay = useCallback(() => setAutoPlay(!autoPlay), [autoPlay, setAutoPlay]);
+
   return {
     copy,
-    voice: { ...voice, startListening, toggleHandsFree },
+    voice: {
+      ...voice,
+      startListening,
+      toggleHandsFree,
+      toggleAutoPlay,
+      autoPlay,
+      handsFreeModeEnabled,
+    },
   };
 }

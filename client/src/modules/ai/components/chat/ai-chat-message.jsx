@@ -47,7 +47,7 @@ export function AiChatMessage({
       )}
 
       <div className={cn('flex flex-col gap-1.5 min-w-0', isUser ? 'items-end' : 'items-start')}>
-        <div className="relative">
+        <div className="relative inline-block max-w-full">
           <div
             className={cn(
               'px-4 py-3 text-sm leading-relaxed',
@@ -60,17 +60,20 @@ export function AiChatMessage({
             {children}
           </div>
 
+          {/* Floating action bar — appears at bottom-right of bubble on hover, no layout shift */}
           {showActions && (
-            <AiChatMessageActions
-              messageId={messageId}
-              content={content}
-              copyState={copyState}
-              onCopy={onCopy}
-              onPlay={onPlay}
-              onStop={onStop}
-              ttsActive={ttsActive}
-              showTts={showTts}
-            />
+            <div className="absolute -bottom-3 right-1 z-10 flex items-center bg-background border rounded-lg shadow-sm px-0.5 py-0.5">
+              <AiChatMessageActions
+                messageId={messageId}
+                content={content}
+                copyState={copyState}
+                onCopy={onCopy}
+                onPlay={onPlay}
+                onStop={onStop}
+                ttsActive={ttsActive}
+                showTts={showTts}
+              />
+            </div>
           )}
         </div>
 

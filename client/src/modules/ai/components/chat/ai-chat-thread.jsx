@@ -120,12 +120,24 @@ function RunPair({ run, onConfirm, isConfirming, onRetry, copyProps, ttsProps })
       ? JSON.stringify(run.input)
       : 'Voice recording';
 
-  const { retryState } = useMessageRetry({
+  const { retryState, scheduleRetry } = useMessageRetry({
     runId: run._id,
     correlationId: run.correlationId,
     onRetry,
     maxAttempts: 3,
   });
+
+  // Use a ref so the effect dep array stays stable while always calling latest scheduleRetry
+  const scheduleRetryRef = useRef(scheduleRetry);
+  useEffect(() => { scheduleRetryRef.current = scheduleRetry; }, [scheduleRetry]);
+
+  // Auto-trigger retry when run transitions to FAILED (transient errors only)
+  useEffect(() => {
+    if (run.status === AGENT_STATUSES.FAILED && run.error) {
+      scheduleRetryRef.current(run.error, run.correlationId);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [run._id, run.status]);
 
   const isRunning = run.status === AGENT_STATUSES.RUNNING || run.status === AGENT_STATUSES.PENDING;
   const outputText = getRunOutputText(run);

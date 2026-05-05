@@ -47,6 +47,7 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
   const dispatchMutation = useMutation({
     mutationFn: ({ input, threadId, correlationId }) => aiAgentService.dispatch(input, threadId, correlationId),
     onSuccess: (result, { threadId }) => {
+      setPendingInput(null);
       onThreadSelected(threadId);
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentRuns({}) });
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentThread(threadId) });
@@ -126,8 +127,9 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
   );
 
   const isLoading = threadQuery.isLoading;
-  const activePendingInput =
-    pendingInput && (dispatchMutation.isPending || isLoading) ? pendingInput : null;
+  // Only show the optimistic bubble while the POST request is in flight —
+  // once onSuccess fires (which clears pendingInput), the real run takes over
+  const activePendingInput = pendingInput && dispatchMutation.isPending ? pendingInput : null;
 
   return {
     threads: history.threads,

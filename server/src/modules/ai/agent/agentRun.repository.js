@@ -50,8 +50,8 @@ class AgentRunRepository {
     return AgentRun.aggregate(pipeline);
   }
 
-  async findByUserId(userId, { limit = 20, skip = 0, archived = false } = {}) {
-    return AgentRun.find({ userId, archived })
+  async findByUserId(userId, { limit = 20, skip = 0 } = {}) {
+    return AgentRun.find({ userId })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)

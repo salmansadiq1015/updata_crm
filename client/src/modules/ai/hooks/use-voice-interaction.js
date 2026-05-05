@@ -94,9 +94,14 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
       let interim = '';
       let finalText = '';
       let confidence = null;
-      for (const result of e.results) {
-        if (result.isFinal) { finalText += result[0].transcript; confidence = result[0].confidence; }
-        else { interim += result[0].transcript; }
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const result = e.results[i];
+        if (result.isFinal) {
+          finalText += result[0].transcript;
+          confidence = result[0].confidence;
+        } else {
+          interim += result[0].transcript;
+        }
       }
       setTranscript((prev) => ({
         partial: interim,

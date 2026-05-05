@@ -171,7 +171,7 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
 
     recognition.start();
     setVoiceState('listening');
-    resetSilence();
+    // Do NOT start silence timer here — only after first speech result arrives
   }, [isSTTSupported]);
 
   useEffect(() => { startListeningRef.current = startListening; }, [startListening]);

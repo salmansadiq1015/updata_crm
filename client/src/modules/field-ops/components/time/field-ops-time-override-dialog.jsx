@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -9,7 +9,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { Loader2, ShieldAlert } from 'lucide-react';
 
 export function FieldOpsTimeOverrideDialog({ open, onOpenChange, onConfirm, isLoading }) {
-  const { t, language } = useLanguage();
+  const { t, locale: language } = useLanguage();
   const [justification, setJustification] = useState('');
   const tooShort = justification.trim().length > 0 && justification.trim().length < 20;
   const valid = justification.trim().length >= 20;

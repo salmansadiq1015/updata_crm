@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { Loader2 } from 'lucide-react';
 
 export function FieldOpsTimeReleaseDialog({ open, onOpenChange, count, onConfirm, isLoading }) {
-  const { t, language } = useLanguage();
+  const { t, locale: language } = useLanguage();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">

@@ -1,165 +1,453 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { Clock, Eye, Pencil, Plus, ShieldAlert, Trash2, Unlock } from 'lucide-react';
 import { useFieldOpsTimeEntries } from '@/modules/field-ops/hooks/use-field-ops-queries';
 import { useFieldOpsTimeMutations } from '@/modules/field-ops/hooks/use-field-ops-time-mutations';
+import { FieldOpsTimeStatusBadge } from './field-ops-time-status-badge';
+import { FieldOpsTimeDetailPanel } from './field-ops-time-detail-panel';
+import { FieldOpsTimeFormDialog } from './field-ops-time-form-dialog';
 import { FieldOpsTimeReleaseDialog } from './field-ops-time-release-dialog';
 import { FieldOpsTimeOverrideDialog } from './field-ops-time-override-dialog';
 import { RELEASE_STATUS_CONFIG, ACTIVITY_TYPE_LABELS } from '@/modules/field-ops/constants/field-ops-constants';
 import { DataTableShell } from '@/shared/components/data-table/data-table-shell';
 import { BulkActionsBar } from '@/shared/components/data-table/bulk-actions-bar';
-import { PermissionGate } from '@/shared/components/permission-gate';
+import { RowActionsMenu } from '@/shared/components/data-table/row-actions-menu';
+import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { PageHeader } from '@/shared/components/page-header';
+import { PermissionGate } from '@/shared/components/permission-gate';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
-import { Unlock, ShieldAlert } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+function TimeEmptyState({ de }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <div className="relative flex items-center justify-center">
+        <span className="absolute inline-flex h-16 w-16 animate-ping rounded-full bg-primary/15" />
+        <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+          <Clock className="h-7 w-7 text-primary animate-bounce" />
+        </div>
+      </div>
+      <div className="text-center space-y-1">
+        <p className="text-sm font-medium text-foreground">
+          {de ? 'Keine Zeiteinträge gefunden' : 'No time entries found'}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {de
+            ? 'Einträge erscheinen hier, sobald Techniker ihre Zeit erfassen.'
+            : 'Entries will appear here once technicians record their time.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Stats card ────────────────────────────────────────────────────────────────
+
+function StatCard({ label, value, colorClass }) {
+  return (
+    <div className="rounded-xl border bg-card px-4 py-3 flex flex-col gap-1">
+      <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{label}</span>
+      <span className={cn('text-2xl font-bold', colorClass)}>{value}</span>
+    </div>
+  );
+}
+
+// ── Time helpers ──────────────────────────────────────────────────────────────
+
+function fmtTime(isoStr) {
+  if (!isoStr) return null;
+  const d = new Date(isoStr);
+  if (isNaN(d)) return isoStr.slice(11, 16) || null;
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmtDuration(min) {
+  if (!min) return '0m';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h > 0 ? `${h}h ${m > 0 ? `${m}m` : ''}`.trim() : `${m}m`;
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export function FieldOpsTimeTable() {
-  const { t, language } = useLanguage();
+  const { t, locale: language } = useLanguage();
+  const de = language === 'de';
+
+  // Filters
+  const [activityFilter, setActivityFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  // UI state
   const [rowSelection, setRowSelection] = useState({});
+  const [selectedEntry, setSelectedEntry] = useState(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
   const [overrideTarget, setOverrideTarget] = useState(null);
 
+  // Data
   const { data: entries = [], isFetching } = useFieldOpsTimeEntries({});
 
-  const { release, releaseBatch, override } = useFieldOpsTimeMutations({
-    onRelease: () => { setRowSelection({}); setReleaseOpen(false); },
-    onOverride: () => setOverrideTarget(null),
+  // Stats (derived, no extra query)
+  const stats = useMemo(() => ({
+    total: entries.length,
+    pending: entries.filter((e) => e.releaseStatus === 'PENDING').length,
+    released: entries.filter((e) => e.releaseStatus === 'RELEASED').length,
+    locked: entries.filter((e) => e.releaseStatus === 'LOCKED').length,
+  }), [entries]);
+
+  // Client-side filtering
+  const filtered = useMemo(() => {
+    return entries.filter((e) => {
+      if (activityFilter !== 'all' && e.activityType !== activityFilter) return false;
+      if (statusFilter !== 'all' && e.releaseStatus !== statusFilter) return false;
+      return true;
+    });
+  }, [entries, activityFilter, statusFilter]);
+
+  // Selected IDs
+  const selectedIds = useMemo(
+    () => Object.entries(rowSelection).filter(([, v]) => v).map(([k]) => k),
+    [rowSelection],
+  );
+  const pendingSelectedIds = useMemo(
+    () => selectedIds.filter((id) => entries.find((e) => (e._id || e.id) === id)?.releaseStatus === 'PENDING'),
+    [selectedIds, entries],
+  );
+
+  // Mutations
+  const {
+    createEntry, updateEntry, deleteEntry, bulkDelete,
+    release, releaseBatch, override,
+  } = useFieldOpsTimeMutations({
+    onCreate: () => setShowCreate(false),
+    onUpdate: () => setEditTarget(null),
+    onDelete: () => { setDeleteTarget(null); setPanelOpen(false); },
+    onBulkDelete: () => { setRowSelection({}); setBulkDeleteOpen(false); },
+    onRelease: () => { setRowSelection({}); setReleaseOpen(false); setPanelOpen(false); },
+    onOverride: () => { setOverrideTarget(null); setPanelOpen(false); },
   });
 
-  const selectedIds = Object.keys(rowSelection).filter((id) => {
-    const e = entries.find((x) => x._id === id);
-    return e && e.releaseStatus === 'PENDING';
-  });
+  const handleCreate = useCallback(({ orderId, payload }) => {
+    createEntry.mutate({ orderId, payload });
+  }, [createEntry]);
 
+  const handleUpdate = useCallback(({ orderId, payload }) => {
+    if (!editTarget) return;
+    updateEntry.mutate({ id: editTarget._id || editTarget.id, data: payload });
+  }, [editTarget, updateEntry]);
+
+  const handleDelete = useCallback(() => {
+    if (!deleteTarget) return;
+    deleteEntry.mutate(deleteTarget._id || deleteTarget.id);
+  }, [deleteTarget, deleteEntry]);
+
+  const handleBulkDelete = useCallback(() => {
+    bulkDelete.mutate(selectedIds);
+  }, [selectedIds, bulkDelete]);
+
+  // Filter options
+  const ACTIVITY_OPTS = [
+    { value: 'all', de: 'Alle Tätigkeiten', en: 'All Activities' },
+    ...Object.entries(ACTIVITY_TYPE_LABELS).map(([v, c]) => ({ value: v, de: c.label, en: c.labelEn })),
+  ];
+
+  const STATUS_OPTS = [
+    { value: 'all', de: 'Alle Status', en: 'All Statuses' },
+    ...Object.entries(RELEASE_STATUS_CONFIG).map(([v, c]) => ({ value: v, de: c.label, en: c.labelEn })),
+  ];
+
+  // Columns
   const columns = useMemo(() => [
     {
       accessorKey: 'date',
-      header: language === 'de' ? 'Datum' : 'Date',
-      size: 110,
+      header: de ? 'Datum' : 'Date',
+      size: 100,
       Cell: ({ row }) => <span className="text-xs">{formatDate(row.original.date)}</span>,
     },
     {
+      accessorKey: 'technicianId',
+      header: de ? 'Techniker' : 'Technician',
+      size: 150,
+      Cell: ({ row }) => {
+        const tech = row.original.technicianId;
+        const name = typeof tech === 'object' && tech
+          ? `${tech.firstName ?? ''} ${tech.lastName ?? ''}`.trim()
+          : null;
+        return <span className="text-sm">{name || '—'}</span>;
+      },
+    },
+    {
+      accessorKey: 'orderId',
+      header: de ? 'Auftrag' : 'Order',
+      size: 140,
+      Cell: ({ row }) => {
+        const o = row.original.orderId;
+        const label = typeof o === 'object' && o
+          ? (o.assignmentNumber ? `#${o.assignmentNumber}` : o.title || '—')
+          : '—';
+        return <span className="font-mono text-xs text-muted-foreground">{label}</span>;
+      },
+    },
+    {
       accessorKey: 'activityType',
-      header: language === 'de' ? 'Tätigkeit' : 'Activity',
-      size: 130,
+      header: de ? 'Tätigkeit' : 'Activity',
+      size: 120,
       Cell: ({ row }) => {
         const cfg = ACTIVITY_TYPE_LABELS[row.original.activityType];
         return (
-          <span className="text-xs text-muted-foreground">
-            {cfg ? (language === 'de' ? cfg.label : cfg.labelEn) : row.original.activityType}
+          <span className="inline-flex items-center gap-1.5 text-xs">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary/50 shrink-0" />
+            {cfg ? (de ? cfg.label : cfg.labelEn) : row.original.activityType || '—'}
           </span>
         );
       },
     },
     {
-      accessorKey: 'netDurationMin',
-      header: language === 'de' ? 'Netto' : 'Net',
-      size: 90,
+      id: 'timeRange',
+      header: de ? 'Zeitspanne' : 'Time Range',
+      size: 120,
       Cell: ({ row }) => {
-        const min = row.original.netDurationMin || row.original.net_duration_min || 0;
-        const h = Math.floor(min / 60);
-        const m = min % 60;
-        return <span className="text-xs font-mono">{h}h {m > 0 ? `${m}m` : ''}</span>;
+        const s = fmtTime(row.original.startTime);
+        const e = fmtTime(row.original.endTime);
+        if (!s && !e) return <span className="text-xs text-muted-foreground">—</span>;
+        return <span className="text-xs font-mono">{s ?? '?'} → {e ?? '?'}</span>;
+      },
+    },
+    {
+      accessorKey: 'netDurationMin',
+      header: de ? 'Netto' : 'Net',
+      size: 80,
+      Cell: ({ row }) => {
+        const min = row.original.netDurationMin ?? row.original.net_duration_min ?? 0;
+        return <span className="text-xs font-mono font-semibold">{fmtDuration(min)}</span>;
       },
     },
     {
       accessorKey: 'releaseStatus',
-      header: language === 'de' ? 'Freigabe' : 'Release',
-      size: 120,
-      Cell: ({ row }) => {
-        const cfg = RELEASE_STATUS_CONFIG[row.original.releaseStatus];
-        return cfg ? (
-          <span className={cn('text-[11px] px-2 py-0.5 rounded-full font-medium', cfg.badge)}>
-            {language === 'de' ? cfg.label : cfg.labelEn}
-          </span>
-        ) : <span className="text-xs">{row.original.releaseStatus}</span>;
-      },
+      header: de ? 'Freigabe' : 'Release',
+      size: 115,
+      Cell: ({ row }) => <FieldOpsTimeStatusBadge status={row.original.releaseStatus} size="sm" />,
     },
     {
-      accessorKey: 'note',
-      header: language === 'de' ? 'Notiz' : 'Note',
-      size: 200,
-      Cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground truncate">{row.original.note || '—'}</span>
-      ),
+      id: 'actions',
+      header: '',
+      size: 52,
+      Cell: ({ row }) => {
+        const entry = row.original;
+        const isPending = entry.releaseStatus === 'PENDING';
+        const isLocked = entry.releaseStatus === 'LOCKED';
+        return (
+          <RowActionsMenu
+            items={[
+              {
+                label: de ? 'Anzeigen' : 'View',
+                icon: Eye,
+                onSelect: () => { setSelectedEntry(entry); setPanelOpen(true); },
+              },
+              {
+                label: de ? 'Bearbeiten' : 'Edit',
+                icon: Pencil,
+                onSelect: () => setEditTarget(entry),
+              },
+              { type: 'separator', hidden: !isPending && !isLocked },
+              {
+                label: de ? 'Freigeben' : 'Release',
+                icon: Unlock,
+                hidden: !isPending,
+                onSelect: () => release.mutate(entry._id || entry.id),
+              },
+              {
+                label: de ? 'Überschreiben' : 'Override',
+                icon: ShieldAlert,
+                hidden: !isLocked,
+                onSelect: () => setOverrideTarget(entry._id || entry.id),
+              },
+              { type: 'separator' },
+              {
+                label: de ? 'Löschen' : 'Delete',
+                icon: Trash2,
+                destructive: true,
+                onSelect: () => setDeleteTarget(entry),
+              },
+            ]}
+          />
+        );
+      },
     },
-  ], [language]);
+  ], [de, release]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={t('fieldOps.time.title', 'Time Entries')}
         description={t('fieldOps.time.desc', 'Release and manage time entries.')}
-        count={entries.length}
-      />
-      <DataTableShell
-        columns={columns}
-        data={entries}
-        isLoading={isFetching && entries.length === 0}
-        enableRowSelection
-        rowSelection={rowSelection}
-        onRowSelectionChange={setRowSelection}
-        getRowId={(row) => row._id}
-        emptyMessage={t('fieldOps.time.empty', 'No time entries found.')}
-        renderRowActions={({ row }) => {
-          const isPending = row.original.releaseStatus === 'PENDING';
-          const isLocked = row.original.releaseStatus === 'LOCKED';
-          if (!isPending && !isLocked) return null;
-          return (
-            <div className="flex items-center gap-1">
-              {isPending && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={() => release.mutate(row.original._id)}
-                  disabled={release.isPending}
-                >
-                  <Unlock className="h-3.5 w-3.5 mr-1" />
-                  {t('fieldOps.time.release', 'Release')}
-                </Button>
-              )}
-              {isLocked && (
-                <PermissionGate permission="time:release:override">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-xs text-amber-600 hover:text-amber-700"
-                    onClick={() => setOverrideTarget(row.original._id)}
-                    disabled={override.isPending}
-                  >
-                    <ShieldAlert className="h-3.5 w-3.5 mr-1" />
-                    {t('fieldOps.time.overrideRelease', 'Override')}
-                  </Button>
-                </PermissionGate>
-              )}
-            </div>
-          );
-        }}
+        count={filtered.length}
+      >
+        <div className="flex items-center gap-2">
+          {/* Activity filter */}
+          <Select value={activityFilter} onValueChange={setActivityFilter}>
+            <SelectTrigger className="h-8 w-40 text-xs rounded-full border-dashed">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ACTIVITY_OPTS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{de ? o.de : o.en}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Status filter */}
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-8 w-36 text-xs rounded-full border-dashed">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{de ? o.de : o.en}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            {de ? 'Neuer Eintrag' : 'New Entry'}
+          </Button>
+        </div>
+      </PageHeader>
+
+      {/* Stats cards */}
+      <div className="grid grid-cols-4 gap-3">
+        <StatCard label={de ? 'Gesamt' : 'Total'} value={stats.total} colorClass="text-foreground" />
+        <StatCard label={de ? 'Ausstehend' : 'Pending'} value={stats.pending} colorClass="text-amber-600" />
+        <StatCard label={de ? 'Freigegeben' : 'Released'} value={stats.released} colorClass="text-emerald-600" />
+        <StatCard label={de ? 'Gesperrt' : 'Locked'} value={stats.locked} colorClass="text-red-600" />
+      </div>
+
+      {/* Create dialog */}
+      <FieldOpsTimeFormDialog
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        onSave={handleCreate}
+        isLoading={createEntry.isPending}
       />
 
-      <BulkActionsBar count={selectedIds.length} onClear={() => setRowSelection({})}>
-        <Button size="sm" onClick={() => setReleaseOpen(true)} disabled={releaseBatch.isPending}>
-          <Unlock className="h-3.5 w-3.5 mr-1.5" />
-          {t('fieldOps.time.releaseSelected', 'Release Selected')}
-        </Button>
-      </BulkActionsBar>
+      {/* Edit dialog */}
+      <FieldOpsTimeFormDialog
+        open={!!editTarget}
+        onOpenChange={(v) => { if (!v) setEditTarget(null); }}
+        onSave={handleUpdate}
+        isLoading={updateEntry.isPending}
+        defaultValues={editTarget}
+      />
 
+      {/* Single delete confirm */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+        title={de ? 'Zeiteintrag löschen' : 'Delete Time Entry'}
+        description={de
+          ? 'Dieser Zeiteintrag wird unwiderruflich gelöscht.'
+          : 'This time entry will be permanently deleted.'}
+        onConfirm={handleDelete}
+        isLoading={deleteEntry.isPending}
+        variant="destructive"
+        confirmText={de ? 'Löschen' : 'Delete'}
+      />
+
+      {/* Bulk delete confirm */}
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title={de ? `${selectedIds.length} Einträge löschen` : `Delete ${selectedIds.length} Entries`}
+        description={de
+          ? `${selectedIds.length} Zeiteinträge werden unwiderruflich gelöscht.`
+          : `${selectedIds.length} time entries will be permanently deleted.`}
+        onConfirm={handleBulkDelete}
+        isLoading={bulkDelete.isPending}
+        variant="destructive"
+        confirmText={de ? 'Alle löschen' : 'Delete All'}
+      />
+
+      {/* Release batch dialog */}
       <FieldOpsTimeReleaseDialog
         open={releaseOpen}
         onOpenChange={setReleaseOpen}
-        count={selectedIds.length}
-        onConfirm={() => releaseBatch.mutate(selectedIds)}
+        count={pendingSelectedIds.length}
+        onConfirm={() => releaseBatch.mutate(pendingSelectedIds)}
         isLoading={releaseBatch.isPending}
       />
+
+      {/* Override dialog */}
       <FieldOpsTimeOverrideDialog
         open={!!overrideTarget}
         onOpenChange={(v) => { if (!v) setOverrideTarget(null); }}
         onConfirm={(justification) => override.mutate({ id: overrideTarget, justification })}
         isLoading={override.isPending}
+      />
+
+      {/* Table */}
+      <DataTableShell
+        columns={columns}
+        data={filtered}
+        isLoading={isFetching && entries.length === 0}
+        onRowClick={(row) => { setSelectedEntry(row); setPanelOpen(true); }}
+        emptyState={<TimeEmptyState de={de} />}
+        getRowId={(row) => row._id || row.id}
+        enableRowSelection
+        rowSelection={rowSelection}
+        onRowSelectionChange={setRowSelection}
+      />
+
+      {/* Bulk actions bar */}
+      <BulkActionsBar count={selectedIds.length} onClear={() => setRowSelection({})}>
+        {pendingSelectedIds.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => setReleaseOpen(true)}
+            disabled={releaseBatch.isPending}
+          >
+            <Unlock className="h-3.5 w-3.5" />
+            {de
+              ? `${pendingSelectedIds.length} freigeben`
+              : `Release ${pendingSelectedIds.length}`}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="destructive"
+          className="gap-1.5"
+          onClick={() => setBulkDeleteOpen(true)}
+          disabled={bulkDelete.isPending}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          {de ? `${selectedIds.length} löschen` : `Delete ${selectedIds.length}`}
+        </Button>
+      </BulkActionsBar>
+
+      {/* Detail panel */}
+      <FieldOpsTimeDetailPanel
+        entry={selectedEntry}
+        open={panelOpen}
+        onOpenChange={(v) => { setPanelOpen(v); if (!v) setSelectedEntry(null); }}
+        onEdit={(entry) => { setPanelOpen(false); setEditTarget(entry); }}
+        onRelease={(id) => release.mutate(id)}
+        onOverride={(id) => setOverrideTarget(id)}
+        onDelete={(entry) => setDeleteTarget(entry)}
+        isReleasePending={release.isPending}
+        isOverridePending={override.isPending}
       />
     </div>
   );

@@ -13,7 +13,7 @@ export const photoService = {
 
   async getPhotos(orderId) {
     const res = await apiClient.get(ENDPOINTS.MOBILE.ORDER_PHOTOS(orderId));
-    return res.data;
+    return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
   },
 
   async deletePhoto(photoId) {

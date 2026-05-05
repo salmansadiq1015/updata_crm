@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,7 @@ const TYPE_OPTS = [
 const activeFilterClass = 'border-primary/40 bg-primary/5 text-primary';
 
 export function FieldOpsOrderFilters({ search, onSearch, status, onStatus, type, onType, onClear }) {
-  const { language: lang } = useLanguage();
+  const { locale: lang } = useLanguage();
   const l = (o) => lang === 'de' ? o.de : o.en;
   const hasFilters = search || (status && status !== 'all') || (type && type !== 'all');
 

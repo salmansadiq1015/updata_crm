@@ -76,6 +76,12 @@ export function useChatMessages(projectId) {
   return { ...query, typingUsers };
 }
 
+export function useChatMembers(projectId) {
+  // Returns project members for @mention suggestions.
+  // Extend with a real API call when a /mobile/projects/:id/members endpoint is available.
+  return { data: [] };
+}
+
 export function useChatMutations(projectId) {
   const queryClient = useQueryClient();
   const keys = [queryKeys.mobile.chat.byProject(projectId)];

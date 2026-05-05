@@ -6,13 +6,73 @@ import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-export function useFieldOpsTimeMutations({ onRelease, onOverride } = {}) {
+export function useFieldOpsTimeMutations({
+  onRelease, onOverride, onCreate, onUpdate, onDelete, onBulkDelete,
+} = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.mobile.timeEntries.all() });
   };
+
+  const createEntry = useMutation({
+    retry: 0,
+    mutationFn: ({ orderId, payload }) => timeService.createTimeEntry(orderId, payload),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('fieldOps.time.created', 'Time entry created.'));
+      onCreate?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const updateEntry = useMutation({
+    retry: 0,
+    mutationFn: ({ id, data }) => timeService.updateTimeEntry(id, data),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('fieldOps.time.updated', 'Time entry updated.'));
+      onUpdate?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const deleteEntry = useMutation({
+    mutationFn: (entryId) => timeService.deleteTimeEntry(entryId),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('fieldOps.time.deleted', 'Time entry deleted.'));
+      onDelete?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const bulkDelete = useMutation({
+    mutationFn: async (entryIds) => {
+      const results = [];
+      for (const id of entryIds) {
+        try {
+          await timeService.deleteTimeEntry(id);
+          results.push({ id, ok: true });
+        } catch (e) {
+          results.push({ id, ok: false, error: e.message });
+        }
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      invalidate();
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length > 0) {
+        showError(`${failed.length} ${t('fieldOps.time.bulkDeleteFailed', 'entries could not be deleted.')}`);
+      } else {
+        showSuccess(t('fieldOps.time.bulkDeleted', 'Time entries deleted.'));
+        onBulkDelete?.(results);
+      }
+    },
+    onError: (err) => showError(err.message),
+  });
 
   const release = useMutation({
     mutationFn: (entryId) => timeService.releaseTimeEntry(entryId),
@@ -21,7 +81,7 @@ export function useFieldOpsTimeMutations({ onRelease, onOverride } = {}) {
       if (res?.released === false) {
         showError(res?.message || t('fieldOps.time.releaseFailed', 'Cannot release: work report not submitted.'));
       } else {
-        showSuccess(t('fieldOps.time.released', 'Time entries released.'));
+        showSuccess(t('fieldOps.time.released', 'Time entry released.'));
         onRelease?.(res);
       }
     },
@@ -51,7 +111,7 @@ export function useFieldOpsTimeMutations({ onRelease, onOverride } = {}) {
   });
 
   const override = useMutation({
-    mutationFn: ({ id, justification }) => timeService.releaseTimeEntry(id),
+    mutationFn: ({ id, justification }) => timeService.overrideTimeEntry(id, justification),
     onSuccess: (res) => {
       invalidate();
       showSuccess(t('fieldOps.time.overrideSuccess', 'Time entry manually released.'));
@@ -60,5 +120,5 @@ export function useFieldOpsTimeMutations({ onRelease, onOverride } = {}) {
     onError: (err) => showError(err.message),
   });
 
-  return { release, releaseBatch, override };
+  return { createEntry, updateEntry, deleteEntry, bulkDelete, release, releaseBatch, override };
 }

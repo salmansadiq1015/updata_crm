@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { notificationService } from '@/modules/mobile/services/notification-service';
+import { useNotificationStore } from '@/stores/notification-store';
 import { queryKeys } from '@/lib/query/keys';
 import { showError } from '@/lib/toast';
 
@@ -19,14 +20,11 @@ export function useFieldOpsNotificationMutations() {
   });
 
   const markAllRead = useMutation({
-    mutationFn: async () => {
-      const data = queryClient.getQueryData(queryKeys.mobile.notifications.list()) || [];
-      const unread = data.filter((n) => !n.is_read);
-      for (const n of unread) {
-        await notificationService.markRead(n._id || n.id);
-      }
+    mutationFn: () => notificationService.markAllRead(),
+    onSuccess: () => {
+      invalidate();
+      useNotificationStore.getState().markAllAsRead();
     },
-    onSuccess: invalidate,
     onError: (err) => showError(err.message),
   });
 

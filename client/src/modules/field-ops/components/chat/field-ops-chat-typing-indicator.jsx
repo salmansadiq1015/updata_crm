@@ -1,10 +1,10 @@
-'use client';
+﻿'use client';
 
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 export function FieldOpsChatTypingIndicator({ typingUsers = [] }) {
-  const { t, language } = useLanguage();
+  const { t, locale: language } = useLanguage();
   const count = typingUsers.length;
 
   let label = '';

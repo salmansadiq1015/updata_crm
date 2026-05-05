@@ -4,7 +4,7 @@ import { ENDPOINTS } from '@/lib/api/endpoints';
 export const installationService = {
   async getInstallations(siteId) {
     const res = await apiClient.get(ENDPOINTS.MOBILE.SITE_INSTALLATIONS(siteId));
-    return res.data;
+    return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
   },
 
   async getInstallationById(id) {

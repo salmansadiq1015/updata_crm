@@ -137,6 +137,7 @@ export const queryKeys = {
       history: (id) => ['mobile', 'orders', 'history', id],
     },
     reports: {
+      list: (filters) => ['mobile', 'reports', 'list', filters],
       byOrder: (orderId) => ['mobile', 'reports', 'byOrder', orderId],
       detail: (id) => ['mobile', 'reports', 'detail', id],
     },
@@ -182,6 +183,14 @@ export const queryKeys = {
     rooms:    ()       => ['chat', 'rooms'],
     room:     (id)     => ['chat', 'room', id],
     messages: (roomId) => ['chat', 'messages', roomId],
+  },
+  ai: {
+    all:          ()         => ['ai'],
+    agentRuns:    (filters)  => ['ai', 'agentRuns', filters],
+    agentRun:     (id)       => ['ai', 'agentRun', id],
+    agentThread:  (threadId) => ['ai', 'agentThread', threadId],
+    sessions:     (params)   => ['ai', 'sessions', params],
+    session:      (id)       => ['ai', 'session', id],
   },
   deploy: {
     all: () => ['deploy'],

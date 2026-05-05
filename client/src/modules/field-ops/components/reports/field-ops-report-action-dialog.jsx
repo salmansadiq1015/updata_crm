@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -9,7 +9,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { Loader2 } from 'lucide-react';
 
 export function FieldOpsRejectDialog({ open, onOpenChange, onConfirm, isLoading }) {
-  const { t, language } = useLanguage();
+  const { t, locale: language } = useLanguage();
   const [note, setNote] = useState('');
   const noteError = note.trim().length > 0 && note.trim().length < 5;
 

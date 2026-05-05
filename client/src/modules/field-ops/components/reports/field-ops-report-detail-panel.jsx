@@ -1,7 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { RichTextContent } from '@/components/ui/rich-text-content';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { FieldOpsReportStatusBadge } from './field-ops-report-status-badge';
@@ -9,7 +10,7 @@ import { FieldOpsRejectDialog } from './field-ops-report-action-dialog';
 import { useFieldOpsReportMutations } from '@/modules/field-ops/hooks/use-field-ops-report-mutations';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate } from '@/lib/formatters';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function Section({ title, children, className }) {
@@ -21,8 +22,8 @@ function Section({ title, children, className }) {
   );
 }
 
-export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange }) {
-  const { t, language } = useLanguage();
+export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange, onEdit }) {
+  const { t, locale: language } = useLanguage();
   const [rejectOpen, setRejectOpen] = useState(false);
 
   const { approve, reject } = useFieldOpsReportMutations({
@@ -37,13 +38,23 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange 
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto flex flex-col gap-0 p-0">
+        <SheetContent className="!w-[50vw] !max-w-[50vw] overflow-y-auto flex flex-col gap-0 p-0">
           <SheetHeader className="px-6 py-4 border-b">
             <div className="flex items-center justify-between gap-3">
               <SheetTitle className="text-base">
                 {language === 'de' ? 'Arbeitsbericht' : 'Work Report'}
               </SheetTitle>
-              <FieldOpsReportStatusBadge status={report.status} />
+              <div className="flex items-center gap-2">
+                <FieldOpsReportStatusBadge status={report.status} />
+                {(report.status === 'DRAFT' || report.status === 'SUBMITTED') && onEdit && (
+                  <button
+                    onClick={() => onEdit(report)}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </SheetHeader>
 
@@ -65,19 +76,19 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange 
 
             {report.workPerformed && (
               <Section title={language === 'de' ? 'Durchgeführte Arbeiten' : 'Work Performed'}>
-                <p className="text-sm text-foreground/80 whitespace-pre-wrap">{report.workPerformed}</p>
+                <RichTextContent html={report.workPerformed} />
               </Section>
             )}
 
             {report.findings && (
               <Section title={language === 'de' ? 'Feststellungen' : 'Findings'}>
-                <p className="text-sm text-foreground/80 whitespace-pre-wrap">{report.findings}</p>
+                <RichTextContent html={report.findings} />
               </Section>
             )}
 
             {report.nextSteps && (
               <Section title={language === 'de' ? 'Nächste Schritte' : 'Next Steps'}>
-                <p className="text-sm text-foreground/80 whitespace-pre-wrap">{report.nextSteps}</p>
+                <RichTextContent html={report.nextSteps} />
               </Section>
             )}
 
@@ -113,7 +124,7 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange 
               <>
                 <Separator />
                 <Section title={language === 'de' ? 'Technikernotizen' : 'Technician Notes'}>
-                  <p className="text-sm text-foreground/80 whitespace-pre-wrap">{report.technicianNotes}</p>
+                  <RichTextContent html={report.technicianNotes} />
                 </Section>
               </>
             )}

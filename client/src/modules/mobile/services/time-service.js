@@ -7,6 +7,11 @@ export const timeService = {
     return res.data;
   },
 
+  async getTimeEntriesByOrder(orderId) {
+    const res = await apiClient.get(ENDPOINTS.MOBILE.ORDER_TIME_ENTRIES(orderId));
+    return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+  },
+
   async getTimeEntries(params = {}) {
     const res = await apiClient.get(ENDPOINTS.MOBILE.TIME_ENTRIES, { params });
     return res.data;
@@ -24,6 +29,11 @@ export const timeService = {
 
   async releaseTimeEntry(entryId) {
     const res = await apiClient.post(ENDPOINTS.MOBILE.TIME_ENTRY_RELEASE(entryId));
+    return res.data;
+  },
+
+  async overrideTimeEntry(entryId, justification) {
+    const res = await apiClient.post(ENDPOINTS.MOBILE.TIME_ENTRY_OVERRIDE(entryId), { justification });
     return res.data;
   },
 };

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useFieldOpsOrderPhotos } from '@/modules/field-ops/hooks/use-field-ops-queries';
@@ -16,7 +16,7 @@ const CATEGORY_LABELS = {
 };
 
 export function FieldOpsPhotoGallery({ orderId }) {
-  const { language } = useLanguage();
+  const { locale: language } = useLanguage();
   const { data: photos = [], isLoading } = useFieldOpsOrderPhotos(orderId);
   const [lightbox, setLightbox] = useState(null);
 
@@ -30,9 +30,17 @@ export function FieldOpsPhotoGallery({ orderId }) {
 
   if (photos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
-        <ImageOff className="h-8 w-8" />
-        <p className="text-sm">{language === 'de' ? 'Keine Fotos vorhanden.' : 'No photos.'}</p>
+      <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
+        <div className="relative flex items-center justify-center">
+          <div className="absolute h-20 w-20 rounded-full bg-muted/60 animate-ping opacity-20" />
+          <div className="relative flex items-center justify-center h-16 w-16 rounded-full bg-muted">
+            <ImageOff className="h-7 w-7 text-muted-foreground/50 animate-bounce" />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground/70">{language === 'de' ? 'Keine Fotos vorhanden' : 'No photos yet'}</p>
+          <p className="text-xs text-muted-foreground">{language === 'de' ? 'Fotos werden vom Techniker über die App hochgeladen.' : 'Photos are uploaded by the technician via the mobile app.'}</p>
+        </div>
       </div>
     );
   }

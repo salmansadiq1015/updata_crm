@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -31,7 +31,7 @@ function getDayLabel(ts, language) {
 }
 
 export function FieldOpsChatMessages({ messages = [], isLoading, currentUserId }) {
-  const { language } = useLanguage();
+  const { locale: language } = useLanguage();
   const bottomRef = useRef(null);
   const scrollRef = useRef(null);
   const [showFab, setShowFab] = useState(false);

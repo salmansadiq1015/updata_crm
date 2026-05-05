@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { orderService } from '@/modules/mobile/services/order-service';
 import { reportService } from '@/modules/mobile/services/report-service';
@@ -12,8 +12,8 @@ import { notificationService } from '@/modules/mobile/services/notification-serv
 
 export function useFieldOpsOrders(filters = {}) {
   return useQuery({
-    queryKey: queryKeys.mobile.orders.list(filters),
-    queryFn: () => orderService.getOrders(filters),
+    queryKey: ['field-ops', 'orders', 'all', filters],
+    queryFn: () => orderService.getAllOrders(filters),
     staleTime: 30_000,
   });
 }
@@ -32,6 +32,14 @@ export function useFieldOpsOrderReports(orderId) {
     queryKey: queryKeys.mobile.reports.byOrder(orderId),
     queryFn: () => reportService.getReportsByOrder(orderId),
     enabled: !!orderId,
+    staleTime: 30_000,
+  });
+}
+
+export function useFieldOpsAllReports(filters = {}) {
+  return useQuery({
+    queryKey: queryKeys.mobile.reports.list(filters),
+    queryFn: () => reportService.getAllReports(filters),
     staleTime: 30_000,
   });
 }
@@ -56,7 +64,7 @@ export function useFieldOpsTimeEntries(filters = {}) {
 export function useFieldOpsOrderTimeEntries(orderId) {
   return useQuery({
     queryKey: queryKeys.mobile.timeEntries.byOrder(orderId),
-    queryFn: () => timeService.getTimeEntries({ orderId }),
+    queryFn: () => timeService.getTimeEntriesByOrder(orderId),
     enabled: !!orderId,
     staleTime: 30_000,
   });
@@ -90,11 +98,13 @@ export function useFieldOpsInstallationDetail(id) {
 }
 
 export function useFieldOpsNotifications(params = {}) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: queryKeys.mobile.notifications.list(),
-    queryFn: () => notificationService.getNotifications(params),
+    queryFn: ({ pageParam }) =>
+      notificationService.getNotifications({ ...params, cursor: pageParam ?? undefined }),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage?.nextCursor ?? null,
     staleTime: 60_000,
-    refetchInterval: 60_000,
   });
 }
 

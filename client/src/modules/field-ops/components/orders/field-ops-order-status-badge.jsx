@@ -1,11 +1,11 @@
-'use client';
+﻿'use client';
 
 import { cn } from '@/lib/utils';
 import { ORDER_STATUS_CONFIG } from '@/modules/field-ops/constants/field-ops-constants';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 export function FieldOpsOrderStatusBadge({ status, size = 'md' }) {
-  const { language } = useLanguage();
+  const { locale: language } = useLanguage();
   const cfg = ORDER_STATUS_CONFIG[status] || {};
   return (
     <span className={cn(

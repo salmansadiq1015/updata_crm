@@ -179,6 +179,17 @@ export const queryKeys = {
       status: () => ['mobile', 'sync', 'status'],
     },
   },
+  tasks: {
+    all: () => ['tasks'],
+    lists: () => ['tasks', 'lists'],
+    listDetail: (id) => ['tasks', 'lists', 'detail', id],
+    list: (filters) => ['tasks', 'list', filters],
+    detail: (id) => ['tasks', 'detail', id],
+    subtasks: (parentId) => ['tasks', 'subtasks', parentId],
+    notes: (taskId) => ['tasks', 'notes', taskId],
+    dashboard: (filters) => ['tasks', 'dashboard', filters],
+    stats: (filters) => ['tasks', 'stats', filters],
+  },
   chat: {
     rooms:    ()       => ['chat', 'rooms'],
     room:     (id)     => ['chat', 'room', id],

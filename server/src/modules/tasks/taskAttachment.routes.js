@@ -15,9 +15,9 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE },
 });
 
-router.get('/', authenticate, requirePermission('tasks:manage'), validate(listAttachmentsSchema), (req, res, next) => taskAttachmentController.list(req, res, next));
-router.post('/', authenticate, requirePermission('tasks:manage'), upload.single('file'), validate(uploadAttachmentSchema), (req, res, next) => taskAttachmentController.upload(req, res, next));
-router.get('/:attachmentId/download', authenticate, requirePermission('tasks:manage'), validate(downloadAttachmentSchema), (req, res, next) => taskAttachmentController.download(req, res, next));
-router.delete('/:attachmentId', authenticate, requirePermission('tasks:manage'), validate(deleteAttachmentSchema), (req, res, next) => taskAttachmentController.remove(req, res, next));
+router.get('/', authenticate, requirePermission('tasks:read'), validate(listAttachmentsSchema), (req, res, next) => taskAttachmentController.list(req, res, next));
+router.post('/', authenticate, requirePermission('tasks:write'), upload.single('file'), validate(uploadAttachmentSchema), (req, res, next) => taskAttachmentController.upload(req, res, next));
+router.get('/:attachmentId/download', authenticate, requirePermission('tasks:read'), validate(downloadAttachmentSchema), (req, res, next) => taskAttachmentController.download(req, res, next));
+router.delete('/:attachmentId', authenticate, requirePermission('tasks:delete'), validate(deleteAttachmentSchema), (req, res, next) => taskAttachmentController.remove(req, res, next));
 
 export default router;

@@ -8,8 +8,8 @@ import {
 
 const router = Router({ mergeParams: true });
 
-router.get('/', authenticate, requirePermission('tasks:manage'), validate(listRemindersSchema), (req, res, next) => taskReminderController.list(req, res, next));
-router.post('/', authenticate, requirePermission('tasks:manage'), validate(createReminderSchema), (req, res, next) => taskReminderController.create(req, res, next));
-router.delete('/:reminderId', authenticate, requirePermission('tasks:manage'), validate(deleteReminderSchema), (req, res, next) => taskReminderController.remove(req, res, next));
+router.get('/', authenticate, requirePermission('tasks:read'), validate(listRemindersSchema), (req, res, next) => taskReminderController.list(req, res, next));
+router.post('/', authenticate, requirePermission('tasks:write'), validate(createReminderSchema), (req, res, next) => taskReminderController.create(req, res, next));
+router.delete('/:reminderId', authenticate, requirePermission('tasks:delete'), validate(deleteReminderSchema), (req, res, next) => taskReminderController.remove(req, res, next));
 
 export default router;

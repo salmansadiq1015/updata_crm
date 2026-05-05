@@ -9,7 +9,12 @@ export function createTool({ name, description, schema, requiredPermission, exec
     async (input, config) => {
       const { permissions = [], userId, agentRunId } = config?.configurable || {};
 
-      if (requiredPermission && !permissions.includes(requiredPermission)) {
+      // '*' wildcard = Admin bypass; otherwise check specific permission string
+      const hasPermission =
+        !requiredPermission ||
+        permissions.includes('*') ||
+        permissions.includes(requiredPermission);
+      if (!hasPermission) {
         throw new Error(`RBAC_DENIED: Missing permission '${requiredPermission}'`);
       }
 

@@ -211,6 +211,13 @@ export const authorize = (...roleNames) => {
   };
 };
 
+/**
+ * Load permission strings for a user (exported for non-middleware use).
+ * Returns array of 'module:action' strings, e.g. ['tasks:write', 'crm:read'].
+ * Admin role yields every permission currently in the DB.
+ */
+export const loadUserPermissions = (user) => _loadPermissions(user);
+
 // --- Internal helpers ---
 
 const PERMISSION_CACHE_TTL = { l1Ttl: 60, l2Ttl: 300 };

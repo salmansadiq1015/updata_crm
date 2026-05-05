@@ -17,7 +17,7 @@ export const createTaskTool = createTool({
     priority: z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
     projectId: z.string().optional().describe('MongoDB ObjectId of the project'),
   }),
-  requiredPermission: 'tasks:create',
+  requiredPermission: 'tasks:write',
   compensationAction: 'delete_task',
   execute: async ({ title, description, assignedTo, dueDate, priority, projectId }, { userId }) => {
     const { default: taskService } = await import('../../tasks/task.service.js');
@@ -52,7 +52,7 @@ export const updateTaskTool = createTool({
     dueDate: z.string().datetime({ offset: true }).optional().describe('ISO 8601 date string for new due date'),
     priority: z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
   }),
-  requiredPermission: 'tasks:update',
+  requiredPermission: 'tasks:write',
   execute: async ({ taskId, status, assignedTo, dueDate, priority }, { userId }) => {
     const { default: taskService } = await import('../../tasks/task.service.js');
 

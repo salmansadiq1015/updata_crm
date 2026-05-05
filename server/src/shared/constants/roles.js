@@ -87,6 +87,16 @@ const PERMISSIONS = Object.freeze({
   FILES_DELETE: 'files:delete',
   FILES_LIST: 'files:list',
 
+  // Tasks
+  TASKS_READ: 'tasks:read',
+  TASKS_WRITE: 'tasks:write',
+  TASKS_DELETE: 'tasks:delete',
+  TASKS_ADMIN: 'tasks:admin',
+
+  // Notifications
+  NOTIFICATIONS_READ: 'notifications:read',
+  NOTIFICATIONS_WRITE: 'notifications:write',
+
   // System
   SYSTEM_CONFIG_VIEW: 'system:config:view',
   SYSTEM_JOBS_VIEW: 'system:jobs:view',

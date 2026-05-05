@@ -24,7 +24,7 @@ export const sendNotificationTool = createTool({
     body: z.string().max(1000).describe('Notification body text'),
     type: z.enum(['INFO', 'WARNING', 'SUCCESS', 'ACTION_REQUIRED']).default('INFO'),
   }),
-  requiredPermission: 'notifications:send',
+  requiredPermission: 'notifications:write',
   execute: async ({ recipientIds, title, body, type }, { userId }) => {
     const { default: notificationService } = await import('../../notifications/notification.service.js');
 

@@ -9,8 +9,10 @@ import logger from '../shared/logger/index.js';
 /**
  * Seed permissions, roles, and initial admin user.
  *
- * Idempotent: checks if data already exists before inserting.
- * Called once during server startup after database connection.
+ * Idempotent: upserts permissions on every run so new entries added to
+ * PERMISSION_DEFINITIONS are created in existing databases automatically.
+ * Roles are created if missing; Admin role is always synced to all permissions.
+ * Other roles receive new permissions via $addToSet (never removes existing ones).
  */
 
 // All permission definitions: { module, action, description }
@@ -70,6 +72,16 @@ const PERMISSION_DEFINITIONS = [
   { module: 'reports', action: 'read', description: 'View reports' },
   { module: 'reports', action: 'write', description: 'Create and manage reports' },
 
+  // Tasks
+  { module: 'tasks', action: 'read', description: 'View tasks' },
+  { module: 'tasks', action: 'write', description: 'Create and update tasks' },
+  { module: 'tasks', action: 'delete', description: 'Delete tasks' },
+  { module: 'tasks', action: 'admin', description: 'Full task administration' },
+
+  // Notifications
+  { module: 'notifications', action: 'read', description: 'View notifications' },
+  { module: 'notifications', action: 'write', description: 'Send and manage notifications' },
+
   // Time Tracking
   { module: 'time-tracking', action: 'read', description: 'View time entries' },
   { module: 'time-tracking', action: 'write', description: 'Create and update time entries' },
@@ -84,13 +96,11 @@ const PERMISSION_DEFINITIONS = [
 const ROLE_DEFINITIONS = [
   {
     name: 'Admin',
-
     description: 'Full system access, user management',
-    permissionKeys: '*', // All permissions
+    permissionKeys: '*', // Always synced to all permissions
   },
   {
     name: 'Projektleiter',
-
     description: 'Manages projects, quotations, schedules',
     permissionKeys: [
       'crm:read', 'crm:write', 'crm:delete', 'crm:admin',
@@ -98,6 +108,8 @@ const ROLE_DEFINITIONS = [
       'quotations:read', 'quotations:write', 'quotations:delete', 'quotations:admin',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'field-service:read',
+      'tasks:read', 'tasks:write', 'tasks:delete', 'tasks:admin',
+      'notifications:read', 'notifications:write',
       'reports:read', 'reports:write',
       'time-tracking:read',
       'users:read', 'roles:read',
@@ -105,18 +117,18 @@ const ROLE_DEFINITIONS = [
   },
   {
     name: 'Techniker',
-
     description: 'Field operations, time tracking',
     permissionKeys: [
       'crm:read',
       'field-service:read', 'field-service:write', 'field-service:admin',
+      'tasks:read', 'tasks:write',
+      'notifications:read',
       'time-tracking:read', 'time-tracking:write', 'time-tracking:admin',
       'users:read', 'roles:read',
     ],
   },
   {
     name: 'Buchhalter',
-
     description: 'Financial operations',
     permissionKeys: [
       'crm:read',
@@ -124,40 +136,45 @@ const ROLE_DEFINITIONS = [
       'accounting:read', 'accounting:write', 'accounting:admin',
       'reports:read', 'reports:write',
       'quotations:read',
+      'tasks:read',
+      'notifications:read',
       'users:read', 'roles:read',
     ],
   },
   {
     name: 'Disponent',
-
     description: 'Scheduling and resource planning',
     permissionKeys: [
       'crm:read',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'field-service:read',
+      'tasks:read', 'tasks:write',
+      'notifications:read', 'notifications:write',
       'time-tracking:read',
       'users:read', 'roles:read',
     ],
   },
   {
     name: 'Lehrling',
-
     description: 'Limited field access, supervised',
     permissionKeys: [
       'field-service:read',
+      'tasks:read',
+      'notifications:read',
       'time-tracking:read', 'time-tracking:write', 'time-tracking:admin',
       'users:read', 'roles:read',
     ],
   },
   {
     name: 'User',
-
     description: 'Default role for new users with basic read access',
     permissionKeys: [
       'users:read',
       'roles:read',
       'crm:read',
       'projects:read',
+      'tasks:read', 'tasks:write',
+      'notifications:read',
       'time-tracking:read', 'time-tracking:write',
     ],
   },
@@ -165,18 +182,18 @@ const ROLE_DEFINITIONS = [
 
 export async function seedDatabase() {
   try {
-    const permCount = await Permission.countDocuments();
-    const isFirstSeed = permCount === 0;
+    // 1. Upsert all permissions — runs on every startup so new entries reach existing DBs
+    await Promise.all(
+      PERMISSION_DEFINITIONS.map((def) =>
+        Permission.findOneAndUpdate(
+          { module: def.module, action: def.action },
+          { $setOnInsert: def },
+          { upsert: true, new: true },
+        ),
+      ),
+    );
 
-    if (isFirstSeed) {
-      logger.info('Seeding database (first run)...', { module: 'seed' });
-
-      // 1. Seed permissions
-      const permissions = await Permission.insertMany(PERMISSION_DEFINITIONS, { ordered: false });
-      logger.info(`Seeded ${permissions.length} permissions`, { module: 'seed' });
-    }
-
-    // Build lookup map from DB (works for both first seed and re-seed)
+    // Build lookup map: 'module:action' → ObjectId
     const allPermissions = await Permission.find();
     const permMap = new Map();
     for (const p of allPermissions) {
@@ -184,25 +201,37 @@ export async function seedDatabase() {
     }
     const allPermIds = [...permMap.values()];
 
-    // 2. Seed roles — idempotent: only create if missing
+    logger.info(`Permissions synced (${allPermissions.length} total)`, { module: 'seed' });
+
+    // 2. Seed or update roles
     for (const roleDef of ROLE_DEFINITIONS) {
+      const permIds =
+        roleDef.permissionKeys === '*'
+          ? allPermIds
+          : roleDef.permissionKeys.map((key) => permMap.get(key)).filter(Boolean);
+
       const existingRole = await Role.findOne({ name: roleDef.name });
-      if (existingRole) continue;
 
-      const permIds = roleDef.permissionKeys === '*'
-        ? allPermIds
-        : roleDef.permissionKeys
-          .map((key) => permMap.get(key))
-          .filter(Boolean);
-
-      await Role.create({
-        name: roleDef.name,
-        description: roleDef.description,
-        permissions: permIds,
-        isSystem: true,
-      });
-
-      logger.info(`Seeded role: ${roleDef.name} (${permIds.length} permissions)`, { module: 'seed' });
+      if (existingRole) {
+        if (roleDef.permissionKeys === '*') {
+          // Admin: always own every permission (keeps pace with new modules)
+          await Role.updateOne({ _id: existingRole._id }, { $set: { permissions: permIds } });
+        } else {
+          // Other roles: add any new permissions without removing manually-granted ones
+          await Role.updateOne(
+            { _id: existingRole._id },
+            { $addToSet: { permissions: { $each: permIds } } },
+          );
+        }
+      } else {
+        await Role.create({
+          name: roleDef.name,
+          description: roleDef.description,
+          permissions: permIds,
+          isSystem: true,
+        });
+        logger.info(`Seeded role: ${roleDef.name} (${permIds.length} permissions)`, { module: 'seed' });
+      }
     }
 
     // 3. Seed admin user (if env vars are set) — idempotent
@@ -223,16 +252,12 @@ export async function seedDatabase() {
             passwordChangedAt: new Date(),
           });
 
-          // Save to password history
           await PasswordHistory.create({
             userId: adminUser._id,
             passwordHash: hashedPw,
           });
 
-          logger.info('Seeded admin user', {
-            module: 'seed',
-            email: config.admin.email,
-          });
+          logger.info('Seeded admin user', { module: 'seed', email: config.admin.email });
         }
       }
     }

@@ -48,7 +48,7 @@ const navSectionDefs = [
       { labelKey: 'sidebar.quotes', href: '/quotes', icon: FileText, disabled: true, permission: 'quotations:read' },
       { labelKey: 'sidebar.accounting', href: '/accounting', icon: Receipt, disabled: true, permission: 'accounting:read' },
       { labelKey: 'sidebar.tasks', href: '/tasks', icon: CheckSquare, permission: 'tasks:read' },
-      { labelKey: 'sidebar.catalog', href: '/catalog', icon: Boxes, disabled: true },
+      { labelKey: 'sidebar.catalog', href: '/catalog', icon: Boxes, permission: 'catalog:read' },
       { labelKey: 'sidebar.notifications', href: '/notifications', icon: Bell, permission: 'notifications:feed' },
       { labelKey: 'sidebar.ai', href: '/ai', icon: Sparkles },
     ],

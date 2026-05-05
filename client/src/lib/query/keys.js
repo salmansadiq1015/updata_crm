@@ -24,6 +24,15 @@ export const queryKeys = {
     feed: (filters) => ['notifications', 'feed', filters],
     unreadCount: () => ['notifications', 'unreadCount'],
   },
+  catalog: {
+    categories: () => ['catalog', 'categories'],
+    categoryDetail: (id) => ['catalog', 'categories', 'detail', id],
+    articles: (filters) => ['catalog', 'articles', filters],
+    articleDetail: (id) => ['catalog', 'articles', 'detail', id],
+    articleVersions: (id) => ['catalog', 'articles', 'versions', id],
+    textBlocks: (filters) => ['catalog', 'textBlocks', filters],
+    priceHistory: (id) => ['catalog', 'prices', id],
+  },
   dashboard: {
     stats: () => ['dashboard', 'stats'],
   },

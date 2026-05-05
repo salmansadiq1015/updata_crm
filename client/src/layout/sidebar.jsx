@@ -49,7 +49,7 @@ const navSectionDefs = [
       { labelKey: 'sidebar.accounting', href: '/accounting', icon: Receipt, disabled: true, permission: 'accounting:read' },
       { labelKey: 'sidebar.tasks', href: '/tasks', icon: CheckSquare, disabled: true },
       { labelKey: 'sidebar.catalog', href: '/catalog', icon: Boxes, disabled: true },
-      { labelKey: 'sidebar.ai', href: '/ai', icon: Sparkles, disabled: true },
+      { labelKey: 'sidebar.ai', href: '/ai', icon: Sparkles },
     ],
   },
   {

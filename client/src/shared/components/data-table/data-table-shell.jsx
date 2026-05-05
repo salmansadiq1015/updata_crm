@@ -43,6 +43,7 @@ export function DataTableShell({
   onRowSelectionChange,
   getRowId,
   onRowClick,
+  emptyState,
   /**
    * Optional cursor pagination mode. When provided, replaces the numeric
    * pagination footer with Prev / Next buttons.
@@ -212,13 +213,15 @@ export function DataTableShell({
               ))
             ) : table.getRowModel().rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-40">
-                  <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                    <div className="h-12 w-12 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center">
-                      <Inbox className="h-6 w-6 text-primary/40" />
+                <TableCell colSpan={columns.length} className="h-40 p-0">
+                  {emptyState ?? (
+                    <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground h-full">
+                      <div className="h-12 w-12 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center">
+                        <Inbox className="h-6 w-6 text-primary/40" />
+                      </div>
+                      <p className="text-sm font-medium">Keine Eintraege vorhanden</p>
                     </div>
-                    <p className="text-sm font-medium">Keine Eintraege vorhanden</p>
-                  </div>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (

@@ -119,6 +119,8 @@ function StepFooter({ currentStep, totalSteps, onBack, onNext, onCancel, isLoadi
   );
 }
 
+export { StepIndicator, StepFooter };
+
 export function FormStepper({
   steps,
   currentStep,

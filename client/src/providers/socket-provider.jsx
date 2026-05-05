@@ -1,14 +1,17 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
 import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket/client';
 import { usePresenceStore } from '@/stores/presence-store';
+import { queryKeys } from '@/lib/query/keys';
 
 export function SocketProvider({ children }) {
   const { isAuthenticated, accessToken } = useAuthStore();
   const addNotification = useNotificationStore((s) => s.addNotification);
+  const queryClient = useQueryClient();
   const prevTokenRef = useRef(null);
 
   useEffect(() => {
@@ -20,7 +23,7 @@ export function SocketProvider({ children }) {
       const socket = connectSocket(accessToken);
       prevTokenRef.current = accessToken;
 
-      // Listen for push notifications
+      // Listen for push notifications (buffered for offline users)
       socket.on('pushNotification', (payload) => {
         addNotification({
           id: payload.deliveryId,
@@ -31,11 +34,11 @@ export function SocketProvider({ children }) {
           sentAt: payload.sentAt,
           isRead: false,
         });
-        // Acknowledge receipt
         socket.emit('ack:notification', { deliveryId: payload.deliveryId });
+        queryClient.invalidateQueries({ queryKey: queryKeys.mobile.notifications.list() });
       });
 
-      // Listen for in-app notifications
+      // Listen for in-app notifications (InApp adapter)
       socket.on('newNotification', (payload) => {
         addNotification({
           id: payload.id,
@@ -46,9 +49,11 @@ export function SocketProvider({ children }) {
           sentAt: payload.sentAt,
           isRead: false,
         });
+        // Invalidate the notifications list so the page updates instantly
+        queryClient.invalidateQueries({ queryKey: queryKeys.mobile.notifications.list() });
       });
 
-      // Listen for unread count updates
+      // Unread count from server — update Zustand (used by bell badge)
       socket.on('unreadCount', ({ count }) => {
         useNotificationStore.getState().setUnreadCount(count);
       });
@@ -74,7 +79,7 @@ export function SocketProvider({ children }) {
       disconnectSocket();
       prevTokenRef.current = null;
     }
-  }, [isAuthenticated, accessToken, addNotification]);
+  }, [isAuthenticated, accessToken, addNotification, queryClient]);
 
   return children;
 }

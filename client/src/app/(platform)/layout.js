@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDrawerStore } from '@/stores/drawer-store';
@@ -11,12 +11,20 @@ import { FullPageSpinner } from '@/shared/components/loading-spinner';
 import { useKeyboardShortcuts } from '@/shared/hooks/use-keyboard-shortcuts';
 import { cn } from '@/lib/utils';
 
+const AiAssistantButton = lazy(() =>
+  import('@/modules/ai/components/ai-assistant-button').then((m) => ({ default: m.AiAssistantButton }))
+);
+const AiAssistantPanel = lazy(() =>
+  import('@/modules/ai/components/panel/ai-assistant-panel').then((m) => ({ default: m.AiAssistantPanel }))
+);
+
 export default function PlatformLayout({ children }) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
   const isDrawerOpen = useDrawerStore((s) => s.isOpen);
   const pathname = usePathname();
   const isChatPage = pathname?.includes('/chat');
+  const isAiPage   = pathname === '/ai' || pathname?.startsWith('/ai/');
 
   useKeyboardShortcuts();
 
@@ -31,32 +39,46 @@ export default function PlatformLayout({ children }) {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* Desktop sidebar */}
-      <div className="hidden md:block shrink-0">
-        <Sidebar />
-      </div>
+      {/* Desktop sidebar — hidden on AI chat page */}
+      {!isAiPage && (
+        <div className="hidden md:block shrink-0">
+          <Sidebar />
+        </div>
+      )}
 
-      {/* Mobile sidebar (Sheet overlay) */}
-      <MobileSidebar />
+      {/* Mobile sidebar — hidden on AI chat page */}
+      {!isAiPage && <MobileSidebar />}
 
       {/* Main content area */}
       <div className={cn(
         'flex flex-1 flex-col overflow-hidden min-w-0',
         'transition-all duration-300'
       )}>
-        <Header />
+        {/* Header — hidden on AI chat page */}
+        {!isAiPage && <Header />}
+
         <main className={cn(
-          'flex-1 bg-muted/30',
-          isChatPage
-            ? 'overflow-hidden p-0 flex flex-col'
-            : 'overflow-auto p-4 sm:p-6 scrollbar-thin'
+          'flex-1',
+          isAiPage
+            ? 'overflow-hidden p-0'
+            : isChatPage
+            ? 'overflow-hidden p-0 flex flex-col bg-muted/30'
+            : 'overflow-auto p-4 sm:p-6 scrollbar-thin bg-muted/30'
         )}>
           {children}
         </main>
       </div>
 
       {/* Right drawer */}
-      <RightDrawer />
+      {!isAiPage && <RightDrawer />}
+
+      {/* AI Assistant floating button — hidden when already on AI page */}
+      {!isAiPage && (
+        <Suspense fallback={null}>
+          <AiAssistantButton />
+          <AiAssistantPanel />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -257,6 +257,30 @@ export const ENDPOINTS = Object.freeze({
     COARSE_ALLOCATION_BY_ID: (id) => `/scheduling/coarse/allocations/${id}`,
     COARSE_ALLOCATIONS_BULK: '/scheduling/coarse/allocations/bulk',
   },
+  QOP: {
+    // Quotations
+    QUOTATIONS: '/qop/quotations',
+    QUOTATION_BY_ID: (id) => `/qop/quotations/${id}`,
+    QUOTATION_STATUS: (id) => `/qop/quotations/${id}/status`,
+    QUOTATION_SEND: (id) => `/qop/quotations/${id}/send`,
+    QUOTATION_CONVERT: (id) => `/qop/quotations/${id}/convert`,
+    QUOTATION_DUPLICATE: (id) => `/qop/quotations/${id}/duplicate`,
+    QUOTATION_HISTORY: (id) => `/qop/quotations/${id}/history`,
+    // Orders
+    ORDERS: '/qop/orders',
+    ORDER_BY_ID: (id) => `/qop/orders/${id}`,
+    ORDER_STATUS: (id) => `/qop/orders/${id}/status`,
+    ORDER_INVOICES: (id) => `/qop/orders/${id}/invoices`,
+    ORDER_HISTORY: (id) => `/qop/orders/${id}/history`,
+    // Invoices
+    INVOICES: '/qop/invoices',
+    INVOICE_BY_ID: (id) => `/qop/invoices/${id}`,
+    INVOICE_STATUS: (id) => `/qop/invoices/${id}/status`,
+    INVOICE_FINALIZE: (id) => `/qop/invoices/${id}/finalize`,
+    INVOICE_SEND: (id) => `/qop/invoices/${id}/send`,
+    INVOICE_PAYMENTS: (id) => `/qop/invoices/${id}/payments`,
+    INVOICE_HISTORY: (id) => `/qop/invoices/${id}/history`,
+  },
   AI: {
     // Voice sessions
     SESSIONS:        '/ai/sessions',

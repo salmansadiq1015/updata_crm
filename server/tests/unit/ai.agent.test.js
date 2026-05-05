@@ -3,22 +3,32 @@
  *
  * All external dependencies are mocked so no real MongoDB, Redis, or LLM
  * calls happen. These tests verify workflow routing only.
+ *
+ * Uses jest.unstable_mockModule() for proper ESM mock interception.
  */
 
-// --- Mock all external dependencies before any imports ---
+import { jest, describe, test, expect, beforeAll, beforeEach } from '@jest/globals';
 
-jest.mock('../../src/modules/ai/agent/agentRun.repository.js', () => ({
-  default: { pushStep: jest.fn().mockResolvedValue(null), updateById: jest.fn().mockResolvedValue(null) },
+// ---------------------------------------------------------------------------
+// Declare module mocks BEFORE any imports of modules that depend on them.
+// jest.unstable_mockModule() intercepts the ESM module registry.
+// ---------------------------------------------------------------------------
+
+jest.unstable_mockModule('../../src/modules/ai/agent/agentRun.repository.js', () => ({
+  default: {
+    pushStep: jest.fn().mockResolvedValue(null),
+    updateById: jest.fn().mockResolvedValue(null),
+  },
 }));
 
-jest.mock('../../src/modules/ai/agent/agent.memory.js', () => ({
+jest.unstable_mockModule('../../src/modules/ai/agent/agent.memory.js', () => ({
   default: {
     saveWorkflowState: jest.fn().mockResolvedValue(null),
     loadWorkflowState: jest.fn().mockResolvedValue(null),
   },
 }));
 
-jest.mock('../../src/modules/ai/tools/context.tools.js', () => ({
+jest.unstable_mockModule('../../src/modules/ai/tools/context.tools.js', () => ({
   fetchUserContextTool: {
     invoke: jest.fn().mockResolvedValue(JSON.stringify({ found: true, name: 'Test User' })),
   },
@@ -27,7 +37,7 @@ jest.mock('../../src/modules/ai/tools/context.tools.js', () => ({
   },
 }));
 
-jest.mock('../../src/modules/ai/tools/task.tools.js', () => ({
+jest.unstable_mockModule('../../src/modules/ai/tools/task.tools.js', () => ({
   createTaskTool: {
     invoke: jest.fn().mockResolvedValue(JSON.stringify({ taskId: 'task-1', taskNumber: 'T-001' })),
   },
@@ -36,35 +46,47 @@ jest.mock('../../src/modules/ai/tools/task.tools.js', () => ({
   },
 }));
 
-jest.mock('../../src/modules/ai/tools/notification.tools.js', () => ({
+jest.unstable_mockModule('../../src/modules/ai/tools/notification.tools.js', () => ({
   sendNotificationTool: {
-    invoke: jest.fn().mockResolvedValue(JSON.stringify({ sent: 2, failed: 0 })),
+    invoke: jest.fn().mockResolvedValue(JSON.stringify({ sent: 1, failed: 0 })),
   },
 }));
 
-jest.mock('../../src/modules/ai/tools/lead.tools.js', () => ({
-  createLeadTool: {
-    invoke: jest.fn().mockResolvedValue(JSON.stringify({ leadId: 'lead-1', leadNumber: 'L-001' })),
-  },
-  searchLeadsTool: {
-    invoke: jest.fn().mockResolvedValue(JSON.stringify({ count: 0, leads: [] })),
+jest.unstable_mockModule('../../src/modules/auth/user.model.js', () => ({
+  default: {
+    find: jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([{ _id: 'user-1' }, { _id: 'user-2' }]),
+        }),
+      }),
+    }),
   },
 }));
 
-// ---- Tests ----
+jest.unstable_mockModule('../../src/config/redis.js', () => ({
+  getRedisClient: () => ({
+    incr: jest.fn().mockResolvedValue(1),
+    expire: jest.fn().mockResolvedValue(1),
+    get: jest.fn().mockResolvedValue(null),
+  }),
+}));
+
+jest.unstable_mockModule('../../src/modules/ai/agent/toolExecution.model.js', () => ({
+  default: {
+    create: jest.fn().mockResolvedValue({ _id: 'te-1' }),
+    findByIdAndUpdate: jest.fn().mockResolvedValue(null),
+  },
+}));
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 describe('AI Agent — agent.guardrails', () => {
   let checkRateLimit, sanitizeUserInput, enforceMaxSteps;
 
   beforeAll(async () => {
-    // Patch Redis before importing guardrails
-    jest.doMock('../../src/config/redis.js', () => ({
-      getRedisClient: () => ({
-        incr: jest.fn().mockResolvedValue(1),
-        expire: jest.fn().mockResolvedValue(1),
-        get: jest.fn().mockResolvedValue(null),
-      }),
-    }));
     const mod = await import('../../src/modules/ai/agent/agent.guardrails.js');
     checkRateLimit = mod.checkRateLimit;
     sanitizeUserInput = mod.sanitizeUserInput;
@@ -82,7 +104,7 @@ describe('AI Agent — agent.guardrails', () => {
   });
 
   test('enforceMaxSteps throws at MAX_STEPS (10)', () => {
-    expect(() => enforceMaxSteps(10)).toThrow('AI_AGENT_MAX_STEPS');
+    expect(() => enforceMaxSteps(10)).toThrow('Max agent steps');
   });
 
   test('enforceMaxSteps does not throw below limit', () => {
@@ -92,9 +114,11 @@ describe('AI Agent — agent.guardrails', () => {
 
 describe('AI Agent — task.workflow', () => {
   let taskWorkflow;
-  const { createTaskTool } = jest.requireMock('../../src/modules/ai/tools/task.tools.js');
+  let createTaskTool;
 
   beforeAll(async () => {
+    const toolsMod = await import('../../src/modules/ai/tools/task.tools.js');
+    createTaskTool = toolsMod.createTaskTool;
     const mod = await import('../../src/modules/ai/workflows/task.workflow.js');
     taskWorkflow = mod.taskWorkflow;
   });
@@ -150,9 +174,14 @@ describe('AI Agent — task.workflow', () => {
 
 describe('AI Agent — notification.workflow', () => {
   let notificationWorkflow;
-  const { sendNotificationTool } = jest.requireMock('../../src/modules/ai/tools/notification.tools.js');
+  let sendNotificationTool;
+  let UserModel;
 
   beforeAll(async () => {
+    const toolsMod = await import('../../src/modules/ai/tools/notification.tools.js');
+    sendNotificationTool = toolsMod.sendNotificationTool;
+    const userMod = await import('../../src/modules/auth/user.model.js');
+    UserModel = userMod.default;
     const mod = await import('../../src/modules/ai/workflows/notification.workflow.js');
     notificationWorkflow = mod.notificationWorkflow;
   });
@@ -160,6 +189,14 @@ describe('AI Agent — notification.workflow', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sendNotificationTool.invoke.mockResolvedValue(JSON.stringify({ sent: 1, failed: 0 }));
+    // Restore default User.find mock after each test
+    UserModel.find.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          lean: jest.fn().mockResolvedValue([{ _id: 'user-1' }, { _id: 'user-2' }]),
+        }),
+      }),
+    });
   });
 
   function baseState(overrides = {}) {
@@ -183,18 +220,43 @@ describe('AI Agent — notification.workflow', () => {
     expect(result.output?.sent).toBe(1);
   });
 
-  test('fails when no recipient resolvedId available', async () => {
+  test('falls back to text path when CUSTOMER_NAME entity has no resolvedId', async () => {
+    // No resolvedId → voice recipients empty → text path → "team" keyword → mocked users
     const result = await notificationWorkflow.invoke(baseState({
       entities: { CUSTOMER_NAME: [{ value: 'ACME', resolvedId: undefined }] },
     }));
-    expect(result.status).toBe('failed');
-    expect(result.error?.code).toBe('MISSING_ENTITY');
+    expect(result.status).toBe('completed');
+    expect(result.output?.sent).toBe(1);
   });
 
-  test('fails when entities is empty', async () => {
+  test('resolves to sender when entities empty and no team keyword in input', async () => {
+    // No entities + no team keyword → fallback to [userId]
+    const result = await notificationWorkflow.invoke(baseState({
+      entities: {},
+      input: 'Send a reminder about the inspection',
+    }));
+    expect(result.status).toBe('completed');
+    expect(result.output?.sent).toBe(1);
+  });
+
+  test('resolves team members when entities empty and input contains team keyword', async () => {
+    // "team" keyword → User.find() → mocked to return 2 users
+    const result = await notificationWorkflow.invoke(baseState({ entities: {} }));
+    expect(result.status).toBe('completed');
+    expect(result.output?.recipientCount).toBe(2);
+  });
+
+  test('fails when recipient resolution throws (User model error)', async () => {
+    UserModel.find.mockReturnValueOnce({
+      select: jest.fn().mockReturnValue({
+        limit: jest.fn().mockReturnValue({
+          lean: jest.fn().mockRejectedValueOnce(new Error('MongoDB connection lost')),
+        }),
+      }),
+    });
     const result = await notificationWorkflow.invoke(baseState({ entities: {} }));
     expect(result.status).toBe('failed');
-    expect(result.error?.code).toBe('MISSING_ENTITY');
+    expect(result.error?.code).toBe('RECIPIENT_RESOLUTION_FAILED');
   });
 
   test('fails when MAX_STEPS already reached', async () => {
@@ -214,9 +276,6 @@ describe('AI Agent — tool.runner (RBAC)', () => {
   let createTool;
 
   beforeAll(async () => {
-    jest.doMock('../../src/modules/ai/agent/toolExecution.model.js', () => ({
-      default: { create: jest.fn().mockResolvedValue({ _id: 'te-1' }), findByIdAndUpdate: jest.fn().mockResolvedValue(null) },
-    }));
     const mod = await import('../../src/modules/ai/tools/tool.runner.js');
     createTool = mod.createTool;
   });

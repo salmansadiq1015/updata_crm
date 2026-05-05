@@ -6,10 +6,12 @@
  */
 import { taskWorkflow } from './task.workflow.js';
 import { notificationWorkflow } from './notification.workflow.js';
+import { generalWorkflow } from './general.workflow.js';
 
 const WORKFLOW_REGISTRY = {
   TASK_AUTOMATION: taskWorkflow,
   NOTIFICATION: notificationWorkflow,
+  GENERAL: generalWorkflow,
 };
 
 /**

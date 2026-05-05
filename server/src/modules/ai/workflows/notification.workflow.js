@@ -2,12 +2,13 @@
  * LangGraph StateGraph workflow for sending AI-agent notifications.
  *
  * Graph:
- *   __start__ → execute_tools → [conditional] → END
- *                                            ↘ handle_failure
+ *   __start__ → resolve_recipients → [conditional] → execute_tools → [conditional] → END
+ *                                                ↘ handle_failure             ↘ handle_failure
  *
- * The single execute_tools node validates recipients, builds tool input,
- * and calls sendNotificationTool. Missing or invalid recipients cause an
- * immediate failure before tool invocation.
+ * resolve_recipients handles two paths:
+ *   - Voice path: CUSTOMER_NAME entities with resolvedId (from NLP pipeline)
+ *   - Text path:  No entities — resolves recipients from input text keywords
+ *                 ("team", "all", "everyone") → all active users, else → sender only
  */
 import { StateGraph, END } from '@langchain/langgraph';
 
@@ -17,13 +18,90 @@ import { sendNotificationTool } from '../tools/notification.tools.js';
 import { WorkflowState } from './workflow.state.js';
 import logger from '../../../shared/logger/index.js';
 
+const TEAM_KEYWORDS = /\b(team|all|everyone|staff|users|group|company|organisation|organization|alle|mitarbeiter)\b/i;
+
+async function resolveRecipientsFromText(input, userId) {
+  if (TEAM_KEYWORDS.test(input)) {
+    const { default: User } = await import('../../auth/user.model.js');
+    const members = await User.find({ isActive: true }).select('_id').limit(100).lean();
+    return members.map((u) => u._id.toString());
+  }
+  // Fallback: notify the sender themselves (useful for testing)
+  return [userId];
+}
+
+// ---------------------------------------------------------------------------
+// Node: resolve_recipients
+// ---------------------------------------------------------------------------
+async function resolveRecipients(state) {
+  const stepCount = state.stepCount + 1;
+
+  if (stepCount >= MAX_STEPS) {
+    return {
+      stepCount,
+      status: 'failed',
+      error: { code: 'MAX_STEPS_EXCEEDED', message: `Max agent steps (${MAX_STEPS}) exceeded`, node: 'resolve_recipients' },
+    };
+  }
+
+  if (!state.input || state.input.length === 0) {
+    return {
+      stepCount,
+      status: 'failed',
+      error: { code: 'INVALID_INPUT', message: 'Input is required to generate notification body', node: 'resolve_recipients' },
+    };
+  }
+
+  // Voice path: entities already carry resolved IDs
+  const voiceRecipients = (state.entities?.CUSTOMER_NAME || [])
+    .map((e) => e.resolvedId)
+    .filter(Boolean);
+
+  let recipientIds = voiceRecipients;
+
+  // Text path: no pre-resolved entities — derive from input text
+  if (recipientIds.length === 0) {
+    try {
+      recipientIds = await resolveRecipientsFromText(state.input, state.userId);
+    } catch (err) {
+      logger.warn('Failed to resolve recipients from text', {
+        module: 'ai-workflows',
+        action: 'notification.resolve_recipients',
+        agentRunId: state.agentRunId,
+        error: err.message,
+      });
+      return {
+        stepCount,
+        status: 'failed',
+        error: { code: 'RECIPIENT_RESOLUTION_FAILED', message: 'Could not resolve notification recipients', node: 'resolve_recipients' },
+      };
+    }
+  }
+
+  if (recipientIds.length === 0) {
+    return {
+      stepCount,
+      status: 'failed',
+      error: { code: 'NO_RECIPIENTS', message: 'No recipients found to notify', node: 'resolve_recipients' },
+    };
+  }
+
+  return {
+    stepCount,
+    status: 'running',
+    entities: {
+      ...state.entities,
+      _resolvedRecipientIds: recipientIds,
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Node: execute_tools
 // ---------------------------------------------------------------------------
 async function executeTools(state) {
   const stepCount = state.stepCount + 1;
 
-  // Guard: MAX_STEPS
   if (stepCount >= MAX_STEPS) {
     return {
       stepCount,
@@ -32,33 +110,9 @@ async function executeTools(state) {
     };
   }
 
-  // Guard: valid recipients
-  const recipientIds = (state.entities?.CUSTOMER_NAME || [])
-    .map((e) => e.resolvedId)
-    .filter(Boolean);
-
-  if (recipientIds.length === 0) {
-    return {
-      stepCount,
-      status: 'failed',
-      error: {
-        code: 'MISSING_ENTITY',
-        message: 'No valid recipients resolved — CUSTOMER_NAME entities must have resolvedId',
-        node: 'execute_tools',
-      },
-    };
-  }
-
-  // Guard: non-empty input
-  if (!state.input || state.input.length === 0) {
-    return {
-      stepCount,
-      status: 'failed',
-      error: { code: 'INVALID_INPUT', message: 'Input is required to generate notification body', node: 'execute_tools' },
-    };
-  }
-
+  const recipientIds = state.entities?._resolvedRecipientIds || [];
   const body = (state.entities?.DESCRIPTION?.[0]?.value || state.input).slice(0, 1000);
+
   const toolInput = {
     recipientIds,
     title: 'Message from AI Assistant',
@@ -91,7 +145,6 @@ async function executeTools(state) {
     };
   }
 
-  // Tool runner returns a JSON string — parse it.
   let result;
   try {
     result = JSON.parse(rawResult);
@@ -99,7 +152,6 @@ async function executeTools(state) {
     result = { raw: rawResult };
   }
 
-  // Log the step to AgentRun — non-fatal.
   try {
     await agentRunRepository.pushStep(state.agentRunId, {
       stepIndex: stepCount,
@@ -122,7 +174,7 @@ async function executeTools(state) {
   return {
     stepCount,
     status: 'completed',
-    output: result,
+    output: { ...result, recipientCount: recipientIds.length },
     toolResults: [result],
   };
 }
@@ -137,26 +189,34 @@ async function handleFailure(state) {
     agentRunId: state.agentRunId,
     error: state.error,
   });
-
   return { status: 'failed' };
 }
 
 // ---------------------------------------------------------------------------
 // Conditional routing
 // ---------------------------------------------------------------------------
+function routeAfterResolve(state) {
+  return state.status === 'failed' ? 'handle_failure' : 'execute_tools';
+}
+
 function routeAfterExecution(state) {
   return state.status === 'failed' ? 'handle_failure' : END;
 }
 
 // ---------------------------------------------------------------------------
-// Build and compile the graph
+// Build and compile
 // ---------------------------------------------------------------------------
 const graph = new StateGraph(WorkflowState);
 
+graph.addNode('resolve_recipients', resolveRecipients);
 graph.addNode('execute_tools', executeTools);
 graph.addNode('handle_failure', handleFailure);
 
-graph.addEdge('__start__', 'execute_tools');
+graph.addEdge('__start__', 'resolve_recipients');
+graph.addConditionalEdges('resolve_recipients', routeAfterResolve, {
+  handle_failure: 'handle_failure',
+  execute_tools: 'execute_tools',
+});
 graph.addConditionalEdges('execute_tools', routeAfterExecution, {
   handle_failure: 'handle_failure',
   [END]: END,

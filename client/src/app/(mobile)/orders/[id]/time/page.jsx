@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -23,7 +24,8 @@ import { useOrderTimeEntries } from '@/modules/mobile/hooks/use-time-queries';
 import { useNetworkStatus } from '@/modules/mobile/hooks/use-network-status';
 import { useTimer } from '@/modules/mobile/hooks/use-timer';
 import { createTimeEntrySchema } from '@/modules/mobile/validations/time-entry';
-import { ACTIVITY_TYPE, RELEASE_STATUS } from '@/modules/mobile/constants/mobile-constants';
+import { ACTIVITY_TYPE, RELEASE_STATUS, REPORT_STATUS } from '@/modules/mobile/constants/mobile-constants';
+import { useOrderReports } from '@/modules/mobile/hooks/use-report-queries';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import {
@@ -74,8 +76,13 @@ export default function TimePage() {
   const [editingEntry, setEditingEntry] = useState(null);
 
   const { data: entries, isLoading, isOffline } = useOrderTimeEntries(orderId);
+  const { data: reports } = useOrderReports(orderId);
 
   const { createEntry, updateEntry, deleteEntry, releaseEntry } = useTimeMutations(orderId);
+
+  const hasSubmittedReport = Array.isArray(reports) && reports.some(
+    (r) => r.status === REPORT_STATUS.SUBMITTED || r.status === REPORT_STATUS.APPROVED
+  );
 
   const activeEntries = (entries || []).filter((e) => !e.is_deleted);
   const totalMinutes = activeEntries.reduce((sum, e) => sum + (e.net_duration_min || 0), 0);
@@ -116,6 +123,8 @@ export default function TimePage() {
                 key={entry.id}
                 entry={entry}
                 lang={lang}
+                orderId={orderId}
+                hasSubmittedReport={hasSubmittedReport}
                 onEdit={() => {
                   setEditingEntry(entry);
                   setShowManualForm(true);
@@ -280,12 +289,15 @@ function TimerWidget({ orderId, lang, createEntry }) {
   );
 }
 
-function TimeEntryCard({ entry, lang, onEdit, onDelete, onRelease }) {
+function TimeEntryCard({ entry, lang, orderId, hasSubmittedReport, onEdit, onDelete, onRelease }) {
   const startTime = entry.startTime || entry.start_time;
   const endTime = entry.endTime || entry.end_time;
   const activityType = entry.activityType || entry.activity_type;
   const releaseStatus = entry.releaseStatus || entry.release_status;
   const netDuration = entry.net_duration_min || entry.netDurationMin || 0;
+
+  const canRelease = onRelease && hasSubmittedReport;
+  const blockedRelease = onRelease && !hasSubmittedReport;
 
   return (
     <div className="bg-card border border-border rounded-xl p-4">
@@ -302,7 +314,7 @@ function TimeEntryCard({ entry, lang, onEdit, onDelete, onRelease }) {
           )}
         </div>
         <div className="flex gap-1">
-          {onRelease && (
+          {canRelease && (
             <Button variant="ghost" size="sm" onClick={onRelease} className="h-11 w-11 p-0 text-green-600" aria-label="Release">
               <CheckCircle2 className="h-4 w-4" />
             </Button>
@@ -315,6 +327,19 @@ function TimeEntryCard({ entry, lang, onEdit, onDelete, onRelease }) {
           </Button>
         </div>
       </div>
+      {blockedRelease && (
+        <div className="mb-2 flex items-center gap-2 px-2 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-700">
+          <Clock className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1">
+            {lang === 'de'
+              ? 'Bericht muss zuerst eingereicht werden.'
+              : 'Work report must be submitted first.'}
+          </span>
+          <Link href={`/orders/${orderId}/report`} className="underline underline-offset-1 shrink-0 font-medium">
+            {lang === 'de' ? 'Zum Bericht' : 'Go to report'}
+          </Link>
+        </div>
+      )}
       <div className="flex items-center gap-4 text-sm">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Clock className="h-3.5 w-3.5" />

@@ -11,14 +11,16 @@ import { PullToRefresh } from '@/modules/mobile/components/pull-to-refresh';
 import { useOrderList } from '@/modules/mobile/hooks/use-order-queries';
 import { useSyncStatus } from '@/modules/mobile/hooks/use-sync-status';
 import { triggerSync } from '@/modules/mobile/lib/sync-engine';
-import { ORDER_STATUS } from '@/modules/mobile/constants/mobile-constants';
+import { ORDER_STATUS, ORDER_TYPE } from '@/modules/mobile/constants/mobile-constants';
 
 export default function OrdersPage() {
   const { t } = useLanguage();
   const [activeFilter, setActiveFilter] = useState('today');
+  const [activeType, setActiveType] = useState('all_types');
+  const [activeSort, setActiveSort] = useState('time');
   const { isOnline } = useSyncStatus();
 
-  const filters = buildFilters(activeFilter);
+  const filters = buildFilters(activeFilter, activeType, activeSort);
   const { data, isLoading, isError, isOffline, refetch } = useOrderList(filters);
 
   const orders = normalizeOrders(data);
@@ -47,7 +49,14 @@ export default function OrdersPage() {
         }
       />
 
-      <OrderFilters activeFilter={activeFilter} onFilterChange={setActiveFilter} />
+      <OrderFilters
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+        activeType={activeType}
+        onTypeChange={setActiveType}
+        activeSort={activeSort}
+        onSortChange={setActiveSort}
+      />
 
       <PullToRefresh onRefresh={handleRefresh} className="flex-1 overflow-y-auto px-4 pb-4">
         {isLoading ? (
@@ -77,7 +86,7 @@ export default function OrdersPage() {
             }
           />
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 pt-3">
             {orders.map((order) => (
               <OrderCard key={order.id} order={order} />
             ))}
@@ -90,12 +99,13 @@ export default function OrdersPage() {
 
 function OrderListSkeleton() {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 pt-3">
       {Array.from({ length: 5 }).map((_, i) => (
         <div key={i} className="bg-card rounded-xl border border-border p-4 animate-pulse">
           <div className="flex items-center gap-2 mb-2">
             <div className="h-3 w-20 bg-muted rounded" />
             <div className="h-4 w-16 bg-muted rounded-full" />
+            <div className="h-4 w-14 bg-muted rounded-full" />
           </div>
           <div className="h-4 w-3/4 bg-muted rounded mb-3" />
           <div className="flex gap-4">
@@ -108,23 +118,29 @@ function OrderListSkeleton() {
   );
 }
 
-function buildFilters(activeFilter) {
+function buildFilters(activeFilter, activeType, activeSort) {
+  const filters = {};
+
   if (activeFilter === 'today') {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    return {
-      dateFrom: today.toISOString(),
-      dateTo: tomorrow.toISOString(),
-    };
+    filters.dateFrom = today.toISOString();
+    filters.dateTo = tomorrow.toISOString();
+  } else if (Object.values(ORDER_STATUS).includes(activeFilter)) {
+    filters.status = activeFilter;
   }
 
-  if (Object.values(ORDER_STATUS).includes(activeFilter)) {
-    return { status: activeFilter };
+  if (activeType && activeType !== 'all_types' && Object.values(ORDER_TYPE).includes(activeType)) {
+    filters.orderType = activeType;
   }
 
-  return {};
+  if (activeSort && activeSort !== 'time') {
+    filters.sortBy = activeSort;
+  }
+
+  return filters;
 }
 
 function normalizeOrders(data) {

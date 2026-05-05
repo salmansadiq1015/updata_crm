@@ -1,16 +1,30 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Send, Paperclip, Image, ArrowDown, X } from 'lucide-react';
+import { Send, Paperclip, Camera, X, FileText, ImageIcon, File } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { MobileHeader } from '@/modules/mobile/components/mobile-header';
 import { EmptyState } from '@/modules/mobile/components/empty-state';
-import { useChatMessages, useChatMutations } from '@/modules/mobile/hooks/use-chat';
+import { useChatMessages, useChatMutations, useChatMembers } from '@/modules/mobile/hooks/use-chat';
 import { MESSAGE_TYPE, SYNC_STATUS } from '@/modules/mobile/constants/mobile-constants';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+
+function formatMentions(text) {
+  if (!text) return null;
+  const parts = text.split(/(@\w+)/g);
+  return parts.map((part, i) =>
+    part.startsWith('@') ? (
+      <span key={i} className="font-semibold text-primary">
+        {part}
+      </span>
+    ) : (
+      part
+    )
+  );
+}
 
 export default function ChatPage() {
   const { projectId } = useParams();
@@ -19,39 +33,92 @@ export default function ChatPage() {
 
   const [message, setMessage] = useState('');
   const [attachment, setAttachment] = useState(null);
+  const [attachmentType, setAttachmentType] = useState(null);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [showMentions, setShowMentions] = useState(false);
+  const [caretPos, setCaretPos] = useState(0);
+
   const messagesEndRef = useRef(null);
-  const listRef = useRef(null);
+  const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   const { data: messages, isLoading, isOffline } = useChatMessages(projectId);
   const { sendMessage } = useChatMutations(projectId);
+  const { data: members } = useChatMembers(projectId);
 
   const allMessages = Array.isArray(messages) ? messages : [];
+  const memberList = Array.isArray(members) ? members : [];
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [allMessages.length]);
 
-  const handleFileSelect = (e) => {
+  const handleTextChange = (e) => {
+    const val = e.target.value;
+    setMessage(val);
+    const pos = e.target.selectionStart;
+    setCaretPos(pos);
+
+    // Detect @mention trigger
+    const textBefore = val.slice(0, pos);
+    const mentionMatch = textBefore.match(/@(\w*)$/);
+    if (mentionMatch && memberList.length > 0) {
+      setMentionQuery(mentionMatch[1].toLowerCase());
+      setShowMentions(true);
+    } else {
+      setShowMentions(false);
+      setMentionQuery('');
+    }
+  };
+
+  const insertMention = (memberName) => {
+    const textBefore = message.slice(0, caretPos);
+    const textAfter = message.slice(caretPos);
+    const replaced = textBefore.replace(/@(\w*)$/, `@${memberName} `);
+    setMessage(replaced + textAfter);
+    setShowMentions(false);
+    setMentionQuery('');
+    textareaRef.current?.focus();
+  };
+
+  const filteredMembers = mentionQuery
+    ? memberList.filter((m) =>
+        (m.username || m.name || '').toLowerCase().startsWith(mentionQuery)
+      )
+    : memberList;
+
+  const handleFileSelect = (e, type) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setAttachment(file);
+    setAttachmentType(type || (file.type.startsWith('image/') ? MESSAGE_TYPE.PHOTO : MESSAGE_TYPE.DOCUMENT));
   };
 
   const handleSend = async () => {
     const text = message.trim();
     if (!text && !attachment) return;
+
+    const mentions = [];
+    const mentionRegex = /@(\w+)/g;
+    let m;
+    while ((m = mentionRegex.exec(text)) !== null) {
+      mentions.push(m[1]);
+    }
+
     setMessage('');
+    setAttachment(null);
+    setAttachmentType(null);
+
     const payload = {
       content: text || (attachment ? attachment.name : ''),
-      messageType: attachment ? MESSAGE_TYPE.FILE : MESSAGE_TYPE.TEXT,
-      message_type: attachment ? MESSAGE_TYPE.FILE : MESSAGE_TYPE.TEXT,
+      messageType: attachment ? attachmentType : MESSAGE_TYPE.TEXT,
+      message_type: attachment ? attachmentType : MESSAGE_TYPE.TEXT,
       is_own: true,
+      mentions: mentions.length > 0 ? JSON.stringify(mentions) : undefined,
     };
-    if (attachment) {
-      payload.attachment = attachment;
-    }
-    setAttachment(null);
+    if (attachment) payload.attachment = attachment;
+
     try {
       await sendMessage.mutateAsync(payload);
     } catch {
@@ -60,6 +127,10 @@ export default function ChatPage() {
   };
 
   const handleKeyDown = (e) => {
+    if (showMentions && (e.key === 'Escape')) {
+      setShowMentions(false);
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -81,7 +152,7 @@ export default function ChatPage() {
       />
 
       {/* Messages area */}
-      <div ref={listRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {isLoading ? (
           <ChatSkeleton />
         ) : allMessages.length === 0 ? (
@@ -102,23 +173,71 @@ export default function ChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* @mention suggestions */}
+      {showMentions && filteredMembers.length > 0 && (
+        <div className="px-4 py-2 border-t border-border bg-background">
+          <div className="flex gap-2 overflow-x-auto scrollbar-none">
+            {filteredMembers.slice(0, 8).map((member) => {
+              const name = member.username || member.name || member.first_name;
+              return (
+                <button
+                  key={member.id || name}
+                  onClick={() => insertMention(name)}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-sm font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+                >
+                  <span className="h-5 w-5 rounded-full bg-primary/20 text-primary text-[10px] flex items-center justify-center font-bold">
+                    {(name || 'U')[0].toUpperCase()}
+                  </span>
+                  @{name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Compose bar */}
       <div className="border-t border-border bg-background">
         {attachment && (
           <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 border-b border-border">
-            <Image className="h-4 w-4 text-muted-foreground" />
+            {attachmentType === MESSAGE_TYPE.PHOTO ? (
+              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            )}
             <span className="text-xs truncate flex-1">{attachment.name}</span>
-            <button onClick={() => setAttachment(null)} className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-muted" aria-label="Remove attachment">
+            <button
+              onClick={() => { setAttachment(null); setAttachmentType(null); }}
+              className="h-6 w-6 flex items-center justify-center rounded-full hover:bg-muted"
+              aria-label="Remove attachment"
+            >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
-        <div className="px-4 py-3 pb-safe">
+        <div className="px-3 py-3">
           <div className="flex items-end gap-2">
+            <div className="flex gap-1 shrink-0">
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                className="h-[42px] w-[42px] flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Take photo"
+              >
+                <Camera className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="h-[42px] w-[42px] flex items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Attach file"
+              >
+                <Paperclip className="h-5 w-5" />
+              </button>
+            </div>
             <div className="flex-1 relative">
               <textarea
+                ref={textareaRef}
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={handleTextChange}
                 onKeyDown={handleKeyDown}
                 placeholder={lang === 'de' ? 'Nachricht schreiben...' : 'Type a message...'}
                 rows={1}
@@ -130,13 +249,6 @@ export default function ChatPage() {
                 style={{ height: 'auto', overflowY: message.split('\n').length > 3 ? 'auto' : 'hidden' }}
               />
             </div>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="h-[42px] w-[42px] flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-              aria-label="Attach file"
-            >
-              <Paperclip className="h-5 w-5" />
-            </button>
             <Button
               size="sm"
               className="h-[42px] w-[42px] p-0 rounded-xl shrink-0"
@@ -148,10 +260,18 @@ export default function ChatPage() {
           </div>
         </div>
         <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(e) => handleFileSelect(e, MESSAGE_TYPE.PHOTO)}
+          className="hidden"
+        />
+        <input
           ref={fileInputRef}
           type="file"
           accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-          onChange={handleFileSelect}
+          onChange={(e) => handleFileSelect(e, null)}
           className="hidden"
         />
       </div>
@@ -163,25 +283,95 @@ function ChatBubble({ message, lang }) {
   const isOwn = message.is_own || message.isOwn;
   const isPending = message.sync_status === SYNC_STATUS.PENDING_SYNC;
   const sentAt = message.sent_at || message.created_at;
+  const msgType = message.message_type || message.messageType || MESSAGE_TYPE.TEXT;
+
+  const mentions = (() => {
+    try {
+      if (!message.mentions) return [];
+      return typeof message.mentions === 'string'
+        ? JSON.parse(message.mentions)
+        : message.mentions;
+    } catch {
+      return [];
+    }
+  })();
 
   return (
     <div className={cn('flex', isOwn ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[80%] rounded-2xl px-4 py-2.5',
+          'max-w-[80%] rounded-2xl overflow-hidden',
           isOwn
             ? 'bg-primary text-primary-foreground rounded-br-md'
             : 'bg-muted rounded-bl-md'
         )}
       >
         {!isOwn && message.sender_name && (
-          <p className="text-xs font-semibold mb-0.5 opacity-70">
+          <p className={cn('text-xs font-semibold px-4 pt-2.5 pb-0.5 opacity-70')}>
             {message.sender_name}
           </p>
         )}
-        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+
+        {/* Photo message */}
+        {msgType === MESSAGE_TYPE.PHOTO && (message.attachment_url || message.attachment_local_path) && (
+          <div className="relative">
+            <img
+              src={message.attachment_url || message.attachment_local_path}
+              alt={lang === 'de' ? 'Foto' : 'Photo'}
+              className="w-full max-w-[280px] object-cover max-h-48"
+              loading="lazy"
+            />
+          </div>
+        )}
+
+        {/* Document message */}
+        {msgType === MESSAGE_TYPE.DOCUMENT && (
+          <div className={cn(
+            'flex items-center gap-3 px-4 py-3',
+            isOwn ? '' : ''
+          )}>
+            <div className={cn(
+              'flex items-center justify-center h-10 w-10 rounded-lg shrink-0',
+              isOwn ? 'bg-primary-foreground/20' : 'bg-background'
+            )}>
+              <File className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">
+                {message.content || (lang === 'de' ? 'Dokument' : 'Document')}
+              </p>
+              {message.attachment_url && (
+                <a
+                  href={message.attachment_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    'text-[10px] underline',
+                    isOwn ? 'text-primary-foreground/70' : 'text-primary'
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {lang === 'de' ? 'Öffnen' : 'Open'}
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Text content (shown for TEXT type and as caption for PHOTO/DOCUMENT) */}
+        {message.content && msgType === MESSAGE_TYPE.TEXT && (
+          <p className="text-sm whitespace-pre-wrap break-words px-4 py-2.5">
+            {mentions.length > 0 ? formatMentions(message.content) : message.content}
+          </p>
+        )}
+        {message.content && msgType !== MESSAGE_TYPE.TEXT && msgType !== MESSAGE_TYPE.DOCUMENT && (
+          <p className="text-xs opacity-80 px-4 pb-2">
+            {message.content}
+          </p>
+        )}
+
         <div className={cn(
-          'flex items-center gap-1 mt-1',
+          'flex items-center gap-1 px-4 pb-2',
           isOwn ? 'justify-end' : 'justify-start'
         )}>
           {sentAt && (

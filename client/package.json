@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
+    "test": "jest",
     "lint": "eslint",
     "skeletons": "boneyard-js build http://localhost:3000"
   },
@@ -75,9 +76,13 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.29.3",
+    "@babel/preset-react": "^7.28.5",
     "@tailwindcss/postcss": "^4",
+    "babel-jest": "^30.3.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
+    "jest": "^30.3.0",
     "tailwindcss": "^4"
   }
 }

@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/api/api-client';
+import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 
 const E = ENDPOINTS.NOTIFICATIONS;

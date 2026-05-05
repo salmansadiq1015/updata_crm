@@ -19,7 +19,7 @@ export const WorkflowState = Annotation.Root({
     default: () => '',
   }),
 
-  /** RBAC permission strings granted to the user (e.g. 'tasks:create'). */
+  /** RBAC permission strings granted to the user (e.g. 'tasks:write'). */
   permissions: Annotation({
     reducer: (_x, y) => y,
     default: () => [],

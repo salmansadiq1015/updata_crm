@@ -6,7 +6,7 @@ const MAX_OUTPUT_CHARS = 4096;
 
 export function createTool({ name, description, schema, requiredPermission, execute, compensationAction }) {
   return tool(
-    async (input, config) => {
+    async (input, _runManager, config) => {
       const { permissions = [], userId, agentRunId } = config?.configurable || {};
 
       // '*' wildcard = Admin bypass; otherwise check specific permission string

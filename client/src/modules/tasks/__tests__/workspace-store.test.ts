@@ -41,26 +41,19 @@ describe('useTaskWorkspaceStore', () => {
 
   describe('setStatus', () => {
     it('updates status and resets savedView to none', () => {
-      // First set a savedView
       act(() => useTaskWorkspaceStore.getState().setSavedView('dueToday'));
-      const { result } = renderHook(() =>
-        useTaskWorkspaceStore((s) => ({ status: s.status, savedView: s.savedView }))
-      );
       act(() => useTaskWorkspaceStore.getState().setStatus('OPEN'));
-      expect(result.current.status).toBe('OPEN');
-      expect(result.current.savedView).toBe('none');
+      expect(useTaskWorkspaceStore.getState().status).toBe('OPEN');
+      expect(useTaskWorkspaceStore.getState().savedView).toBe('none');
     });
   });
 
   describe('setPriority', () => {
     it('updates priority and resets savedView to none', () => {
       act(() => useTaskWorkspaceStore.getState().setSavedView('overdue'));
-      const { result } = renderHook(() =>
-        useTaskWorkspaceStore((s) => ({ priority: s.priority, savedView: s.savedView }))
-      );
       act(() => useTaskWorkspaceStore.getState().setPriority('HIGH'));
-      expect(result.current.priority).toBe('HIGH');
-      expect(result.current.savedView).toBe('none');
+      expect(useTaskWorkspaceStore.getState().priority).toBe('HIGH');
+      expect(useTaskWorkspaceStore.getState().savedView).toBe('none');
     });
   });
 
@@ -80,7 +73,6 @@ describe('useTaskWorkspaceStore', () => {
 
   describe('clearFilters', () => {
     it('resets search, status, priority, and savedView to defaults', () => {
-      // Set non-default values
       act(() => {
         useTaskWorkspaceStore.getState().setSearch('find me');
         useTaskWorkspaceStore.getState().setStatus('IN_PROGRESS');
@@ -88,21 +80,13 @@ describe('useTaskWorkspaceStore', () => {
         useTaskWorkspaceStore.getState().setSavedView('dueToday');
       });
 
-      const { result } = renderHook(() =>
-        useTaskWorkspaceStore((s) => ({
-          search: s.search,
-          status: s.status,
-          priority: s.priority,
-          savedView: s.savedView,
-        }))
-      );
-
       act(() => useTaskWorkspaceStore.getState().clearFilters());
 
-      expect(result.current.search).toBe('');
-      expect(result.current.status).toBe('ALL');
-      expect(result.current.priority).toBe('ALL');
-      expect(result.current.savedView).toBe('none');
+      const s = useTaskWorkspaceStore.getState();
+      expect(s.search).toBe('');
+      expect(s.status).toBe('ALL');
+      expect(s.priority).toBe('ALL');
+      expect(s.savedView).toBe('none');
     });
   });
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   AlertCircle,
   Calendar,
@@ -26,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { FOLDER_COLOR_OPTIONS } from './task-ui-constants';
+import { ListColorDialog, FolderColorDialog } from './color-picker-dialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,8 @@ type TaskSidebarProps = {
   onCreateList: (folderId?: string) => void;
   onFolderAction: (action: FolderAction, folder: any) => void;
   onListAction: (action: ListAction, list: any, folderId: string | null) => void;
+  onListColorChange?: (listId: string, folderId: string | null, color: string | null) => void;
+  onFolderColorChange?: (folderId: string, color: string | null) => void;
 };
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
@@ -71,12 +75,14 @@ function ListItem({
   activeListId,
   onSelectList,
   onListAction,
+  onChangeColor,
 }: {
   list: any;
   folderId: string | null;
   activeListId: string | undefined;
   onSelectList: (listId: string | undefined) => void;
   onListAction: (action: ListAction, list: any, folderId: string | null) => void;
+  onChangeColor?: () => void;
 }) {
   const isActive = activeListId === list.id;
 
@@ -123,7 +129,7 @@ function ListItem({
             <Pencil className="mr-2 h-3.5 w-3.5" />
             Rename
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onListAction('changeColor', list, folderId)}>
+          <DropdownMenuItem onClick={() => onChangeColor?.()}>
             <Palette className="mr-2 h-3.5 w-3.5" />
             Change color
           </DropdownMenuItem>
@@ -161,6 +167,8 @@ function FolderItem({
   onListAction,
   onFolderAction,
   onCreateList,
+  onChangeFolderColor,
+  onChangeListColor,
 }: {
   folder: any;
   isCollapsed: boolean;
@@ -170,6 +178,8 @@ function FolderItem({
   onListAction: (action: ListAction, list: any, folderId: string | null) => void;
   onFolderAction: (action: FolderAction, folder: any) => void;
   onCreateList: (folderId?: string) => void;
+  onChangeFolderColor?: () => void;
+  onChangeListColor?: (list: any) => void;
 }) {
   const colorProps = getFolderColorStyle(folder.color);
 
@@ -215,7 +225,7 @@ function FolderItem({
               <Pencil className="mr-2 h-3.5 w-3.5" />
               Rename
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onFolderAction('changeColor', folder)}>
+            <DropdownMenuItem onClick={() => onChangeFolderColor?.()}>
               <Palette className="mr-2 h-3.5 w-3.5" />
               Change color
             </DropdownMenuItem>
@@ -246,6 +256,7 @@ function FolderItem({
               activeListId={activeListId}
               onSelectList={onSelectList}
               onListAction={onListAction}
+              onChangeColor={() => onChangeListColor?.(list)}
             />
           ))}
           {(folder.lists ?? []).length === 0 && (
@@ -316,8 +327,14 @@ export function TaskSidebar({
   onCreateList,
   onFolderAction,
   onListAction,
+  onListColorChange,
+  onFolderColorChange,
 }: TaskSidebarProps) {
   const isAllTasksActive = !activeListId && activeSavedView === 'none';
+
+  // Color picker state
+  const [listColorTarget, setListColorTarget] = useState<{ list: any; folderId: string | null } | null>(null);
+  const [folderColorTarget, setFolderColorTarget] = useState<any | null>(null);
 
   return (
     <aside
@@ -400,6 +417,8 @@ export function TaskSidebar({
                       onListAction={onListAction}
                       onFolderAction={onFolderAction}
                       onCreateList={onCreateList}
+                      onChangeFolderColor={() => setFolderColorTarget(folder)}
+                      onChangeListColor={(list) => setListColorTarget({ list, folderId: folder.id })}
                     />
                   ))}
                 </div>
@@ -430,6 +449,7 @@ export function TaskSidebar({
                     activeListId={activeListId}
                     onSelectList={onSelectList}
                     onListAction={onListAction}
+                    onChangeColor={() => setListColorTarget({ list, folderId: null })}
                   />
                 ))}
                 {standaloneLists.length === 0 && folders.length === 0 && (
@@ -516,6 +536,30 @@ export function TaskSidebar({
           </div>
         )}
       </nav>
+
+      {/* List color picker dialog */}
+      <ListColorDialog
+        open={Boolean(listColorTarget)}
+        currentColor={listColorTarget?.list?.color ?? null}
+        onColorChange={(color) => {
+          if (listColorTarget) {
+            onListColorChange?.(listColorTarget.list.id, listColorTarget.folderId, color);
+          }
+        }}
+        onClose={() => setListColorTarget(null)}
+      />
+
+      {/* Folder color picker dialog */}
+      <FolderColorDialog
+        open={Boolean(folderColorTarget)}
+        currentColor={folderColorTarget?.color ?? null}
+        onColorChange={(color) => {
+          if (folderColorTarget) {
+            onFolderColorChange?.(folderColorTarget.id, color);
+          }
+        }}
+        onClose={() => setFolderColorTarget(null)}
+      />
     </aside>
   );
 }

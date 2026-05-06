@@ -12,7 +12,8 @@ class TaskController {
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
-      const result = await taskService.list(query, req.user._id);
+      const isAdmin = req.user.role?.name === 'Admin';
+      const result = await taskService.list(query, req.user._id, { isAdmin });
       return res.success({ data: result.data, pagination: result.pagination });
     } catch (err) { next(err); }
   }

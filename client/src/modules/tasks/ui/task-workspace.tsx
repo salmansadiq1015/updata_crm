@@ -1,18 +1,13 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/shared/hooks/use-debounce';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { useTaskRealtime } from '../hooks/use-task-realtime';
 import { TaskBulkActionBar } from './task-bulk-action-bar';
 import {
   toTaskParams,
   useFlattenedTasks,
-  useTaskDetailV2,
   useTaskListsV2,
   useTaskWindow,
   useTaskWorkspaceMutations,
@@ -31,15 +26,13 @@ import {
 import type { TaskFilters, TaskPatch } from '../types/task-types';
 import { TaskBoardSkeleton, TaskListSkeleton } from './task-skeletons';
 import { TaskBoardView } from './task-board-view';
+import { TaskCalendarView } from './task-calendar-view';
+import { TaskTimelineView } from './task-timeline-view';
 import { TaskCommandBar } from './task-command-bar';
 import { TaskEmptyState } from './task-empty-state';
 import { TaskListView } from './task-list-view';
 import { TaskSidebar } from './task-sidebar';
-
-const TaskDetailDrawer = dynamic(() => import('./task-detail-drawer'), {
-  ssr: false,
-  loading: () => null,
-});
+import { InputDialog } from './input-dialog';
 
 type TaskWorkspaceProps = {
   listId?: string;
@@ -80,21 +73,48 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const rowSelection = useRowSelection();
   const sidebarState = useTaskSidebarState();
 
-  // Folder/list dialog state
-  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
-  const [folderNameInput, setFolderNameInput] = useState('');
-  const [actionTarget, setActionTarget] = useState<{ type: string; target: any } | null>(null);
+  // Dialog state — covers folder create/rename AND list create/rename
+  type DialogState =
+    | { kind: 'createFolder' }
+    | { kind: 'renameFolder'; id: string; current: string }
+    | { kind: 'createList'; folderId: string | null }
+    | { kind: 'renameList'; id: string; current: string };
+
+  const [dlg, setDlg] = useState<DialogState | null>(null);
+
+  const closeDlg = () => setDlg(null);
+
+  const dlgTitle = dlg
+    ? dlg.kind === 'createFolder' ? 'New Folder'
+    : dlg.kind === 'renameFolder' ? 'Rename Folder'
+    : dlg.kind === 'createList' ? 'New List'
+    : 'Rename List'
+    : '';
+
+  const dlgDefaultValue = dlg && 'current' in dlg ? dlg.current : '';
+  const dlgConfirmLabel = dlg?.kind.startsWith('create') ? 'Create' : 'Rename';
+
+  const handleDlgConfirm = (value: string) => {
+    if (!dlg) return;
+    if (dlg.kind === 'createFolder') {
+      createFolder.mutate({ name: value });
+    } else if (dlg.kind === 'renameFolder') {
+      updateFolder.mutate({ id: dlg.id, patch: { name: value } });
+    } else if (dlg.kind === 'createList') {
+      createList.mutate({ name: value, ...(dlg.folderId ? { folderId: dlg.folderId } : {}) });
+    } else if (dlg.kind === 'renameList') {
+      updateList.mutate({ id: dlg.id, data: { name: value } });
+    }
+    closeDlg();
+  };
 
   // Folder action handlers
   const handleFolderAction = (action: string, folder: any) => {
     if (action === 'delete') {
       deleteFolder.mutate(folder.id);
     } else if (action === 'rename') {
-      setActionTarget({ type: 'renameFolder', target: folder });
-      setFolderNameInput(folder.name);
-      setFolderDialogOpen(true);
+      setDlg({ kind: 'renameFolder', id: folder.id, current: folder.name });
     }
-    // changeColor: can be wired to a color picker dialog in a future iteration
   };
 
   const handleListAction = (action: string, list: any, _folderId: string | null) => {
@@ -103,23 +123,8 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     } else if (action === 'delete') {
       removeList.mutate(list.id);
     } else if (action === 'rename') {
-      // Inline rename can be added later; for now a simple prompt as placeholder
-      const newName = window.prompt('Rename list', list.name);
-      if (newName && newName.trim() && newName.trim() !== list.name) {
-        updateList.mutate({ id: list.id, data: { name: newName.trim() } });
-      }
+      setDlg({ kind: 'renameList', id: list.id, current: list.name });
     }
-    // changeColor, moveToFolder: can be wired to dialogs in future iterations
-  };
-
-  const handleFolderDialogConfirm = () => {
-    if (!folderNameInput.trim()) return;
-    if (actionTarget?.type === 'createFolder') {
-      createFolder.mutate({ name: folderNameInput.trim() });
-    } else if (actionTarget?.type === 'renameFolder') {
-      updateFolder.mutate({ id: actionTarget.target.id, patch: { name: folderNameInput.trim() } });
-    }
-    setFolderDialogOpen(false);
   };
 
   const debouncedSearch = useDebounce(search, 280);
@@ -146,7 +151,6 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     return (listsQuery.data ?? []).filter((l: any) => !folderListIds.has(l.id) && !l.isArchived);
   }, [foldersQuery.data, listsQuery.data]);
   const tasks = useFlattenedTasks(tasksQuery.data);
-  const detailQuery = useTaskDetailV2(selectedTaskId);
   const mutations = useTaskWorkspaceMutations(taskParams);
 
   useTaskRealtime();
@@ -155,6 +159,10 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const hasFilters = Boolean(search || status !== 'ALL' || priority !== 'ALL' || savedView !== 'none');
 
   const content = (() => {
+    // Calendar and timeline render their own empty/loading states
+    if (activeView === 'calendar') return <TaskCalendarView tasks={tasks} listId={listId} />;
+    if (activeView === 'timeline') return <TaskTimelineView tasks={tasks} listId={listId} />;
+
     if (tasksQuery.isLoading) return activeView === 'board' ? <TaskBoardSkeleton /> : <TaskListSkeleton />;
     if (tasksQuery.isError) {
       return <TaskEmptyState type={typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'error'} onRetry={() => tasksQuery.refetch()} />;
@@ -165,14 +173,11 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
         <TaskBoardView
           tasks={tasks}
           selectedTaskId={selectedTaskId}
-          onSelectTask={setSelectedTaskId}
+          onSelectTask={(id) => router.push(`/tasks/${listId ?? 'all'}/${id}`)}
           onPatchTask={patchTask}
           users={usersQuery.data ?? []}
         />
       );
-    }
-    if (activeView === 'calendar' || activeView === 'timeline') {
-      return <TaskEmptyState type="empty" />;
     }
     return (
       <TaskListView
@@ -183,7 +188,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
         onFetchNextPage={() => {
           if (!tasksQuery.isFetchingNextPage) void tasksQuery.fetchNextPage();
         }}
-        onSelectTask={setSelectedTaskId}
+        onSelectTask={(id) => router.push(`/tasks/${listId ?? 'all'}/${id}`)}
         onPatchTask={patchTask}
         onDeleteTask={(id) => mutations.deleteTask.mutate(id)}
         onDuplicateTask={(id) => mutations.duplicateTask.mutate(id)}
@@ -207,19 +212,12 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
         onToggleFolder={toggleFolderCollapsed}
         onSelectList={(nextListId) => router.push(nextListId ? `/tasks/${nextListId}` : '/tasks/all')}
         onSelectSavedView={setSavedView}
-        onCreateFolder={() => {
-          setFolderNameInput('');
-          setActionTarget({ type: 'createFolder', target: null });
-          setFolderDialogOpen(true);
-        }}
-        onCreateList={(folderId) => {
-          const listName = window.prompt('New list name');
-          if (listName && listName.trim()) {
-            createList.mutate({ name: listName.trim(), ...(folderId ? { folderId } : {}) });
-          }
-        }}
+        onCreateFolder={() => setDlg({ kind: 'createFolder' })}
+        onCreateList={(folderId) => setDlg({ kind: 'createList', folderId: folderId ?? null })}
         onFolderAction={handleFolderAction}
         onListAction={handleListAction}
+        onListColorChange={(listId, _folderId, color) => updateList.mutate({ id: listId, data: { color } })}
+        onFolderColorChange={(folderId, color) => updateFolder.mutate({ id: folderId, patch: { color } })}
       />
 
       <section className="flex min-w-0 flex-1 flex-col">
@@ -245,18 +243,6 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
         </main>
       </section>
 
-      <TaskDetailDrawer
-        task={detailQuery.data}
-        open={Boolean(selectedTaskId)}
-        isLoading={detailQuery.isLoading}
-        onOpenChange={(open) => {
-          if (!open) setSelectedTaskId(null);
-        }}
-        onPatchTask={patchTask}
-        users={usersQuery.data ?? []}
-        onDuplicateTask={(id) => mutations.duplicateTask.mutate(id)}
-      />
-
       <TaskBulkActionBar
         selectedIds={selectedTaskIds}
         onStatusChange={(status) => {
@@ -277,33 +263,15 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
         onClear={() => setRowSelection({})}
       />
 
-      {/* Folder create / rename dialog */}
-      <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
-        <DialogContent className="sm:max-w-xs">
-          <DialogHeader>
-            <DialogTitle>
-              {actionTarget?.type === 'createFolder' ? 'New Folder' : 'Rename Folder'}
-            </DialogTitle>
-          </DialogHeader>
-          <Input
-            value={folderNameInput}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFolderNameInput(e.target.value)}
-            placeholder="Folder name"
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-              if (e.key === 'Enter') handleFolderDialogConfirm();
-            }}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFolderDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleFolderDialogConfirm} disabled={!folderNameInput.trim()}>
-              {actionTarget?.type === 'createFolder' ? 'Create' : 'Rename'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <InputDialog
+        open={Boolean(dlg)}
+        title={dlgTitle}
+        defaultValue={dlgDefaultValue}
+        placeholder={dlg?.kind.includes('older') ? 'Folder name' : 'List name'}
+        confirmLabel={dlgConfirmLabel}
+        onConfirm={handleDlgConfirm}
+        onCancel={closeDlg}
+      />
     </div>
   );
 }

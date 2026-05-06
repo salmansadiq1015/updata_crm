@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import taskController from './task.controller.js';
 import { validate } from '../../shared/validation/validate.js';
+import taskNoteRoutes from './taskNote.routes.js';
+import taskAttachmentRoutes from './taskAttachment.routes.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   createTaskSchema, updateTaskSchema, taskIdParamSchema,
@@ -27,5 +29,8 @@ router.patch('/:id/promote', authenticate, requirePermission('tasks:write'), val
 router.get('/:parentId/subtasks', authenticate, requirePermission('tasks:read'), validate(parentIdParamSchema), (req, res, next) => taskController.getSubtasks(req, res, next));
 router.post('/:parentId/subtasks', authenticate, requirePermission('tasks:write'), validate(createSubtaskSchema), (req, res, next) => taskController.createSubtask(req, res, next));
 router.patch('/:parentId/reorder', authenticate, requirePermission('tasks:write'), validate(reorderSubtasksSchema), (req, res, next) => taskController.reorderSubtasks(req, res, next));
+
+router.use('/:taskId/notes', taskNoteRoutes);
+router.use('/:taskId/attachments', taskAttachmentRoutes);
 
 export default router;

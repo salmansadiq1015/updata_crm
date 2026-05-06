@@ -17,6 +17,7 @@ const taskSchema = new mongoose.Schema(
     parentTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
     projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', default: null },
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
+    startDate: { type: Date, default: null },
     dueDate: { type: Date, default: null },
     sortOrder: { type: Number, default: 0 },
     depth: { type: Number, default: 0, min: 0, max: MAX_SUBTASK_DEPTH },
@@ -35,6 +36,7 @@ taskSchema.index({ listId: 1, isDeleted: 1 });
 taskSchema.index({ assigneeId: 1, isDeleted: 1 });
 taskSchema.index({ status: 1 });
 taskSchema.index({ priority: 1 });
+taskSchema.index({ startDate: 1 });
 taskSchema.index({ dueDate: 1 });
 taskSchema.index({ projectId: 1 }, { sparse: true });
 taskSchema.index({ orderId: 1 }, { sparse: true });

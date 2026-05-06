@@ -68,7 +68,9 @@ class TaskService {
         taskId: task._id,
         assigneeId,
         assignedBy: userId,
-        title: task.title,
+        taskTitle: task.title,
+        dueDate: task.dueDate,
+        priority: task.priority,
       });
     }
 
@@ -119,8 +121,25 @@ class TaskService {
     return task;
   }
 
-  async list(queryParams, userId) {
+  async list(queryParams, userId, { isAdmin = false } = {}) {
     const { cursor, limit, sortBy, sortOrder, ...filters } = queryParams;
+
+    // Admins see everything — no access filter applied
+    if (isAdmin) {
+      const filterKey = Object.entries(filters)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k}=${v}`)
+        .join('&');
+      const cacheKey = `tasks:tasks:list:admin:${cursor || ''}:${limit}:${sortBy}:${sortOrder}:${filterKey}`;
+      return cacheManager.getOrSet(
+        cacheKey,
+        () => taskRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters }),
+        LIST_TTL,
+      );
+    }
+
+    // Non-admins: only tasks they created or are assigned to
     const [ownedLists, groupLists] = await Promise.all([
       taskListRepository.findByOwnerId(userId, { includeArchived: true }),
       taskListRepository.findGroupListsByUserId(userId),
@@ -134,7 +153,7 @@ class TaskService {
     const scopedFilters = {
       ...filters,
       accessUserId: userId,
-      accessibleListIds,
+      // Do NOT pass accessibleListIds — non-admins see only their own tasks, not all list tasks
     };
     const filterKey = Object.entries(filters)
       .filter(([, v]) => v !== undefined)
@@ -172,7 +191,9 @@ class TaskService {
         assigneeId: patch.assigneeId,
         previousAssigneeId: existing.assigneeId,
         assignedBy: userId,
-        title: existing.title,
+        taskTitle: existing.title,
+        dueDate: patch.dueDate ?? existing.dueDate,
+        priority: patch.priority ?? existing.priority,
       });
     }
 

@@ -3,6 +3,7 @@ import Role from '../modules/auth/role.model.js';
 import User from '../modules/auth/user.model.js';
 import PasswordHistory from '../modules/auth/passwordHistory.model.js';
 import { hashPassword } from '../shared/utils/crypto.js';
+import cacheManager from '../shared/cache/CacheManager.js';
 import config from '../config/index.js';
 import logger from '../shared/logger/index.js';
 
@@ -234,7 +235,15 @@ export async function seedDatabase() {
       }
     }
 
-    // 3. Seed admin user (if env vars are set) — idempotent
+    // 3. Invalidate permission caches so stale [] entries don't block updated roles
+    try {
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}auth:permissions:*`);
+      logger.info('Permission caches invalidated', { module: 'seed' });
+    } catch {
+      // Non-fatal: Redis may not be ready yet during very early startup
+    }
+
+    // 4. Seed admin user (if env vars are set) — idempotent
     if (config.admin?.email && config.admin?.password) {
       const existingAdmin = await User.findOne({ email: config.admin.email.toLowerCase() });
       if (!existingAdmin) {

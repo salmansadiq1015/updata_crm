@@ -1,15 +1,53 @@
 'use client';
 
-import { CalendarDays, Copy, Paperclip, UserRound } from 'lucide-react';
+import { useRef, useState } from 'react';
+import {
+  CalendarDays, Circle, CircleCheck, CircleDashed, CircleX,
+  Copy, ExternalLink, Flag, Paperclip, Plus, Send, Trash2,
+  Upload, UserRound, X,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import type { Task, TaskPatch } from '../types/task-types';
-import { TASK_PRIORITIES, TASK_PRIORITY_LABEL, TASK_STATUSES, TASK_STATUS_LABEL, taskPriorityClass, taskStatusClass } from './task-ui-constants';
+import type { Task, TaskNote, TaskPatch, TaskStatus } from '../types/task-types';
+import {
+  TASK_PRIORITIES, TASK_PRIORITY_LABEL,
+  TASK_STATUSES, TASK_STATUS_LABEL,
+  taskPriorityClass, taskPriorityIconColor,
+  taskStatusClass, taskStatusIconColor,
+} from './task-ui-constants';
 import { TaskInlineField } from './task-inline-field';
 import { TaskEmptyState } from './task-empty-state';
 import { AssigneeSelector } from './assignee-selector';
+import { TaskSubtasksPanel } from './task-subtasks-panel';
+import { taskApi } from '../services/task-api';
+import { useTaskSubtasks, useTaskNotes } from '../hooks/use-task-queries';
+
+const STATUS_ICON = {
+  OPEN:        Circle,
+  IN_PROGRESS: CircleDashed,
+  COMPLETED:   CircleCheck,
+  CANCELLED:   CircleX,
+} as const;
+
+const PRIORITY_ACCENT: Record<string, string> = {
+  URGENT: 'from-red-500/20 via-transparent',
+  HIGH:   'from-orange-500/15 via-transparent',
+  MEDIUM: 'from-amber-400/15 via-transparent',
+  LOW:    'from-sky-400/15 via-transparent',
+  NONE:   'from-transparent via-transparent',
+};
+
+const PRIORITY_BORDER: Record<string, string> = {
+  URGENT: 'border-l-red-500',
+  HIGH:   'border-l-orange-500',
+  MEDIUM: 'border-l-amber-400',
+  LOW:    'border-l-sky-400',
+  NONE:   'border-l-border',
+};
 
 type TaskDetailDrawerProps = {
   task: Task | undefined;
@@ -17,121 +55,526 @@ type TaskDetailDrawerProps = {
   isLoading: boolean;
   onOpenChange: (open: boolean) => void;
   onPatchTask: (id: string, patch: TaskPatch) => void;
+  onTaskRefresh?: (id: string) => void;
   users?: any[];
   onDuplicateTask?: (id: string) => void;
 };
 
-const formatDate = (value: string | null) => {
-  if (!value) return 'No due date';
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
+const toDateValue = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : '');
+
+const formatDate = (iso: string | null | undefined, fallback = 'Not set') => {
+  if (!iso) return fallback;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(iso));
 };
 
-export default function TaskDetailDrawer({ task, open, isLoading, onOpenChange, onPatchTask, users, onDuplicateTask }: TaskDetailDrawerProps) {
+const timeAgo = (iso: string) => {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+};
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+        {children}
+      </span>
+      <div className="h-px flex-1 bg-border/50" />
+    </div>
+  );
+}
+
+function FieldRow({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: React.ElementType;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/30">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+      <span className="w-20 shrink-0 text-xs text-muted-foreground">{label}</span>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+
+function ActivityNote({ note, users }: { note: TaskNote; users?: any[] }) {
+  const author = (users ?? []).find((u: any) => u.id === note.authorId);
+  const name = author ? `${author.firstName} ${author.lastName}` : 'Team member';
+  const initials = author
+    ? `${author.firstName?.[0] ?? ''}${author.lastName?.[0] ?? ''}`.toUpperCase()
+    : '?';
+
+  return (
+    <div className="flex gap-3">
+      <div className="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-primary/15 text-[9px] font-semibold text-primary flex items-center justify-center ring-1 ring-primary/20">
+        {initials}
+      </div>
+      <div className="flex-1 rounded-xl border border-border/50 bg-muted/20 px-3 py-2">
+        <div className="mb-1 flex items-baseline gap-2">
+          <span className="text-xs font-semibold text-foreground">{name}</span>
+          <span className="text-[10px] text-muted-foreground">{timeAgo(note.createdAt)}</span>
+        </div>
+        <div
+          className="prose prose-sm max-w-none dark:prose-invert text-xs text-muted-foreground leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: note.bodyHtml }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export default function TaskDetailDrawer({
+  task,
+  open,
+  isLoading,
+  onOpenChange,
+  onPatchTask,
+  onTaskRefresh,
+  users,
+  onDuplicateTask,
+}: TaskDetailDrawerProps) {
+  const startInputRef = useRef<HTMLInputElement>(null);
+  const dueInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [postingNote, setPostingNote] = useState(false);
+
+  const subtasksQuery = useTaskSubtasks(task?.id ?? null);
+  const notesQuery = useTaskNotes(task?.id ?? null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !task) return;
+    e.target.value = '';
+    setUploading(true);
+    try {
+      await taskApi.uploadAttachment(task.id, file);
+      toast.success('Attachment uploaded');
+      onTaskRefresh?.(task.id);
+    } catch {
+      toast.error('Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handlePostNote = async () => {
+    const body = noteText.trim();
+    if (!body || !task) return;
+    setPostingNote(true);
+    try {
+      await taskApi.createNote(task.id, body);
+      setNoteText('');
+      notesQuery.refetch();
+    } catch {
+      toast.error('Failed to post note');
+    } finally {
+      setPostingNote(false);
+    }
+  };
+
+  const handleCreateSubtask = async (title: string) => {
+    if (!task) return;
+    try {
+      await taskApi.createSubtask(task.id, { title });
+      subtasksQuery.refetch();
+    } catch {
+      toast.error('Failed to create subtask');
+    }
+  };
+
+  const handlePatchSubtask = async (id: string, status: TaskStatus) => {
+    if (!task) return;
+    try {
+      await taskApi.changeStatus(id, status);
+      subtasksQuery.refetch();
+    } catch {
+      toast.error('Failed to update subtask');
+    }
+  };
+
+  const handleDeleteSubtask = async (id: string) => {
+    if (!task) return;
+    try {
+      await taskApi.remove(id);
+      subtasksQuery.refetch();
+    } catch {
+      toast.error('Failed to delete subtask');
+    }
+  };
+
+  const priority = task?.priority ?? 'NONE';
+  const StatusIcon = task ? STATUS_ICON[task.status] : null;
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full gap-0 bg-card p-0 sm:max-w-xl">
-        {isLoading ? (
-          <div className="space-y-4 p-5">
-            <div className="h-7 w-3/4 rounded bg-muted skeleton-shimmer" />
-            <div className="h-4 w-1/2 rounded bg-muted skeleton-shimmer" />
-            <div className="h-28 rounded-lg bg-muted skeleton-shimmer" />
-          </div>
-        ) : task ? (
+      <SheetContent
+        side="right"
+        className={cn(
+          'flex w-full flex-col gap-0 overflow-hidden border-l border-border bg-card p-0 shadow-2xl sm:max-w-2xl',
+          'border-l-4',
+          PRIORITY_BORDER[priority],
+        )}
+      >
+        {/* Loading skeleton */}
+        {isLoading && (
           <>
-            <SheetHeader className="border-b border-border p-5 pr-12">
-              <SheetTitle className="">
+            <SheetTitle className="sr-only">Loading task…</SheetTitle>
+            <div className="space-y-4 p-6">
+              <div className="h-6 w-3/4 rounded-lg bg-muted skeleton-shimmer" />
+              <div className="h-3 w-1/3 rounded bg-muted skeleton-shimmer" />
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <div className="h-9 rounded-lg bg-muted skeleton-shimmer" />
+                <div className="h-9 rounded-lg bg-muted skeleton-shimmer" />
+              </div>
+              <div className="mt-4 h-32 rounded-xl bg-muted skeleton-shimmer" />
+            </div>
+          </>
+        )}
+
+        {/* No task */}
+        {!isLoading && !task && (
+          <>
+            <SheetTitle className="sr-only">No task selected</SheetTitle>
+            <TaskEmptyState type="empty" />
+          </>
+        )}
+
+        {/* Task content */}
+        {!isLoading && task && (
+          <>
+            {/* ── Header ─────────────────────────────────────────────────────── */}
+            <div className={cn('relative shrink-0 bg-linear-to-r px-6 py-5 pr-14', PRIORITY_ACCENT[priority])}>
+              <SheetTitle className="mb-1.5">
                 <TaskInlineField
                   value={task.title}
                   ariaLabel="Edit task title"
-                  className="block max-w-full truncate text-left text-base font-semibold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="block w-full text-left text-lg font-bold leading-snug text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onCommit={(title) => onPatchTask(task.id, { title, expectedVersion: task.version })}
                 />
               </SheetTitle>
-              <SheetDescription className="">Version {task.version} - updated {formatDate(task.updatedAt)}</SheetDescription>
-            </SheetHeader>
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-5 scrollbar-thin">
-              <div className="grid grid-cols-2 gap-3">
-                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  <span>Status</span>
-                  <Select value={task.status} onValueChange={(status: string) => onPatchTask(task.id, { status: status as Task['status'], expectedVersion: task.version })}>
-                    <SelectTrigger className={cn('h-8 border text-xs font-semibold', taskStatusClass[task.status])}><SelectValue /></SelectTrigger>
-                    <SelectContent className="">
-                      {TASK_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status} className={taskStatusClass[status]} textValue={TASK_STATUS_LABEL[status]}>{TASK_STATUS_LABEL[status]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="space-y-1 text-xs font-medium text-muted-foreground">
-                  <span>Priority</span>
-                  <Select value={task.priority} onValueChange={(priority: string) => onPatchTask(task.id, { priority: priority as Task['priority'], expectedVersion: task.version })}>
-                    <SelectTrigger className={cn('h-8 border text-xs font-semibold', taskPriorityClass[task.priority])}><SelectValue /></SelectTrigger>
-                    <SelectContent className="">
-                      {TASK_PRIORITIES.map((priority) => (
-                        <SelectItem key={priority} value={priority} className={taskPriorityClass[priority]} textValue={TASK_PRIORITY_LABEL[priority]}>{TASK_PRIORITY_LABEL[priority]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </label>
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                {StatusIcon && <StatusIcon className={cn('h-3 w-3', taskStatusIconColor[task.status])} />}
+                <span>{TASK_STATUS_LABEL[task.status]}</span>
+                <span className="opacity-40">·</span>
+                <span>v{task.version}</span>
+                <span className="opacity-40">·</span>
+                <span>updated {formatDate(task.updatedAt)}</span>
               </div>
-
-              <div className="mt-5 grid gap-2 text-sm">
-                <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2">
-                  <UserRound className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Assignee</span>
-                  <div className="ml-auto">
-                    <AssigneeSelector
-                      assigneeId={task.assigneeId ?? null}
-                      users={users ?? []}
-                      onAssigneeChange={(assigneeId) =>
-                        onPatchTask(task.id, { assigneeId, expectedVersion: task.version })
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2">
-                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Due date</span>
-                  <span className="ml-auto font-medium">{formatDate(task.dueDate)}</span>
-                </div>
-                <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2">
-                  <Paperclip className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Attachments</span>
-                  <span className="ml-auto font-medium">{task.attachmentCount}</span>
-                </div>
-              </div>
-
-              <section className="mt-5">
-                <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Description</h3>
-                <div className="min-h-32 rounded-lg border border-border bg-background p-3 text-sm text-foreground">
-                  {task.description ? (
-                    <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: task.description }} />
-                  ) : (
-                    <p className="text-muted-foreground">No description yet.</p>
-                  )}
-                </div>
-              </section>
             </div>
 
-            <div className="border-t border-border p-4 flex items-center gap-2">
+            {/* ── Status + Priority row ────────────────────────────────────── */}
+            <div className="flex shrink-0 items-center gap-2 border-b border-border bg-background/60 px-6 py-3">
+              <Select
+                value={task.status}
+                onValueChange={(s: string) =>
+                  onPatchTask(task.id, { status: s as Task['status'], expectedVersion: task.version })
+                }
+              >
+                <SelectTrigger
+                  className={cn(
+                    'h-7 w-auto gap-1.5 rounded-full border px-3 text-[11px] font-semibold',
+                    taskStatusClass[task.status],
+                  )}
+                >
+                  {StatusIcon && <StatusIcon className="h-3 w-3 shrink-0" />}
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TASK_STATUSES.map((s) => {
+                    const Icon = STATUS_ICON[s];
+                    return (
+                      <SelectItem key={s} value={s} textValue={TASK_STATUS_LABEL[s]}>
+                        <span className={cn('flex items-center gap-2', taskStatusIconColor[s])}>
+                          <Icon className="h-3.5 w-3.5 shrink-0" />
+                          {TASK_STATUS_LABEL[s]}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={task.priority}
+                onValueChange={(p: string) =>
+                  onPatchTask(task.id, { priority: p as Task['priority'], expectedVersion: task.version })
+                }
+              >
+                <SelectTrigger
+                  className={cn(
+                    'h-7 w-auto gap-1.5 rounded-full border px-3 text-[11px] font-semibold',
+                    taskPriorityClass[task.priority],
+                  )}
+                >
+                  {task.priority !== 'NONE' ? (
+                    <Flag className={cn('h-3 w-3 shrink-0 fill-current', taskPriorityIconColor[task.priority])} />
+                  ) : (
+                    <span className="text-muted-foreground/50 text-sm leading-none">—</span>
+                  )}
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TASK_PRIORITIES.map((p) => (
+                    <SelectItem key={p} value={p} textValue={TASK_PRIORITY_LABEL[p]}>
+                      <span className={cn('flex items-center gap-2', p === 'NONE' ? 'text-muted-foreground' : taskPriorityIconColor[p])}>
+                        {p !== 'NONE' ? (
+                          <Flag className="h-3.5 w-3.5 shrink-0 fill-current" />
+                        ) : (
+                          <span className="w-3.5 text-center opacity-40">—</span>
+                        )}
+                        {TASK_PRIORITY_LABEL[p]}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="ml-auto">
+                <AssigneeSelector
+                  assigneeId={task.assigneeId ?? null}
+                  users={users ?? []}
+                  onAssigneeChange={(id) =>
+                    onPatchTask(task.id, { assigneeId: id, expectedVersion: task.version })
+                  }
+                  size="sm"
+                />
+              </div>
+            </div>
+
+            {/* ── Scrollable body ──────────────────────────────────────────── */}
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+              <div className="space-y-5 p-6">
+
+                {/* ── Properties ─────────────────────────────────────────── */}
+                <section>
+                  <SectionLabel>Properties</SectionLabel>
+                  <div className="mt-1 divide-y divide-border/30 rounded-xl border border-border/50 bg-background/40 overflow-hidden">
+                    {/* Start date */}
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
+                      onClick={() => startInputRef.current?.showPicker?.()}
+                    >
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground">Start date</span>
+                      <span className={cn('ml-auto text-xs font-medium', !task.startDate && 'text-muted-foreground/50')}>
+                        {formatDate(task.startDate, 'Not set')}
+                      </span>
+                      {task.startDate && (
+                        <button
+                          type="button"
+                          className="ml-1 rounded p-0.5 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onPatchTask(task.id, { startDate: null, expectedVersion: task.version });
+                          }}
+                        >
+                          <X className="h-3 w-3 text-muted-foreground" />
+                        </button>
+                      )}
+                      <input
+                        ref={startInputRef}
+                        type="date"
+                        className="sr-only"
+                        value={toDateValue(task.startDate)}
+                        onChange={(e) =>
+                          onPatchTask(task.id, { startDate: e.target.value || null, expectedVersion: task.version })
+                        }
+                      />
+                    </button>
+
+                    {/* Due date */}
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40"
+                      onClick={() => dueInputRef.current?.showPicker?.()}
+                    >
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground">Due date</span>
+                      <span
+                        className={cn(
+                          'ml-auto text-xs font-medium',
+                          !task.dueDate && 'text-muted-foreground/50',
+                          task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED'
+                            ? 'text-red-500'
+                            : task.dueDate
+                              ? 'text-foreground'
+                              : '',
+                        )}
+                      >
+                        {formatDate(task.dueDate, 'No due date')}
+                      </span>
+                      <input
+                        ref={dueInputRef}
+                        type="date"
+                        className="sr-only"
+                        value={toDateValue(task.dueDate)}
+                        onChange={(e) =>
+                          onPatchTask(task.id, { dueDate: e.target.value || null, expectedVersion: task.version })
+                        }
+                      />
+                    </button>
+
+                    {/* Attachments */}
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground">Attachments</span>
+                      <span className="ml-auto flex items-center gap-1.5 text-xs font-medium">
+                        {task.attachmentCount > 0 ? (
+                          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                            {task.attachmentCount} file{task.attachmentCount !== 1 ? 's' : ''}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground/50">None</span>
+                        )}
+                        <Upload className="h-3 w-3 text-muted-foreground" />
+                      </span>
+                      <input ref={fileInputRef} type="file" className="sr-only" onChange={handleFileChange} />
+                    </button>
+                  </div>
+                </section>
+
+                {/* ── Description ────────────────────────────────────────── */}
+                <section>
+                  <SectionLabel>Description</SectionLabel>
+                  <div className="mt-1 min-h-24 rounded-xl border border-border/50 bg-background/40 px-4 py-3 text-sm">
+                    {task.description ? (
+                      <div
+                        className="prose prose-sm max-w-none dark:prose-invert leading-relaxed"
+                        dangerouslySetInnerHTML={{ __html: task.description }}
+                      />
+                    ) : (
+                      <p className="text-xs text-muted-foreground/50 italic">No description yet. Click to add one.</p>
+                    )}
+                  </div>
+                </section>
+
+                {/* ── Subtasks ────────────────────────────────────────────── */}
+                <section>
+                  <SectionLabel>Subtasks</SectionLabel>
+                  <div className="mt-1">
+                    <TaskSubtasksPanel
+                      parentId={task.id}
+                      subtasks={subtasksQuery.data ?? []}
+                      isLoading={subtasksQuery.isLoading}
+                      onCreateSubtask={handleCreateSubtask}
+                      onPatchSubtask={handlePatchSubtask}
+                      onDeleteSubtask={handleDeleteSubtask}
+                    />
+                  </div>
+                </section>
+
+                {/* ── Activity / Notes ────────────────────────────────────── */}
+                <section>
+                  <SectionLabel>Activity</SectionLabel>
+                  <div className="mt-2 space-y-3">
+                    {notesQuery.isLoading && (
+                      <div className="space-y-2">
+                        {[1, 2].map((i) => (
+                          <div key={i} className="flex gap-3">
+                            <div className="h-6 w-6 shrink-0 rounded-full bg-muted skeleton-shimmer" />
+                            <div className="flex-1 h-14 rounded-xl bg-muted skeleton-shimmer" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!notesQuery.isLoading && (notesQuery.data ?? []).length === 0 && (
+                      <p className="rounded-xl border border-dashed border-border/50 py-6 text-center text-xs text-muted-foreground/50">
+                        No activity yet. Add a note below.
+                      </p>
+                    )}
+                    {(notesQuery.data ?? []).map((note) => (
+                      <ActivityNote key={note.id} note={note} users={users} />
+                    ))}
+
+                    {/* Add note */}
+                    <div className="flex gap-3">
+                      <div className="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-muted/50 text-muted-foreground/40 flex items-center justify-center ring-1 ring-border">
+                        <UserRound className="h-3 w-3" />
+                      </div>
+                      <div className="flex-1">
+                        <Textarea
+                          value={noteText}
+                          onChange={(e) => setNoteText(e.target.value)}
+                          placeholder="Write a note…"
+                          rows={2}
+                          className="min-h-0 resize-none rounded-xl border-border/50 bg-background/60 px-4 py-3 text-xs placeholder:text-muted-foreground/40 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handlePostNote();
+                          }}
+                        />
+                        {noteText.trim() && (
+                          <div className="mt-1.5 flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => setNoteText('')}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-7 gap-1.5 px-3 text-xs"
+                              onClick={handlePostNote}
+                              disabled={postingNote}
+                            >
+                              <Send className="h-3 w-3" />
+                              Post note
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <div className="h-2" />
+              </div>
+            </div>
+
+            {/* ── Footer ──────────────────────────────────────────────────── */}
+            <div className="flex shrink-0 items-center gap-2 border-t border-border bg-background/60 px-6 py-3">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="gap-1.5"
+                className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => task && onDuplicateTask?.(task.id)}
               >
-                <Copy className="h-4 w-4" />
+                <Copy className="h-3.5 w-3.5" />
                 Duplicate
               </Button>
-              <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
-                Close details
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
+                <span>#{task.id.slice(-6)}</span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="ml-auto gap-1.5 text-xs"
+                onClick={() => onOpenChange(false)}
+              >
+                <X className="h-3.5 w-3.5" />
+                Close
               </Button>
             </div>
           </>
-        ) : (
-          <TaskEmptyState type="empty" />
         )}
       </SheetContent>
     </Sheet>

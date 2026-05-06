@@ -48,7 +48,10 @@ export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = '
               <span className="h-5 w-5 rounded-full bg-primary/20 text-primary text-[9px] font-medium flex items-center justify-center shrink-0">
                 {initials(assigned)}
               </span>
-              <span className="truncate max-w-24">{assigned.firstName} {assigned.lastName}</span>
+              <span className="min-w-0 flex flex-col items-start">
+                <span className="truncate max-w-24 leading-tight">{assigned.firstName} {assigned.lastName}</span>
+                <span className="truncate max-w-24 text-[9px] text-muted-foreground leading-tight">{assigned.email}</span>
+              </span>
             </>
           ) : (
             <>

@@ -3,17 +3,28 @@ import toolExecutionRepository from '../agent/toolExecution.repository.js';
 import logger from '../../../shared/logger/index.js';
 
 const MAX_OUTPUT_CHARS = 4096;
+const PERMISSION_ALIASES = Object.freeze({
+  'tasks:write': ['tasks:create', 'tasks:update'],
+  'notifications:write': ['notifications:send'],
+});
+
+function hasRequiredPermission(permissions, requiredPermission) {
+  if (!requiredPermission) return true;
+  if (permissions.includes('*') || permissions.includes(requiredPermission)) return true;
+  const aliases = PERMISSION_ALIASES[requiredPermission] || [];
+  return aliases.some((alias) => permissions.includes(alias));
+}
 
 export function createTool({ name, description, schema, requiredPermission, execute, compensationAction }) {
   return tool(
     async (input, _runManager, config) => {
-      const { permissions = [], userId, agentRunId } = config?.configurable || {};
+      // LangChain may pass RunnableConfig as the 2nd arg (direct invoke)
+      // or the 3rd arg (tool node execution), so support both.
+      const runnableConfig = config?.configurable ? config : _runManager;
+      const { permissions = [], userId, agentRunId } = runnableConfig?.configurable || {};
 
-      // '*' wildcard = Admin bypass; otherwise check specific permission string
-      const hasPermission =
-        !requiredPermission ||
-        permissions.includes('*') ||
-        permissions.includes(requiredPermission);
+      // '*' wildcard = Admin bypass; aliases keep legacy permission slugs working.
+      const hasPermission = hasRequiredPermission(permissions, requiredPermission);
       if (!hasPermission) {
         throw new Error(`RBAC_DENIED: Missing permission '${requiredPermission}'`);
       }

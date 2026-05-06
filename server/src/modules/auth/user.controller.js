@@ -58,6 +58,27 @@ class UserController {
     }
   }
 
+  /**
+   * GET /users/directory — returns a lightweight list of active users for
+   * task assignment and @-mention purposes. Available to all authenticated
+   * users (no admin permission required).
+   */
+  async directory(req, res, next) {
+    try {
+      const result = await userService.listUsers({ status: 'active', limit: 500, page: 1 });
+      const users = (result.data ?? []).map((u) => ({
+        id: u._id ?? u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        email: u.email,
+        avatarUrl: u.avatarUrl ?? u.avatar ?? null,
+      }));
+      return res.success({ data: users });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getMe(req, res, next) {
     try {
       const user = await userService.getMe(req.user._id);

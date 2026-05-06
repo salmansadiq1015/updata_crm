@@ -13,6 +13,23 @@ vi.mock('react-hot-toast', () => ({
   success: vi.fn(),
 }));
 
+// Bypass the auth interceptor which calls require('@/stores/auth-store') —
+// that CJS dynamic require cannot be resolved in Vitest's ESM environment.
+// We also add the envelope-unwrapping response interceptor that the real client has,
+// so task-api.ts sees { data, pagination } instead of the raw Axios response object.
+vi.mock('@/lib/api/client', async () => {
+  const axios = await import('axios');
+  const instance = axios.default.create({ baseURL: 'http://localhost:9097/api/v1' });
+  instance.interceptors.response.use((response) => {
+    const body = response.data;
+    if (body && typeof body === 'object' && 'success' in body) {
+      return { data: body.data, meta: body.meta || {}, pagination: body.pagination || null } as any;
+    }
+    return response;
+  });
+  return { default: instance, normalizeApiError: (err: unknown) => err };
+});
+
 const BASE = 'http://localhost:9097/api/v1';
 
 const DEFAULT_ACTIVE_PARAMS = {

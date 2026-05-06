@@ -70,6 +70,13 @@ router.patch(
   (req, res, next) => userController.updateMe(req, res, next),
 );
 
+// --- Directory (available to all authenticated users, used for task assignment) ---
+router.get(
+  '/directory',
+  authenticate,
+  (req, res, next) => userController.directory(req, res, next),
+);
+
 // --- Bulk operations (MUST be before /:id to prevent matching) ---
 
 router.patch(

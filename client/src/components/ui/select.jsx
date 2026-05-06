@@ -147,10 +147,13 @@ function SelectItem({
       {isSimple ? (
         <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
       ) : (
+        // For complex children, render ItemText as an absolutely-hidden element
+        // so Radix can port the text to the trigger's <SelectValue />, then
+        // render the styled children for the visual dropdown row.
         <>
-          <SelectPrimitive.ItemText className="sr-only">
-            {resolvedTextValue}
-          </SelectPrimitive.ItemText>
+          <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+            <SelectPrimitive.ItemText>{resolvedTextValue}</SelectPrimitive.ItemText>
+          </span>
           {children}
         </>
       )}

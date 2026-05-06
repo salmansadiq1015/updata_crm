@@ -1,4 +1,5 @@
 import invoiceService from './invoice.service.js';
+import queueManager from '../../shared/queue/QueueManager.js';
 
 class InvoiceController {
   async create(req, res, next) {
@@ -96,8 +97,12 @@ class InvoiceController {
 
   async generateDocument(req, res, next) {
     try {
-      // Placeholder for document generation
-      return res.success({ data: null, message: 'Document generation not yet implemented' });
+      await queueManager.addJob('document-generation', {
+        documentType: 'invoice',
+        documentId: req.params.id,
+        requestedBy: req.user._id,
+      });
+      return res.success({ data: { jobQueued: true }, message: 'Document generation queued' });
     } catch (err) { next(err); }
   }
 

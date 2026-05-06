@@ -23,6 +23,7 @@ export const ENDPOINTS = Object.freeze({
   },
   USERS: {
     LIST: '/users',
+    DIRECTORY: '/users/directory',
     BY_ID: (id) => `/users/${id}`,
     ME: '/users/me',
     ACTIVATE: (id) => `/users/${id}/activate`,
@@ -144,6 +145,8 @@ export const ENDPOINTS = Object.freeze({
     BULK: '/tasks/bulk',
     NOTES: (taskId) => `/tasks/${taskId}/notes`,
     NOTE_BY_ID: (taskId, noteId) => `/tasks/${taskId}/notes/${noteId}`,
+    ATTACHMENTS: (taskId) => `/tasks/${taskId}/attachments`,
+    ATTACHMENT_BY_ID: (taskId, attachId) => `/tasks/${taskId}/attachments/${attachId}`,
     DASHBOARD: '/tasks/dashboard',
     DASHBOARD_STATS: '/tasks/dashboard/stats',
   },

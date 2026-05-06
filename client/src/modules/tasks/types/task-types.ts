@@ -21,6 +21,7 @@ export type Task = {
   parentTaskId: string | null;
   projectId: string | null;
   orderId: string | null;
+  startDate: string | null;
   dueDate: string | null;
   sortOrder: number;
   depth: number;
@@ -79,7 +80,7 @@ export type TaskPage = {
 };
 
 export type TaskPatch = Partial<
-  Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'assigneeId' | 'dueDate' | 'listId' | 'sortOrder'>
+  Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'assigneeId' | 'startDate' | 'dueDate' | 'listId' | 'sortOrder'>
 > & {
   expectedVersion?: number;
 };
@@ -127,4 +128,26 @@ export type TaskFolderCreate = {
 };
 
 export type TaskFolderPatch = Partial<Pick<TaskFolder, 'name' | 'color' | 'icon' | 'sortOrder'>>;
+
+export type TaskNote = {
+  id: string;
+  taskId: string;
+  authorId: string;
+  bodyHtml: string;
+  isEdited: boolean;
+  mentions: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TaskAttachment = {
+  id: string;
+  taskId: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedBy: string;
+  createdAt: string;
+  downloadUrl: string;
+};
 

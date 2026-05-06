@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ConfirmDialog } from './confirm-dialog';
 
 const STATUSES = [
   { value: 'OPEN', label: 'To do' },
@@ -39,16 +41,21 @@ export function TaskBulkActionBar({
   onDelete,
   onClear,
 }: TaskBulkActionBarProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   if (selectedIds.length === 0) return null;
 
-  const handleDelete = () => {
-    const confirmed = window.confirm(
-      `Delete ${selectedIds.length} task${selectedIds.length === 1 ? '' : 's'}? This action cannot be undone.`
-    );
-    if (confirmed) onDelete();
-  };
-
   return (
+    <>
+    <ConfirmDialog
+      open={confirmOpen}
+      title="Delete tasks"
+      description={`Delete ${selectedIds.length} task${selectedIds.length === 1 ? '' : 's'}? This action cannot be undone.`}
+      confirmLabel="Delete"
+      destructive
+      onConfirm={() => { setConfirmOpen(false); onDelete(); }}
+      onCancel={() => setConfirmOpen(false)}
+    />
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl border border-border bg-card shadow-2xl px-4 py-2.5 animate-in slide-in-from-bottom-2">
       <span className="text-sm font-medium text-foreground whitespace-nowrap">
         {selectedIds.length} selected
@@ -95,7 +102,7 @@ export function TaskBulkActionBar({
         variant="ghost"
         size="sm"
         className="h-7 text-xs text-destructive hover:text-destructive gap-1"
-        onClick={handleDelete}
+        onClick={() => setConfirmOpen(true)}
       >
         <Trash2 className="h-3.5 w-3.5" />
         Delete
@@ -112,5 +119,6 @@ export function TaskBulkActionBar({
         <X className="h-4 w-4" />
       </Button>
     </div>
+    </>
   );
 }

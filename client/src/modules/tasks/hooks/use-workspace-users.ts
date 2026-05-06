@@ -14,8 +14,6 @@ export type WorkspaceUser = {
 
 type ApiEnvelope<T> = {
   data?: T;
-  meta?: Record<string, unknown>;
-  pagination?: unknown;
 };
 
 const toApiResponse = <T>(value: unknown): ApiEnvelope<T> => value as ApiEnvelope<T>;
@@ -23,36 +21,32 @@ const toApiResponse = <T>(value: unknown): ApiEnvelope<T> => value as ApiEnvelop
 function normalizeUser(raw: unknown): WorkspaceUser {
   const r = raw as Record<string, unknown>;
   return {
-    id: ((r._id ?? r.id) as string) ?? '',
-    firstName: (r.firstName as string) ?? '',
-    lastName: (r.lastName as string) ?? '',
-    email: (r.email as string) ?? '',
+    id: String((r._id ?? r.id) ?? ''),
+    firstName: String(r.firstName ?? ''),
+    lastName:  String(r.lastName ?? ''),
+    email:     String(r.email ?? ''),
     avatarUrl: (r.avatarUrl ?? r.avatar ?? null) as string | null,
   };
 }
 
 export function useWorkspaceUsers() {
   return useQuery({
-    queryKey: ['users', 'workspace', 'active'],
+    queryKey: ['users', 'directory'],
     queryFn: async () => {
+      // /users/directory is available to all authenticated users (no admin permission required).
       const response = toApiResponse<unknown>(
-        await apiClient.get(ENDPOINTS.USERS.LIST, {
-          params: { status: 'active', limit: 200 },
-        }),
+        await apiClient.get(ENDPOINTS.USERS.DIRECTORY),
       );
-      // The interceptor unwraps the envelope — response.data holds the payload.
-      // Payload may be an array directly, or { users: [...] }, or { data: [...] }.
       const payload = response.data;
       const items = Array.isArray(payload)
         ? payload
         : Array.isArray((payload as any)?.users)
           ? (payload as any).users
-          : Array.isArray((payload as any)?.data)
-            ? (payload as any).data
-            : [];
-      return (items as unknown[]).map(normalizeUser);
+          : [];
+      return (items as unknown[]).map(normalizeUser).filter((u) => u.id);
     },
     staleTime: 5 * 60_000,
-    gcTime: 10 * 60_000,
+    gcTime:   15 * 60_000,
+    retry: 1,
   });
 }

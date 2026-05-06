@@ -31,6 +31,10 @@ export const rawTaskSchema = z
     parentTaskId: nullableId,
     projectId: nullableId,
     orderId: nullableId,
+    startDate: z.union([z.string(), z.date(), z.null(), z.undefined()]).transform((value) => {
+      if (!value) return null;
+      return value instanceof Date ? value.toISOString() : value;
+    }),
     dueDate: z.union([z.string(), z.date(), z.null(), z.undefined()]).transform((value) => {
       if (!value) return null;
       return value instanceof Date ? value.toISOString() : value;
@@ -71,6 +75,7 @@ export const rawTaskSchema = z
       parentTaskId: raw.parentTaskId,
       projectId: raw.projectId,
       orderId: raw.orderId,
+      startDate: raw.startDate ?? null,
       dueDate: raw.dueDate,
       sortOrder: raw.sortOrder,
       depth: raw.depth,

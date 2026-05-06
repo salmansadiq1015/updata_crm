@@ -172,6 +172,27 @@ class FileService {
     );
   }
 
+  /**
+   * Upload a raw buffer directly to S3 (no DB record — for temporary files like audio).
+   * Returns { key } which serves as the download reference.
+   */
+  async uploadBuffer(buffer, { originalName, mimeType, folder = 'temp', uploadedBy }) {
+    const key = storageService.buildKey({ module: folder, entityType: null, entityId: uploadedBy, originalName });
+    await storageService.upload({ key, body: buffer, mimeType });
+    logger.info('Buffer uploaded to S3', { module: 'files', action: 'uploadBuffer', key, mimeType });
+    return { key };
+  }
+
+  /**
+   * Download a buffer previously stored via uploadBuffer.
+   */
+  async downloadBuffer(key) {
+    if (!key || key.startsWith('buffer://')) {
+      throw new Error(`Audio was not stored in S3 (key: ${key}). Re-upload the audio file.`);
+    }
+    return storageService.download(key);
+  }
+
   async _invalidateEntityCache(module, entityType, entityId) {
     if (entityId) {
       await cacheManager.del(`core:files:${module}:${entityType}:${entityId}`);

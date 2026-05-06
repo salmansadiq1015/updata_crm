@@ -30,7 +30,7 @@ export function connectSocket(accessToken) {
 
   socket = io(SOCKET_URL, {
     auth: { token: accessToken },
-    transports: ['polling', 'websocket'],
+    transports: ['websocket', 'polling'],
     autoConnect: true,
     reconnection: true,
     reconnectionDelay: 1000,
@@ -44,6 +44,11 @@ export function connectSocket(accessToken) {
   });
 
   socket.on('connect_error', (err) => {
+    if (err.message === 'Authentication required' || err.message === 'Authentication failed') {
+      console.warn('[Socket] Auth rejected — stopping reconnection');
+      socket.disconnect();
+      return;
+    }
     console.error('[Socket] Connection error:', err.message);
   });
 

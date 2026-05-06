@@ -36,13 +36,13 @@ export function registerNotificationsEvents() {
   // --- Task Events ---
   eventBus.subscribe(EVENT_TYPES.TASK_ASSIGNED, async (data) => {
     const payload = data.payload || data;
-    if (payload.assigneeId && payload.assigneeId !== payload.assignedBy) {
+    if (payload.assigneeId && String(payload.assigneeId) !== String(payload.assignedBy)) {
       await dispatch(payload, {
         type: 'task_assigned',
         category: 'TASK',
         channels: ['IN_APP', 'PUSH', 'EMAIL'],
         recipientIds: [payload.assigneeId],
-        payload: { taskTitle: payload.taskTitle, taskId: payload.taskId, dueDate: payload.dueDate, priority: payload.priority, assignerName: payload.assignerName || '' },
+        payload: { taskTitle: payload.taskTitle || payload.title, taskId: payload.taskId, dueDate: payload.dueDate, priority: payload.priority, assignerName: payload.assignerName || '' },
         sourceModule: 'tasks',
         sourceEvent: 'TASK_ASSIGNED',
         sourceEntityType: 'Task',

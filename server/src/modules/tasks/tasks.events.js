@@ -41,7 +41,7 @@ export function registerTasksEvents() {
   // When a task is assigned to another user → send notification email
   eventBus.subscribe(EVENT_TYPES.TASK_ASSIGNED, async (data) => {
     try {
-      if (data.assigneeId && data.assigneeId !== data.assignedBy) {
+      if (data.assigneeId && String(data.assigneeId) !== String(data.assignedBy)) {
         // Lazy import to avoid circular deps
         const { sendTaskAssignedEmail } = await import('../../shared/mail/mail.js');
         const User = (await import('../auth/user.model.js')).default;
@@ -55,7 +55,7 @@ export function registerTasksEvents() {
           await sendTaskAssignedEmail(assignee.email, {
             assigneeName: `${assignee.firstName} ${assignee.lastName}`,
             assignerName: `${assigner?.firstName || ''} ${assigner?.lastName || ''}`.trim(),
-            taskTitle: data.taskTitle,
+            taskTitle: data.taskTitle || data.title,
             taskId: data.taskId,
             dueDate: data.dueDate,
             priority: data.priority,

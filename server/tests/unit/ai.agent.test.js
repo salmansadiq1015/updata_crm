@@ -316,6 +316,27 @@ describe('AI Agent — tool.runner (RBAC)', () => {
     expect(parsed.result).toBe('ok');
   });
 
+  test('executes when legacy permission alias is present', async () => {
+    const { z } = await import('zod');
+    const execute = jest.fn().mockResolvedValue({ result: 'ok' });
+    const t = createTool({
+      name: 'rbac_test_alias',
+      description: 'test',
+      schema: z.object({ x: z.string() }),
+      requiredPermission: 'tasks:write',
+      execute,
+    });
+
+    const result = await t.invoke(
+      { x: 'value' },
+      { configurable: { permissions: ['tasks:create'], userId: 'u1' } }
+    );
+
+    expect(execute).toHaveBeenCalledWith({ x: 'value' }, expect.objectContaining({ userId: 'u1' }));
+    const parsed = JSON.parse(result);
+    expect(parsed.result).toBe('ok');
+  });
+
   test('caps output and wraps as valid JSON when output exceeds 4096 chars', async () => {
     const { z } = await import('zod');
     const t = createTool({

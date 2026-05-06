@@ -28,6 +28,7 @@ import { TaskOverdueCheckWorker } from './taskOverdueCheck.job.js';
 import { NotificationDispatchWorker } from './notificationDispatch.job.js';
 import { NotificationChannelPushWorker } from './notificationChannelPush.job.js';
 import { NotificationChannelEmailWorker } from './notificationChannelEmail.job.js';
+import { NotificationChannelInAppWorker } from './notificationChannelInApp.job.js';
 import { ScheduledNotificationPollWorker } from './scheduledNotificationPoll.job.js';
 import { IntegrationHealthCheckWorker } from './integrationHealthCheck.job.js';
 import { WidgetSubmissionProcessWorker } from './widgetSubmissionProcess.job.js';
@@ -429,6 +430,16 @@ export function registerJobs() {
     },
   });
 
+  // Notification in-app channel — delivers via Socket.IO to connected clients
+  const notificationInApp = new NotificationChannelInAppWorker();
+  queueManager.registerQueue('notification-in-app', notificationInApp.getHandler(), {
+    concurrency: 20,
+    jobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5000 },
+    },
+  });
+
   // Scheduled notification poll — every 5 minutes
   const scheduledNotificationPoll = new ScheduledNotificationPollWorker();
   queueManager.registerQueue('scheduled-notification-poll', scheduledNotificationPoll.getHandler(), {
@@ -519,7 +530,7 @@ export function registerJobs() {
   logger.info('Background jobs registered', {
     module: 'jobs',
     action: 'register',
-    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'ai-agent', 'ai-agent-timeout'],
+    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'ai-agent', 'ai-agent-timeout'],
   });
 }
 

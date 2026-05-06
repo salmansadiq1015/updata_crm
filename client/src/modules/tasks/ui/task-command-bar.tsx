@@ -2,7 +2,20 @@
 
 import type { ChangeEvent, FormEvent } from 'react';
 import { useState } from 'react';
-import { CalendarDays, Columns3, List, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import {
+  CalendarDays,
+  Check,
+  Circle,
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Columns3,
+  Flag,
+  List,
+  Plus,
+  Search,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,9 +26,20 @@ import {
   TASK_PRIORITY_LABEL,
   TASK_STATUSES,
   TASK_STATUS_LABEL,
-  taskPriorityClass,
-  taskStatusClass,
+  taskPriorityIconColor,
+  taskStatusIconColor,
 } from './task-ui-constants';
+
+// ── Icon maps ────────────────────────────────────────────────────────────────
+
+const STATUS_ICON = {
+  OPEN:        Circle,
+  IN_PROGRESS: CircleDashed,
+  COMPLETED:   CircleCheck,
+  CANCELLED:   CircleX,
+} as const satisfies Record<TaskStatus, React.ComponentType<{ className?: string }>>;
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type TaskCommandBarProps = {
   activeView: TaskViewType;
@@ -34,11 +58,60 @@ type TaskCommandBarProps = {
 };
 
 const views: Array<{ value: TaskViewType; label: string; icon: typeof List; disabled?: boolean }> = [
-  { value: 'list', label: 'List', icon: List },
-  { value: 'board', label: 'Board', icon: Columns3 },
-  { value: 'calendar', label: 'Calendar', icon: CalendarDays, disabled: true },
-  { value: 'timeline', label: 'Timeline', icon: SlidersHorizontal, disabled: true },
+  { value: 'list',     label: 'List',     icon: List },
+  { value: 'board',    label: 'Board',    icon: Columns3 },
+  { value: 'calendar', label: 'Calendar', icon: CalendarDays },
+  { value: 'timeline', label: 'Timeline', icon: SlidersHorizontal },
 ];
+
+// ── StatusTriggerContent ─────────────────────────────────────────────────────
+
+function StatusTriggerContent({ status }: { status: TaskStatus | 'ALL' }) {
+  if (status === 'ALL') {
+    return (
+      <span className="flex items-center gap-1.5 text-muted-foreground">
+        <Circle className="h-3.5 w-3.5 opacity-50" />
+        All statuses
+      </span>
+    );
+  }
+  const Icon = STATUS_ICON[status];
+  return (
+    <span className={cn('flex items-center gap-1.5', taskStatusIconColor[status])}>
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+      {TASK_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+// ── PriorityTriggerContent ───────────────────────────────────────────────────
+
+function PriorityTriggerContent({ priority }: { priority: TaskPriority | 'ALL' }) {
+  if (priority === 'ALL') {
+    return (
+      <span className="flex items-center gap-1.5 text-muted-foreground">
+        <Flag className="h-3.5 w-3.5 opacity-40" />
+        All priorities
+      </span>
+    );
+  }
+  if (priority === 'NONE') {
+    return (
+      <span className="flex items-center gap-1.5 text-muted-foreground">
+        <span className="w-3.5 text-center text-sm leading-none opacity-40">—</span>
+        None
+      </span>
+    );
+  }
+  return (
+    <span className={cn('flex items-center gap-1.5', taskPriorityIconColor[priority])}>
+      <Flag className="h-3.5 w-3.5 shrink-0 fill-current" />
+      {TASK_PRIORITY_LABEL[priority]}
+    </span>
+  );
+}
+
+// ── TaskCommandBar ───────────────────────────────────────────────────────────
 
 export function TaskCommandBar({
   activeView,
@@ -66,13 +139,14 @@ export function TaskCommandBar({
 
   return (
     <div className="border-b border-border bg-card">
-      <div className="flex h-12 items-center gap-2 px-3">
+      {/* Top row: search + quick-add + view switcher */}
+      <div className="flex items-center gap-2 px-3 py-3">
         <div className="relative min-w-64 flex-1 max-w-xl">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
             value={search}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => onSearchChange(event.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
             placeholder="Search tasks"
             className="h-8 rounded-md border-border bg-background pl-9 text-sm"
             aria-label="Search tasks"
@@ -83,7 +157,7 @@ export function TaskCommandBar({
           <Input
             type="text"
             value={quickTitle}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => setQuickTitle(event.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setQuickTitle(e.target.value)}
             placeholder="Quick add task"
             className="h-8 rounded-md border-border bg-background text-sm"
             aria-label="Quick add task title"
@@ -94,7 +168,11 @@ export function TaskCommandBar({
           </Button>
         </form>
 
-        <div className="ml-auto flex items-center gap-1 rounded-md border border-border bg-background p-0.5" role="tablist" aria-label="Task views">
+        <div
+          className="ml-auto flex items-center gap-1 rounded-md border border-border bg-background p-0.5"
+          role="tablist"
+          aria-label="Task views"
+        >
           {views.map((view) => {
             const Icon = view.icon;
             return (
@@ -104,7 +182,10 @@ export function TaskCommandBar({
                 variant="ghost"
                 size="sm"
                 disabled={view.disabled}
-                className={cn('h-7 gap-1 rounded px-2 text-xs', activeView === view.value && 'bg-primary text-primary-foreground hover:bg-primary')}
+                className={cn(
+                  'h-7 gap-1 rounded px-2 text-xs',
+                  activeView === view.value && 'bg-primary text-primary-foreground hover:bg-primary',
+                )}
                 onClick={() => onViewChange(view.value)}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -115,44 +196,69 @@ export function TaskCommandBar({
         </div>
       </div>
 
-      <div className="flex h-11 items-center gap-2 border-t border-border px-3">
-        <Select value={status} onValueChange={(value: string) => onStatusChange(value as TaskStatus | 'ALL')}>
-          <SelectTrigger
-            className={cn(
-              'h-8 w-40 border text-xs font-semibold',
-              status === 'ALL' ? 'border-primary/25 bg-primary/10 text-primary' : taskStatusClass[status],
-            )}
-          >
-            <SelectValue placeholder="Status" />
+      {/* Filter row */}
+      <div className="flex items-center gap-2 border-t border-border px-3 py-2.5">
+        {/* Status filter */}
+        <Select value={status} onValueChange={(v: string) => onStatusChange(v as TaskStatus | 'ALL')}>
+          <SelectTrigger className="h-8 w-40 gap-1.5 border border-border bg-background text-xs font-medium hover:bg-muted [&>svg:last-child]:shrink-0">
+            <StatusTriggerContent status={status} />
           </SelectTrigger>
-          <SelectContent className="">
-            <SelectItem value="ALL" className="bg-primary/10 text-primary" textValue="All statuses">All statuses</SelectItem>
-            {TASK_STATUSES.map((item) => (
-              <SelectItem key={item} value={item} className={taskStatusClass[item]} textValue={TASK_STATUS_LABEL[item]}>{TASK_STATUS_LABEL[item]}</SelectItem>
+          <SelectContent className="w-44">
+            <SelectItem value="ALL" textValue="All statuses">
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <Circle className="h-3.5 w-3.5 opacity-40" />
+                All statuses
+                {status === 'ALL' && <Check className="ml-auto h-3.5 w-3.5 shrink-0" />}
+              </span>
+            </SelectItem>
+            {TASK_STATUSES.map((s) => {
+              const Icon = STATUS_ICON[s];
+              return (
+                <SelectItem key={s} value={s} textValue={TASK_STATUS_LABEL[s]}>
+                  <span className={cn('flex items-center gap-2', taskStatusIconColor[s])}>
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                    {TASK_STATUS_LABEL[s]}
+                  </span>
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
+
+        {/* Priority filter */}
+        <Select value={priority} onValueChange={(v: string) => onPriorityChange(v as TaskPriority | 'ALL')}>
+          <SelectTrigger className="h-8 w-40 gap-1.5 border border-border bg-background text-xs font-medium hover:bg-muted [&>svg:last-child]:shrink-0">
+            <PriorityTriggerContent priority={priority} />
+          </SelectTrigger>
+          <SelectContent className="w-40">
+            <SelectItem value="ALL" textValue="All priorities">
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <Flag className="h-3.5 w-3.5 opacity-40" />
+                All priorities
+              </span>
+            </SelectItem>
+            {TASK_PRIORITIES.map((p) => (
+              <SelectItem key={p} value={p} textValue={TASK_PRIORITY_LABEL[p]}>
+                {p === 'NONE' ? (
+                  <span className="flex items-center gap-2 text-muted-foreground">
+                    <span className="w-3.5 text-center text-sm leading-none opacity-40">—</span>
+                    None
+                  </span>
+                ) : (
+                  <span className={cn('flex items-center gap-2', taskPriorityIconColor[p])}>
+                    <Flag className="h-3.5 w-3.5 shrink-0 fill-current" />
+                    {TASK_PRIORITY_LABEL[p]}
+                  </span>
+                )}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <Select value={priority} onValueChange={(value: string) => onPriorityChange(value as TaskPriority | 'ALL')}>
-          <SelectTrigger
-            className={cn(
-              'h-8 w-40 border text-xs font-semibold',
-              priority === 'ALL' ? 'border-secondary/25 bg-secondary/10 text-secondary' : taskPriorityClass[priority],
-            )}
-          >
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent className="">
-            <SelectItem value="ALL" className="bg-secondary/10 text-secondary" textValue="All priorities">All priorities</SelectItem>
-            {TASK_PRIORITIES.map((item) => (
-              <SelectItem key={item} value={item} className={taskPriorityClass[item]} textValue={TASK_PRIORITY_LABEL[item]}>{TASK_PRIORITY_LABEL[item]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
+        {/* Page size */}
         {onPageSizeChange && (
           <Select value={String(pageSize ?? 50)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-            <SelectTrigger className="h-8 w-24 text-xs">
+            <SelectTrigger className="h-8 w-28 border-border bg-background text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -164,8 +270,8 @@ export function TaskCommandBar({
         )}
 
         <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
-          {isFetching ? <span>Syncing view...</span> : null}
-          {isStale ? <span className="text-warning">Stale cache</span> : <span>Live cache</span>}
+          {isFetching ? <span>Syncing…</span> : null}
+          {isStale ? <span className="text-warning">Stale</span> : <span>Live</span>}
         </div>
       </div>
     </div>

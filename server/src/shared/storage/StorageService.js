@@ -125,6 +125,29 @@ class StorageService {
   }
 
   /**
+   * Download an S3 object and return its content as a Buffer.
+   */
+  async download(key) {
+    try {
+      const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
+      const result = await this._getClient().send(command);
+      const chunks = [];
+      for await (const chunk of result.Body) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+      return Buffer.concat(chunks);
+    } catch (err) {
+      logger.error('S3 download failed', {
+        module: 'storage',
+        action: 'download',
+        key,
+        error: { message: err.message },
+      });
+      throw new ExternalServiceError('S3', `Download failed: ${err.message}`, ERROR_CODES.S3_DOWNLOAD_FAILED);
+    }
+  }
+
+  /**
    * Generate a pre-signed download URL.
    */
   async getPresignedUrl(key, expiresIn = config.storage.presignExpiry) {

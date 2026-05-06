@@ -59,14 +59,19 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 flex w-full max-w-[calc(100%-2rem)] max-h-[97vh] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl bg-popover p-0 text-sm text-popover-foreground shadow-2xl ring-1 ring-foreground/[0.08] duration-200 outline-none sm:max-w-4xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.97] data-open:slide-in-from-bottom-2 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-[0.97] data-closed:slide-out-to-bottom-2",
-          className
+          "fixed top-1/2 left-1/2 z-50 flex w-full px-5 pb-3 max-w-[calc(100%-2rem)] max-h-[97vh] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl bg-popover p-0 text-sm text-popover-foreground shadow-2xl ring-1 ring-foreground/[0.08] duration-200 outline-none sm:max-w-4xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.97] data-open:slide-in-from-bottom-2 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-[0.97] data-closed:slide-out-to-bottom-2",
+          className,
         )}
-        {...props}>
+        {...props}
+      >
         {children}
-        {(showCloseButton && !hideClose) && (
+        {showCloseButton && !hideClose && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button variant="ghost" className="absolute top-4 right-4 h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" size="icon-sm">
+            <Button
+              variant="ghost"
+              className="absolute top-4 right-4 h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
+              size="icon-sm"
+            >
               <XIcon className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </Button>

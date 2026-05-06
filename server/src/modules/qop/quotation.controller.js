@@ -1,4 +1,5 @@
 import quotationService from './quotation.service.js';
+import queueManager from '../../shared/queue/QueueManager.js';
 
 class QuotationController {
   async create(req, res, next) {
@@ -87,8 +88,12 @@ class QuotationController {
 
   async generateDocument(req, res, next) {
     try {
-      // Placeholder — document generation to be implemented
-      return res.success({ data: null, message: 'Document generation endpoint placeholder' });
+      await queueManager.addJob('document-generation', {
+        documentType: 'quotation',
+        documentId: req.params.id,
+        requestedBy: req.user._id,
+      });
+      return res.success({ data: { jobQueued: true }, message: 'Document generation queued' });
     } catch (err) { next(err); }
   }
 
@@ -102,8 +107,9 @@ class QuotationController {
 
   async snoozeReminder(req, res, next) {
     try {
-      // Placeholder — reminder snooze to be implemented
-      return res.success({ message: 'Reminder snoozed successfully' });
+      const { default: quotationReminderService } = await import('./quotationReminder.service.js');
+      const reminder = await quotationReminderService.snooze(req.params.remId, req.body.snoozeDays || 7);
+      return res.success({ data: reminder, message: 'Reminder snoozed successfully' });
     } catch (err) { next(err); }
   }
 }

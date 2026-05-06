@@ -7,6 +7,7 @@ import {
   listTasksSchema, changeStatusSchema, completeTaskSchema,
   moveTaskSchema, bulkOperationSchema, createSubtaskSchema,
   parentIdParamSchema, reorderSubtasksSchema, promoteTaskSchema,
+  batchPatchSchema,
 } from './task.validation.js';
 
 const router = Router();
@@ -14,6 +15,7 @@ const router = Router();
 router.get('/', authenticate, requirePermission('tasks:read'), validate(listTasksSchema), (req, res, next) => taskController.list(req, res, next));
 router.post('/', authenticate, requirePermission('tasks:write'), validate(createTaskSchema), (req, res, next) => taskController.create(req, res, next));
 router.post('/bulk', authenticate, requirePermission('tasks:write'), validate(bulkOperationSchema), (req, res, next) => taskController.bulkOperation(req, res, next));
+router.patch('/batch', authenticate, requirePermission('tasks:write'), validate(batchPatchSchema), (req, res, next) => taskController.batchPatch(req, res, next));
 router.get('/:id', authenticate, requirePermission('tasks:read'), validate(taskIdParamSchema), (req, res, next) => taskController.getById(req, res, next));
 router.put('/:id', authenticate, requirePermission('tasks:write'), validate(updateTaskSchema), (req, res, next) => taskController.update(req, res, next));
 router.delete('/:id', authenticate, requirePermission('tasks:delete'), validate(taskIdParamSchema), (req, res, next) => taskController.remove(req, res, next));

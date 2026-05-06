@@ -14,7 +14,7 @@ class OcrResultRepository {
     return OcrResult.findOneAndUpdate(
       { documentId },
       { status, ...additionalData },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 }

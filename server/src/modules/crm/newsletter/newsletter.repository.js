@@ -52,7 +52,7 @@ class NewsletterRepository {
 
   async updateById(id, data) {
     return Newsletter.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     })
       .populate('createdBy', 'firstName lastName email')
@@ -64,7 +64,7 @@ class NewsletterRepository {
     return Newsletter.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 
@@ -94,7 +94,7 @@ class NewsletterRepository {
     return Newsletter.findByIdAndUpdate(
       newsletterId,
       { $set: { stats } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 

@@ -216,36 +216,34 @@ export function NotificationsCenter() {
   const groups = useMemo(() => groupByDay(notifications), [notifications]);
 
   return (
-    <div className="flex flex-col gap-5 max-w-3xl mx-auto w-full">
+    <div className="flex flex-col gap-5 w-full min-w-0">
       <PageHeader
-        icon={Bell}
         title={de ? 'Benachrichtigungen' : 'Notifications'}
         description={de
           ? 'Alle Systemmeldungen und Aktivitäten'
           : 'All system alerts and activity'}
-        actions={
-          <div className="flex items-center gap-2">
+      >
+        <div className="flex items-center gap-2">
+          <Button
+            size="icon" variant="ghost" className="h-8 w-8"
+            onClick={() => refetch()} disabled={isFetching}
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
+          </Button>
+          {unreadCount > 0 && (
             <Button
-              size="icon" variant="ghost" className="h-8 w-8"
-              onClick={() => refetch()} disabled={isFetching}
+              size="sm" variant="outline" className="h-8 gap-1.5"
+              onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}
             >
-              <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
+              <CheckCheck className="h-3.5 w-3.5" />
+              {de ? 'Alle gelesen' : 'Mark all read'}
+              <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+                {unreadCount}
+              </span>
             </Button>
-            {unreadCount > 0 && (
-              <Button
-                size="sm" variant="outline" className="h-8 gap-1.5"
-                onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}
-              >
-                <CheckCheck className="h-3.5 w-3.5" />
-                {de ? 'Alle gelesen' : 'Mark all read'}
-                <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                  {unreadCount}
-                </span>
-              </Button>
-            )}
-          </div>
-        }
-      />
+          )}
+        </div>
+      </PageHeader>
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3">

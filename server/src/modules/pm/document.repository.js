@@ -34,7 +34,7 @@ class DocumentRepository {
 
   async updateById(id, data) {
     return ProjectDocument.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     })
       .populate(POPULATE_FIELDS)
@@ -45,7 +45,7 @@ class DocumentRepository {
     return ProjectDocument.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 
@@ -53,7 +53,7 @@ class DocumentRepository {
     return ProjectDocument.findByIdAndUpdate(
       id,
       { isDeleted: false, deletedAt: null },
-      { new: true },
+      { returnDocument: 'after' },
     ).setOptions({ includeDeleted: true });
   }
 }

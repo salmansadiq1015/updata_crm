@@ -5,7 +5,7 @@ class WorkflowStateRepository {
     return WorkflowState.findOneAndUpdate(
       { agentRunId },
       { agentRunId, workflowType, currentNode, state, stepCount },
-      { upsert: true, new: true, runValidators: true }
+      { upsert: true, returnDocument: 'after', runValidators: true }
     ).lean();
   }
 

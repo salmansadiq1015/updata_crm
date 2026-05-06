@@ -64,7 +64,7 @@ class WorkReportRepository {
     return WorkReport.findByIdAndUpdate(
       id,
       { ...data, $inc: { version: 1 } },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     )
       .populate(POPULATE_FIELDS)
       .lean();
@@ -74,7 +74,7 @@ class WorkReportRepository {
     return WorkReport.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

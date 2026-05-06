@@ -13,7 +13,7 @@ class CalendarConnectionRepository {
     return CalendarConnection.findOneAndUpdate(
       { userId, provider },
       { ...data, userId, provider },
-      { new: true, upsert: true, runValidators: true },
+      { returnDocument: 'after', upsert: true, runValidators: true },
     ).lean();
   }
 
@@ -21,7 +21,7 @@ class CalendarConnectionRepository {
     return CalendarConnection.findOneAndUpdate(
       { userId, provider },
       { accessToken, refreshToken, tokenExpiresAt },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 
@@ -34,7 +34,7 @@ class CalendarConnectionRepository {
     return CalendarConnection.findOneAndUpdate(
       { userId, provider },
       update,
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 

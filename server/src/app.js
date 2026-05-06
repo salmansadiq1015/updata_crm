@@ -35,6 +35,7 @@ import catalogRoutes from './modules/catalog/catalog.routes.js';
 import accountingRoutes from './modules/accounting/accounting.routes.js';
 import tasksRoutes, { projectTaskRouter, orderTaskRouter, crossProjectRouter } from './modules/tasks/tasks.routes.js';
 import taskListRoutes from './modules/tasks/taskList.routes.js';
+import taskFolderRoutes from './modules/tasks/taskFolder.routes.js';
 import notificationsRoutes, {
   notificationFeedRoutes,
   notificationPreferenceRoutes,
@@ -134,6 +135,7 @@ export function createApp() {
   app.use("/api/v1/accounting", accountingRoutes);
   app.use("/api/v1/tasks", tasksRoutes);
   app.use("/api/v1/task-lists", taskListRoutes);
+  app.use("/api/v1/task-folders", taskFolderRoutes);
   app.use("/api/v1/projects/:projectId/tasks", projectTaskRouter);
   app.use("/api/v1/orders/:orderId/tasks", orderTaskRouter);
   app.use("/api/v1/projects/tasks", crossProjectRouter);

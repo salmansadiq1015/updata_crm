@@ -121,7 +121,7 @@ class AssignmentRepository {
     return Assignment.findByIdAndUpdate(
       id,
       { ...data, $inc: { version: 1 } },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     )
       .populate(POPULATE_FIELDS)
       .lean();
@@ -131,7 +131,7 @@ class AssignmentRepository {
     return Assignment.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date(), status: 'CANCELLED' },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

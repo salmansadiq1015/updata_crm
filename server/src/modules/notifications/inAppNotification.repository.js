@@ -56,7 +56,7 @@ class InAppNotificationRepository {
     return InAppNotification.findOneAndUpdate(
       { _id: id, userId },
       { isRead: true },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 
@@ -72,7 +72,7 @@ class InAppNotificationRepository {
     return InAppNotification.findOneAndUpdate(
       { _id: id, userId },
       { isDismissed: true },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 

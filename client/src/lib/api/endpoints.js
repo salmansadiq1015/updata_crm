@@ -157,6 +157,11 @@ export const ENDPOINTS = Object.freeze({
     MEMBER: (id, userId) => `/task-lists/${id}/members/${userId}`,
     LEAVE: (id) => `/task-lists/${id}/leave`,
   },
+  TASK_FOLDERS: {
+    LIST: '/task-folders',
+    BY_ID: (id) => `/task-folders/${id}`,
+    REORDER: '/task-folders/reorder',
+  },
   CATALOG: {
     ARTICLES: '/catalog/articles',
     ARTICLE_BY_ID: (id) => `/catalog/articles/${id}`,

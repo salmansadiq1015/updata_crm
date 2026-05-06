@@ -5,7 +5,7 @@ class AccuracyMetricRepository {
     return AccuracyMetric.findOneAndUpdate(
       { period, feature, language },
       { $set: data },
-      { new: true, upsert: true, runValidators: true },
+      { returnDocument: 'after', upsert: true, runValidators: true },
     ).lean();
   }
 

@@ -22,7 +22,7 @@ class VoiceSessionEntityRepository {
 
   async updateById(id, data) {
     return VoiceSessionEntity.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -31,7 +31,7 @@ class VoiceSessionEntityRepository {
     return VoiceSessionEntity.findByIdAndUpdate(
       id,
       { correctedValue },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 

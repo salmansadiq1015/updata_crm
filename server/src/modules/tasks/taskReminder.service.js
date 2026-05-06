@@ -283,7 +283,7 @@ class TaskReminderService {
         defaultOffsetMinutes: data.defaultOffsetMinutes,
         defaultChannels: data.defaultChannels,
       },
-      { new: true, upsert: true, runValidators: true },
+      { returnDocument: 'after', upsert: true, runValidators: true },
     ).lean();
 
     logger.info('User reminder defaults updated', {

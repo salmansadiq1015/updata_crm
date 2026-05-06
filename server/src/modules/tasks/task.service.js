@@ -48,12 +48,16 @@ class TaskService {
       assigneeId,
       createdBy: userId,
     });
+    const createdTask = await taskRepository.findById(task._id);
 
     await this._invalidateListTasksCache(listId);
 
     eventBus.publish(EVENT_TYPES.TASK_CREATED, {
       taskId: task._id,
       listId,
+      version: createdTask.version,
+      updatedAt: createdTask.updatedAt,
+      task: createdTask,
       createdBy: userId,
       assigneeId,
       title: task.title,
@@ -80,7 +84,7 @@ class TaskService {
 
     logger.info('Task created', { module: 'tasks', action: 'create', taskId: task._id, userId });
 
-    return taskRepository.findById(task._id);
+    return createdTask;
   }
 
   async getById(id, userId) {
@@ -117,6 +121,21 @@ class TaskService {
 
   async list(queryParams, userId) {
     const { cursor, limit, sortBy, sortOrder, ...filters } = queryParams;
+    const [ownedLists, groupLists] = await Promise.all([
+      taskListRepository.findByOwnerId(userId, { includeArchived: true }),
+      taskListRepository.findGroupListsByUserId(userId),
+    ]);
+    const accessibleListIds = [...ownedLists, ...groupLists].map((list) => list._id);
+
+    if (filters.listId && !accessibleListIds.some((id) => String(id) === String(filters.listId))) {
+      throw new AppError('Access denied to this task list', 403, ERROR_CODES.TASK_ACCESS_DENIED);
+    }
+
+    const scopedFilters = {
+      ...filters,
+      accessUserId: userId,
+      accessibleListIds,
+    };
     const filterKey = Object.entries(filters)
       .filter(([, v]) => v !== undefined)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -126,7 +145,7 @@ class TaskService {
 
     return cacheManager.getOrSet(
       cacheKey,
-      () => taskRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters }),
+      () => taskRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters: scopedFilters }),
       LIST_TTL,
     );
   }
@@ -136,31 +155,45 @@ class TaskService {
     if (!existing) throw new NotFoundError('Task', id);
 
     await this._checkTaskAccess(existing, userId);
+    const { expectedVersion, ...patch } = data;
 
-    const updated = await taskRepository.updateById(id, { ...data, updatedBy: userId });
+    const updated = await taskRepository.updateById(id, { ...patch, updatedBy: userId }, { expectedVersion });
+    if (!updated) {
+      throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
 
     await this._invalidateTaskCache(id);
     await this._invalidateListTasksCache(existing.listId);
 
     // Publish events for specific field changes
-    if (data.assigneeId && String(data.assigneeId) !== String(existing.assigneeId)) {
+    if (patch.assigneeId && String(patch.assigneeId) !== String(existing.assigneeId)) {
       eventBus.publish(EVENT_TYPES.TASK_ASSIGNED, {
         taskId: id,
-        assigneeId: data.assigneeId,
+        assigneeId: patch.assigneeId,
         previousAssigneeId: existing.assigneeId,
         assignedBy: userId,
         title: existing.title,
       });
     }
 
-    if (data.dueDate && String(data.dueDate) !== String(existing.dueDate)) {
+    if (patch.dueDate && String(patch.dueDate) !== String(existing.dueDate)) {
       eventBus.publish(EVENT_TYPES.TASK_DUE_DATE_CHANGED, {
         taskId: id,
         previousDueDate: existing.dueDate,
-        newDueDate: data.dueDate,
+        newDueDate: patch.dueDate,
         changedBy: userId,
       });
     }
+
+    eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+      taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: Object.keys(patch),
+      task: updated,
+      changedBy: userId,
+    });
 
     auditService.logEvent({
       eventType: 'task.updated',
@@ -168,7 +201,7 @@ class TaskService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { taskId: id, changedFields: Object.keys(data) },
+      details: { taskId: id, changedFields: Object.keys(patch) },
       module: 'tasks',
     });
 
@@ -244,7 +277,10 @@ class TaskService {
       updateData.completedBy = null;
     }
 
-    const updated = await taskRepository.updateById(id, updateData);
+    const updated = await taskRepository.updateById(id, updateData, { expectedVersion: meta.expectedVersion });
+    if (!updated) {
+      throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
 
     await this._invalidateTaskCache(id);
     await this._invalidateListTasksCache(task.listId);
@@ -252,6 +288,10 @@ class TaskService {
     if (status === 'COMPLETED') {
       eventBus.publish(EVENT_TYPES.TASK_COMPLETED, {
         taskId: id,
+        listId: updated.listId,
+        version: updated.version,
+        updatedAt: updated.updatedAt,
+        task: updated,
         completedBy: userId,
         title: task.title,
       });
@@ -264,8 +304,27 @@ class TaskService {
     } else {
       eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
         taskId: id,
+        listId: updated.listId,
+        version: updated.version,
+        updatedAt: updated.updatedAt,
         previousStatus,
         newStatus: status,
+        changedFields: ['status'],
+        task: updated,
+        changedBy: userId,
+      });
+    }
+
+    if (status === 'COMPLETED' || previousStatus === 'COMPLETED') {
+      eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+        taskId: id,
+        listId: updated.listId,
+        version: updated.version,
+        updatedAt: updated.updatedAt,
+        previousStatus,
+        newStatus: status,
+        changedFields: ['status'],
+        task: updated,
         changedBy: userId,
       });
     }
@@ -324,9 +383,22 @@ class TaskService {
 
     eventBus.publish(EVENT_TYPES.TASK_COMPLETED, {
       taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['status', 'completedAt', 'completedBy'],
+      task: updated,
       completedBy: userId,
       title: task.title,
       subtasksCompleted: completeSubtasks,
+    });
+    eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+      taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['status', 'completedAt', 'completedBy'],
+      task: updated,
     });
 
     auditService.logEvent({
@@ -366,8 +438,21 @@ class TaskService {
 
     eventBus.publish(EVENT_TYPES.TASK_REOPENED, {
       taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['status', 'completedAt', 'completedBy'],
+      task: updated,
       reopenedBy: userId,
       title: task.title,
+    });
+    eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+      taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['status', 'completedAt', 'completedBy'],
+      task: updated,
     });
 
     auditService.logEvent({
@@ -407,6 +492,10 @@ class TaskService {
       taskId: id,
       previousListId,
       newListId: listId,
+      listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      task: updated,
       movedBy: userId,
       title: task.title,
     });
@@ -480,6 +569,59 @@ class TaskService {
     logger.info('Bulk task operation', { module: 'tasks', action: 'bulkOperation', bulkAction: action, taskCount: taskIds.length, userId });
 
     return { action, modifiedCount: result };
+  }
+
+  async batchPatch(updates, userId, meta = {}) {
+    const normalizedUpdates = [];
+
+    for (const update of updates) {
+      const task = await taskRepository.findById(update.id);
+      if (!task) throw new NotFoundError('Task', update.id);
+      await this._checkTaskAccess(task, userId);
+
+      const { expectedVersion, ...data } = update.patch;
+      if (expectedVersion !== undefined && task.version !== expectedVersion) {
+        throw new AppError('One or more tasks were modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+      }
+      normalizedUpdates.push({
+        id: update.id,
+        patch: {
+          expectedVersion,
+          data: { ...data, updatedBy: userId },
+        },
+      });
+    }
+
+    const result = await taskRepository.batchPatch(normalizedUpdates);
+    if (result.modifiedCount !== normalizedUpdates.length) {
+      throw new AppError('One or more tasks were modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
+
+    for (const task of result.tasks) {
+      await this._invalidateTaskCache(task._id);
+      await this._invalidateListTasksCache(task.listId);
+      eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+        taskId: task._id,
+        listId: task.listId,
+        version: task.version,
+        updatedAt: task.updatedAt,
+        changedFields: Object.keys(normalizedUpdates.find((item) => String(item.id) === String(task._id))?.patch.data || {}),
+        task,
+        changedBy: userId,
+      });
+    }
+
+    auditService.logEvent({
+      eventType: 'task.batch_patch',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskCount: updates.length },
+      module: 'tasks',
+    });
+
+    return result.tasks;
   }
 
   async createSubtask(parentId, data, userId, meta = {}) {

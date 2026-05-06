@@ -10,6 +10,7 @@
    ═══════════════════════════════════════════ */
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -35,6 +36,8 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
@@ -100,19 +103,20 @@
    Design System — Light Theme (hex-based)
    ═══════════════════════════════════════════ */
 :root {
-  --background: #F8FAFC;
+  --background: #F7F8FC;
+  --surface: #FFFFFF;
   --foreground: #111827;
   --card: #FFFFFF;
   --card-foreground: #111827;
   --popover: #FFFFFF;
   --popover-foreground: #111827;
 
-  --primary: #7B61FF;
+  --primary: #7B68EE;
   --primary-foreground: #FFFFFF;
-  --primary-light: #9F7AEA;
+  --primary-light: #7B68EE;
 
-  --secondary: #F1F5F9;
-  --secondary-foreground: #334155;
+  --secondary: #5B5BD6;
+  --secondary-foreground: #FFFFFF;
 
   --muted: #F1F5F9;
   --muted-foreground: #6B7280;
@@ -122,7 +126,9 @@
 
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
-  --success: #10B981;
+  --danger: #EF4444;
+  --danger-foreground: #FFFFFF;
+  --success: #22C55E;
   --success-foreground: #FFFFFF;
   --warning: #F59E0B;
   --warning-foreground: #111827;
@@ -131,11 +137,11 @@
 
   --border: #E5E7EB;
   --input: #E5E7EB;
-  --ring: #7B61FF;
+  --ring: #7B68EE;
 
-  --chart-1: #7B61FF;
-  --chart-2: #3B82F6;
-  --chart-3: #10B981;
+  --chart-1: #7B68EE;
+  --chart-2: #5B5BD6;
+  --chart-3: #22C55E;
   --chart-4: #F59E0B;
   --chart-5: #EC4899;
 
@@ -148,12 +154,12 @@
   /* Sidebar — always dark */
   --sidebar: #0F172A;
   --sidebar-foreground: #E5E7EB;
-  --sidebar-primary: #9F7AEA;
+  --sidebar-primary: #7B68EE;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #1F2937;
   --sidebar-accent-foreground: #E5E7EB;
   --sidebar-border: rgb(255 255 255 / 0.08);
-  --sidebar-ring: #7B61FF;
+  --sidebar-ring: #7B68EE;
 }
 
 /* ═══════════════════════════════════════════
@@ -161,6 +167,7 @@
    ═══════════════════════════════════════════ */
 .dark {
   --background: #0F172A;
+  --surface: #111827;
   --foreground: #E5E7EB;
   --card: #111827;
   --card-foreground: #E5E7EB;
@@ -182,7 +189,9 @@
 
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
-  --success: #10B981;
+  --danger: #EF4444;
+  --danger-foreground: #FFFFFF;
+  --success: #22C55E;
   --success-foreground: #FFFFFF;
   --warning: #F59E0B;
   --warning-foreground: #111827;

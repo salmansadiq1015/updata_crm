@@ -18,7 +18,7 @@ class EntityNoteRepository {
 
   async updateById(id, data) {
     return EntityNote.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -27,7 +27,7 @@ class EntityNoteRepository {
     return EntityNote.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 }

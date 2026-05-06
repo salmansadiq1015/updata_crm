@@ -25,6 +25,7 @@ export const updateTaskSchema = {
     dueDate: Joi.date().iso().allow(null),
     projectId: objectId.allow(null),
     orderId: objectId.allow(null),
+    expectedVersion: Joi.number().integer().min(0),
   }).min(1),
 };
 
@@ -55,6 +56,26 @@ export const changeStatusSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     status: Joi.string().valid(...TASK_STATUSES).required(),
+    expectedVersion: Joi.number().integer().min(0),
+  }),
+};
+
+export const batchPatchSchema = {
+  body: Joi.object({
+    updates: Joi.array().items(Joi.object({
+      id: objectId.required(),
+      patch: Joi.object({
+        title: Joi.string().trim().max(500),
+        description: Joi.string().allow('', null),
+        status: Joi.string().valid(...TASK_STATUSES),
+        priority: Joi.string().valid(...TASK_PRIORITIES),
+        assigneeId: objectId.allow(null),
+        dueDate: Joi.date().iso().allow(null),
+        listId: objectId,
+        sortOrder: Joi.number().integer().min(0),
+        expectedVersion: Joi.number().integer().min(0),
+      }).min(1).required(),
+    })).min(1).max(100).required(),
   }),
 };
 

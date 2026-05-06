@@ -37,7 +37,7 @@ class BankAccountRepository {
 
   async updateById(id, data) {
     return BankAccount.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -46,7 +46,7 @@ class BankAccountRepository {
     return BankAccount.findByIdAndUpdate(
       id,
       { currentBalance: balance, balanceDate: date },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 }

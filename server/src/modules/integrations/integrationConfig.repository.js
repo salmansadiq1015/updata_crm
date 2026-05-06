@@ -19,7 +19,7 @@ class IntegrationConfigRepository {
     return IntegrationConfig.findOneAndUpdate(
       { integrationKey },
       { ...data, integrationKey },
-      { new: true, upsert: true, runValidators: true },
+      { returnDocument: 'after', upsert: true, runValidators: true },
     ).lean();
   }
 
@@ -32,7 +32,7 @@ class IntegrationConfigRepository {
     return IntegrationConfig.findOneAndUpdate(
       { integrationKey },
       update,
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 }

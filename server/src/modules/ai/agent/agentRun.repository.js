@@ -16,14 +16,14 @@ class AgentRunRepository {
   }
 
   async updateById(id, data) {
-    return AgentRun.findByIdAndUpdate(id, { $set: data }, { new: true, runValidators: true }).lean();
+    return AgentRun.findByIdAndUpdate(id, { $set: data }, { returnDocument: 'after', runValidators: true }).lean();
   }
 
   async pushStep(id, step) {
     return AgentRun.findByIdAndUpdate(
       id,
       { $push: { steps: step } },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).lean();
   }
 
@@ -74,7 +74,7 @@ class AgentRunRepository {
     return AgentRun.findOneAndUpdate(
       { _id: id, userId },
       { $set: { archived: true } },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
   }
 
@@ -82,7 +82,7 @@ class AgentRunRepository {
     return AgentRun.findOneAndUpdate(
       { _id: id, userId },
       { $set: { archived: false } },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
   }
 

@@ -20,6 +20,7 @@ const taskSchema = new mongoose.Schema(
     dueDate: { type: Date, default: null },
     sortOrder: { type: Number, default: 0 },
     depth: { type: Number, default: 0, min: 0, max: MAX_SUBTASK_DEPTH },
+    version: { type: Number, default: 0, min: 0 },
     completedAt: { type: Date, default: null },
     completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     cancelledAt: { type: Date, default: null },
@@ -39,15 +40,17 @@ taskSchema.index({ projectId: 1 }, { sparse: true });
 taskSchema.index({ orderId: 1 }, { sparse: true });
 taskSchema.index({ parentTaskId: 1 }, { sparse: true });
 taskSchema.index({ updatedAt: 1 }); // For sync queries
+taskSchema.index({ listId: 1, status: 1, sortOrder: 1, isDeleted: 1 });
+taskSchema.index({ assigneeId: 1, status: 1, dueDate: 1, isDeleted: 1 });
+taskSchema.index({ projectId: 1, status: 1, sortOrder: 1 }, { sparse: true });
 taskSchema.index({ title: 'text' }); // Full-text search
 taskSchema.index({ createdBy: 1, isDeleted: 1 });
 
 // Validation: projectId and orderId are mutually exclusive
-taskSchema.pre('validate', function (next) {
+taskSchema.pre('validate', function () {
   if (this.projectId && this.orderId) {
-    return next(new Error('Task cannot be linked to both a project and an order'));
+    throw new Error('Task cannot be linked to both a project and an order');
   }
-  next();
 });
 
 // Soft delete filter

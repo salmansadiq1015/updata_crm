@@ -31,7 +31,7 @@ class TimeEntryRepository {
 
   async updateById(id, data) {
     return TimeEntry.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -40,7 +40,7 @@ class TimeEntryRepository {
     return TimeEntry.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

@@ -298,7 +298,7 @@ class TaskListService {
     const member = await TaskListMember.findOneAndUpdate(
       { listId, userId: targetUserId },
       { role },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
 
     if (!member) throw new NotFoundError('TaskListMember', targetUserId);

@@ -61,7 +61,7 @@ export class OcrProcessingWorker extends BaseWorker {
     await OcrResult.findOneAndUpdate(
       { documentId },
       extractedData,
-      { upsert: true, new: true, runValidators: true },
+      { upsert: true, returnDocument: 'after', runValidators: true },
     );
 
     // Update document OCR status

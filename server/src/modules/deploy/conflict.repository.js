@@ -30,7 +30,7 @@ class ConflictRepository {
           overrideReason,
         },
       },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 

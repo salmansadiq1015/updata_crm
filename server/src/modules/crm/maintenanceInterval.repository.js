@@ -28,7 +28,7 @@ class MaintenanceIntervalRepository {
 
   async updateById(id, data) {
     return MaintenanceInterval.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }

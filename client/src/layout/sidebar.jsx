@@ -27,6 +27,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/stores/auth-store';
+import { useUnreadCount } from '@/modules/notifications/hooks/use-notification-feed';
 
 const navSectionDefs = [
   {
@@ -85,6 +86,7 @@ function SidebarNav({ collapsed, onNavigate }) {
   const pathname = usePathname();
   const { hasPermission } = usePermissions();
   const { t } = useLanguage();
+  const notificationUnread = useUnreadCount();
 
   return (
     <LayoutGroup id={collapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}>
@@ -138,12 +140,19 @@ function SidebarNav({ collapsed, onNavigate }) {
                         />
                       )}
 
-                      <Icon className={cn(
-                        'h-[18px] w-[18px] shrink-0 transition-all duration-200',
-                        isActive
-                          ? 'text-[oklch(0.75_0.18_292)]'
-                          : 'text-white/30 group-hover:text-white/55'
-                      )} />
+                      <span className="relative shrink-0">
+                        <Icon className={cn(
+                          'h-[18px] w-[18px] transition-all duration-200',
+                          isActive
+                            ? 'text-[oklch(0.75_0.18_292)]'
+                            : 'text-white/30 group-hover:text-white/55'
+                        )} />
+                        {item.href === '/notifications' && notificationUnread > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
+                            {notificationUnread > 99 ? '99+' : notificationUnread}
+                          </span>
+                        )}
+                      </span>
 
                       <AnimatePresence mode="wait">
                         {!collapsed && (

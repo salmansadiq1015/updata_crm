@@ -50,7 +50,7 @@ class DocumentTemplateRepository {
     return DocumentTemplate.findByIdAndUpdate(
       id,
       { ...data, $inc: { currentVersion: 1 } },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 
@@ -58,7 +58,7 @@ class DocumentTemplateRepository {
     return DocumentTemplate.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 }

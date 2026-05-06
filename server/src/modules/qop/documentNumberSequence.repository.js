@@ -20,7 +20,7 @@ class DocumentNumberSequenceRepository {
 
   async updateById(id, data) {
     return DocumentNumberSequence.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }

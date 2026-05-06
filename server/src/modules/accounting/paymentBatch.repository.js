@@ -35,7 +35,7 @@ class PaymentBatchRepository {
     return PaymentBatch.findByIdAndUpdate(
       id,
       { status, ...additionalData },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 }

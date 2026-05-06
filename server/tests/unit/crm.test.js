@@ -143,7 +143,7 @@ describe('Installation Model', () => {
     const updated = await Installation.findByIdAndUpdate(
       i._id,
       { status: 'decommissioned', decommissionedDate: new Date(), decommissionReason: 'End of life' },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
     expect(updated.status).toBe('decommissioned');
     expect(updated.decommissionReason).toBe('End of life');

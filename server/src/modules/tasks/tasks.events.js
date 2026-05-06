@@ -1,8 +1,43 @@
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
+import { emitTaskRealtimeEvent } from '../../shared/socket/socketServer.js';
+
+function emitTaskEvent(eventName, data) {
+  emitTaskRealtimeEvent(eventName, {
+    type: eventName,
+    taskId: String(data.taskId),
+    listId: data.listId ? String(data.listId) : null,
+    version: data.version ?? data.task?.version ?? 0,
+    updatedAt: data.updatedAt ?? data.task?.updatedAt ?? new Date().toISOString(),
+    changedFields: data.changedFields,
+    task: data.task,
+  });
+}
 
 export function registerTasksEvents() {
+  eventBus.subscribe(EVENT_TYPES.TASK_CREATED, async (data) => {
+    emitTaskEvent('task_created', data);
+  });
+
+  eventBus.subscribe(EVENT_TYPES.TASK_UPDATED, async (data) => {
+    emitTaskEvent('task_updated', data);
+  });
+
+  eventBus.subscribe(EVENT_TYPES.TASK_MOVED, async (data) => {
+    emitTaskEvent('task_moved', data);
+  });
+
+  eventBus.subscribe(EVENT_TYPES.TASK_DELETED, async (data) => {
+    emitTaskRealtimeEvent('task_deleted', {
+      type: 'task_deleted',
+      taskId: String(data.taskId),
+      listId: data.listId ? String(data.listId) : null,
+      version: data.version ?? 0,
+      updatedAt: data.updatedAt ?? new Date().toISOString(),
+    });
+  });
+
   // When a task is assigned to another user → send notification email
   eventBus.subscribe(EVENT_TYPES.TASK_ASSIGNED, async (data) => {
     try {

@@ -11,6 +11,7 @@ export const createTaskListSchema = {
     color: Joi.string().trim().max(7).allow(null, ''),
     icon: Joi.string().trim().max(50).allow(null, ''),
     sortOrder: Joi.number().integer().min(0),
+    folderId: objectId.allow(null).optional(),
   }),
 };
 
@@ -21,6 +22,7 @@ export const updateTaskListSchema = {
     color: Joi.string().trim().max(7).allow(null, ''),
     icon: Joi.string().trim().max(50).allow(null, ''),
     sortOrder: Joi.number().integer().min(0),
+    folderId: objectId.allow(null).optional(),
   }).min(1),
 };
 

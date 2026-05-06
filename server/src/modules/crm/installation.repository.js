@@ -59,7 +59,7 @@ class InstallationRepository {
 
   async updateById(id, data) {
     return Installation.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -68,7 +68,7 @@ class InstallationRepository {
     return Installation.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

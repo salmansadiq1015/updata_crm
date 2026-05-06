@@ -54,7 +54,7 @@ class NotificationTemplateRepository {
 
   async updateById(id, data) {
     return NotificationTemplate.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -71,7 +71,7 @@ class NotificationTemplateRepository {
     return NotificationTemplate.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date(), isActive: false },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 }

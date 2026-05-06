@@ -4,6 +4,7 @@ import logger from '../logger/index.js';
 
 // ─── Connected users: userId → Set<socketId> ──────────────
 const connectedUsers = new Map();
+let socketServer = null;
 
 /**
  * Check if a user has at least one active socket connection.
@@ -19,6 +20,15 @@ export function isUserOnline(userId) {
 export function getConnectedSocketCount(userId) {
   const sockets = connectedUsers.get(String(userId));
   return sockets ? sockets.size : 0;
+}
+
+export function emitTaskRealtimeEvent(eventName, payload) {
+  if (!socketServer) return false;
+  socketServer.to('tasks:workspace').emit(eventName, payload);
+  if (payload?.listId) {
+    socketServer.to(`tasks:list:${payload.listId}`).emit(eventName, payload);
+  }
+  return true;
 }
 
 // ─── Lazy-load models to avoid circular deps ──────────────
@@ -126,6 +136,7 @@ export function initializeSocketServer(httpServer) {
     pingTimeout: 60000,
     pingInterval: 25000,
   });
+  socketServer = io;
 
   // ─── JWT Authentication Middleware ──────────────────────
   io.use((socket, next) => {
@@ -207,6 +218,16 @@ export function initializeSocketServer(httpServer) {
       } catch (err) {
         logger.warn('Failed to ack notification', { module: 'socket', deliveryId, error: err.message });
       }
+    });
+
+    socket.on('tasks:subscribe', ({ listId } = {}) => {
+      socket.join('tasks:workspace');
+      if (listId) socket.join(`tasks:list:${listId}`);
+    });
+
+    socket.on('tasks:unsubscribe', ({ listId } = {}) => {
+      socket.leave('tasks:workspace');
+      if (listId) socket.leave(`tasks:list:${listId}`);
     });
 
     // ─── Chat Events (preserved from existing) ───────────

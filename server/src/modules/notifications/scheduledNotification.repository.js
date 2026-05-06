@@ -55,7 +55,7 @@ class ScheduledNotificationRepository {
 
   async updateById(id, data) {
     return ScheduledNotification.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -64,7 +64,7 @@ class ScheduledNotificationRepository {
     return ScheduledNotification.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date(), status: 'CANCELLED' },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 }

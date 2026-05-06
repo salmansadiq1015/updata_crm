@@ -7,7 +7,7 @@ class ToolExecutionRepository {
   }
 
   async updateById(id, data) {
-    return ToolExecution.findByIdAndUpdate(id, { $set: data }, { new: true, runValidators: true }).lean();
+    return ToolExecution.findByIdAndUpdate(id, { $set: data }, { returnDocument: 'after', runValidators: true }).lean();
   }
 
   async findByAgentRunId(agentRunId) {

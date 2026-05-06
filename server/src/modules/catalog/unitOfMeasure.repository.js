@@ -16,7 +16,7 @@ class UnitOfMeasureRepository {
 
   async updateByCode(code, data) {
     return UnitOfMeasure.findOneAndUpdate({ code }, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }

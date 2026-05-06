@@ -59,7 +59,7 @@ class SiteRepository {
 
   async updateById(id, data) {
     return Site.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -68,7 +68,7 @@ class SiteRepository {
     return Site.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

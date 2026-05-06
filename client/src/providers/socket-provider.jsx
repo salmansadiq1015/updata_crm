@@ -36,6 +36,8 @@ export function SocketProvider({ children }) {
         });
         socket.emit('ack:notification', { deliveryId: payload.deliveryId });
         queryClient.invalidateQueries({ queryKey: queryKeys.mobile.notifications.list() });
+        queryClient.invalidateQueries({ queryKey: ['notifications', 'feed'] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unreadCount() });
       });
 
       // Listen for in-app notifications (InApp adapter)
@@ -49,8 +51,9 @@ export function SocketProvider({ children }) {
           sentAt: payload.sentAt,
           isRead: false,
         });
-        // Invalidate the notifications list so the page updates instantly
         queryClient.invalidateQueries({ queryKey: queryKeys.mobile.notifications.list() });
+        queryClient.invalidateQueries({ queryKey: ['notifications', 'feed'] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unreadCount() });
       });
 
       // Unread count from server — update Zustand (used by bell badge)

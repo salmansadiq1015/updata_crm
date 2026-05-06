@@ -78,7 +78,7 @@ class CustomerRepository {
 
   async updateById(id, data) {
     return Customer.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -87,7 +87,7 @@ class CustomerRepository {
     return Customer.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date(), status: 'archived' },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

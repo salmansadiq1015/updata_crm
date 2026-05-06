@@ -144,7 +144,7 @@ describe('ProjectDocument Model', () => {
     await ProjectDocument.findByIdAndUpdate(
       doc._id,
       { isDeleted: false, deletedAt: null },
-      { new: true },
+      { returnDocument: 'after' },
     ).setOptions({ includeDeleted: true });
     const restored = await ProjectDocument.findById(doc._id).lean();
     expect(restored).not.toBeNull();
@@ -253,14 +253,14 @@ describe('ScheduleEntry Model', () => {
     const updated = await ScheduleEntry.findByIdAndUpdate(
       entry._id,
       { status: 'IN_PROGRESS' },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
     expect(updated.status).toBe('IN_PROGRESS');
 
     const completed = await ScheduleEntry.findByIdAndUpdate(
       entry._id,
       { status: 'COMPLETED' },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
     expect(completed.status).toBe('COMPLETED');
   });

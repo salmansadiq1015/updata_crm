@@ -33,7 +33,7 @@ class IghImportJobRepository {
     return IghImportJob.findByIdAndUpdate(
       id,
       { status, ...additionalData },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 
@@ -41,7 +41,7 @@ class IghImportJobRepository {
     return IghImportJob.findByIdAndUpdate(
       id,
       { $set: { log: logText } },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 

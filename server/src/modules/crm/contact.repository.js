@@ -22,7 +22,7 @@ class ContactRepository {
 
   async updateById(id, data) {
     return Contact.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -31,7 +31,7 @@ class ContactRepository {
     return Contact.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

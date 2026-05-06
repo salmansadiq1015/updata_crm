@@ -22,7 +22,7 @@ class TaskNoteRepository {
 
   async updateById(id, data) {
     return TaskNote.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -31,7 +31,7 @@ class TaskNoteRepository {
     return TaskNote.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 }

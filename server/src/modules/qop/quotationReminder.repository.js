@@ -24,7 +24,7 @@ class QuotationReminderRepository {
     return QuotationReminder.findByIdAndUpdate(
       id,
       { status: 'SENT', sentAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 
@@ -32,7 +32,7 @@ class QuotationReminderRepository {
     return QuotationReminder.findByIdAndUpdate(
       id,
       { status: 'SNOOZED', snoozedUntil },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 

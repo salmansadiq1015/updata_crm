@@ -79,7 +79,7 @@ class NotificationRepository {
 
   async updateById(id, data) {
     return Notification.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -88,7 +88,7 @@ class NotificationRepository {
     return Notification.findByIdAndUpdate(
       id,
       { status, ...(status === 'COMPLETED' ? { processedAt: new Date() } : {}) },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 
@@ -100,7 +100,7 @@ class NotificationRepository {
     return Notification.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

@@ -4,13 +4,15 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { taskService } from '../services/task-service';
 import { taskListService } from '../services/task-list-service';
+import { taskApi } from '../services/task-api';
 
 export function useTaskLists() {
   return useQuery({
-    queryKey: queryKeys.tasks.lists(),
-    queryFn: () => taskListService.list(),
-    staleTime: 60_000,
-    select: (data) => (Array.isArray(data) ? data : (data?.data ?? [])),
+    queryKey: ['tasks', 'workspace', 'lists'],
+    queryFn: () => taskApi.lists(),
+    staleTime: 90_000,
+    gcTime: 10 * 60_000,
+    select: (data) => (Array.isArray(data) ? data : []),
   });
 }
 

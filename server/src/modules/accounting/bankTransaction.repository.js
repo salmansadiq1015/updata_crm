@@ -74,7 +74,7 @@ class BankTransactionRepository {
     return BankTransaction.findByIdAndUpdate(
       id,
       { reconciliationStatus: status, ...matchData },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 }

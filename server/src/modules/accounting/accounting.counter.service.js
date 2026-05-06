@@ -15,7 +15,7 @@ class AccountingCounterService {
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
         { $inc: { seq: 1 } },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       );
       return counter.seq;
     } catch (err) {
@@ -35,7 +35,7 @@ class AccountingCounterService {
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
         { $inc: { seq: 1 } },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       );
       return `APR-${year}-${String(counter.seq).padStart(5, '0')}`;
     } catch (err) {
@@ -55,7 +55,7 @@ class AccountingCounterService {
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
         { $inc: { seq: 1 } },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       );
       return `PB-${year}-${String(counter.seq).padStart(5, '0')}`;
     } catch (err) {

@@ -82,7 +82,7 @@ class WidgetSubmissionRepository {
 
   async updateById(id, data) {
     return WidgetSubmission.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -91,7 +91,7 @@ class WidgetSubmissionRepository {
     return WidgetSubmission.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 
@@ -101,7 +101,7 @@ class WidgetSubmissionRepository {
     const counter = await Counter.findOneAndUpdate(
       { _id: counterId },
       { $inc: { seq: 1 } },
-      { new: true, upsert: true },
+      { returnDocument: 'after', upsert: true },
     );
     return `WEB-${year}-${String(counter.seq).padStart(6, '0')}`;
   }

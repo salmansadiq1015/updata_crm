@@ -23,7 +23,7 @@ class AppointmentReminderRepository {
     return AppointmentReminder.findByIdAndUpdate(
       id,
       { $set: data },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 

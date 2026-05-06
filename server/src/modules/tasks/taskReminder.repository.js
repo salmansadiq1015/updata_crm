@@ -41,7 +41,7 @@ class TaskReminderRepository {
 
   async updateById(id, data) {
     return TaskReminder.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }

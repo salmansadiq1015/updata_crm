@@ -21,7 +21,7 @@ class ScheduleRepository {
 
   async updateById(id, data) {
     return ScheduleEntry.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -30,7 +30,7 @@ class ScheduleRepository {
     return ScheduleEntry.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 
@@ -82,7 +82,7 @@ class ScheduleRepository {
 
   async updateConfirmationById(id, data) {
     return PartnerConfirmation.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }

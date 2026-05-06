@@ -49,7 +49,7 @@ class EmailRecordRepository {
 
   async updateStatus(id, status, details = {}) {
     const update = { status, ...details };
-    return EmailRecord.findByIdAndUpdate(id, { $set: update }, { new: true }).lean();
+    return EmailRecord.findByIdAndUpdate(id, { $set: update }, { returnDocument: 'after' }).lean();
   }
 }
 

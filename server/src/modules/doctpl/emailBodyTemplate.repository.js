@@ -20,7 +20,7 @@ class EmailBodyTemplateRepository {
 
   async updateById(id, data) {
     return EmailBodyTemplate.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }

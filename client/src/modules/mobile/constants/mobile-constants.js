@@ -134,7 +134,7 @@ export const MOBILE_NAV_TABS = Object.freeze([
   { key: 'orders', labelKey: 'mobile.nav.orders', href: '/orders', icon: 'ClipboardList' },
   { key: 'chat', labelKey: 'mobile.nav.chat', href: '/chat', icon: 'MessageSquare' },
   { key: 'timer', labelKey: 'mobile.nav.timer', href: '/timer', icon: 'Timer' },
-  { key: 'notifications', labelKey: 'mobile.nav.notifications', href: '/notifications', icon: 'Bell' },
+  { key: 'notifications', labelKey: 'mobile.nav.notifications', href: '/m/notifications', icon: 'Bell' },
   { key: 'settings', labelKey: 'mobile.nav.settings', href: '/settings', icon: 'Settings' },
 ]);
 

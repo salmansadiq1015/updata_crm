@@ -17,7 +17,7 @@ class MobileCounterService {
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
         { $inc: { seq: 1 } },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       );
       return `RPT-${year}-${String(counter.seq).padStart(5, '0')}`;
     } catch (err) {
@@ -37,7 +37,7 @@ class MobileCounterService {
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
         { $inc: { seq: 1 } },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       );
       return `SMO-${year}-${String(counter.seq).padStart(5, '0')}`;
     } catch (err) {

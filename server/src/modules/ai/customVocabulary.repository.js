@@ -47,7 +47,7 @@ class CustomVocabularyRepository {
 
   async updateById(id, data) {
     return CustomVocabulary.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -56,7 +56,7 @@ class CustomVocabularyRepository {
     return CustomVocabulary.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

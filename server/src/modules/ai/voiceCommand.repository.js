@@ -45,7 +45,7 @@ class VoiceCommandRepository {
 
   async updateById(id, data) {
     return VoiceCommand.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -54,7 +54,7 @@ class VoiceCommandRepository {
     return VoiceCommand.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

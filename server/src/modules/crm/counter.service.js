@@ -12,7 +12,7 @@ class CounterService {
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
         { $inc: { seq: 1 } },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       );
       return `${prefix}${String(counter.seq).padStart(padLength, '0')}`;
     } catch (err) {

@@ -35,7 +35,7 @@ class NotificationDeliveryRepository {
 
   async updateById(id, data) {
     return NotificationDelivery.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -44,7 +44,7 @@ class NotificationDeliveryRepository {
     return NotificationDelivery.findOneAndUpdate(
       { providerMessageId },
       data,
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 

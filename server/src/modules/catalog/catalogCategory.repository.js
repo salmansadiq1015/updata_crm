@@ -65,7 +65,7 @@ class CatalogCategoryRepository {
 
   async updateById(id, data) {
     return CatalogCategory.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -74,7 +74,7 @@ class CatalogCategoryRepository {
     return CatalogCategory.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

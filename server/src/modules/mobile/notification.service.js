@@ -17,7 +17,7 @@ class NotificationService {
         isActive: true,
         lastUsedAt: new Date(),
       },
-      { upsert: true, new: true, runValidators: true },
+      { upsert: true, returnDocument: 'after', runValidators: true },
     );
 
     logger.info('Device token registered', { module: 'mobile', action: 'notification.registerDevice', userId, platform: data.platform });
@@ -29,7 +29,7 @@ class NotificationService {
     const device = await DeviceToken.findOneAndUpdate(
       { _id: deviceId },
       { isActive: false },
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (device) {
@@ -110,7 +110,7 @@ class NotificationService {
     return InAppNotification.findOneAndUpdate(
       { _id: notificationId, userId },
       { isRead: true },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 
@@ -136,7 +136,7 @@ class NotificationService {
     return NotificationPreference.findOneAndUpdate(
       { userId },
       { $set: data },
-      { upsert: true, new: true, runValidators: true },
+      { upsert: true, returnDocument: 'after', runValidators: true },
     ).lean();
   }
 

@@ -14,7 +14,7 @@ class AppointmentRepository {
     return AppointmentDetails.findOneAndUpdate(
       { assignmentId },
       { $set: data },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 

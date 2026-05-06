@@ -59,7 +59,7 @@ class TextBlockRepository {
 
   async updateById(id, data) {
     return TextBlock.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -68,7 +68,7 @@ class TextBlockRepository {
     return TextBlock.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 }

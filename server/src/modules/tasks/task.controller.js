@@ -32,6 +32,14 @@ class TaskController {
     } catch (err) { next(err); }
   }
 
+  async batchPatch(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const tasks = await taskService.batchPatch(req.body.updates, req.user._id, meta);
+      return res.success({ data: tasks, message: 'Tasks updated successfully' });
+    } catch (err) { next(err); }
+  }
+
   async remove(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
@@ -43,7 +51,10 @@ class TaskController {
   async changeStatus(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      const task = await taskService.changeStatus(req.params.id, req.body.status, req.user._id, meta);
+      const task = await taskService.changeStatus(req.params.id, req.body.status, req.user._id, {
+        ...meta,
+        expectedVersion: req.body.expectedVersion,
+      });
       return res.success({ data: task, message: 'Task status updated successfully' });
     } catch (err) { next(err); }
   }

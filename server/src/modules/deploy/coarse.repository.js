@@ -83,7 +83,7 @@ class CoarseRepository {
     return CoarseAllocation.findByIdAndUpdate(
       id,
       data,
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     )
       .populate(POPULATE_FIELDS)
       .lean();

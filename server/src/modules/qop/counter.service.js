@@ -68,7 +68,7 @@ class QOPCounterService {
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
         { $inc: { seq: 1 } },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       );
 
       // 5. Format the number

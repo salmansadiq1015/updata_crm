@@ -66,7 +66,7 @@ class VoiceSessionRepository {
 
   async updateById(id, data) {
     return VoiceSession.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -75,7 +75,7 @@ class VoiceSessionRepository {
     return VoiceSession.findByIdAndUpdate(
       id,
       { status, ...additionalData },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 
@@ -83,7 +83,7 @@ class VoiceSessionRepository {
     return VoiceSession.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

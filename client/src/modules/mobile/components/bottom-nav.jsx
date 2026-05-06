@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { key: 'orders', href: '/orders', icon: 'ClipboardList', labelKey: 'mobile.nav.orders', labelFallback: 'Aufträge' },
   { key: 'chat', href: '/chat', icon: 'MessageSquare', labelKey: 'mobile.nav.chat', labelFallback: 'Chat' },
   { key: 'timer', href: '/timer', icon: 'Timer', labelKey: 'mobile.nav.timer', labelFallback: 'Timer' },
-  { key: 'notifications', href: '/notifications', icon: 'Bell', labelKey: 'mobile.nav.notifications', labelFallback: 'Meldungen' },
+  { key: 'notifications', href: '/m/notifications', icon: 'Bell', labelKey: 'mobile.nav.notifications', labelFallback: 'Meldungen' },
   { key: 'settings', href: '/settings', icon: 'Settings', labelKey: 'mobile.nav.settings', labelFallback: 'Einstellungen' },
 ];
 

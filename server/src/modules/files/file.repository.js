@@ -81,7 +81,7 @@ class FileRepository {
     return FileMetadata.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

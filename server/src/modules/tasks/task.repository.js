@@ -21,6 +21,13 @@ const ALLOWED_FILTERS = {
 
 const ALLOWED_SORT_FIELDS = ['createdAt', 'dueDate', 'priority', 'title', 'sortOrder', '_id'];
 
+function combineFilters(...filters) {
+  const active = filters.filter((filter) => filter && Object.keys(filter).length > 0);
+  if (active.length === 0) return {};
+  if (active.length === 1) return active[0];
+  return { $and: active };
+}
+
 class TaskRepository {
   async create(data) {
     const task = new Task(data);
@@ -36,7 +43,7 @@ class TaskRepository {
     const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
 
     // Extract special filters before passing to buildFilter
-    const { overdue, dueToday, hasParent, q, dueFrom, dueTo, createdById, ...standardFilters } = filters;
+    const { overdue, dueToday, hasParent, q, dueFrom, dueTo, createdById, accessUserId, accessibleListIds, ...standardFilters } = filters;
 
     // Map createdById to the actual field name
     if (createdById) {
@@ -52,32 +59,31 @@ class TaskRepository {
     }
 
     // Build base filter from standard allowed filters
-    const filter = {
+    const baseFilter = {
       ...buildFilter(standardFilters, {
         ...ALLOWED_FILTERS,
         dueFrom: 'dateFrom',
         dueTo: 'dateTo',
       }),
-      ...buildCursorQuery(cursor, safeSortBy, sortOrder),
     };
 
     // Remap dueFrom/dueTo filter keys to dueDate
-    if (filter.dueFrom || filter.dueTo) {
-      filter.dueDate = {};
-      if (filter.dueFrom) {
-        filter.dueDate.$gte = filter.dueFrom.$gte;
-        delete filter.dueFrom;
+    if (baseFilter.dueFrom || baseFilter.dueTo) {
+      baseFilter.dueDate = {};
+      if (baseFilter.dueFrom) {
+        baseFilter.dueDate.$gte = baseFilter.dueFrom.$gte;
+        delete baseFilter.dueFrom;
       }
-      if (filter.dueTo) {
-        filter.dueDate.$lte = filter.dueTo.$lte;
-        delete filter.dueTo;
+      if (baseFilter.dueTo) {
+        baseFilter.dueDate.$lte = baseFilter.dueTo.$lte;
+        delete baseFilter.dueTo;
       }
     }
 
     // Handle overdue filter
     if (overdue === true || overdue === 'true') {
-      filter.dueDate = { $lt: new Date() };
-      filter.status = { $in: ['OPEN', 'IN_PROGRESS'] };
+      baseFilter.dueDate = { $lt: new Date() };
+      baseFilter.status = { $in: ['OPEN', 'IN_PROGRESS'] };
     }
 
     // Handle dueToday filter
@@ -85,20 +91,34 @@ class TaskRepository {
       const now = new Date();
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-      filter.dueDate = { $gte: startOfDay, $lt: endOfDay };
+      baseFilter.dueDate = { $gte: startOfDay, $lt: endOfDay };
     }
 
     // Handle hasParent filter
     if (hasParent === true || hasParent === 'true') {
-      filter.parentTaskId = { $ne: null };
+      baseFilter.parentTaskId = { $ne: null };
     } else if (hasParent === false || hasParent === 'false') {
-      filter.parentTaskId = null;
+      baseFilter.parentTaskId = null;
     }
 
     // Handle text search
     if (q) {
-      filter.$text = { $search: q };
+      baseFilter.$text = { $search: q };
     }
+
+    const accessFilter = accessUserId
+      ? {
+          $or: [
+            { createdBy: accessUserId },
+            { assigneeId: accessUserId },
+            ...(Array.isArray(accessibleListIds) && accessibleListIds.length > 0
+              ? [{ listId: { $in: accessibleListIds } }]
+              : []),
+          ],
+        }
+      : {};
+
+    const filter = combineFilters(baseFilter, buildCursorQuery(cursor, safeSortBy, sortOrder), accessFilter);
 
     const sort = buildCursorSort(safeSortBy, sortOrder);
 
@@ -202,9 +222,17 @@ class TaskRepository {
       .lean();
   }
 
-  async updateById(id, data) {
-    return Task.findByIdAndUpdate(id, data, {
-      new: true,
+  async updateById(id, data, { expectedVersion } = {}) {
+    const filter = { _id: id };
+    if (expectedVersion !== undefined && expectedVersion !== null) {
+      filter.version = expectedVersion;
+    }
+
+    return Task.findOneAndUpdate(filter, {
+      $set: data,
+      $inc: { version: 1 },
+    }, {
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }
@@ -213,17 +241,39 @@ class TaskRepository {
     return Task.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 
   async bulkUpdate(taskIds, data) {
     const result = await Task.updateMany(
       { _id: { $in: taskIds }, isDeleted: false },
-      { $set: data },
+      { $set: data, $inc: { version: 1 } },
       { runValidators: true },
     );
     return result.modifiedCount;
+  }
+
+  async batchPatch(updates) {
+    const operations = updates.map(({ id, patch }) => ({
+      updateOne: {
+        filter: {
+          _id: id,
+          isDeleted: false,
+          ...(patch.expectedVersion !== undefined ? { version: patch.expectedVersion } : {}),
+        },
+        update: {
+          $set: patch.data,
+          $inc: { version: 1 },
+        },
+        runValidators: true,
+      },
+    }));
+
+    if (operations.length === 0) return { modifiedCount: 0, tasks: [] };
+    const result = await Task.bulkWrite(operations, { ordered: true });
+    const tasks = await Task.find({ _id: { $in: updates.map(({ id }) => id) }, isDeleted: false }).lean();
+    return { modifiedCount: result.modifiedCount, tasks };
   }
 
   async moveTasksToList(fromListId, toListId) {

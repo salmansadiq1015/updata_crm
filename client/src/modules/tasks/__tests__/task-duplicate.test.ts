@@ -1,0 +1,151 @@
+import { describe, it, expect, vi } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createElement } from 'react';
+import { http, HttpResponse } from 'msw';
+import { server } from './mocks/server';
+import { useTaskWorkspaceMutations } from '../hooks/use-task-workspace';
+
+// Silence toast notifications in tests
+vi.mock('react-hot-toast', () => ({
+  default: { error: vi.fn(), success: vi.fn() },
+  error: vi.fn(),
+  success: vi.fn(),
+}));
+
+const BASE = 'http://localhost:9097/api/v1';
+
+const DEFAULT_ACTIVE_PARAMS = {
+  sortBy: 'sortOrder' as const,
+  sortOrder: 'asc' as const,
+  limit: 50,
+};
+
+const SOURCE_TASK = {
+  id: '1',
+  title: 'My Task',
+  status: 'IN_PROGRESS',
+  priority: 'HIGH',
+  description: null,
+  listId: null,
+  assigneeId: null,
+  createdBy: null,
+  updatedBy: null,
+  parentTaskId: null,
+  projectId: null,
+  orderId: null,
+  dueDate: null,
+  sortOrder: 0,
+  depth: 0,
+  subtaskCount: 0,
+  noteCount: 0,
+  attachmentCount: 0,
+  version: 1,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  completedAt: null,
+  completedBy: null,
+  cancelledAt: null,
+};
+
+function makeWrapper() {
+  const qc = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  return ({ children }: { children: React.ReactNode }) =>
+    createElement(QueryClientProvider, { client: qc }, children);
+}
+
+describe('duplicateTask', () => {
+  it('fetches the source task and creates a copy with OPEN status and same priority', async () => {
+    let capturedCreateBody: Record<string, unknown> | null = null;
+
+    // Override GET /tasks/1 to return SOURCE_TASK
+    server.use(
+      http.get(`${BASE}/tasks/1`, () => {
+        return HttpResponse.json({ success: true, data: SOURCE_TASK });
+      }),
+
+      http.post(`${BASE}/tasks`, async ({ request }) => {
+        capturedCreateBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          success: true,
+          data: {
+            ...SOURCE_TASK,
+            id: 'copy-1',
+            title: capturedCreateBody.title,
+            status: capturedCreateBody.status,
+            priority: capturedCreateBody.priority,
+          },
+        });
+      })
+    );
+
+    const { result } = renderHook(
+      () => useTaskWorkspaceMutations(DEFAULT_ACTIVE_PARAMS),
+      { wrapper: makeWrapper() }
+    );
+
+    result.current.duplicateTask.mutate('1');
+
+    await waitFor(() => expect(result.current.duplicateTask.isSuccess).toBe(true), {
+      timeout: 5000,
+    });
+
+    expect(capturedCreateBody).not.toBeNull();
+    expect(capturedCreateBody?.title).toBe('Copy of My Task');
+    expect(capturedCreateBody?.status).toBe('OPEN');
+    expect(capturedCreateBody?.priority).toBe('HIGH');
+  });
+
+  it('uses cached task data when available (no extra GET request)', async () => {
+    let getCallCount = 0;
+    let capturedCreateBody: Record<string, unknown> | null = null;
+
+    server.use(
+      http.get(`${BASE}/tasks/1`, () => {
+        getCallCount++;
+        return HttpResponse.json({ success: true, data: SOURCE_TASK });
+      }),
+      http.post(`${BASE}/tasks`, async ({ request }) => {
+        capturedCreateBody = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          success: true,
+          data: {
+            ...SOURCE_TASK,
+            id: 'copy-2',
+            title: capturedCreateBody.title,
+            status: capturedCreateBody.status,
+          },
+        });
+      })
+    );
+
+    // Pre-seed the cache
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    qc.setQueryData(['tasks', 'workspace', 'detail', '1'], SOURCE_TASK);
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+
+    const { result } = renderHook(
+      () => useTaskWorkspaceMutations(DEFAULT_ACTIVE_PARAMS),
+      { wrapper }
+    );
+
+    result.current.duplicateTask.mutate('1');
+
+    await waitFor(() => expect(result.current.duplicateTask.isSuccess).toBe(true), {
+      timeout: 5000,
+    });
+
+    // When cached, duplicateTask reads from cache without an extra GET
+    expect(getCallCount).toBe(0);
+    expect(capturedCreateBody?.title).toBe('Copy of My Task');
+  });
+});

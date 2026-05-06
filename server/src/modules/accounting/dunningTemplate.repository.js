@@ -13,7 +13,7 @@ class DunningTemplateRepository {
     return DunningTemplate.findOneAndUpdate(
       { level },
       { $set: data },
-      { new: true, upsert: true, runValidators: true },
+      { returnDocument: 'after', upsert: true, runValidators: true },
     ).lean();
   }
 }

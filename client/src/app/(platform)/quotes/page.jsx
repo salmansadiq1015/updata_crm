@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText } from 'lucide-react';
 import { PageHeader } from '@/shared/components/page-header';
 import { QuotationsTable } from '@/modules/qop/components/quotations-table';
 import { OrdersTable } from '@/modules/qop/components/orders-table';
@@ -23,9 +22,8 @@ export default function QuotesPage() {
   const [tab, setTab] = useState('quotations');
 
   return (
-    <div className="flex flex-col gap-5 max-w-6xl mx-auto w-full">
+    <div className="flex flex-col gap-5 w-full min-w-0">
       <PageHeader
-        icon={FileText}
         title={de ? 'Offerten, Aufträge & Rechnungen' : 'Quotations, Orders & Invoices'}
         description={de
           ? 'Kundenangebote erstellen, Aufträge verwalten und Rechnungen stellen'

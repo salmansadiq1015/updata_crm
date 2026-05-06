@@ -16,7 +16,7 @@ class DeployCounterService {
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
         { $inc: { seq: 1 } },
-        { new: true, upsert: true },
+        { returnDocument: 'after', upsert: true },
       );
       return `ASN-${year}-${String(counter.seq).padStart(5, '0')}`;
     } catch (err) {

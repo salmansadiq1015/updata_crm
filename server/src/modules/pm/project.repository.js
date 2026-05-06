@@ -72,7 +72,7 @@ class ProjectRepository {
 
   async updateById(id, data) {
     return Project.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     })
       .populate(POPULATE_FIELDS)
@@ -83,7 +83,7 @@ class ProjectRepository {
     return Project.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date(), status: 'ARCHIVED' },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

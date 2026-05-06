@@ -172,7 +172,7 @@ class AccountingDocumentService {
         assignedAt: new Date(),
         assignedBy,
       },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
 
     eventBus.publish(EVENT_TYPES.ACCOUNTING_DOCUMENT_ASSIGNED, {

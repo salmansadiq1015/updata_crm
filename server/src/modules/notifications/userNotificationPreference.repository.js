@@ -9,7 +9,7 @@ class UserNotificationPreferenceRepository {
     return UserNotificationPreference.findOneAndUpdate(
       { userId },
       { userId, ...data },
-      { new: true, upsert: true, runValidators: true },
+      { returnDocument: 'after', upsert: true, runValidators: true },
     ).lean();
   }
 

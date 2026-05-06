@@ -123,7 +123,7 @@ const dlqService = {
     const entry = await DlqEntry.findByIdAndUpdate(
       dlqEntryId,
       { status: 'resolved', resolvedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!entry) {

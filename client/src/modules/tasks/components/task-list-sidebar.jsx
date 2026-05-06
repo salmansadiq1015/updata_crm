@@ -105,9 +105,10 @@ export function TaskListSidebar({ activeListId, onSelectList }) {
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const { data: lists = [], isLoading } = useTaskLists();
+  const { data, isLoading } = useTaskLists();
   const { createList, updateList, removeList, archiveList } = useTaskListMutations();
 
+  const lists = Array.isArray(data) ? data : [];
   const activeLists = lists.filter((l) => !l.isArchived);
   const archivedLists = lists.filter((l) => l.isArchived);
 
@@ -117,15 +118,15 @@ export function TaskListSidebar({ activeListId, onSelectList }) {
 
   const handleUpdate = (data) => {
     if (!editTarget) return;
-    updateList.mutate({ id: editTarget._id, data }, { onSuccess: () => setEditTarget(null) });
+    updateList.mutate({ id: editTarget.id, data }, { onSuccess: () => setEditTarget(null) });
   };
 
   const handleDelete = () => {
     if (!deleteTarget) return;
-    removeList.mutate(deleteTarget._id, {
+    removeList.mutate(deleteTarget.id, {
       onSuccess: () => {
         setDeleteTarget(null);
-        if (activeListId === deleteTarget._id) onSelectList(null);
+        if (activeListId === deleteTarget.id) onSelectList(null);
       },
     });
   };
@@ -165,14 +166,14 @@ export function TaskListSidebar({ activeListId, onSelectList }) {
       )}
 
       {activeLists.map((list) => (
-        <div key={list._id} onClick={() => onSelectList(list._id)}>
+        <div key={list.id} onClick={() => onSelectList(list.id)}>
           <ListItem
             list={list}
-            active={activeListId === list._id}
+            active={activeListId === list.id}
             de={de}
             onEdit={setEditTarget}
             onDelete={setDeleteTarget}
-            onArchive={(l) => archiveList.mutate(l._id)}
+            onArchive={(l) => archiveList.mutate(l.id)}
           />
         </div>
       ))}
@@ -186,14 +187,14 @@ export function TaskListSidebar({ activeListId, onSelectList }) {
             </span>
           </div>
           {archivedLists.map((list) => (
-            <div key={list._id} onClick={() => onSelectList(list._id)} className="opacity-60">
+            <div key={list.id} onClick={() => onSelectList(list.id)} className="opacity-60">
               <ListItem
                 list={list}
-                active={activeListId === list._id}
+                active={activeListId === list.id}
                 de={de}
                 onEdit={setEditTarget}
                 onDelete={setDeleteTarget}
-                onArchive={(l) => archiveList.mutate(l._id)}
+                onArchive={(l) => archiveList.mutate(l.id)}
               />
             </div>
           ))}

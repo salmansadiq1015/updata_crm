@@ -93,7 +93,7 @@ class UserRepository {
 
   async updateById(id, data) {
     return User.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     })
       .populate('role', 'name')
@@ -104,7 +104,7 @@ class UserRepository {
     return User.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date(), status: 'deactivated' },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

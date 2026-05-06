@@ -188,7 +188,7 @@ export async function seedDatabase() {
         Permission.findOneAndUpdate(
           { module: def.module, action: def.action },
           { $setOnInsert: def },
-          { upsert: true, new: true },
+          { upsert: true, returnDocument: 'after' },
         ),
       ),
     );

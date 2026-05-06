@@ -32,11 +32,11 @@ class TaskListRepository {
   }
 
   async updateById(id, data) {
-    return TaskList.findByIdAndUpdate(id, data, { new: true, runValidators: true }).lean();
+    return TaskList.findByIdAndUpdate(id, data, { returnDocument: 'after', runValidators: true }).lean();
   }
 
   async softDelete(id) {
-    return TaskList.findByIdAndUpdate(id, { isDeleted: true, deletedAt: new Date() }, { new: true });
+    return TaskList.findByIdAndUpdate(id, { isDeleted: true, deletedAt: new Date() }, { returnDocument: 'after' });
   }
 
   async bulkUpdateSortOrder(updates) {

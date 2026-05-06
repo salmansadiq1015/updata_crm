@@ -9,7 +9,7 @@ class IghConfigRepository {
     return IghConfig.findOneAndUpdate(
       {},
       data,
-      { upsert: true, new: true, runValidators: true },
+      { upsert: true, returnDocument: 'after', runValidators: true },
     ).lean();
   }
 
@@ -17,7 +17,7 @@ class IghConfigRepository {
     return IghConfig.findOneAndUpdate(
       {},
       { lastSyncAt: date },
-      { new: true },
+      { returnDocument: 'after' },
     ).lean();
   }
 }

@@ -42,7 +42,7 @@ class PriceUpdateBatchRepository {
     return PriceUpdateBatch.findByIdAndUpdate(
       id,
       { status, ...additionalData },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 

@@ -39,7 +39,7 @@ class IntegrationSyncLogRepository {
 
   async updateById(id, data) {
     return IntegrationSyncLog.findByIdAndUpdate(id, data, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     }).lean();
   }

@@ -83,7 +83,7 @@ class ArticleRepository {
     return Article.findByIdAndUpdate(
       id,
       { ...data, $inc: { version: 1 } },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     )
       .populate(POPULATE_FIELDS)
       .lean();
@@ -93,7 +93,7 @@ class ArticleRepository {
     return Article.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true },
+      { returnDocument: 'after' },
     );
   }
 

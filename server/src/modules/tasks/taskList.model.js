@@ -11,6 +11,7 @@ const taskListSchema = new mongoose.Schema(
     icon: { type: String, trim: true, maxlength: 50, default: null },
     sortOrder: { type: Number, default: 0 },
     isDefault: { type: Boolean, default: false },
+    folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaskFolder', default: null },
     isArchived: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
@@ -22,6 +23,7 @@ taskListSchema.index({ ownerId: 1, isDeleted: 1 });
 taskListSchema.index({ type: 1 });
 taskListSchema.index({ isArchived: 1 });
 taskListSchema.index({ ownerId: 1, isDefault: 1 }, { unique: true, partialFilterExpression: { isDefault: true, isDeleted: false } });
+taskListSchema.index({ folderId: 1 }, { sparse: true });
 
 taskListSchema.pre(/^find/, function () {
   if (this.getOptions().includeDeleted) return;

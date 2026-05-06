@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/query/keys';
 import { quotationService } from '../services/quotation-service';
 import { orderService } from '../services/order-service';
 import { invoiceService } from '../services/invoice-service';
@@ -7,79 +6,106 @@ import { invoiceService } from '../services/invoice-service';
 export function useQuotationMutations() {
   const qc = useQueryClient();
   const invalidateList = () => qc.invalidateQueries({ queryKey: ['qop', 'quotations'] });
-  const invalidateDetail = (id) => qc.invalidateQueries({ queryKey: queryKeys.qop.quotationDetail(id) });
 
-  const create = useMutation({ mutationFn: quotationService.create, onSuccess: invalidateList });
-  const update = useMutation({
+  const createQuotation = useMutation({ mutationFn: quotationService.create, onSuccess: invalidateList });
+  const updateQuotation = useMutation({
     mutationFn: ({ id, data }) => quotationService.update(id, data),
-    onSuccess: (_, { id }) => { invalidateDetail(id); invalidateList(); },
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'quotations', 'detail', id] });
+      invalidateList();
+    },
   });
-  const remove = useMutation({ mutationFn: quotationService.remove, onSuccess: invalidateList });
-  const updateStatus = useMutation({
-    mutationFn: ({ id, status }) => quotationService.updateStatus(id, status),
-    onSuccess: (_, { id }) => { invalidateDetail(id); invalidateList(); },
+  const deleteQuotation = useMutation({ mutationFn: quotationService.remove, onSuccess: invalidateList });
+  const duplicateQuotation = useMutation({ mutationFn: quotationService.duplicate, onSuccess: invalidateList });
+  const sendQuotation = useMutation({
+    mutationFn: quotationService.send,
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'quotations', 'detail', id] });
+      invalidateList();
+    },
   });
-  const send = useMutation({
-    mutationFn: (id) => quotationService.send(id),
-    onSuccess: (_, id) => { invalidateDetail(id); invalidateList(); },
+  const convertQuotation = useMutation({
+    mutationFn: quotationService.convert,
+    onSuccess: () => {
+      invalidateList();
+      qc.invalidateQueries({ queryKey: ['qop', 'orders'] });
+    },
   });
-  const convert = useMutation({
-    mutationFn: (id) => quotationService.convert(id),
-    onSuccess: () => { invalidateList(); qc.invalidateQueries({ queryKey: ['qop', 'orders'] }); },
+  const transitionQuotationStatus = useMutation({
+    mutationFn: ({ id, targetStatus, reason }) => quotationService.transitionStatus(id, targetStatus, reason),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'quotations', 'detail', id] });
+      invalidateList();
+    },
   });
-  const duplicate = useMutation({ mutationFn: (id) => quotationService.duplicate(id), onSuccess: invalidateList });
 
-  return { create, update, remove, updateStatus, send, convert, duplicate };
+  return {
+    createQuotation, updateQuotation, deleteQuotation,
+    duplicateQuotation, sendQuotation, convertQuotation, transitionQuotationStatus,
+  };
 }
 
 export function useOrderMutations() {
   const qc = useQueryClient();
   const invalidateList = () => qc.invalidateQueries({ queryKey: ['qop', 'orders'] });
-  const invalidateDetail = (id) => qc.invalidateQueries({ queryKey: queryKeys.qop.orderDetail(id) });
 
-  const create = useMutation({ mutationFn: orderService.create, onSuccess: invalidateList });
-  const update = useMutation({
+  const updateOrder = useMutation({
     mutationFn: ({ id, data }) => orderService.update(id, data),
-    onSuccess: (_, { id }) => { invalidateDetail(id); invalidateList(); },
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'orders', 'detail', id] });
+      invalidateList();
+    },
   });
-  const updateStatus = useMutation({
-    mutationFn: ({ id, status }) => orderService.updateStatus(id, status),
-    onSuccess: (_, { id }) => { invalidateDetail(id); invalidateList(); },
+  const transitionOrderStatus = useMutation({
+    mutationFn: ({ id, targetStatus, reason }) => orderService.transitionStatus(id, targetStatus, reason),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'orders', 'detail', id] });
+      invalidateList();
+    },
   });
 
-  return { create, update, updateStatus };
+  return { updateOrder, transitionOrderStatus };
 }
 
 export function useInvoiceMutations() {
   const qc = useQueryClient();
   const invalidateList = () => qc.invalidateQueries({ queryKey: ['qop', 'invoices'] });
-  const invalidateDetail = (id) => qc.invalidateQueries({ queryKey: queryKeys.qop.invoiceDetail(id) });
 
-  const create = useMutation({ mutationFn: invoiceService.create, onSuccess: invalidateList });
-  const update = useMutation({
-    mutationFn: ({ id, data }) => invoiceService.update(id, data),
-    onSuccess: (_, { id }) => { invalidateDetail(id); invalidateList(); },
+  const createInvoice = useMutation({ mutationFn: invoiceService.create, onSuccess: invalidateList });
+  const createAdvanceInvoice = useMutation({ mutationFn: invoiceService.createAdvance, onSuccess: invalidateList });
+  const createFinalInvoice = useMutation({ mutationFn: invoiceService.createFinal, onSuccess: invalidateList });
+  const finalizeInvoice = useMutation({
+    mutationFn: invoiceService.finalize,
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'invoices', 'detail', id] });
+      invalidateList();
+    },
   });
-  const updateStatus = useMutation({
-    mutationFn: ({ id, status }) => invoiceService.updateStatus(id, status),
-    onSuccess: (_, { id }) => { invalidateDetail(id); invalidateList(); },
+  const sendInvoice = useMutation({
+    mutationFn: invoiceService.send,
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'invoices', 'detail', id] });
+      invalidateList();
+    },
   });
-  const finalize = useMutation({
-    mutationFn: (id) => invoiceService.finalize(id),
-    onSuccess: (_, id) => { invalidateDetail(id); invalidateList(); },
-  });
-  const send = useMutation({
-    mutationFn: (id) => invoiceService.send(id),
-    onSuccess: (_, id) => { invalidateDetail(id); invalidateList(); },
-  });
-  const addPayment = useMutation({
-    mutationFn: ({ id, data }) => invoiceService.addPayment(id, data),
+  const recordPayment = useMutation({
+    mutationFn: ({ id, data }) => invoiceService.recordPayment(id, data),
     onSuccess: (_, { id }) => {
-      qc.invalidateQueries({ queryKey: queryKeys.qop.invoicePayments(id) });
-      invalidateDetail(id);
+      qc.invalidateQueries({ queryKey: ['qop', 'invoices', 'detail', id] });
+      qc.invalidateQueries({ queryKey: ['qop', 'invoices', 'payments', id] });
+      invalidateList();
+    },
+  });
+  const transitionInvoiceStatus = useMutation({
+    mutationFn: ({ id, targetStatus, reason }) => invoiceService.transitionStatus(id, targetStatus, reason),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'invoices', 'detail', id] });
       invalidateList();
     },
   });
 
-  return { create, update, updateStatus, finalize, send, addPayment };
+  return {
+    createInvoice, createAdvanceInvoice, createFinalInvoice,
+    finalizeInvoice, sendInvoice, recordPayment, transitionInvoiceStatus,
+  };
 }

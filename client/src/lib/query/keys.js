@@ -200,6 +200,11 @@ export const queryKeys = {
     invoiceDetail: (id) => ['qop', 'invoices', 'detail', id],
     invoicePayments: (id) => ['qop', 'invoices', 'payments', id],
     invoiceHistory: (id) => ['qop', 'invoices', 'history', id],
+    search: (params) => ['qop', 'search', params],
+    pipeline: () => ['qop', 'pipeline'],
+    aging: () => ['qop', 'aging'],
+    customerDocs: (customerId) => ['qop', 'customerDocs', customerId],
+    projectDocs: (projectId) => ['qop', 'projectDocs', projectId],
   },
   tasks: {
     all: () => ['tasks'],

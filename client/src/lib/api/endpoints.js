@@ -288,6 +288,20 @@ export const ENDPOINTS = Object.freeze({
     INVOICE_SEND: (id) => `/qop/invoices/${id}/send`,
     INVOICE_PAYMENTS: (id) => `/qop/invoices/${id}/payments`,
     INVOICE_HISTORY: (id) => `/qop/invoices/${id}/history`,
+    // Extended endpoints
+    QUOTATION_GENERATE_DOC: (id) => `/qop/quotations/${id}/documents/generate`,
+    QUOTATION_SNOOZE_REMINDER: (id, remId) => `/qop/quotations/${id}/reminders/${remId}/snooze`,
+    ORDER_GENERATE_DOC: (id) => `/qop/orders/${id}/documents/generate`,
+    INVOICE_ADVANCE: '/qop/invoices/advance',
+    INVOICE_FINAL: '/qop/invoices/final',
+    INVOICE_RECORD_PAYMENT: (id) => `/qop/invoices/${id}/payments`,
+    INVOICE_GENERATE_DOC: (id) => `/qop/invoices/${id}/documents/generate`,
+    QOP_SEARCH: '/qop/documents/search',
+    QOP_CUSTOMER_DOCS: (customerId) => `/qop/documents/customer/${customerId}`,
+    QOP_PROJECT_DOCS: (projectId) => `/qop/documents/project/${projectId}`,
+    QOP_INVOICE_AGING: '/qop/documents/invoices/aging',
+    QOP_PIPELINE: '/qop/documents/quotations/pipeline',
+    NUMBER_SEQUENCES: '/qop/numbering/sequences',
   },
   AI: {
     // Voice sessions

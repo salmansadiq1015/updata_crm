@@ -3,17 +3,13 @@ import { queryKeys } from '@/lib/query/keys';
 import { quotationService } from '../services/quotation-service';
 import { orderService } from '../services/order-service';
 import { invoiceService } from '../services/invoice-service';
-
-const selectArray = (data) => (Array.isArray(data) ? data : (data?.data ?? data?.items ?? []));
-const selectOne = (data) => data?.data ?? data;
-
-// ── Quotations ────────────────────────────────────────────────────────────────
+import { searchService } from '../services/search-service';
 
 export function useQuotations(filters = {}) {
   return useQuery({
     queryKey: queryKeys.qop.quotations(filters),
     queryFn: () => quotationService.list(filters),
-    select: selectArray,
+    select: (r) => ({ items: Array.isArray(r.data) ? r.data : [], pagination: r.pagination }),
   });
 }
 
@@ -22,7 +18,7 @@ export function useQuotationDetail(id) {
     queryKey: queryKeys.qop.quotationDetail(id),
     queryFn: () => quotationService.getById(id),
     enabled: !!id,
-    select: selectOne,
+    select: (r) => r.data,
   });
 }
 
@@ -31,17 +27,15 @@ export function useQuotationHistory(id) {
     queryKey: queryKeys.qop.quotationHistory(id),
     queryFn: () => quotationService.getHistory(id),
     enabled: !!id,
-    select: selectArray,
+    select: (r) => Array.isArray(r.data) ? r.data : [],
   });
 }
-
-// ── Orders ────────────────────────────────────────────────────────────────────
 
 export function useOrders(filters = {}) {
   return useQuery({
     queryKey: queryKeys.qop.orders(filters),
     queryFn: () => orderService.list(filters),
-    select: selectArray,
+    select: (r) => ({ items: Array.isArray(r.data) ? r.data : [], pagination: r.pagination }),
   });
 }
 
@@ -50,7 +44,7 @@ export function useOrderDetail(id) {
     queryKey: queryKeys.qop.orderDetail(id),
     queryFn: () => orderService.getById(id),
     enabled: !!id,
-    select: selectOne,
+    select: (r) => r.data,
   });
 }
 
@@ -59,17 +53,24 @@ export function useOrderInvoices(id) {
     queryKey: queryKeys.qop.orderInvoices(id),
     queryFn: () => orderService.getInvoices(id),
     enabled: !!id,
-    select: selectArray,
+    select: (r) => Array.isArray(r.data) ? r.data : [],
   });
 }
 
-// ── Invoices ──────────────────────────────────────────────────────────────────
+export function useOrderHistory(id) {
+  return useQuery({
+    queryKey: queryKeys.qop.orderHistory(id),
+    queryFn: () => orderService.getHistory(id),
+    enabled: !!id,
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+  });
+}
 
 export function useInvoices(filters = {}) {
   return useQuery({
     queryKey: queryKeys.qop.invoices(filters),
     queryFn: () => invoiceService.list(filters),
-    select: selectArray,
+    select: (r) => ({ items: Array.isArray(r.data) ? r.data : [], pagination: r.pagination }),
   });
 }
 
@@ -78,7 +79,7 @@ export function useInvoiceDetail(id) {
     queryKey: queryKeys.qop.invoiceDetail(id),
     queryFn: () => invoiceService.getById(id),
     enabled: !!id,
-    select: selectOne,
+    select: (r) => r.data,
   });
 }
 
@@ -87,6 +88,40 @@ export function useInvoicePayments(id) {
     queryKey: queryKeys.qop.invoicePayments(id),
     queryFn: () => invoiceService.getPayments(id),
     enabled: !!id,
-    select: selectArray,
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+  });
+}
+
+export function useInvoiceHistory(id) {
+  return useQuery({
+    queryKey: queryKeys.qop.invoiceHistory(id),
+    queryFn: () => invoiceService.getHistory(id),
+    enabled: !!id,
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+  });
+}
+
+export function useQopSearch(params = {}) {
+  return useQuery({
+    queryKey: queryKeys.qop.search(params),
+    queryFn: () => searchService.search(params),
+    enabled: !!params.q,
+    select: (r) => r.data ?? [],
+  });
+}
+
+export function useQopPipeline() {
+  return useQuery({
+    queryKey: queryKeys.qop.pipeline(),
+    queryFn: () => searchService.pipeline(),
+    select: (r) => r.data,
+  });
+}
+
+export function useInvoiceAging() {
+  return useQuery({
+    queryKey: queryKeys.qop.aging(),
+    queryFn: () => searchService.invoiceAging(),
+    select: (r) => r.data,
   });
 }

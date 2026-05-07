@@ -16,7 +16,7 @@ const lineItemSchema = Joi.object({
   quantity: Joi.number().min(0),
   unitPrice: Joi.number().min(0),
   discountPercent: Joi.number().min(0).max(100),
-  vatRate: Joi.number(),
+  vatRate: Joi.number().valid(0, 2.6, 8.1).required(),
 });
 
 export const createQuotationSchema = {
@@ -25,13 +25,13 @@ export const createQuotationSchema = {
     customerName: Joi.string().required().trim().max(255),
     contactId: objectId.allow(null),
     projectId: objectId.allow(null),
-    departmentId: objectId.allow(null),
+    departmentId: objectId.required(),
     language: Joi.string().valid('de', 'fr', 'it', 'en'),
     title: Joi.string().max(500).allow(''),
     introduction: Joi.string().max(5000).allow(''),
     validUntil: Joi.date().iso().required(),
     currency: Joi.string().valid('CHF', 'EUR'),
-    lineItems: Joi.array().items(lineItemSchema).min(1),
+    lineItems: Joi.array().items(lineItemSchema).min(1).max(50),
     globalDiscountPercent: Joi.number().min(0).max(100),
     paymentTerms: Joi.string().max(1000).allow(''),
     notes: Joi.string().max(5000).allow(''),
@@ -54,7 +54,7 @@ export const updateQuotationSchema = {
     introduction: Joi.string().max(5000).allow(''),
     validUntil: Joi.date().iso(),
     currency: Joi.string().valid('CHF', 'EUR'),
-    lineItems: Joi.array().items(lineItemSchema).min(1),
+    lineItems: Joi.array().items(lineItemSchema).min(1).max(50),
     globalDiscountPercent: Joi.number().min(0).max(100),
     paymentTerms: Joi.string().max(1000).allow(''),
     notes: Joi.string().max(5000).allow(''),
@@ -67,7 +67,7 @@ export const listQuotationsSchema = {
   query: cursorPagination.keys({
     status: Joi.string().valid(...QUOTATION_STATUSES),
     customerId: objectId,
-    departmentId: objectId,
+    departmentId: Joi.alternatives().try(objectId, Joi.array().items(objectId)),
     assignedUserId: objectId,
     currency: Joi.string().valid('CHF', 'EUR'),
     search: Joi.string().trim().max(100),
@@ -96,6 +96,9 @@ export const sendSchema = {
 
 export const convertSchema = {
   params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    selectedLineItemIds: Joi.array().items(objectId).min(1).optional(),
+  }),
 };
 
 export const snoozeReminderSchema = {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw, Plus } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -17,6 +17,7 @@ import { OrderStatusBadge, InvoiceStatusBadge, InvoiceTypeBadge } from './status
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
 import { orderService } from '../services/order-service';
+import { InvoiceFormDialog } from './invoice-form-dialog';
 
 // Valid order transitions
 const ORDER_TRANSITIONS = {
@@ -128,31 +129,47 @@ function LineItemsTab({ order, de }) {
   );
 }
 
-function InvoicesTab({ orderId, de, language }) {
+function InvoicesTab({ orderId, de, language, onCreateInvoice }) {
   const { data: invoices = [], isLoading } = useOrderInvoices(orderId);
   const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
-  if (isLoading) return <Skeleton className="h-32 w-full" />;
-  if (!invoices.length) return (
-    <p className="text-sm text-muted-foreground py-6 text-center">
-      {de ? 'Keine Rechnungen.' : 'No invoices yet.'}
-    </p>
-  );
+
   return (
-    <div className="rounded-lg border border-border overflow-hidden text-sm">
-      <div className="grid grid-cols-[8rem_6rem_7rem_7rem_1fr] bg-muted/50 border-b text-xs font-medium text-muted-foreground">
-        {[de ? 'Nummer' : 'Number', de ? 'Typ' : 'Type', de ? 'Status' : 'Status', de ? 'Fällig' : 'Due', de ? 'Betrag' : 'Amount'].map((h, i) => (
-          <div key={i} className={`px-3 py-2 ${i === 4 ? 'text-right' : ''}`}>{h}</div>
-        ))}
+    <div className="flex flex-col gap-3">
+      <div className="flex gap-2 justify-end flex-wrap">
+        <Button size="sm" variant="outline" onClick={() => onCreateInvoice('STANDARD')}>
+          <Plus className="h-4 w-4 mr-1.5" />{de ? 'Rechnung' : 'Invoice'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => onCreateInvoice('ADVANCE')}>
+          <Plus className="h-4 w-4 mr-1.5" />{de ? 'Akontorechnung' : 'Advance'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => onCreateInvoice('FINAL')}>
+          <Plus className="h-4 w-4 mr-1.5" />{de ? 'Schlussrechnung' : 'Final'}
+        </Button>
       </div>
-      {invoices.map((inv) => (
-        <div key={inv._id ?? inv.id} className="grid grid-cols-[8rem_6rem_7rem_7rem_1fr] border-b last:border-0 hover:bg-muted/20">
-          <div className="px-3 py-2.5 font-mono text-muted-foreground">{inv.invoiceNumber}</div>
-          <div className="px-3 py-2.5"><InvoiceTypeBadge type={inv.invoiceType} /></div>
-          <div className="px-3 py-2.5"><InvoiceStatusBadge status={inv.status} /></div>
-          <div className="px-3 py-2.5 text-muted-foreground">{fmtDate(inv.dueDate, language)}</div>
-          <div className="px-3 py-2.5 text-right font-medium">{fmt(inv.grandTotalRounded ?? inv.grandTotal)} {inv.currency}</div>
+      {isLoading && <Skeleton className="h-32 w-full" />}
+      {!isLoading && invoices.length === 0 && (
+        <p className="text-sm text-muted-foreground py-6 text-center">
+          {de ? 'Keine Rechnungen.' : 'No invoices yet.'}
+        </p>
+      )}
+      {!isLoading && invoices.length > 0 && (
+        <div className="rounded-lg border border-border overflow-hidden text-sm">
+          <div className="grid grid-cols-[8rem_6rem_7rem_7rem_1fr] bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+            {[de ? 'Nummer' : 'Number', de ? 'Typ' : 'Type', de ? 'Status' : 'Status', de ? 'Fällig' : 'Due', de ? 'Betrag' : 'Amount'].map((h, i) => (
+              <div key={i} className={`px-3 py-2 ${i === 4 ? 'text-right' : ''}`}>{h}</div>
+            ))}
+          </div>
+          {invoices.map((inv) => (
+            <div key={inv._id ?? inv.id} className="grid grid-cols-[8rem_6rem_7rem_7rem_1fr] border-b last:border-0 hover:bg-muted/20">
+              <div className="px-3 py-2.5 font-mono text-muted-foreground">{inv.invoiceNumber}</div>
+              <div className="px-3 py-2.5"><InvoiceTypeBadge type={inv.invoiceType} /></div>
+              <div className="px-3 py-2.5"><InvoiceStatusBadge status={inv.status} /></div>
+              <div className="px-3 py-2.5 text-muted-foreground">{fmtDate(inv.dueDate, language)}</div>
+              <div className="px-3 py-2.5 text-right font-medium">{fmt(inv.grandTotalRounded ?? inv.grandTotal)} {inv.currency}</div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -163,6 +180,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
   const [tab, setTab] = useState('overview');
   const [transitionTarget, setTransitionTarget] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [invoiceType, setInvoiceType] = useState(null);
 
   const { data: order, isLoading } = useOrderDetail(open ? orderId : null);
   const { data: history = [] } = useOrderHistory(open && tab === 'history' ? orderId : null);
@@ -216,7 +234,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
                 <LineItemsTab order={order} de={de} />
               </TabsContent>
               <TabsContent value="invoices" className="mt-4">
-                <InvoicesTab orderId={orderId} de={de} language={language} />
+                <InvoicesTab orderId={orderId} de={de} language={language} onCreateInvoice={setInvoiceType} />
               </TabsContent>
               <TabsContent value="history" className="mt-4">
                 <DocumentHistoryTimeline history={history} />
@@ -225,6 +243,17 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Create invoice from order */}
+      {invoiceType && (
+        <InvoiceFormDialog
+          open={!!invoiceType}
+          onClose={() => setInvoiceType(null)}
+          type={invoiceType}
+          sourceOrderId={orderId}
+          sourceOrder={order}
+        />
+      )}
 
       {/* Confirm status transition */}
       <Dialog open={!!transitionTarget} onOpenChange={() => setTransitionTarget(null)}>

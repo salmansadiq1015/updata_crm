@@ -30,6 +30,8 @@ const EMPTY_FORM = () => ({
   customerId: '',
   customerName: '',
   departmentId: '',
+  projectId: '',
+  language: 'de',
   currency: 'CHF',
   validUntil: addDays(new Date(), DEFAULT_VALIDITY_DAYS),
   globalDiscountPercent: 0,
@@ -59,6 +61,22 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
     select: (r) => r.data ?? [],
   });
 
+  // Department list
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => apiClient.get('/admin/departments'),
+    select: (r) => r.data ?? [],
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Projects for selected customer
+  const { data: projects = [] } = useQuery({
+    queryKey: ['pm', 'projects', 'for-customer', form.customerId],
+    queryFn: () => apiClient.get(ENDPOINTS.PM.PROJECTS, { params: { customerId: form.customerId, limit: 50, status: 'ACTIVE' } }),
+    enabled: !!form.customerId,
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+  });
+
   // Populate form on edit
   useEffect(() => {
     if (quotation) {
@@ -66,6 +84,8 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
         customerId: quotation.customerId ?? quotation.customer?._id ?? '',
         customerName: quotation.customerName ?? quotation.customer?.name ?? '',
         departmentId: quotation.departmentId ?? '',
+        projectId: quotation.projectId ?? '',
+        language: quotation.language ?? 'de',
         currency: quotation.currency ?? 'CHF',
         validUntil: quotation.validUntil?.slice(0, 10) ?? addDays(new Date(), DEFAULT_VALIDITY_DAYS),
         globalDiscountPercent: quotation.globalDiscountPercent ?? 0,
@@ -100,6 +120,8 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
       customerId: form.customerId,
       customerName: form.customerName,
       departmentId: form.departmentId || undefined,
+      projectId: form.projectId || undefined,
+      language: form.language,
       currency: form.currency,
       validUntil: form.validUntil,
       globalDiscountPercent: Number(form.globalDiscountPercent) || 0,
@@ -184,6 +206,51 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
               />
             </div>
 
+            {/* Department (required) */}
+            <div className="flex flex-col gap-1.5">
+              <Label>{de ? 'Abteilung *' : 'Department *'}</Label>
+              <Select value={form.departmentId} onValueChange={(v) => set('departmentId', v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder={de ? 'Abteilung wählen...' : 'Select department...'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((d) => (
+                    <SelectItem key={d._id ?? d.id} value={d._id ?? d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Project (optional) */}
+            <div className="flex flex-col gap-1.5">
+              <Label>{de ? 'Projekt (optional)' : 'Project (optional)'}</Label>
+              <Select value={form.projectId || 'NONE'} onValueChange={(v) => set('projectId', v === 'NONE' ? '' : v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder={de ? 'Kein Projekt' : 'No project'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">{de ? '— Kein Projekt —' : '— No project —'}</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p._id ?? p.id} value={p._id ?? p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Document Language */}
+            <div className="flex flex-col gap-1.5">
+              <Label>{de ? 'Dokument-Sprache' : 'Document Language'}</Label>
+              <Select value={form.language} onValueChange={(v) => set('language', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="de">Deutsch</SelectItem>
+                  <SelectItem value="fr">Français</SelectItem>
+                  <SelectItem value="it">Italiano</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Global discount */}
             <div className="flex flex-col gap-1.5">
               <Label>{de ? 'Globalrabatt %' : 'Global Discount %'}</Label>
@@ -241,7 +308,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
               {de ? 'Abbrechen' : 'Cancel'}
             </Button>
-            <Button type="submit" disabled={isPending || !form.customerId}>
+            <Button type="submit" disabled={isPending || !form.customerId || !form.departmentId}>
               {isPending
                 ? (de ? 'Speichern...' : 'Saving...')
                 : isEdit ? (de ? 'Aktualisieren' : 'Update') : (de ? 'Erstellen' : 'Create')}

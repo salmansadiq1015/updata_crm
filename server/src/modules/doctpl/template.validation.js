@@ -126,12 +126,12 @@ export const createTemplateSchema = {
     layout: Joi.object({
       pageSize: Joi.string().valid('A4', 'Letter').default('A4'),
       orientation: Joi.string().valid('portrait', 'landscape').default('portrait'),
-      margins: Joi.object({ top: Joi.number().default(25), bottom: Joi.number().default(20), left: Joi.number().default(20), right: Joi.number().default(15) }),
+      margins: Joi.object({ top: Joi.number().min(0).max(50).default(25), bottom: Joi.number().min(0).max(50).default(20), left: Joi.number().min(0).max(50).default(20), right: Joi.number().min(0).max(50).default(15) }),
       headerHeight: Joi.number().default(45),
       footerHeight: Joi.number().default(30),
     }),
     sections: Joi.array().items(Joi.object({ id: Joi.string().required(), name: Joi.string().required(), type: Joi.string().valid('header','body','table','totals','deductions','qr_bill','footer','custom').required(), position: Joi.number().required(), isVisible: Joi.boolean().default(true), isConditional: Joi.boolean().default(false), conditionField: Joi.string().allow(null,''), config: Joi.object().default({}) })),
     textBlocks: Joi.object(),
-    tableColumns: Joi.array(),
+    tableColumns: Joi.array().items(Joi.object({ field: Joi.string().required(), widthPercent: Joi.number().min(1).max(100).required(), label: Joi.object().default({}) })).custom((cols, helpers) => { if (!cols || cols.length === 0) return cols; const sum = cols.reduce((s, c) => s + (c.widthPercent || 0), 0); if (Math.abs(sum - 100) > 1) return helpers.error('any.invalid'); return cols; }).messages({ 'any.invalid': 'Column widths must sum to 100%' }),
   }),
 };

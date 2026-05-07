@@ -3,6 +3,8 @@
 import { useRef, useEffect } from 'react';
 import { CheckCircle2, XCircle, MinusCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AiChatMessage } from './ai-chat-message';
 import { AiChatTypingIndicator } from './ai-chat-typing-indicator';
@@ -11,6 +13,55 @@ import { AiProgressSteps } from '../status/ai-progress-steps';
 import { AiRunSteps } from '../history/ai-run-steps';
 import { AGENT_STATUSES, WORKFLOW_LABELS } from '../../constants/ai-constants';
 import { useMessageRetry } from '../../hooks/use-message-retry';
+
+const MD_COMPONENTS = {
+  p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+  h1: ({ children }) => <h1 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="text-sm font-bold mb-1.5 mt-3 first:mt-0">{children}</h2>,
+  h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h3>,
+  ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2 hover:opacity-80">
+      {children}
+    </a>
+  ),
+  code: ({ className, children, ...rest }) => {
+    const isBlock = /language-(\w+)/.exec(className || '');
+    return isBlock ? (
+      <code className="block bg-muted p-3 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre" {...rest}>
+        {children}
+      </code>
+    ) : (
+      <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...rest}>{children}</code>
+    );
+  },
+  pre: ({ children }) => <pre className="mb-2 last:mb-0 rounded-lg overflow-hidden">{children}</pre>,
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-primary/40 pl-3 italic text-muted-foreground mb-2">{children}</blockquote>
+  ),
+  table: ({ children }) => (
+    <div className="overflow-x-auto mb-2">
+      <table className="text-xs border-collapse w-full">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => <th className="border border-border px-2 py-1 font-semibold bg-muted text-left">{children}</th>,
+  td: ({ children }) => <td className="border border-border px-2 py-1">{children}</td>,
+  hr: () => <hr className="my-2 border-border" />,
+};
+
+function MarkdownMessage({ content }) {
+  return (
+    <div className="text-sm">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 function getRunOutputText(run) {
   if (run.output?.message && typeof run.output.message === 'string') return run.output.message;
@@ -50,7 +101,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
 
   if (status === AGENT_STATUSES.COMPLETED) {
     if (output?.message && typeof output.message === 'string') {
-      return <p className="text-sm leading-relaxed">{output.message}</p>;
+      return <MarkdownMessage content={output.message} />;
     }
     return (
       <div className="flex flex-col gap-3">
@@ -60,7 +111,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
         </div>
         {output && (
           <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 overflow-auto max-h-40 border">
-            <pre className="whitespace-pre-wrap break-words">
+            <pre className="whitespace-pre-wrap wrap-break-word">
               {typeof output === 'string' ? output : JSON.stringify(output, null, 2)}
             </pre>
           </div>

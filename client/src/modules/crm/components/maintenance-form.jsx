@@ -1,14 +1,14 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { createMaintenanceSchema } from '@/modules/crm/validations/maintenance';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FormField, FormBody } from '@/components/ui/form-field';
 import { Loader2, Wrench } from 'lucide-react';
@@ -33,7 +33,7 @@ const toDateInput = (v) => {
 export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, setValue, watch, control, formState: { errors } } = useForm({
     resolver: zodResolver(createMaintenanceSchema),
     defaultValues: BLANK,
   });
@@ -70,7 +70,7 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-120">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wrench className="h-4.5 w-4.5 text-primary" />
@@ -123,7 +123,20 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
             </div>
 
             <FormField label={t('crm.notes', 'Notizen')} error={errors.notes?.message}>
-              <Textarea rows={2} {...register('notes')} />
+              <Controller
+                name="notes"
+                control={control}
+                render={({ field }) => (
+                  <RichTextEditor
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder={t('crm.maintenance.notesPlaceholder', 'Notizen zur Wartung...')}
+                    maxLength={2000}
+                    minHeight={120}
+                    error={errors.notes}
+                  />
+                )}
+              />
             </FormField>
           </FormBody>
 

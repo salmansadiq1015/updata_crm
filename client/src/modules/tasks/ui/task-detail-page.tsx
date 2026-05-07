@@ -20,6 +20,7 @@ import { TaskChatPanel } from './task-chat-panel';
 import { TaskFileViewer } from './task-file-viewer';
 import { TaskInlineField } from './task-inline-field';
 import { AssigneeSelector } from './assignee-selector';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import type { Task, TaskPatch } from '../types/task-types';
 import {
   TASK_STATUSES, TASK_PRIORITIES,
@@ -187,17 +188,12 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
             </h3>
             {descEditMode ? (
               <div className="space-y-2">
-                <textarea
-                  autoFocus
+                <RichTextEditor
                   value={descDraft}
-                  onChange={(e) => setDescDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') { setDescEditMode(false); }
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveDesc();
-                  }}
-                  rows={6}
+                  onChange={setDescDraft}
                   placeholder="Add a description…"
-                  className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  minHeight={160}
+                  maxLength={10000}
                 />
                 <div className="flex gap-2">
                   <Button size="sm" className="h-7 text-xs" onClick={saveDesc}>Save</Button>

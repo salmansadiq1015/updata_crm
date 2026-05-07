@@ -10,7 +10,12 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git push *)",
-      "Bash(node -e \"import\\('./src/modules/ai/agent/agent.service.js'\\).then\\(\\(\\) => console.log\\('OK'\\)\\).catch\\(e => console.error\\(e.message\\)\\)\")"
+      "Bash(node -e \"import\\('./src/modules/ai/agent/agent.service.js'\\).then\\(\\(\\) => console.log\\('OK'\\)\\).catch\\(e => console.error\\(e.message\\)\\)\")",
+      "Bash(New-Item -ItemType Directory -Force \"D:\\\\Animmza\\\\Boiler\\\\client\\\\src\\\\modules\\\\qop\\\\constants\")",
+      "Bash(Out-Null)",
+      "Bash(New-Item -ItemType Directory -Force \"D:\\\\Animmza\\\\Boiler\\\\client\\\\src\\\\modules\\\\qop\\\\services\")",
+      "Bash(New-Item -ItemType Directory -Force \"D:\\\\Animmza\\\\Boiler\\\\client\\\\src\\\\modules\\\\qop\\\\hooks\")",
+      "Bash(Write-Output \"Directories created\")"
     ]
   }
 }

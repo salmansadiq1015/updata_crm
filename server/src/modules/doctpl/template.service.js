@@ -29,6 +29,31 @@ class TemplateService {
     );
   }
 
+  async create(data, userId, meta = {}) {
+    const created = await documentTemplateRepository.create({ ...data, createdBy: userId });
+    await this._invalidateListCache();
+
+    eventBus.publish(EVENT_TYPES.DOCTPL_TEMPLATE_UPDATED, {
+      templateId: created._id,
+      templateType: created.templateType,
+      createdBy: userId,
+    }, { source: 'doctpl:templates' });
+
+    auditService.logEvent({
+      eventType: 'doctpl.template.created',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { templateId: created._id, templateType: created.templateType },
+      module: 'doctpl',
+    });
+
+    logger.info('Template created', { module: 'doctpl', action: 'create', templateId: created._id, templateType: created.templateType });
+
+    return created;
+  }
+
   async getById(id) {
     const cacheKey = `doctpl:template:${id}`;
     const template = await cacheManager.getOrSet(

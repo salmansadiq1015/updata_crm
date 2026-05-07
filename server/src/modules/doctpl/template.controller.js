@@ -1,6 +1,14 @@
 import templateService from './template.service.js';
 
 class TemplateController {
+  async create(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const template = await templateService.create(req.body, req.user._id, meta);
+      return res.success({ data: template, statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;

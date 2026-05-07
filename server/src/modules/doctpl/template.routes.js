@@ -4,10 +4,13 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   listTemplatesSchema, templateIdParamSchema, updateTemplateSchema,
-  versionParamSchema, previewSchema,
+  versionParamSchema, previewSchema, createTemplateSchema,
 } from './template.validation.js';
 
 const router = Router();
+
+// Create
+router.post('/', authenticate, requirePermission('templates:write'), validate(createTemplateSchema), (req, res, next) => templateController.create(req, res, next));
 
 // List & detail
 router.get('/', authenticate, requirePermission('templates:read'), validate(listTemplatesSchema), (req, res, next) => templateController.list(req, res, next));

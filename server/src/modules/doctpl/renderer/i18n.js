@@ -1,0 +1,8 @@
+export const LABELS = {
+  de: { subtotal:'Zwischensumme', vat:'MwSt.', grandTotal:'Gesamtbetrag', advanceDeduction:'Abzüglich Akonto', netBalance:'Nettobetrag', page:'Seite', of:'von', position:'Pos.', description:'Beschreibung', quantity:'Menge', unitPrice:'Einzelpreis', discount:'Rabatt', total:'Total', optional:'(optional)', validUntil:'Gültig bis', dueDate:'Fällig am', currency:'CHF' },
+  fr: { subtotal:'Sous-total', vat:'TVA', grandTotal:'Total général', advanceDeduction:'Déduction acompte', netBalance:'Montant net', page:'Page', of:'sur', position:'Pos.', description:'Description', quantity:'Quantité', unitPrice:'Prix unitaire', discount:'Remise', total:'Total', optional:'(optionnel)', validUntil:"Valable jusqu'au", dueDate:'Échéance', currency:'CHF' },
+  it: { subtotal:'Totale parziale', vat:'IVA', grandTotal:'Totale complessivo', advanceDeduction:'Deduzione acconto', netBalance:'Importo netto', page:'Pagina', of:'di', position:'Pos.', description:'Descrizione', quantity:'Quantità', unitPrice:'Prezzo unitario', discount:'Sconto', total:'Totale', optional:'(opzionale)', validUntil:'Valido fino al', dueDate:'Scadenza', currency:'CHF' },
+  en: { subtotal:'Subtotal', vat:'VAT', grandTotal:'Grand Total', advanceDeduction:'Less advance payments', netBalance:'Net balance', page:'Page', of:'of', position:'Pos.', description:'Description', quantity:'Qty', unitPrice:'Unit Price', discount:'Discount', total:'Total', optional:'(optional)', validUntil:'Valid until', dueDate:'Due date', currency:'CHF' },
+};
+
+export const t = (language, key) => LABELS[language]?.[key] ?? LABELS.de[key] ?? key;

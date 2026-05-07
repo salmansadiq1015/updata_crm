@@ -1,0 +1,46 @@
+import { t } from '../i18n.js';
+
+export default class FooterRenderer {
+  constructor(doc, pageManager, ciConfig, language) {
+    this.doc = doc;
+    this.pm = pageManager;
+    this.ci = ciConfig;
+    this.lang = language;
+    this.footerYPositions = [];
+    doc.on('pageAdded', () => this._drawFooterLayout());
+    this._drawFooterLayout();
+  }
+
+  _drawFooterLayout() {
+    const y = this.pm.footerY + 5;
+    this.footerYPositions.push({ pageIndex: this.pm.pageCount - 1, y });
+    const doc = this.doc;
+    const left = this.pm.margins.left;
+    const width = this.pm.contentWidth;
+    doc.save();
+    doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.5).strokeColor('#CCCCCC').stroke();
+    doc.fontSize(7).fillColor('#888888');
+    const company = this.ci?.companyName || 'MB Boiler & Heizung AG';
+    const vat = this.ci?.companyDetails?.vatNumber || '';
+    const bank = this.ci?.companyDetails?.bankName || '';
+    doc.text(`${company} | ${vat} | ${bank}`, left, y + 6, { width, align: 'center' });
+    doc.restore();
+  }
+
+  stampPageNumbers(totalPages) {
+    const range = this.doc.bufferedPageRange();
+    for (let i = 0; i < totalPages; i++) {
+      this.doc.switchToPage(range.start + i);
+      const y = (this.footerYPositions[i]?.y || this.pm.footerY) + 6;
+      const left = this.pm.margins.left;
+      const width = this.pm.contentWidth;
+      this.doc.save();
+      this.doc.fontSize(7).fillColor('#888888');
+      this.doc.text(
+        `${t(this.lang, 'page')} ${i + 1} ${t(this.lang, 'of')} ${totalPages}`,
+        left + width - 60, y, { width: 60, align: 'right' },
+      );
+      this.doc.restore();
+    }
+  }
+}

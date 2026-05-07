@@ -37,7 +37,7 @@ export function OrdersTable() {
   const [detailId, setDetailId]   = useState(null);
 
   const filters = {};
-  if (search.trim())  filters.q      = search.trim();
+  if (search.trim())  filters.search = search.trim();
   if (statusFilter)   filters.status = statusFilter;
 
   const { data, isLoading } = useOrders(filters);

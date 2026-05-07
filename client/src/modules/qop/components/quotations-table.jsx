@@ -127,7 +127,7 @@ export function QuotationsTable() {
   const [historyFor, setHistoryFor] = useState(null);
 
   const filters = {};
-  if (search.trim())    filters.q      = search.trim();
+  if (search.trim())    filters.search = search.trim();
   if (statusFilter)     filters.status = statusFilter;
 
   const { data, isLoading } = useQuotations(filters);

@@ -85,21 +85,26 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const mappedItems = form.lineItems.map(({ _uid, ...li }) => ({
+      type: li.type || 'service',
+      position: li.position,
+      description: li.description,
+      unit: li.unit || undefined,
+      quantity: Number(li.quantity),
+      unitPrice: Number(li.unitPrice),
+      discountPercent: Number(li.discountPercent) || 0,
+      vatRate: Number(li.vatRate),
+      catalogItemId: li.catalogItemId || undefined,
+    }));
     const payload = {
       customerId: form.customerId,
+      customerName: form.customerName,
       departmentId: form.departmentId || undefined,
       currency: form.currency,
       validUntil: form.validUntil,
       globalDiscountPercent: Number(form.globalDiscountPercent) || 0,
-      lineItems: form.lineItems.map(({ _uid, ...li }) => ({
-        ...li,
-        quantity: Number(li.quantity),
-        unitPrice: Number(li.unitPrice),
-        discountPercent: Number(li.discountPercent),
-        vatRate: Number(li.vatRate),
-      })),
+      ...(mappedItems.length > 0 ? { lineItems: mappedItems } : {}),
       notes: form.notes || undefined,
-      internalNote: form.internalNote || undefined,
     };
     if (isEdit) {
       await updateQuotation.mutateAsync({ id: quotation._id ?? quotation.id, data: { ...payload, version: form.version } });

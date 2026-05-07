@@ -18,11 +18,15 @@ export class AppointmentReminderWorker extends BaseWorker {
 
   async process(job) {
     const now = new Date();
-    const tomorrowStart = new Date(now);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-    tomorrowStart.setHours(0, 0, 0, 0);
-    const tomorrowEnd = new Date(tomorrowStart);
-    tomorrowEnd.setHours(23, 59, 59, 999);
+
+    // Configurable reminder windows: hours before appointment to trigger reminder
+    // First value is used as the check window; defaults to 24h (tomorrow logic)
+    const reminderHours = (process.env.APPOINTMENT_REMINDER_HOURS || '48,24,2')
+      .split(',').map(Number).filter(Boolean);
+    const primaryHours = reminderHours[0] ?? 24;
+
+    const windowStart = new Date(now.getTime() + primaryHours * 60 * 60 * 1000);
+    const windowEnd = new Date(windowStart.getTime() + 24 * 60 * 60 * 1000);
 
     // Lazy imports to avoid circular dependencies
     const AppointmentDetails = (await import('../modules/deploy/appointmentDetails.model.js')).default;
@@ -37,7 +41,7 @@ export class AppointmentReminderWorker extends BaseWorker {
     let remindersCount = 0;
 
     for (const appointment of pendingAppointments) {
-      // Join with assignment to check if it starts tomorrow
+      // Join with assignment to check if it falls in the reminder window
       const assignment = await Assignment.findById(appointment.assignmentId)
         .populate([
           { path: 'employeeId', select: 'firstName lastName email' },
@@ -47,7 +51,7 @@ export class AppointmentReminderWorker extends BaseWorker {
       if (!assignment) continue;
 
       const assignmentStart = new Date(assignment.startDatetime);
-      if (assignmentStart < tomorrowStart || assignmentStart > tomorrowEnd) continue;
+      if (assignmentStart < windowStart || assignmentStart > windowEnd) continue;
 
       // Enqueue reminder email
       try {

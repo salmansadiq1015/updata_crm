@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { customerService } from '@/modules/crm/services/customer-service';
+import { useCustomerDocuments } from '@/modules/qop/hooks/use-qop-queries';
+import { QuotationStatusBadge, OrderStatusBadge, InvoiceStatusBadge } from '@/modules/qop/components/status-badge';
 import { queryKeys } from '@/lib/query/keys';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useCustomerMutations } from '@/modules/crm/hooks/use-customer-mutations';
@@ -34,8 +36,47 @@ import { pickCustomerAccent, CH_CANTONS } from '@/modules/crm/constants/customer
 
 const cantonName = (code) => CH_CANTONS.find((c) => c.code === code)?.name || code;
 
+function CustomerDocumentsTab({ customerId, de, language }) {
+  const { data: docs = [], isLoading } = useCustomerDocuments(customerId);
+  const fmtDate = (d) => d ? new Intl.DateTimeFormat(de ? 'de-CH' : 'en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(d)) : '—';
+  const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
+
+  if (isLoading) return <Skeleton className="h-32 w-full" />;
+  if (!docs.length) return (
+    <p className="text-sm text-muted-foreground py-6 text-center">
+      {de ? 'Keine Dokumente.' : 'No documents.'}
+    </p>
+  );
+
+  return (
+    <div className="rounded-lg border border-border overflow-hidden text-sm">
+      <div className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] bg-muted/50 border-b text-xs font-medium text-muted-foreground px-3 py-2">
+        <div>{de ? 'Typ' : 'Type'}</div>
+        <div>{de ? 'Nummer' : 'Number'}</div>
+        <div>{de ? 'Titel' : 'Title'}</div>
+        <div>{de ? 'Datum' : 'Date'}</div>
+        <div className="text-right">{de ? 'Betrag' : 'Amount'}</div>
+      </div>
+      {docs.map((doc) => {
+        const num = doc.quotationNumber || doc.orderNumber || doc.invoiceNumber;
+        const StatusBadge = doc.docType === 'quotation' ? QuotationStatusBadge : doc.docType === 'order' ? OrderStatusBadge : InvoiceStatusBadge;
+        return (
+          <div key={doc._id} className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] border-b last:border-0 px-3 py-2.5 hover:bg-muted/20">
+            <div><StatusBadge status={doc.status} /></div>
+            <div className="font-mono text-muted-foreground">{num}</div>
+            <div className="truncate">{doc.title || doc.customerName || '—'}</div>
+            <div className="text-muted-foreground">{fmtDate(doc.createdAt)}</div>
+            <div className="text-right font-medium">{fmt(doc.grandTotalRounded)} {doc.currency}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CustomerDetail() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
+  const de = locale === 'de';
   const { id } = useParams();
   const router = useRouter();
   const { hasPermission } = usePermissions();
@@ -284,6 +325,10 @@ export function CustomerDetail() {
                 <FileText className="h-3.5 w-3.5" />
                 {t('crm.tabActivity', 'Activity')}
               </TabsTrigger>
+              <TabsTrigger value="documents" className="gap-1.5">
+                <ClipboardList className="h-3.5 w-3.5" />
+                {de ? 'Dokumente' : 'Documents'}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
@@ -319,6 +364,9 @@ export function CustomerDetail() {
 
             <TabsContent value="activity">
               <CustomerActivityPanel customerId={customer._id} />
+            </TabsContent>
+            <TabsContent value="documents">
+              <CustomerDocumentsTab customerId={customer._id} de={de} locale={locale} />
             </TabsContent>
           </Tabs>
         </div>

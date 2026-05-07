@@ -136,3 +136,12 @@ export function useBillingPlan(orderId) {
     select: (r) => r.data,
   });
 }
+
+export function useCustomerDocuments(customerId, filters = {}) {
+  return useQuery({
+    queryKey: ['qop', 'customer-docs', customerId, filters],
+    queryFn: () => searchService.customerDocs(customerId, filters),
+    enabled: !!customerId,
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+  });
+}

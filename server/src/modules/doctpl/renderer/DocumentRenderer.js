@@ -33,6 +33,11 @@ export default class DocumentRenderer {
       autoFirstPage: true,
     });
 
+    doc.info.Title = data.documentNumber || data.templateType || 'Document';
+    doc.info.Author = ciConfig?.companyName || 'MB Boiler & Heizung AG';
+    doc.info.Creator = 'MB Boiler ERP';
+    doc.info.CreationDate = new Date();
+
     const pm = new PageManager(doc, margins);
     const footer = new FooterRenderer(doc, pm, ciConfig, language);
 

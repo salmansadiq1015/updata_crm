@@ -29,10 +29,10 @@ export const updateTemplateSchema = {
       pageSize: Joi.string().valid('A4', 'Letter'),
       orientation: Joi.string().valid('portrait', 'landscape'),
       margins: Joi.object({
-        top: Joi.number().min(0),
-        bottom: Joi.number().min(0),
-        left: Joi.number().min(0),
-        right: Joi.number().min(0),
+        top:    Joi.number().min(0).max(50),
+        bottom: Joi.number().min(0).max(50),
+        left:   Joi.number().min(0).max(50),
+        right:  Joi.number().min(0).max(50),
       }),
       headerHeight: Joi.number().min(0),
       footerHeight: Joi.number().min(0),
@@ -92,7 +92,14 @@ export const updateTemplateSchema = {
         alignment: Joi.string().valid('left', 'center', 'right'),
         format: Joi.string().valid('text', 'number', 'currency', 'percent', 'date'),
       }),
-    ),
+    ).custom((cols, helpers) => {
+      if (!cols || cols.length === 0) return cols;
+      const sum = cols.reduce((s, c) => s + (c.widthPercent || 0), 0);
+      if (Math.abs(sum - 100) > 1) {
+        return helpers.error('any.invalid', { message: 'Column widths must sum to 100%' });
+      }
+      return cols;
+    }).messages({ 'any.invalid': 'Column widths must sum to 100%' }),
   }).min(1),
 };
 

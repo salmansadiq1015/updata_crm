@@ -11,6 +11,10 @@ export default class TableRenderer {
     const cols = this._buildCols(config.tableColumns || data.tableColumns, pm.contentWidth, language);
     this._drawTableHeader(doc, pm, cols, left, language);
     for (const item of items) {
+      const newPage = pm.checkSpace(ROW_HEIGHT);
+      if (newPage) {
+        this._drawTableHeader(doc, pm, cols, left, language);
+      }
       this._drawRow(doc, pm, item, cols, left, language);
     }
     pm.moveDown(4);

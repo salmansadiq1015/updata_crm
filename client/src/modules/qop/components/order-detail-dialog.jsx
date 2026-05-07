@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Download, RefreshCw } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -15,6 +16,7 @@ import { useOrderMutations } from '../hooks/use-qop-mutations';
 import { OrderStatusBadge, InvoiceStatusBadge, InvoiceTypeBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
+import { orderService } from '../services/order-service';
 
 // Valid order transitions
 const ORDER_TRANSITIONS = {
@@ -40,7 +42,7 @@ function InfoRow({ label, value, mono = false }) {
   );
 }
 
-function OverviewTab({ order, de, language, onTransition }) {
+function OverviewTab({ order, de, language, onTransition, onDownloadPdf, pdfLoading }) {
   const allowed = ORDER_TRANSITIONS[order?.status] ?? [];
   return (
     <div className="flex flex-col gap-5">
@@ -56,22 +58,26 @@ function OverviewTab({ order, de, language, onTransition }) {
         />
       </div>
 
-      {allowed.length > 0 && (
-        <div className="flex gap-2">
-          {allowed.map((s) => {
-            const labels = {
-              de: { IN_PROGRESS: 'In Bearbeitung', COMPLETED: 'Abschliessen', CANCELLED: 'Stornieren' },
-              en: { IN_PROGRESS: 'Start', COMPLETED: 'Complete', CANCELLED: 'Cancel' },
-            };
-            const variant = s === 'CANCELLED' ? 'destructive' : s === 'COMPLETED' ? 'default' : 'outline';
-            return (
-              <Button key={s} size="sm" variant={variant} onClick={() => onTransition(s)}>
-                {labels[de ? 'de' : 'en'][s] ?? s}
-              </Button>
-            );
-          })}
-        </div>
-      )}
+      <div className="flex gap-2 flex-wrap">
+        {allowed.map((s) => {
+          const labels = {
+            de: { IN_PROGRESS: 'In Bearbeitung', COMPLETED: 'Abschliessen', CANCELLED: 'Stornieren' },
+            en: { IN_PROGRESS: 'Start', COMPLETED: 'Complete', CANCELLED: 'Cancel' },
+          };
+          const variant = s === 'CANCELLED' ? 'destructive' : s === 'COMPLETED' ? 'default' : 'outline';
+          return (
+            <Button key={s} size="sm" variant={variant} onClick={() => onTransition(s)}>
+              {labels[de ? 'de' : 'en'][s] ?? s}
+            </Button>
+          );
+        })}
+        <Button size="sm" variant="outline" onClick={onDownloadPdf} disabled={pdfLoading} className="ml-auto">
+          {pdfLoading
+            ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            : <Download className="h-4 w-4 mr-2" />}
+          {de ? 'PDF herunterladen' : 'Download PDF'}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -156,6 +162,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
   const de = language === 'de';
   const [tab, setTab] = useState('overview');
   const [transitionTarget, setTransitionTarget] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const { data: order, isLoading } = useOrderDetail(open ? orderId : null);
   const { data: history = [] } = useOrderHistory(open && tab === 'history' ? orderId : null);
@@ -165,6 +172,17 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
     if (!transitionTarget) return;
     transitionOrderStatus.mutate({ id: orderId, targetStatus: transitionTarget });
     setTransitionTarget(null);
+  };
+
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true);
+    try {
+      const res = await orderService.generateDocument(orderId);
+      const url = res?.data?.url ?? res?.url;
+      if (url) window.open(url, '_blank');
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   return (
@@ -192,7 +210,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
                 <TabsTrigger value="history">{de ? 'Verlauf' : 'History'}</TabsTrigger>
               </TabsList>
               <TabsContent value="overview" className="mt-4">
-                <OverviewTab order={order} de={de} language={language} onTransition={setTransitionTarget} />
+                <OverviewTab order={order} de={de} language={language} onTransition={setTransitionTarget} onDownloadPdf={handleDownloadPdf} pdfLoading={pdfLoading} />
               </TabsContent>
               <TabsContent value="items" className="mt-4">
                 <LineItemsTab order={order} de={de} />

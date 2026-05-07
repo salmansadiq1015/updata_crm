@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   Search, Plus, MoreHorizontal, FileText, CheckCircle,
-  Send, DollarSign, History,
+  Send, DollarSign, History, Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useInvoices, useInvoiceHistory } from '../hooks/use-qop-queries';
 import { useInvoiceMutations } from '../hooks/use-qop-mutations';
+import { invoiceService } from '../services/invoice-service';
 import { InvoiceStatusBadge, InvoiceTypeBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
@@ -69,6 +70,14 @@ export function InvoicesTable() {
   const items = data?.items ?? [];
 
   const { finalizeInvoice, sendInvoice } = useInvoiceMutations();
+
+  const handleGeneratePdf = async (id) => {
+    try {
+      const res = await invoiceService.generateDocument(id);
+      const url = res?.data?.url ?? res?.url;
+      if (url) window.open(url, '_blank');
+    } catch { /* silently fail */ }
+  };
 
   const handleFinalize = (id) => {
     if (confirm(de ? 'Rechnung finalisieren? Dies kann nicht rückgängig gemacht werden.' : 'Finalize invoice? This cannot be undone.')) {
@@ -207,6 +216,9 @@ export function InvoicesTable() {
                         <DollarSign className="h-4 w-4 mr-2" />{de ? 'Zahlung erfassen' : 'Record Payment'}
                       </DropdownMenuItem>
                     )}
+                    <DropdownMenuItem onClick={() => handleGeneratePdf(id)}>
+                      <Download className="h-4 w-4 mr-2" />{de ? 'PDF herunterladen' : 'Download PDF'}
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setHistoryFor(id)}>
                       <History className="h-4 w-4 mr-2" />{de ? 'Verlauf' : 'History'}

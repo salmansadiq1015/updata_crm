@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
+import apiClient from '@/lib/api/client';
+import { ENDPOINTS } from '@/lib/api/endpoints';
 import { quotationService } from '../services/quotation-service';
 import { orderService } from '../services/order-service';
 import { invoiceService } from '../services/invoice-service';
@@ -122,6 +124,15 @@ export function useInvoiceAging() {
   return useQuery({
     queryKey: queryKeys.qop.aging(),
     queryFn: () => searchService.invoiceAging(),
+    select: (r) => r.data,
+  });
+}
+
+export function useBillingPlan(orderId) {
+  return useQuery({
+    queryKey: ['qop', 'billing-plan', orderId],
+    queryFn: () => apiClient.get(ENDPOINTS.QOP.ORDER_BILLING_PLAN(orderId)),
+    enabled: !!orderId,
     select: (r) => r.data,
   });
 }

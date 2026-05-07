@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { useOrderDetail, useOrderHistory, useOrderInvoices } from '../hooks/use-qop-queries';
+import { useOrderDetail, useOrderHistory, useOrderInvoices, useBillingPlan } from '../hooks/use-qop-queries';
 import { useOrderMutations } from '../hooks/use-qop-mutations';
 import { OrderStatusBadge, InvoiceStatusBadge, InvoiceTypeBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
@@ -129,6 +129,63 @@ function LineItemsTab({ order, de }) {
   );
 }
 
+function BillingPlanTab({ orderId, de }) {
+  const { data: plan, isLoading } = useBillingPlan(orderId);
+  const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
+
+  if (isLoading) return <Skeleton className="h-32 w-full" />;
+  if (!plan) return <p className="text-sm text-muted-foreground py-6 text-center">{de ? 'Keine Daten.' : 'No data.'}</p>;
+
+  const pct = plan.percentInvoiced || 0;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: de ? 'Projektwert' : 'Project Value', value: fmt(plan.projectTotal), color: 'text-foreground' },
+          { label: de ? 'Bereits fakturiert' : 'Invoiced', value: fmt(plan.advancesInvoiced), color: 'text-amber-700' },
+          { label: de ? 'Restbetrag' : 'Remaining', value: fmt(plan.remainingForFinal), color: 'text-emerald-700' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="rounded-lg border border-border p-3 flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">{label}</span>
+            <span className={`text-lg font-bold tabular-nums ${color}`}>{value}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{de ? 'Fortschritt' : 'Progress'}</span><span>{pct}%</span>
+        </div>
+        <div className="h-3 rounded-full bg-muted overflow-hidden">
+          <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
+        </div>
+      </div>
+
+      {(plan.advances ?? []).length > 0 && (
+        <div className="rounded-lg border border-border overflow-hidden text-sm">
+          <div className="grid grid-cols-[1fr_5rem_5rem_6rem_5rem] bg-muted/50 border-b text-xs font-medium text-muted-foreground px-3 py-2">
+            <div>{de ? 'Akontorechnung' : 'Advance Invoice'}</div>
+            <div>{de ? 'Datum' : 'Date'}</div>
+            <div className="text-right">%</div>
+            <div className="text-right">{de ? 'Betrag' : 'Amount'}</div>
+            <div>{de ? 'Status' : 'Status'}</div>
+          </div>
+          {plan.advances.map((a) => (
+            <div key={a._id} className="grid grid-cols-[1fr_5rem_5rem_6rem_5rem] border-b last:border-0 px-3 py-2.5">
+              <div className="font-mono text-muted-foreground">{a.invoiceNumber}</div>
+              <div className="text-muted-foreground">{a.invoiceDate?.slice(0, 10) ?? '—'}</div>
+              <div className="text-right">{a.milestonePercent ?? '—'}%</div>
+              <div className="text-right font-medium">{fmt(a.grandTotalRounded)}</div>
+              <div><InvoiceStatusBadge status={a.status} /></div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InvoicesTab({ orderId, de, language, onCreateInvoice }) {
   const { data: invoices = [], isLoading } = useOrderInvoices(orderId);
   const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
@@ -221,9 +278,10 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
             </div>
           ) : (
             <Tabs value={tab} onValueChange={setTab} className="mt-2">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 <TabsTrigger value="overview">{de ? 'Übersicht' : 'Overview'}</TabsTrigger>
                 <TabsTrigger value="items">{de ? 'Positionen' : 'Items'}</TabsTrigger>
+                <TabsTrigger value="billing">{de ? 'Fakturierung' : 'Billing'}</TabsTrigger>
                 <TabsTrigger value="invoices">{de ? 'Rechnungen' : 'Invoices'}</TabsTrigger>
                 <TabsTrigger value="history">{de ? 'Verlauf' : 'History'}</TabsTrigger>
               </TabsList>
@@ -232,6 +290,9 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
               </TabsContent>
               <TabsContent value="items" className="mt-4">
                 <LineItemsTab order={order} de={de} />
+              </TabsContent>
+              <TabsContent value="billing" className="mt-4">
+                <BillingPlanTab orderId={orderId} de={de} />
               </TabsContent>
               <TabsContent value="invoices" className="mt-4">
                 <InvoicesTab orderId={orderId} de={de} language={language} onCreateInvoice={setInvoiceType} />

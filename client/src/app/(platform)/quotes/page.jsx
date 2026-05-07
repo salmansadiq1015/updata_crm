@@ -9,6 +9,7 @@ import { InvoicesTable } from '@/modules/qop/components/invoices-table';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import { useQopPipeline, useInvoiceAging } from '@/modules/qop/hooks/use-qop-queries';
+import { QopAdvancedFilters } from '@/modules/qop/components/qop-advanced-filters';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const TABS = ['quotations', 'orders', 'invoices'];
@@ -101,10 +102,40 @@ function StatsBar({ de }) {
   );
 }
 
+function StatusCountsWidget({ de }) {
+  const { data: pipeline } = useQopPipeline();
+  if (!pipeline) return null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        {de ? 'Offerten nach Status' : 'Quotations by Status'}
+      </h3>
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { status: 'DRAFT',    label: de ? 'Entwurf' : 'Draft',       color: 'bg-slate-100' },
+          { status: 'SENT',     label: de ? 'Gesendet' : 'Sent',       color: 'bg-blue-100' },
+          { status: 'ACCEPTED', label: de ? 'Angenommen' : 'Accepted', color: 'bg-emerald-100' },
+          { status: 'EXPIRED',  label: de ? 'Abgelaufen' : 'Expired',  color: 'bg-amber-100' },
+        ].map(({ status, label, color }) => {
+          const count = pipeline?.statusCounts?.[status] ?? 0;
+          return (
+            <div key={status} className={`rounded-lg ${color} p-3 flex flex-col gap-1`}>
+              <span className="text-2xl font-bold tabular-nums">{count}</span>
+              <span className="text-xs text-muted-foreground">{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function QuotesPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
   const [tab, setTab] = useState('quotations');
+  const [advFilters, setAdvFilters] = useState({});
 
   return (
     <div className="flex flex-col gap-5 w-full min-w-0">
@@ -116,6 +147,8 @@ export default function QuotesPage() {
       />
 
       <StatsBar de={de} />
+      <StatusCountsWidget de={de} />
+      <QopAdvancedFilters onFiltersChange={setAdvFilters} />
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">

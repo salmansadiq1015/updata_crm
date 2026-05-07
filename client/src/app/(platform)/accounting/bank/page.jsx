@@ -1,0 +1,275 @@
+'use client';
+
+import { useState, useRef } from 'react';
+import { Plus, Upload, ArrowUp, ArrowDown, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { useBankAccounts, useBankTransactions } from '@/modules/accounting/hooks/use-accounting-queries';
+import { useBankMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
+
+const fmt = (n, currency = 'CHF') =>
+  new Intl.NumberFormat('de-CH', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n ?? 0);
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('de-CH') : '—';
+
+function BankAccountForm({ open, onClose, de }) {
+  const { createBankAccount } = useBankMutations();
+  const [form, setForm] = useState({ bankName: '', iban: '', currency: 'CHF', openingBalance: '0' });
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await createBankAccount.mutateAsync({ ...form, openingBalance: Number(form.openingBalance) });
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{de ? 'Bankkonto hinzufügen' : 'Add Bank Account'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">{de ? 'Bank' : 'Bank Name'}</Label>
+            <Input className="h-8" value={form.bankName} onChange={(e) => set('bankName', e.target.value)} required placeholder="PostFinance / UBS / ZKB..." />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">IBAN</Label>
+            <Input className="h-8 font-mono tracking-wider" value={form.iban} onChange={(e) => set('iban', e.target.value.toUpperCase())} required placeholder="CH56 0483 5012 3456 7800 9" maxLength={30} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
+              <Select value={form.currency} onValueChange={(v) => set('currency', v)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CHF">CHF</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Eröffnungssaldo' : 'Opening Balance'}</Label>
+              <Input type="number" step="0.05" className="h-8 font-mono" value={form.openingBalance} onChange={(e) => set('openingBalance', e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={createBankAccount.isPending}>{de ? 'Abbrechen' : 'Cancel'}</Button>
+            <Button type="submit" disabled={createBankAccount.isPending}>
+              {createBankAccount.isPending ? '...' : (de ? 'Hinzufügen' : 'Add')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ImportDialog({ open, onClose, de }) {
+  const { importStatement } = useBankMutations();
+  const fileRef = useRef(null);
+  const [file, setFile] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!file) return;
+    await importStatement.mutateAsync(file);
+    onClose();
+    setFile(null);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{de ? 'Kontoauszug importieren' : 'Import Bank Statement'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
+          <p className="text-xs text-muted-foreground">
+            {de ? 'Unterstützte Formate: MT940, CAMT.053, CSV' : 'Supported formats: MT940, CAMT.053, CSV'}
+          </p>
+          <div
+            className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+            onClick={() => fileRef.current?.click()}
+          >
+            <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            {file ? (
+              <p className="text-sm font-medium">{file.name}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">{de ? 'Datei auswählen oder hierher ziehen' : 'Select file or drag here'}</p>
+            )}
+            <input ref={fileRef} type="file" className="hidden" accept=".mt940,.xml,.csv,.sta" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>{de ? 'Abbrechen' : 'Cancel'}</Button>
+            <Button type="submit" disabled={!file || importStatement.isPending}>
+              {importStatement.isPending ? (de ? 'Importiere...' : 'Importing...') : (de ? 'Importieren' : 'Import')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AccountsTab({ de, onImport }) {
+  const { data: accounts = [], isLoading } = useBankAccounts();
+  const [formOpen, setFormOpen] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onImport}>
+          <Upload className="h-4 w-4 mr-1.5" />
+          {de ? 'Kontoauszug' : 'Import Statement'}
+        </Button>
+        <Button size="sm" onClick={() => setFormOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          {de ? 'Konto' : 'Account'}
+        </Button>
+      </div>
+
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {isLoading
+          ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-36 rounded-xl" />)
+          : accounts.map((acc) => (
+            <div key={acc._id} className="rounded-xl border border-border bg-card p-5 flex flex-col gap-3 hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-semibold text-sm">{acc.bankName}</p>
+                  <p className="font-mono text-xs text-muted-foreground mt-0.5">{acc.iban}</p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${acc.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                  {acc.isActive ? (de ? 'Aktiv' : 'Active') : (de ? 'Inaktiv' : 'Inactive')}
+                </span>
+              </div>
+              <div>
+                <p className="text-2xl font-bold tabular-nums">{fmt(acc.currentBalance, acc.currency)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{de ? 'Aktueller Saldo' : 'Current balance'}</p>
+              </div>
+              {acc.lastImportedAt && (
+                <p className="text-xs text-muted-foreground">
+                  {de ? 'Zuletzt importiert' : 'Last imported'}: {fmtDate(acc.lastImportedAt)}
+                </p>
+              )}
+            </div>
+          ))}
+        {!isLoading && accounts.length === 0 && (
+          <div className="col-span-3 text-center py-12 text-sm text-muted-foreground">
+            {de ? 'Noch kein Bankkonto.' : 'No bank accounts yet.'}
+          </div>
+        )}
+      </div>
+
+      <BankAccountForm open={formOpen} onClose={() => setFormOpen(false)} de={de} />
+    </div>
+  );
+}
+
+function TransactionsTab({ de }) {
+  const [search, setSearch] = useState('');
+  const filters = search ? { q: search } : {};
+  const { data: { items = [] } = {}, isLoading } = useBankTransactions(filters);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="relative max-w-xs">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input className="pl-9 h-9" placeholder={de ? 'Suchen...' : 'Search...'} value={search} onChange={(e) => setSearch(e.target.value)} />
+      </div>
+
+      <div className="rounded-xl border border-border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2.5 text-left">{de ? 'Datum' : 'Date'}</th>
+              <th className="px-3 py-2.5 text-left">{de ? 'Verwendungszweck' : 'Description'}</th>
+              <th className="px-3 py-2.5 text-left">{de ? 'Referenz' : 'Reference'}</th>
+              <th className="px-3 py-2.5 text-center">{de ? 'Typ' : 'Type'}</th>
+              <th className="px-3 py-2.5 text-right">{de ? 'Betrag' : 'Amount'}</th>
+              <th className="px-3 py-2.5 text-right">{de ? 'Saldo' : 'Balance'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i} className="border-b border-border/50">
+                  {Array.from({ length: 6 }).map((__, j) => (
+                    <td key={j} className="px-3 py-3"><Skeleton className="h-4 w-full" /></td>
+                  ))}
+                </tr>
+              ))
+            ) : items.map((tx) => {
+              const isCredit = (tx.amount ?? 0) > 0;
+              return (
+                <tr key={tx._id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="px-3 py-3 text-xs">{fmtDate(tx.valueDate || tx.bookingDate)}</td>
+                  <td className="px-3 py-3 max-w-64 truncate" title={tx.description}>{tx.description}</td>
+                  <td className="px-3 py-3 font-mono text-xs text-muted-foreground">{tx.reference || '—'}</td>
+                  <td className="px-3 py-3 text-center">
+                    {isCredit
+                      ? <ArrowDown className="h-4 w-4 text-emerald-500 mx-auto" />
+                      : <ArrowUp className="h-4 w-4 text-red-500 mx-auto" />}
+                  </td>
+                  <td className={`px-3 py-3 text-right tabular-nums font-medium ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {isCredit ? '+' : ''}{fmt(tx.amount, tx.currency)}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
+                    {tx.runningBalance != null ? fmt(tx.runningBalance, tx.currency) : '—'}
+                  </td>
+                </tr>
+              );
+            })}
+            {!isLoading && items.length === 0 && (
+              <tr><td colSpan={6} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                {de ? 'Keine Transaktionen.' : 'No transactions found.'}
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export default function BankPage() {
+  const { locale: language } = useLanguage();
+  const de = language === 'de';
+  const [importOpen, setImportOpen] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-5 max-w-7xl mx-auto">
+      <div>
+        <h1 className="text-2xl font-bold">{de ? 'Bank' : 'Bank Accounts'}</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          {de ? 'Bankkonten und Kontoauszüge verwalten' : 'Manage bank accounts and statements'}
+        </p>
+      </div>
+
+      <Tabs defaultValue="accounts">
+        <TabsList className="h-9">
+          <TabsTrigger value="accounts" className="text-xs">{de ? 'Konten' : 'Accounts'}</TabsTrigger>
+          <TabsTrigger value="transactions" className="text-xs">{de ? 'Transaktionen' : 'Transactions'}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="accounts" className="mt-4">
+          <AccountsTab de={de} onImport={() => setImportOpen(true)} />
+        </TabsContent>
+        <TabsContent value="transactions" className="mt-4">
+          <TransactionsTab de={de} />
+        </TabsContent>
+      </Tabs>
+
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} de={de} />
+    </div>
+  );
+}

@@ -47,7 +47,7 @@ const navSectionDefs = [
       { labelKey: 'sidebar.projects', href: '/projects', icon: FolderKanban, permission: 'projects:read' },
       { labelKey: 'sidebar.scheduling', href: '/scheduling', icon: CalendarClock, permission: 'scheduling:read' },
       { labelKey: 'sidebar.quotes', href: '/quotes', icon: FileText, permission: 'quotations:read' },
-      { labelKey: 'sidebar.accounting', href: '/accounting', icon: Receipt, disabled: true, permission: 'accounting:read' },
+      { labelKey: 'sidebar.accounting', href: '/accounting', icon: Receipt, permission: 'accounting:read' },
       { labelKey: 'sidebar.tasks', href: '/tasks', icon: CheckSquare, permission: 'tasks:read' },
       { labelKey: 'sidebar.catalog', href: '/catalog', icon: Boxes, permission: 'catalog:read' },
       { labelKey: 'sidebar.notifications', href: '/notifications', icon: Bell, permission: 'notifications:feed' },

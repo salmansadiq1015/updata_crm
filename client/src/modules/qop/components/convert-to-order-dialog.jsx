@@ -5,7 +5,6 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useQuotationMutations } from '../hooks/use-qop-mutations';
@@ -72,7 +71,9 @@ export function ConvertToOrderDialog({ open, onClose, quotation }) {
                   onClick={() => toggle(id)}
                 >
                   <div className="px-3 py-3 flex items-center">
-                    <Checkbox checked={isChecked} onCheckedChange={() => toggle(id)} onClick={(e) => e.stopPropagation()} />
+                    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isChecked ? 'bg-primary border-primary' : 'border-border bg-background'}`}>
+                      {isChecked && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                    </span>
                   </div>
                   <div className="px-3 py-3">
                     <span>{li.description}</span>

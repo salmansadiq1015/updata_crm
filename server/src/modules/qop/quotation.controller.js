@@ -74,7 +74,13 @@ class QuotationController {
   async convert(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      const order = await quotationService.convertToOrder(req.params.id, req.user._id, meta);
+      const { selectedLineItemIds } = req.body || {};
+      const order = await quotationService.convertToOrder(
+        req.params.id,
+        { selectedLineItemIds },
+        req.user._id,
+        meta,
+      );
       return res.success({ data: order, message: 'Quotation converted to order successfully', statusCode: 201 });
     } catch (err) { next(err); }
   }

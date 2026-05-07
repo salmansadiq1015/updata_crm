@@ -63,10 +63,26 @@ class OrderService {
     // Lazy import to avoid circular dependencies
     const { default: quotationRepository } = await import('./quotation.repository.js');
 
-    const quotation = await quotationRepository.findById(quotationId);
+    // Accept either a quotation object or an id string
+    let quotation = (quotationId && typeof quotationId === 'object') ? quotationId : null;
+    if (!quotation) {
+      quotation = await quotationRepository.findById(quotationId);
+    }
     if (!quotation) throw new NotFoundError('Quotation', quotationId);
 
+    const { selectedLineItemIds, ...restAdditional } = additionalData || {};
+
     const orderNumber = await counterService.getNextOrderNumber(quotation.departmentId);
+
+    let lineItems = JSON.parse(JSON.stringify(quotation.lineItems || []));
+    if (selectedLineItemIds?.length) {
+      const idSet = new Set(selectedLineItemIds.map(String));
+      lineItems = lineItems.filter((li) => idSet.has(String(li._id)));
+    }
+
+    const totals = lineItems.length
+      ? calculateTotals(lineItems, quotation.globalDiscountPercent || 0, quotation.currency || 'CHF')
+      : {};
 
     const orderData = {
       sourceQuotationId: quotation._id,
@@ -78,18 +94,14 @@ class OrderService {
       departmentId: quotation.departmentId || null,
       language: quotation.language,
       title: quotation.title,
-      lineItems: JSON.parse(JSON.stringify(quotation.lineItems || [])),
+      lineItems,
       currency: quotation.currency,
       globalDiscountPercent: quotation.globalDiscountPercent,
-      subtotal: quotation.subtotal,
-      vatBreakdown: JSON.parse(JSON.stringify(quotation.vatBreakdown || [])),
-      grandTotal: quotation.grandTotal,
-      roundingAmount: quotation.roundingAmount,
-      grandTotalRounded: quotation.grandTotalRounded,
+      ...totals,
       paymentTerms: quotation.paymentTerms || null,
       notes: quotation.notes || null,
       termsAndConditions: quotation.termsAndConditions || null,
-      ...additionalData,
+      ...restAdditional,
       orderNumber,
       createdBy,
     };

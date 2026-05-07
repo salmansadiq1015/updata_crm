@@ -15,57 +15,58 @@ export class QuotationFollowUpWorker extends BaseWorker {
 
   async process(job) {
     const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
 
-    // Lazy imports
+    // Configurable via env — defaults: "7,14,21" days and 3 days expiry warning
+    const intervalDays = (process.env.QUOTATION_FOLLOWUP_INTERVALS || '7,14,21')
+      .split(',').map(Number).filter(Boolean);
+    const expiryWarnDays = Number(process.env.QUOTATION_EXPIRY_WARN_DAYS || 3);
+
     const Quotation = (await import('../modules/qop/quotation.model.js')).default;
     const QuotationReminder = (await import('../modules/qop/quotationReminder.model.js')).default;
 
-    // --- Follow-up reminders for quotations sent > 7 days ago ---
-    const followUpCandidates = await Quotation.find({
-      status: 'SENT',
-      sentAt: { $lt: sevenDaysAgo },
-      isDeleted: false,
-    }).lean();
-
     let followUpCount = 0;
+    let expirationWarningCount = 0;
 
-    for (const q of followUpCandidates) {
-      const existingReminder = await QuotationReminder.findOne({
-        quotationId: q._id,
-        type: 'follow_up',
-        status: 'PENDING',
-      });
+    // Multi-interval follow-up reminders
+    for (const days of intervalDays) {
+      const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      const upperCutoff = new Date(cutoff.getTime() + 24 * 60 * 60 * 1000);
 
-      if (!existingReminder) {
-        await QuotationReminder.create({
-          quotationId: q._id,
-          type: 'follow_up',
-          scheduledAt: now,
-          status: 'PENDING',
-        });
-        followUpCount++;
+      const candidates = await Quotation.find({
+        status: { $in: ['SENT', 'VIEWED'] },
+        sentAt: { $gte: cutoff, $lt: upperCutoff },
+        isDeleted: false,
+      }).lean();
+
+      for (const q of candidates) {
+        const tag = `follow_up_${days}d`;
+        const exists = await QuotationReminder.findOne({ quotationId: q._id, type: tag });
+        if (!exists) {
+          await QuotationReminder.create({
+            quotationId: q._id,
+            type: tag,
+            intervalDays: days,
+            scheduledAt: now,
+            status: 'PENDING',
+          });
+          followUpCount++;
+        }
       }
     }
 
-    // --- Expiration warnings for quotations expiring within 3 days ---
+    // Expiration warnings
+    const expiryStart = new Date(now.getTime() + expiryWarnDays * 24 * 60 * 60 * 1000);
+    const expiryEnd = new Date(expiryStart.getTime() + 24 * 60 * 60 * 1000);
+
     const expirationCandidates = await Quotation.find({
       status: { $in: ['SENT', 'VIEWED'] },
-      validUntil: { $gte: now, $lte: threeDaysFromNow },
+      validUntil: { $gte: expiryStart, $lt: expiryEnd },
       isDeleted: false,
     }).lean();
 
-    let expirationWarningCount = 0;
-
     for (const q of expirationCandidates) {
-      const existingReminder = await QuotationReminder.findOne({
-        quotationId: q._id,
-        type: 'expiration_warning',
-        status: 'PENDING',
-      });
-
-      if (!existingReminder) {
+      const exists = await QuotationReminder.findOne({ quotationId: q._id, type: 'expiration_warning' });
+      if (!exists) {
         await QuotationReminder.create({
           quotationId: q._id,
           type: 'expiration_warning',
@@ -77,10 +78,7 @@ export class QuotationFollowUpWorker extends BaseWorker {
     }
 
     logger.info('Quotation follow-up check completed', {
-      module: 'jobs',
-      action: 'quotation-follow-up',
-      followUpCount,
-      expirationWarningCount,
+      module: 'jobs', action: 'quotation-follow-up', followUpCount, expirationWarningCount,
     });
 
     return { followUpCount, expirationWarningCount };

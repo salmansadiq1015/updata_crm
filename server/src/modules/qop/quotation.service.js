@@ -336,7 +336,7 @@ class QuotationService {
     return updated;
   }
 
-  async convertToOrder(id, userId, meta = {}) {
+  async convertToOrder(id, additionalData, userId, meta = {}) {
     const quotation = await quotationRepository.findById(id);
     if (!quotation) throw new NotFoundError('Quotation', id);
 
@@ -352,7 +352,7 @@ class QuotationService {
 
     // Lazy import to avoid circular dependencies
     const { default: orderService } = await import('./order.service.js');
-    const order = await orderService.createFromQuotation(quotation, userId, meta);
+    const order = await orderService.createFromQuotation(quotation, additionalData, userId, meta);
 
     await quotationRepository.updateById(id, {
       status: 'CONVERTED',

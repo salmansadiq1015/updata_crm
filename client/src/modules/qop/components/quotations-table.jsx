@@ -27,6 +27,7 @@ import { QuotationStatusBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
 import { QuotationFormDialog } from './quotation-form-dialog';
+import { ConvertToOrderDialog } from './convert-to-order-dialog';
 import { VALID_QUOTATION_TRANSITIONS } from '../constants/qop-constants';
 
 const STATUSES = ['', 'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED'];
@@ -121,10 +122,11 @@ export function QuotationsTable() {
 
   const [search, setSearch]         = useState('');
   const [statusFilter, setStatus]   = useState('');
-  const [formOpen, setFormOpen]     = useState(false);
-  const [editing, setEditing]       = useState(null);
-  const [transitioning, setTrans]   = useState(null);
-  const [historyFor, setHistoryFor] = useState(null);
+  const [formOpen, setFormOpen]         = useState(false);
+  const [editing, setEditing]           = useState(null);
+  const [transitioning, setTrans]       = useState(null);
+  const [historyFor, setHistoryFor]     = useState(null);
+  const [convertTarget, setConvertTarget] = useState(null);
 
   const filters = {};
   if (search.trim())    filters.search = search.trim();
@@ -138,14 +140,11 @@ export function QuotationsTable() {
     convertQuotation, transitionQuotationStatus,
   } = useQuotationMutations();
 
-  const handleDelete   = (id) => {
+  const handleDelete    = (id) => {
     if (confirm(de ? 'Offerte löschen?' : 'Delete quotation?')) deleteQuotation.mutate(id);
   };
   const handleDuplicate = (id) => duplicateQuotation.mutate(id);
   const handleSend      = (id) => sendQuotation.mutate(id);
-  const handleConvert   = (id) => {
-    if (confirm(de ? 'Zu Auftrag konvertieren?' : 'Convert to order?')) convertQuotation.mutate(id);
-  };
   const handleTransitionConfirm = (targetStatus, reason) => {
     transitionQuotationStatus.mutate({
       id: transitioning._id ?? transitioning.id,
@@ -265,7 +264,7 @@ export function QuotationsTable() {
                       </DropdownMenuItem>
                     )}
                     {q.status === 'ACCEPTED' && (
-                      <DropdownMenuItem onClick={() => handleConvert(id)}>
+                      <DropdownMenuItem onClick={() => setConvertTarget(q)}>
                         <ArrowRight className="h-4 w-4 mr-2" />{de ? 'In Auftrag konvertieren' : 'Convert to Order'}
                       </DropdownMenuItem>
                     )}
@@ -308,6 +307,11 @@ export function QuotationsTable() {
         open={!!historyFor}
         onClose={() => setHistoryFor(null)}
         quotationId={historyFor}
+      />
+      <ConvertToOrderDialog
+        open={!!convertTarget}
+        onClose={() => setConvertTarget(null)}
+        quotation={convertTarget}
       />
     </div>
   );

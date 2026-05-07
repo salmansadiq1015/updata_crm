@@ -9,7 +9,7 @@ export const quotationService = {
   remove:        (id)          => apiClient.delete(E.QUOTATION_BY_ID(id)),
   duplicate:     (id)          => apiClient.post(E.QUOTATION_DUPLICATE(id)),
   send:          (id)          => apiClient.post(E.QUOTATION_SEND(id)),
-  convert:       (id)          => apiClient.post(E.QUOTATION_CONVERT(id)),
+  convert:       (id, body = {}) => apiClient.post(E.QUOTATION_CONVERT(id), body),
   transitionStatus: (id, targetStatus, reason) =>
     apiClient.patch(E.QUOTATION_STATUS(id), { targetStatus, reason }),
   generateDocument: (id)       => apiClient.post(E.QUOTATION_GENERATE_DOC(id)),

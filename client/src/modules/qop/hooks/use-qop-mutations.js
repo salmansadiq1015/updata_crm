@@ -25,7 +25,7 @@ export function useQuotationMutations() {
     },
   });
   const convertQuotation = useMutation({
-    mutationFn: quotationService.convert,
+    mutationFn: ({ id, selectedLineItemIds }) => quotationService.convert(id, { selectedLineItemIds }),
     onSuccess: () => {
       invalidateList();
       qc.invalidateQueries({ queryKey: ['qop', 'orders'] });

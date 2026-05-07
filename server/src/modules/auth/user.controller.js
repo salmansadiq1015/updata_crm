@@ -196,6 +196,19 @@ class UserController {
     }
   }
 
+  async updatePreferences(req, res, next) {
+    try {
+      const User = (await import('./user.model.js')).default;
+      const { preferredDepartmentId } = req.body || {};
+      const updated = await User.findByIdAndUpdate(
+        req.user._id,
+        { $set: { 'preferences.preferredDepartmentId': preferredDepartmentId || null } },
+        { new: true, select: 'preferences' },
+      ).lean();
+      return res.success({ data: { preferences: updated?.preferences ?? {} } });
+    } catch (err) { next(err); }
+  }
+
   /**
    * Admin: bulk update multiple users.
    */

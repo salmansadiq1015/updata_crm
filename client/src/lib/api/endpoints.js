@@ -15,6 +15,7 @@ export const ENDPOINTS = Object.freeze({
     ACTIVATE: '/auth/activate',
     RESET_REQUEST: '/auth/reset-password/request',
     RESET_CONFIRM: '/auth/reset-password/confirm',
+    USER_PREFERENCES: '/users/me/preferences',
     SESSIONS: '/auth/sessions',
     SESSION_BY_ID: (id) => `/auth/sessions/${id}`,
     SESSIONS_REVOKE_OTHERS: '/auth/sessions/revoke-others',

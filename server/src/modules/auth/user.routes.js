@@ -70,6 +70,12 @@ router.patch(
   (req, res, next) => userController.updateMe(req, res, next),
 );
 
+router.patch(
+  '/me/preferences',
+  authenticate,
+  (req, res, next) => userController.updatePreferences(req, res, next),
+);
+
 // --- Directory (available to all authenticated users, used for task assignment) ---
 router.get(
   '/directory',

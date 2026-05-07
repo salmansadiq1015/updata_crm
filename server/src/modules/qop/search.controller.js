@@ -37,7 +37,9 @@ class SearchController {
         if (status) filter.status = status;
         if (customerId) filter.customerId = customerId;
         if (projectId) filter.projectId = projectId;
-        if (departmentId) filter.departmentId = departmentId;
+        if (departmentId) {
+          filter.departmentId = Array.isArray(departmentId) ? { $in: departmentId } : departmentId;
+        }
         if (assignedUserId) filter.assignedUserId = assignedUserId;
         if (dateFrom || dateTo) {
           filter.createdAt = {};

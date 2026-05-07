@@ -154,6 +154,9 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    preferences: {
+      preferredDepartmentId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    },
   },
   {
     timestamps: true,

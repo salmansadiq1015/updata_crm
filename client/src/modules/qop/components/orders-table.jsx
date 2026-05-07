@@ -56,12 +56,12 @@ export function OrdersTable() {
             className="pl-9 h-9 text-sm"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatus}>
+        <Select value={statusFilter || 'ALL'} onValueChange={(v) => setStatus(v === 'ALL' ? '' : v)}>
           <SelectTrigger className="h-9 w-44 text-sm">
             <SelectValue placeholder={de ? 'Alle Status' : 'All statuses'} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">{de ? 'Alle Status' : 'All statuses'}</SelectItem>
+            <SelectItem value="ALL">{de ? 'Alle Status' : 'All statuses'}</SelectItem>
             {ORDER_STATUSES.filter(Boolean).map((s) => (
               <SelectItem key={s} value={s}><OrderStatusBadge status={s} /></SelectItem>
             ))}

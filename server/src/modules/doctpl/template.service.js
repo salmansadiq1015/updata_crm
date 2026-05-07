@@ -171,11 +171,41 @@ class TemplateService {
     return updated;
   }
 
-  async preview(templateId, sampleData, language) {
+  async preview(templateId, sampleData = {}, language = 'de') {
     const template = await documentTemplateRepository.findById(templateId);
     if (!template) throw new NotFoundError('DocumentTemplate', templateId);
 
-    return { message: 'Preview generation requires rendering engine (Phase 5)' };
+    const CIConfiguration = (await import('./ciConfiguration.model.js')).default;
+    const ciConfig = await CIConfiguration.findOne({ isActive: true }).lean();
+
+    const { DocumentRenderer } = await import('./renderer/index.js');
+    const renderer = new DocumentRenderer();
+    const buffer = await renderer.render(template, ciConfig, sampleData, language);
+
+    const { default: fileService } = await import('../files/file.service.js');
+    const fileMeta = await fileService.upload({
+      buffer,
+      originalName: `preview_${templateId}_${language}.pdf`,
+      mimeType: 'application/pdf',
+      sizeBytes: buffer.length,
+      module: 'doctpl',
+      entityType: 'preview',
+      entityId: templateId,
+      uploadedBy: sampleData._previewBy || null,
+      bucket: 'documents',
+    });
+
+    const downloadUrl = await fileService.getDownloadUrl(fileMeta._id);
+
+    logger.info('Template preview generated', {
+      module: 'doctpl',
+      action: 'preview',
+      templateId,
+      language,
+      sizeBytes: buffer.length,
+    });
+
+    return { downloadUrl, sizeBytes: buffer.length };
   }
 
   async _pruneVersions(templateId) {

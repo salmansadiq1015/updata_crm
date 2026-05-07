@@ -9,6 +9,7 @@
 
 import 'dotenv/config';
 import logger from '../shared/logger/index.js';
+import { seedDoctplTemplates } from './doctplSeed.js';
 import { connectDatabase, disconnectDatabase } from '../config/database.js';
 import Permission from '../modules/auth/permission.model.js';
 import Role from '../modules/auth/role.model.js';
@@ -108,6 +109,10 @@ async function reseed() {
   } else {
     console.log('No ADMIN_EMAIL/ADMIN_PASSWORD in env — skipping admin user.');
   }
+
+  // Seed doctpl default templates
+  const adminUserForSeed = await User.findOne({ email: (config.admin?.email || process.env.ADMIN_EMAIL || '').toLowerCase() });
+  await seedDoctplTemplates(adminUserForSeed?._id);
 
   console.log('Re-seed complete.');
   await disconnectDatabase(logger);

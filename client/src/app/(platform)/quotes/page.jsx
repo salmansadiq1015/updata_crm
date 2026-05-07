@@ -45,7 +45,9 @@ function StatsBar({ de }) {
   const { data: pipeline, isLoading: pLoading } = useQopPipeline();
   const { data: aging,    isLoading: aLoading } = useInvoiceAging();
 
-  const byStatus   = pipeline?.byStatus ?? [];
+  const rawByStatus = pipeline?.byStatus ?? pipeline ?? null;
+  const byStatus    = Array.isArray(rawByStatus) ? rawByStatus : [];
+
   const openStatuses = ['DRAFT', 'SENT', 'VIEWED', 'ACCEPTED'];
   const openQuotes = byStatus.filter((b) => openStatuses.includes(b.status));
   const openCount  = openQuotes.reduce((s, b) => s + (b.count ?? 0), 0);
@@ -55,10 +57,12 @@ function StatsBar({ de }) {
   const activeOrders   = byStatus.filter((b) => activeStatuses.includes(b.status));
   const activeCount    = activeOrders.reduce((s, b) => s + (b.count ?? 0), 0);
 
-  const overdueCount = aging?.overdue?.count ?? 0;
-  const overdueValue = aging?.overdue?.totalValue ?? 0;
+  const rawAging     = aging?.overdue ?? aging ?? null;
+  const overdueCount = rawAging?.count ?? 0;
+  const overdueValue = rawAging?.totalValue ?? 0;
 
-  const paidBucket = (aging?.buckets ?? []).find((b) => b.label === 'paid_this_month');
+  const rawBuckets = Array.isArray(aging?.buckets) ? aging.buckets : [];
+  const paidBucket = rawBuckets.find((b) => b.label === 'paid_this_month');
   const paidAmount = paidBucket?.totalValue ?? 0;
 
   return (

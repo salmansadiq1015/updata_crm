@@ -302,6 +302,9 @@ export const ENDPOINTS = Object.freeze({
     QOP_PROJECT_DOCS: (projectId) => `/qop/documents/project/${projectId}`,
     QOP_INVOICE_AGING: '/qop/documents/invoices/aging',
     QOP_PIPELINE: '/qop/documents/quotations/pipeline',
+    QOP_SEARCH_PRESETS:      '/qop/documents/search/presets',
+    QOP_SEARCH_PRESET_BY_ID: (id) => `/qop/documents/search/presets/${id}`,
+    QOP_SEARCH_EXPORT:       '/qop/documents/search/export',
     NUMBER_SEQUENCES: '/qop/numbering/sequences',
   },
   AI: {

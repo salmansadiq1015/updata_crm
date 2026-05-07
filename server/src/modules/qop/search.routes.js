@@ -57,4 +57,12 @@ router.get(
   (req, res, next) => searchController.getQuotationPipeline(req, res, next),
 );
 
+// Search presets
+router.get('/search/presets', authenticate, (req, res, next) => searchController.listPresets(req, res, next));
+router.post('/search/presets', authenticate, (req, res, next) => searchController.createPreset(req, res, next));
+router.delete('/search/presets/:presetId', authenticate, (req, res, next) => searchController.deletePreset(req, res, next));
+
+// CSV export
+router.get('/search/export', authenticate, (req, res, next) => searchController.exportDocuments(req, res, next));
+
 export default router;

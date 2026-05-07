@@ -204,6 +204,104 @@ class SearchController {
       return res.success({ data: { total, byStatus, totalValue } });
     } catch (err) { next(err); }
   }
+
+  async listPresets(req, res, next) {
+    try {
+      const { default: searchPresetService } = await import('./searchPreset.service.js');
+      const presets = await searchPresetService.list(req.user._id);
+      return res.success({ data: presets });
+    } catch (err) { next(err); }
+  }
+
+  async createPreset(req, res, next) {
+    try {
+      const { default: searchPresetService } = await import('./searchPreset.service.js');
+      const preset = await searchPresetService.create(req.user._id, req.body);
+      return res.success({ data: preset, statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  async deletePreset(req, res, next) {
+    try {
+      const { default: searchPresetService } = await import('./searchPreset.service.js');
+      await searchPresetService.delete(req.user._id, req.params.presetId);
+      return res.success({ message: 'Preset deleted' });
+    } catch (err) { next(err); }
+  }
+
+  async exportDocuments(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const { q, type = 'all', status, customerId, departmentId, dateFrom, dateTo, amountMin, amountMax } = query;
+
+      const { default: Quotation } = await import('./quotation.model.js');
+      const { default: Order }     = await import('./order.model.js');
+      const { default: Invoice }   = await import('./invoice.model.js');
+
+      const buildFilter = (docType) => {
+        const filter = { isDeleted: { $ne: true } };
+        const numField = docType === 'quotation' ? 'quotationNumber' : docType === 'order' ? 'orderNumber' : 'invoiceNumber';
+        if (q) filter.$or = [
+          { [numField]: { $regex: q, $options: 'i' } },
+          { customerName: { $regex: q, $options: 'i' } },
+        ];
+        if (status) filter.status = status;
+        if (customerId) filter.customerId = customerId;
+        if (departmentId) filter.departmentId = Array.isArray(departmentId) ? { $in: departmentId } : departmentId;
+        if (dateFrom || dateTo) {
+          filter.createdAt = {};
+          if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+          if (dateTo)   filter.createdAt.$lte = new Date(dateTo);
+        }
+        if (amountMin !== undefined || amountMax !== undefined) {
+          filter.grandTotalRounded = {};
+          if (amountMin !== undefined) filter.grandTotalRounded.$gte = Number(amountMin);
+          if (amountMax !== undefined) filter.grandTotalRounded.$lte = Number(amountMax);
+        }
+        return filter;
+      };
+
+      const types = type === 'all' ? ['quotation', 'order', 'invoice'] : [type];
+      const rows = [];
+
+      if (types.includes('quotation')) {
+        const docs = await Quotation.find(buildFilter('quotation'))
+          .select('quotationNumber customerName status grandTotalRounded currency createdAt').limit(10000).lean();
+        docs.forEach((d) => rows.push({
+          type: 'Quotation', number: d.quotationNumber, customer: d.customerName,
+          status: d.status, total: d.grandTotalRounded ?? 0, currency: d.currency,
+          date: d.createdAt?.toISOString().slice(0, 10) ?? '',
+        }));
+      }
+      if (types.includes('order')) {
+        const docs = await Order.find(buildFilter('order'))
+          .select('orderNumber customerName status grandTotalRounded currency createdAt').limit(10000).lean();
+        docs.forEach((d) => rows.push({
+          type: 'Order', number: d.orderNumber, customer: d.customerName,
+          status: d.status, total: d.grandTotalRounded ?? 0, currency: d.currency,
+          date: d.createdAt?.toISOString().slice(0, 10) ?? '',
+        }));
+      }
+      if (types.includes('invoice')) {
+        const docs = await Invoice.find(buildFilter('invoice'))
+          .select('invoiceNumber customerName status grandTotalRounded currency createdAt').limit(10000).lean();
+        docs.forEach((d) => rows.push({
+          type: 'Invoice', number: d.invoiceNumber, customer: d.customerName,
+          status: d.status, total: d.grandTotalRounded ?? 0, currency: d.currency,
+          date: d.createdAt?.toISOString().slice(0, 10) ?? '',
+        }));
+      }
+
+      const header = 'Type,Number,Customer,Status,Total,Currency,Date\n';
+      const body = rows.map((r) =>
+        `${r.type},${r.number},"${(r.customer || '').replace(/"/g, '""')}",${r.status},${r.total},${r.currency},${r.date}`
+      ).join('\n');
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="qop-export.csv"');
+      return res.send(header + body);
+    } catch (err) { next(err); }
+  }
 }
 
 const searchController = new SearchController();

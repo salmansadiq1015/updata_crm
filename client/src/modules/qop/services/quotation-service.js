@@ -16,4 +16,5 @@ export const quotationService = {
   getHistory:    (id)          => apiClient.get(E.QUOTATION_HISTORY(id)),
   snoozeReminder:(id, remId, snoozeDays) =>
     apiClient.post(E.QUOTATION_SNOOZE_REMINDER(id, remId), { snoozeDays }),
+  listReminders: (params = {}) => apiClient.get(`${E.QUOTATIONS}/reminders`, { params }),
 };

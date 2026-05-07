@@ -137,6 +137,15 @@ export function useBillingPlan(orderId) {
   });
 }
 
+export function useQopReminders(filters = {}) {
+  return useQuery({
+    queryKey: ['qop', 'reminders', filters],
+    queryFn: () => quotationService.listReminders(filters),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    refetchInterval: 60 * 1000,
+  });
+}
+
 export function useCustomerDocuments(customerId, filters = {}) {
   return useQuery({
     queryKey: ['qop', 'customer-docs', customerId, filters],

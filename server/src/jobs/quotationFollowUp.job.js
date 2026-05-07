@@ -1,4 +1,6 @@
 import { BaseWorker } from '../shared/queue/BaseWorker.js';
+import eventBus from '../shared/events/EventBus.js';
+import EVENT_TYPES from '../shared/events/eventTypes.js';
 import logger from '../shared/logger/index.js';
 
 /**
@@ -49,6 +51,13 @@ export class QuotationFollowUpWorker extends BaseWorker {
             scheduledAt: now,
             status: 'PENDING',
           });
+          eventBus.publish(EVENT_TYPES.NOTIFICATION_QUEUED, {
+            type: 'qop_followup_reminder',
+            title: `Follow-up: ${q.quotationNumber}`,
+            body: `Quotation ${q.quotationNumber} (${q.customerName}) needs follow-up (${days}d since sent).`,
+            recipientId: q.assignedUserId || q.createdBy,
+            metadata: { quotationId: q._id, quotationNumber: q.quotationNumber },
+          }, { source: 'jobs:quotation-follow-up' });
           followUpCount++;
         }
       }

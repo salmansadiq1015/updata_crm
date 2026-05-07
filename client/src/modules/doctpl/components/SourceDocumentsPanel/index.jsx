@@ -1,14 +1,18 @@
 'use client';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { FileText, Mail, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DocumentsTable } from '../DocumentsTable';
 import { EmailComposeModal } from '../EmailComposeModal';
 import { DocumentPreviewDrawer } from '../DocumentPreviewDrawer';
+import { EmailStatusBadge } from '../EmailStatusBadge';
 import { useDocumentsBySource } from '../../hooks/useDocumentQueries';
 import { useGenerateDocument } from '../../hooks/useDocumentMutations';
 import { useDownloadDocument } from '../../hooks/useDocumentMutations';
 import { useComposeEmail } from '../../hooks/useEmailMutations';
+import apiClient from '@/lib/api/client';
+import { ENDPOINTS } from '@/lib/api/endpoints';
 
 export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateType, documentData = {}, language = 'de' }) {
   const [emailOpen, setEmailOpen] = useState(false);
@@ -16,6 +20,11 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
   const [preview, setPreview]     = useState(null);
 
   const { data: docs = [], refetch, isLoading } = useDocumentsBySource(sourceModule, sourceRecordId);
+  const { data: emails = [] } = useQuery({
+    queryKey: ['doctpl', 'emails', sourceModule, sourceRecordId],
+    queryFn: () => apiClient.get(ENDPOINTS.DOCTPL.EMAILS, { params: { sourceModule, sourceRecordId, limit: 5 } }).then(r => r.data ?? []),
+    enabled: !!sourceRecordId,
+  });
   const generate = useGenerateDocument();
   const compose  = useComposeEmail();
   const download = useDownloadDocument();
@@ -80,6 +89,21 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
         onPreview={handlePreview}
         onDownload={handleDownload}
       />
+
+      {emails.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">Email history</p>
+          {emails.map(email => (
+            <div key={email._id} className="flex items-center justify-between text-xs text-muted-foreground py-1 border-t border-border/50">
+              <span className="truncate">{email.to?.join(', ')}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span>{new Date(email.createdAt).toLocaleDateString('de-CH')}</span>
+                <EmailStatusBadge status={email.status} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <EmailComposeModal open={emailOpen} onClose={() => setEmailOpen(false)} initialValues={emailInit} />
       <DocumentPreviewDrawer open={!!preview} url={preview?.url} fileName={preview?.fileName} onClose={() => setPreview(null)} />

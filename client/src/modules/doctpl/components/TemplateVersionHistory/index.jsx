@@ -20,6 +20,7 @@ export function TemplateVersionHistory({ templateId }) {
             <div className="flex items-center gap-1.5 mb-0.5">
               <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">v{v.version}</span>
               <span className="text-xs text-muted-foreground">{new Date(v.createdAt).toLocaleDateString('de-CH')}</span>
+              <span className="text-xs text-muted-foreground">by {v.createdBy?.name || v.createdBy?.email || v.createdBy || '—'}</span>
             </div>
             <p className="text-xs text-muted-foreground truncate">{v.changeDescription || 'No description'}</p>
           </div>

@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useSendEmail } from '../../hooks/useEmailMutations';
 
 export function EmailComposeModal({ open, onClose, initialValues = {} }) {
-  const [form, setForm] = useState({ to: '', cc: '', subject: '', bodyHtml: '', documentId: null, sourceModule: null, sourceRecordId: null });
+  const [form, setForm] = useState({ to: '', cc: '', bcc: '', subject: '', bodyHtml: '', documentId: null, sourceModule: null, sourceRecordId: null });
   const send = useSendEmail();
 
   useEffect(() => {
@@ -22,6 +22,7 @@ export function EmailComposeModal({ open, onClose, initialValues = {} }) {
       ...form,
       to:  form.to.split(',').map((s) => s.trim()).filter(Boolean),
       cc:  form.cc ? form.cc.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      bcc: form.bcc ? form.bcc.split(',').map((s) => s.trim()).filter(Boolean) : [],
     });
     onClose();
   };
@@ -33,6 +34,11 @@ export function EmailComposeModal({ open, onClose, initialValues = {} }) {
         <div className="space-y-3 py-1">
           <div><Label>To</Label><Input value={form.to} onChange={set('to')} placeholder="email@example.com, ..." /></div>
           <div><Label>CC</Label><Input value={form.cc} onChange={set('cc')} placeholder="optional" /></div>
+          <div className="flex flex-col gap-1.5">
+            <Label>BCC</Label>
+            <Input value={form.bcc} onChange={(e) => setForm(f => ({ ...f, bcc: e.target.value }))}
+              placeholder="optional" className="text-sm" />
+          </div>
           <div><Label>Subject</Label><Input value={form.subject} onChange={set('subject')} /></div>
           <div><Label>Message</Label><Textarea rows={7} value={form.bodyHtml} onChange={set('bodyHtml')} /></div>
         </div>

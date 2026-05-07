@@ -1,4 +1,5 @@
 import orderService from './order.service.js';
+import invoiceService from './invoice.service.js';
 import queueManager from '../../shared/queue/QueueManager.js';
 
 class OrderController {
@@ -72,6 +73,13 @@ class OrderController {
       const { default: documentStatusLogService } = await import('./documentStatusLog.service.js');
       const history = await documentStatusLogService.getHistory('order', req.params.id);
       return res.success({ data: history });
+    } catch (err) { next(err); }
+  }
+
+  async getBillingPlan(req, res, next) {
+    try {
+      const plan = await invoiceService.getBillingPlan(req.params.id);
+      return res.success({ data: plan });
     } catch (err) { next(err); }
   }
 }

@@ -21,5 +21,6 @@ router.patch('/:id/status', authenticate, requirePermission('quotations:write'),
 router.get('/:id/invoices', authenticate, requirePermission('quotations:read'), validate(orderIdParamSchema), (req, res, next) => orderController.getInvoices(req, res, next));
 router.post('/:id/documents/generate', authenticate, requirePermission('quotations:write'), validate(orderIdParamSchema), (req, res, next) => orderController.generateDocument(req, res, next));
 router.get('/:id/history', authenticate, requirePermission('quotations:read'), validate(orderIdParamSchema), (req, res, next) => orderController.getHistory(req, res, next));
+router.get('/:id/billing-plan', authenticate, requirePermission('quotations:read'), validate(orderIdParamSchema), (req, res, next) => orderController.getBillingPlan(req, res, next));
 
 export default router;

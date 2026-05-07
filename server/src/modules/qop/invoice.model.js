@@ -147,6 +147,7 @@ const invoiceSchema = new mongoose.Schema(
     payments: [paymentSchema],
     milestoneDescription: { type: String, maxlength: 500, default: null },
     milestonePercent: { type: Number, default: null, min: 0, max: 100 },
+    isDeducted: { type: Boolean, default: false, index: true },
     sentAt: { type: Date, default: null },
     paidAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },

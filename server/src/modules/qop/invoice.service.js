@@ -74,20 +74,33 @@ class InvoiceService {
     const order = await orderRepository.findById(data.sourceOrderId);
     if (!order) throw new NotFoundError('Order', data.sourceOrderId);
 
-    if (!data.milestonePercent || data.milestonePercent <= 0 || data.milestonePercent > 100) {
-      throw new ConflictError('milestonePercent is required and must be between 1 and 100');
+    // Support percentage OR fixed amount
+    if (!data.milestonePercent && !data.milestoneAmount) {
+      throw new ConflictError('Either milestonePercent or milestoneAmount is required');
     }
 
-    // Validate total advance does not exceed 100%
-    const existingAdvances = await invoiceRepository.findAdvancesByProject(order.projectId);
-    const existingPercent = existingAdvances.reduce((sum, inv) => sum + (inv.milestonePercent || 0), 0);
-    if (existingPercent + data.milestonePercent > 100) {
-      throw new ConflictError(
-        `Total advance percentage would exceed 100% (existing: ${existingPercent}%, requested: ${data.milestonePercent}%)`,
-      );
+    let advanceAmount;
+    if (data.milestoneAmount && data.milestoneAmount > 0) {
+      advanceAmount = roundToFiveRappen(data.milestoneAmount);
+      if (!data.milestonePercent) {
+        data.milestonePercent = order.grandTotalRounded > 0
+          ? Math.round((advanceAmount / order.grandTotalRounded) * 10000) / 100
+          : 0;
+      }
+    } else {
+      if (!data.milestonePercent || data.milestonePercent <= 0 || data.milestonePercent > 100) {
+        throw new ConflictError('milestonePercent must be between 1 and 100');
+      }
+      // Validate total advance does not exceed 100%
+      const existingAdvances = await invoiceRepository.findAdvancesByProject(order.projectId);
+      const existingPercent = existingAdvances.reduce((sum, inv) => sum + (inv.milestonePercent || 0), 0);
+      if (existingPercent + data.milestonePercent > 100) {
+        throw new ConflictError(
+          `Total advance percentage would exceed 100% (existing: ${existingPercent}%, requested: ${data.milestonePercent}%)`,
+        );
+      }
+      advanceAmount = roundToFiveRappen(order.grandTotalRounded * data.milestonePercent / 100);
     }
-
-    const advanceAmount = roundToFiveRappen(order.grandTotalRounded * data.milestonePercent / 100);
 
     // Build line items from milestone
     const lineItems = [
@@ -235,6 +248,15 @@ class InvoiceService {
 
     // Link invoice to order
     await orderRepository.addInvoiceId(order._id, invoice._id);
+
+    // Mark all advance invoices for this order as DEDUCTED
+    if (orderAdvances.length > 0) {
+      const Invoice = (await import('./invoice.model.js')).default;
+      await Invoice.updateMany(
+        { _id: { $in: orderAdvances.map((a) => a._id) } },
+        { $set: { isDeducted: true } },
+      );
+    }
 
     await this._invalidateListCache();
 
@@ -606,6 +628,44 @@ class InvoiceService {
 
   async getAgingReport(filters = {}) {
     return invoiceRepository.findAgingReport();
+  }
+
+  async getBillingPlan(orderId) {
+    const { default: orderRepository } = await import('./order.repository.js');
+    const order = await orderRepository.findById(orderId);
+    if (!order) throw new NotFoundError('Order', orderId);
+
+    const advances = await invoiceRepository.findAdvancesByProject(
+      order.projectId?._id || order.projectId,
+    );
+    const orderAdvances = advances.filter(
+      (inv) => String(inv.sourceOrderId) === String(order._id),
+    );
+
+    const projectTotal = order.grandTotalRounded || 0;
+    const advancesInvoiced = orderAdvances.reduce((s, a) => s + (a.grandTotalRounded || 0), 0);
+    const percentInvoiced = projectTotal > 0
+      ? Math.round((advancesInvoiced / projectTotal) * 10000) / 100
+      : 0;
+
+    return {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      projectTotal,
+      advancesInvoiced: roundToFiveRappen(advancesInvoiced),
+      remainingForFinal: roundToFiveRappen(projectTotal - advancesInvoiced),
+      percentInvoiced,
+      advances: orderAdvances.map((a) => ({
+        _id: a._id,
+        invoiceNumber: a.invoiceNumber,
+        invoiceDate: a.invoiceDate,
+        milestonePercent: a.milestonePercent,
+        milestoneDescription: a.milestoneDescription,
+        grandTotalRounded: a.grandTotalRounded,
+        status: a.status,
+        isDeducted: a.isDeducted || false,
+      })),
+    };
   }
 
   async _invalidateInvoiceCache(id) {

@@ -40,7 +40,8 @@ export const createInvoiceSchema = {
 export const createAdvanceSchema = {
   body: Joi.object({
     sourceOrderId: objectId.required(),
-    milestonePercent: Joi.number().min(1).max(100).required(),
+    milestonePercent: Joi.number().min(1).max(100),
+    milestoneAmount: Joi.number().min(0.01),
     milestoneDescription: Joi.string().required().trim().max(500),
     title: Joi.string().trim().max(500).allow('', null),
     dueDate: Joi.date().iso().required(),

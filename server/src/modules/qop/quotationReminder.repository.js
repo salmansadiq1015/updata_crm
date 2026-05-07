@@ -1,6 +1,16 @@
 import QuotationReminder from './quotationReminder.model.js';
 
 class QuotationReminderRepository {
+  async list({ status, limit = 50 } = {}) {
+    const filter = {};
+    if (status) filter.status = status;
+    return QuotationReminder.find(filter)
+      .sort({ scheduledAt: -1 })
+      .limit(limit)
+      .populate({ path: 'quotationId', select: 'quotationNumber customerName status' })
+      .lean();
+  }
+
   async create(data) {
     const reminder = new QuotationReminder(data);
     return reminder.save();

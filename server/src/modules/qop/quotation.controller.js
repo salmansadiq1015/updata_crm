@@ -111,6 +111,15 @@ class QuotationController {
     } catch (err) { next(err); }
   }
 
+  async listReminders(req, res, next) {
+    try {
+      const { default: quotationReminderService } = await import('./quotationReminder.service.js');
+      const { status, limit } = req.query;
+      const reminders = await quotationReminderService.list({ status, limit: limit ? Number(limit) : 50 });
+      return res.success({ data: reminders });
+    } catch (err) { next(err); }
+  }
+
   async snoozeReminder(req, res, next) {
     try {
       const { default: quotationReminderService } = await import('./quotationReminder.service.js');

@@ -1,6 +1,10 @@
 import quotationReminderRepository from './quotationReminder.repository.js';
 
 class QuotationReminderService {
+  async list(filters = {}) {
+    return quotationReminderRepository.list(filters);
+  }
+
   async createReminder(quotationId, type, scheduledAt) {
     return quotationReminderRepository.create({
       quotationId,

@@ -9,8 +9,11 @@ const quotationReminderSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['follow_up', 'expiration_warning'],
       required: true,
+    },
+    intervalDays: {
+      type: Number,
+      default: null,
     },
     scheduledAt: {
       type: Date,

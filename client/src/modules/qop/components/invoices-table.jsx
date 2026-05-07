@@ -27,6 +27,7 @@ import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
 import { InvoiceFormDialog } from './invoice-form-dialog';
 import { RecordPaymentDialog } from './record-payment-dialog';
+import { InvoiceDetailDialog } from './invoice-detail-dialog';
 
 const INV_STATUSES = ['', 'DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'];
 
@@ -55,12 +56,13 @@ export function InvoicesTable() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
 
-  const [search, setSearch]         = useState('');
-  const [statusFilter, setStatus]   = useState('');
-  const [formOpen, setFormOpen]     = useState(false);
-  const [formType, setFormType]     = useState('STANDARD');
-  const [payingInvoice, setPaying]  = useState(null);
-  const [historyFor, setHistoryFor] = useState(null);
+  const [search, setSearch]           = useState('');
+  const [statusFilter, setStatus]     = useState('');
+  const [formOpen, setFormOpen]       = useState(false);
+  const [formType, setFormType]       = useState('STANDARD');
+  const [payingInvoice, setPaying]    = useState(null);
+  const [historyFor, setHistoryFor]   = useState(null);
+  const [detailInvoiceId, setDetail]  = useState(null);
 
   const filters = {};
   if (search.trim())  filters.search = search.trim();
@@ -178,7 +180,10 @@ export function InvoicesTable() {
               key={id}
               className="grid grid-cols-[9rem_6rem_1fr_8rem_7rem_7rem_8rem_2.5rem] border-b border-border last:border-0 hover:bg-muted/30 transition-colors group"
             >
-              <div className="px-3 py-3 text-sm font-mono text-muted-foreground">{inv.invoiceNumber}</div>
+              <div
+                className="px-3 py-3 text-sm font-mono text-muted-foreground cursor-pointer hover:text-foreground hover:underline"
+                onClick={() => setDetail(id)}
+              >{inv.invoiceNumber}</div>
               <div className="px-3 py-3"><InvoiceTypeBadge type={inv.invoiceType} /></div>
               <div className="px-3 py-3 text-sm font-medium truncate">
                 {inv.customerName ?? inv.customer?.name ?? '—'}
@@ -248,6 +253,11 @@ export function InvoicesTable() {
         open={!!historyFor}
         onClose={() => setHistoryFor(null)}
         invoiceId={historyFor}
+      />
+      <InvoiceDetailDialog
+        open={!!detailInvoiceId}
+        onClose={() => setDetail(null)}
+        invoiceId={detailInvoiceId}
       />
     </div>
   );

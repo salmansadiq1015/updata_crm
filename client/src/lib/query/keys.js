@@ -256,4 +256,23 @@ export const queryKeys = {
       matrix: (params) => ['deploy', 'coarse', 'matrix', params],
     },
   },
+  doctpl: {
+    templates: {
+      list:   (f)  => ['doctpl', 'templates', 'list', f],
+      detail: (id) => ['doctpl', 'templates', 'detail', id],
+      versions:(id)=> ['doctpl', 'templates', 'versions', id],
+    },
+    documents: {
+      list:     (f)      => ['doctpl', 'documents', 'list', f],
+      detail:   (id)     => ['doctpl', 'documents', 'detail', id],
+      bySource: (mod,rid)=> ['doctpl', 'documents', 'source', mod, rid],
+    },
+    ci: {
+      config: () => ['doctpl', 'ci', 'config'],
+      assets: () => ['doctpl', 'ci', 'assets'],
+    },
+    emails: {
+      list: (f) => ['doctpl', 'emails', 'list', f],
+    },
+  },
 };

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import articleController from './article.controller.js';
+import articleImageController from './articleImage.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
@@ -15,10 +16,24 @@ import config from '../../config/index.js';
 
 const router = Router();
 
-// Multer: memory storage for import files
+// Multer: memory storage for import files and image uploads
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: config.storage.maxFileSize },
+});
+
+// Multer for image uploads: 2 MB limit, images bucket
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter(_req, file, cb) {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type '${file.mimetype}' is not allowed. Accepted: jpeg, png, webp`));
+    }
+  },
 });
 
 // Named routes BEFORE /:id
@@ -35,5 +50,10 @@ router.delete('/:id', authenticate, requirePermission('catalog:delete'), validat
 // Version history
 router.get('/:id/versions', authenticate, requirePermission('catalog:read'), validate(articleIdParamSchema), (req, res, next) => articleController.getVersions(req, res, next));
 router.get('/:id/versions/:ver', authenticate, requirePermission('catalog:read'), validate(articleVersionParamSchema), (req, res, next) => articleController.getVersion(req, res, next));
+
+// Article images
+router.get('/:articleId/images', authenticate, requirePermission('catalog:read'), (req, res, next) => articleImageController.list(req, res, next));
+router.post('/:articleId/images', authenticate, requirePermission('catalog:write'), uploadImage.single('image'), (req, res, next) => articleImageController.upload(req, res, next));
+router.delete('/:articleId/images/:imageId', authenticate, requirePermission('catalog:write'), (req, res, next) => articleImageController.remove(req, res, next));
 
 export default router;

@@ -54,6 +54,13 @@ export const PERMISSIONS = {
   TASKS_READ: 'tasks:read',
   TASKS_WRITE: 'tasks:write',
 
+  // Catalog
+  CATALOG_READ: 'catalog:read',
+  CATALOG_WRITE: 'catalog:write',
+  CATALOG_DELETE: 'catalog:delete',
+  CATALOG_PRICE: 'catalog:price',
+  CATALOG_ADMIN: 'catalog:admin',
+
   // Notifications (future)
   NOTIFICATIONS_READ: 'notifications:read',
   NOTIFICATIONS_ADMIN: 'notifications:admin',

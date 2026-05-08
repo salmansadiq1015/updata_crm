@@ -79,6 +79,13 @@ const PERMISSION_DEFINITIONS = [
   { module: 'tasks', action: 'delete', description: 'Delete tasks' },
   { module: 'tasks', action: 'admin', description: 'Full task administration' },
 
+  // Catalog
+  { module: 'catalog', action: 'read', description: 'View catalog articles and categories' },
+  { module: 'catalog', action: 'write', description: 'Create and update catalog articles and categories' },
+  { module: 'catalog', action: 'delete', description: 'Soft-delete catalog articles' },
+  { module: 'catalog', action: 'price', description: 'Update article prices and manage price batches' },
+  { module: 'catalog', action: 'admin', description: 'Full catalog administration — IGH import, bulk import, UoM management' },
+
   // Notifications
   { module: 'notifications', action: 'read', description: 'View notifications' },
   { module: 'notifications', action: 'write', description: 'Send and manage notifications' },

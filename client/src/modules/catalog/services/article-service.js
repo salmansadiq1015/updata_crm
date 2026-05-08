@@ -13,4 +13,14 @@ export const articleService = {
   updatePrice: (data) => apiClient.post(E.PRICE_UPDATE, data),
   getPriceHistory: (id) => apiClient.get(E.PRICE_HISTORY(id)),
   picker: (query) => apiClient.get(E.PICKER, { params: { q: query } }),
+  listImages: (articleId) => apiClient.get(E.ARTICLE_IMAGES(articleId)),
+  uploadImage: (articleId, file) => {
+    const form = new FormData();
+    form.append('image', file);
+    return apiClient.post(E.ARTICLE_IMAGES(articleId), form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  deleteImage: (articleId, imageId) =>
+    apiClient.delete(E.ARTICLE_IMAGE(articleId, imageId)),
 };

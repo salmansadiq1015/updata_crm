@@ -32,7 +32,21 @@ export function useArticleMutations() {
     onSuccess: invalidateArticles,
   });
 
-  return { createArticle, updateArticle, removeArticle, updatePrice };
+  const uploadImage = useMutation({
+    mutationFn: ({ articleId, file }) => articleService.uploadImage(articleId, file),
+    onSuccess: (_, { articleId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.catalog.articleImages(articleId) });
+    },
+  });
+
+  const deleteImage = useMutation({
+    mutationFn: ({ articleId, imageId }) => articleService.deleteImage(articleId, imageId),
+    onSuccess: (_, { articleId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.catalog.articleImages(articleId) });
+    },
+  });
+
+  return { createArticle, updateArticle, removeArticle, updatePrice, uploadImage, deleteImage };
 }
 
 export function useCategoryMutations() {

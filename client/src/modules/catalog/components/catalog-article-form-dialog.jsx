@@ -15,12 +15,16 @@ import { useArticleMutations } from '../hooks/use-catalog-mutations';
 import { useCatalogCategories } from '../hooks/use-catalog-queries';
 import { ARTICLE_TYPES, ARTICLE_STATUSES } from '../constants/catalog-constants';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { ArticleImageGallery } from './article-image-gallery';
 
-export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
-  const { locale: language } = useLanguage();
+export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article }) {
+  const { locale: language, t } = useLanguage();
   const de = language === 'de';
 
-  const { createArticle, updateArticle } = useArticleMutations();
+  // Support both onOpenChange (existing usage) and onClose (new API)
+  const handleClose = onOpenChange ?? onClose ?? (() => {});
+
+  const { createArticle, updateArticle, uploadImage, deleteImage } = useArticleMutations();
   const { data: categories = [] } = useCatalogCategories();
   const isEdit = !!article;
 
@@ -29,9 +33,11 @@ export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
       articleNumber: '',
       name: '',
       description: '',
+      supplierRef: '',
+      ighArticleNumber: '',
       type: 'MATERIAL',
       status: 'ACTIVE',
-      categoryId: '',
+      categoryId: '__none__',
       unit: 'Stk',
       buyPrice: '',
       sellPrice: '',
@@ -45,14 +51,28 @@ export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
             articleNumber: article.articleNumber ?? '',
             name: article.name ?? '',
             description: article.description ?? '',
+            supplierRef: article.supplierRef ?? '',
+            ighArticleNumber: article.ighArticleNumber ?? '',
             type: article.type ?? 'MATERIAL',
             status: article.status ?? 'ACTIVE',
-            categoryId: article.categoryId ?? '',
+            categoryId: article.categoryId ?? '__none__',
             unit: article.unit ?? 'Stk',
             buyPrice: article.buyPrice ?? '',
             sellPrice: article.sellPrice ?? '',
           }
-        : { articleNumber: '', name: '', description: '', type: 'MATERIAL', status: 'ACTIVE', categoryId: '', unit: 'Stk', buyPrice: '', sellPrice: '' }
+        : {
+            articleNumber: '',
+            name: '',
+            description: '',
+            supplierRef: '',
+            ighArticleNumber: '',
+            type: 'MATERIAL',
+            status: 'ACTIVE',
+            categoryId: '__none__',
+            unit: 'Stk',
+            buyPrice: '',
+            sellPrice: '',
+          }
       );
     }
   }, [open, article, reset]);
@@ -62,21 +82,23 @@ export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
       ...values,
       buyPrice: values.buyPrice !== '' ? parseFloat(values.buyPrice) : undefined,
       sellPrice: values.sellPrice !== '' ? parseFloat(values.sellPrice) : undefined,
-      categoryId: values.categoryId || undefined,
+      categoryId: (values.categoryId && values.categoryId !== '__none__') ? values.categoryId : undefined,
+      supplierRef: values.supplierRef || undefined,
+      ighArticleNumber: values.ighArticleNumber || undefined,
     };
     if (isEdit) {
       await updateArticle.mutateAsync({ id: article._id || article.id, data: payload });
     } else {
       await createArticle.mutateAsync(payload);
     }
-    onOpenChange(false);
+    handleClose(false);
   };
 
   const type = watch('type');
   const status = watch('status');
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
@@ -89,18 +111,19 @@ export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>{de ? 'Art.-Nr.' : 'Article No.'}</Label>
-              <Input {...register('articleNumber')} placeholder="ART-001" className="h-8 text-sm" />
+              <Label htmlFor="articleNumber">{de ? 'Art.-Nr.' : 'Article No.'}</Label>
+              <Input id="articleNumber" {...register('articleNumber')} placeholder="ART-001" className="h-8 text-sm" />
             </div>
             <div className="space-y-1.5">
-              <Label>{de ? 'Einheit' : 'Unit'}</Label>
-              <Input {...register('unit')} placeholder="Stk" className="h-8 text-sm" />
+              <Label htmlFor="unit">{de ? 'Einheit' : 'Unit'}</Label>
+              <Input id="unit" {...register('unit')} placeholder="Stk" className="h-8 text-sm" />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label>{de ? 'Bezeichnung' : 'Name'} *</Label>
+            <Label htmlFor="name">{de ? 'Bezeichnung' : 'Name'} *</Label>
             <Input
+              id="name"
               {...register('name', { required: true })}
               placeholder={de ? 'Artikelbezeichnung' : 'Article name'}
               className="h-8 text-sm"
@@ -109,10 +132,31 @@ export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label>{de ? 'Beschreibung' : 'Description'}</Label>
+            <Label htmlFor="description">{de ? 'Beschreibung' : 'Description'}</Label>
             <Input
+              id="description"
               {...register('description')}
               placeholder={de ? 'Kurzbeschreibung' : 'Short description'}
+              className="h-8 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="supplierRef">{t('catalog.articles.supplierRef')}</Label>
+            <Input
+              id="supplierRef"
+              {...register('supplierRef')}
+              placeholder="e.g. SUP-10023"
+              className="h-8 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ighArticleNumber">{t('catalog.articles.ighNumber')}</Label>
+            <Input
+              id="ighArticleNumber"
+              {...register('ighArticleNumber')}
+              placeholder="e.g. IGH-98001"
               className="h-8 text-sm"
             />
           </div>
@@ -153,7 +197,7 @@ export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
                 <SelectValue placeholder={de ? 'Keine Kategorie' : 'No category'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">{de ? 'Keine Kategorie' : 'No category'}</SelectItem>
+                <SelectItem value="__none__">{de ? 'Keine Kategorie' : 'No category'}</SelectItem>
                 {categories.map((c) => (
                   <SelectItem key={c._id || c.id} value={c._id || c.id}>{c.name}</SelectItem>
                 ))}
@@ -163,8 +207,9 @@ export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>{de ? 'EK-Preis (CHF)' : 'Buy Price (CHF)'}</Label>
+              <Label htmlFor="buyPrice">{de ? 'EK-Preis (CHF)' : 'Buy Price (CHF)'}</Label>
               <Input
+                id="buyPrice"
                 {...register('buyPrice')}
                 type="number" step="0.01" min="0"
                 placeholder="0.00"
@@ -172,8 +217,9 @@ export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>{de ? 'VK-Preis (CHF)' : 'Sell Price (CHF)'}</Label>
+              <Label htmlFor="sellPrice">{de ? 'VK-Preis (CHF)' : 'Sell Price (CHF)'}</Label>
               <Input
+                id="sellPrice"
                 {...register('sellPrice')}
                 type="number" step="0.01" min="0"
                 placeholder="0.00"
@@ -182,8 +228,20 @@ export function CatalogArticleFormDialog({ open, onOpenChange, article }) {
             </div>
           </div>
 
+          {article && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t('catalog.images.upload')}</p>
+              <p className="text-xs text-muted-foreground">{t('catalog.images.maxSize')}</p>
+              <ArticleImageGallery
+                articleId={article._id}
+                onUpload={(file) => uploadImage.mutate({ articleId: article._id, file })}
+                onDelete={(imageId) => deleteImage.mutate({ articleId: article._id, imageId })}
+              />
+            </div>
+          )}
+
           <DialogFooter>
-            <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => handleClose(false)}>
               {de ? 'Abbrechen' : 'Cancel'}
             </Button>
             <Button type="submit" size="sm" disabled={isSubmitting}>

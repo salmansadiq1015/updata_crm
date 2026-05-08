@@ -13,7 +13,7 @@ class ArticleController {
     try {
       const { categoryId, q } = req.query;
       const facets = await articleService.getFacets({ categoryId, q });
-      res.success({ data: facets });
+      return res.success({ data: facets });
     } catch (err) {
       next(err);
     }

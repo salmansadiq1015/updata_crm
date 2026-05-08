@@ -20,7 +20,7 @@ const fmt = (v, currency = 'CHF') =>
   new Intl.NumberFormat('de-CH', { style: 'currency', currency }).format(v ?? 0);
 
 export function CatalogArticlesTable({ categoryId }) {
-  const { locale: language } = useLanguage();
+  const { locale: language, t } = useLanguage();
   const de = language === 'de';
 
   const [search, setSearch] = useState('');

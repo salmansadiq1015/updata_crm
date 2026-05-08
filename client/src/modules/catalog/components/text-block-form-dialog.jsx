@@ -112,12 +112,16 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
       categoryId: values.categoryId === '__none__' ? undefined : values.categoryId,
       unit: values.unit || undefined,
     };
-    if (isEdit) {
-      await updateTextBlock.mutateAsync({ id: textBlock._id, data: payload });
-    } else {
-      await createTextBlock.mutateAsync(payload);
+    try {
+      if (isEdit) {
+        await updateTextBlock.mutateAsync({ id: textBlock._id, data: payload });
+      } else {
+        await createTextBlock.mutateAsync(payload);
+      }
+      onClose();
+    } catch {
+      // mutation error is available via createTextBlock.error / updateTextBlock.error
     }
-    onClose();
   };
 
   const isPending = createTextBlock.isPending || updateTextBlock.isPending;

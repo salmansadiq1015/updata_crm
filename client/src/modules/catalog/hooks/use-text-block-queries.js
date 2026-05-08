@@ -9,3 +9,11 @@ export function useTextBlocks(filters = {}) {
     staleTime: 60_000,
   });
 }
+
+export function useTextBlockDetail(id) {
+  return useQuery({
+    queryKey: queryKeys.catalog.textBlockDetail(id),
+    queryFn: () => textBlockService.getById(id).then((r) => r.data ?? r),
+    enabled: !!id,
+  });
+}

@@ -16,7 +16,10 @@ export function useTextBlockMutations() {
 
   const updateTextBlock = useMutation({
     mutationFn: ({ id, data }) => textBlockService.update(id, data),
-    onSuccess: invalidate,
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.catalog.textBlockDetail(id) });
+      invalidate();
+    },
   });
 
   const deleteTextBlock = useMutation({

@@ -7,16 +7,16 @@ import { z } from 'zod/v4';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from '@/shared/components/ui/dialog';
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
-} from '@/shared/components/ui/form';
-import { Input } from '@/shared/components/ui/input';
-import { Button } from '@/shared/components/ui/button';
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/shared/components/ui/select';
+} from '@/components/ui/select';
 import { useTextBlockMutations } from '../hooks/use-text-block-mutations';
 import { useCatalogCategories } from '../hooks/use-catalog-queries';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -133,6 +133,9 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
           <DialogTitle>
             {isEdit ? t('catalog.textBlocks.edit') : t('catalog.textBlocks.create')}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {isEdit ? 'Edit text block content and settings.' : 'Create a new reusable text block.'}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

@@ -46,7 +46,18 @@ export function useArticleMutations() {
     },
   });
 
-  return { createArticle, updateArticle, removeArticle, updatePrice, uploadImage, deleteImage };
+  const bulkImport = useMutation({
+    mutationFn: (file) => {
+      const form = new FormData();
+      form.append('file', file);
+      return articleService.bulkImport(form);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['catalog', 'articles'] });
+    },
+  });
+
+  return { createArticle, updateArticle, removeArticle, updatePrice, uploadImage, deleteImage, bulkImport };
 }
 
 export function useCategoryMutations() {

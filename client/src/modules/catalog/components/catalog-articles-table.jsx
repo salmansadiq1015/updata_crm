@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Plus, MoreHorizontal, Pencil, Trash2, ToggleLeft } from 'lucide-react';
+import { Search, Plus, MoreHorizontal, Pencil, Trash2, ToggleLeft, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -12,6 +12,7 @@ import { useArticleMutations } from '../hooks/use-catalog-mutations';
 import { ArticleTypeBadge } from './article-type-badge';
 import { ArticleStatusBadge } from './article-status-badge';
 import { CatalogArticleFormDialog } from './catalog-article-form-dialog';
+import { CatalogBulkImportDialog } from './catalog-bulk-import-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 const fmt = (v, currency = 'CHF') =>
@@ -24,6 +25,7 @@ export function CatalogArticlesTable({ categoryId }) {
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const filters = {};
   if (categoryId) filters.categoryId = categoryId;
@@ -53,6 +55,10 @@ export function CatalogArticlesTable({ categoryId }) {
             className="pl-9 h-8 text-sm"
           />
         </div>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setImportOpen(true)}>
+          <Upload className="h-3.5 w-3.5" />
+          {de ? 'Importieren' : 'Bulk Import'}
+        </Button>
         <Button size="sm" className="h-8 gap-1.5" onClick={handleNew}>
           <Plus className="h-3.5 w-3.5" />
           {de ? 'Artikel' : 'Article'}
@@ -162,6 +168,7 @@ export function CatalogArticlesTable({ categoryId }) {
         onOpenChange={setFormOpen}
         article={editing}
       />
+      <CatalogBulkImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );
 }

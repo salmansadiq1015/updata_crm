@@ -12,6 +12,10 @@ export const articleService = {
   getVersions: (id) => apiClient.get(E.ARTICLE_VERSIONS(id)),
   updatePrice: (data) => apiClient.post(E.PRICE_UPDATE, data),
   getPriceHistory: (id) => apiClient.get(E.PRICE_HISTORY(id)),
+  bulkImport: (formData) =>
+    apiClient.post(E.ARTICLES_IMPORT, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   picker: (query) => apiClient.get(E.PICKER, { params: { q: query } }),
   listImages: (articleId) => apiClient.get(E.ARTICLE_IMAGES(articleId)),
   uploadImage: (articleId, file) => {

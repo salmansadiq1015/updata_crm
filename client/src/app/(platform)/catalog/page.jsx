@@ -5,12 +5,14 @@ import { Boxes } from 'lucide-react';
 import { PageHeader } from '@/shared/components/page-header';
 import { CatalogCategoryTree } from '@/modules/catalog/components/catalog-category-tree';
 import { CatalogArticlesTable } from '@/modules/catalog/components/catalog-articles-table';
+import { CatalogFilterPanel } from '@/modules/catalog/components/catalog-filter-panel';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 export default function CatalogPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [filters, setFilters] = useState({});
 
   return (
     <div className="flex flex-col gap-5 h-full">
@@ -28,6 +30,14 @@ export default function CatalogPage() {
           <CatalogCategoryTree
             selectedId={selectedCategoryId}
             onSelect={setSelectedCategoryId}
+          />
+        </div>
+
+        {/* Faceted filter panel */}
+        <div className="w-48 shrink-0 rounded-xl border bg-card overflow-y-auto">
+          <CatalogFilterPanel
+            filters={{ ...filters, categoryId: selectedCategoryId || undefined }}
+            onFiltersChange={setFilters}
           />
         </div>
 

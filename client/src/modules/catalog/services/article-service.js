@@ -19,6 +19,7 @@ export const articleService = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  getFacets: (params = {}) => apiClient.get(E.ARTICLES_FACETS, { params }),
   picker: (query) => apiClient.get(E.PICKER, { params: { q: query } }),
   listImages: (articleId) => apiClient.get(E.ARTICLE_IMAGES(articleId)),
   uploadImage: (articleId, file) => {

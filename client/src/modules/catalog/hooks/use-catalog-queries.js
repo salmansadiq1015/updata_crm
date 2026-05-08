@@ -20,6 +20,14 @@ export function useArticles(filters = {}) {
   });
 }
 
+export function useArticleFacets(filters = {}) {
+  return useQuery({
+    queryKey: queryKeys.catalog.facets(filters),
+    queryFn: () => articleService.getFacets(filters).then((r) => r.data ?? r),
+    staleTime: 30_000,
+  });
+}
+
 export function useArticleDetail(id) {
   return useQuery({
     queryKey: queryKeys.catalog.articleDetail(id),

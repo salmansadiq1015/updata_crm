@@ -47,13 +47,9 @@ export function useArticleMutations() {
   });
 
   const bulkImport = useMutation({
-    mutationFn: (file) => {
-      const form = new FormData();
-      form.append('file', file);
-      return articleService.bulkImport(form);
-    },
+    mutationFn: articleService.bulkImport,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['catalog', 'articles'] });
+      invalidateArticles();
     },
   });
 

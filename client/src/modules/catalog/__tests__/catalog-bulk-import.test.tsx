@@ -33,7 +33,7 @@ describe('CatalogBulkImportDialog', () => {
       { wrapper }
     );
     expect(screen.getByText(/download template/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /upload/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /bulk import/i })).toBeInTheDocument();
   });
 
   it('shows error table when importErrors prop provided', () => {

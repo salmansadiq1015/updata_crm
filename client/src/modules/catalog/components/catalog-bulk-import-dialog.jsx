@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useArticleMutations } from '../hooks/use-catalog-mutations';
 import { useLanguage } from '@/lib/i18n/language-context';
+import apiClient from '@/lib/api/client';
 
 export function CatalogBulkImportDialog({ open, onClose, importErrors: externalErrors }) {
   const { t } = useLanguage();
@@ -34,7 +35,7 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
   const importSummary = result?.success ? result.data : null;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setResult(null); onClose(); } }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t('catalog.articles.importTitle')}</DialogTitle>
@@ -44,7 +45,7 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" asChild>
-              <a href="/api/v1/catalog/articles/import/template" download>
+              <a href={`${apiClient.defaults.baseURL}/catalog/articles/import/template`} download>
                 <FileSpreadsheet className="w-4 h-4 mr-2" />
                 {t('catalog.articles.importDownloadTemplate')}
               </a>
@@ -56,7 +57,7 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
               onClick={() => fileRef.current?.click()}
             >
               <Upload className="w-4 h-4 mr-2" />
-              {bulkImport.isPending ? 'Importing...' : 'Upload'}
+              {t('catalog.articles.bulkImport')}
             </Button>
             <input
               ref={fileRef}
@@ -64,6 +65,7 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
               accept=".csv,.xlsx,.xls"
               className="hidden"
               onChange={(e) => {
+                if (bulkImport.isPending) return;
                 const file = e.target.files?.[0];
                 if (file) handleFile(file);
                 e.target.value = '';

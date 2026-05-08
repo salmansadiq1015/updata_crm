@@ -1,0 +1,185 @@
+'use client';
+
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod/v4';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/shared/components/ui/dialog';
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from '@/shared/components/ui/form';
+import { Input } from '@/shared/components/ui/input';
+import { Button } from '@/shared/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/shared/components/ui/radio-group';
+import { Label } from '@/shared/components/ui/label';
+import { usePriceMutations } from '../hooks/use-price-mutations';
+import { useLanguage } from '@/lib/i18n/language-context';
+
+const schema = z.object({
+  mode: z.enum(['fixed', 'percentage', 'schedule']),
+  value: z.preprocess((v) => (v === '' ? undefined : Number(v)), z.number()),
+  effectiveDate: z.string().optional(),
+});
+
+export function PriceUpdateDialog({ open, onClose, selectedArticles }) {
+  const { t } = useLanguage();
+  const { updatePrices, schedulePrices } = usePriceMutations();
+  const [preview, setPreview] = useState(null);
+
+  const form = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { mode: 'fixed', value: '', effectiveDate: '' },
+  });
+
+  const mode = form.watch('mode');
+
+  const computePreview = (vals) => {
+    return selectedArticles.map((a) => {
+      const oldPrice = Number(a.basePrice) || 0;
+      const newPrice = vals.mode === 'percentage'
+        ? Math.round(oldPrice * (1 + Number(vals.value) / 100) * 100) / 100
+        : Number(vals.value);
+      return { ...a, oldPrice, newPrice, delta: newPrice - oldPrice };
+    });
+  };
+
+  const onPreview = () => {
+    const vals = form.getValues();
+    setPreview(computePreview(vals));
+  };
+
+  const onConfirm = async () => {
+    const vals = form.getValues();
+    const articleIds = selectedArticles.map((a) => a._id);
+    try {
+      if (vals.mode === 'schedule') {
+        await schedulePrices.mutateAsync({ articleIds, percentage: Number(vals.value), scheduledDate: vals.effectiveDate });
+      } else if (vals.mode === 'percentage') {
+        await updatePrices.mutateAsync({ articleIds, percentage: Number(vals.value) });
+      } else {
+        await updatePrices.mutateAsync({ articleIds, newPrice: Number(vals.value) });
+      }
+      onClose();
+    } catch {
+      // error accessible via mutation state
+    }
+  };
+
+  const isPending = updatePrices.isPending || schedulePrices.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setPreview(null); onClose(); } }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t('catalog.prices.update')}</DialogTitle>
+          <DialogDescription>
+            {selectedArticles.length} article{selectedArticles.length !== 1 ? 's' : ''} selected
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form className="space-y-4">
+            <FormField
+              control={form.control}
+              name="mode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Update type</FormLabel>
+                  <FormControl>
+                    <RadioGroup value={field.value} onValueChange={field.onChange} className="flex gap-4">
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="fixed" id="mode-fixed" />
+                        <Label htmlFor="mode-fixed">Fixed price</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="percentage" id="mode-pct" />
+                        <Label htmlFor="mode-pct">Percentage</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="schedule" id="mode-sched" />
+                        <Label htmlFor="mode-sched">{t('catalog.prices.schedule')}</Label>
+                      </div>
+                    </RadioGroup>
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="value"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{mode === 'fixed' ? 'New Price (CHF)' : 'Percentage (%)'}</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" step={mode === 'fixed' ? '0.01' : '0.1'} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {mode === 'schedule' && (
+                <FormField
+                  control={form.control}
+                  name="effectiveDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('catalog.prices.effectiveDate')}</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="date" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
+            <Button type="button" variant="outline" size="sm" onClick={onPreview}>
+              Preview Changes
+            </Button>
+          </form>
+        </Form>
+
+        {preview && (
+          <div className="space-y-2 mt-2">
+            <p className="text-sm font-medium">Preview</p>
+            <div className="max-h-48 overflow-y-auto rounded-md border">
+              <table className="w-full text-xs">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="text-left px-3 py-2">Article</th>
+                    <th className="text-right px-3 py-2">{t('catalog.prices.oldPrice')}</th>
+                    <th className="text-right px-3 py-2">{t('catalog.prices.newPrice')}</th>
+                    <th className="text-right px-3 py-2">&Delta;</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.map((row) => (
+                    <tr key={row._id} className="border-t">
+                      <td className="px-3 py-1.5 font-mono">{row.articleNumber}</td>
+                      <td className="px-3 py-1.5 text-right text-muted-foreground">{row.oldPrice.toFixed(2)}</td>
+                      <td className="px-3 py-1.5 text-right font-medium">{row.newPrice.toFixed(2)}</td>
+                      <td className={`px-3 py-1.5 text-right ${row.delta > 0 ? 'text-green-600' : row.delta < 0 ? 'text-destructive' : ''}`}>
+                        {row.delta > 0 ? '+' : ''}{row.delta.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setPreview(null); onClose(); }}>Cancel</Button>
+              <Button onClick={onConfirm} disabled={isPending}>
+                {isPending ? 'Applying...' : 'Confirm Update'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}

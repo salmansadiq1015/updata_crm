@@ -1,6 +1,7 @@
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import { queryKeys } from '@/lib/query/keys';
+import { translations } from '@/lib/i18n/translations';
 
 describe('catalog constants', () => {
   it('has all catalog permission keys', () => {
@@ -60,5 +61,26 @@ describe('catalog constants', () => {
 
   it('has price batch query keys', () => {
     expect(queryKeys.catalog.priceBatches()).toEqual(['catalog', 'priceBatches']);
+  });
+
+  it('has German catalog translations', () => {
+    const t = translations.de;
+    expect(t['catalog.articles.title']).toBeDefined();
+    expect(t['catalog.articles.create']).toBeDefined();
+    expect(t['catalog.articles.bulkImport']).toBeDefined();
+    expect(t['catalog.filter.type']).toBeDefined();
+    expect(t['catalog.filter.status']).toBeDefined();
+    expect(t['catalog.filter.source']).toBeDefined();
+    expect(t['catalog.filter.priceRange']).toBeDefined();
+    expect(t['catalog.articles.versions']).toBeDefined();
+    expect(t['catalog.images.upload']).toBeDefined();
+  });
+
+  it('has English catalog translations', () => {
+    const t = translations.en;
+    expect(t['catalog.articles.title']).toBeDefined();
+    expect(t['catalog.articles.create']).toBeDefined();
+    expect(t['catalog.images.upload']).toBeDefined();
+    expect(t['catalog.igh.title']).toBeDefined();
   });
 });

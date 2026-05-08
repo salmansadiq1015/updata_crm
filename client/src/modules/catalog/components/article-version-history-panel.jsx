@@ -9,10 +9,18 @@ export function ArticleVersionHistoryPanel({ articleId }) {
   const { t } = useLanguage();
   const { data: versions = [], isLoading } = useArticleVersions(articleId);
 
+  const fmtDate = (raw) => {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleString('de-CH', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="p-4 text-sm text-muted-foreground animate-pulse">
-        Loading...
+        {t('catalog.articles.versions') || 'Lädt...'}
       </div>
     );
   }
@@ -29,17 +37,11 @@ export function ArticleVersionHistoryPanel({ articleId }) {
     <ScrollArea className="h-full">
       <div className="p-4 space-y-3">
         {versions.map((v) => (
-          <div key={v._id} className="rounded-md border p-3 space-y-1.5 text-sm">
+          <div key={v._id ?? v.id} className="rounded-md border p-3 space-y-1.5 text-sm">
             <div className="flex items-center justify-between">
               <span className="font-medium">Version {v.version}</span>
               <Badge variant="outline" className="text-xs">
-                {new Date(v.createdAt).toLocaleDateString('de-CH', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
+                {fmtDate(v.createdAt)}
               </Badge>
             </div>
             {v.changedBy && (
@@ -51,7 +53,7 @@ export function ArticleVersionHistoryPanel({ articleId }) {
               <div className="text-xs text-muted-foreground space-y-0.5 pt-1 border-t">
                 {v.snapshot.name && <p>Name: {v.snapshot.name}</p>}
                 {v.snapshot.basePrice != null && (
-                  <p>Price: CHF {v.snapshot.basePrice.toFixed(2)}</p>
+                  <p>Price: CHF {Number(v.snapshot.basePrice).toFixed(2)}</p>
                 )}
               </div>
             )}

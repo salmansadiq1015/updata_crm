@@ -173,7 +173,7 @@ export function CatalogArticlesTable({ categoryId }) {
         <div className="rounded-xl border bg-card">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <p className="text-sm font-medium">
-              {de ? 'Versionshistorie' : 'Version History'} — {historyArticle.name}
+              {t('catalog.articles.versions')} — {historyArticle.name}
             </p>
             <Button
               variant="ghost"
@@ -184,7 +184,7 @@ export function CatalogArticlesTable({ categoryId }) {
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
-          <div className="max-h-64 overflow-hidden">
+          <div className="h-64 overflow-hidden">
             <ArticleVersionHistoryPanel
               articleId={historyArticle._id || historyArticle.id}
             />

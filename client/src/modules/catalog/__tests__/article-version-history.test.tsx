@@ -65,7 +65,7 @@ describe('ArticleVersionHistoryPanel', () => {
       <ArticleVersionHistoryPanel articleId="art123" />,
       { wrapper }
     );
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByText(/catalog\.articles\.versions|Lädt/i)).toBeInTheDocument();
   });
 
   it('does not call hook when articleId is falsy', () => {

@@ -9,3 +9,11 @@ export function useUnits() {
     staleTime: 5 * 60_000,
   });
 }
+
+export function useUnitDetail(code) {
+  return useQuery({
+    queryKey: queryKeys.catalog.unitDetail(code),
+    queryFn: () => unitService.getByCode(code).then((r) => r.data ?? r),
+    enabled: !!code,
+  });
+}

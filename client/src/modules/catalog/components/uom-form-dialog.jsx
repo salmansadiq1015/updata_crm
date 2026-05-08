@@ -72,7 +72,7 @@ export function UomFormDialog({ open, onClose, unit }) {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? t('catalog.units.create').replace('Create', 'Edit') : t('catalog.units.create')}</DialogTitle>
+          <DialogTitle>{isEdit ? t('catalog.units.edit') : t('catalog.units.create')}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

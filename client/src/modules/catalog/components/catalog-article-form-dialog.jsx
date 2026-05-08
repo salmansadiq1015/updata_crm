@@ -148,6 +148,7 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
               {...register('supplierRef')}
               placeholder="e.g. SUP-10023"
               className="h-8 text-sm"
+              maxLength={100}
             />
           </div>
 
@@ -158,6 +159,7 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
               {...register('ighArticleNumber')}
               placeholder="e.g. IGH-98001"
               className="h-8 text-sm"
+              maxLength={50}
             />
           </div>
 
@@ -233,9 +235,9 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
               <p className="text-sm font-medium">{t('catalog.images.upload')}</p>
               <p className="text-xs text-muted-foreground">{t('catalog.images.maxSize')}</p>
               <ArticleImageGallery
-                articleId={article._id}
-                onUpload={(file) => uploadImage.mutate({ articleId: article._id, file })}
-                onDelete={(imageId) => deleteImage.mutate({ articleId: article._id, imageId })}
+                articleId={(article._id || article.id)}
+                onUpload={(file) => uploadImage.mutate({ articleId: (article._id || article.id), file })}
+                onDelete={(imageId) => deleteImage.mutate({ articleId: (article._id || article.id), imageId })}
               />
             </div>
           )}

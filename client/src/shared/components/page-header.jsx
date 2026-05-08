@@ -3,15 +3,17 @@
  * @param {{
  *   title: string,
  *   description?: string,
+ *   icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>,
  *   count?: number | string,
  *   children?: React.ReactNode
  * }} props
  */
-export function PageHeader({ title, description, count, children }) {
+export function PageHeader({ title, description, icon: Icon, count, children }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-border">
       <div className="min-w-0">
         <div className="flex items-center gap-2.5">
+          {Icon && <Icon className="w-5 h-5 text-muted-foreground shrink-0" />}
           <h1 className="text-[22px] sm:text-2xl font-bold tracking-tight text-foreground truncate">
             {title}
           </h1>

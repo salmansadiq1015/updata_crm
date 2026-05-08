@@ -23,6 +23,7 @@ const upload = multer({
 
 // Named routes BEFORE /:id
 router.post('/import', authenticate, requirePermission('catalog:admin'), upload.single('file'), validate(bulkImportSchema), (req, res, next) => articleController.bulkImport(req, res, next));
+router.get('/facets', authenticate, requirePermission('catalog:read'), (req, res, next) => articleController.getFacets(req, res, next));
 
 // Standard CRUD
 router.get('/', authenticate, requirePermission('catalog:read'), validate(listArticlesSchema), (req, res, next) => articleController.list(req, res, next));

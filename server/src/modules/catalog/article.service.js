@@ -76,6 +76,15 @@ class ArticleService {
     );
   }
 
+  async getFacets(filter = {}) {
+    const cacheKey = `catalog:facets:${JSON.stringify(filter)}`;
+    return cacheManager.getOrSet(
+      cacheKey,
+      () => articleRepository.getFacets(filter),
+      { l1Ttl: 30, l2Ttl: 120 },
+    );
+  }
+
   async update(id, data, updatedBy, meta = {}) {
     const existing = await articleRepository.findById(id);
     if (!existing) throw new NotFoundError('Article', id);

@@ -9,6 +9,16 @@ class ArticleController {
     } catch (err) { next(err); }
   }
 
+  async getFacets(req, res, next) {
+    try {
+      const { categoryId, q } = req.query;
+      const facets = await articleService.getFacets({ categoryId, q });
+      res.success({ data: facets });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;

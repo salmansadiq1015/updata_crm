@@ -126,6 +126,37 @@ class ArticleRepository {
   async findByIds(ids) {
     return Article.find({ _id: { $in: ids }, isDeleted: false }).lean();
   }
+
+  async getFacets(filter = {}) {
+    const match = { isDeleted: false };
+    if (filter.categoryId) match.categoryId = filter.categoryId;
+    if (filter.q) match.$text = { $search: filter.q };
+
+    const [result] = await Article.aggregate([
+      { $match: match },
+      {
+        $facet: {
+          types: [{ $group: { _id: '$type', count: { $sum: 1 } } }],
+          statuses: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
+          sources: [{ $group: { _id: '$source', count: { $sum: 1 } } }],
+          priceRange: [
+            { $group: { _id: null, min: { $min: '$basePrice' }, max: { $max: '$basePrice' } } },
+          ],
+          total: [{ $count: 'count' }],
+        },
+      },
+    ]);
+
+    return {
+      types: (result?.types ?? []).map((f) => ({ value: f._id, count: f.count })),
+      statuses: (result?.statuses ?? []).map((f) => ({ value: f._id, count: f.count })),
+      sources: (result?.sources ?? []).map((f) => ({ value: f._id, count: f.count })),
+      priceRange: result?.priceRange?.[0]
+        ? { min: result.priceRange[0].min, max: result.priceRange[0].max }
+        : { min: 0, max: 0 },
+      total: result?.total?.[0]?.count ?? 0,
+    };
+  }
 }
 
 const articleRepository = new ArticleRepository();

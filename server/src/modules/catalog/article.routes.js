@@ -54,6 +54,6 @@ router.get('/:id/versions/:ver', authenticate, requirePermission('catalog:read')
 // Article images
 router.get('/:articleId/images', authenticate, requirePermission('catalog:read'), (req, res, next) => articleImageController.list(req, res, next));
 router.post('/:articleId/images', authenticate, requirePermission('catalog:write'), uploadImage.single('image'), (req, res, next) => articleImageController.upload(req, res, next));
-router.delete('/:articleId/images/:imageId', authenticate, requirePermission('catalog:write'), (req, res, next) => articleImageController.remove(req, res, next));
+router.delete('/:articleId/images/:imageId', authenticate, requirePermission('catalog:delete'), (req, res, next) => articleImageController.remove(req, res, next));
 
 export default router;

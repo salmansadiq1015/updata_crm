@@ -23,12 +23,6 @@ jest.unstable_mockModule('../../files/file.service.js', () => ({
   },
 }));
 
-const mockStorageDelete = jest.fn();
-
-jest.unstable_mockModule('../../../shared/storage/StorageService.js', () => ({
-  default: { delete: mockStorageDelete },
-}));
-
 // ── Lazy-load controller after mocks are installed ────────────────────────────
 
 let articleImageController;
@@ -108,15 +102,15 @@ describe('articleImageController.list()', () => {
 // ── upload ────────────────────────────────────────────────────────────────────
 
 describe('articleImageController.upload()', () => {
-  it('returns 400 when no file is provided', async () => {
+  it('calls next(ValidationError) when no file is provided', async () => {
     const req = makeReq({ file: null });
     const res = makeRes();
     const next = jest.fn();
 
     await articleImageController.upload(req, res, next);
 
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ message: 'No file provided' });
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next.mock.calls[0][0]).toMatchObject({ statusCode: 400, message: 'No file provided' });
     expect(mockFileServiceUpload).not.toHaveBeenCalled();
   });
 
@@ -165,8 +159,7 @@ describe('articleImageController.upload()', () => {
       fileId: 'fileMeta1',
       sortOrder: 0,
     });
-    expect(res.status).toHaveBeenCalledWith(201);
-    expect(res.json).toHaveBeenCalledWith({ success: true, data: savedImage });
+    expect(res.success).toHaveBeenCalledWith({ data: savedImage, statusCode: 201 });
   });
 
   it('calls next(err) on service error', async () => {
@@ -219,8 +212,8 @@ describe('articleImageController.remove()', () => {
     // (since repository has no findById, the controller handles this)
     await articleImageController.remove(req, res, next);
 
-    // Either succeeds or calls next — the important thing is no unhandled crash
-    expect(next.mock.calls.length + res.success.mock.calls.length).toBeGreaterThan(0);
+    expect(mockDeleteById).toHaveBeenCalledWith('img1');
+    expect(res.success).toHaveBeenCalledWith({ data: { deleted: true } });
   });
 
   it('calls next(err) when image is not found', async () => {

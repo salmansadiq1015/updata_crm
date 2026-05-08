@@ -1,6 +1,6 @@
 import articleImageRepository from './articleImage.repository.js';
 import fileService from '../files/file.service.js';
-import { NotFoundError } from '../../shared/errors/AppError.js';
+import { NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 
 /**
  * ArticleImage controller — HTTP layer for article image management.
@@ -23,7 +23,7 @@ class ArticleImageController {
   async list(req, res, next) {
     try {
       const images = await articleImageRepository.findByArticleId(req.params.articleId);
-      res.success({ data: images });
+      return res.success({ data: images });
     } catch (err) {
       next(err);
     }
@@ -39,11 +39,12 @@ class ArticleImageController {
   async upload(req, res, next) {
     try {
       if (!req.file) {
-        return res.status(400).json({ message: 'No file provided' });
+        return next(new ValidationError('No file provided'));
       }
 
       const { articleId } = req.params;
-      const sortOrder = Number(req.body?.sortOrder ?? 0);
+      const parsed = Number(req.body?.sortOrder ?? 0);
+      const sortOrder = Number.isFinite(parsed) ? parsed : 0;
 
       // 1. Upload file to S3 via shared file service — creates FileMetadata
       const fileMetadata = await fileService.upload({
@@ -58,14 +59,21 @@ class ArticleImageController {
         bucket: 'images',
       });
 
-      // 2. Create the ArticleImage join record
-      const image = await articleImageRepository.create({
-        articleId,
-        fileId: fileMetadata._id,
-        sortOrder,
-      });
+      // 2. Create the ArticleImage join record — compensate if DB fails
+      let image;
+      try {
+        image = await articleImageRepository.create({
+          articleId,
+          fileId: fileMetadata._id,
+          sortOrder,
+        });
+      } catch (dbErr) {
+        // Compensate: remove the uploaded file to avoid S3 orphan
+        await fileService.delete(fileMetadata._id).catch(() => {});
+        throw dbErr;
+      }
 
-      return res.status(201).json({ success: true, data: image });
+      return res.success({ data: image, statusCode: 201 });
     } catch (err) {
       next(err);
     }

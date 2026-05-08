@@ -19,7 +19,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 const fmt = (v, currency = 'CHF') =>
   new Intl.NumberFormat('de-CH', { style: 'currency', currency }).format(v ?? 0);
 
-export function CatalogArticlesTable({ categoryId }) {
+export function CatalogArticlesTable({ filters: externalFilters = {} }) {
   const { locale: language, t } = useLanguage();
   const de = language === 'de';
 
@@ -29,11 +29,10 @@ export function CatalogArticlesTable({ categoryId }) {
   const [importOpen, setImportOpen] = useState(false);
   const [historyArticle, setHistoryArticle] = useState(null);
 
-  const filters = {};
-  if (categoryId) filters.categoryId = categoryId;
-  if (search.trim()) filters.q = search.trim();
+  const queryFilters = { ...externalFilters };
+  if (search.trim()) queryFilters.q = search.trim();
 
-  const { data: articles = [], isLoading } = useArticles(filters);
+  const { data: articles = [], isLoading } = useArticles(queryFilters);
   const { removeArticle, updateArticle } = useArticleMutations();
 
   const handleEdit = (article) => { setEditing(article); setFormOpen(true); };

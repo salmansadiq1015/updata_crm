@@ -43,7 +43,7 @@ export default function CatalogPage() {
 
         {/* Articles table */}
         <div className="flex-1 min-w-0 overflow-y-auto">
-          <CatalogArticlesTable categoryId={selectedCategoryId} />
+          <CatalogArticlesTable filters={{ ...filters, categoryId: selectedCategoryId || undefined }} />
         </div>
       </div>
     </div>

@@ -48,9 +48,12 @@ export function CatalogFilterPanel({ filters, onFiltersChange }) {
           {(facets?.types ?? []).map((f) => (
             <Badge
               key={f.value}
+              role="button"
+              tabIndex={0}
               variant={filters.type === f.value ? 'default' : 'outline'}
               className="cursor-pointer select-none"
               onClick={() => toggle('type', f.value)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('type', f.value)}
             >
               {f.value} <span className="ml-1 opacity-60">{f.count}</span>
             </Badge>
@@ -66,9 +69,12 @@ export function CatalogFilterPanel({ filters, onFiltersChange }) {
           {(facets?.statuses ?? []).map((f) => (
             <Badge
               key={f.value}
+              role="button"
+              tabIndex={0}
               variant={filters.status === f.value ? 'default' : 'outline'}
               className="cursor-pointer select-none"
               onClick={() => toggle('status', f.value)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('status', f.value)}
             >
               {f.value} <span className="ml-1 opacity-60">{f.count}</span>
             </Badge>
@@ -84,9 +90,12 @@ export function CatalogFilterPanel({ filters, onFiltersChange }) {
           {(facets?.sources ?? []).map((f) => (
             <Badge
               key={f.value}
+              role="button"
+              tabIndex={0}
               variant={filters.source === f.value ? 'default' : 'outline'}
               className="cursor-pointer select-none"
               onClick={() => toggle('source', f.value)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggle('source', f.value)}
             >
               {f.value} <span className="ml-1 opacity-60">{f.count}</span>
             </Badge>
@@ -107,7 +116,7 @@ export function CatalogFilterPanel({ filters, onFiltersChange }) {
                 min={0}
                 placeholder={String(facets.priceRange.min)}
                 value={filters.priceMin ?? ''}
-                onChange={(e) => onFiltersChange({ ...filters, priceMin: e.target.value || undefined })}
+                onChange={(e) => onFiltersChange({ ...filters, priceMin: e.target.value !== '' ? Number(e.target.value) : undefined })}
                 className="h-8 text-xs"
               />
             </div>
@@ -119,7 +128,7 @@ export function CatalogFilterPanel({ filters, onFiltersChange }) {
                 min={0}
                 placeholder={String(facets.priceRange.max)}
                 value={filters.priceMax ?? ''}
-                onChange={(e) => onFiltersChange({ ...filters, priceMax: e.target.value || undefined })}
+                onChange={(e) => onFiltersChange({ ...filters, priceMax: e.target.value !== '' ? Number(e.target.value) : undefined })}
                 className="h-8 text-xs"
               />
             </div>

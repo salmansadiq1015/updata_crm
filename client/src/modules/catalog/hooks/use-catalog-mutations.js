@@ -7,11 +7,12 @@ export function useArticleMutations() {
   const qc = useQueryClient();
 
   const invalidateArticles = () => qc.invalidateQueries({ queryKey: ['catalog', 'articles'] });
+  const invalidateFacets = () => qc.invalidateQueries({ queryKey: ['catalog', 'facets'] });
   const invalidateCategories = () => qc.invalidateQueries({ queryKey: queryKeys.catalog.categories() });
 
   const createArticle = useMutation({
     mutationFn: articleService.create,
-    onSuccess: invalidateArticles,
+    onSuccess: () => { invalidateArticles(); invalidateFacets(); },
   });
 
   const updateArticle = useMutation({
@@ -19,12 +20,13 @@ export function useArticleMutations() {
     onSuccess: (_, { id }) => {
       qc.invalidateQueries({ queryKey: queryKeys.catalog.articleDetail(id) });
       invalidateArticles();
+      invalidateFacets();
     },
   });
 
   const removeArticle = useMutation({
     mutationFn: (id) => articleService.remove(id),
-    onSuccess: invalidateArticles,
+    onSuccess: () => { invalidateArticles(); invalidateFacets(); },
   });
 
   const updatePrice = useMutation({
@@ -50,6 +52,7 @@ export function useArticleMutations() {
     mutationFn: articleService.bulkImport,
     onSuccess: () => {
       invalidateArticles();
+      invalidateFacets();
     },
   });
 

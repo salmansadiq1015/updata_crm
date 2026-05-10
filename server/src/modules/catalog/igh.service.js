@@ -45,6 +45,61 @@ class IghService {
     return updated;
   }
 
+  async previewImport() {
+    const cfg = await ighConfigRepository.getConfig();
+    if (!cfg || !cfg.isEnabled) {
+      throw new AppError('IGH integration is disabled', 400, ERROR_CODES.CATALOG_IGH_DISABLED);
+    }
+    if (!cfg.endpointUrl) {
+      throw new AppError('IGH endpoint URL is not configured', 400, ERROR_CODES.CATALOG_IGH_DISABLED);
+    }
+
+    const { default: axios } = await import('axios');
+    const { parseIghCsv, parseIghJson } = await import('./igh-import-adapters.js');
+    const Article = (await import('./article.model.js')).default;
+
+    // Fetch IGH data
+    const response = await axios.get(cfg.endpointUrl, {
+      headers: cfg.credentials?.apiKey
+        ? { Authorization: `Bearer ${cfg.credentials.apiKey}` }
+        : {},
+      timeout: 60_000,
+      responseType: 'text',
+    });
+
+    // Parse
+    let articles;
+    const contentType = (response.headers['content-type'] ?? '').toLowerCase();
+    if (contentType.includes('json')) {
+      const json = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+      articles = parseIghJson(Array.isArray(json) ? json : (json.articles ?? json.data ?? []));
+    } else {
+      articles = await parseIghCsv(response.data);
+    }
+
+    // Compare against existing catalog
+    const ighNumbers = articles.map((a) => a.ighArticleNumber);
+    const existingArticles = await Article.find({
+      ighArticleNumber: { $in: ighNumbers },
+    }).select('ighArticleNumber').lean();
+
+    const existingSet = new Set(existingArticles.map((a) => a.ighArticleNumber));
+
+    // Count obsolete: IGH articles currently in DB but NOT in the incoming feed
+    const allIghInDb = await Article.countDocuments({
+      source: 'IGH',
+      isDeleted: false,
+      ighArticleNumber: { $nin: ighNumbers },
+    });
+
+    return {
+      total: articles.length,
+      newCount: articles.filter((a) => !existingSet.has(a.ighArticleNumber)).length,
+      updatedCount: articles.filter((a) => existingSet.has(a.ighArticleNumber)).length,
+      obsoleteCount: allIghInDb,
+    };
+  }
+
   async triggerFullImport(userId, meta = {}) {
     const cfg = await ighConfigRepository.getConfig();
     if (!cfg || !cfg.isEnabled) {

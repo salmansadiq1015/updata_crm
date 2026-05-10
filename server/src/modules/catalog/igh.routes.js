@@ -15,6 +15,7 @@ router.get('/config', authenticate, requirePermission('catalog:admin'), (req, re
 router.put('/config', authenticate, requirePermission('catalog:admin'), validate(updateIghConfigSchema), (req, res, next) => ighController.updateConfig(req, res, next));
 
 // Import triggers
+router.post('/import/preview', authenticate, requirePermission('catalog:manage'), (req, res, next) => ighController.previewImport(req, res, next));
 router.post('/import/full', authenticate, requirePermission('catalog:admin'), (req, res, next) => ighController.triggerFullImport(req, res, next));
 router.post('/import/delta', authenticate, requirePermission('catalog:admin'), (req, res, next) => ighController.triggerDeltaImport(req, res, next));
 

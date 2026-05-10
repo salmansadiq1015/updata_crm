@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { format } from 'date-fns';
 import { useIghImportHistory, useIghImportJob, useIghConfig } from '../hooks/use-igh-queries';
 import { useIghMutations } from '../hooks/use-igh-mutations';
+import { IghImportPreviewDialog } from './igh-import-preview-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 const STATUS_VARIANT = {
@@ -83,8 +84,10 @@ function JobRow({ job }) {
 export function IghImportHistoryTable() {
   const { t } = useLanguage();
   const { data: jobs = [], isLoading } = useIghImportHistory();
-  const { importFull, importDelta } = useIghMutations();
+  const { previewImport, importFull, importDelta } = useIghMutations();
   const { data: config } = useIghConfig();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [preview, setPreview] = useState(null);
 
   if (!config?.isEnabled) {
     return (
@@ -95,57 +98,74 @@ export function IghImportHistoryTable() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={importFull.isPending}
-          onClick={() => importFull.mutate()}
-        >
-          <Download className="w-4 h-4 mr-2" />
-          {t('catalog.igh.importFull')}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={importDelta.isPending}
-          onClick={() => importDelta.mutate()}
-        >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          {t('catalog.igh.importDelta')}
-        </Button>
+    <>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={previewImport.isPending || importFull.isPending}
+            onClick={async () => {
+              const result = await previewImport.mutateAsync();
+              setPreview(result?.data ?? result);
+              setPreviewOpen(true);
+            }}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            {previewImport.isPending ? 'Loading...' : t('catalog.igh.importFull')}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={importDelta.isPending}
+            onClick={() => importDelta.mutate()}
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            {t('catalog.igh.importDelta')}
+          </Button>
+        </div>
+
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Started</TableHead>
+                <TableHead>Result</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    Loading...
+                  </TableCell>
+                </TableRow>
+              ) : jobs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    No imports yet.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                jobs.map((job) => <JobRow key={job._id} job={job} />)
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Started</TableHead>
-              <TableHead>Result</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                  Loading...
-                </TableCell>
-              </TableRow>
-            ) : jobs.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                  No imports yet.
-                </TableCell>
-              </TableRow>
-            ) : (
-              jobs.map((job) => <JobRow key={job._id} job={job} />)
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
+      <IghImportPreviewDialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        preview={preview}
+        onConfirm={() => {
+          importFull.mutate();
+          setPreviewOpen(false);
+        }}
+        isImporting={importFull.isPending}
+      />
+    </>
   );
 }

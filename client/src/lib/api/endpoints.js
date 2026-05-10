@@ -193,6 +193,7 @@ export const ENDPOINTS = Object.freeze({
     PICKER_BARCODE: '/catalog/picker/barcode',
     PICKER_ARTICLE_USE: (id) => `/catalog/picker/articles/${id}/use`,
     IGH_CONFIG: '/catalog/igh/config',
+    IGH_IMPORT_PREVIEW: '/catalog/igh/import/preview',
     IGH_IMPORT_FULL: '/catalog/igh/import/full',
     IGH_IMPORT_DELTA: '/catalog/igh/import/delta',
     IGH_IMPORT_HISTORY: '/catalog/igh/import/history',

@@ -10,6 +10,10 @@ export function useIghMutations() {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.catalog.ighConfig() }),
   });
 
+  const previewImport = useMutation({
+    mutationFn: ighService.previewImport,
+  });
+
   const importFull = useMutation({
     mutationFn: ighService.importFull,
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.catalog.ighImportHistory() }),
@@ -20,5 +24,5 @@ export function useIghMutations() {
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.catalog.ighImportHistory() }),
   });
 
-  return { saveConfig, importFull, importDelta };
+  return { saveConfig, previewImport, importFull, importDelta };
 }

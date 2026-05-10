@@ -16,6 +16,13 @@ class IghController {
     } catch (err) { next(err); }
   }
 
+  async previewImport(req, res, next) {
+    try {
+      const data = await ighService.previewImport();
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async triggerFullImport(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

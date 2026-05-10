@@ -4,7 +4,7 @@ import {
 } from '@/components/ui/tooltip';
 
 export function PriceDriftBadge({ snapshotPrice, currentPrice }) {
-  if (currentPrice == null || currentPrice === snapshotPrice) return null;
+  if (currentPrice == null || !snapshotPrice || currentPrice === snapshotPrice) return null;
 
   const diff = currentPrice - snapshotPrice;
   const pct = ((diff / snapshotPrice) * 100).toFixed(1);

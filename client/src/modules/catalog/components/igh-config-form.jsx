@@ -40,7 +40,7 @@ export function IghConfigForm() {
         syncSchedule: config.syncSchedule ?? '',
       });
     }
-  }, [config]);
+  }, [config, form]);
 
   const onSubmit = async (values) => {
     const payload = {

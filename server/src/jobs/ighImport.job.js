@@ -23,6 +23,8 @@ export class IghImportWorker extends BaseWorker {
     // Lazy import to avoid circular dependencies
     const IghImportJob = (await import('../modules/catalog/ighImportJob.model.js')).default;
     const IghConfig = (await import('../modules/catalog/ighConfig.model.js')).default;
+    const { default: axios } = await import('axios');
+    const { parseIghCsv, parseIghJson, batchUpsertArticles } = await import('../modules/catalog/igh-import-adapters.js');
 
     // Update job status to RUNNING
     await IghImportJob.findByIdAndUpdate(importJobId, {
@@ -37,21 +39,75 @@ export class IghImportWorker extends BaseWorker {
         throw new Error('IGH integration is disabled');
       }
 
-      // --- Placeholder: simulate IGH API fetch ---
-      // Actual implementation will fetch from cfg.endpointUrl
-      // with cfg.credentials, parse the response, and upsert articles.
-      logger.info('IGH import started (placeholder)', {
+      if (!cfg.endpointUrl) {
+        throw new Error('IGH endpoint URL is not configured');
+      }
+
+      await IghImportJob.findByIdAndUpdate(importJobId, {
+        log: 'Connecting to IGH data source...',
+      });
+
+      logger.info('IGH import started', {
         module: 'jobs',
         action: 'igh-import',
         type,
         importJobId,
       });
 
+      // Fetch with up to 3 retries and exponential backoff
+      let response;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          response = await axios.get(cfg.endpointUrl, {
+            headers: cfg.credentials?.apiKey
+              ? { Authorization: `Bearer ${cfg.credentials.apiKey}` }
+              : {},
+            params: type === 'DELTA' && cfg.lastSyncAt
+              ? { since: cfg.lastSyncAt.toISOString() }
+              : {},
+            timeout: 120_000,
+            responseType: 'text',
+          });
+          break;
+        } catch (fetchErr) {
+          if (attempt === 3) throw fetchErr;
+          await IghImportJob.findByIdAndUpdate(importJobId, {
+            log: `Attempt ${attempt} failed, retrying in ${attempt * 2}s...`,
+          });
+          await new Promise((r) => setTimeout(r, attempt * 2000));
+        }
+      }
+
+      await IghImportJob.findByIdAndUpdate(importJobId, {
+        log: `Downloaded ${response.data.length} bytes. Parsing...`,
+      });
+
+      // Detect format and parse
+      let articles;
+      const contentType = (response.headers['content-type'] ?? '').toLowerCase();
+      if (contentType.includes('json')) {
+        const json = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+        articles = parseIghJson(Array.isArray(json) ? json : (json.articles ?? json.data ?? []));
+      } else {
+        articles = await parseIghCsv(response.data);
+      }
+
+      await IghImportJob.findByIdAndUpdate(importJobId, {
+        log: `Parsed ${articles.length} articles. Upserting in batches of 500...`,
+      });
+
+      await job.updateProgress(30);
+
+      const result = await batchUpsertArticles(articles, importJobId);
+
+      // Update last sync timestamp on the config
+      await IghConfig.findOneAndUpdate({}, { lastSyncAt: new Date() });
+
       const counts = {
-        articlesCreated: 0,
-        articlesUpdated: 0,
+        articlesCreated: result.upsertedCount,
+        articlesUpdated: result.modifiedCount,
         articlesSkipped: 0,
-        errorsCount: 0,
+        errorsCount: result.errors.length,
       };
 
       // Update job with completed status
@@ -59,22 +115,19 @@ export class IghImportWorker extends BaseWorker {
         status: 'COMPLETED',
         completedAt: new Date(),
         ...counts,
-        log: `${type} import completed successfully at ${new Date().toISOString()}. No articles processed (placeholder).`,
+        log: `${type} import completed. Created: ${result.upsertedCount}, Updated: ${result.modifiedCount}, Errors: ${result.errors.length}`,
       });
 
-      // Update last sync timestamp
-      await IghConfig.findOneAndUpdate({}, { lastSyncAt: new Date() });
+      // Invalidate caches
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:articles:list:*`);
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:picker:*`);
+      await cacheManager.del('catalog:igh:config');
 
       eventBus.publish(EVENT_TYPES.CATALOG_IGH_IMPORT_COMPLETED, {
         jobId: importJobId,
         type,
         ...counts,
       }, { source: 'jobs:igh-import' });
-
-      // Invalidate caches
-      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:articles:list:*`);
-      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:picker:*`);
-      await cacheManager.del('catalog:igh:config');
 
       logger.info('IGH import completed', {
         module: 'jobs',
@@ -84,6 +137,7 @@ export class IghImportWorker extends BaseWorker {
         ...counts,
       });
 
+      await job.updateProgress(100);
       return counts;
     } catch (err) {
       // Set job status to FAILED

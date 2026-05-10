@@ -49,6 +49,10 @@ export function ArticlePickerDialog({ open, onClose, onSelect }) {
   const handleSelect = (article) => {
     onSelect(toSnapshot(article));
     onClose();
+    // Fire-and-forget: update lastUsedAt (don't block UI)
+    if (article._id) {
+      apiClient.post(ENDPOINTS.CATALOG.PICKER_ARTICLE_USE(article._id)).catch(() => {});
+    }
   };
 
   const handleFreeText = () => {

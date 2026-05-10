@@ -23,6 +23,14 @@ class PickerController {
       return res.success({ data });
     } catch (err) { next(err); }
   }
+
+  async recordArticleUse(req, res, next) {
+    try {
+      const { id } = req.params;
+      await pickerService.recordArticleUse(id);
+      return res.success({ data: null });
+    } catch (err) { next(err); }
+  }
 }
 
 const pickerController = new PickerController();

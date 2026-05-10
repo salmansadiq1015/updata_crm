@@ -2,6 +2,8 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 import crypto from 'crypto';
+import eventBus from '../../shared/events/EventBus.js';
+import EVENT_TYPES from '../../shared/events/eventTypes.js';
 
 const PICKER_TTL = { l1Ttl: 15, l2Ttl: 60 };
 
@@ -90,6 +92,11 @@ class PickerService {
     if (!article) throw new NotFoundError('Article', code);
 
     return article;
+  }
+
+  async recordArticleUse(articleId) {
+    // Fire-and-forget — publish event; catalog.events.js handler updates lastUsedAt
+    eventBus.publish(EVENT_TYPES.CATALOG_ARTICLE_USED, { articleId }, { source: 'catalog:picker' });
   }
 }
 

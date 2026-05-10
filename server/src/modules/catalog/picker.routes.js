@@ -13,5 +13,6 @@ const router = Router();
 router.get('/articles', authenticate, requirePermission('catalog:read'), validate(pickerArticlesSchema), (req, res, next) => pickerController.searchArticles(req, res, next));
 router.get('/text-blocks', authenticate, requirePermission('catalog:read'), validate(pickerTextBlocksSchema), (req, res, next) => pickerController.searchTextBlocks(req, res, next));
 router.post('/barcode', authenticate, requirePermission('catalog:read'), validate(barcodeSchema), (req, res, next) => pickerController.lookupBarcode(req, res, next));
+router.post('/articles/:id/use', authenticate, (req, res, next) => pickerController.recordArticleUse(req, res, next));
 
 export default router;

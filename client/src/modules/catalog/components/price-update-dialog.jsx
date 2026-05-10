@@ -6,14 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod/v4';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from '@/shared/components/ui/dialog';
+} from '@/components/ui/dialog';
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
-} from '@/shared/components/ui/form';
-import { Input } from '@/shared/components/ui/input';
-import { Button } from '@/shared/components/ui/button';
-import { RadioGroup, RadioGroupItem } from '@/shared/components/ui/radio-group';
-import { Label } from '@/shared/components/ui/label';
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { usePriceMutations } from '../hooks/use-price-mutations';
 import { useLanguage } from '@/lib/i18n/language-context';
 
@@ -21,6 +21,25 @@ const schema = z.object({
   mode: z.enum(['fixed', 'percentage', 'schedule']),
   value: z.preprocess((v) => (v === '' ? undefined : Number(v)), z.number()),
   effectiveDate: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.mode === 'fixed' && (data.value === undefined || data.value <= 0)) {
+    ctx.addIssue({ code: 'custom', message: 'Price must be greater than 0', path: ['value'] });
+  }
+  if (data.mode === 'percentage' && (data.value === undefined || data.value < -99 || data.value > 999)) {
+    ctx.addIssue({ code: 'custom', message: 'Percentage must be between -99 and 999', path: ['value'] });
+  }
+  if (data.mode === 'schedule') {
+    if (!data.effectiveDate) {
+      ctx.addIssue({ code: 'custom', message: 'Effective date is required', path: ['effectiveDate'] });
+    } else {
+      const date = new Date(data.effectiveDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (date <= today) {
+        ctx.addIssue({ code: 'custom', message: 'Effective date must be in the future', path: ['effectiveDate'] });
+      }
+    }
+  }
 });
 
 export function PriceUpdateDialog({ open, onClose, selectedArticles }) {
@@ -45,13 +64,11 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles }) {
     });
   };
 
-  const onPreview = () => {
-    const vals = form.getValues();
+  const onPreview = form.handleSubmit((vals) => {
     setPreview(computePreview(vals));
-  };
+  });
 
-  const onConfirm = async () => {
-    const vals = form.getValues();
+  const onConfirm = form.handleSubmit(async (vals) => {
     const articleIds = selectedArticles.map((a) => a._id);
     try {
       if (vals.mode === 'schedule') {
@@ -65,12 +82,12 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles }) {
     } catch {
       // error accessible via mutation state
     }
-  };
+  });
 
   const isPending = updatePrices.isPending || schedulePrices.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { setPreview(null); onClose(); } }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setPreview(null); form.reset(); onClose(); } }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('catalog.prices.update')}</DialogTitle>
@@ -172,7 +189,7 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles }) {
               </table>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => { setPreview(null); onClose(); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setPreview(null); form.reset(); onClose(); }}>Cancel</Button>
               <Button onClick={onConfirm} disabled={isPending}>
                 {isPending ? 'Applying...' : 'Confirm Update'}
               </Button>

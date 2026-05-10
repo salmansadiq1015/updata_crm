@@ -17,7 +17,7 @@ export function usePriceMutations() {
 
   const schedulePrices = useMutation({
     mutationFn: priceService.schedule,
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.catalog.priceBatches() }),
+    onSuccess: invalidateAll,
   });
 
   const rollbackBatch = useMutation({

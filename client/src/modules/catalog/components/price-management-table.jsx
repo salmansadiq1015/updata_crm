@@ -4,15 +4,15 @@ import { useState } from 'react';
 import { TrendingUp, RotateCcw } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/shared/components/ui/table';
-import { Button } from '@/shared/components/ui/button';
-import { Checkbox } from '@/shared/components/ui/checkbox';
-import { Badge } from '@/shared/components/ui/badge';
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/shared/components/ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { useArticles } from '../hooks/use-catalog-queries';
 import { usePriceBatches } from '../hooks/use-price-queries';
 import { usePriceMutations } from '../hooks/use-price-mutations';
@@ -41,6 +41,7 @@ export function PriceManagementTable() {
   };
 
   const allSelected = articles.length > 0 && selected.size === articles.length;
+  const someSelected = selected.size > 0 && selected.size < articles.length;
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(articles.map((a) => a._id)));
   const selectedArticles = articles.filter((a) => selected.has(a._id));
 
@@ -67,7 +68,7 @@ export function PriceManagementTable() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
-                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all" />
+                  <Checkbox checked={allSelected ? true : someSelected ? 'indeterminate' : false} onCheckedChange={toggleAll} aria-label="Select all" />
                 </TableHead>
                 <TableHead>{t('catalog.articles.articleNumber')}</TableHead>
                 <TableHead>Name</TableHead>

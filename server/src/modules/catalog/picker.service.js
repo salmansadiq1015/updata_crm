@@ -29,6 +29,7 @@ class PickerService {
         filter.$or = [
           { name: { $regex: query, $options: 'i' } },
           { articleNumber: { $regex: query, $options: 'i' } },
+          { description: { $regex: query, $options: 'i' } },
         ];
 
         return Article.find(filter)

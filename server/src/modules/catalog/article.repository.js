@@ -45,6 +45,8 @@ class ArticleRepository {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
         { articleNumber: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { supplierReference: { $regex: search, $options: 'i' } },
       ];
     }
 

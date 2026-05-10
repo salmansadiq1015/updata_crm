@@ -1,3 +1,4 @@
+import { seedCatalog } from './catalog-seed.js';
 import Permission from '../modules/auth/permission.model.js';
 import Role from '../modules/auth/role.model.js';
 import User from '../modules/auth/user.model.js';
@@ -277,6 +278,9 @@ export async function seedDatabase() {
         }
       }
     }
+
+    // 5. Seed catalog data (units of measure, etc.)
+    await seedCatalog();
 
     logger.info('Database seeding complete', { module: 'seed' });
   } catch (err) {

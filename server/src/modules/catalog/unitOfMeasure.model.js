@@ -7,6 +7,7 @@ import mongoose from 'mongoose';
 export const STANDARD_UNITS = [
   { code: 'STK', nameDe: 'Stück', nameFr: 'Pièce', nameIt: 'Pezzo', isSystem: true },
   { code: 'M', nameDe: 'Meter', nameFr: 'Mètre', nameIt: 'Metro', isSystem: true },
+  { code: 'LFM', nameDe: 'Laufmeter', nameFr: 'Mètre courant', nameIt: 'Metro corrente', isSystem: true },
   { code: 'M2', nameDe: 'Quadratmeter', nameFr: 'Mètre carré', nameIt: 'Metro quadrato', isSystem: true },
   { code: 'M3', nameDe: 'Kubikmeter', nameFr: 'Mètre cube', nameIt: 'Metro cubo', isSystem: true },
   { code: 'KG', nameDe: 'Kilogramm', nameFr: 'Kilogramme', nameIt: 'Chilogrammo', isSystem: true },

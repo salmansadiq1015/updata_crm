@@ -23,16 +23,19 @@ export class IghImportWorker extends BaseWorker {
     // Lazy import to avoid circular dependencies
     const IghImportJob = (await import('../modules/catalog/ighImportJob.model.js')).default;
     const IghConfig = (await import('../modules/catalog/ighConfig.model.js')).default;
+    const CatalogCategory = (await import('../modules/catalog/catalogCategory.model.js')).default;
     const { default: axios } = await import('axios');
     const { parseIghCsv, parseIghJson, batchUpsertArticles } = await import('../modules/catalog/igh-import-adapters.js');
 
-    // Update job status to RUNNING
-    await IghImportJob.findByIdAndUpdate(importJobId, {
-      status: 'RUNNING',
-      startedAt: new Date(),
-    });
-
     try {
+      // Update job status to RUNNING and retrieve createdBy (the triggering user)
+      const importJobDoc = await IghImportJob.findByIdAndUpdate(
+        importJobId,
+        { status: 'RUNNING', startedAt: new Date() },
+        { returnDocument: 'after' },
+      ).lean();
+      const importedBy = importJobDoc?.createdBy ?? null;
+
       // Load config
       const cfg = await IghConfig.findOne().lean();
       if (!cfg || !cfg.isEnabled) {
@@ -42,6 +45,11 @@ export class IghImportWorker extends BaseWorker {
       if (!cfg.endpointUrl) {
         throw new Error('IGH endpoint URL is not configured');
       }
+
+      // Resolve a default category for new IGH articles (categoryId is required on Article)
+      const ighCategory = await CatalogCategory.findOne({ code: 'IGH' }).lean().select('_id');
+      const fallbackCategory = ighCategory ?? (await CatalogCategory.findOne().lean().select('_id'));
+      const defaultCategoryId = fallbackCategory?._id ?? null;
 
       await IghImportJob.findByIdAndUpdate(importJobId, {
         log: 'Connecting to IGH data source...',
@@ -79,7 +87,7 @@ export class IghImportWorker extends BaseWorker {
       }
 
       await IghImportJob.findByIdAndUpdate(importJobId, {
-        log: `Downloaded ${response.data.length} bytes. Parsing...`,
+        log: `Downloaded ${String(response.data).length} chars. Parsing...`,
       });
 
       // Detect format and parse
@@ -98,10 +106,10 @@ export class IghImportWorker extends BaseWorker {
 
       await job.updateProgress(30);
 
-      const result = await batchUpsertArticles(articles, importJobId);
+      const result = await batchUpsertArticles(articles, importedBy, defaultCategoryId);
 
-      // Update last sync timestamp on the config
-      await IghConfig.findOneAndUpdate({}, { lastSyncAt: new Date() });
+      // Update last sync timestamp using the specific document to avoid phantom updates
+      await IghConfig.findOneAndUpdate({ _id: cfg._id }, { lastSyncAt: new Date() });
 
       const counts = {
         articlesCreated: result.upsertedCount,

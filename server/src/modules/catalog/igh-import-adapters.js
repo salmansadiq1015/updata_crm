@@ -42,7 +42,7 @@ export function parseIghJson(jsonArray) {
     }));
 }
 
-export async function batchUpsertArticles(articles, importedBy) {
+export async function batchUpsertArticles(articles, importedBy, defaultCategoryId = null) {
   const totals = { upsertedCount: 0, modifiedCount: 0, errors: [] };
 
   for (let i = 0; i < articles.length; i += BATCH_SIZE) {
@@ -66,6 +66,7 @@ export async function batchUpsertArticles(articles, importedBy) {
             ighArticleNumber: article.ighArticleNumber,
             articleNumber: `IGH-${article.ighArticleNumber}`,
             createdBy: importedBy,
+            ...(defaultCategoryId ? { categoryId: defaultCategoryId } : {}),
           },
         },
         upsert: true,

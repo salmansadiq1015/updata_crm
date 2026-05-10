@@ -25,7 +25,7 @@ export function AiHelpOverlay({ onClose }) {
         <ul className="flex flex-col gap-3">
           {COMMANDS.map(({ trigger, result }) => (
             <li key={trigger} className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium">"{trigger}"</span>
+              <span className="text-sm font-medium">&quot;{trigger}&quot;</span>
               <span className="text-xs text-muted-foreground">{result}</span>
             </li>
           ))}

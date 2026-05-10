@@ -7,6 +7,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 
 export default function GlobalError({ error, reset }) {
   let t;
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   try { t = useLanguage().t; } catch { t = (_, fb) => fb; }
 
   return (

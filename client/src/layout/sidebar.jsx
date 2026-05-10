@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
@@ -162,9 +162,10 @@ function SidebarNav({ collapsed, onNavigate }) {
                         )}
                       </span>
 
-                      <AnimatePresence mode="wait">
+                      <AnimatePresence mode="wait" initial={false}>
                         {!collapsed && (
                           <motion.span
+                            key="nav-label"
                             initial={{ opacity: 0, width: 0 }}
                             animate={{ opacity: 1, width: 'auto' }}
                             exit={{ opacity: 0, width: 0 }}
@@ -325,27 +326,31 @@ function SidebarUserCard({ collapsed }) {
 
 export function Sidebar() {
   const { isCollapsed, toggleCollapsed } = useSidebarStore();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  // Use default (expanded) until after hydration to prevent persisted-store mismatch
+  const collapsed = mounted ? isCollapsed : false;
 
   return (
     <TooltipProvider delayDuration={0}>
       <motion.aside
-        animate={{ width: isCollapsed ? 68 : 260 }}
+        animate={{ width: collapsed ? 68 : 260 }}
         transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
         className="relative flex flex-col h-screen overflow-hidden bg-sidebar text-sidebar-foreground border-r border-sidebar-border sidebar-inner-glow"
       >
         {/* Ambient gradient */}
         <div className="pointer-events-none absolute inset-0 sidebar-ambient" />
 
-        <SidebarLogo collapsed={isCollapsed} />
+        <SidebarLogo collapsed={collapsed} />
 
         {/* Scrollable nav */}
         <div className="relative flex-1 overflow-y-auto overflow-x-hidden py-3 scrollbar-thin scrollbar-dark">
-          <SidebarNav collapsed={isCollapsed} />
+          <SidebarNav collapsed={collapsed} />
         </div>
 
         {/* Bottom section */}
         <div className="relative p-2.5 space-y-2 border-t border-white/[0.04]">
-          <SidebarUserCard collapsed={isCollapsed} />
+          <SidebarUserCard collapsed={collapsed} />
 
           {/* Collapse toggle */}
           <button
@@ -355,7 +360,7 @@ export function Sidebar() {
               'text-white/20 hover:text-white/50 hover:bg-white/[0.04]'
             )}
           >
-            {isCollapsed ? (
+            {collapsed ? (
               <PanelLeftOpen className="h-4 w-4" />
             ) : (
               <div className="flex items-center gap-2">

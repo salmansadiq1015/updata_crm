@@ -4,13 +4,13 @@ import { useState } from 'react';
 import { Trash2, Pencil, Lock } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/shared/components/ui/table';
-import { Button } from '@/shared/components/ui/button';
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/shared/components/ui/alert-dialog';
+} from '@/components/ui/alert-dialog';
 import { useUnits } from '../hooks/use-unit-queries';
 import { useUnitMutations } from '../hooks/use-unit-mutations';
 import { UomFormDialog } from './uom-form-dialog';

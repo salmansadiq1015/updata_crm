@@ -8,7 +8,7 @@ import { useDocuments } from '@/modules/doctpl/hooks/useDocumentQueries';
 import { useDownloadDocument } from '@/modules/doctpl/hooks/useDocumentMutations';
 
 const DOC_TYPES = [
-  ['', 'All Types'],
+  ['all', 'All Types'],
   ['quotation', 'Quotation'],
   ['order_confirmation', 'Order Confirmation'],
   ['invoice_standard', 'Invoice'],
@@ -20,9 +20,9 @@ const DOC_TYPES = [
 ];
 
 export default function DocumentsPage() {
-  const [typeFilter, setTypeFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [preview, setPreview] = useState(null);
-  const { data, isLoading } = useDocuments(typeFilter ? { documentType: typeFilter } : {});
+  const { data, isLoading } = useDocuments(typeFilter !== 'all' ? { documentType: typeFilter } : {});
   const download = useDownloadDocument();
   const documents = data?.items ?? [];
 

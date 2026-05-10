@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import systemController from './system.controller.js';
+import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 
 /**
  * System admin routes.
- * All routes require admin authentication (enforced in app.js route mounting).
+ * All routes require settings administration permission.
  */
 const router = Router();
+
+router.use(authenticate, requirePermission('settings:admin'));
 
 // Config
 router.get('/config', (req, res, next) => systemController.getConfig(req, res, next));

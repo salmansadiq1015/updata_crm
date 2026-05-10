@@ -31,6 +31,7 @@ export function RecordPaymentDialog({ open, onClose, invoiceId, outstandingAmoun
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         amount: outstandingAmount > 0 ? String(outstandingAmount) : '',
         paymentDate: new Date().toISOString().slice(0, 10),

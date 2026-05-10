@@ -115,12 +115,15 @@ function ImagePreview({ url, zoom, rotation, flipH, onZoomChange }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPan({ x: 0, y: 0 });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoaded(false);
   }, [url]);
 
   useEffect(() => {
     if (zoom === 1 && rotation % 360 === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPan({ x: 0, y: 0 });
     }
   }, [zoom, rotation]);
@@ -237,7 +240,7 @@ function VideoPreview({ url, mimeType }) {
 // ── Audio preview ───────────────────────────────────────────
 
 function AudioPreview({ url, mimeType, doc }) {
-  const FileIcon = getFileIcon(mimeType);
+  const FileIcon = useMemo(() => getFileIcon(mimeType), [mimeType]);
   const color = getFileColor(mimeType);
 
   return (
@@ -265,7 +268,9 @@ function TextPreview({ url }) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setContent(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(false);
     fetch(url)
       .then((r) => {
@@ -304,7 +309,7 @@ function TextPreview({ url }) {
 // ── Fallback preview ────────────────────────────────────────
 
 function FallbackPreview({ doc }) {
-  const FileIcon = getFileIcon(doc?.mimeType);
+  const FileIcon = useMemo(() => getFileIcon(doc?.mimeType), [doc?.mimeType]);
   const color = getFileColor(doc?.mimeType);
   const ext = getFileExtension(doc?.originalName || doc?.fileName);
 
@@ -354,6 +359,7 @@ export function DocumentViewer({ open, onOpenChange, doc, url, docs, onNavigate 
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     resetView();
   }, [doc?._id, resetView]);
 
@@ -469,6 +475,7 @@ export function DocumentViewer({ open, onOpenChange, doc, url, docs, onNavigate 
 
   if (!doc) return null;
 
+  // eslint-disable-next-line react-hooks/static-components
   const FileIcon = getFileIcon(doc.mimeType);
   const fileColor = getFileColor(doc.mimeType);
   const ext = getFileExtension(doc.originalName || doc.fileName);

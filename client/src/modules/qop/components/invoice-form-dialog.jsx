@@ -54,6 +54,7 @@ export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrde
 
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         currency: sourceOrder?.currency || 'CHF',
         paymentTermDays: 30,

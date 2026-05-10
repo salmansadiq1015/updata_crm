@@ -33,6 +33,7 @@ function RichTextEditor({ value, onChange }) {
   const editor = useEditor({
     extensions: [StarterKit],
     content: value || '',
+    immediatelyRender: false,
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
   });
 

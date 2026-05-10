@@ -25,7 +25,7 @@ export const createQuotationSchema = {
     customerName: Joi.string().required().trim().max(255),
     contactId: objectId.allow(null),
     projectId: objectId.allow(null),
-    departmentId: objectId.required(),
+    departmentId: objectId.allow(null),
     language: Joi.string().valid('de', 'fr', 'it', 'en'),
     title: Joi.string().max(500).allow(''),
     introduction: Joi.string().max(5000).allow(''),

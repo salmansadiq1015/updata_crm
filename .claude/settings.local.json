@@ -15,7 +15,10 @@
       "Bash(Out-Null)",
       "Bash(New-Item -ItemType Directory -Force \"D:\\\\Animmza\\\\Boiler\\\\client\\\\src\\\\modules\\\\qop\\\\services\")",
       "Bash(New-Item -ItemType Directory -Force \"D:\\\\Animmza\\\\Boiler\\\\client\\\\src\\\\modules\\\\qop\\\\hooks\")",
-      "Bash(Write-Output \"Directories created\")"
+      "Bash(Write-Output \"Directories created\")",
+      "Bash(npm test *)",
+      "Bash(cd /d)",
+      "Bash(ls -1 \"Animmza/Boiler/client/src/modules/ai/components/chat/\")"
     ]
   }
 }

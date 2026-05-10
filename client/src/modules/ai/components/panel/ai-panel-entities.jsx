@@ -18,7 +18,7 @@ export function AiPanelEntities({ session, onConfirm, onCancel, isConfirming }) 
 
       {transcript && (
         <p className="text-xs text-muted-foreground bg-muted/50 rounded p-2 leading-relaxed line-clamp-3">
-          "{transcript}"
+          &quot;{transcript}&quot;
         </p>
       )}
 

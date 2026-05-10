@@ -56,7 +56,7 @@ export function DocumentHistoryTimeline({ history = [], className }) {
               </span>
             </div>
             {entry.reason && (
-              <p className="mt-1 text-xs text-muted-foreground italic">"{entry.reason}"</p>
+              <p className="mt-1 text-xs text-muted-foreground italic">&quot;{entry.reason}&quot;</p>
             )}
           </li>
         );

@@ -19,6 +19,7 @@ import { ENDPOINTS } from '@/lib/api/endpoints';
 import { useQuotationMutations } from '../hooks/use-qop-mutations';
 import { LineItemsEditor } from './line-items-editor';
 import { CURRENCIES, DEFAULT_VALIDITY_DAYS } from '../constants/qop-constants';
+import { SourceDocumentsPanel } from '@/modules/doctpl/components/SourceDocumentsPanel';
 
 function addDays(date, days) {
   const d = new Date(date);
@@ -80,6 +81,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   // Populate form on edit
   useEffect(() => {
     if (quotation) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         customerId: quotation.customerId ?? quotation.customer?._id ?? '',
         customerName: quotation.customerName ?? quotation.customer?.name ?? '',
@@ -303,6 +305,19 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
               />
             </div>
           </div>
+
+          {isEdit && quotation && (
+            <>
+              <Separator />
+              <SourceDocumentsPanel
+                sourceModule="qop"
+                sourceRecordId={quotation._id ?? quotation.id}
+                templateType="quotation"
+                documentData={quotation}
+                language={form.language}
+              />
+            </>
+          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>

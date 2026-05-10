@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { getSocket } from '@/lib/socket/client';
 
 export function useSocketEvent(event, handler) {
-  const stableHandler = useCallback(handler, [handler]);
+  const stableHandler = useCallback((...args) => handler(...args), [handler]);
 
   useEffect(() => {
     const socket = getSocket();

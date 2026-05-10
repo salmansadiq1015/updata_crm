@@ -68,6 +68,7 @@ export function RoleForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) setCurrentStep(0);
     if (defaultValues) {
       const perms = defaultValues.permissions?.map((p) => p._id || p) || [];
@@ -101,9 +102,9 @@ export function RoleForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
           return acc;
         }, {})
       : allPerms.reduce((acc, perm) => {
-          const module = perm.module || 'other';
-          if (!acc[module]) acc[module] = [];
-          acc[module].push(perm);
+          const moduleName = perm.module || 'other';
+          if (!acc[moduleName]) acc[moduleName] = [];
+          acc[moduleName].push(perm);
           return acc;
         }, {})
   ), [rawPerms, allPerms, isGroupedFormat]);

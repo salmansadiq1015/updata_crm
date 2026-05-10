@@ -97,7 +97,7 @@ export function PriceManagementTable() {
                   <TableCell className="font-mono text-sm">{article.articleNumber}</TableCell>
                   <TableCell>{article.name}</TableCell>
                   <TableCell className="text-right font-medium">
-                    {Number(article.basePrice).toFixed(2)}
+                    {(Number(article.basePrice) || 0).toFixed(2)}
                   </TableCell>
                   <TableCell>
                     <Button

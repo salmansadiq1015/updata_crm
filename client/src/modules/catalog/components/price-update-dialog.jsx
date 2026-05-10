@@ -29,10 +29,13 @@ const schema = z.object({
     ctx.addIssue({ code: 'custom', message: 'Percentage must be between -99 and 999', path: ['value'] });
   }
   if (data.mode === 'schedule') {
+    if (data.value === undefined || data.value === 0 || data.value < -99 || data.value > 999) {
+      ctx.addIssue({ code: 'custom', message: 'Percentage must be between -99 and 999 and non-zero', path: ['value'] });
+    }
     if (!data.effectiveDate) {
       ctx.addIssue({ code: 'custom', message: 'Effective date is required', path: ['effectiveDate'] });
     } else {
-      const date = new Date(data.effectiveDate);
+      const date = new Date(data.effectiveDate + 'T00:00:00');
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (date <= today) {
@@ -42,7 +45,7 @@ const schema = z.object({
   }
 });
 
-export function PriceUpdateDialog({ open, onClose, selectedArticles }) {
+export function PriceUpdateDialog({ open, onClose, selectedArticles = [] }) {
   const { t } = useLanguage();
   const { updatePrices, schedulePrices } = usePriceMutations();
   const [preview, setPreview] = useState(null);
@@ -87,7 +90,7 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles }) {
   const isPending = updatePrices.isPending || schedulePrices.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { setPreview(null); form.reset(); onClose(); } }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setPreview(null); form.reset(); onClose(); } }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('catalog.prices.update')}</DialogTitle>

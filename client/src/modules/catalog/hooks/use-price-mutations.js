@@ -7,6 +7,7 @@ export function usePriceMutations() {
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['catalog', 'articles'] });
+    qc.invalidateQueries({ queryKey: ['catalog', 'prices'] });
     qc.invalidateQueries({ queryKey: queryKeys.catalog.priceBatches() });
   };
 

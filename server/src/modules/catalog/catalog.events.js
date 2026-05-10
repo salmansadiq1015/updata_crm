@@ -53,6 +53,68 @@ export function registerCatalogEvents() {
     }
   });
 
+  // --- CATALOG_IGH_IMPORT_FAILED ---
+  // Notify users with admin or catalog:admin permissions when an IGH import fails
+  eventBus.on(EVENT_TYPES.CATALOG_IGH_IMPORT_FAILED, async (event) => {
+    try {
+      const notificationService = (await import('../notifications/notification.service.js')).default;
+      const User = (await import('../auth/user.model.js')).default;
+
+      // Find active users whose role grants admin or catalog:admin access.
+      // Populate role → permissions so we can filter by permission key.
+      const candidates = await User.find({ status: 'active', isDeleted: false })
+        .select('_id')
+        .populate({ path: 'role', select: 'name permissions', populate: { path: 'permissions', select: 'module action' } })
+        .lean();
+
+      const recipientIds = candidates
+        .filter((u) => {
+          if (!u.role) return false;
+          if (u.role.name === 'Admin') return true;
+          return (u.role.permissions || []).some(
+            (p) => p.module === 'catalog' && p.action === 'admin',
+          );
+        })
+        .map((u) => u._id)
+        .slice(0, 50);
+
+      if (recipientIds.length > 0) {
+        await notificationService.create(
+          {
+            type: 'igh_import_failed',
+            category: 'SYSTEM',
+            priority: 'HIGH',
+            channels: ['IN_APP', 'EMAIL'],
+            recipientIds,
+            payload: {
+              jobId: event.payload.jobId,
+              errorMessage: event.payload.error || 'Unknown error',
+            },
+            sourceModule: 'catalog',
+            sourceEvent: 'CATALOG_IGH_IMPORT_FAILED',
+            idempotencyKey: `igh-import-failed-${event.payload.jobId}`,
+          },
+          null,
+          { ipAddress: 'internal', userAgent: 'event-handler' },
+        );
+      }
+
+      logger.warn('IGH import failure notification sent to admins', {
+        module: 'catalog',
+        action: 'event.igh_import_failed',
+        jobId: event.payload.jobId,
+        error: event.payload.error,
+        recipientCount: recipientIds.length,
+      });
+    } catch (err) {
+      logger.error('Failed to handle CATALOG_IGH_IMPORT_FAILED event', {
+        module: 'catalog',
+        action: 'event.igh_import_failed',
+        error: { message: err.message, stack: err.stack },
+      });
+    }
+  });
+
   // --- CATALOG_PRICE_BATCH_APPLIED ---
   // Invalidate affected article caches
   eventBus.on(EVENT_TYPES.CATALOG_PRICE_BATCH_APPLIED, async (event) => {

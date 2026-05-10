@@ -54,7 +54,12 @@ class PickerService {
 
         if (categoryId) filter.categoryId = categoryId;
 
-        filter.title = { $regex: query, $options: 'i' };
+        if (query) {
+          filter.$or = [
+            { title: { $regex: query, $options: 'i' } },
+            { bodyHtml: { $regex: query, $options: 'i' } },
+          ];
+        }
 
         const docs = await TextBlock.find(filter)
           .select('_id title bodyHtml price unit')

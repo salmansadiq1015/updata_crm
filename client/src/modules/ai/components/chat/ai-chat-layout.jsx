@@ -4,9 +4,10 @@ import { useState, useCallback } from 'react';
 import { useAiChat } from '../../hooks/use-ai-chat';
 import { AiChatSidebar } from './ai-chat-sidebar';
 import { AiChatMain } from './ai-chat-main';
+import { generateId } from '@/lib/utils/ids';
 
 function newThreadId() {
-  return crypto.randomUUID();
+  return generateId();
 }
 
 export function AiChatLayout({ initialThreadId } = {}) {

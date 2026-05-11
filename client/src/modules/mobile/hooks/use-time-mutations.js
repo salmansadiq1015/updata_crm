@@ -6,6 +6,7 @@ import { timeService } from '../services/time-service';
 import { db } from '../db/mobile-db';
 import { useOfflineMutation } from './use-offline-mutation';
 import { SYNC_STATUS, SYNC_ENTITY_TYPE, RELEASE_STATUS } from '../constants/mobile-constants';
+import { generateId } from '@/lib/utils/ids';
 import toast from 'react-hot-toast';
 
 export function useTimeMutations(orderId) {
@@ -17,7 +18,7 @@ export function useTimeMutations(orderId) {
     entityType: SYNC_ENTITY_TYPE.TIME_ENTRY,
     invalidateKeys: keys,
     onOfflineWrite: async (data) => {
-      const id = crypto.randomUUID();
+      const id = generateId();
       const entry = {
         id,
         order_id: orderId,

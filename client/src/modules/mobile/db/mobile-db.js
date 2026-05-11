@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { generateId } from '@/lib/utils/ids';
 
 export const db = new Dexie('mb-mobile');
 
@@ -25,7 +26,7 @@ export async function setSyncMeta(key, value) {
 }
 
 export async function enqueueSync(entityType, entityId, operation, payload, priority) {
-  const id = crypto.randomUUID();
+  const id = generateId();
   await db.syncQueue.add({
     id,
     entity_type: entityType,

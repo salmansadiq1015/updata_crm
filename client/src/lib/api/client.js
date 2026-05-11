@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { generateId } from '@/lib/utils/ids';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9097/api/v1';
 
@@ -29,7 +30,7 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    config.headers['X-Request-Id'] = crypto.randomUUID();
+    config.headers['X-Request-Id'] = generateId();
     return config;
   },
   (error) => Promise.reject(error)

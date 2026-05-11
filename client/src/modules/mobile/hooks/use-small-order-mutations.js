@@ -6,6 +6,7 @@ import { smallOrderService } from '../services/small-order-service';
 import { useOfflineMutation } from './use-offline-mutation';
 import { db } from '../db/mobile-db';
 import { SYNC_STATUS, SYNC_ENTITY_TYPE } from '../constants/mobile-constants';
+import { generateId } from '@/lib/utils/ids';
 import toast from 'react-hot-toast';
 
 export function useSmallOrderMutations(projectId) {
@@ -17,7 +18,7 @@ export function useSmallOrderMutations(projectId) {
     entityType: SYNC_ENTITY_TYPE.SMALL_ORDER,
     invalidateKeys: keys,
     onOfflineWrite: async (data) => {
-      const id = crypto.randomUUID();
+      const id = generateId();
       const order = {
         id,
         project_id: projectId,

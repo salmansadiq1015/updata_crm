@@ -6,6 +6,7 @@ import { db } from '../db/mobile-db';
 import { useOfflineMutation } from './use-offline-mutation';
 import { SYNC_STATUS, SYNC_ENTITY_TYPE } from '../constants/mobile-constants';
 import { compressPhoto, generateThumbnail, captureGeoLocation } from '../lib/photo-utils';
+import { generateId } from '@/lib/utils/ids';
 import toast from 'react-hot-toast';
 
 export function usePhotoMutations(orderId) {
@@ -31,7 +32,7 @@ export function usePhotoMutations(orderId) {
       const compressed = await compressPhoto(file);
       const thumbnail = await generateThumbnail(file);
       const geo = await captureGeoLocation();
-      const id = crypto.randomUUID();
+      const id = generateId();
       const photo = {
         id,
         order_id: orderId,

@@ -1,1 +1,3 @@
-export const generateCorrelationId = () => crypto.randomUUID();
+import { generateId } from '@/lib/utils/ids';
+
+export const generateCorrelationId = () => generateId();

@@ -9,6 +9,7 @@ import { useOfflineQuery } from './use-offline-query';
 import { useOfflineMutation } from './use-offline-mutation';
 import { SYNC_STATUS, SYNC_ENTITY_TYPE } from '../constants/mobile-constants';
 import { getExistingSocket } from '../lib/websocket-client';
+import { generateId } from '@/lib/utils/ids';
 
 export function useChatMessages(projectId) {
   const queryClient = useQueryClient();
@@ -91,7 +92,7 @@ export function useChatMutations(projectId) {
     entityType: SYNC_ENTITY_TYPE.CHAT_MESSAGE,
     invalidateKeys: keys,
     onOfflineWrite: async (data) => {
-      const id = crypto.randomUUID();
+      const id = generateId();
       const message = {
         id,
         project_id: projectId,

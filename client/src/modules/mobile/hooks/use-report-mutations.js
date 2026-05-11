@@ -8,6 +8,7 @@ import { useNetworkStatus } from './use-network-status';
 import { useOfflineMutation } from './use-offline-mutation';
 import { SYNC_STATUS, SYNC_ENTITY_TYPE, REPORT_STATUS } from '../constants/mobile-constants';
 import { encryptSensitiveFields } from '../lib/crypto';
+import { generateId } from '@/lib/utils/ids';
 import toast from 'react-hot-toast';
 
 export function useReportMutations(orderId) {
@@ -24,7 +25,7 @@ export function useReportMutations(orderId) {
     entityType: SYNC_ENTITY_TYPE.WORK_REPORT,
     invalidateKeys: keys,
     onOfflineWrite: async (data) => {
-      const id = crypto.randomUUID();
+      const id = generateId();
       const report = await encryptSensitiveFields({
         id,
         order_id: orderId,

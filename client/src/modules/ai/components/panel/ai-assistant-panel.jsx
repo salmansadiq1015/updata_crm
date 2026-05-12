@@ -21,7 +21,7 @@ export function AiAssistantPanel() {
   const {
     isPanelOpen, panelView, closePanel, resetToIdle,
     session,
-    createSession, stopRecording, submitCorrections, confirmSession, cancelSession, isConfirmingSession,
+    createSession, stopRecording, submitCorrections, confirmSession, cancelSession, isConfirmingSession, isCancellingSession,
     recorder,
     agentRun, workflowLabel, dispatch, isDispatching, confirmRun, isConfirmingRun,
     isCreating,
@@ -65,7 +65,11 @@ export function AiAssistantPanel() {
           )}
 
           {(panelView === PANEL_VIEWS.UPLOADING || panelView === PANEL_VIEWS.PROCESSING) && (
-            <AiPanelProcessing uploadProgress={recorder.uploadProgress} />
+            <AiPanelProcessing
+              uploadProgress={recorder.uploadProgress}
+              onCancel={cancelSession}
+              isCancelling={isCancellingSession}
+            />
           )}
 
           {panelView === PANEL_VIEWS.ENTITIES && (

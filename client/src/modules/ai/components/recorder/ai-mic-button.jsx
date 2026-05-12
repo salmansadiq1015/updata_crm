@@ -3,8 +3,11 @@
 import { Mic } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function AiMicButton({ isSupported, onClick, disabled, className }) {
+  const { t } = useLanguage();
+
   return (
     <Button
       onClick={onClick}
@@ -16,11 +19,11 @@ export function AiMicButton({ isSupported, onClick, disabled, className }) {
         isSupported && !disabled && 'hover:ring-primary/50 active:scale-95',
         className
       )}
-      aria-label="Start voice recording"
+      aria-label={t('ai.chat.startVoiceRecording', 'Start voice recording')}
     >
       <Mic className="h-6 w-6" />
       {!isSupported && (
-        <span className="sr-only">Voice not supported on this browser</span>
+        <span className="sr-only">{t('ai.panel.voiceUnsupported', 'Voice not supported on this browser')}</span>
       )}
     </Button>
   );

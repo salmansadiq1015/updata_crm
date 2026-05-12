@@ -33,6 +33,7 @@ const EVENT_TYPES = Object.keys(EVENT_LABELS);
 const ALL_MARKER = '__all__';
 
 function DetailsCell({ details }) {
+  const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
 
   if (!details || (typeof details === 'object' && Object.keys(details).length === 0)) {
@@ -58,7 +59,7 @@ function DetailsCell({ details }) {
             onClick={() => setExpanded(true)}
             className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
           >
-            Mehr <ChevronDown className="h-3 w-3" />
+            {t('common.more', 'Mehr')} <ChevronDown className="h-3 w-3" />
           </button>
         )}
       </div>
@@ -76,7 +77,7 @@ function DetailsCell({ details }) {
           onClick={() => setExpanded(false)}
           className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
         >
-          Weniger <ChevronUp className="h-3 w-3" />
+          {t('common.less', 'Weniger')} <ChevronUp className="h-3 w-3" />
         </button>
       </div>
     );
@@ -156,7 +157,7 @@ export function AuditLogTable() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      showError(err.message || 'Export fehlgeschlagen');
+      showError(err.message || t('audit.exportFailed', 'Export fehlgeschlagen'));
     } finally {
       setIsExporting(false);
     }
@@ -169,7 +170,7 @@ export function AuditLogTable() {
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <div className="space-y-1.5">
-              <Label htmlFor="audit-from">Von</Label>
+              <Label htmlFor="audit-from">{t('audit.from', 'Von')}</Label>
               <Input
                 id="audit-from"
                 type="date"
@@ -178,7 +179,7 @@ export function AuditLogTable() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="audit-to">Bis</Label>
+              <Label htmlFor="audit-to">{t('audit.to', 'Bis')}</Label>
               <Input
                 id="audit-to"
                 type="date"
@@ -187,16 +188,16 @@ export function AuditLogTable() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Ereignistyp</Label>
+              <Label>{t('audit.eventType', 'Ereignistyp')}</Label>
               <Select
                 value={filters.event || ALL_MARKER}
                 onValueChange={(val) => updateFilter('event', val === ALL_MARKER ? '' : val)}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Alle Ereignisse" />
+                  <SelectValue placeholder={t('audit.allEvents', 'Alle Ereignisse')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL_MARKER}>Alle Ereignisse</SelectItem>
+                  <SelectItem value={ALL_MARKER}>{t('audit.allEvents', 'Alle Ereignisse')}</SelectItem>
                   {EVENT_TYPES.map((type) => (
                     <SelectItem key={type} value={type}>
                       {EVENT_LABELS[type]}
@@ -206,37 +207,37 @@ export function AuditLogTable() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Ergebnis</Label>
+              <Label>{t('audit.result', 'Ergebnis')}</Label>
               <Select
                 value={filters.result || ALL_MARKER}
                 onValueChange={(val) => updateFilter('result', val === ALL_MARKER ? '' : val)}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Alle" />
+                  <SelectValue placeholder={t('common.all', 'Alle')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL_MARKER}>Alle</SelectItem>
-                  <SelectItem value="success">Erfolgreich</SelectItem>
-                  <SelectItem value="failure">Fehlgeschlagen</SelectItem>
+                  <SelectItem value={ALL_MARKER}>{t('common.all', 'Alle')}</SelectItem>
+                  <SelectItem value="success">{t('audit.successful', 'Erfolgreich')}</SelectItem>
+                  <SelectItem value="failure">{t('audit.failed', 'Fehlgeschlagen')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="audit-user">Benutzer (E-Mail)</Label>
+              <Label htmlFor="audit-user">{t('audit.userEmail', 'Benutzer (E-Mail)')}</Label>
               <Input
                 id="audit-user"
                 type="text"
-                placeholder="E-Mail suchen..."
+                placeholder={t('audit.searchEmail', 'E-Mail suchen...')}
                 value={filters.user}
                 onChange={(e) => updateFilter('user', e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="audit-module">Modul</Label>
+              <Label htmlFor="audit-module">{t('audit.module', 'Modul')}</Label>
               <Input
                 id="audit-module"
                 type="text"
-                placeholder="Modul filtern..."
+                placeholder={t('audit.filterModule', 'Modul filtern...')}
                 value={filters.module}
                 onChange={(e) => updateFilter('module', e.target.value)}
               />
@@ -250,7 +251,7 @@ export function AuditLogTable() {
         <CardContent className="p-0">
           <div className="flex items-center justify-between border-b px-4 py-3">
             <p className="text-sm text-muted-foreground">
-              {isLoading ? 'Lade...' : `${entries.length} Eintraege`}
+              {isLoading ? t('common.loading', 'Wird geladen...') : t('audit.entryCount', '{count} Eintraege', { count: entries.length })}
             </p>
             <Button
               variant="outline"
@@ -270,12 +271,12 @@ export function AuditLogTable() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Zeitpunkt</TableHead>
-                <TableHead>Ereignis</TableHead>
-                <TableHead>Benutzer</TableHead>
-                <TableHead>Ergebnis</TableHead>
-                <TableHead>IP-Adresse</TableHead>
-                <TableHead>Details</TableHead>
+                <TableHead>{t('audit.timestamp', 'Zeitpunkt')}</TableHead>
+                <TableHead>{t('audit.event', 'Ereignis')}</TableHead>
+                <TableHead>{t('audit.user', 'Benutzer')}</TableHead>
+                <TableHead>{t('audit.result', 'Ergebnis')}</TableHead>
+                <TableHead>{t('audit.ipAddress', 'IP-Adresse')}</TableHead>
+                <TableHead>{t('audit.details', 'Details')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -288,7 +289,7 @@ export function AuditLogTable() {
               ) : entries.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                    Keine Eintraege gefunden.
+                    {t('common.noResults', 'Keine Eintraege vorhanden')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -301,7 +302,7 @@ export function AuditLogTable() {
                     </TableCell>
                     <TableCell>
                       <span className="text-sm">
-                        {EVENT_LABELS[entry.event] || entry.event}
+                        {t(`audit.event.${entry.event}`, EVENT_LABELS[entry.event] || entry.event)}
                       </span>
                     </TableCell>
                     <TableCell className="text-sm">
@@ -316,7 +317,7 @@ export function AuditLogTable() {
                             : ''
                         }
                       >
-                        {entry.result === 'success' ? 'Erfolg' : 'Fehler'}
+                        {entry.result === 'success' ? t('audit.success', 'Erfolg') : t('audit.error', 'Fehler')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs font-mono text-muted-foreground">
@@ -337,7 +338,7 @@ export function AuditLogTable() {
               {isFetching && !isLoading && (
                 <Loader2 className="inline mr-1 h-3 w-3 animate-spin" />
               )}
-              Seite {cursorStack.length + 1}
+              {t('common.page', 'Seite')} {cursorStack.length + 1}
             </div>
             <div className="flex gap-2">
               <Button
@@ -347,7 +348,7 @@ export function AuditLogTable() {
                 disabled={!hasPrev || isLoading}
               >
                 <ChevronLeft className="mr-1 h-4 w-4" />
-                Zurueck
+                {t('common.back', 'Zurueck')}
               </Button>
               <Button
                 variant="outline"
@@ -355,7 +356,7 @@ export function AuditLogTable() {
                 onClick={handleNext}
                 disabled={!hasNext || isLoading}
               >
-                Weiter
+                {t('common.next', 'Weiter')}
                 <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>

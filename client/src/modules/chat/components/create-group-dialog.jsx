@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, X, FolderOpen, Link } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLanguage } from '@/lib/i18n/language-context';
 import apiClient from '@/lib/api/client';
 
 function Checkbox({ checked, onCheckedChange }) {
@@ -40,6 +41,7 @@ function useDebounce(value, delay) {
 }
 
 export function CreateGroupDialog({ open, onClose }) {
+  const { t } = useLanguage();
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -152,15 +154,15 @@ export function CreateGroupDialog({ open, onClose }) {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <FolderOpen className="h-5 w-5" />
-                Select Project
+                {t('chat.selectProject')}
               </DialogTitle>
-              <DialogDescription className="sr-only">Optionally link this group chat to a project.</DialogDescription>
+              <DialogDescription className="sr-only">{t('chat.selectProjectDesc')}</DialogDescription>
             </DialogHeader>
 
             <DialogBody className="space-y-3 pt-0">
               <Input
                 autoFocus
-                placeholder="Search by name or number…"
+                placeholder={t('chat.searchProject')}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
@@ -179,7 +181,7 @@ export function CreateGroupDialog({ open, onClose }) {
                     ))}
                   </div>
                 ) : filteredProjects.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">No projects found</p>
+                  <p className="py-6 text-center text-sm text-muted-foreground">{t('common.noProjects')}</p>
                 ) : (
                   <ul className="space-y-1 py-1 pr-3">
                     {filteredProjects.map(project => (
@@ -216,8 +218,8 @@ export function CreateGroupDialog({ open, onClose }) {
             </DialogBody>
 
             <DialogFooter>
-              <Button variant="outline" onClick={handleClose}>Cancel</Button>
-              <Button variant="ghost" onClick={handleSkipProject}>Skip →</Button>
+              <Button variant="outline" onClick={handleClose}>{t('common.cancel')}</Button>
+              <Button variant="ghost" onClick={handleSkipProject}>{t('common.skip')}</Button>
             </DialogFooter>
           </>
         )}
@@ -228,9 +230,9 @@ export function CreateGroupDialog({ open, onClose }) {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                New Group
+                {t('chat.newGroup')}
               </DialogTitle>
-              <DialogDescription className="sr-only">Set the group name and description.</DialogDescription>
+              <DialogDescription className="sr-only">{t('chat.groupInfoDesc')}</DialogDescription>
             </DialogHeader>
 
             <DialogBody className="space-y-4 pt-0">
@@ -238,17 +240,17 @@ export function CreateGroupDialog({ open, onClose }) {
                 <div className="flex items-center gap-2 rounded-md bg-primary/5 border border-primary/20 px-3 py-2">
                   <Link className="h-3.5 w-3.5 text-primary shrink-0" />
                   <span className="text-xs text-primary font-medium truncate">
-                    Linked to: {selectedProject.name}
+                    {t('chat.linkedTo', { name: selectedProject.name })}
                   </span>
                 </div>
               )}
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">
-                  Group Name <span className="text-destructive">*</span>
+                  {t('chat.groupName')} <span className="text-destructive">*</span>
                 </label>
                 <Input
                   autoFocus
-                  placeholder="e.g. Field Ops Alpha"
+                  placeholder={t('chat.groupNamePlaceholder')}
                   value={name}
                   onChange={e => setName(e.target.value.slice(0, 100))}
                   maxLength={100}
@@ -256,11 +258,11 @@ export function CreateGroupDialog({ open, onClose }) {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-muted-foreground">
-                  Description (optional)
+                  {t('common.descriptionOptional')}
                 </label>
                 <textarea
                   className="w-full min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-                  placeholder="What is this group about?"
+                  placeholder={t('chat.groupDescriptionPlaceholder')}
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   rows={3}
@@ -269,9 +271,9 @@ export function CreateGroupDialog({ open, onClose }) {
             </DialogBody>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setSearchTerm(''); setStep(1); }}>← Back</Button>
+              <Button variant="outline" onClick={() => { setSearchTerm(''); setStep(1); }}>{t('common.back')}</Button>
               <Button onClick={() => { setSearchTerm(''); setStep(3); }} disabled={!name.trim()}>
-                Next →
+                {t('common.next')}
               </Button>
             </DialogFooter>
           </>
@@ -283,15 +285,15 @@ export function CreateGroupDialog({ open, onClose }) {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Add Members
+                {t('chat.addMembers')}
               </DialogTitle>
-              <DialogDescription className="sr-only">Select members to add to the group.</DialogDescription>
+              <DialogDescription className="sr-only">{t('chat.addMembersDesc')}</DialogDescription>
             </DialogHeader>
 
             <DialogBody className="space-y-3 pt-0">
               <Input
                 autoFocus
-                placeholder="Search by name or email…"
+                placeholder={t('chat.searchByNameEmail')}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
@@ -308,7 +310,7 @@ export function CreateGroupDialog({ open, onClose }) {
                           type="button"
                           onClick={() => setSelectedIds(prev => prev.filter(i => i !== id))}
                           className="ml-0.5 rounded-full hover:bg-accent p-0.5"
-                          aria-label={`Remove ${user.firstName}`}
+                          aria-label={t('common.removeName', { name: user.firstName })}
                         >
                           <X className="h-3 w-3" />
                         </button>
@@ -320,9 +322,9 @@ export function CreateGroupDialog({ open, onClose }) {
 
               <ScrollArea className="h-64">
                 {usersLoading ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">Loading users…</p>
+                  <p className="py-6 text-center text-sm text-muted-foreground">{t('common.loadingUsers')}</p>
                 ) : filteredUsers.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">No users found</p>
+                  <p className="py-6 text-center text-sm text-muted-foreground">{t('common.noUsers')}</p>
                 ) : (
                   <ul className="space-y-1 py-1 pr-3">
                     {filteredUsers.map(user => (
@@ -359,9 +361,9 @@ export function CreateGroupDialog({ open, onClose }) {
             </DialogBody>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setSearchTerm(''); setStep(2); }}>← Back</Button>
+              <Button variant="outline" onClick={() => { setSearchTerm(''); setStep(2); }}>{t('common.back')}</Button>
               <Button onClick={handleCreate} disabled={!name.trim() || createGroupRoom.isPending}>
-                {createGroupRoom.isPending ? 'Creating…' : 'Create Group'}
+                {createGroupRoom.isPending ? t('common.creating') : t('chat.createGroup')}
               </Button>
             </DialogFooter>
           </>

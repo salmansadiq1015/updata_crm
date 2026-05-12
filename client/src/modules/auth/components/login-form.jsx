@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { loginSchema } from '@/modules/auth/validations/auth';
+import { createLoginSchema } from '@/modules/auth/validations/auth';
 import { authService } from '@/modules/auth/services/auth-service';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Button } from '@/components/ui/button';
@@ -16,13 +16,14 @@ import { Loader2, ArrowRight, Lock, Eye, EyeOff } from 'lucide-react';
 import { showError, showSuccess } from '@/lib/toast';
 
 export function LoginForm() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect') || '/dashboard';
   const [isLoading, setIsLoading] = useState(false);
   const [lockMessage, setLockMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const loginSchema = useMemo(() => createLoginSchema(t), [t]);
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(loginSchema),
@@ -45,18 +46,18 @@ export function LoginForm() {
 
       if (status === 423 || body?.lockedUntil) {
         const lockedUntil = body?.lockedUntil
-          ? new Intl.DateTimeFormat('de-CH', {
+          ? new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-US', {
               dateStyle: 'medium',
               timeStyle: 'short',
             }).format(new Date(body.lockedUntil))
           : null;
         setLockMessage(
           lockedUntil
-            ? `Konto gesperrt bis ${lockedUntil}. Bitte versuchen Sie es spaeter erneut.`
-            : 'Konto gesperrt. Bitte versuchen Sie es spaeter erneut.'
+            ? t('auth.accountLockedUntil', 'Konto gesperrt bis {time}. Bitte versuchen Sie es spaeter erneut.', { time: lockedUntil })
+            : t('auth.accountLocked', 'Konto gesperrt. Bitte versuchen Sie es spaeter erneut.')
         );
       } else {
-        showError(err.message || 'Anmeldung fehlgeschlagen');
+        showError(err.message || t('auth.loginFailed', 'Anmeldung fehlgeschlagen'));
       }
     } finally {
       setIsLoading(false);
@@ -117,13 +118,14 @@ export function LoginForm() {
             <Input
               id="password"
               type={showPassword ? 'text' : 'password'}
-              placeholder="Ihr Passwort eingeben"
+              placeholder={t('auth.passwordPlaceholder', 'Ihr Passwort eingeben')}
               autoComplete="current-password"
               className="h-11 rounded-xl bg-muted/40 border-border/60 focus:bg-background transition-colors pr-10"
               {...register('password')}
             />
             <button
               type="button"
+              aria-label={t(showPassword ? 'auth.hidePassword' : 'auth.showPassword', showPassword ? 'Passwort ausblenden' : 'Passwort anzeigen')}
               onClick={() => setShowPassword((v) => !v)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               tabIndex={-1}

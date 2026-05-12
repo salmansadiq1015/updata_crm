@@ -308,7 +308,7 @@ export function RolesTable() {
       <div className="flex items-center gap-3 flex-wrap rounded-xl border border-border bg-card px-4 py-3">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Filter className="h-3.5 w-3.5" />
-          <span className="text-xs font-semibold uppercase tracking-wider">Filter</span>
+          <span className="text-xs font-semibold uppercase tracking-wider">{t('common.filter')}</span>
         </div>
 
         <div className="w-px h-5 bg-border" />
@@ -427,7 +427,7 @@ export function RolesTable() {
                       </Link>
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Anzeigen</TooltipContent>
+                  <TooltipContent>{t('common.view')}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
 
@@ -444,7 +444,7 @@ export function RolesTable() {
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Bearbeiten</TooltipContent>
+                    <TooltipContent>{t('common.edit')}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
 
@@ -460,7 +460,7 @@ export function RolesTable() {
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Duplizieren</TooltipContent>
+                    <TooltipContent>{t('common.duplicate')}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
 
@@ -477,7 +477,7 @@ export function RolesTable() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Loeschen</TooltipContent>
+                      <TooltipContent>{t('common.delete')}</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 )}
@@ -533,6 +533,7 @@ export function RolesTable() {
 
 /* ── Role Card Grid ── */
 function RoleCardGrid({ roles, isLoading, onEdit, onClone, onDelete }) {
+  const { t } = useLanguage();
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -557,7 +558,7 @@ function RoleCardGrid({ roles, isLoading, onEdit, onClone, onDelete }) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground rounded-xl border border-dashed border-border bg-card/50">
         <Shield className="h-10 w-10 opacity-30 mb-3" />
-        <p className="text-sm font-medium">Keine Rollen gefunden</p>
+        <p className="text-sm font-medium">{t('roles.empty')}</p>
       </div>
     );
   }

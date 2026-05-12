@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 type ConfirmDialogProps = {
   open: boolean;
@@ -22,6 +23,8 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useLanguage();
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
       <DialogContent className="sm:max-w-md">
@@ -32,7 +35,7 @@ export function ConfirmDialog({
           <p className="text-sm text-muted-foreground">{description}</p>
         )}
         <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button variant="outline" onClick={onCancel}>{t('common.cancel', 'Cancel')}</Button>
           <Button
             variant={destructive ? 'destructive' : 'default'}
             onClick={onConfirm}

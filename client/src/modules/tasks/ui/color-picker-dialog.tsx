@@ -2,6 +2,7 @@
 
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { LIST_COLORS, FOLDER_COLOR_OPTIONS } from './task-ui-constants';
 
@@ -15,13 +16,14 @@ type ListColorDialogProps = {
 };
 
 export function ListColorDialog({ open, currentColor, onColorChange, onClose }: ListColorDialogProps) {
+  const { t } = useLanguage();
   const pick = (color: string | null) => { onColorChange(color); onClose(); };
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>List color</DialogTitle>
+          <DialogTitle>{t('tasks.listColor', 'List color')}</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-8 gap-2 py-1">
           {LIST_COLORS.map((color) => (
@@ -44,7 +46,7 @@ export function ListColorDialog({ open, currentColor, onColorChange, onClose }: 
             className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 text-left"
             onClick={() => pick(null)}
           >
-            Remove color
+            {t('tasks.removeColor', 'Remove color')}
           </button>
         )}
       </DialogContent>
@@ -62,13 +64,14 @@ type FolderColorDialogProps = {
 };
 
 export function FolderColorDialog({ open, currentColor, onColorChange, onClose }: FolderColorDialogProps) {
+  const { t } = useLanguage();
   const pick = (color: string | null) => { onColorChange(color); onClose(); };
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Folder color</DialogTitle>
+          <DialogTitle>{t('tasks.folderColor', 'Folder color')}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-wrap gap-2 py-1">
           {FOLDER_COLOR_OPTIONS.map((opt) => (
@@ -92,7 +95,7 @@ export function FolderColorDialog({ open, currentColor, onColorChange, onClose }
             className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 text-left"
             onClick={() => pick(null)}
           >
-            Remove color
+            {t('tasks.removeColor', 'Remove color')}
           </button>
         )}
       </DialogContent>

@@ -18,8 +18,14 @@ import { ChatSidebarItem } from './chat-sidebar-item';
 import { UserSearchDialog } from './user-search-dialog';
 import { CreateGroupDialog } from './create-group-dialog';
 import { JoinGroupDialog } from './join-group-dialog';
+import { useLanguage } from '@/lib/i18n/language-context';
 
-const FILTERS = ['All', 'Direct', 'Groups', 'Projects'];
+const FILTERS = [
+  { value: 'All', labelKey: 'common.all' },
+  { value: 'Direct', labelKey: 'chat.direct' },
+  { value: 'Groups', labelKey: 'chat.groups' },
+  { value: 'Projects', labelKey: 'common.projects' },
+];
 
 function filterRooms(rooms, filter, search) {
   let list = rooms ?? [];
@@ -37,6 +43,7 @@ function filterRooms(rooms, filter, search) {
 }
 
 export function ChatSidebar({ activeRoomId }) {
+  const { t } = useLanguage();
   const router = useRouter();
   const queryClient = useQueryClient();
   const user = useAuthStore(s => s.user);
@@ -65,7 +72,7 @@ export function ChatSidebar({ activeRoomId }) {
     <div className="flex flex-col h-full bg-card">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
-        <h2 className="text-lg font-bold tracking-tight">Chats</h2>
+        <h2 className="text-lg font-bold tracking-tight">{t('chat.title')}</h2>
         <TooltipProvider delayDuration={300}>
           <div className="flex items-center gap-1">
             <Tooltip>
@@ -74,7 +81,7 @@ export function ChatSidebar({ activeRoomId }) {
                   <SquarePen className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>New message</TooltipContent>
+              <TooltipContent>{t('chat.newMessage')}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -82,7 +89,7 @@ export function ChatSidebar({ activeRoomId }) {
                   <Users className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>New group</TooltipContent>
+              <TooltipContent>{t('chat.newGroup')}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -90,7 +97,7 @@ export function ChatSidebar({ activeRoomId }) {
                   <Hash className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Join by code</TooltipContent>
+              <TooltipContent>{t('chat.joinByCode')}</TooltipContent>
             </Tooltip>
           </div>
         </TooltipProvider>
@@ -103,7 +110,7 @@ export function ChatSidebar({ activeRoomId }) {
           <Input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search or start new chat"
+            placeholder={t('chat.searchOrStart')}
             className="pl-8 h-8 text-sm bg-muted/50 border-0 focus-visible:ring-1 rounded-full"
           />
         </div>
@@ -113,16 +120,16 @@ export function ChatSidebar({ activeRoomId }) {
       <div className="flex gap-1 px-3 py-2 border-b border-border/40 overflow-x-auto scrollbar-none">
         {FILTERS.map(f => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
+            key={f.value}
+            onClick={() => setFilter(f.value)}
             className={cn(
               'text-xs px-3 py-1 rounded-full shrink-0 font-medium transition-colors',
-              filter === f
+              filter === f.value
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
             )}
           >
-            {f}
+            {t(f.labelKey)}
           </button>
         ))}
       </div>
@@ -140,7 +147,7 @@ export function ChatSidebar({ activeRoomId }) {
             </div>
           ))
         ) : visible.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-8">No conversations</p>
+          <p className="text-xs text-muted-foreground text-center py-8">{t('chat.noConversations')}</p>
         ) : (
           visible.map(room => (
             <ChatSidebarItem

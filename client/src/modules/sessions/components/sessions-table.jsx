@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authService } from '@/modules/auth/services/auth-service';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { useAuthStore } from '@/stores/auth-store';
 import { showSuccess, showError } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,10 +17,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
-import { Monitor, Smartphone, Trash2, LogOut, Loader2 } from 'lucide-react';
+import { Monitor, Smartphone, Trash2, LogOut } from 'lucide-react';
 
 function formatDate(dateString) {
-  if (!dateString) return '—';
+  if (!dateString) return '\u2014';
   return new Intl.DateTimeFormat('de-CH', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -38,7 +37,6 @@ function DeviceIcon({ deviceType }) {
 export function SessionsTable() {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
-  const user = useAuthStore((s) => s.user);
   const [revokeTarget, setRevokeTarget] = useState(null);
   const [showRevokeOthers, setShowRevokeOthers] = useState(false);
 
@@ -50,7 +48,7 @@ export function SessionsTable() {
   const revokeMutation = useMutation({
     mutationFn: (sessionId) => authService.revokeSession(sessionId),
     onSuccess: () => {
-      showSuccess('Sitzung wurde beendet');
+      showSuccess(t('sessions.revoked', 'Sitzung wurde beendet'));
       queryClient.invalidateQueries({ queryKey: ['auth', 'sessions'] });
       setRevokeTarget(null);
     },
@@ -60,7 +58,7 @@ export function SessionsTable() {
   const revokeOthersMutation = useMutation({
     mutationFn: () => authService.revokeOtherSessions(),
     onSuccess: () => {
-      showSuccess('Alle anderen Sitzungen wurden beendet');
+      showSuccess(t('sessions.othersRevoked', 'Alle anderen Sitzungen wurden beendet'));
       queryClient.invalidateQueries({ queryKey: ['auth', 'sessions'] });
       setShowRevokeOthers(false);
     },
@@ -68,6 +66,13 @@ export function SessionsTable() {
   });
 
   const sessions = Array.isArray(data) ? data : (data?.sessions ?? data?.data ?? []);
+  const headers = [
+    t('sessions.deviceBrowser', 'Geraet / Browser'),
+    t('sessions.ipAddress', 'IP-Adresse'),
+    t('sessions.lastActivity', 'Letzte Aktivitaet'),
+    t('sessions.created', 'Erstellt'),
+    t('common.actions', 'Aktionen'),
+  ];
 
   if (isLoading) {
     return (
@@ -75,7 +80,7 @@ export function SessionsTable() {
         <CardContent className="p-0">
           <div className="divide-y divide-border/30">
             <div className="flex items-center gap-4 px-4 py-3 bg-muted/30">
-              {['Geraet / Browser', 'IP-Adresse', 'Letzte Aktivitaet', 'Erstellt', 'Aktionen'].map((h) => (
+              {headers.map((h) => (
                 <div key={h} className="h-4 w-24 rounded bg-muted animate-pulse" />
               ))}
             </div>
@@ -104,7 +109,7 @@ export function SessionsTable() {
     return (
       <Card>
         <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          Sitzungen konnten nicht geladen werden.
+          {t('sessions.loadFailed', 'Sitzungen konnten nicht geladen werden.')}
         </CardContent>
       </Card>
     );
@@ -123,7 +128,7 @@ export function SessionsTable() {
               onClick={() => setShowRevokeOthers(true)}
             >
               <LogOut className="mr-2 h-4 w-4" />
-              Alle anderen abmelden
+              {t('sessions.logoutOthers', 'Alle anderen abmelden')}
             </Button>
           </div>
         )}
@@ -131,18 +136,18 @@ export function SessionsTable() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Gerät / Browser</TableHead>
-                <TableHead>IP-Adresse</TableHead>
-                <TableHead>Letzte Aktivität</TableHead>
-                <TableHead>Erstellt</TableHead>
-                <TableHead className="text-right">Aktionen</TableHead>
+                <TableHead>{t('sessions.deviceBrowser', 'Geraet / Browser')}</TableHead>
+                <TableHead>{t('sessions.ipAddress', 'IP-Adresse')}</TableHead>
+                <TableHead>{t('sessions.lastActivity', 'Letzte Aktivitaet')}</TableHead>
+                <TableHead>{t('sessions.created', 'Erstellt')}</TableHead>
+                <TableHead className="text-right">{t('common.actions', 'Aktionen')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sessions.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    Keine aktiven Sitzungen gefunden.
+                    {t('sessions.empty', 'Keine aktiven Sitzungen gefunden.')}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -156,11 +161,11 @@ export function SessionsTable() {
                           <div>
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-sm">
-                                {session.browser || session.userAgent || 'Unbekannt'}
+                                {session.browser || session.userAgent || t('common.unknown', 'Unbekannt')}
                               </span>
                               {isCurrent && (
                                 <Badge variant="secondary" className="text-xs">
-                                  Aktuelle Sitzung
+                                  {t('sessions.current', 'Aktuelle Sitzung')}
                                 </Badge>
                               )}
                             </div>
@@ -171,7 +176,7 @@ export function SessionsTable() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {session.ipAddress || '—'}
+                        {session.ipAddress || '\u2014'}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(session.lastActiveAt)}
@@ -185,6 +190,7 @@ export function SessionsTable() {
                             variant="ghost"
                             size="sm"
                             onClick={() => setRevokeTarget(session)}
+                            aria-label={t('sessions.revoke', 'Sitzung beenden')}
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -202,9 +208,9 @@ export function SessionsTable() {
       <ConfirmDialog
         open={!!revokeTarget}
         onOpenChange={(open) => !open && setRevokeTarget(null)}
-        title="Sitzung beenden"
-        description="Möchten Sie diese Sitzung wirklich beenden? Das Gerät wird abgemeldet."
-        confirmText="Abmelden"
+        title={t('sessions.revoke', 'Sitzung beenden')}
+        description={t('sessions.revokeDescription', 'Moechten Sie diese Sitzung wirklich beenden? Das Geraet wird abgemeldet.')}
+        confirmText={t('sessions.logout', 'Abmelden')}
         onConfirm={() => revokeMutation.mutate(revokeTarget?.sessionId || revokeTarget?.id)}
         loading={revokeMutation.isPending}
       />
@@ -212,9 +218,9 @@ export function SessionsTable() {
       <ConfirmDialog
         open={showRevokeOthers}
         onOpenChange={setShowRevokeOthers}
-        title="Alle anderen Sitzungen beenden"
-        description="Möchten Sie alle anderen Sitzungen wirklich beenden? Alle anderen Geräte werden abgemeldet."
-        confirmText="Alle abmelden"
+        title={t('sessions.revokeOthers', 'Alle anderen Sitzungen beenden')}
+        description={t('sessions.revokeOthersDescription', 'Moechten Sie alle anderen Sitzungen wirklich beenden? Alle anderen Geraete werden abgemeldet.')}
+        confirmText={t('sessions.logoutAll', 'Alle abmelden')}
         onConfirm={() => revokeOthersMutation.mutate()}
         loading={revokeOthersMutation.isPending}
       />

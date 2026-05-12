@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LIST_COLORS } from './task-ui-constants';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 type TaskListColorPickerProps = {
   currentColor: string | null;
@@ -13,11 +14,12 @@ type TaskListColorPickerProps = {
 };
 
 export function TaskListColorPicker({ currentColor, onColorChange, children }: TaskListColorPickerProps) {
+  const { t } = useLanguage();
   return (
     <Popover>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent className="w-52 p-3" align="start">
-        <p className="text-xs font-medium text-muted-foreground mb-2">List color</p>
+        <p className="text-xs font-medium text-muted-foreground mb-2">{t('tasks.listColor')}</p>
         <div className="grid grid-cols-8 gap-1.5">
           {LIST_COLORS.map((color) => (
             <button
@@ -38,7 +40,7 @@ export function TaskListColorPicker({ currentColor, onColorChange, children }: T
           className="mt-2 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
           onClick={() => onColorChange(null)}
         >
-          Remove color
+          {t('tasks.removeColor')}
         </button>
       </PopoverContent>
     </Popover>

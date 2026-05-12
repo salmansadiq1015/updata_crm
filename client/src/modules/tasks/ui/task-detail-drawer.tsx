@@ -11,11 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import type { Task, TaskNote, TaskPatch, TaskStatus } from '../types/task-types';
 import {
-  TASK_PRIORITIES, TASK_PRIORITY_LABEL,
-  TASK_STATUSES, TASK_STATUS_LABEL,
+  TASK_PRIORITIES, getTaskPriorityLabel,
+  TASK_STATUSES, getTaskStatusLabel,
   taskPriorityClass, taskPriorityIconColor,
   taskStatusClass, taskStatusIconColor,
 } from './task-ui-constants';
@@ -107,8 +108,9 @@ function FieldRow({
 }
 
 function ActivityNote({ note, users }: { note: TaskNote; users?: any[] }) {
+  const { t } = useLanguage();
   const author = (users ?? []).find((u: any) => u.id === note.authorId);
-  const name = author ? `${author.firstName} ${author.lastName}` : 'Team member';
+  const name = author ? `${author.firstName} ${author.lastName}` : t('tasks.teamMember');
   const initials = author
     ? `${author.firstName?.[0] ?? ''}${author.lastName?.[0] ?? ''}`.toUpperCase()
     : '?';
@@ -142,6 +144,7 @@ export default function TaskDetailDrawer({
   users,
   onDuplicateTask,
 }: TaskDetailDrawerProps) {
+  const { t } = useLanguage();
   const startInputRef = useRef<HTMLInputElement>(null);
   const dueInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -159,10 +162,10 @@ export default function TaskDetailDrawer({
     setUploading(true);
     try {
       await taskApi.uploadAttachment(task.id, file);
-      toast.success('Attachment uploaded');
+      toast.success(t('tasks.attachmentUploaded'));
       onTaskRefresh?.(task.id);
     } catch {
-      toast.error('Upload failed');
+      toast.error(t('tasks.uploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -177,7 +180,7 @@ export default function TaskDetailDrawer({
       setNoteText('');
       notesQuery.refetch();
     } catch {
-      toast.error('Failed to post note');
+      toast.error(t('tasks.postNoteFailed'));
     } finally {
       setPostingNote(false);
     }
@@ -189,7 +192,7 @@ export default function TaskDetailDrawer({
       await taskApi.createSubtask(task.id, { title });
       subtasksQuery.refetch();
     } catch {
-      toast.error('Failed to create subtask');
+      toast.error(t('tasks.createSubtaskFailed'));
     }
   };
 
@@ -199,7 +202,7 @@ export default function TaskDetailDrawer({
       await taskApi.changeStatus(id, status);
       subtasksQuery.refetch();
     } catch {
-      toast.error('Failed to update subtask');
+      toast.error(t('tasks.updateSubtaskFailed'));
     }
   };
 
@@ -209,7 +212,7 @@ export default function TaskDetailDrawer({
       await taskApi.remove(id);
       subtasksQuery.refetch();
     } catch {
-      toast.error('Failed to delete subtask');
+      toast.error(t('tasks.deleteSubtaskFailed'));
     }
   };
 
@@ -229,7 +232,7 @@ export default function TaskDetailDrawer({
         {/* Loading skeleton */}
         {isLoading && (
           <>
-            <SheetTitle className="sr-only">Loading task…</SheetTitle>
+            <SheetTitle className="sr-only">{t('tasks.loadingTask')}</SheetTitle>
             <div className="space-y-4 p-6">
               <div className="h-6 w-3/4 rounded-lg bg-muted skeleton-shimmer" />
               <div className="h-3 w-1/3 rounded bg-muted skeleton-shimmer" />
@@ -245,7 +248,7 @@ export default function TaskDetailDrawer({
         {/* No task */}
         {!isLoading && !task && (
           <>
-            <SheetTitle className="sr-only">No task selected</SheetTitle>
+            <SheetTitle className="sr-only">{t('tasks.noTaskSelected')}</SheetTitle>
             <TaskEmptyState type="empty" />
           </>
         )}
@@ -258,18 +261,18 @@ export default function TaskDetailDrawer({
               <SheetTitle className="mb-1.5">
                 <TaskInlineField
                   value={task.title}
-                  ariaLabel="Edit task title"
+                  ariaLabel={t('tasks.editTitle')}
                   className="block w-full text-left text-lg font-bold leading-snug text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   onCommit={(title) => onPatchTask(task.id, { title, expectedVersion: task.version })}
                 />
               </SheetTitle>
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 {StatusIcon && <StatusIcon className={cn('h-3 w-3', taskStatusIconColor[task.status])} />}
-                <span>{TASK_STATUS_LABEL[task.status]}</span>
+                <span>{getTaskStatusLabel(t, task.status)}</span>
                 <span className="opacity-40">·</span>
                 <span>v{task.version}</span>
                 <span className="opacity-40">·</span>
-                <span>updated {formatDate(task.updatedAt)}</span>
+                <span>{t('tasks.updatedAt', { date: formatDate(task.updatedAt) })}</span>
               </div>
             </div>
 
@@ -294,10 +297,10 @@ export default function TaskDetailDrawer({
                   {TASK_STATUSES.map((s) => {
                     const Icon = STATUS_ICON[s];
                     return (
-                      <SelectItem key={s} value={s} textValue={TASK_STATUS_LABEL[s]}>
+                      <SelectItem key={s} value={s} textValue={getTaskStatusLabel(t, s)}>
                         <span className={cn('flex items-center gap-2', taskStatusIconColor[s])}>
                           <Icon className="h-3.5 w-3.5 shrink-0" />
-                          {TASK_STATUS_LABEL[s]}
+                          {getTaskStatusLabel(t, s)}
                         </span>
                       </SelectItem>
                     );
@@ -326,14 +329,14 @@ export default function TaskDetailDrawer({
                 </SelectTrigger>
                 <SelectContent>
                   {TASK_PRIORITIES.map((p) => (
-                    <SelectItem key={p} value={p} textValue={TASK_PRIORITY_LABEL[p]}>
+                    <SelectItem key={p} value={p} textValue={getTaskPriorityLabel(t, p)}>
                       <span className={cn('flex items-center gap-2', p === 'NONE' ? 'text-muted-foreground' : taskPriorityIconColor[p])}>
                         {p !== 'NONE' ? (
                           <Flag className="h-3.5 w-3.5 shrink-0 fill-current" />
                         ) : (
                           <span className="w-3.5 text-center opacity-40">—</span>
                         )}
-                        {TASK_PRIORITY_LABEL[p]}
+                        {getTaskPriorityLabel(t, p)}
                       </span>
                     </SelectItem>
                   ))}
@@ -358,7 +361,7 @@ export default function TaskDetailDrawer({
 
                 {/* ── Properties ─────────────────────────────────────────── */}
                 <section>
-                  <SectionLabel>Properties</SectionLabel>
+                  <SectionLabel>{t('tasks.properties')}</SectionLabel>
                   <div className="mt-1 divide-y divide-border/30 rounded-xl border border-border/50 bg-background/40 overflow-hidden">
                     {/* Start date */}
                     <button
@@ -367,9 +370,9 @@ export default function TaskDetailDrawer({
                       onClick={() => startInputRef.current?.showPicker?.()}
                     >
                       <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                      <span className="w-20 shrink-0 text-xs text-muted-foreground">Start date</span>
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground">{t('tasks.startDate')}</span>
                       <span className={cn('ml-auto text-xs font-medium', !task.startDate && 'text-muted-foreground/50')}>
-                        {formatDate(task.startDate, 'Not set')}
+                        {formatDate(task.startDate, t('tasks.notSet'))}
                       </span>
                       {task.startDate && (
                         <button
@@ -401,7 +404,7 @@ export default function TaskDetailDrawer({
                       onClick={() => dueInputRef.current?.showPicker?.()}
                     >
                       <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                      <span className="w-20 shrink-0 text-xs text-muted-foreground">Due date</span>
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground">{t('tasks.dueDate')}</span>
                       <span
                         className={cn(
                           'ml-auto text-xs font-medium',
@@ -413,7 +416,7 @@ export default function TaskDetailDrawer({
                               : '',
                         )}
                       >
-                        {formatDate(task.dueDate, 'No due date')}
+                        {formatDate(task.dueDate, t('tasks.noDueDate'))}
                       </span>
                       <input
                         ref={dueInputRef}
@@ -434,14 +437,14 @@ export default function TaskDetailDrawer({
                       onClick={() => fileInputRef.current?.click()}
                     >
                       <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                      <span className="w-20 shrink-0 text-xs text-muted-foreground">Attachments</span>
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground">{t('tasks.attachments')}</span>
                       <span className="ml-auto flex items-center gap-1.5 text-xs font-medium">
                         {task.attachmentCount > 0 ? (
                           <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                            {task.attachmentCount} file{task.attachmentCount !== 1 ? 's' : ''}
+                            {t('tasks.fileCount', { count: task.attachmentCount })}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground/50">None</span>
+                          <span className="text-muted-foreground/50">{t('tasks.none')}</span>
                         )}
                         <Upload className="h-3 w-3 text-muted-foreground" />
                       </span>
@@ -452,7 +455,7 @@ export default function TaskDetailDrawer({
 
                 {/* ── Description ────────────────────────────────────────── */}
                 <section>
-                  <SectionLabel>Description</SectionLabel>
+                  <SectionLabel>{t('common.description')}</SectionLabel>
                   <div className="mt-1 min-h-24 rounded-xl border border-border/50 bg-background/40 px-4 py-3 text-sm">
                     {task.description ? (
                       <div
@@ -460,14 +463,14 @@ export default function TaskDetailDrawer({
                         dangerouslySetInnerHTML={{ __html: task.description }}
                       />
                     ) : (
-                      <p className="text-xs text-muted-foreground/50 italic">No description yet. Click to add one.</p>
+                      <p className="text-xs text-muted-foreground/50 italic">{t('tasks.noDescription')}</p>
                     )}
                   </div>
                 </section>
 
                 {/* ── Subtasks ────────────────────────────────────────────── */}
                 <section>
-                  <SectionLabel>Subtasks</SectionLabel>
+                  <SectionLabel>{t('tasks.subtasks')}</SectionLabel>
                   <div className="mt-1">
                     <TaskSubtasksPanel
                       parentId={task.id}
@@ -482,7 +485,7 @@ export default function TaskDetailDrawer({
 
                 {/* ── Activity / Notes ────────────────────────────────────── */}
                 <section>
-                  <SectionLabel>Activity</SectionLabel>
+                  <SectionLabel>{t('tasks.activity')}</SectionLabel>
                   <div className="mt-2 space-y-3">
                     {notesQuery.isLoading && (
                       <div className="space-y-2">
@@ -496,7 +499,7 @@ export default function TaskDetailDrawer({
                     )}
                     {!notesQuery.isLoading && (notesQuery.data ?? []).length === 0 && (
                       <p className="rounded-xl border border-dashed border-border/50 py-6 text-center text-xs text-muted-foreground/50">
-                        No activity yet. Add a note below.
+                        {t('tasks.noActivity')}
                       </p>
                     )}
                     {(notesQuery.data ?? []).map((note) => (
@@ -512,7 +515,7 @@ export default function TaskDetailDrawer({
                         <Textarea
                           value={noteText}
                           onChange={(e) => setNoteText(e.target.value)}
-                          placeholder="Write a note…"
+                          placeholder={t('tasks.writeNote')}
                           rows={2}
                           className="min-h-0 resize-none rounded-xl border-border/50 bg-background/60 px-4 py-3 text-xs placeholder:text-muted-foreground/40 focus-visible:ring-1 focus-visible:ring-primary/50 transition-all"
                           onKeyDown={(e) => {
@@ -527,7 +530,7 @@ export default function TaskDetailDrawer({
                               className="h-7 px-2 text-xs"
                               onClick={() => setNoteText('')}
                             >
-                              Cancel
+                              {t('common.cancel')}
                             </Button>
                             <Button
                               size="sm"
@@ -536,7 +539,7 @@ export default function TaskDetailDrawer({
                               disabled={postingNote}
                             >
                               <Send className="h-3 w-3" />
-                              Post note
+                              {t('tasks.postNote')}
                             </Button>
                           </div>
                         )}
@@ -559,7 +562,7 @@ export default function TaskDetailDrawer({
                 onClick={() => task && onDuplicateTask?.(task.id)}
               >
                 <Copy className="h-3.5 w-3.5" />
-                Duplicate
+                {t('common.duplicate')}
               </Button>
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
                 <span>#{task.id.slice(-6)}</span>
@@ -571,7 +574,7 @@ export default function TaskDetailDrawer({
                 onClick={() => onOpenChange(false)}
               >
                 <X className="h-3.5 w-3.5" />
-                Close
+                {t('common.close')}
               </Button>
             </div>
           </>

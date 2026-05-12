@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { resetPasswordConfirmSchema } from '@/modules/auth/validations/auth';
+import { createResetPasswordConfirmSchema } from '@/modules/auth/validations/auth';
 import { authService } from '@/modules/auth/services/auth-service';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ function getPasswordStrength(password) {
 }
 
 function PasswordStrengthIndicator({ password }) {
+  const { t } = useLanguage();
   const strength = useMemo(() => getPasswordStrength(password), [password]);
   if (!password) return null;
   return (
@@ -44,7 +45,7 @@ function PasswordStrengthIndicator({ password }) {
           />
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">{strength.labelKey}</p>
+      <p className="text-xs text-muted-foreground">{t(strength.labelKey, '')}</p>
     </div>
   );
 }
@@ -55,6 +56,7 @@ export function ResetPasswordConfirmForm() {
   const token = searchParams.get('token');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const resetPasswordConfirmSchema = useMemo(() => createResetPasswordConfirmSchema(t), [t]);
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     resolver: zodResolver(resetPasswordConfirmSchema),
@@ -69,14 +71,14 @@ export function ResetPasswordConfirmForm() {
         <Alert variant="destructive" className="rounded-xl">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Ungueltiger oder fehlender Token. Bitte fordern Sie einen neuen Link an.
+            {t('auth.invalidResetToken', 'Ungueltiger oder fehlender Token. Bitte fordern Sie einen neuen Link an.')}
           </AlertDescription>
         </Alert>
         <Link
           href="/reset-password"
           className="mt-4 flex items-center justify-center text-sm font-medium text-primary hover:text-primary/80 transition-colors"
         >
-          Neuen Link anfordern
+          {t('auth.requestNewLink', 'Neuen Link anfordern')}
         </Link>
       </div>
     );
@@ -110,7 +112,7 @@ export function ResetPasswordConfirmForm() {
       await authService.confirmPasswordReset(token, data.password);
       setIsSuccess(true);
     } catch (err) {
-      showError(err.message || 'Passwort konnte nicht zurueckgesetzt werden');
+      showError(err.message || t('auth.resetFailed', 'Passwort konnte nicht zurueckgesetzt werden'));
     } finally {
       setIsLoading(false);
     }
@@ -133,7 +135,7 @@ export function ResetPasswordConfirmForm() {
           <Input
             id="password"
             type="password"
-            placeholder="Mindestens 10 Zeichen"
+            placeholder={t('auth.passwordMinPlaceholder', 'Mindestens 10 Zeichen')}
             autoComplete="new-password"
             autoFocus
             className="h-11 rounded-xl bg-muted/40 border-border/60 focus:bg-background transition-colors"
@@ -150,7 +152,7 @@ export function ResetPasswordConfirmForm() {
           <Input
             id="confirmPassword"
             type="password"
-            placeholder="Passwort erneut eingeben"
+            placeholder={t('auth.confirmPasswordPlaceholder', 'Passwort erneut eingeben')}
             autoComplete="new-password"
             className="h-11 rounded-xl bg-muted/40 border-border/60 focus:bg-background transition-colors"
             {...register('confirmPassword')}

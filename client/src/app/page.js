@@ -7,9 +7,9 @@ import { CtaSection } from '@/components/landing/cta-section';
 import { LandingFooter } from '@/components/landing/landing-footer';
 
 export const metadata = {
-  title: 'MB Boiler ERP — Internes Mitarbeiterportal',
+  title: 'MB Boiler ERP - Internal Team Portal',
   description:
-    'Das interne ERP-System der MB Boiler & Heizung AG. Projekte, Kunden, Offerten und Buchhaltung in einer Plattform.',
+    'The internal workspace for MB Boiler teams to manage customers, projects, field work, documents, tasks, and finance.',
 };
 
 export default function HomePage() {

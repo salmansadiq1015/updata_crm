@@ -18,6 +18,16 @@ export const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = {
   URGENT: 'Urgent',
 };
 
+type TranslateFn = (key: string, fallback?: string, vars?: Record<string, unknown>) => string;
+
+export function getTaskStatusLabel(t: TranslateFn, status: TaskStatus): string {
+  return t(`tasks.status.${status}`, TASK_STATUS_LABEL[status]);
+}
+
+export function getTaskPriorityLabel(t: TranslateFn, priority: TaskPriority): string {
+  return t(`tasks.priority.${priority}`, TASK_PRIORITY_LABEL[priority]);
+}
+
 // ── Icon colors ─────────────────────────────────────────────────────────────
 // Used on the lucide icon component as className
 

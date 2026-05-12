@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Circle, CircleCheck, CircleDashed, CircleX, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import type { Task, TaskStatus } from '../types/task-types';
 import { taskPriorityIconColor, taskStatusIconColor } from './task-ui-constants';
@@ -13,8 +14,6 @@ import { taskPriorityIconColor, taskStatusIconColor } from './task-ui-constants'
 const DAY_WIDTH = 40; // px per day column
 const ROW_HEIGHT = 40; // px per task row
 const LABEL_WIDTH = 280; // px for left task label column
-
-const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const STATUS_ICON: Record<TaskStatus, React.ComponentType<{ className?: string }>> = {
   OPEN:        Circle,
@@ -61,6 +60,7 @@ type TaskTimelineViewProps = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
+  const { t, locale } = useLanguage();
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -90,10 +90,11 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
 
   // Month header groups: { label, startIdx, spanDays }
   const monthGroups = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-US', { month: 'short', year: 'numeric' });
     const groups: Array<{ label: string; startIdx: number; count: number }> = [];
     let cur: { label: string; startIdx: number; count: number } | null = null;
     dates.forEach((d, i) => {
-      const label = `${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+      const label = formatter.format(d);
       if (!cur || cur.label !== label) {
         if (cur) groups.push(cur);
         cur = { label, startIdx: i, count: 1 };
@@ -103,7 +104,11 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
     });
     if (cur) groups.push(cur);
     return groups;
-  }, [dates]);
+  }, [dates, locale]);
+  const rangeLabel = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-US', { month: 'short', year: 'numeric' });
+    return `${formatter.format(rangeStart)} - ${formatter.format(rangeEnd)}`;
+  }, [locale, rangeEnd, rangeStart]);
 
   const goBack = () => setOffset((o) => o - 30);
   const goForward = () => setOffset((o) => o + 30);
@@ -141,8 +146,8 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
     <div className="flex h-full flex-col overflow-hidden bg-background">
       {/* ── Toolbar ── */}
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
-        <h2 className="text-base font-semibold">Timeline</h2>
-        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={goToday}>Today</Button>
+        <h2 className="text-base font-semibold">{t('tasks.timeline')}</h2>
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={goToday}>{t('common.today')}</Button>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goBack}>
             <ChevronLeft className="h-4 w-4" />
@@ -152,9 +157,9 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
           </Button>
         </div>
         <span className="text-xs text-muted-foreground">
-          {MONTHS_SHORT[rangeStart.getMonth()]} {rangeStart.getFullYear()} — {MONTHS_SHORT[rangeEnd.getMonth()]} {rangeEnd.getFullYear()}
+          {rangeLabel}
         </span>
-        <span className="ml-auto text-xs text-muted-foreground">{scheduledTasks.length} task{scheduledTasks.length !== 1 ? 's' : ''} with dates</span>
+        <span className="ml-auto text-xs text-muted-foreground">{t('tasks.withDates', undefined, { count: scheduledTasks.length })}</span>
       </div>
 
       {/* ── Body ── */}
@@ -164,7 +169,7 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
           {/* Header placeholder (matches date header height: 2 rows = 56px) */}
           <div className="shrink-0 border-b border-border bg-muted/30" style={{ height: 56 }}>
             <div className="flex h-full items-end px-3 pb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{t('tasks.task')}</span>
             </div>
           </div>
 
@@ -188,7 +193,7 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
             {unscheduledTasks.length > 0 && (
               <>
                 <div className="border-b border-border bg-muted/20 px-3 py-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">No dates ({unscheduledTasks.length})</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('tasks.noDates', undefined, { count: unscheduledTasks.length })}</span>
                 </div>
                 {unscheduledTasks.map((task) => {
                   const Icon = STATUS_ICON[task.status];

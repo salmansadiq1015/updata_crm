@@ -100,7 +100,7 @@ export function LanguageProvider({ children }) {
   );
 
   const value = useMemo(
-    () => ({ locale, setLocale, toggleLanguage, t }),
+    () => ({ locale, language: locale, setLocale, toggleLanguage, t }),
     [locale, setLocale, toggleLanguage, t],
   );
 

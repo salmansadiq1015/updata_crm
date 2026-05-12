@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Paperclip, Smile, Mic, ArrowUp, X, Lock, FileText, Image as ImageIcon, Film, Music, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { chatService } from '../services/chat-service';
 import { useChatTyping } from '../hooks/use-chat-typing';
 import { ChatReplyPreview } from './chat-reply-preview';
@@ -39,6 +40,7 @@ function FileTypeIcon({ type, className }) {
 }
 
 export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply, isBlocked, editTarget, onClearEdit }) {
+  const { t } = useLanguage();
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState(null); // { url, fileId, messageType, name, size, preview }
   const [uploadProgress, setUploadProgress] = useState(null); // null | 0-100
@@ -114,7 +116,7 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
 
     // Client-side size validation
     if (file.size > MAX_FILE_SIZE) {
-      setUploadError(`File too large. Maximum size is 25 MB (your file: ${formatBytes(file.size)})`);
+      setUploadError(t('chat.fileTooLarge', 'File too large. Maximum size is 25 MB (your file: {size})', { size: formatBytes(file.size) }));
       return;
     }
 
@@ -139,7 +141,7 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
       setAttachment({ url, fileId, messageType: type, name: file.name, size: file.size, preview });
     } catch (err) {
       if (preview) { URL.revokeObjectURL(preview); previewUrlRef.current = null; }
-      const msg = err?.response?.data?.message ?? 'Upload failed. Please try again.';
+      const msg = err?.response?.data?.message ?? t('chat.uploadFailed', 'Upload failed. Please try again.');
       setUploadError(msg);
     } finally {
       setUploadProgress(null);
@@ -161,7 +163,7 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
     return (
       <div className="border-t border-border/40 bg-card px-4 py-3 flex items-center justify-center gap-2 text-muted-foreground">
         <Lock className="h-4 w-4" />
-        <span className="text-sm">You cannot send messages</span>
+        <span className="text-sm">{t('chat.cannotSend', 'You cannot send messages')}</span>
       </div>
     );
   }
@@ -171,7 +173,7 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
       {/* Edit indicator */}
       {editTarget && (
         <div className="flex items-center justify-between px-4 pt-2 pb-1 text-xs text-primary">
-          <span className="font-medium">Editing message</span>
+          <span className="font-medium">{t('chat.editingMessage', 'Editing message')}</span>
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => { onClearEdit?.(); setText(''); }}>
             <X className="h-3 w-3" />
           </Button>
@@ -254,7 +256,7 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
             className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
             onClick={() => { setUploadError(''); fileInputRef.current?.click(); }}
             disabled={uploading}
-            title="Attach file (max 25 MB)"
+            title={t('chat.attachFile', 'Attach file (max 25 MB)')}
           >
             {uploading
               ? <Loader2 className="h-4 w-4 animate-spin" />

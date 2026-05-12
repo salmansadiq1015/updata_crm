@@ -3,8 +3,10 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { X, Camera, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function BarcodeScanner({ onScan, onClose }) {
+  const { t } = useLanguage();
   const videoRef = useRef(null);
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(true);
@@ -17,7 +19,7 @@ export function BarcodeScanner({ onScan, onClose }) {
     async function startScanning() {
       try {
         if (!('BarcodeDetector' in window)) {
-          setError('Barcode scanner not supported in this browser');
+          setError(t('mobile.scanner.unsupported', 'Barcode scanner not supported in this browser'));
           return;
         }
 
@@ -49,7 +51,7 @@ export function BarcodeScanner({ onScan, onClose }) {
         };
         scan();
       } catch (err) {
-        setError(err.message || 'Camera access denied');
+        setError(err.message || t('mobile.scanner.cameraDenied', 'Camera access denied'));
       }
     }
 
@@ -74,8 +76,8 @@ export function BarcodeScanner({ onScan, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       <div className="flex items-center justify-between px-4 py-3">
-        <p className="text-sm text-white font-medium">Scan Barcode / QR Code</p>
-        <Button variant="ghost" size="sm" onClick={handleClose} className="text-white h-11 w-11 p-0" aria-label="Close">
+        <p className="text-sm text-white font-medium">{t('mobile.scanner.title', 'Scan Barcode / QR Code')}</p>
+        <Button variant="ghost" size="sm" onClick={handleClose} className="text-white h-11 w-11 p-0" aria-label={t('common.close', 'Close')}>
           <X className="h-5 w-5" />
         </Button>
       </div>
@@ -86,7 +88,7 @@ export function BarcodeScanner({ onScan, onClose }) {
             <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-3" />
             <p className="text-sm text-white/80">{error}</p>
             <p className="text-xs text-white/50 mt-2">
-              Try using a browser that supports the BarcodeDetector API (Chrome, Edge).
+              {t('mobile.scanner.supportHint', 'Try using a browser that supports the BarcodeDetector API (Chrome, Edge).')}
             </p>
           </div>
         ) : (
@@ -107,7 +109,7 @@ export function BarcodeScanner({ onScan, onClose }) {
 
       <div className="px-4 py-4 bg-black/80">
         <p className="text-xs text-white/50 text-center">
-          Point camera at barcode or QR code
+          {t('mobile.scanner.hint', 'Point camera at barcode or QR code')}
         </p>
       </div>
     </div>

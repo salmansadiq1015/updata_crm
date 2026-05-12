@@ -179,7 +179,7 @@ function SidebarNav({ collapsed, onNavigate }) {
 
                       {!collapsed && item.disabled && (
                         <span className="ml-auto text-[8px] rounded-full bg-white/[0.06] px-1.5 py-0.5 text-white/15 uppercase tracking-widest font-bold">
-                          Soon
+                          {t('common.soon', 'Soon')}
                         </span>
                       )}
                     </Link>
@@ -326,6 +326,7 @@ function SidebarUserCard({ collapsed }) {
 
 export function Sidebar() {
   const { isCollapsed, toggleCollapsed } = useSidebarStore();
+  const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   // Use default (expanded) until after hydration to prevent persisted-store mismatch
@@ -365,7 +366,7 @@ export function Sidebar() {
             ) : (
               <div className="flex items-center gap-2">
                 <PanelLeftClose className="h-4 w-4" />
-                <span className="text-[11px] font-medium">Collapse</span>
+                <span className="text-[11px] font-medium">{t('sidebar.collapse', 'Collapse')}</span>
               </div>
             )}
           </button>

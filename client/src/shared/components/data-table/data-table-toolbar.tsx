@@ -3,6 +3,7 @@
 import type { Table } from '@tanstack/react-table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { Search, X, SlidersHorizontal } from 'lucide-react';
 import {
   DropdownMenu,
@@ -32,6 +33,7 @@ export function DataTableToolbar<TData>({
   toolbarActions,
   children,
 }: DataTableToolbarProps<TData>) {
+  const { t } = useLanguage();
   const isFiltered = globalFilter.length > 0;
 
   return (
@@ -46,7 +48,7 @@ export function DataTableToolbar<TData>({
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Suchen..."
+              placeholder={t('common.search', 'Suchen...')}
               value={globalFilter}
               onChange={(e) => onGlobalFilterChange?.(e.target.value)}
               className="h-9 pl-9 pr-8 rounded-lg bg-muted/40 border-border/60 text-sm"
@@ -67,11 +69,11 @@ export function DataTableToolbar<TData>({
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 rounded-lg">
                 <SlidersHorizontal className="mr-2 h-3.5 w-3.5" />
-                Spalten
+                {t('common.columns', 'Spalten')}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>Spalten ein-/ausblenden</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('common.toggleColumns', 'Spalten ein-/ausblenden')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {table
                 .getAllColumns()

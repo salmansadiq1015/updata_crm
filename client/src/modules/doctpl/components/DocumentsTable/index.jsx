@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { FileText, Eye, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { DocumentPreviewDrawer } from '../DocumentPreviewDrawer';
 import { useDownloadDocument } from '../../hooks/useDocumentMutations';
 
@@ -12,6 +13,7 @@ const TYPE_LABELS = {
 };
 
 export function DocumentsTable({ documents = [], loading = false, onPreview, onDownload }) {
+  const { t } = useLanguage();
   const [preview, setPreview] = useState(null);
   const download = useDownloadDocument();
 
@@ -27,8 +29,8 @@ export function DocumentsTable({ documents = [], loading = false, onPreview, onD
     if (r?.data?.downloadUrl) window.open(r.data.downloadUrl, '_blank');
   };
 
-  if (loading) return <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>;
-  if (!documents.length) return <div className="py-8 text-center text-sm text-muted-foreground">No documents generated yet.</div>;
+  if (loading) return <div className="py-8 text-center text-sm text-muted-foreground">{t('common.loading')}</div>;
+  if (!documents.length) return <div className="py-8 text-center text-sm text-muted-foreground">{t('doctpl.noDocuments')}</div>;
 
   return (
     <>
@@ -36,10 +38,10 @@ export function DocumentsTable({ documents = [], loading = false, onPreview, onD
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Type</th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">File</th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Generated</th>
-              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Size</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">{t('doctpl.type')}</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">{t('doctpl.file')}</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">{t('doctpl.generated')}</th>
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">{t('doctpl.size')}</th>
               <th className="px-4 py-2.5 w-20" />
             </tr>
           </thead>
@@ -61,10 +63,10 @@ export function DocumentsTable({ documents = [], loading = false, onPreview, onD
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex gap-1 justify-end">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" title="Preview" onClick={() => handlePreview(doc)}>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" title={t('common.preview')} onClick={() => handlePreview(doc)}>
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" title="Download" onClick={() => handleDownload(doc)}>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" title={t('common.download')} onClick={() => handleDownload(doc)}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                   </div>

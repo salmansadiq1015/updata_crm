@@ -8,12 +8,12 @@ export const AGENT_STATUSES = {
 };
 
 export const SESSION_STATUSES = {
-  ACTIVE:                'active',
-  PROCESSING:            'processing',
-  AWAITING_CONFIRMATION: 'awaiting_confirmation',
-  COMPLETED:             'completed',
-  CANCELLED:             'cancelled',
-  ERROR:                 'error',
+  ACTIVE:                'ACTIVE',
+  PROCESSING:            'PROCESSING',
+  AWAITING_CONFIRMATION: 'AWAITING_CONFIRMATION',
+  COMPLETED:             'COMPLETED',
+  CANCELLED:             'CANCELLED',
+  FAILED:                'FAILED',
 };
 
 export const TERMINAL_AGENT_STATUSES = new Set([
@@ -25,7 +25,11 @@ export const TERMINAL_AGENT_STATUSES = new Set([
 export const TERMINAL_SESSION_STATUSES = new Set([
   SESSION_STATUSES.COMPLETED,
   SESSION_STATUSES.CANCELLED,
-  SESSION_STATUSES.ERROR,
+  SESSION_STATUSES.FAILED,
+  'completed',
+  'cancelled',
+  'error',
+  'failed',
 ]);
 
 export const PANEL_VIEWS = {
@@ -65,6 +69,7 @@ export const RECORDING_WARNING_SECONDS = 14 * 60; // warn at 14 min
 
 export const AGENT_POLL_INTERVAL_MS = 1000;
 export const SESSION_POLL_INTERVAL_MS = 2000;
+export const SESSION_PROCESSING_TIMEOUT_MS = 90000;
 
 export const OFFLINE_QUEUE_MAX = 5; // max queued recordings
 
@@ -104,6 +109,10 @@ export function isTerminalAgentStatus(status) {
 
 export function isTerminalSessionStatus(status) {
   return TERMINAL_SESSION_STATUSES.has(status);
+}
+
+export function normalizeSessionStatus(status) {
+  return typeof status === 'string' ? status.toUpperCase() : status;
 }
 
 export function formatEntityLabel(type) {

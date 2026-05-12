@@ -6,8 +6,9 @@ import { CSS } from '@dnd-kit/utilities';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { CalendarDays, GripVertical, MessageSquare, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import type { Task, TaskPatch, TaskStatus } from '../types/task-types';
-import { TASK_STATUSES, TASK_STATUS_LABEL, taskPriorityClass, taskStatusClass } from './task-ui-constants';
+import { TASK_STATUSES, getTaskPriorityLabel, getTaskStatusLabel, taskPriorityClass, taskStatusClass } from './task-ui-constants';
 
 type TaskBoardViewProps = {
   tasks: Task[];
@@ -47,6 +48,7 @@ const TaskCard = memo(function TaskCard({
   users: any[];
   onSelectTask: (taskId: string) => void;
 }) {
+  const { t } = useLanguage();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { status: task.status },
@@ -68,7 +70,7 @@ const TaskCard = memo(function TaskCard({
         <button
           type="button"
           className="mt-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-          aria-label={`Drag ${task.title}`}
+          aria-label={t('tasks.dragTask', 'Aufgabe ziehen: {title}', { title: task.title })}
           {...attributes}
           {...listeners}
         >
@@ -84,7 +86,9 @@ const TaskCard = memo(function TaskCard({
       </div>
 
       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-        <span className={cn('rounded border px-1.5 py-0.5 font-medium', taskPriorityClass[task.priority])}>{task.priority}</span>
+        <span className={cn('rounded border px-1.5 py-0.5 font-medium', taskPriorityClass[task.priority])}>
+          {getTaskPriorityLabel(t, task.priority)}
+        </span>
         {due ? (
           <span className={cn('inline-flex items-center gap-1', task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED' ? 'text-danger' : '')}>
             <CalendarDays className="h-3 w-3" />
@@ -117,6 +121,8 @@ function TaskBoardColumn({
   users: any[];
   onSelectTask: (taskId: string) => void;
 }) {
+  const { t } = useLanguage();
+  const statusLabel = getTaskStatusLabel(t, status);
   const parentRef = useRef<HTMLDivElement | null>(null);
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const virtualizer = useVirtualizer({
@@ -130,18 +136,18 @@ function TaskBoardColumn({
     <section
       ref={setNodeRef}
       className={cn('flex min-h-0 min-w-70 flex-1 flex-col rounded-lg border border-border bg-background', isOver && 'border-primary bg-primary/5')}
-      aria-label={`${TASK_STATUS_LABEL[status]} column`}
+      aria-label={t('tasks.boardColumnAria', '{status} Spalte', { status: statusLabel })}
     >
       <header className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
         <span className={cn('h-2.5 w-2.5 rounded-full border', taskStatusClass[status])} />
-        <span className="text-xs font-semibold uppercase text-foreground">{TASK_STATUS_LABEL[status]}</span>
+        <span className="text-xs font-semibold uppercase text-foreground">{statusLabel}</span>
         <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{tasks.length}</span>
       </header>
 
       <div ref={parentRef} className="min-h-0 flex-1 overflow-auto p-2 scrollbar-thin">
         {tasks.length === 0 ? (
           <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
-            Drop tasks here
+            {t('tasks.dropTasksHere', 'Aufgaben hier ablegen')}
           </div>
         ) : (
           <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
@@ -174,6 +180,7 @@ function TaskBoardColumn({
 }
 
 export function TaskBoardView({ tasks, selectedTaskId, onSelectTask, onPatchTask, users }: TaskBoardViewProps) {
+  const { t } = useLanguage();
   const grouped = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = {
       OPEN: [],
@@ -196,7 +203,7 @@ export function TaskBoardView({ tasks, selectedTaskId, onSelectTask, onPatchTask
 
   return (
     <DndContext onDragEnd={onDragEnd}>
-      <div className="flex h-full min-h-0 gap-3 overflow-x-auto bg-card p-3 scrollbar-thin" aria-label="Kanban board">
+      <div className="flex h-full min-h-0 gap-3 overflow-x-auto bg-card p-3 scrollbar-thin" aria-label={t('tasks.boardAria', 'Kanban-Board')}>
         {TASK_STATUSES.map((status) => (
           <TaskBoardColumn
             key={status}

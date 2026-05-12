@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,9 +26,9 @@ import { cn } from '@/lib/utils';
 import type { Task, TaskPatch, TaskPriority, TaskStatus } from '../types/task-types';
 import {
   TASK_PRIORITIES,
-  TASK_PRIORITY_LABEL,
   TASK_STATUSES,
-  TASK_STATUS_LABEL,
+  getTaskPriorityLabel,
+  getTaskStatusLabel,
   taskPriorityBorderClass,
   taskPriorityIconColor,
   taskStatusIconColor,
@@ -103,6 +104,7 @@ const TaskRow = memo(function TaskRow({
   onRowSelectionChange?: (selection: Record<string, boolean>) => void;
   onDuplicateTask?: (id: string) => void;
 }) {
+  const { t } = useLanguage();
   const isOverdue =
     task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED';
 
@@ -125,7 +127,7 @@ const TaskRow = memo(function TaskRow({
           type="checkbox"
           className="rounded border-border w-4 h-4 accent-primary cursor-pointer"
           checked={!!rowSelection?.[task.id]}
-          aria-label={`Select task ${task.title}`}
+          aria-label={t('tasks.selectTask', 'Aufgabe auswaehlen: {title}', { title: task.title })}
           onChange={(e) => {
             const next = { ...(rowSelection ?? {}) };
             if (e.target.checked) next[task.id] = true;
@@ -139,7 +141,7 @@ const TaskRow = memo(function TaskRow({
       <div role="gridcell" className="min-w-0">
         <TaskInlineField
           value={task.title}
-          ariaLabel={`Edit title for ${task.title}`}
+          ariaLabel={t('tasks.editTitleFor', 'Titel bearbeiten: {title}', { title: task.title })}
           className="block max-w-full truncate text-left font-medium text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onCommit={(title) => onPatchTask(task.id, { title, expectedVersion: task.version })}
         />
@@ -151,10 +153,10 @@ const TaskRow = memo(function TaskRow({
           <DropdownMenuTrigger asChild>
             <button
               className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={`Status: ${TASK_STATUS_LABEL[task.status]}`}
+              aria-label={t('tasks.statusAria', 'Status: {status}', { status: getTaskStatusLabel(t, task.status) })}
             >
               <StatusIcon status={task.status} />
-              <span className={taskStatusIconColor[task.status]}>{TASK_STATUS_LABEL[task.status]}</span>
+              <span className={taskStatusIconColor[task.status]}>{getTaskStatusLabel(t, task.status)}</span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-40">
@@ -165,7 +167,7 @@ const TaskRow = memo(function TaskRow({
                 onClick={() => onPatchTask(task.id, { status: s, expectedVersion: task.version })}
               >
                 <StatusIcon status={s} />
-                <span className={taskStatusIconColor[s]}>{TASK_STATUS_LABEL[s]}</span>
+                <span className={taskStatusIconColor[s]}>{getTaskStatusLabel(t, s)}</span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -178,11 +180,11 @@ const TaskRow = memo(function TaskRow({
           <DropdownMenuTrigger asChild>
             <button
               className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={`Priority: ${TASK_PRIORITY_LABEL[task.priority]}`}
+              aria-label={t('tasks.priorityAria', 'Prioritaet: {priority}', { priority: getTaskPriorityLabel(t, task.priority) })}
             >
               <PriorityFlag priority={task.priority} />
               {task.priority !== 'NONE' && (
-                <span className={taskPriorityIconColor[task.priority]}>{TASK_PRIORITY_LABEL[task.priority]}</span>
+                <span className={taskPriorityIconColor[task.priority]}>{getTaskPriorityLabel(t, task.priority)}</span>
               )}
             </button>
           </DropdownMenuTrigger>
@@ -195,7 +197,7 @@ const TaskRow = memo(function TaskRow({
               >
                 <PriorityFlag priority={p} />
                 <span className={p === 'NONE' ? 'text-muted-foreground' : taskPriorityIconColor[p]}>
-                  {TASK_PRIORITY_LABEL[p]}
+                  {getTaskPriorityLabel(t, p)}
                 </span>
               </DropdownMenuItem>
             ))}
@@ -231,14 +233,14 @@ const TaskRow = memo(function TaskRow({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDuplicateTask?.(task.id); }}>
-              <Copy className="mr-2 h-4 w-4" /> Duplicate
+              <Copy className="mr-2 h-4 w-4" /> {t('common.duplicate', 'Duplicate')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
               onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); }}
             >
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
+              <Trash2 className="mr-2 h-4 w-4" /> {t('common.delete', 'Delete')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -278,6 +280,7 @@ export function TaskListView({
   users,
   onDuplicateTask,
 }: TaskListViewProps) {
+  const { t } = useLanguage();
   const parentRef = useRef<HTMLDivElement | null>(null);
   const rowVirtualizer = useVirtualizer({
     count: tasks.length,
@@ -298,7 +301,7 @@ export function TaskListView({
   const someSelected = tasks.some((t) => rowSelection?.[t.id]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-card" role="grid" aria-label="Tasks list">
+    <div className="flex h-full min-h-0 flex-col bg-card" role="grid" aria-label={t('tasks.listAria', 'Tasks list')}>
       {/* Header */}
       <div
         className={cn(
@@ -313,7 +316,7 @@ export function TaskListView({
             className="rounded border-border w-4 h-4 accent-primary cursor-pointer"
             ref={(el) => { if (el) el.indeterminate = !allSelected && someSelected; }}
             checked={allSelected}
-            aria-label="Select all"
+            aria-label={t('common.selectAll', 'Select all')}
             onChange={(e) => {
               if (e.target.checked) {
                 const sel: Record<string, boolean> = {};
@@ -325,11 +328,11 @@ export function TaskListView({
             }}
           />
         </div>
-        <div role="columnheader">Task</div>
-        <div role="columnheader">Status</div>
-        <div role="columnheader">Priority</div>
-        <div role="columnheader">Assignee</div>
-        <div role="columnheader">Due</div>
+        <div role="columnheader">{t('tasks.task', 'Task')}</div>
+        <div role="columnheader">{t('tasks.status', 'Status')}</div>
+        <div role="columnheader">{t('tasks.priority', 'Priority')}</div>
+        <div role="columnheader">{t('tasks.assignee', 'Assignee')}</div>
+        <div role="columnheader">{t('tasks.due', 'Due')}</div>
         <div role="columnheader" />
       </div>
 
@@ -362,7 +365,7 @@ export function TaskListView({
           })}
         </div>
         {isFetchingNextPage && (
-          <div className="h-10 px-4 py-3 text-xs text-muted-foreground">Loading more…</div>
+          <div className="h-10 px-4 py-3 text-xs text-muted-foreground">{t('common.loadingMore', 'Weitere laden...')}</div>
         )}
       </div>
     </div>

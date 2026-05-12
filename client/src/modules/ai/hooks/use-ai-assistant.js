@@ -4,7 +4,7 @@ import { useAiStore } from '../store/ai-store';
 import { useVoiceSession } from './use-voice-session';
 import { useAgentRun } from './use-agent-run';
 import { useAudioRecorder } from './use-audio-recorder';
-import { PANEL_VIEWS, RECORDING_STATES, SESSION_TYPES, isTerminalAgentStatus } from '../constants/ai-constants';
+import { PANEL_VIEWS, SESSION_TYPES, isTerminalAgentStatus } from '../constants/ai-constants';
 import { showError } from '@/lib/toast';
 
 /**
@@ -14,7 +14,6 @@ import { showError } from '@/lib/toast';
 export function useAiAssistant() {
   const isPanelOpen  = useAiStore((s) => s.isPanelOpen);
   const panelView    = useAiStore((s) => s.panelView);
-  const activeSessionId = useAiStore((s) => s.activeSessionId);
   const activeRunId  = useAiStore((s) => s.activeRunId);
   const openPanel    = useAiStore((s) => s.openPanel);
   const closePanel   = useAiStore((s) => s.closePanel);
@@ -32,22 +31,44 @@ export function useAiAssistant() {
         showError('Upload failed — your recording was saved and will retry when connected.');
       } else if (code === 'MIC_DENIED') {
         showError('Microphone access denied. Please enable it in your browser settings.');
+      } else if (code === 'MIC_NOT_SUPPORTED') {
+        showError('Voice input is not supported in this browser. Please use text input.');
+      } else if (code === 'EMPTY_AUDIO') {
+        showError('No audio was captured. Please try again.');
       }
     },
   });
 
   const startVoiceSession = async () => {
+    let sessionId = null;
     try {
       const session = await voiceSession.createSessionAsync(SESSION_TYPES.COMMAND);
-      const sid = session._id || session.id;
-      await recorder.startRecording(sid);
-    } catch {
-      // onError in the mutation handles the toast
+      sessionId = session?._id || session?.id;
+      if (!sessionId) {
+        throw new Error('Voice session could not be started.');
+      }
+      await recorder.startRecording(sessionId);
+    } catch (err) {
+      if (sessionId) {
+        await voiceSession.cancelSessionById(sessionId);
+      } else {
+        voiceSession.resetSession();
+      }
+      if (!['MIC_DENIED', 'MIC_NOT_SUPPORTED'].includes(err?.message)) {
+        showError(err);
+      }
     }
   };
 
-  const stopVoiceRecording = () => {
-    recorder.stopRecording();
+  const stopVoiceRecording = async () => {
+    try {
+      const result = await recorder.stopRecording();
+      if (result?.queued || result?.skipped) {
+        voiceSession.resetSession();
+      }
+    } catch {
+      voiceSession.resetSession();
+    }
   };
 
   const handleTextSubmit = (input) => {
@@ -57,6 +78,7 @@ export function useAiAssistant() {
 
   const resetToIdle = () => {
     recorder.reset();
+    voiceSession.resetSession();
     setPanelView(PANEL_VIEWS.IDLE);
   };
 
@@ -77,11 +99,13 @@ export function useAiAssistant() {
     // Voice session
     session:          voiceSession.session,
     createSession:    startVoiceSession,
+    isCreating:       voiceSession.isCreating,
     stopRecording:    stopVoiceRecording,
     submitCorrections: voiceSession.submitCorrections,
     confirmSession:   voiceSession.confirmSession,
     cancelSession:    voiceSession.cancelSession,
     isConfirmingSession: voiceSession.isConfirming,
+    isCancellingSession: voiceSession.isCancelling,
 
     // Recorder
     recorder,

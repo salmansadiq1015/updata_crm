@@ -23,6 +23,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Inbox } from 'lucide-react';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 const statusBadge: Record<string, string> = {
   active: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
@@ -33,6 +34,7 @@ const statusBadge: Record<string, string> = {
 };
 
 export function JobsViewer() {
+  const { t } = useLanguage();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const { data, isLoading } = useSystemJobs(
     statusFilter !== 'all' ? { status: statusFilter } : undefined
@@ -43,18 +45,18 @@ export function JobsViewer() {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
-        <CardTitle className="text-base">Hintergrundjobs</CardTitle>
+        <CardTitle className="text-base">{t('platform.jobs')}</CardTitle>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-36 h-9">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Alle</SelectItem>
-            <SelectItem value="active">Aktiv</SelectItem>
-            <SelectItem value="completed">Abgeschlossen</SelectItem>
-            <SelectItem value="failed">Fehlgeschlagen</SelectItem>
-            <SelectItem value="delayed">Verzögert</SelectItem>
-            <SelectItem value="waiting">Wartend</SelectItem>
+            <SelectItem value="all">{t('common.all')}</SelectItem>
+            <SelectItem value="active">{t('platform.status.active')}</SelectItem>
+            <SelectItem value="completed">{t('platform.status.completed')}</SelectItem>
+            <SelectItem value="failed">{t('platform.status.failed')}</SelectItem>
+            <SelectItem value="delayed">{t('platform.status.delayed')}</SelectItem>
+            <SelectItem value="waiting">{t('platform.status.waiting')}</SelectItem>
           </SelectContent>
         </Select>
       </CardHeader>
@@ -62,11 +64,11 @@ export function JobsViewer() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">
-              <TableHead className="text-xs font-semibold uppercase">Job</TableHead>
-              <TableHead className="text-xs font-semibold uppercase">Queue</TableHead>
-              <TableHead className="text-xs font-semibold uppercase">Status</TableHead>
-              <TableHead className="text-xs font-semibold uppercase">Versuche</TableHead>
-              <TableHead className="text-xs font-semibold uppercase">Zeit</TableHead>
+              <TableHead className="text-xs font-semibold uppercase">{t('platform.job')}</TableHead>
+              <TableHead className="text-xs font-semibold uppercase">{t('platform.queue')}</TableHead>
+              <TableHead className="text-xs font-semibold uppercase">{t('common.status')}</TableHead>
+              <TableHead className="text-xs font-semibold uppercase">{t('platform.attempts')}</TableHead>
+              <TableHead className="text-xs font-semibold uppercase">{t('platform.time')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -85,7 +87,7 @@ export function JobsViewer() {
                 <TableCell colSpan={5} className="h-32">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Inbox className="h-6 w-6 opacity-40" />
-                    <p className="text-sm">Keine Jobs gefunden</p>
+                    <p className="text-sm">{t('platform.noJobs')}</p>
                   </div>
                 </TableCell>
               </TableRow>

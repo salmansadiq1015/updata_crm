@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AiMicButton } from '../recorder/ai-mic-button';
 import { AiHelpOverlay } from '../ai-help-overlay';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCreating }) {
+  const { t } = useLanguage();
   const [text, setText]         = useState('');
   const [showHelp, setShowHelp] = useState(false);
 
@@ -20,7 +22,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
 
   return (
     <div className="flex flex-col items-center gap-6 px-2 py-4">
-      <p className="text-sm text-muted-foreground text-center">How can I help you?</p>
+      <p className="text-sm text-muted-foreground text-center">{t('ai.panel.prompt', 'Wie kann ich helfen?')}</p>
 
       {/* Microphone */}
       <div className="flex flex-col items-center gap-2">
@@ -31,14 +33,14 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
         />
         {!isSupported && (
           <p className="text-xs text-muted-foreground text-center max-w-48">
-            Voice not supported on this browser. Use text input below.
+            {t('ai.panel.voiceUnsupported', 'Sprache wird in diesem Browser nicht unterstuetzt. Nutzen Sie die Texteingabe.')}
           </p>
         )}
       </div>
 
       <div className="flex items-center gap-3 w-full text-xs text-muted-foreground">
         <span className="flex-1 h-px bg-border" />
-        or
+        {t('common.or', 'oder')}
         <span className="flex-1 h-px bg-border" />
       </div>
 
@@ -47,7 +49,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Type a command…"
+          placeholder={t('ai.panel.commandPlaceholder', 'Befehl eingeben...')}
           className="flex-1 text-sm"
           maxLength={2000}
         />
@@ -63,7 +65,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
         className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         <HelpCircle className="h-3.5 w-3.5" />
-        What can I say?
+        {t('ai.panel.helpTrigger', 'Was kann ich sagen?')}
       </button>
 
       {showHelp && <AiHelpOverlay onClose={() => setShowHelp(false)} />}

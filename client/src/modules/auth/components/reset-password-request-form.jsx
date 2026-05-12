@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { resetPasswordRequestSchema } from '@/modules/auth/validations/auth';
+import { createResetPasswordRequestSchema } from '@/modules/auth/validations/auth';
 import { authService } from '@/modules/auth/services/auth-service';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ export function ResetPasswordRequestForm() {
   const { t } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const resetPasswordRequestSchema = useMemo(() => createResetPasswordRequestSchema(t), [t]);
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(resetPasswordRequestSchema),
@@ -29,7 +30,7 @@ export function ResetPasswordRequestForm() {
       await authService.requestPasswordReset(data.email);
       setIsSuccess(true);
     } catch (err) {
-      showError(err.message || 'Anfrage fehlgeschlagen');
+      showError(err.message || t('auth.resetRequestFailed', 'Anfrage fehlgeschlagen'));
     } finally {
       setIsLoading(false);
     }

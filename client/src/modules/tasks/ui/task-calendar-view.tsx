@@ -5,16 +5,11 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Circle, CircleCheck, CircleDashed, CircleX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import type { Task, TaskStatus } from '../types/task-types';
 import { taskPriorityIconColor, taskStatusIconColor } from './task-ui-constants';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
 
 const STATUS_ICON: Record<TaskStatus, React.ComponentType<{ className?: string }>> = {
   OPEN:        Circle,
@@ -57,6 +52,7 @@ type TaskCalendarViewProps = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function TaskCalendarView({ tasks, listId }: TaskCalendarViewProps) {
+  const { t, locale } = useLanguage();
   const router = useRouter();
   const today = useMemo(() => new Date(), []);
   const todayKey = useMemo(() => today.toISOString().slice(0, 10), [today]);
@@ -67,6 +63,15 @@ export function TaskCalendarView({ tasks, listId }: TaskCalendarViewProps) {
 
   const tasksByDate = useMemo(() => groupByDueDate(tasks), [tasks]);
   const noDateTasks = useMemo(() => tasks.filter((t) => !t.dueDate), [tasks]);
+  const monthLabel = useMemo(
+    () => new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-US', { month: 'long', year: 'numeric' }).format(new Date(year, month, 1)),
+    [locale, month, year],
+  );
+  const dayLabels = useMemo(
+    () => Array.from({ length: 7 }, (_, day) =>
+      new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-US', { weekday: 'short' }).format(new Date(2026, 1, day + 1))),
+    [locale],
+  );
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstDow = getFirstDayOfWeek(year, month);
@@ -103,10 +108,10 @@ export function TaskCalendarView({ tasks, listId }: TaskCalendarViewProps) {
       {/* ── Toolbar ── */}
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
         <h2 className="text-base font-semibold tabular-nums">
-          {MONTHS[month]} {year}
+          {monthLabel}
         </h2>
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={goToday}>
-          Today
+          {t('common.today', 'Today')}
         </Button>
         <div className="ml-auto flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={prevMonth}>
@@ -123,7 +128,7 @@ export function TaskCalendarView({ tasks, listId }: TaskCalendarViewProps) {
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {/* Day-of-week headers */}
           <div className="grid shrink-0 grid-cols-7 border-b border-border bg-muted/30">
-            {DAYS_SHORT.map((d) => (
+            {dayLabels.map((d) => (
               <div key={d} className="py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {d}
               </div>
@@ -198,7 +203,7 @@ export function TaskCalendarView({ tasks, listId }: TaskCalendarViewProps) {
                         className="w-full px-1 text-left text-[10px] text-primary hover:underline"
                         onClick={() => setExpandedDay(isExpanded ? null : dateKey)}
                       >
-                        +{overflow} more
+                        +{overflow} {t('common.more', 'more')}
                       </button>
                     )}
                     {isExpanded && (
@@ -207,7 +212,7 @@ export function TaskCalendarView({ tasks, listId }: TaskCalendarViewProps) {
                         className="w-full px-1 text-left text-[10px] text-muted-foreground hover:underline"
                         onClick={() => setExpandedDay(null)}
                       >
-                        Show less
+                        {t('common.less', 'Show less')}
                       </button>
                     )}
                   </div>
@@ -221,8 +226,8 @@ export function TaskCalendarView({ tasks, listId }: TaskCalendarViewProps) {
         {noDateTasks.length > 0 && (
           <aside className="flex w-52 shrink-0 flex-col border-l border-border">
             <div className="shrink-0 border-b border-border px-3 py-2.5">
-              <p className="text-xs font-semibold text-muted-foreground">No due date</p>
-              <p className="text-[10px] text-muted-foreground">{noDateTasks.length} task{noDateTasks.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs font-semibold text-muted-foreground">{t('tasks.noDueDate', 'No due date')}</p>
+              <p className="text-[10px] text-muted-foreground">{t('tasks.taskCount', '{count} Aufgabe(n)', { count: noDateTasks.length })}</p>
             </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
               {noDateTasks.map((task) => {

@@ -10,6 +10,7 @@ import {
   useSortable, arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 const TYPE_COLORS = {
   header:     'bg-blue-100 text-blue-700',
@@ -23,6 +24,7 @@ const TYPE_COLORS = {
 };
 
 function SortableSection({ section, onToggle }) {
+  const { t } = useLanguage();
   const {
     attributes, listeners, setNodeRef,
     transform, transition, isDragging,
@@ -58,7 +60,7 @@ function SortableSection({ section, onToggle }) {
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <Label className="text-xs text-muted-foreground">Visible</Label>
+        <Label className="text-xs text-muted-foreground">{t('common.visible')}</Label>
         <Switch
           checked={section.isVisible !== false}
           onCheckedChange={(v) => onToggle(section.id, v)}

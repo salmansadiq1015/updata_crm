@@ -14,6 +14,6 @@ export const aiSessionService = {
     }).then((r) => r.data),
   correct:     (id, corrections) => apiClient.patch(ENDPOINTS.AI.SESSION_CORRECT(id), corrections).then((r) => r.data),
   confirm:     (id)              => apiClient.post(ENDPOINTS.AI.SESSION_CONFIRM(id)).then((r) => r.data),
-  cancel:      (id)              => apiClient.delete(ENDPOINTS.AI.SESSION_CANCEL(id)).then((r) => r.data),
+  cancel:      (id)              => apiClient.post(ENDPOINTS.AI.SESSION_CANCEL(id)).then((r) => r.data),
   list:        (params)          => apiClient.get(ENDPOINTS.AI.SESSIONS, { params }).then((r) => r.data),
 };

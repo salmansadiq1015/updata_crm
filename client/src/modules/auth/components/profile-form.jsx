@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { Loader2 } from 'lucide-react';
 
 const profileSchema = z.object({
@@ -26,6 +27,7 @@ const profileSchema = z.object({
 });
 
 export function ProfileForm() {
+  const { t } = useLanguage();
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
@@ -54,7 +56,7 @@ export function ProfileForm() {
     mutationFn: (data) => profileService.updateProfile(data),
     onSuccess: (updatedUser) => {
       setUser(updatedUser);
-      showSuccess('Profil aktualisiert');
+      showSuccess(t('profile.updated', 'Profil aktualisiert'));
     },
     onError: (err) => showError(err.message),
   });
@@ -63,18 +65,18 @@ export function ProfileForm() {
     mutationFn: (file) => userService.uploadAvatar(user._id || 'me', file),
     onSuccess: () => {
       authService.fetchMe();
-      showSuccess('Avatar aktualisiert');
+      showSuccess(t('profile.avatarUpdated', 'Avatar aktualisiert'));
     },
-    onError: (err) => showError(err.message || 'Avatar-Upload fehlgeschlagen'),
+    onError: (err) => showError(err.message || t('profile.avatarUploadFailed', 'Avatar-Upload fehlgeschlagen')),
   });
 
   const avatarRemoveMutation = useMutation({
     mutationFn: () => userService.removeAvatar(user._id || 'me'),
     onSuccess: () => {
       authService.fetchMe();
-      showSuccess('Avatar entfernt');
+      showSuccess(t('profile.avatarRemoved', 'Avatar entfernt'));
     },
-    onError: (err) => showError(err.message || 'Avatar konnte nicht entfernt werden'),
+    onError: (err) => showError(err.message || t('profile.avatarRemoveFailed', 'Avatar konnte nicht entfernt werden')),
   });
 
   const userInitials = user
@@ -88,8 +90,8 @@ export function ProfileForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Profil</CardTitle>
-        <CardDescription>Aktualisieren Sie Ihre persoenlichen Daten.</CardDescription>
+        <CardTitle>{t('profile.title', 'Profil')}</CardTitle>
+        <CardDescription>{t('profile.description', 'Aktualisieren Sie Ihre persoenlichen Daten.')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -104,27 +106,27 @@ export function ProfileForm() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="profile-firstName">Vorname</Label>
+              <Label htmlFor="profile-firstName">{t('users.firstName', 'Vorname')}</Label>
               <Input id="profile-firstName" {...register('firstName')} />
               {errors.firstName && <p className="text-sm text-destructive">{errors.firstName.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="profile-lastName">Nachname</Label>
+              <Label htmlFor="profile-lastName">{t('users.lastName', 'Nachname')}</Label>
               <Input id="profile-lastName" {...register('lastName')} />
               {errors.lastName && <p className="text-sm text-destructive">{errors.lastName.message}</p>}
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="profile-email">E-Mail</Label>
+            <Label htmlFor="profile-email">{t('users.email', 'E-Mail')}</Label>
             <Input id="profile-email" value={user?.email || ''} disabled className="bg-muted" />
-            <p className="text-xs text-muted-foreground">E-Mail kann nicht geaendert werden.</p>
+            <p className="text-xs text-muted-foreground">{t('profile.emailLocked', 'E-Mail kann nicht geaendert werden.')}</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="profile-phone">Telefon</Label>
+            <Label htmlFor="profile-phone">{t('users.phone', 'Telefon')}</Label>
             <Input id="profile-phone" {...register('phone')} />
           </div>
           <div className="space-y-2">
-            <Label>Sprache</Label>
+            <Label>{t('users.language', 'Sprache')}</Label>
             <Select value={watch('language')} onValueChange={(val) => setValue('language', val)}>
               <SelectTrigger>
                 <SelectValue />
@@ -140,7 +142,7 @@ export function ProfileForm() {
           <div className="flex justify-end pt-2">
             <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Speichern
+              {t('common.save', 'Speichern')}
             </Button>
           </div>
         </form>

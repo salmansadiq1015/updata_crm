@@ -20,6 +20,7 @@ import {
   ArrowUp, ArrowDown, ArrowUpDown, Search, Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function DataTableShell({
   columns: rawColumns,
@@ -59,6 +60,7 @@ export function DataTableShell({
    */
   cursorPagination,
 }) {
+  const { t } = useLanguage();
   const columns = useMemo(() => {
     const cols = rawColumns.map((col) => ({
       ...col,
@@ -153,7 +155,7 @@ export function DataTableShell({
             <div className="relative w-56">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Suchen..."
+                placeholder={t('common.search', 'Suchen...')}
                 value={globalFilter}
                 onChange={(e) => onGlobalFilterChange?.(e.target.value)}
                 className="h-8 pl-9 rounded-lg bg-muted/40 border-border/50 text-sm"
@@ -219,7 +221,7 @@ export function DataTableShell({
                       <div className="h-12 w-12 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center">
                         <Inbox className="h-6 w-6 text-primary/40" />
                       </div>
-                      <p className="text-sm font-medium">Keine Eintraege vorhanden</p>
+                      <p className="text-sm font-medium">{t('common.noResults', 'Keine Eintraege vorhanden')}</p>
                     </div>
                   )}
                 </TableCell>
@@ -253,7 +255,7 @@ export function DataTableShell({
       {cursorPagination ? (
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-muted/10">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Zeilen</span>
+            <span>{t('common.rows', 'Zeilen')}</span>
             <Select
               value={String(cursorPagination.pageSize || 25)}
               onValueChange={(val) => cursorPagination.onPageSizeChange?.(Number(val))}
@@ -268,7 +270,7 @@ export function DataTableShell({
               </SelectContent>
             </Select>
             {cursorPagination.isFetching && (
-              <span className="ml-2 text-xs text-muted-foreground/60 italic">Laden...</span>
+              <span className="ml-2 text-xs text-muted-foreground/60 italic">{t('common.loading', 'Wird geladen...')}</span>
             )}
           </div>
 
@@ -281,7 +283,7 @@ export function DataTableShell({
               disabled={!cursorPagination.hasPrev || cursorPagination.isFetching}
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              Zurueck
+              {t('common.back', 'Zurueck')}
             </Button>
             <Button
               variant="ghost"
@@ -290,7 +292,7 @@ export function DataTableShell({
               onClick={cursorPagination.onNext}
               disabled={!cursorPagination.hasNext || cursorPagination.isFetching}
             >
-              Weiter
+              {t('common.next', 'Weiter')}
               <ChevronRight className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -298,7 +300,7 @@ export function DataTableShell({
       ) : (
         <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-muted/10">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Zeilen</span>
+            <span>{t('common.rows', 'Zeilen')}</span>
             <Select
               value={String(pagination?.pageSize || 25)}
               onValueChange={(val) => {

@@ -1,50 +1,59 @@
 import { z } from 'zod';
 
-export const loginSchema = z.object({
-  email: z.string().min(1, 'E-Mail ist erforderlich').email('Bitte gültige E-Mail-Adresse eingeben'),
-  password: z.string().min(1, 'Passwort ist erforderlich'),
-});
+const fallbackT = (_key, fallback) => fallback;
 
-export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Aktuelles Passwort eingeben'),
-  newPassword: z
-    .string()
-    .min(10, 'Mindestens 10 Zeichen')
-    .regex(/[A-Z]/, 'Mindestens ein Grossbuchstabe')
-    .regex(/[a-z]/, 'Mindestens ein Kleinbuchstabe')
-    .regex(/[0-9]/, 'Mindestens eine Zahl')
-    .regex(/[^A-Za-z0-9]/, 'Mindestens ein Sonderzeichen'),
-  confirmPassword: z.string().min(1, 'Passwort bestätigen'),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: 'Passwörter stimmen nicht überein',
-  path: ['confirmPassword'],
-});
+const message = (t, key, fallback) => (t || fallbackT)(key, fallback);
 
-// Shared password policy for reuse
-const passwordPolicy = z
+const passwordPolicy = (t = fallbackT) => z
   .string()
-  .min(10, 'Mindestens 10 Zeichen')
-  .regex(/[A-Z]/, 'Mindestens ein Grossbuchstabe')
-  .regex(/[a-z]/, 'Mindestens ein Kleinbuchstabe')
-  .regex(/[0-9]/, 'Mindestens eine Zahl')
-  .regex(/[^A-Za-z0-9]/, 'Mindestens ein Sonderzeichen');
+  .min(10, message(t, 'auth.validation.passwordMin', 'Mindestens 10 Zeichen'))
+  .regex(/[A-Z]/, message(t, 'auth.validation.passwordUppercase', 'Mindestens ein Grossbuchstabe'))
+  .regex(/[a-z]/, message(t, 'auth.validation.passwordLowercase', 'Mindestens ein Kleinbuchstabe'))
+  .regex(/[0-9]/, message(t, 'auth.validation.passwordNumber', 'Mindestens eine Zahl'))
+  .regex(/[^A-Za-z0-9]/, message(t, 'auth.validation.passwordSpecial', 'Mindestens ein Sonderzeichen'));
 
-export const resetPasswordRequestSchema = z.object({
-  email: z.string().min(1, 'E-Mail ist erforderlich').email('Bitte gültige E-Mail-Adresse eingeben'),
+export const createLoginSchema = (t = fallbackT) => z.object({
+  email: z
+    .string()
+    .min(1, message(t, 'auth.validation.emailRequired', 'E-Mail ist erforderlich'))
+    .email(message(t, 'auth.validation.emailInvalid', 'Bitte gueltige E-Mail-Adresse eingeben')),
+  password: z.string().min(1, message(t, 'auth.validation.passwordRequired', 'Passwort ist erforderlich')),
 });
 
-export const resetPasswordConfirmSchema = z.object({
-  password: passwordPolicy,
-  confirmPassword: z.string().min(1, 'Passwort bestätigen'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Passwörter stimmen nicht überein',
+export const createChangePasswordSchema = (t = fallbackT) => z.object({
+  currentPassword: z.string().min(1, message(t, 'auth.validation.currentPasswordRequired', 'Aktuelles Passwort eingeben')),
+  newPassword: passwordPolicy(t),
+  confirmPassword: z.string().min(1, message(t, 'auth.validation.confirmPasswordRequired', 'Passwort bestaetigen')),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: message(t, 'auth.validation.passwordMismatch', 'Passwoerter stimmen nicht ueberein'),
   path: ['confirmPassword'],
 });
 
-export const activateAccountSchema = z.object({
-  password: passwordPolicy,
-  confirmPassword: z.string().min(1, 'Passwort bestätigen'),
+export const createResetPasswordRequestSchema = (t = fallbackT) => z.object({
+  email: z
+    .string()
+    .min(1, message(t, 'auth.validation.emailRequired', 'E-Mail ist erforderlich'))
+    .email(message(t, 'auth.validation.emailInvalid', 'Bitte gueltige E-Mail-Adresse eingeben')),
+});
+
+export const createResetPasswordConfirmSchema = (t = fallbackT) => z.object({
+  password: passwordPolicy(t),
+  confirmPassword: z.string().min(1, message(t, 'auth.validation.confirmPasswordRequired', 'Passwort bestaetigen')),
 }).refine((data) => data.password === data.confirmPassword, {
-  message: 'Passwörter stimmen nicht überein',
+  message: message(t, 'auth.validation.passwordMismatch', 'Passwoerter stimmen nicht ueberein'),
   path: ['confirmPassword'],
 });
+
+export const createActivateAccountSchema = (t = fallbackT) => z.object({
+  password: passwordPolicy(t),
+  confirmPassword: z.string().min(1, message(t, 'auth.validation.confirmPasswordRequired', 'Passwort bestaetigen')),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: message(t, 'auth.validation.passwordMismatch', 'Passwoerter stimmen nicht ueberein'),
+  path: ['confirmPassword'],
+});
+
+export const loginSchema = createLoginSchema();
+export const changePasswordSchema = createChangePasswordSchema();
+export const resetPasswordRequestSchema = createResetPasswordRequestSchema();
+export const resetPasswordConfirmSchema = createResetPasswordConfirmSchema();
+export const activateAccountSchema = createActivateAccountSchema();

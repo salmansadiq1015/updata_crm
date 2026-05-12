@@ -5,6 +5,7 @@ import { ArrowUp, Square, Mic, MicOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import { RECORDING_STATES, SESSION_STATUSES } from '../../constants/ai-constants';
 import { AiRecordingTimer } from '../recorder/ai-recording-timer';
@@ -25,6 +26,7 @@ export function AiChatInput({
   onStopListening,
   isSTTSupported,
 }) {
+  const { t } = useLanguage();
   const [value, setValue] = useState('');
   const [corrections, setCorrections] = useState({});
   const textareaRef = useRef(null);
@@ -66,7 +68,7 @@ export function AiChatInput({
         <div className="max-w-7xl mx-auto px-4 md:px-8 pt-4">
           <div className="rounded-xl border bg-card p-4 shadow-sm">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
-              Extracted from your recording
+              {t('ai.chat.extracted', 'Extracted from your recording')}
             </p>
             <AiEntityList
               entities={voiceSession.session.entities}
@@ -79,7 +81,7 @@ export function AiChatInput({
                 onClick={() => voiceSession.cancelSession()}
                 disabled={voiceSession.isCancelling}
               >
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </Button>
               <Button
                 size="sm"
@@ -114,7 +116,7 @@ export function AiChatInput({
               variant="destructive"
               className="h-8 w-8 shrink-0"
               onClick={() => recorder.stopRecording()}
-              title="Stop recording"
+              title={t('ai.panel.stopRecording', 'Stop recording')}
             >
               <Square className="h-3 w-3" />
             </Button>
@@ -173,7 +175,7 @@ export function AiChatInput({
                     !isListening && 'text-muted-foreground hover:text-foreground'
                   )}
                   onClick={isListening ? onStopListening : (onStartListening ?? onVoiceStart)}
-                  title={isListening ? 'Stop listening' : 'Start voice input'}
+                  title={isListening ? t('ai.chat.stopListening', 'Stop listening') : t('ai.chat.startVoiceInput', 'Start voice input')}
                   type="button"
                 >
                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
@@ -194,7 +196,7 @@ export function AiChatInput({
 
         {value.trim().length > 0 && value.trim().length < 3 ? (
           <p className="text-xs text-destructive text-center">
-            Minimum 3 characters required
+            {t('ai.chat.minimumChars', 'Minimum 3 characters required')}
           </p>
         ) : (
           <p className="text-xs text-muted-foreground text-center">

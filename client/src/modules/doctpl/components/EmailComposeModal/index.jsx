@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { useSendEmail } from '../../hooks/useEmailMutations';
 
 export function EmailComposeModal({ open, onClose, initialValues = {} }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState({ to: '', cc: '', bcc: '', subject: '', bodyHtml: '', documentId: null, sourceModule: null, sourceRecordId: null });
   const send = useSendEmail();
 
@@ -30,22 +32,22 @@ export function EmailComposeModal({ open, onClose, initialValues = {} }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-xl">
-        <DialogHeader><DialogTitle>Send by Email</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t('doctpl.sendByEmail')}</DialogTitle></DialogHeader>
         <div className="space-y-3 py-1">
-          <div><Label>To</Label><Input value={form.to} onChange={set('to')} placeholder="email@example.com, ..." /></div>
-          <div><Label>CC</Label><Input value={form.cc} onChange={set('cc')} placeholder="optional" /></div>
+          <div><Label>{t('doctpl.to')}</Label><Input value={form.to} onChange={set('to')} placeholder="email@example.com, ..." /></div>
+          <div><Label>{t('doctpl.cc')}</Label><Input value={form.cc} onChange={set('cc')} placeholder={t('common.optional')} /></div>
           <div className="flex flex-col gap-1.5">
-            <Label>BCC</Label>
+            <Label>{t('doctpl.bcc')}</Label>
             <Input value={form.bcc} onChange={(e) => setForm(f => ({ ...f, bcc: e.target.value }))}
-              placeholder="optional" className="text-sm" />
+              placeholder={t('common.optional')} className="text-sm" />
           </div>
-          <div><Label>Subject</Label><Input value={form.subject} onChange={set('subject')} /></div>
-          <div><Label>Message</Label><Textarea rows={7} value={form.bodyHtml} onChange={set('bodyHtml')} /></div>
+          <div><Label>{t('doctpl.subject')}</Label><Input value={form.subject} onChange={set('subject')} /></div>
+          <div><Label>{t('doctpl.message')}</Label><Textarea rows={7} value={form.bodyHtml} onChange={set('bodyHtml')} /></div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button onClick={handleSend} disabled={send.isPending}>
-            {send.isPending ? 'Sending…' : 'Send'}
+            {send.isPending ? t('doctpl.sending') : t('common.send')}
           </Button>
         </DialogFooter>
       </DialogContent>

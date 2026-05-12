@@ -1,17 +1,22 @@
+"use client"
+
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react"
+import { useLanguage } from "@/lib/i18n/language-context"
 
 function Pagination({
   className,
   ...props
 }) {
+  const { t } = useLanguage()
+
   return (
     <nav
       role="navigation"
-      aria-label="pagination"
+      aria-label={t('common.pagination', 'Pagination')}
       data-slot="pagination"
       className={cn("mx-auto flex w-full justify-center", className)}
       {...props} />
@@ -59,33 +64,39 @@ function PaginationLink({
 
 function PaginationPrevious({
   className,
-  text = "Previous",
+  text,
   ...props
 }) {
+  const { t } = useLanguage()
+  const label = text ?? t('common.previous', 'Previous')
+
   return (
     <PaginationLink
-      aria-label="Go to previous page"
+      aria-label={t('common.previousPage', 'Go to previous page')}
       size="default"
       className={cn("pl-1.5!", className)}
       {...props}>
       <ChevronLeftIcon data-icon="inline-start" />
-      <span className="hidden sm:block">{text}</span>
+      <span className="hidden sm:block">{label}</span>
     </PaginationLink>
   );
 }
 
 function PaginationNext({
   className,
-  text = "Next",
+  text,
   ...props
 }) {
+  const { t } = useLanguage()
+  const label = text ?? t('common.next', 'Next')
+
   return (
     <PaginationLink
-      aria-label="Go to next page"
+      aria-label={t('common.nextPage', 'Go to next page')}
       size="default"
       className={cn("pr-1.5!", className)}
       {...props}>
-      <span className="hidden sm:block">{text}</span>
+      <span className="hidden sm:block">{label}</span>
       <ChevronRightIcon data-icon="inline-end" />
     </PaginationLink>
   );
@@ -95,6 +106,8 @@ function PaginationEllipsis({
   className,
   ...props
 }) {
+  const { t } = useLanguage()
+
   return (
     <span
       aria-hidden
@@ -105,7 +118,7 @@ function PaginationEllipsis({
       )}
       {...props}>
       <MoreHorizontalIcon />
-      <span className="sr-only">More pages</span>
+      <span className="sr-only">{t('common.morePages', 'More pages')}</span>
     </span>
   );
 }

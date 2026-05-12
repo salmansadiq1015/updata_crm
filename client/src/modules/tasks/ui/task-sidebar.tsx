@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { FOLDER_COLOR_OPTIONS } from './task-ui-constants';
 import { ListColorDialog, FolderColorDialog } from './color-picker-dialog';
 
@@ -84,6 +85,7 @@ function ListItem({
   onListAction: (action: ListAction, list: any, folderId: string | null) => void;
   onChangeColor?: () => void;
 }) {
+  const { t } = useLanguage();
   const isActive = activeListId === list.id;
 
   return (
@@ -119,7 +121,7 @@ function ListItem({
           <button
             type="button"
             className="absolute right-1 top-1 opacity-0 group-hover/listitem:opacity-100 h-6 w-6 flex items-center justify-center rounded hover:bg-accent transition-opacity"
-            aria-label={`Options for list ${list.name}`}
+            aria-label={t('tasks.listOptions', 'Optionen fuer Liste {name}', { name: list.name })}
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
@@ -127,28 +129,28 @@ function ListItem({
         <DropdownMenuContent align="end" className="w-44">
           <DropdownMenuItem onClick={() => onListAction('rename', list, folderId)}>
             <Pencil className="mr-2 h-3.5 w-3.5" />
-            Rename
+            {t('common.rename', 'Rename')}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => onChangeColor?.()}>
             <Palette className="mr-2 h-3.5 w-3.5" />
-            Change color
+            {t('tasks.changeColor', 'Change color')}
           </DropdownMenuItem>
           {folderId && (
             <DropdownMenuItem onClick={() => onListAction('moveToFolder', list, folderId)}>
               <FolderIcon className="mr-2 h-3.5 w-3.5" />
-              Move to folder
+              {t('tasks.moveToFolder', 'Move to folder')}
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => onListAction('archive', list, folderId)}>
-            Archive
+            {t('common.archive', 'Archive')}
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"
             onClick={() => onListAction('delete', list, folderId)}
           >
             <Trash2 className="mr-2 h-3.5 w-3.5" />
-            Delete
+            {t('common.delete', 'Delete')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -181,6 +183,7 @@ function FolderItem({
   onChangeFolderColor?: () => void;
   onChangeListColor?: (list: any) => void;
 }) {
+  const { t } = useLanguage();
   const colorProps = getFolderColorStyle(folder.color);
 
   return (
@@ -190,7 +193,9 @@ function FolderItem({
           type="button"
           onClick={onToggle}
           className="h-5 w-5 shrink-0 flex items-center justify-center text-muted-foreground"
-          aria-label={isFolderCollapsed ? `Expand folder ${folder.name}` : `Collapse folder ${folder.name}`}
+          aria-label={isFolderCollapsed
+            ? t('tasks.expandFolder', 'Ordner ausklappen: {name}', { name: folder.name })
+            : t('tasks.collapseFolder', 'Ordner einklappen: {name}', { name: folder.name })}
         >
           <ChevronRight
             className={cn('h-3.5 w-3.5 transition-transform duration-150', !isFolderCollapsed && 'rotate-90')}
@@ -215,7 +220,7 @@ function FolderItem({
             <button
               type="button"
               className="opacity-0 group-hover/folder:opacity-100 h-6 w-6 flex items-center justify-center rounded hover:bg-accent transition-opacity"
-              aria-label={`Options for folder ${folder.name}`}
+              aria-label={t('tasks.folderOptions', 'Optionen fuer Ordner {name}', { name: folder.name })}
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
@@ -223,16 +228,16 @@ function FolderItem({
           <DropdownMenuContent align="start" className="w-44">
             <DropdownMenuItem onClick={() => onFolderAction('rename', folder)}>
               <Pencil className="mr-2 h-3.5 w-3.5" />
-              Rename
+              {t('common.rename', 'Rename')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onChangeFolderColor?.()}>
               <Palette className="mr-2 h-3.5 w-3.5" />
-              Change color
+              {t('tasks.changeColor', 'Change color')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => onCreateList(folder.id)}>
               <Plus className="mr-2 h-3.5 w-3.5" />
-              Add list
+              {t('tasks.addList', 'Add list')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -240,7 +245,7 @@ function FolderItem({
               onClick={() => onFolderAction('delete', folder)}
             >
               <Trash2 className="mr-2 h-3.5 w-3.5" />
-              Delete folder
+              {t('tasks.deleteFolder', 'Delete folder')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -266,7 +271,7 @@ function FolderItem({
               className="w-full flex items-center gap-2 px-2 h-7 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-md"
             >
               <Plus className="h-3 w-3" />
-              Add a list
+              {t('tasks.addAList', 'Add a list')}
             </button>
           )}
         </div>
@@ -330,6 +335,7 @@ export function TaskSidebar({
   onListColorChange,
   onFolderColorChange,
 }: TaskSidebarProps) {
+  const { t } = useLanguage();
   const isAllTasksActive = !activeListId && activeSavedView === 'none';
 
   // Color picker state
@@ -342,12 +348,12 @@ export function TaskSidebar({
         'flex h-full shrink-0 flex-col border-r border-border bg-card transition-[width] duration-200',
         collapsed ? 'w-14' : 'w-64',
       )}
-      aria-label="Task workspace navigation"
+      aria-label={t('tasks.workspaceNavigation', 'Task workspace navigation')}
     >
       {/* HEADER */}
       <div className="flex h-12 items-center justify-between border-b border-border px-3">
         {!collapsed && (
-          <span className="text-sm font-semibold text-foreground">Tasks</span>
+          <span className="text-sm font-semibold text-foreground">{t('tasks.title', 'Tasks')}</span>
         )}
         <Button
           type="button"
@@ -355,7 +361,7 @@ export function TaskSidebar({
           size="icon"
           className={cn('h-8 w-8 shrink-0', collapsed && 'mx-auto')}
           onClick={() => onCollapseChange(!collapsed)}
-          aria-label={collapsed ? 'Expand task sidebar' : 'Collapse task sidebar'}
+          aria-label={collapsed ? t('tasks.expandSidebar', 'Expand task sidebar') : t('tasks.collapseSidebar', 'Collapse task sidebar')}
         >
           {collapsed ? (
             <PanelLeftOpen className="h-4 w-4" />
@@ -381,10 +387,10 @@ export function TaskSidebar({
               ? 'bg-accent text-accent-foreground'
               : 'hover:bg-accent/50 text-muted-foreground hover:text-foreground',
           )}
-          aria-label="All tasks"
+          aria-label={t('tasks.allTasks', 'All tasks')}
         >
           <LayoutList className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>All Tasks</span>}
+          {!collapsed && <span>{t('tasks.allTasks', 'All Tasks')}</span>}
         </button>
 
         {!collapsed && (
@@ -394,13 +400,13 @@ export function TaskSidebar({
               <div className="mt-3">
                 <div className="flex items-center justify-between px-1 mb-1">
                   <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Folders
+                    {t('tasks.folders', 'Folders')}
                   </span>
                   <button
                     type="button"
                     onClick={onCreateFolder}
                     className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                    aria-label="Create folder"
+                    aria-label={t('tasks.createFolder', 'Create folder')}
                   >
                     <Plus className="h-3 w-3" />
                   </button>
@@ -429,13 +435,13 @@ export function TaskSidebar({
             <div className="mt-3">
               <div className="flex items-center justify-between px-1 mb-1">
                 <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Lists
+                  {t('tasks.lists', 'Lists')}
                 </span>
                 <button
                   type="button"
                   onClick={() => onCreateList()}
                   className="h-5 w-5 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-                  aria-label="Create list"
+                  aria-label={t('tasks.createList', 'Create list')}
                 >
                   <Plus className="h-3 w-3" />
                 </button>
@@ -459,7 +465,7 @@ export function TaskSidebar({
                     className="w-full flex items-center gap-2 px-2 h-7 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/40 rounded-md"
                   >
                     <Plus className="h-3 w-3" />
-                    Create your first list
+                    {t('tasks.createFirstList', 'Create your first list')}
                   </button>
                 )}
               </div>
@@ -469,20 +475,20 @@ export function TaskSidebar({
             <div className="mt-3">
               <div className="px-1 mb-1">
                 <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Views
+                  {t('tasks.views', 'Views')}
                 </span>
               </div>
               <div className="space-y-0.5">
                 <SavedViewButton
                   view="dueToday"
-                  label="Due Today"
+                  label={t('tasks.dueToday', 'Due Today')}
                   icon={Calendar}
                   activeSavedView={activeSavedView}
                   onSelectSavedView={onSelectSavedView}
                 />
                 <SavedViewButton
                   view="overdue"
-                  label="Overdue"
+                  label={t('tasks.overdue', 'Overdue')}
                   icon={AlertCircle}
                   activeSavedView={activeSavedView}
                   onSelectSavedView={onSelectSavedView}
@@ -499,7 +505,7 @@ export function TaskSidebar({
               type="button"
               onClick={onCreateFolder}
               className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-              aria-label="Create folder"
+              aria-label={t('tasks.createFolder', 'Create folder')}
             >
               <FolderIcon className="h-4 w-4" />
             </button>
@@ -507,7 +513,7 @@ export function TaskSidebar({
               type="button"
               onClick={() => onCreateList()}
               className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
-              aria-label="Create list"
+              aria-label={t('tasks.createList', 'Create list')}
             >
               <ClipboardList className="h-4 w-4" />
             </button>
@@ -518,7 +524,7 @@ export function TaskSidebar({
                 'h-8 w-8 flex items-center justify-center rounded hover:bg-accent',
                 activeSavedView === 'dueToday' ? 'text-warning' : 'text-muted-foreground hover:text-foreground',
               )}
-              aria-label="Due Today"
+              aria-label={t('tasks.dueToday', 'Due Today')}
             >
               <Calendar className="h-4 w-4" />
             </button>
@@ -529,7 +535,7 @@ export function TaskSidebar({
                 'h-8 w-8 flex items-center justify-center rounded hover:bg-accent',
                 activeSavedView === 'overdue' ? 'text-danger' : 'text-muted-foreground hover:text-foreground',
               )}
-              aria-label="Overdue"
+              aria-label={t('tasks.overdue', 'Overdue')}
             >
               <AlertCircle className="h-4 w-4" />
             </button>

@@ -2,6 +2,7 @@
 
 import { Inbox, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 type TaskEmptyStateProps = {
   type: 'empty' | 'filtered' | 'error' | 'offline';
@@ -10,19 +11,20 @@ type TaskEmptyStateProps = {
 };
 
 export function TaskEmptyState({ type, onReset, onRetry }: TaskEmptyStateProps) {
+  const { t } = useLanguage();
   const isError = type === 'error' || type === 'offline';
   const Icon = type === 'offline' ? WifiOff : Inbox;
   const title = {
-    empty: 'No tasks yet',
-    filtered: 'No tasks match this view',
-    error: 'Tasks could not be loaded',
-    offline: 'You are offline',
+    empty: t('tasks.empty.title', 'Noch keine Aufgaben'),
+    filtered: t('tasks.empty.filteredTitle', 'Keine Aufgaben fuer diese Ansicht'),
+    error: t('tasks.empty.errorTitle', 'Aufgaben konnten nicht geladen werden'),
+    offline: t('tasks.empty.offlineTitle', 'Sie sind offline'),
   }[type];
   const body = {
-    empty: 'Create a task to start building this workspace.',
-    filtered: 'Adjust search or filters to widen the task window.',
-    error: 'The current view is still available from cache when possible.',
-    offline: 'Cached tasks remain usable. Changes will sync after reconnect.',
+    empty: t('tasks.empty.body', 'Erstellen Sie eine Aufgabe, um diesen Arbeitsbereich zu starten.'),
+    filtered: t('tasks.empty.filteredBody', 'Passen Sie Suche oder Filter an, um mehr Aufgaben zu sehen.'),
+    error: t('tasks.empty.errorBody', 'Die aktuelle Ansicht bleibt nach Moeglichkeit aus dem Cache verfuegbar.'),
+    offline: t('tasks.empty.offlineBody', 'Zwischengespeicherte Aufgaben bleiben nutzbar. Aenderungen synchronisieren nach der Wiederverbindung.'),
   }[type];
 
   return (
@@ -36,12 +38,12 @@ export function TaskEmptyState({ type, onReset, onRetry }: TaskEmptyStateProps) 
       </div>
       {type === 'filtered' && onReset ? (
         <Button type="button" variant="outline" size="sm" className="" onClick={onReset}>
-          Clear filters
+          {t('tasks.clearFilters', 'Filter loeschen')}
         </Button>
       ) : null}
       {isError && onRetry ? (
         <Button type="button" variant="outline" size="sm" className="" onClick={onRetry}>
-          Retry
+          {t('common.retry', 'Erneut versuchen')}
         </Button>
       ) : null}
     </div>

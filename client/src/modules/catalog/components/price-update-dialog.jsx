@@ -106,16 +106,16 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles = [] }) {
               name="mode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Update type</FormLabel>
+                  <FormLabel>{t('catalog.prices.updateType')}</FormLabel>
                   <FormControl>
                     <RadioGroup value={field.value} onValueChange={field.onChange} className="flex gap-4">
                       <div className="flex items-center gap-2">
                         <RadioGroupItem value="fixed" id="mode-fixed" />
-                        <Label htmlFor="mode-fixed">Fixed price</Label>
+                        <Label htmlFor="mode-fixed">{t('catalog.prices.fixedPrice')}</Label>
                       </div>
                       <div className="flex items-center gap-2">
                         <RadioGroupItem value="percentage" id="mode-pct" />
-                        <Label htmlFor="mode-pct">Percentage</Label>
+                        <Label htmlFor="mode-pct">{t('catalog.prices.percentage')}</Label>
                       </div>
                       <div className="flex items-center gap-2">
                         <RadioGroupItem value="schedule" id="mode-sched" />
@@ -133,7 +133,7 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles = [] }) {
                 name="value"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{mode === 'fixed' ? 'New Price (CHF)' : 'Percentage (%)'}</FormLabel>
+                    <FormLabel>{mode === 'fixed' ? t('catalog.prices.newPriceChf') : t('catalog.prices.percentageValue')}</FormLabel>
                     <FormControl>
                       <Input {...field} type="number" step={mode === 'fixed' ? '0.01' : '0.1'} />
                     </FormControl>
@@ -159,19 +159,19 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles = [] }) {
             </div>
 
             <Button type="button" variant="outline" size="sm" onClick={onPreview}>
-              Preview Changes
+              {t('catalog.prices.previewChanges')}
             </Button>
           </form>
         </Form>
 
         {preview && (
           <div className="space-y-2 mt-2">
-            <p className="text-sm font-medium">Preview</p>
+            <p className="text-sm font-medium">{t('common.preview')}</p>
             <div className="max-h-48 overflow-y-auto rounded-md border">
               <table className="w-full text-xs">
                 <thead className="bg-muted sticky top-0">
                   <tr>
-                    <th className="text-left px-3 py-2">Article</th>
+                    <th className="text-left px-3 py-2">{t('catalog.article')}</th>
                     <th className="text-right px-3 py-2">{t('catalog.prices.oldPrice')}</th>
                     <th className="text-right px-3 py-2">{t('catalog.prices.newPrice')}</th>
                     <th className="text-right px-3 py-2">&Delta;</th>
@@ -192,7 +192,7 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles = [] }) {
               </table>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => { setPreview(null); form.reset(); onClose(); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setPreview(null); form.reset(); onClose(); }}>{t('common.cancel')}</Button>
               <Button onClick={onConfirm} disabled={isPending}>
                 {isPending ? 'Applying...' : 'Confirm Update'}
               </Button>

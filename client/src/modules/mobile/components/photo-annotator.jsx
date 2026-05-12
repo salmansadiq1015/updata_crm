@@ -3,11 +3,13 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Pencil, Type, Undo2, Check, X, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 
 const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff'];
 
 export function PhotoAnnotator({ imageUrl, onSave, onCancel }) {
+  const { t } = useLanguage();
   const canvasRef = useRef(null);
   const [tool, setTool] = useState('draw');
   const [color, setColor] = useState(COLORS[0]);
@@ -118,7 +120,7 @@ export function PhotoAnnotator({ imageUrl, onSave, onCancel }) {
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/80">
         <Button variant="ghost" size="sm" onClick={onCancel} className="text-white h-9">
-          <X className="h-4 w-4 mr-1" /> Cancel
+          <X className="h-4 w-4 mr-1" /> {t('common.cancel', 'Cancel')}
         </Button>
         <div className="flex gap-1">
           <Button
@@ -140,7 +142,7 @@ export function PhotoAnnotator({ imageUrl, onSave, onCancel }) {
           </Button>
         </div>
         <Button variant="ghost" size="sm" onClick={handleSave} className="text-green-400 h-9">
-          <Check className="h-4 w-4 mr-1" /> Save
+          <Check className="h-4 w-4 mr-1" /> {t('common.save', 'Save')}
         </Button>
       </div>
 
@@ -183,12 +185,12 @@ export function PhotoAnnotator({ imageUrl, onSave, onCancel }) {
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder="Enter text..."
+              placeholder={t('mobile.photos.enterText', 'Enter text...')}
               autoFocus
               className="flex-1 h-10 px-3 rounded-lg bg-white/10 text-white text-sm border border-white/20"
               onKeyDown={(e) => e.key === 'Enter' && addText()}
             />
-            <Button onClick={addText} size="sm" className="h-10">Add</Button>
+            <Button onClick={addText} size="sm" className="h-10">{t('common.add', 'Add')}</Button>
             <Button variant="ghost" onClick={() => setTextPos(null)} size="sm" className="h-10 text-white">
               <X className="h-4 w-4" />
             </Button>

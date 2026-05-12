@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ChevronDown, UserRound, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 
@@ -44,6 +45,7 @@ function Avatar({ user, size = 'sm' }: { user: WorkspaceUser; size?: 'sm' | 'def
 }
 
 export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = 'sm' }: AssigneeSelectorProps) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -76,7 +78,7 @@ export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = '
           ) : (
             <>
               <UserRound className={cn('shrink-0', isSmall ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
-              <span className="flex-1">Assign</span>
+              <span className="flex-1">{t('tasks.assign', 'Assign')}</span>
             </>
           )}
           <ChevronDown className={cn('ml-auto shrink-0 opacity-40', isSmall ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
@@ -86,7 +88,7 @@ export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = '
       <PopoverContent className="w-64 p-0 shadow-lg" align="start">
         <div className="px-2 pt-2 pb-1.5 border-b">
           <Input
-            placeholder="Search members..."
+            placeholder={t('tasks.searchMembers', 'Search members...')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-7 text-xs"
@@ -107,7 +109,7 @@ export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = '
             <span className="h-6 w-6 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center shrink-0">
               <UserRound className="h-3 w-3 text-muted-foreground/60" />
             </span>
-            <span className="text-xs text-muted-foreground">Unassigned</span>
+            <span className="text-xs text-muted-foreground">{t('tasks.unassigned', 'Unassigned')}</span>
             {!assigneeId && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
           </button>
 
@@ -138,7 +140,7 @@ export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = '
           ))}
 
           {filtered.length === 0 && (
-            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No members found</p>
+            <p className="px-3 py-3 text-xs text-muted-foreground text-center">{t('tasks.noMembers', 'No members found')}</p>
           )}
         </div>
       </PopoverContent>

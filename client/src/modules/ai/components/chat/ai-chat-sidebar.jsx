@@ -7,6 +7,7 @@ import { formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLanguage } from '@/lib/i18n/language-context';
 import {
   Dialog,
   DialogContent,
@@ -40,10 +41,11 @@ function groupByDate(threads) {
 
 function ThreadItem({ thread, isActive, onSelect, onArchive, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { t } = useLanguage();
   const title =
     (typeof thread.input === 'string' && thread.input)
       ? thread.input
-      : WORKFLOW_LABELS[thread.workflowType] ?? thread.workflowType ?? 'AI Run';
+      : WORKFLOW_LABELS[thread.workflowType] ?? thread.workflowType ?? t('ai.chat.run', 'AI Run');
   const dot = STATUS_DOT[thread.status] ?? 'bg-muted-foreground/50';
   const ago = thread.createdAt
     ? formatDistanceToNow(new Date(thread.createdAt), { addSuffix: false })
@@ -75,7 +77,7 @@ function ThreadItem({ thread, isActive, onSelect, onArchive, onDelete }) {
             variant="ghost"
             size="icon"
             className="h-6 w-6 text-muted-foreground hover:text-foreground"
-            title="Archive"
+            title={t('common.archive', 'Archive')}
             onClick={(e) => { e.stopPropagation(); onArchive(threadId); }}
           >
             <Archive className="h-3 w-3" />
@@ -84,7 +86,7 @@ function ThreadItem({ thread, isActive, onSelect, onArchive, onDelete }) {
             variant="ghost"
             size="icon"
             className="h-6 w-6 text-muted-foreground hover:text-destructive"
-            title="Delete"
+            title={t('common.delete', 'Delete')}
             onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
           >
             <Trash2 className="h-3 w-3" />
@@ -95,21 +97,21 @@ function ThreadItem({ thread, isActive, onSelect, onArchive, onDelete }) {
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete this chat?</DialogTitle>
+            <DialogTitle>{t('ai.chat.deleteTitle', 'Delete this chat?')}</DialogTitle>
             <DialogDescription>
               &ldquo;{title.slice(0, 60)}{title.length > 60 ? '…' : ''}&rdquo; will be permanently removed.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)}>
-              Cancel
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
               size="sm"
               onClick={() => { onDelete(threadId); setConfirmDelete(false); }}
             >
-              Delete
+              {t('common.delete', 'Delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -159,6 +161,8 @@ function SidebarContent({
   filtered,
   groups,
 }) {
+  const { t } = useLanguage();
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 py-3 border-b border-border shrink-0">
@@ -169,11 +173,11 @@ function SidebarContent({
           <span className="font-semibold text-sm truncate">MB Boiler</span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNewChat} title="New chat">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNewChat} title={t('ai.chat.newChat', 'New chat')}>
             <PenSquare className="h-3.5 w-3.5" />
           </Button>
           {onClose && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} title="Close sidebar">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} title={t('ai.chat.closeSidebar', 'Close sidebar')}>
               <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
           )}
@@ -201,9 +205,9 @@ function SidebarContent({
           </div>
         ) : (
           <>
-            <ThreadGroup label="Today"     threads={groups.today}     selectedThreadId={selectedThreadId} onSelect={onSelectThread} onArchive={onArchiveThread} onDelete={onDeleteThread} />
-            <ThreadGroup label="Yesterday" threads={groups.yesterday}  selectedThreadId={selectedThreadId} onSelect={onSelectThread} onArchive={onArchiveThread} onDelete={onDeleteThread} />
-            <ThreadGroup label="Earlier"   threads={groups.earlier}   selectedThreadId={selectedThreadId} onSelect={onSelectThread} onArchive={onArchiveThread} onDelete={onDeleteThread} />
+            <ThreadGroup label={t('common.today', 'Today')} threads={groups.today} selectedThreadId={selectedThreadId} onSelect={onSelectThread} onArchive={onArchiveThread} onDelete={onDeleteThread} />
+            <ThreadGroup label={t('common.yesterday', 'Yesterday')} threads={groups.yesterday} selectedThreadId={selectedThreadId} onSelect={onSelectThread} onArchive={onArchiveThread} onDelete={onDeleteThread} />
+            <ThreadGroup label={t('common.earlier', 'Earlier')} threads={groups.earlier} selectedThreadId={selectedThreadId} onSelect={onSelectThread} onArchive={onArchiveThread} onDelete={onDeleteThread} />
             {!filtered.length && (
               <p className="text-xs text-muted-foreground text-center py-10 px-3">
                 {search ? 'No matching chats' : 'No chats yet. Start a conversation!'}

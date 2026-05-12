@@ -8,6 +8,7 @@ import { Activity, Database, HardDrive, Radio, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
+import { useLanguage } from '@/lib/i18n/language-context';
 import type { ComponentHealth } from '../types/platform.types';
 
 const statusColor: Record<string, string> = {
@@ -35,6 +36,7 @@ function ComponentCard({
   icon: React.ComponentType<{ className?: string }>;
   health?: ComponentHealth;
 }) {
+  const { t } = useLanguage();
   const status = health?.status ?? 'down';
   return (
     <Card>
@@ -48,13 +50,13 @@ function ComponentCard({
               <p className="text-sm font-medium">{name}</p>
               {health?.latency != null && (
                 <p className="text-xs text-muted-foreground">
-                  {health.latency}ms Latenz
+                  {t('platform.latency', { value: health.latency })}
                 </p>
               )}
             </div>
           </div>
           <Badge variant="outline" className={statusColor[status]}>
-            {statusLabel[status] ?? status}
+            {t(`platform.health.${status}`)}
           </Badge>
         </div>
       </CardContent>
@@ -63,6 +65,7 @@ function ComponentCard({
 }
 
 export function HealthDashboard() {
+  const { t } = useLanguage();
   const { data, isLoading } = useSystemHealth();
   const queryClient = useQueryClient();
 
@@ -92,10 +95,10 @@ export function HealthDashboard() {
       {/* Overall status */}
       <Card>
         <CardHeader className="flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base">Systemstatus</CardTitle>
+          <CardTitle className="text-base">{t('platform.systemStatus')}</CardTitle>
           <Button variant="ghost" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" />
-            Aktualisieren
+            {t('common.refresh')}
           </Button>
         </CardHeader>
         <CardContent>
@@ -110,11 +113,11 @@ export function HealthDashboard() {
               }`}
             />
             <span className="text-lg font-semibold">
-              {statusLabel[overallStatus] ?? overallStatus}
+              {t(`platform.health.${overallStatus}`)}
             </span>
             {data?.uptime != null && (
               <span className="text-sm text-muted-foreground">
-                · Laufzeit: {formatUptime(data.uptime)}
+                {t('platform.uptime', { value: formatUptime(data.uptime) })}
               </span>
             )}
             {data?.version && (
@@ -129,22 +132,22 @@ export function HealthDashboard() {
       {/* Component health */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <ComponentCard
-          name="Datenbank"
+          name={t('platform.database')}
           icon={Database}
           health={checks.database}
         />
         <ComponentCard
-          name="Redis Cache"
+          name={t('platform.redisCache')}
           icon={HardDrive}
           health={checks.redis}
         />
         <ComponentCard
-          name="Job Queue"
+          name={t('platform.jobQueue')}
           icon={Activity}
           health={checks.queue}
         />
         <ComponentCard
-          name="Speicher"
+          name={t('platform.storage')}
           icon={Radio}
           health={checks.storage}
         />

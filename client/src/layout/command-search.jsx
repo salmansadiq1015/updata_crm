@@ -11,16 +11,7 @@ import {
 } from 'lucide-react';
 import { userService } from '@/modules/users/services/user-service';
 import { cn } from '@/lib/utils';
-
-const navItems = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, group: 'Seiten', shortcut: '' },
-  { label: 'Benutzer', href: '/settings/users', icon: Users, group: 'Seiten', shortcut: '' },
-  { label: 'Rollen', href: '/settings/roles', icon: Shield, group: 'Seiten', shortcut: '' },
-  { label: 'Sitzungen', href: '/settings/sessions', icon: Monitor, group: 'Seiten', shortcut: '' },
-  { label: 'Audit Log', href: '/settings/audit', icon: ScrollText, group: 'Seiten', shortcut: '' },
-  { label: 'Mein Profil', href: '/profile', icon: User, group: 'Seiten', shortcut: '' },
-  { label: 'System', href: '/settings/system', icon: Activity, group: 'Seiten', shortcut: '' },
-];
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function CommandSearch() {
   const [open, setOpen] = useState(false);
@@ -28,7 +19,17 @@ export function CommandSearch() {
   const [users, setUsers] = useState([]);
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const { t } = useLanguage();
   const debounceRef = useRef(null);
+  const navItems = [
+    { label: t('sidebar.dashboard', 'Dashboard'), href: '/dashboard', icon: LayoutDashboard },
+    { label: t('sidebar.users', 'Benutzer'), href: '/settings/users', icon: Users },
+    { label: t('sidebar.roles', 'Rollen'), href: '/settings/roles', icon: Shield },
+    { label: t('sidebar.sessions', 'Sitzungen'), href: '/settings/sessions', icon: Monitor },
+    { label: t('sidebar.audit', 'Audit Log'), href: '/settings/audit', icon: ScrollText },
+    { label: t('dashboard.myProfile', 'Mein Profil'), href: '/profile', icon: User },
+    { label: t('sidebar.system', 'System'), href: '/settings/system', icon: Activity },
+  ];
 
   useEffect(() => {
     const handler = (e) => {
@@ -77,7 +78,7 @@ export function CommandSearch() {
         className="hidden md:flex items-center gap-2 rounded-xl border border-border/50 bg-muted/30 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted/60 hover:border-border transition-all duration-200 min-w-[200px] backdrop-blur-sm"
       >
         <Search className="h-3.5 w-3.5" />
-        <span className="flex-1 text-left">Suchen...</span>
+        <span className="flex-1 text-left">{t('common.search', 'Suchen...')}</span>
         <kbd className="hidden sm:inline-flex h-5 items-center gap-0.5 rounded border border-border/60 bg-background/80 px-1.5 text-[0.65rem] font-mono text-muted-foreground">
           Ctrl+K
         </kbd>
@@ -85,24 +86,24 @@ export function CommandSearch() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="p-0 gap-0 max-w-lg overflow-hidden rounded-2xl shadow-theme-lg" hideClose>
-          <DialogTitle className="sr-only">Suche</DialogTitle>
+          <DialogTitle className="sr-only">{t('common.searchTitle', 'Suche')}</DialogTitle>
           <Command className="[&_[cmdk-group-heading]]:px-4 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[0.65rem] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground">
             <div className="flex items-center gap-2 border-b border-border/40 px-4 py-3">
               <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <Command.Input
                 value={query}
                 onValueChange={setQuery}
-                placeholder="Suchen oder Aktion ausfuehren..."
+                placeholder={t('command.placeholder', 'Suchen oder Aktion ausfuehren...')}
                 className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
 
             <Command.List className="max-h-[300px] overflow-y-auto py-2 scrollbar-thin">
               <Command.Empty className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Keine Ergebnisse fuer &ldquo;{query}&rdquo;
+                {t('command.noResults', 'Keine Ergebnisse fuer "{query}"', { query })}
               </Command.Empty>
 
-              <Command.Group heading="Seiten">
+              <Command.Group heading={t('command.pages', 'Seiten')}>
                 {navItems.map((item) => (
                   <Command.Item
                     key={item.href}
@@ -118,7 +119,7 @@ export function CommandSearch() {
               </Command.Group>
 
               {users.length > 0 && (
-                <Command.Group heading="Benutzer">
+                <Command.Group heading={t('sidebar.users', 'Benutzer')}>
                   {users.map((u) => (
                     <Command.Item
                       key={u._id}
@@ -136,22 +137,22 @@ export function CommandSearch() {
                 </Command.Group>
               )}
 
-              <Command.Group heading="Aktionen">
+              <Command.Group heading={t('common.actions', 'Aktionen')}>
                 <Command.Item
-                  value="Design wechseln Theme toggle"
+                  value={`${t('common.toggleTheme', 'Design wechseln')} Theme toggle`}
                   onSelect={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); setOpen(false); }}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm cursor-pointer transition-colors data-[selected=true]:bg-primary/8 data-[selected=true]:text-foreground text-muted-foreground hover:text-foreground"
                 >
                   {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                  <span className="flex-1 font-medium">Design wechseln</span>
+                  <span className="flex-1 font-medium">{t('common.toggleTheme', 'Design wechseln')}</span>
                 </Command.Item>
                 <Command.Item
-                  value="Neuer Benutzer erstellen"
+                  value={t('users.newUserCommand', 'Neuer Benutzer erstellen')}
                   onSelect={() => navigate('/settings/users?action=create')}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm cursor-pointer transition-colors data-[selected=true]:bg-primary/8 data-[selected=true]:text-foreground text-muted-foreground hover:text-foreground"
                 >
                   <Plus className="h-4 w-4" />
-                  <span className="flex-1 font-medium">Neuer Benutzer</span>
+                  <span className="flex-1 font-medium">{t('users.newUser', 'Neuer Benutzer')}</span>
                 </Command.Item>
               </Command.Group>
             </Command.List>

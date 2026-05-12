@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { useStartDm } from '../hooks/use-start-dm';
 import apiClient from '@/lib/api/client';
 
@@ -20,6 +21,7 @@ function useDebounce(value, delay) {
 }
 
 export function UserSearchDialog({ open, onClose }) {
+  const { t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearch = useDebounce(searchTerm.toLowerCase().trim(), 300);
   const startDm = useStartDm();
@@ -54,14 +56,14 @@ export function UserSearchDialog({ open, onClose }) {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New Message</DialogTitle>
-          <DialogDescription className="sr-only">Search for a user to start a direct message conversation.</DialogDescription>
+          <DialogTitle>{t('chat.newMessage')}</DialogTitle>
+          <DialogDescription className="sr-only">{t('chat.newMessageDesc')}</DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-3">
           <Input
             autoFocus
-            placeholder="Search by name or email…"
+            placeholder={t('chat.searchByNameEmail')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -80,7 +82,7 @@ export function UserSearchDialog({ open, onClose }) {
                 ))}
               </div>
             ) : filtered.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No users found</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">{t('common.noUsers')}</p>
             ) : (
               <ul className="space-y-1 py-1">
                 {filtered.map((user) => (

@@ -33,12 +33,14 @@ import { TaskEmptyState } from './task-empty-state';
 import { TaskListView } from './task-list-view';
 import { TaskSidebar } from './task-sidebar';
 import { InputDialog } from './input-dialog';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 type TaskWorkspaceProps = {
   listId?: string;
 };
 
 export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
+  const { t } = useLanguage();
   const router = useRouter();
   const viewState = useTaskWorkspaceViewState();
   const {
@@ -85,14 +87,14 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const closeDlg = () => setDlg(null);
 
   const dlgTitle = dlg
-    ? dlg.kind === 'createFolder' ? 'New Folder'
-    : dlg.kind === 'renameFolder' ? 'Rename Folder'
-    : dlg.kind === 'createList' ? 'New List'
-    : 'Rename List'
+    ? dlg.kind === 'createFolder' ? t('tasks.newFolder', 'Neuer Ordner')
+    : dlg.kind === 'renameFolder' ? t('tasks.renameFolder', 'Ordner umbenennen')
+    : dlg.kind === 'createList' ? t('tasks.newList', 'Neue Liste')
+    : t('tasks.renameList', 'Liste umbenennen')
     : '';
 
   const dlgDefaultValue = dlg && 'current' in dlg ? dlg.current : '';
-  const dlgConfirmLabel = dlg?.kind.startsWith('create') ? 'Create' : 'Rename';
+  const dlgConfirmLabel = dlg?.kind.startsWith('create') ? t('common.create', 'Erstellen') : t('common.rename', 'Umbenennen');
 
   const handleDlgConfirm = (value: string) => {
     if (!dlg) return;
@@ -267,7 +269,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
         open={Boolean(dlg)}
         title={dlgTitle}
         defaultValue={dlgDefaultValue}
-        placeholder={dlg?.kind.includes('older') ? 'Folder name' : 'List name'}
+        placeholder={dlg?.kind.includes('older') ? t('tasks.folderName', 'Ordnername') : t('tasks.listName', 'Listenname')}
         confirmLabel={dlgConfirmLabel}
         onConfirm={handleDlgConfirm}
         onCancel={closeDlg}

@@ -5,8 +5,10 @@ import { useChatMutations } from '@/modules/chat/hooks/use-chat-mutations';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Hash } from 'lucide-react';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function JoinGroupDialog({ open, onClose }) {
+  const { t } = useLanguage();
   const router = useRouter();
   const [digits, setDigits] = useState(['', '', '', '']);
   const [error, setError] = useState('');
@@ -61,7 +63,7 @@ export function JoinGroupDialog({ open, onClose }) {
         onClose();
       },
       onError: (err) => {
-        setError(err?.response?.data?.message ?? 'Invalid or expired code. Please try again.');
+        setError(err?.response?.data?.message ?? t('chat.invalidCode'));
         setDigits(['', '', '', '']);
         setTimeout(() => inputRefs.current[0]?.focus(), 50);
       },
@@ -72,8 +74,8 @@ export function JoinGroupDialog({ open, onClose }) {
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Join a Group</DialogTitle>
-          <DialogDescription className="sr-only">Enter the 4-digit code to join a group chat.</DialogDescription>
+          <DialogTitle>{t('chat.joinGroup')}</DialogTitle>
+          <DialogDescription className="sr-only">{t('chat.joinGroupDesc')}</DialogDescription>
         </DialogHeader>
 
         <DialogBody>
@@ -82,7 +84,7 @@ export function JoinGroupDialog({ open, onClose }) {
               <Hash className="h-8 w-8 text-primary" />
             </div>
             <p className="text-sm text-muted-foreground text-center">
-              Enter the 4-digit code shared by the group admin
+              {t('chat.joinCodeHint')}
             </p>
             <div className="flex gap-3">
               {digits.map((d, i) => (
@@ -103,14 +105,14 @@ export function JoinGroupDialog({ open, onClose }) {
             </div>
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
             {joinByCode.isPending && (
-              <p className="text-sm text-muted-foreground">Joining…</p>
+              <p className="text-sm text-muted-foreground">{t('chat.joining')}</p>
             )}
           </div>
         </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={joinByCode.isPending}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -20,12 +20,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import type { TaskPriority, TaskStatus, TaskViewType } from '../types/task-types';
 import {
   TASK_PRIORITIES,
-  TASK_PRIORITY_LABEL,
   TASK_STATUSES,
-  TASK_STATUS_LABEL,
+  getTaskPriorityLabel,
+  getTaskStatusLabel,
   taskPriorityIconColor,
   taskStatusIconColor,
 } from './task-ui-constants';
@@ -57,29 +58,31 @@ type TaskCommandBarProps = {
   onPageSizeChange?: (size: number) => void;
 };
 
-const views: Array<{ value: TaskViewType; label: string; icon: typeof List; disabled?: boolean }> = [
-  { value: 'list',     label: 'List',     icon: List },
-  { value: 'board',    label: 'Board',    icon: Columns3 },
-  { value: 'calendar', label: 'Calendar', icon: CalendarDays },
-  { value: 'timeline', label: 'Timeline', icon: SlidersHorizontal },
+const views: Array<{ value: TaskViewType; labelKey: string; fallback: string; icon: typeof List; disabled?: boolean }> = [
+  { value: 'list',     labelKey: 'tasks.view.list',     fallback: 'List',     icon: List },
+  { value: 'board',    labelKey: 'tasks.view.board',    fallback: 'Board',    icon: Columns3 },
+  { value: 'calendar', labelKey: 'tasks.view.calendar', fallback: 'Calendar', icon: CalendarDays },
+  { value: 'timeline', labelKey: 'tasks.view.timeline', fallback: 'Timeline', icon: SlidersHorizontal },
 ];
 
 // ── StatusTriggerContent ─────────────────────────────────────────────────────
 
 function StatusTriggerContent({ status }: { status: TaskStatus | 'ALL' }) {
+  const { t } = useLanguage();
   if (status === 'ALL') {
     return (
       <span className="flex items-center gap-1.5 text-muted-foreground">
         <Circle className="h-3.5 w-3.5 opacity-50" />
-        All statuses
+        {t('tasks.allStatuses', 'All statuses')}
       </span>
     );
   }
   const Icon = STATUS_ICON[status];
+  const label = getTaskStatusLabel(t, status);
   return (
     <span className={cn('flex items-center gap-1.5', taskStatusIconColor[status])}>
       <Icon className="h-3.5 w-3.5 shrink-0" />
-      {TASK_STATUS_LABEL[status]}
+      {label}
     </span>
   );
 }
@@ -87,11 +90,12 @@ function StatusTriggerContent({ status }: { status: TaskStatus | 'ALL' }) {
 // ── PriorityTriggerContent ───────────────────────────────────────────────────
 
 function PriorityTriggerContent({ priority }: { priority: TaskPriority | 'ALL' }) {
+  const { t } = useLanguage();
   if (priority === 'ALL') {
     return (
       <span className="flex items-center gap-1.5 text-muted-foreground">
         <Flag className="h-3.5 w-3.5 opacity-40" />
-        All priorities
+        {t('tasks.allPriorities', 'All priorities')}
       </span>
     );
   }
@@ -99,14 +103,15 @@ function PriorityTriggerContent({ priority }: { priority: TaskPriority | 'ALL' }
     return (
       <span className="flex items-center gap-1.5 text-muted-foreground">
         <span className="w-3.5 text-center text-sm leading-none opacity-40">—</span>
-        None
+        {t('tasks.none', 'None')}
       </span>
     );
   }
+  const label = getTaskPriorityLabel(t, priority);
   return (
     <span className={cn('flex items-center gap-1.5', taskPriorityIconColor[priority])}>
       <Flag className="h-3.5 w-3.5 shrink-0 fill-current" />
-      {TASK_PRIORITY_LABEL[priority]}
+      {label}
     </span>
   );
 }
@@ -128,11 +133,12 @@ export function TaskCommandBar({
   pageSize,
   onPageSizeChange,
 }: TaskCommandBarProps) {
+  const { t } = useLanguage();
   const [quickTitle, setQuickTitle] = useState('');
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const title = quickTitle.trim() || 'New task';
+    const title = quickTitle.trim() || t('tasks.newTask', 'New task');
     onCreateTask(title);
     setQuickTitle('');
   };
@@ -147,9 +153,9 @@ export function TaskCommandBar({
             type="search"
             value={search}
             onChange={(e: ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
-            placeholder="Search tasks"
+            placeholder={t('tasks.searchTasks', 'Search tasks')}
             className="h-8 rounded-md border-border bg-background pl-9 text-sm"
-            aria-label="Search tasks"
+            aria-label={t('tasks.searchTasks', 'Search tasks')}
           />
         </div>
 
@@ -158,23 +164,24 @@ export function TaskCommandBar({
             type="text"
             value={quickTitle}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setQuickTitle(e.target.value)}
-            placeholder="Quick add task"
+            placeholder={t('tasks.quickAdd', 'Quick add task')}
             className="h-8 rounded-md border-border bg-background text-sm"
-            aria-label="Quick add task title"
+            aria-label={t('tasks.quickAddTitle', 'Quick add task title')}
           />
           <Button type="submit" size="sm" className="h-8 gap-1">
             <Plus className="h-4 w-4" />
-            Add
+            {t('common.add', 'Add')}
           </Button>
         </form>
 
         <div
           className="ml-auto flex items-center gap-1 rounded-md border border-border bg-background p-0.5"
           role="tablist"
-          aria-label="Task views"
+          aria-label={t('tasks.views', 'Task views')}
         >
           {views.map((view) => {
             const Icon = view.icon;
+            const label = t(view.labelKey, view.fallback);
             return (
               <Button
                 key={view.value}
@@ -189,7 +196,7 @@ export function TaskCommandBar({
                 onClick={() => onViewChange(view.value)}
               >
                 <Icon className="h-3.5 w-3.5" />
-                {view.label}
+                {label}
               </Button>
             );
           })}
@@ -204,20 +211,21 @@ export function TaskCommandBar({
             <StatusTriggerContent status={status} />
           </SelectTrigger>
           <SelectContent className="w-44">
-            <SelectItem value="ALL" textValue="All statuses">
+            <SelectItem value="ALL" textValue={t('tasks.allStatuses', 'All statuses')}>
               <span className="flex items-center gap-2 text-muted-foreground">
                 <Circle className="h-3.5 w-3.5 opacity-40" />
-                All statuses
+                {t('tasks.allStatuses', 'All statuses')}
                 {status === 'ALL' && <Check className="ml-auto h-3.5 w-3.5 shrink-0" />}
               </span>
             </SelectItem>
             {TASK_STATUSES.map((s) => {
               const Icon = STATUS_ICON[s];
+              const label = getTaskStatusLabel(t, s);
               return (
-                <SelectItem key={s} value={s} textValue={TASK_STATUS_LABEL[s]}>
+                <SelectItem key={s} value={s} textValue={label}>
                   <span className={cn('flex items-center gap-2', taskStatusIconColor[s])}>
                     <Icon className="h-3.5 w-3.5 shrink-0" />
-                    {TASK_STATUS_LABEL[s]}
+                    {label}
                   </span>
                 </SelectItem>
               );
@@ -231,23 +239,23 @@ export function TaskCommandBar({
             <PriorityTriggerContent priority={priority} />
           </SelectTrigger>
           <SelectContent className="w-40">
-            <SelectItem value="ALL" textValue="All priorities">
+            <SelectItem value="ALL" textValue={t('tasks.allPriorities', 'All priorities')}>
               <span className="flex items-center gap-2 text-muted-foreground">
                 <Flag className="h-3.5 w-3.5 opacity-40" />
-                All priorities
+                {t('tasks.allPriorities', 'All priorities')}
               </span>
             </SelectItem>
             {TASK_PRIORITIES.map((p) => (
-              <SelectItem key={p} value={p} textValue={TASK_PRIORITY_LABEL[p]}>
+              <SelectItem key={p} value={p} textValue={getTaskPriorityLabel(t, p)}>
                 {p === 'NONE' ? (
                   <span className="flex items-center gap-2 text-muted-foreground">
                     <span className="w-3.5 text-center text-sm leading-none opacity-40">—</span>
-                    None
+                    {t('tasks.none', 'None')}
                   </span>
                 ) : (
                   <span className={cn('flex items-center gap-2', taskPriorityIconColor[p])}>
                     <Flag className="h-3.5 w-3.5 shrink-0 fill-current" />
-                    {TASK_PRIORITY_LABEL[p]}
+                    {getTaskPriorityLabel(t, p)}
                   </span>
                 )}
               </SelectItem>
@@ -262,16 +270,16 @@ export function TaskCommandBar({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="25">25 / page</SelectItem>
-              <SelectItem value="50">50 / page</SelectItem>
-              <SelectItem value="100">100 / page</SelectItem>
+              <SelectItem value="25">{t('common.perPage', '{count} / Seite', { count: 25 })}</SelectItem>
+              <SelectItem value="50">{t('common.perPage', '{count} / Seite', { count: 50 })}</SelectItem>
+              <SelectItem value="100">{t('common.perPage', '{count} / Seite', { count: 100 })}</SelectItem>
             </SelectContent>
           </Select>
         )}
 
         <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
-          {isFetching ? <span>Syncing…</span> : null}
-          {isStale ? <span className="text-warning">Stale</span> : <span>Live</span>}
+          {isFetching ? <span>{t('common.syncing', 'Synchronisiert...')}</span> : null}
+          {isStale ? <span className="text-warning">{t('common.stale', 'Stale')}</span> : <span>{t('common.live', 'Live')}</span>}
         </div>
       </div>
     </div>

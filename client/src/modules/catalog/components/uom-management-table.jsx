@@ -87,15 +87,15 @@ export function UomManagementTable() {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Delete unit &quot;{unit.code}&quot;?</AlertDialogTitle>
-                            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+                            <AlertDialogTitle>{t('catalog.units.deleteTitle', { code: unit.code })}</AlertDialogTitle>
+                            <AlertDialogDescription>{t('common.cannotUndo')}</AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                             <AlertDialogAction
                               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               onClick={() => deleteUnit.mutate(unit.code)}
-                            >Delete</AlertDialogAction>
+                            >{t('common.delete')}</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>

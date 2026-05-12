@@ -13,8 +13,10 @@ import { useDownloadDocument } from '../../hooks/useDocumentMutations';
 import { useComposeEmail } from '../../hooks/useEmailMutations';
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateType, documentData = {}, language = 'de' }) {
+  const { t } = useLanguage();
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailInit, setEmailInit] = useState({});
   const [preview, setPreview]     = useState(null);
@@ -66,18 +68,18 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold flex items-center gap-2">
-          <FileText className="h-4 w-4 text-muted-foreground" />Documents
+          <FileText className="h-4 w-4 text-muted-foreground" />{t('doctpl.documents')}
         </h4>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={handleGenerate} disabled={generate.isPending} className="gap-1.5">
             {generate.isPending
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
               : <Plus className="h-3.5 w-3.5" />}
-            Generate PDF
+            {t('doctpl.generatePdf')}
           </Button>
           {docs.length > 0 && (
             <Button size="sm" variant="outline" onClick={handleEmailOpen} className="gap-1.5">
-              <Mail className="h-3.5 w-3.5" />Send
+              <Mail className="h-3.5 w-3.5" />{t('common.send')}
             </Button>
           )}
         </div>
@@ -92,7 +94,7 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
 
       {emails.length > 0 && (
         <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">Email history</p>
+          <p className="text-xs font-medium text-muted-foreground">{t('doctpl.emailHistory')}</p>
           {emails.map(email => (
             <div key={email._id} className="flex items-center justify-between text-xs text-muted-foreground py-1 border-t border-border/50">
               <span className="truncate">{email.to?.join(', ')}</span>

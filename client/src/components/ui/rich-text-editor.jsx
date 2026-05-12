@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import {
@@ -51,6 +52,7 @@ function ToolbarGroup({ children }) {
 }
 
 function EditorToolbar({ editor }) {
+  const { t } = useLanguage();
   const [linkUrl, setLinkUrl] = useState('');
   const [linkOpen, setLinkOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
@@ -81,16 +83,16 @@ function EditorToolbar({ editor }) {
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b px-2 py-1.5">
       <ToolbarGroup>
-        <ToolbarButton pressed={editor.isActive('bold')} onPressedChange={() => editor.chain().focus().toggleBold().run()} title="Bold">
+        <ToolbarButton pressed={editor.isActive('bold')} onPressedChange={() => editor.chain().focus().toggleBold().run()} title={t('editor.bold', 'Bold')}>
           <Bold className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive('italic')} onPressedChange={() => editor.chain().focus().toggleItalic().run()} title="Italic">
+        <ToolbarButton pressed={editor.isActive('italic')} onPressedChange={() => editor.chain().focus().toggleItalic().run()} title={t('editor.italic', 'Italic')}>
           <Italic className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive('underline')} onPressedChange={() => editor.chain().focus().toggleUnderline().run()} title="Underline">
+        <ToolbarButton pressed={editor.isActive('underline')} onPressedChange={() => editor.chain().focus().toggleUnderline().run()} title={t('editor.underline', 'Underline')}>
           <UnderlineIcon className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive('strike')} onPressedChange={() => editor.chain().focus().toggleStrike().run()} title="Strikethrough">
+        <ToolbarButton pressed={editor.isActive('strike')} onPressedChange={() => editor.chain().focus().toggleStrike().run()} title={t('editor.strikethrough', 'Strikethrough')}>
           <Strikethrough className="h-3.5 w-3.5" />
         </ToolbarButton>
       </ToolbarGroup>
@@ -98,13 +100,13 @@ function EditorToolbar({ editor }) {
       <Separator orientation="vertical" className="h-5 mx-1" />
 
       <ToolbarGroup>
-        <ToolbarButton pressed={editor.isActive('heading', { level: 1 })} onPressedChange={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="Heading 1">
+        <ToolbarButton pressed={editor.isActive('heading', { level: 1 })} onPressedChange={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title={t('editor.heading1', 'Heading 1')}>
           <Heading1 className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive('heading', { level: 2 })} onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Heading 2">
+        <ToolbarButton pressed={editor.isActive('heading', { level: 2 })} onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title={t('editor.heading2', 'Heading 2')}>
           <Heading2 className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive('heading', { level: 3 })} onPressedChange={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="Heading 3">
+        <ToolbarButton pressed={editor.isActive('heading', { level: 3 })} onPressedChange={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title={t('editor.heading3', 'Heading 3')}>
           <Heading3 className="h-3.5 w-3.5" />
         </ToolbarButton>
       </ToolbarGroup>
@@ -112,13 +114,13 @@ function EditorToolbar({ editor }) {
       <Separator orientation="vertical" className="h-5 mx-1" />
 
       <ToolbarGroup>
-        <ToolbarButton pressed={editor.isActive('bulletList')} onPressedChange={() => editor.chain().focus().toggleBulletList().run()} title="Bullet List">
+        <ToolbarButton pressed={editor.isActive('bulletList')} onPressedChange={() => editor.chain().focus().toggleBulletList().run()} title={t('editor.bulletList', 'Bullet List')}>
           <List className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive('orderedList')} onPressedChange={() => editor.chain().focus().toggleOrderedList().run()} title="Ordered List">
+        <ToolbarButton pressed={editor.isActive('orderedList')} onPressedChange={() => editor.chain().focus().toggleOrderedList().run()} title={t('editor.orderedList', 'Ordered List')}>
           <ListOrdered className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive('taskList')} onPressedChange={() => editor.chain().focus().toggleTaskList().run()} title="Task List">
+        <ToolbarButton pressed={editor.isActive('taskList')} onPressedChange={() => editor.chain().focus().toggleTaskList().run()} title={t('editor.taskList', 'Task List')}>
           <ListChecks className="h-3.5 w-3.5" />
         </ToolbarButton>
       </ToolbarGroup>
@@ -126,16 +128,16 @@ function EditorToolbar({ editor }) {
       <Separator orientation="vertical" className="h-5 mx-1" />
 
       <ToolbarGroup>
-        <ToolbarButton pressed={editor.isActive('blockquote')} onPressedChange={() => editor.chain().focus().toggleBlockquote().run()} title="Quote">
+        <ToolbarButton pressed={editor.isActive('blockquote')} onPressedChange={() => editor.chain().focus().toggleBlockquote().run()} title={t('editor.quote', 'Quote')}>
           <Quote className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={false} onPressedChange={() => editor.chain().focus().setHorizontalRule().run()} title="Divider">
+        <ToolbarButton pressed={false} onPressedChange={() => editor.chain().focus().setHorizontalRule().run()} title={t('editor.divider', 'Divider')}>
           <Minus className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive('codeBlock')} onPressedChange={() => editor.chain().focus().toggleCodeBlock().run()} title="Code Block">
+        <ToolbarButton pressed={editor.isActive('codeBlock')} onPressedChange={() => editor.chain().focus().toggleCodeBlock().run()} title={t('editor.codeBlock', 'Code Block')}>
           <Code2 className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={false} onPressedChange={addTable} title="Table">
+        <ToolbarButton pressed={false} onPressedChange={addTable} title={t('editor.table', 'Table')}>
           <TableIcon className="h-3.5 w-3.5" />
         </ToolbarButton>
       </ToolbarGroup>
@@ -146,14 +148,14 @@ function EditorToolbar({ editor }) {
         <Popover open={linkOpen} onOpenChange={setLinkOpen}>
           <PopoverTrigger asChild>
             <div>
-              <ToolbarButton pressed={editor.isActive('link')} onPressedChange={() => setLinkOpen(true)} title="Link">
+              <ToolbarButton pressed={editor.isActive('link')} onPressedChange={() => setLinkOpen(true)} title={t('editor.link', 'Link')}>
                 <LinkIcon className="h-3.5 w-3.5" />
               </ToolbarButton>
             </div>
           </PopoverTrigger>
           <PopoverContent className="w-72 p-3" align="start">
             <div className="space-y-2">
-              <Label className="text-xs">URL</Label>
+              <Label className="text-xs">{t('editor.url', 'URL')}</Label>
               <Input
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
@@ -162,9 +164,9 @@ function EditorToolbar({ editor }) {
                 onKeyDown={(e) => e.key === 'Enter' && addLink()}
               />
               <div className="flex gap-2">
-                <Button size="sm" className="h-7" onClick={addLink}>Add</Button>
+                <Button size="sm" className="h-7" onClick={addLink}>{t('common.add', 'Add')}</Button>
                 {editor.isActive('link') && (
-                  <Button size="sm" variant="outline" className="h-7" onClick={() => { editor.chain().focus().unsetLink().run(); setLinkOpen(false); }}>Remove</Button>
+                  <Button size="sm" variant="outline" className="h-7" onClick={() => { editor.chain().focus().unsetLink().run(); setLinkOpen(false); }}>{t('common.remove', 'Remove')}</Button>
                 )}
               </div>
             </div>
@@ -173,14 +175,14 @@ function EditorToolbar({ editor }) {
         <Popover open={imageOpen} onOpenChange={setImageOpen}>
           <PopoverTrigger asChild>
             <div>
-              <ToolbarButton pressed={false} onPressedChange={() => setImageOpen(true)} title="Image">
+              <ToolbarButton pressed={false} onPressedChange={() => setImageOpen(true)} title={t('editor.image', 'Image')}>
                 <ImageIcon className="h-3.5 w-3.5" />
               </ToolbarButton>
             </div>
           </PopoverTrigger>
           <PopoverContent className="w-72 p-3" align="start">
             <div className="space-y-2">
-              <Label className="text-xs">Image URL</Label>
+              <Label className="text-xs">{t('editor.imageUrl', 'Image URL')}</Label>
               <Input
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
@@ -188,7 +190,7 @@ function EditorToolbar({ editor }) {
                 className="h-8"
                 onKeyDown={(e) => e.key === 'Enter' && addImage()}
               />
-              <Button size="sm" className="h-7" onClick={addImage}>Insert</Button>
+              <Button size="sm" className="h-7" onClick={addImage}>{t('common.insert', 'Insert')}</Button>
             </div>
           </PopoverContent>
         </Popover>
@@ -197,16 +199,16 @@ function EditorToolbar({ editor }) {
       <Separator orientation="vertical" className="h-5 mx-1" />
 
       <ToolbarGroup>
-        <ToolbarButton pressed={editor.isActive({ textAlign: 'left' })} onPressedChange={() => editor.chain().focus().setTextAlign('left').run()} title="Align Left">
+        <ToolbarButton pressed={editor.isActive({ textAlign: 'left' })} onPressedChange={() => editor.chain().focus().setTextAlign('left').run()} title={t('editor.alignLeft', 'Align Left')}>
           <AlignLeft className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive({ textAlign: 'center' })} onPressedChange={() => editor.chain().focus().setTextAlign('center').run()} title="Align Center">
+        <ToolbarButton pressed={editor.isActive({ textAlign: 'center' })} onPressedChange={() => editor.chain().focus().setTextAlign('center').run()} title={t('editor.alignCenter', 'Align Center')}>
           <AlignCenter className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive({ textAlign: 'right' })} onPressedChange={() => editor.chain().focus().setTextAlign('right').run()} title="Align Right">
+        <ToolbarButton pressed={editor.isActive({ textAlign: 'right' })} onPressedChange={() => editor.chain().focus().setTextAlign('right').run()} title={t('editor.alignRight', 'Align Right')}>
           <AlignRight className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={editor.isActive({ textAlign: 'justify' })} onPressedChange={() => editor.chain().focus().setTextAlign('justify').run()} title="Justify">
+        <ToolbarButton pressed={editor.isActive({ textAlign: 'justify' })} onPressedChange={() => editor.chain().focus().setTextAlign('justify').run()} title={t('editor.justify', 'Justify')}>
           <AlignJustify className="h-3.5 w-3.5" />
         </ToolbarButton>
       </ToolbarGroup>
@@ -214,10 +216,10 @@ function EditorToolbar({ editor }) {
       <Separator orientation="vertical" className="h-5 mx-1" />
 
       <ToolbarGroup>
-        <ToolbarButton pressed={false} onPressedChange={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo">
+        <ToolbarButton pressed={false} onPressedChange={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title={t('common.undo', 'Undo')}>
           <Undo2 className="h-3.5 w-3.5" />
         </ToolbarButton>
-        <ToolbarButton pressed={false} onPressedChange={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo">
+        <ToolbarButton pressed={false} onPressedChange={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title={t('common.redo', 'Redo')}>
           <Redo2 className="h-3.5 w-3.5" />
         </ToolbarButton>
       </ToolbarGroup>

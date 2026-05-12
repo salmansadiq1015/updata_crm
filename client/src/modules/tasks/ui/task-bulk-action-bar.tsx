@@ -10,21 +10,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ConfirmDialog } from './confirm-dialog';
-
-const STATUSES = [
-  { value: 'OPEN', label: 'To do' },
-  { value: 'IN_PROGRESS', label: 'In Progress' },
-  { value: 'COMPLETED', label: 'Complete' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-];
-
-const PRIORITIES = [
-  { value: 'NONE', label: 'None' },
-  { value: 'LOW', label: 'Low' },
-  { value: 'MEDIUM', label: 'Medium' },
-  { value: 'HIGH', label: 'High' },
-  { value: 'URGENT', label: 'Urgent' },
-];
+import { useLanguage } from '@/lib/i18n/language-context';
+import { TASK_PRIORITIES, TASK_STATUSES, getTaskPriorityLabel, getTaskStatusLabel } from './task-ui-constants';
 
 type TaskBulkActionBarProps = {
   selectedIds: string[];
@@ -41,6 +28,7 @@ export function TaskBulkActionBar({
   onDelete,
   onClear,
 }: TaskBulkActionBarProps) {
+  const { t } = useLanguage();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (selectedIds.length === 0) return null;
@@ -49,16 +37,16 @@ export function TaskBulkActionBar({
     <>
     <ConfirmDialog
       open={confirmOpen}
-      title="Delete tasks"
-      description={`Delete ${selectedIds.length} task${selectedIds.length === 1 ? '' : 's'}? This action cannot be undone.`}
-      confirmLabel="Delete"
+      title={t('tasks.deleteSelectedTitle', 'Aufgaben loeschen')}
+      description={t('tasks.deleteSelectedDesc', '{count} Aufgabe(n) loeschen? Diese Aktion kann nicht rueckgaengig gemacht werden.', { count: selectedIds.length })}
+      confirmLabel={t('common.delete', 'Loeschen')}
       destructive
       onConfirm={() => { setConfirmOpen(false); onDelete(); }}
       onCancel={() => setConfirmOpen(false)}
     />
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl border border-border bg-card shadow-2xl px-4 py-2.5 animate-in slide-in-from-bottom-2">
       <span className="text-sm font-medium text-foreground whitespace-nowrap">
-        {selectedIds.length} selected
+        {t('common.selectedCountShort', '{count} ausgewaehlt', { count: selectedIds.length })}
       </span>
 
       <div className="w-px h-5 bg-border mx-1" />
@@ -67,13 +55,13 @@ export function TaskBulkActionBar({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
-            Status
+            {t('tasks.status', 'Status')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
-          {STATUSES.map((s) => (
-            <DropdownMenuItem key={s.value} onClick={() => onStatusChange(s.value)}>
-              {s.label}
+          {TASK_STATUSES.map((status) => (
+            <DropdownMenuItem key={status} onClick={() => onStatusChange(status)}>
+              {getTaskStatusLabel(t, status)}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -83,13 +71,13 @@ export function TaskBulkActionBar({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
-            Priority
+            {t('tasks.priority', 'Prioritaet')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
-          {PRIORITIES.map((p) => (
-            <DropdownMenuItem key={p.value} onClick={() => onPriorityChange(p.value)}>
-              {p.label}
+          {TASK_PRIORITIES.map((priority) => (
+            <DropdownMenuItem key={priority} onClick={() => onPriorityChange(priority)}>
+              {getTaskPriorityLabel(t, priority)}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -105,7 +93,7 @@ export function TaskBulkActionBar({
         onClick={() => setConfirmOpen(true)}
       >
         <Trash2 className="h-3.5 w-3.5" />
-        Delete
+        {t('common.delete', 'Loeschen')}
       </Button>
 
       {/* Clear selection */}
@@ -114,7 +102,7 @@ export function TaskBulkActionBar({
         size="icon"
         className="h-7 w-7"
         onClick={onClear}
-        aria-label="Clear selection"
+        aria-label={t('common.clearSelection', 'Auswahl aufheben')}
       >
         <X className="h-4 w-4" />
       </Button>

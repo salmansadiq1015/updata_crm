@@ -51,10 +51,10 @@ export function TextBlockTable() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead className="w-28">Price (CHF)</TableHead>
-              <TableHead className="w-24">Status</TableHead>
+              <TableHead>{t('common.title')}</TableHead>
+              <TableHead>{t('common.category')}</TableHead>
+              <TableHead className="w-28">{t('catalog.priceChf')}</TableHead>
+              <TableHead className="w-24">{t('common.status')}</TableHead>
               <TableHead className="w-20" />
             </TableRow>
           </TableHeader>
@@ -94,7 +94,7 @@ export function TextBlockTable() {
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                           <AlertDialogAction
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             onClick={() => deleteTextBlock.mutate(block._id)}

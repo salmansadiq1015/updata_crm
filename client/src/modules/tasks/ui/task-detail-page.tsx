@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { taskApi } from '../services/task-api';
@@ -24,7 +25,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import type { Task, TaskPatch } from '../types/task-types';
 import {
   TASK_STATUSES, TASK_PRIORITIES,
-  TASK_STATUS_LABEL, TASK_PRIORITY_LABEL,
+  getTaskPriorityLabel, getTaskStatusLabel,
   taskStatusClass, taskPriorityClass,
   taskStatusIconColor, taskPriorityIconColor,
 } from './task-ui-constants';
@@ -56,6 +57,7 @@ type TaskDetailPageProps = {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
+  const { t } = useLanguage();
   const router = useRouter();
   const qc = useQueryClient();
   const currentUserId = useAuthStore((s: any) => s.user?._id ?? s.user?.id ?? null);
@@ -82,7 +84,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
     onSuccess: (updated) => {
       qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
     },
-    onError: () => toast.error('Failed to update task'),
+    onError: () => toast.error(t('tasks.updateFailed')),
   });
 
   const patch = (p: TaskPatch) => {
@@ -109,7 +111,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   const handleDuplicate = async () => {
     if (!task) return;
     const dup = await taskApi.duplicate(task.id);
-    toast.success('Task duplicated');
+    toast.success(t('tasks.duplicated'));
     router.push(`/tasks/${listId}/${dup.id}`);
   };
 
@@ -130,9 +132,9 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   if (!task) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-muted-foreground">Task not found.</p>
+        <p className="text-muted-foreground">{t('tasks.notFound')}</p>
         <Button variant="outline" onClick={() => router.push(`/tasks/${listId}`)}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to list
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t('tasks.backToList')}
         </Button>
       </div>
     );
@@ -149,20 +151,20 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           onClick={() => router.push(`/tasks/${listId}`)}
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          {t('common.back')}
         </Button>
         <div className="h-4 w-px bg-border" />
         <nav className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span>Tasks</span>
+          <span>{t('tasks.title')}</span>
           <span>/</span>
-          <span className="truncate max-w-32">List</span>
+          <span className="truncate max-w-32">{t('tasks.list')}</span>
           <span>/</span>
           <span className="truncate max-w-48 font-medium text-foreground">{task.title}</span>
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleDuplicate}>
             <Copy className="h-3.5 w-3.5" />
-            Duplicate
+            {t('common.duplicate')}
           </Button>
         </div>
       </header>
@@ -175,7 +177,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           <div className="mb-6">
             <TaskInlineField
               value={task.title}
-              ariaLabel="Edit task title"
+              ariaLabel={t('tasks.editTitle')}
               className="block w-full text-left text-2xl font-bold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
               onCommit={(title) => patch({ title })}
             />
@@ -184,20 +186,20 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           {/* Description */}
           <section className="mb-8">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Description
+              {t('common.description')}
             </h3>
             {descEditMode ? (
               <div className="space-y-2">
                 <RichTextEditor
                   value={descDraft}
                   onChange={setDescDraft}
-                  placeholder="Add a description…"
+                  placeholder={t('tasks.addDescription')}
                   minHeight={160}
                   maxLength={10000}
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" className="h-7 text-xs" onClick={saveDesc}>Save</Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setDescEditMode(false)}>Cancel</Button>
+                  <Button size="sm" className="h-7 text-xs" onClick={saveDesc}>{t('common.save')}</Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setDescEditMode(false)}>{t('common.cancel')}</Button>
                 </div>
               </div>
             ) : (
@@ -214,7 +216,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                     dangerouslySetInnerHTML={{ __html: task.description }}
                   />
                 ) : (
-                  <p className="text-muted-foreground/60 italic">Click to add a description…</p>
+                  <p className="text-muted-foreground/60 italic">{t('tasks.clickAddDescription')}</p>
                 )}
               </div>
             )}
@@ -248,12 +250,12 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
 
         {/* Right — properties sidebar */}
         <aside className="w-72 shrink-0 overflow-y-auto border-l border-border bg-card px-4 py-6 scrollbar-thin">
-          <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Properties</h3>
+          <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t('tasks.properties')}</h3>
 
           <div className="space-y-3">
             {/* Status */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Status</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('tasks.status')}</label>
               <Select value={task.status} onValueChange={(v) => patch({ status: v as Task['status'] })}>
                 <SelectTrigger className={cn('h-8 gap-1.5 text-xs font-semibold border', taskStatusClass[task.status])}>
                   {(() => { const Icon = STATUS_ICON[task.status]; return <Icon className="h-3.5 w-3.5 shrink-0" />; })()}
@@ -263,10 +265,10 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                   {TASK_STATUSES.map((s) => {
                     const Icon = STATUS_ICON[s];
                     return (
-                      <SelectItem key={s} value={s} textValue={TASK_STATUS_LABEL[s]}>
+                      <SelectItem key={s} value={s} textValue={getTaskStatusLabel(t, s)}>
                         <span className={cn('flex items-center gap-2', taskStatusIconColor[s])}>
                           <Icon className="h-3.5 w-3.5 shrink-0" />
-                          {TASK_STATUS_LABEL[s]}
+                          {getTaskStatusLabel(t, s)}
                         </span>
                       </SelectItem>
                     );
@@ -277,7 +279,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
 
             {/* Priority */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Priority</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('tasks.priority')}</label>
               <Select value={task.priority} onValueChange={(v) => patch({ priority: v as Task['priority'] })}>
                 <SelectTrigger className={cn('h-8 gap-1.5 text-xs font-semibold border', taskPriorityClass[task.priority])}>
                   {task.priority !== 'NONE'
@@ -287,12 +289,12 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                 </SelectTrigger>
                 <SelectContent>
                   {TASK_PRIORITIES.map((p) => (
-                    <SelectItem key={p} value={p} textValue={TASK_PRIORITY_LABEL[p]}>
+                    <SelectItem key={p} value={p} textValue={getTaskPriorityLabel(t, p)}>
                       <span className={cn('flex items-center gap-2', p === 'NONE' ? 'text-muted-foreground' : taskPriorityIconColor[p])}>
                         {p !== 'NONE'
                           ? <Flag className="h-3.5 w-3.5 shrink-0 fill-current" />
                           : <span className="text-muted-foreground/40 w-3.5 text-center">—</span>}
-                        {TASK_PRIORITY_LABEL[p]}
+                        {getTaskPriorityLabel(t, p)}
                       </span>
                     </SelectItem>
                   ))}
@@ -302,7 +304,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
 
             {/* Assignee */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Assignee</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('tasks.assignee')}</label>
               <AssigneeSelector
                 assigneeId={task.assigneeId ?? null}
                 users={users}
@@ -313,7 +315,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
 
             {/* Start date */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Start date</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('tasks.startDate')}</label>
               <button
                 type="button"
                 className="flex w-full items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
@@ -321,7 +323,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
               >
                 <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className={task.startDate ? 'font-medium' : 'text-muted-foreground text-xs'}>
-                  {formatDate(task.startDate, 'Set date')}
+                  {formatDate(task.startDate, t('tasks.setDate'))}
                 </span>
                 <input
                   ref={startInputRef}
@@ -335,7 +337,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
 
             {/* Due date */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Due date</label>
+              <label className="text-xs font-medium text-muted-foreground">{t('tasks.dueDate')}</label>
               <button
                 type="button"
                 className="flex w-full items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
@@ -343,7 +345,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
               >
                 <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className={task.dueDate ? 'font-medium' : 'text-muted-foreground text-xs'}>
-                  {formatDate(task.dueDate, 'Set date')}
+                  {formatDate(task.dueDate, t('tasks.setDate'))}
                 </span>
                 <input
                   ref={dueInputRef}

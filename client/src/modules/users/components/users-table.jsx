@@ -216,7 +216,7 @@ export function UsersTable() {
       size: 160,
       Cell: ({ row }) => {
         const d = row.original.lastLoginAt || row.original.lastLogin;
-        if (!d) return <span className="text-xs text-muted-foreground/60 italic">Nie</span>;
+        if (!d) return <span className="text-xs text-muted-foreground/60 italic">{t('common.never')}</span>;
         return (
           <span className="text-xs text-muted-foreground">
             {new Date(d).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
@@ -347,7 +347,7 @@ export function UsersTable() {
       <div className="flex items-center gap-3 flex-wrap rounded-xl border border-border/40 bg-card/50 px-4 py-3">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Filter className="h-3.5 w-3.5" />
-          <span className="text-xs font-semibold uppercase tracking-wider">Filter</span>
+          <span className="text-xs font-semibold uppercase tracking-wider">{t('common.filter')}</span>
         </div>
 
         <div className="w-px h-5 bg-border/60" />
@@ -497,7 +497,7 @@ export function UsersTable() {
                         </Link>
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Anzeigen</TooltipContent>
+                    <TooltipContent>{t('common.view')}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
 
@@ -509,7 +509,7 @@ export function UsersTable() {
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Bearbeiten</TooltipContent>
+                      <TooltipContent>{t('common.edit')}</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </PermissionGate>
@@ -530,7 +530,7 @@ export function UsersTable() {
                           }
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{isActive ? 'Deaktivieren' : 'Aktivieren'}</TooltipContent>
+                      <TooltipContent>{isActive ? t('users.deactivate') : t('users.activate')}</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </PermissionGate>
@@ -586,6 +586,7 @@ export function UsersTable() {
 
 /* ── Card Grid View ── */
 function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlobalFilterChange }) {
+  const { t } = useLanguage();
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -593,7 +594,7 @@ function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlob
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
             className="w-full h-9 pl-9 pr-3 rounded-lg border border-border/60 bg-muted/40 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all"
-            placeholder="Benutzer suchen..."
+            placeholder={t('users.search')}
             disabled
           />
         </div>
@@ -627,7 +628,7 @@ function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlob
           value={globalFilter}
           onChange={(e) => onGlobalFilterChange(e.target.value)}
           className="w-full h-9 pl-9 pr-3 rounded-lg border border-border/60 bg-muted/40 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all"
-          placeholder="Benutzer suchen..."
+          placeholder={t('users.search')}
         />
       </div>
 
@@ -635,7 +636,7 @@ function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlob
       {users.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <Users className="h-10 w-10 opacity-30 mb-3" />
-          <p className="text-sm font-medium">Keine Benutzer gefunden</p>
+          <p className="text-sm font-medium">{t('common.noUsers')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -654,6 +655,7 @@ function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlob
 }
 
 function UserCard({ user, onEdit, onToggle }) {
+  const { t } = useLanguage();
   const initials = `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase();
   const status = statusConfig[user.status] || statusConfig.active;
   const isActive = user.status === 'active' || user.isActive;
@@ -695,18 +697,18 @@ function UserCard({ user, onEdit, onToggle }) {
               <DropdownMenuItem asChild>
                 <Link href={`/settings/users/${user._id}`} className="gap-2">
                   <Eye className="h-3.5 w-3.5" />
-                  Anzeigen
+                  {t('common.view')}
                 </Link>
               </DropdownMenuItem>
               <PermissionGate permission="users:write">
                 <DropdownMenuItem onClick={onEdit} className="gap-2">
                   <Pencil className="h-3.5 w-3.5" />
-                  Bearbeiten
+                  {t('common.edit')}
                 </DropdownMenuItem>
               </PermissionGate>
               <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(user.email); showSuccess('E-Mail kopiert'); }} className="gap-2">
                 <Copy className="h-3.5 w-3.5" />
-                E-Mail kopieren
+                {t('users.copyEmail')}
               </DropdownMenuItem>
               <PermissionGate permission="users:admin">
                 <DropdownMenuSeparator />
@@ -715,7 +717,7 @@ function UserCard({ user, onEdit, onToggle }) {
                   className={cn('gap-2', isActive ? 'text-destructive focus:text-destructive' : 'text-emerald-600 focus:text-emerald-600')}
                 >
                   {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                  {isActive ? 'Deaktivieren' : 'Aktivieren'}
+                  {isActive ? t('users.deactivate') : t('users.activate')}
                 </DropdownMenuItem>
               </PermissionGate>
             </DropdownMenuContent>

@@ -1,7 +1,7 @@
 'use client';
 
-import { cn } from '@/lib/utils';
 import { Zap } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export function LoadingSpinner({ className, size = 'default' }) {
   const sizeClass = { sm: 'h-4 w-4', default: 'h-6 w-6', lg: 'h-10 w-10' }[size];
@@ -9,288 +9,315 @@ export function LoadingSpinner({ className, size = 'default' }) {
 
   return (
     <div className={cn('flex items-center justify-center', className)}>
-      <div className="relative">
-        <div className={cn('rounded-full border-2 border-muted border-t-primary animate-spin', ringSize)} />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Zap className={cn('text-primary', sizeClass)} />
-        </div>
+      <div className="relative grid place-items-center">
+        <div className={cn('rounded-full border border-primary/20 bg-primary/5 shadow-[0_0_24px_rgb(123_104_238_/_0.18)]', ringSize)} />
+        <div className={cn('absolute rounded-full border-2 border-transparent border-t-primary border-r-cyan-300 animate-spin', ringSize)} />
+        <Zap className={cn('absolute text-primary drop-shadow-[0_0_10px_rgb(123_104_238_/_0.55)]', sizeClass)} />
       </div>
     </div>
   );
 }
 
-// Fixed particle positions — no Math.random() to avoid hydration mismatch
-const PARTICLES = [
-  { id: 0,  x: 7,  y: 14, s: 2,   delay: 0,   dur: 6.2, c: '#7B61FF' },
-  { id: 1,  x: 91, y: 21, s: 1.5, delay: 1.1, dur: 7.4, c: '#00D4FF' },
-  { id: 2,  x: 14, y: 76, s: 2.5, delay: 2.3, dur: 5.1, c: '#9F7AEA' },
-  { id: 3,  x: 86, y: 67, s: 1,   delay: 0.5, dur: 8.3, c: '#7B61FF' },
-  { id: 4,  x: 44, y: 7,  s: 2,   delay: 3.1, dur: 6.7, c: '#00D4FF' },
-  { id: 5,  x: 56, y: 93, s: 1.5, delay: 1.7, dur: 7.1, c: '#9F7AEA' },
-  { id: 6,  x: 27, y: 41, s: 1,   delay: 2.6, dur: 5.8, c: '#7B61FF' },
-  { id: 7,  x: 73, y: 37, s: 2,   delay: 0.9, dur: 6.4, c: '#00D4FF' },
-  { id: 8,  x: 4,  y: 56, s: 1.5, delay: 3.7, dur: 7.9, c: '#9F7AEA' },
-  { id: 9,  x: 96, y: 44, s: 2,   delay: 1.3, dur: 5.3, c: '#7B61FF' },
-  { id: 10, x: 34, y: 89, s: 1,   delay: 4.2, dur: 8.1, c: '#00D4FF' },
-  { id: 11, x: 66, y: 11, s: 2.5, delay: 0.4, dur: 6.0, c: '#9F7AEA' },
-  { id: 12, x: 21, y: 24, s: 1.5, delay: 2.0, dur: 7.2, c: '#7B61FF' },
-  { id: 13, x: 79, y: 81, s: 2,   delay: 1.9, dur: 5.6, c: '#00D4FF' },
-  { id: 14, x: 11, y: 91, s: 2.5, delay: 0.8, dur: 7.0, c: '#9F7AEA' },
-  { id: 15, x: 89, y: 9,  s: 1.5, delay: 2.4, dur: 8.2, c: '#7B61FF' },
-  { id: 16, x: 41, y: 61, s: 2,   delay: 4.6, dur: 5.0, c: '#00D4FF' },
-  { id: 17, x: 63, y: 73, s: 1,   delay: 1.6, dur: 6.6, c: '#9F7AEA' },
-  { id: 18, x: 24, y: 4,  s: 2,   delay: 3.3, dur: 7.7, c: '#7B61FF' },
-  { id: 19, x: 52, y: 48, s: 1.5, delay: 0.2, dur: 5.9, c: '#00D4FF' },
-];
-
-const KEYFRAMES = `
-  @keyframes pl-float {
-    0%, 100% { transform: translateY(0px) translateX(0px); }
-    33%  { transform: translateY(-14px) translateX(6px); }
-    66%  { transform: translateY(7px)  translateX(-5px); }
+const LOADER_STYLES = `
+  @keyframes mb-shell-in {
+    from { opacity: 0; transform: translateY(18px) scale(0.96); filter: blur(8px); }
+    to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
   }
-  @keyframes pl-orbit-a {
-    from { transform: perspective(500px) rotateX(72deg) rotateZ(0deg); }
-    to   { transform: perspective(500px) rotateX(72deg) rotateZ(360deg); }
+  @keyframes mb-stage {
+    0%, 100% { transform: rotateX(58deg) rotateZ(-18deg) translateY(0); }
+    50% { transform: rotateX(62deg) rotateZ(-14deg) translateY(-8px); }
   }
-  @keyframes pl-orbit-b {
-    from { transform: perspective(500px) rotateX(72deg) rotateZ(60deg); }
-    to   { transform: perspective(500px) rotateX(72deg) rotateZ(-300deg); }
+  @keyframes mb-cube {
+    from { transform: rotateX(-18deg) rotateY(0deg) rotateZ(45deg); }
+    to { transform: rotateX(-18deg) rotateY(360deg) rotateZ(45deg); }
   }
-  @keyframes pl-orbit-c {
-    from { transform: perspective(500px) rotateX(72deg) rotateZ(120deg); }
-    to   { transform: perspective(500px) rotateX(72deg) rotateZ(480deg); }
+  @keyframes mb-ring-spin {
+    from { transform: rotateX(64deg) rotateZ(0deg); }
+    to { transform: rotateX(64deg) rotateZ(360deg); }
   }
-  @keyframes pl-pulse-out {
-    0%   { transform: scale(1);   opacity: 0.35; }
-    100% { transform: scale(2.6); opacity: 0; }
+  @keyframes mb-ring-spin-reverse {
+    from { transform: rotateX(68deg) rotateZ(360deg); }
+    to { transform: rotateX(68deg) rotateZ(0deg); }
   }
-  @keyframes pl-glow {
-    0%, 100% { box-shadow: 0 0 28px rgba(123,97,255,0.55), 0 0 60px rgba(123,97,255,0.18), inset 0 1px 0 rgba(255,255,255,0.22); }
-    50%       { box-shadow: 0 0 48px rgba(123,97,255,0.80), 0 0 90px rgba(123,97,255,0.30), inset 0 1px 0 rgba(255,255,255,0.28); }
+  @keyframes mb-lift {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
   }
-  @keyframes pl-icon {
-    0%, 100% { filter: drop-shadow(0 0 6px rgba(255,255,255,0.9)); }
-    50%       { filter: drop-shadow(0 0 18px rgba(255,255,255,1)) drop-shadow(0 0 34px rgba(123,97,255,0.8)); }
+  @keyframes mb-scan {
+    from { transform: translateX(-110%); }
+    to { transform: translateX(110%); }
   }
-  @keyframes pl-shimmer {
-    0%   { background-position: -250% center; }
-    100% { background-position: 250% center; }
+  @keyframes mb-grid {
+    from { background-position: 0 0, 0 0; }
+    to { background-position: 80px 40px, -80px -40px; }
   }
-  @keyframes pl-blink {
-    0%, 100% { opacity: 0.45; }
-    50%       { opacity: 0.75; }
+  @keyframes mb-progress {
+    0% { transform: translateX(-92%) scaleX(0.28); }
+    35% { transform: translateX(-38%) scaleX(0.72); }
+    70% { transform: translateX(12%) scaleX(0.42); }
+    100% { transform: translateX(92%) scaleX(0.28); }
   }
-  @keyframes pl-bar {
-    0%   { width: 0%; }
-    15%  { width: 18%; }
-    35%  { width: 38%; }
-    55%  { width: 56%; }
-    75%  { width: 70%; }
-    90%  { width: 80%; }
-    100% { width: 84%; }
+  @keyframes mb-text-shine {
+    from { background-position: 220% center; }
+    to { background-position: -220% center; }
   }
-  @keyframes pl-fade-up {
-    from { opacity: 0; transform: translateY(14px); }
-    to   { opacity: 1; transform: translateY(0); }
+  @keyframes mb-status {
+    0%, 100% { opacity: 0.52; }
+    50% { opacity: 0.92; }
   }
-  @keyframes pl-blob-1 {
-    0%, 100% { transform: translate(0,   0)   scale(1); }
-    40%       { transform: translate(32px,-22px) scale(1.1); }
-    70%       { transform: translate(-18px,14px) scale(0.95); }
-  }
-  @keyframes pl-blob-2 {
-    0%, 100% { transform: translate(0,   0)   scale(1); }
-    35%       { transform: translate(-28px,20px) scale(1.05); }
-    65%       { transform: translate(16px,-12px) scale(1.1); }
-  }
-  .pl-ring {
-    position: absolute; inset: 0; margin: auto;
-    border-radius: 50%;
-    border: 1.5px solid transparent;
-  }
-  .pl-ring-a {
-    width: 168px; height: 168px;
+  .mb-loader-root {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: white;
     background:
-      linear-gradient(#080E1C, #080E1C) padding-box,
-      linear-gradient(145deg, #7B61FF 0%, #00D4FF 45%, transparent 70%) border-box;
-    animation: pl-orbit-a 4.2s linear infinite;
+      radial-gradient(circle at 50% 42%, rgba(124, 97, 255, 0.18), transparent 24rem),
+      linear-gradient(135deg, #070913 0%, #101827 42%, #070b15 100%);
   }
-  .pl-ring-b {
-    width: 134px; height: 134px;
+  .mb-loader-root::before {
+    content: "";
+    position: absolute;
+    inset: -20%;
+    opacity: 0.48;
     background:
-      linear-gradient(#080E1C, #080E1C) padding-box,
-      linear-gradient(235deg, #00D4FF 0%, #9F7AEA 50%, transparent 70%) border-box;
-    animation: pl-orbit-b 3.1s linear infinite;
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(0deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 80px 80px;
+    mask-image: radial-gradient(circle at center, black 0%, transparent 68%);
+    animation: mb-grid 18s linear infinite;
   }
-  .pl-ring-c {
-    width: 104px; height: 104px;
+  .mb-loader-root::after {
+    content: "";
+    position: absolute;
+    inset: 0;
     background:
-      linear-gradient(#080E1C, #080E1C) padding-box,
-      linear-gradient(325deg, #9F7AEA 0%, #7B61FF 45%, transparent 70%) border-box;
-    animation: pl-orbit-c 5.4s linear infinite;
+      linear-gradient(115deg, transparent 0%, rgba(123,104,238,0.12) 34%, transparent 52%),
+      linear-gradient(245deg, transparent 0%, rgba(20,184,166,0.10) 30%, transparent 56%),
+      linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.04) 100%);
+    pointer-events: none;
   }
-  .pl-shimmer {
-    background: linear-gradient(
-      90deg,
-      #c8bfff 0%,
-      #ffffff 20%,
-      #7B61FF 38%,
-      #ffffff 50%,
-      #00D4FF 62%,
-      #ffffff 78%,
-      #c8bfff 100%
-    );
-    background-size: 220% auto;
+  .mb-loader-card {
+    position: relative;
+    width: min(420px, calc(100vw - 48px));
+    padding: 36px 34px 32px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.105), rgba(255,255,255,0.045));
+    box-shadow:
+      0 34px 90px rgba(0,0,0,0.52),
+      inset 0 1px 0 rgba(255,255,255,0.14);
+    backdrop-filter: blur(18px);
+    animation: mb-shell-in 0.7s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .mb-loader-card::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: 27px;
+    background: linear-gradient(120deg, rgba(255,255,255,0.16), transparent 34%, rgba(123,104,238,0.10));
+    pointer-events: none;
+  }
+  .mb-loader-scan {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .mb-loader-scan::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 42%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.16), transparent);
+    animation: mb-scan 3.4s linear infinite;
+  }
+  .mb-loader-scene {
+    position: relative;
+    height: 190px;
+    display: grid;
+    place-items: center;
+    perspective: 900px;
+  }
+  .mb-loader-platform {
+    position: absolute;
+    width: 210px;
+    height: 210px;
+    border-radius: 42px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02)),
+      radial-gradient(circle, rgba(123,104,238,0.38), transparent 58%);
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 24px 80px rgba(5,8,16,0.56);
+    transform-style: preserve-3d;
+    animation: mb-stage 5.5s ease-in-out infinite;
+  }
+  .mb-loader-platform::after {
+    content: "";
+    position: absolute;
+    inset: 28px;
+    border-radius: 30px;
+    border: 1px solid rgba(255,255,255,0.13);
+  }
+  .mb-loader-ring {
+    position: absolute;
+    width: 148px;
+    height: 148px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: inset 0 0 28px rgba(123,104,238,0.18), 0 0 30px rgba(45,212,191,0.10);
+  }
+  .mb-loader-ring.one {
+    border-top-color: rgba(139, 92, 246, 0.95);
+    border-right-color: rgba(45, 212, 191, 0.78);
+    animation: mb-ring-spin 3.8s linear infinite;
+  }
+  .mb-loader-ring.two {
+    width: 112px;
+    height: 112px;
+    border-left-color: rgba(99,102,241,0.88);
+    border-bottom-color: rgba(34,211,238,0.74);
+    animation: mb-ring-spin-reverse 2.7s linear infinite;
+  }
+  .mb-loader-core {
+    position: relative;
+    width: 82px;
+    height: 82px;
+    transform-style: preserve-3d;
+    animation: mb-lift 3s ease-in-out infinite;
+  }
+  .mb-loader-cube {
+    position: absolute;
+    inset: 16px;
+    transform-style: preserve-3d;
+    animation: mb-cube 5.2s linear infinite;
+  }
+  .mb-loader-face {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 14px;
+    background:
+      linear-gradient(145deg, rgba(167,139,250,0.92), rgba(79,70,229,0.82)),
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,0.38), transparent 42%);
+    box-shadow: 0 0 30px rgba(123,104,238,0.48);
+  }
+  .mb-loader-front { transform: translateZ(25px); }
+  .mb-loader-back { transform: rotateY(180deg) translateZ(25px); opacity: 0.58; }
+  .mb-loader-right { transform: rotateY(90deg) translateZ(25px); opacity: 0.72; }
+  .mb-loader-left { transform: rotateY(-90deg) translateZ(25px); opacity: 0.72; }
+  .mb-loader-top { transform: rotateX(90deg) translateZ(25px); opacity: 0.86; }
+  .mb-loader-bottom { transform: rotateX(-90deg) translateZ(25px); opacity: 0.56; }
+  .mb-loader-zap {
+    width: 23px;
+    height: 23px;
+    color: white;
+    filter: drop-shadow(0 0 12px rgba(255,255,255,0.85));
+  }
+  .mb-loader-title {
+    margin: 22px 0 0;
+    text-align: center;
+    font-size: 22px;
+    line-height: 1;
+    font-weight: 850;
+    letter-spacing: 0;
+    background: linear-gradient(90deg, #ffffff, #a78bfa, #5eead4, #ffffff);
+    background-size: 240% auto;
     -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: pl-shimmer 3.4s linear infinite;
+    -webkit-text-fill-color: transparent;
+    animation: mb-text-shine 4.8s linear infinite;
+  }
+  .mb-loader-subtitle {
+    margin: 11px 0 0;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.45;
+    color: rgba(226,232,240,0.68);
+    letter-spacing: 0;
+    animation: mb-status 1.8s ease-in-out infinite;
+  }
+  .mb-loader-progress {
+    position: relative;
+    height: 4px;
+    margin-top: 26px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+  }
+  .mb-loader-progress::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 68%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, transparent, #8b5cf6 18%, #22d3ee 58%, transparent);
+    box-shadow: 0 0 22px rgba(34,211,238,0.42);
+    animation: mb-progress 2.3s cubic-bezier(.45,0,.2,1) infinite;
+  }
+  @media (max-width: 520px) {
+    .mb-loader-card {
+      padding: 30px 24px 28px;
+      border-radius: 24px;
+    }
+    .mb-loader-scene {
+      height: 170px;
+    }
+    .mb-loader-platform {
+      width: 184px;
+      height: 184px;
+      border-radius: 36px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mb-loader-root::before,
+    .mb-loader-platform,
+    .mb-loader-ring,
+    .mb-loader-core,
+    .mb-loader-cube,
+    .mb-loader-title,
+    .mb-loader-subtitle,
+    .mb-loader-progress::before,
+    .mb-loader-scan::before {
+      animation: none !important;
+    }
   }
 `;
 
 export function FullPageSpinner() {
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: KEYFRAMES }} />
-
-      {/* Root */}
-      <div style={{
-        position: 'fixed', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: '#080E1C',
-        overflow: 'hidden', zIndex: 9999,
-      }}>
-
-        {/* Ambient gradient blobs */}
-        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-          <div style={{
-            position: 'absolute', top: '15%', left: '18%',
-            width: '45vw', height: '45vw',
-            background: 'radial-gradient(circle, rgba(123,97,255,0.09) 0%, transparent 68%)',
-            animation: 'pl-blob-1 9s ease-in-out infinite',
-          }} />
-          <div style={{
-            position: 'absolute', bottom: '12%', right: '16%',
-            width: '38vw', height: '38vw',
-            background: 'radial-gradient(circle, rgba(0,212,255,0.07) 0%, transparent 68%)',
-            animation: 'pl-blob-2 11s ease-in-out infinite',
-          }} />
-        </div>
-
-        {/* Particle field */}
-        {PARTICLES.map((p) => (
-          <div key={p.id} style={{
-            position: 'absolute',
-            left: `${p.x}%`, top: `${p.y}%`,
-            width: `${p.s}px`, height: `${p.s}px`,
-            borderRadius: '50%',
-            backgroundColor: p.c,
-            opacity: 0.28 + (p.id % 4) * 0.08,
-            animation: `pl-float ${p.dur}s ease-in-out ${p.delay}s infinite`,
-          }} />
-        ))}
-
-        {/* Content column */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '36px', position: 'relative' }}>
-
-          {/* ── Orbital ring system ── */}
-          <div style={{
-            position: 'relative',
-            width: '192px', height: '192px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-
-            {/* Pulse rings */}
-            {[0, 0.9, 1.8].map((delay) => (
-              <div key={delay} style={{
-                position: 'absolute', inset: 0, margin: 'auto',
-                width: '76px', height: '76px',
-                borderRadius: '50%',
-                border: '1px solid rgba(123,97,255,0.4)',
-                animation: `pl-pulse-out 2.7s ease-out ${delay}s infinite`,
-              }} />
-            ))}
-
-            {/* Orbital rings */}
-            <div className="pl-ring pl-ring-a" />
-            <div className="pl-ring pl-ring-b" />
-            <div className="pl-ring pl-ring-c" />
-
-            {/* Core sphere */}
-            <div style={{
-              position: 'absolute', inset: 0, margin: 'auto',
-              width: '76px', height: '76px',
-              borderRadius: '50%',
-              background: 'radial-gradient(circle at 33% 30%, rgba(150,120,255,0.95) 0%, rgba(80,50,180,0.98) 55%, rgba(18,12,52,1) 100%)',
-              animation: 'pl-glow 2.2s ease-in-out infinite',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              overflow: 'hidden',
-            }}>
-              {/* Specular highlight */}
-              <div style={{
-                position: 'absolute', top: '10%', left: '15%',
-                width: '38%', height: '26%',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(255,255,255,0.32) 0%, transparent 100%)',
-                pointerEvents: 'none',
-              }} />
-              {/* Secondary glint */}
-              <div style={{
-                position: 'absolute', bottom: '14%', right: '12%',
-                width: '18%', height: '12%',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(0,212,255,0.25) 0%, transparent 100%)',
-                pointerEvents: 'none',
-              }} />
-              {/* Icon */}
-              <Zap
-                fill="white"
-                strokeWidth={1}
-                style={{
-                  width: '30px', height: '30px',
-                  color: 'white',
-                  animation: 'pl-icon 2.2s ease-in-out infinite',
-                  position: 'relative', zIndex: 1,
-                }}
-              />
+      <style dangerouslySetInnerHTML={{ __html: LOADER_STYLES }} />
+      <div className="mb-loader-root" role="status" aria-live="polite" aria-label="MB Boiler ERP wird geladen">
+        <div className="mb-loader-card">
+          <div className="mb-loader-scan" />
+          <div className="mb-loader-scene" aria-hidden="true">
+            <div className="mb-loader-platform" />
+            <div className="mb-loader-ring one" />
+            <div className="mb-loader-ring two" />
+            <div className="mb-loader-core">
+              <div className="mb-loader-cube">
+                <div className="mb-loader-face mb-loader-front">
+                  <Zap className="mb-loader-zap" fill="white" strokeWidth={1.2} />
+                </div>
+                <div className="mb-loader-face mb-loader-back" />
+                <div className="mb-loader-face mb-loader-right" />
+                <div className="mb-loader-face mb-loader-left" />
+                <div className="mb-loader-face mb-loader-top" />
+                <div className="mb-loader-face mb-loader-bottom" />
+              </div>
             </div>
           </div>
-
-          {/* ── Brand text ── */}
-          <div style={{ textAlign: 'center', animation: 'pl-fade-up 0.7s ease-out 0.15s both' }}>
-            <p
-              className="pl-shimmer"
-              style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '0.06em', lineHeight: 1, marginBottom: '10px' }}
-            >
-              MB Boiler ERP
-            </p>
-            <p style={{
-              fontSize: '10px',
-              color: 'rgba(180,170,255,0.5)',
-              letterSpacing: '0.28em',
-              textTransform: 'uppercase',
-              fontWeight: 500,
-              animation: 'pl-blink 1.8s ease-in-out infinite',
-            }}>
-              Laden
-            </p>
-          </div>
-
-          {/* ── Progress bar ── */}
-          <div style={{
-            width: '200px', height: '2px',
-            background: 'rgba(255,255,255,0.06)',
-            borderRadius: '2px', overflow: 'hidden',
-            animation: 'pl-fade-up 0.7s ease-out 0.3s both',
-          }}>
-            <div style={{
-              height: '100%', borderRadius: '2px',
-              background: 'linear-gradient(90deg, #7B61FF 0%, #00D4FF 60%, #9F7AEA 100%)',
-              boxShadow: '0 0 10px rgba(123,97,255,0.9), 0 0 20px rgba(0,212,255,0.4)',
-              animation: 'pl-bar 3.5s cubic-bezier(0.4,0,0.2,1) infinite',
-            }} />
-          </div>
+          <p className="mb-loader-title">MB Boiler ERP</p>
+          <p className="mb-loader-subtitle">System wird vorbereitet</p>
+          <div className="mb-loader-progress" aria-hidden="true" />
         </div>
       </div>
     </>

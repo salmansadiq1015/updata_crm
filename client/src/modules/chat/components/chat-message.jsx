@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Reply, Smile, Trash2, Pencil, MoreHorizontal, Check, CheckCheck, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { ChatReactionBar } from './chat-reaction-bar';
 import { ChatEmojiPicker } from './chat-emoji-picker';
 
@@ -27,6 +28,7 @@ function senderColor(name) {
 }
 
 export function ChatMessage({ message, isMine, showSenderName, showTimestamp, currentUserId, isGroupRoom, onReply, onReact, onDelete, onEdit }) {
+  const { t } = useLanguage();
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -40,7 +42,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
 
   const renderContent = () => {
     if (isDeleted) {
-      return <span className="italic opacity-50 text-sm">This message was deleted</span>;
+      return <span className="italic opacity-50 text-sm">{t('chat.deletedMessage', 'This message was deleted')}</span>;
     }
     switch (message.messageType) {
       case 'PHOTO':
@@ -77,7 +79,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
             className="flex items-center gap-2 p-2 rounded-lg bg-black/20 hover:bg-black/30 transition-colors text-sm"
           >
             <FileText className="h-5 w-5 shrink-0" />
-            <span className="truncate max-w-[160px]">{message.attachmentFileName || 'Document'}</span>
+            <span className="truncate max-w-[160px]">{message.attachmentFileName || t('common.document', 'Document')}</span>
           </a>
         );
       default:
@@ -124,7 +126,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
           {/* Reply quote */}
           {hasReply && (
             <div className={cn('border-l-[3px] pl-2 mb-1.5 py-0.5 rounded-r text-xs opacity-80', isMine ? 'border-white/50 bg-white/10' : 'border-primary bg-muted/40')}>
-              <p className="font-semibold text-[10px]">{message.replyToSenderName || 'Reply'}</p>
+              <p className="font-semibold text-[10px]">{message.replyToSenderName || t('chat.reply', 'Reply')}</p>
               <p className="truncate">{message.replyToSnippet}</p>
             </div>
           )}
@@ -134,7 +136,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
           {/* Time + read tick */}
           {showTimestamp && (
             <div className="flex items-center gap-1 mt-0.5 justify-end">
-              {message.editedAt && <span className="text-[10px] opacity-60">edited</span>}
+              {message.editedAt && <span className="text-[10px] opacity-60">{t('chat.edited', 'edited')}</span>}
               <span className="text-[10px] opacity-70">{formatTime(ts)}</span>
               {isMine && (
                 isRead
@@ -171,16 +173,16 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
             </DropdownMenuTrigger>
             <DropdownMenuContent align={isMine ? 'end' : 'start'} className="w-36">
               <DropdownMenuItem onClick={() => { setMenuOpen(false); setPickerOpen(true); }}>
-                <Smile className="h-3.5 w-3.5 mr-2" /> React
+                <Smile className="h-3.5 w-3.5 mr-2" /> {t('chat.react', 'React')}
               </DropdownMenuItem>
               {isMine && message.messageType === 'TEXT' && (
                 <DropdownMenuItem onClick={() => { setMenuOpen(false); onEdit?.(message); }}>
-                  <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
+                  <Pencil className="h-3.5 w-3.5 mr-2" /> {t('common.edit', 'Edit')}
                 </DropdownMenuItem>
               )}
               {isMine && (
                 <DropdownMenuItem onClick={() => { setMenuOpen(false); onDelete?.(message._id); }} className="text-destructive focus:text-destructive">
-                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> {t('common.delete', 'Delete')}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>

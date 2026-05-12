@@ -2,15 +2,18 @@
 
 import Link from 'next/link';
 import { Zap, Shield, FolderKanban, BarChart3, Users } from 'lucide-react';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 const features = [
-  { icon: FolderKanban, label: 'Projektmanagement' },
-  { icon: Users, label: 'Kundenmanagement' },
-  { icon: BarChart3, label: 'Buchhaltung & Finanzen' },
-  { icon: Shield, label: 'Rollen & Berechtigungen' },
+  { icon: FolderKanban, labelKey: 'auth.layout.feature.projects', fallback: 'Projektmanagement' },
+  { icon: Users, labelKey: 'auth.layout.feature.customers', fallback: 'Kundenmanagement' },
+  { icon: BarChart3, labelKey: 'auth.layout.feature.accounting', fallback: 'Buchhaltung & Finanzen' },
+  { icon: Shield, labelKey: 'auth.layout.feature.roles', fallback: 'Rollen & Berechtigungen' },
 ];
 
 export function AuthLayout({ children }) {
+  const { t } = useLanguage();
+
   return (
     <div className="flex min-h-screen">
       {/* Left panel — branded */}
@@ -39,25 +42,25 @@ export function AuthLayout({ children }) {
           <div className="space-y-8">
             <div>
               <h2 className="text-xl font-extrabold text-white tracking-tight leading-tight lg:text-2xl 2xl:text-3xl">
-                Ihr zentrales
+                {t('auth.layout.headline1', 'Ihr zentrales')}
                 <br />
-                Werkzeug fuer
+                {t('auth.layout.headline2', 'Werkzeug fuer')}
                 <br />
-                den Arbeitsalltag
+                {t('auth.layout.headline3', 'den Arbeitsalltag')}
               </h2>
               <p className="mt-4 text-base text-white/60 leading-relaxed max-w-xs">
-                Projekte, Kunden und Finanzen — alles in einer modernen Plattform.
+                {t('auth.layout.subtitle', 'Projekte, Kunden und Finanzen - alles in einer modernen Plattform.')}
               </p>
             </div>
 
             {/* Feature list */}
             <div className="space-y-3">
               {features.map((f) => (
-                <div key={f.label} className="flex items-center gap-3">
+                <div key={f.labelKey} className="flex items-center gap-3">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm">
                     <f.icon className="h-4 w-4 text-white/80" />
                   </div>
-                  <span className="text-sm font-medium text-white/75">{f.label}</span>
+                  <span className="text-sm font-medium text-white/75">{t(f.labelKey, f.fallback)}</span>
                 </div>
               ))}
             </div>

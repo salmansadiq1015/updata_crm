@@ -57,7 +57,7 @@ export function PriceManagementTable() {
       {/* Article price table */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium">Articles</p>
+          <p className="text-sm font-medium">{t('catalog.articles.title')}</p>
           <Button size="sm" disabled={selected.size === 0} onClick={() => setUpdateOpen(true)}>
             <TrendingUp className="w-4 h-4 mr-2" />
             {t('catalog.prices.update')} ({selected.size})
@@ -71,8 +71,8 @@ export function PriceManagementTable() {
                   <Checkbox checked={allSelected ? true : someSelected ? 'indeterminate' : false} onCheckedChange={toggleAll} aria-label="Select all" />
                 </TableHead>
                 <TableHead>{t('catalog.articles.articleNumber')}</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead className="text-right">Price (CHF)</TableHead>
+                <TableHead>{t('common.name')}</TableHead>
+                <TableHead className="text-right">{t('catalog.priceChf')}</TableHead>
                 <TableHead className="w-24" />
               </TableRow>
             </TableHeader>
@@ -122,7 +122,7 @@ export function PriceManagementTable() {
       {/* Recent batches with rollback */}
       {recentBatches.length > 0 && (
         <div className="space-y-3">
-          <p className="text-sm font-medium">Recent Updates</p>
+          <p className="text-sm font-medium">{t('catalog.prices.recentUpdates')}</p>
           <div className="space-y-2">
             {recentBatches.map((batch) => (
               <div key={batch._id} className="flex items-center gap-4 rounded-md border px-4 py-3 text-sm">
@@ -140,21 +140,21 @@ export function PriceManagementTable() {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Rollback price update?</AlertDialogTitle>
+                          <AlertDialogTitle>{t('catalog.prices.rollbackTitle')}</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will restore previous prices for {batch.articleCount ?? 0} article{(batch.articleCount ?? 0) !== 1 ? 's' : ''}.
+                            {t('catalog.prices.rollbackDesc', { count: batch.articleCount ?? 0 })}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                           <AlertDialogAction onClick={() => rollbackBatch.mutate(batch._id)}>
-                            Rollback
+                            {t('catalog.prices.rollback')}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   ) : (
-                    <span className="text-xs text-muted-foreground">Rollback expired</span>
+                    <span className="text-xs text-muted-foreground">{t('catalog.prices.rollbackExpired')}</span>
                   )}
                 </div>
               </div>

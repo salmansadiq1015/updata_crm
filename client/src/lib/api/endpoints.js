@@ -388,7 +388,7 @@ export const ENDPOINTS = Object.freeze({
     SESSION_AUDIO:   (id) => `/ai/sessions/${id}/audio`,
     SESSION_CORRECT: (id) => `/ai/sessions/${id}/corrections`,
     SESSION_CONFIRM: (id) => `/ai/sessions/${id}/confirm`,
-    SESSION_CANCEL:  (id) => `/ai/sessions/${id}`,
+    SESSION_CANCEL:  (id) => `/ai/sessions/${id}/cancel`,
     // Agent runs
     AGENT_RUNS:             '/ai/agent',
     AGENT_RUN:              '/ai/agent/run',

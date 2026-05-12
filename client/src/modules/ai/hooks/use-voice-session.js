@@ -10,12 +10,15 @@ import {
   PANEL_VIEWS,
   SESSION_STATUSES,
   SESSION_POLL_INTERVAL_MS,
+  SESSION_PROCESSING_TIMEOUT_MS,
   isTerminalSessionStatus,
+  normalizeSessionStatus,
 } from '../constants/ai-constants';
 
 export function useVoiceSession() {
   const queryClient    = useQueryClient();
   const activeSessionId = useAiStore((s) => s.activeSessionId);
+  const panelView = useAiStore((s) => s.panelView);
   const setActiveSessionId = useAiStore((s) => s.setActiveSessionId);
   const setPanelView   = useAiStore((s) => s.setPanelView);
 
@@ -26,7 +29,7 @@ export function useVoiceSession() {
     enabled:  !!activeSessionId,
     staleTime: 0,
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
+      const status = normalizeSessionStatus(query.state.data?.status);
       if (!status) return SESSION_POLL_INTERVAL_MS;
       if (isTerminalSessionStatus(status)) return false;
       if (status === SESSION_STATUSES.AWAITING_CONFIRMATION) return false;
@@ -35,15 +38,40 @@ export function useVoiceSession() {
   });
 
   // Auto-advance panel view based on polled status
-  const sessionStatus = sessionQuery.data?.status;
+  const sessionStatus = normalizeSessionStatus(sessionQuery.data?.status);
   useEffect(() => {
     if (
       sessionStatus === SESSION_STATUSES.AWAITING_CONFIRMATION &&
-      useAiStore.getState().panelView === PANEL_VIEWS.PROCESSING
+      panelView === PANEL_VIEWS.PROCESSING
     ) {
       setPanelView(PANEL_VIEWS.ENTITIES);
     }
-  }, [sessionStatus, setPanelView]);
+  }, [panelView, sessionStatus, setPanelView]);
+
+  useEffect(() => {
+    if (!sessionStatus || sessionStatus === SESSION_STATUSES.AWAITING_CONFIRMATION) return;
+    if (!isTerminalSessionStatus(sessionStatus)) return;
+    if (![PANEL_VIEWS.RECORDING, PANEL_VIEWS.UPLOADING, PANEL_VIEWS.PROCESSING, PANEL_VIEWS.ENTITIES].includes(panelView)) return;
+
+    if (sessionStatus === SESSION_STATUSES.FAILED) {
+      showError(sessionQuery.data?.result?.message || 'Sprachverarbeitung fehlgeschlagen. Bitte erneut versuchen.');
+    }
+
+    setActiveSessionId(null);
+    setPanelView(PANEL_VIEWS.IDLE);
+  }, [panelView, sessionQuery.data?.result?.message, sessionStatus, setActiveSessionId, setPanelView]);
+
+  useEffect(() => {
+    if (!activeSessionId || panelView !== PANEL_VIEWS.PROCESSING) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      showError('Sprachverarbeitung dauert zu lange. Bitte erneut versuchen.');
+      setActiveSessionId(null);
+      setPanelView(PANEL_VIEWS.IDLE);
+    }, SESSION_PROCESSING_TIMEOUT_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeSessionId, panelView, setActiveSessionId, setPanelView]);
 
   // Create session
   const createMutation = useMutation({
@@ -52,7 +80,11 @@ export function useVoiceSession() {
       setActiveSessionId(session._id || session.id);
       queryClient.setQueryData(queryKeys.ai.session(session._id || session.id), session);
     },
-    onError: (err) => showError(err),
+    onError: (err) => {
+      setActiveSessionId(null);
+      setPanelView(PANEL_VIEWS.IDLE);
+      showError(err);
+    },
   });
 
   // Submit corrections
@@ -114,6 +146,22 @@ export function useVoiceSession() {
     cancelMutation.mutate(activeSessionId);
   }, [activeSessionId, cancelMutation]);
 
+  const cancelSessionById = useCallback((id) => {
+    if (!id) return Promise.resolve();
+    return aiSessionService.cancel(id)
+      .catch(() => {})
+      .finally(() => {
+        setActiveSessionId(null);
+        setPanelView(PANEL_VIEWS.IDLE);
+        queryClient.invalidateQueries({ queryKey: queryKeys.ai.sessions({}) });
+      });
+  }, [queryClient, setActiveSessionId, setPanelView]);
+
+  const resetSession = useCallback(() => {
+    setActiveSessionId(null);
+    setPanelView(PANEL_VIEWS.IDLE);
+  }, [setActiveSessionId, setPanelView]);
+
   const onAudioUploaded = useCallback(() => {
     setPanelView(PANEL_VIEWS.PROCESSING);
   }, [setPanelView]);
@@ -130,6 +178,8 @@ export function useVoiceSession() {
     confirmSession,
     isConfirming:     confirmMutation.isPending,
     cancelSession,
+    cancelSessionById,
+    resetSession,
     isCancelling:     cancelMutation.isPending,
   };
 }

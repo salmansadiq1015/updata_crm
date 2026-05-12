@@ -160,7 +160,7 @@ export function HeroSection() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold">+12 {t('hero.mockup.projects')}</p>
-                    <p className="text-[0.65rem] text-muted-foreground">diese Woche</p>
+                    <p className="text-[0.65rem] text-muted-foreground">{t('hero.mockup.weekNote')}</p>
                   </div>
                 </div>
               </div>

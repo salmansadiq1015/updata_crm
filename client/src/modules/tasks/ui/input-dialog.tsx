@@ -4,6 +4,7 @@ import { type ChangeEvent, type KeyboardEvent, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 type InputDialogProps = {
   open: boolean;
@@ -24,6 +25,7 @@ export function InputDialog({
   onConfirm,
   onCancel,
 }: InputDialogProps) {
+  const { t } = useLanguage();
   const [value, setValue] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const currentValue = value ?? defaultValue;
@@ -67,7 +69,7 @@ export function InputDialog({
         />
         <DialogFooter className=" mt-2 rounded-md">
           <Button className="" variant="outline" onClick={handleCancel}>
-            Cancel
+            {t('common.cancel', 'Abbrechen')}
           </Button>
           <Button className="" onClick={handleConfirm} disabled={!currentValue.trim()}>
             {confirmLabel}

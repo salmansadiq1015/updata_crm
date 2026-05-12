@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { activateAccountSchema } from '@/modules/auth/validations/auth';
+import { createActivateAccountSchema } from '@/modules/auth/validations/auth';
 import { authService } from '@/modules/auth/services/auth-service';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { Loader2, UserCheck, AlertCircle, ArrowRight } from 'lucide-react';
 import { showError, showSuccess } from '@/lib/toast';
 
 function getPasswordStrength(password) {
-  if (!password) return { score: 0, label: '', color: '' };
+  if (!password) return { score: 0, labelKey: '', color: '' };
   let score = 0;
   if (password.length >= 10) score++;
   if (password.length >= 14) score++;
@@ -23,12 +23,13 @@ function getPasswordStrength(password) {
   if (/[a-z]/.test(password)) score++;
   if (/[0-9]/.test(password)) score++;
   if (/[^A-Za-z0-9]/.test(password)) score++;
-  if (score <= 2) return { score: 1, label: 'Schwach', color: 'bg-destructive' };
-  if (score <= 4) return { score: 2, label: 'Mittel', color: 'bg-warning' };
-  return { score: 3, label: 'Stark', color: 'bg-success' };
+  if (score <= 2) return { score: 1, labelKey: 'auth.weak', color: 'bg-destructive' };
+  if (score <= 4) return { score: 2, labelKey: 'auth.medium', color: 'bg-warning' };
+  return { score: 3, labelKey: 'auth.strong', color: 'bg-success' };
 }
 
 function PasswordStrengthIndicator({ password }) {
+  const { t } = useLanguage();
   const strength = useMemo(() => getPasswordStrength(password), [password]);
   if (!password) return null;
   return (
@@ -43,7 +44,7 @@ function PasswordStrengthIndicator({ password }) {
           />
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">{strength.label}</p>
+      <p className="text-xs text-muted-foreground">{t(strength.labelKey, '')}</p>
     </div>
   );
 }
@@ -54,6 +55,7 @@ export function ActivateAccountForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const [isLoading, setIsLoading] = useState(false);
+  const activateAccountSchema = useMemo(() => createActivateAccountSchema(t), [t]);
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm({
     resolver: zodResolver(activateAccountSchema),
@@ -68,7 +70,7 @@ export function ActivateAccountForm() {
         <Alert variant="destructive" className="rounded-xl">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Ungueltiger oder fehlender Token. Bitte kontaktieren Sie Ihren Administrator.
+            {t('auth.invalidActivationToken', 'Ungueltiger oder fehlender Token. Bitte kontaktieren Sie Ihren Administrator.')}
           </AlertDescription>
         </Alert>
       </div>
@@ -79,10 +81,10 @@ export function ActivateAccountForm() {
     setIsLoading(true);
     try {
       await authService.activate(token, data.password);
-      showSuccess('Konto erfolgreich aktiviert');
+      showSuccess(t('auth.activationSuccess', 'Konto erfolgreich aktiviert'));
       router.push('/login');
     } catch (err) {
-      showError(err.message || 'Aktivierung fehlgeschlagen');
+      showError(err.message || t('auth.activationFailed', 'Aktivierung fehlgeschlagen'));
     } finally {
       setIsLoading(false);
     }
@@ -105,7 +107,7 @@ export function ActivateAccountForm() {
           <Input
             id="password"
             type="password"
-            placeholder="Mindestens 10 Zeichen"
+            placeholder={t('auth.passwordMinPlaceholder', 'Mindestens 10 Zeichen')}
             autoComplete="new-password"
             autoFocus
             className="h-11 rounded-xl bg-muted/40 border-border/60 focus:bg-background transition-colors"
@@ -122,7 +124,7 @@ export function ActivateAccountForm() {
           <Input
             id="confirmPassword"
             type="password"
-            placeholder="Passwort erneut eingeben"
+            placeholder={t('auth.confirmPasswordPlaceholder', 'Passwort erneut eingeben')}
             autoComplete="new-password"
             className="h-11 rounded-xl bg-muted/40 border-border/60 focus:bg-background transition-colors"
             {...register('confirmPassword')}

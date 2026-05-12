@@ -2,22 +2,27 @@
 
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { WORKFLOW_LABELS } from '../../constants/ai-constants';
 
 export function AiChatConfirmation({ run, onConfirm, onCancel, isConfirming }) {
+  const { t } = useLanguage();
+
   return (
     <div className="rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-4 flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
         <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-          Action Required
+          {t('ai.confirm.title', 'Action Required')}
         </p>
       </div>
 
       <div className="text-sm">
-        <p className="text-xs text-muted-foreground mb-1">The AI wants to perform:</p>
+        <p className="text-xs text-muted-foreground mb-1">
+          {t('ai.confirm.wantsToPerform', 'The AI wants to perform:')}
+        </p>
         <p className="font-medium">
-          {WORKFLOW_LABELS[run?.workflowType] ?? run?.workflowType ?? 'AI Action'}
+          {WORKFLOW_LABELS[run?.workflowType] ?? run?.workflowType ?? t('ai.confirm.fallbackAction', 'AI Action')}
         </p>
         {run?.output && (
           <pre className="mt-2 text-xs bg-background/60 rounded-lg p-2.5 overflow-auto max-h-28 border">
@@ -35,10 +40,10 @@ export function AiChatConfirmation({ run, onConfirm, onCancel, isConfirming }) {
           onClick={onCancel}
           disabled={isConfirming}
         >
-          Cancel
+          {t('common.cancel', 'Cancel')}
         </Button>
         <Button size="sm" onClick={onConfirm} disabled={isConfirming}>
-          {isConfirming ? 'Confirming…' : '✓ Confirm'}
+          {isConfirming ? t('ai.confirm.confirming', 'Confirming...') : t('ai.confirm.confirm', 'Confirm')}
         </Button>
       </div>
     </div>

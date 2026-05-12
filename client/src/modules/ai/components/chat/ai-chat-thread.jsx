@@ -6,6 +6,7 @@ import { formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { AiChatMessage } from './ai-chat-message';
 import { AiChatTypingIndicator } from './ai-chat-typing-indicator';
 import { AiChatConfirmation } from './ai-chat-confirmation';
@@ -70,6 +71,7 @@ function getRunOutputText(run) {
 }
 
 function AgentContent({ run, onConfirm, isConfirming }) {
+  const { t } = useLanguage();
   const { status, steps = [], output, error, workflowType } = run;
   const isRunning = status === AGENT_STATUSES.RUNNING || status === AGENT_STATUSES.PENDING;
 
@@ -80,7 +82,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
         {steps.length > 0 && (
           <AiProgressSteps
             steps={steps}
-            workflowLabel={WORKFLOW_LABELS[workflowType] ?? 'Working on it'}
+            workflowLabel={WORKFLOW_LABELS[workflowType] ?? t('ai.chat.working', 'Working on it')}
             isRunning
           />
         )}
@@ -107,7 +109,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-          <p className="text-sm font-medium text-green-700 dark:text-green-400">Done</p>
+          <p className="text-sm font-medium text-green-700 dark:text-green-400">{t('ai.result.done', 'Done')}</p>
         </div>
         {output && (
           <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 overflow-auto max-h-40 border">
@@ -119,7 +121,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
         {steps.length > 0 && (
           <details className="text-xs">
             <summary className="text-muted-foreground cursor-pointer hover:text-foreground transition-colors py-1 select-none">
-              View steps ({steps.length})
+              {t('ai.chat.viewSteps', 'View steps')} ({steps.length})
             </summary>
             <div className="mt-2 pl-1">
               <AiRunSteps steps={steps} />
@@ -135,13 +137,13 @@ function AgentContent({ run, onConfirm, isConfirming }) {
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <XCircle className="h-4 w-4 text-destructive shrink-0" />
-          <p className="text-sm font-medium text-destructive">Something went wrong</p>
+          <p className="text-sm font-medium text-destructive">{t('ai.result.failed', 'Something went wrong')}</p>
         </div>
         {error?.message && (
           <p className="text-xs text-muted-foreground">{error.message}</p>
         )}
         {error?.code && (
-          <p className="text-xs text-muted-foreground/60">Code: {error.code}</p>
+          <p className="text-xs text-muted-foreground/60">{t('common.code', 'Code')}: {error.code}</p>
         )}
       </div>
     );
@@ -151,7 +153,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
         <MinusCircle className="h-4 w-4 shrink-0" />
-        <p className="text-sm">Action cancelled</p>
+        <p className="text-sm">{t('ai.result.cancelled', 'Action cancelled')}</p>
       </div>
     );
   }
@@ -160,6 +162,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
 }
 
 function RunPair({ run, onConfirm, isConfirming, onRetry, copyProps, ttsProps }) {
+  const { t } = useLanguage();
   const timestamp = run.createdAt
     ? formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })
     : '';
@@ -169,7 +172,7 @@ function RunPair({ run, onConfirm, isConfirming, onRetry, copyProps, ttsProps })
       ? run.input
       : run.input
       ? JSON.stringify(run.input)
-      : 'Voice recording';
+      : t('ai.chat.voiceRecording', 'Voice recording');
 
   const { retryState, scheduleRetry } = useMessageRetry({
     runId: run._id,

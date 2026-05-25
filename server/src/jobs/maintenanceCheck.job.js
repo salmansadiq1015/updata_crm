@@ -19,7 +19,34 @@ export class MaintenanceCheckWorker extends BaseWorker {
     super('maintenance-check');
   }
 
-  async process(job) {
+  async _getSchedulingRecipientIds() {
+    const [{ default: Permission }, { default: Role }, { default: User }] = await Promise.all([
+      import('../modules/auth/permission.model.js'),
+      import('../modules/auth/role.model.js'),
+      import('../modules/auth/user.model.js'),
+    ]);
+
+    const permission = await Permission.findOne({ module: 'scheduling', action: 'read' })
+      .select('_id')
+      .lean();
+    if (!permission) return [];
+
+    const roles = await Role.find({ permissions: permission._id })
+      .select('_id')
+      .lean();
+    if (roles.length === 0) return [];
+
+    const users = await User.find({
+      role: { $in: roles.map((role) => role._id) },
+      status: 'active',
+    })
+      .select('_id')
+      .lean();
+
+    return users.map((user) => user._id);
+  }
+
+  async process(_job) {
     const now = new Date();
     const lookaheadDays = config.maintenance?.lookaheadDays || 30;
     const lookaheadDate = new Date(now.getTime() + lookaheadDays * 24 * 60 * 60 * 1000);
@@ -32,6 +59,7 @@ export class MaintenanceCheckWorker extends BaseWorker {
       {
         maintenanceStatus: { $in: ['ok', 'due'] },
         nextDueDate: { $lte: now },
+        linkedServiceOrderId: null,
       },
       { $set: { maintenanceStatus: 'overdue' } },
     );
@@ -42,21 +70,28 @@ export class MaintenanceCheckWorker extends BaseWorker {
       {
         maintenanceStatus: 'ok',
         nextDueDate: { $lte: lookaheadDate, $gt: now },
+        linkedServiceOrderId: null,
       },
       { $set: { maintenanceStatus: 'due' } },
     );
     const updatedDue = dueResult.modifiedCount;
 
+    const assignedTo = updatedOverdue > 0 || updatedDue > 0
+      ? await this._getSchedulingRecipientIds()
+      : [];
+
     // Publish events if any records were updated
     if (updatedOverdue > 0) {
       eventBus.publish(EVENT_TYPES.MAINTENANCE_OVERDUE, {
         count: updatedOverdue,
+        assignedTo,
       }, { source: 'jobs:maintenance-check' });
     }
 
     if (updatedDue > 0) {
       eventBus.publish(EVENT_TYPES.MAINTENANCE_DUE, {
         count: updatedDue,
+        assignedTo,
       }, { source: 'jobs:maintenance-check' });
     }
 

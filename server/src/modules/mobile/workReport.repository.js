@@ -32,6 +32,12 @@ class WorkReportRepository {
       .lean();
   }
 
+  async findByIds(ids) {
+    return WorkReport.find({ _id: { $in: ids } })
+      .populate(POPULATE_FIELDS)
+      .lean();
+  }
+
   async findIncomplete(technicianId) {
     return WorkReport.find({
       technicianId,
@@ -45,6 +51,13 @@ class WorkReportRepository {
     return WorkReport.countDocuments({
       technicianId,
       status: 'DRAFT',
+    });
+  }
+
+  async countPendingSyncByTechnician(technicianId) {
+    return WorkReport.countDocuments({
+      technicianId,
+      status: { $in: ['DRAFT', 'SUBMITTED', 'REJECTED'] },
     });
   }
 

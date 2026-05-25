@@ -1,5 +1,161 @@
-import cacheManager from '../../shared/cache/CacheManager.js';
+import mongoose from 'mongoose';
+import journalEntryService from './journalEntry.service.js';
+import accountMappingService, { ACCOUNT_MAPPING } from './accountMapping.service.js';
 import logger from '../../shared/logger/index.js';
+import {
+  buildCursorQuery,
+  buildCursorSort,
+  buildCursorResponse,
+} from '../../shared/utils/pagination.js';
+import { AppError, ConflictError, NotFoundError } from '../../shared/errors/AppError.js';
+import ERROR_CODES from '../../shared/errors/errorCodes.js';
+
+const OPEN_AR_STATUSES = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'];
+const OPEN_AP_STATUSES = ['RECORDED', 'APPROVED', 'PARTIALLY_PAID'];
+const OPEN_ITEM_SORT_FIELDS = ['dueDate', 'outstandingAmount', 'createdAt', '_id'];
+const BUCKET_KEYS = ['current', '1_30', '31_60', '61_90', '90_plus'];
+
+function normalizeLimit(limit) {
+  const parsed = Number(limit) || 25;
+  return Math.min(Math.max(parsed, 1), 100);
+}
+
+function normalizeSort(sortBy) {
+  return OPEN_ITEM_SORT_FIELDS.includes(sortBy) ? sortBy : 'dueDate';
+}
+
+function coerceCursorFieldTypes(filter, sortBy) {
+  if (!filter || !['dueDate', 'createdAt'].includes(sortBy)) return filter;
+
+  const coerceValue = (value) => {
+    if (typeof value === 'string') return new Date(value);
+    return value;
+  };
+
+  if (filter.$or) {
+    return {
+      ...filter,
+      $or: filter.$or.map((clause) => {
+        if (!clause[sortBy]) return clause;
+        if (typeof clause[sortBy] === 'object' && clause[sortBy] !== null) {
+          const op = Object.keys(clause[sortBy])[0];
+          return { ...clause, [sortBy]: { [op]: coerceValue(clause[sortBy][op]) } };
+        }
+        return { ...clause, [sortBy]: coerceValue(clause[sortBy]) };
+      }),
+    };
+  }
+
+  if (filter[sortBy] && typeof filter[sortBy] === 'object') {
+    const op = Object.keys(filter[sortBy])[0];
+    return { ...filter, [sortBy]: { [op]: coerceValue(filter[sortBy][op]) } };
+  }
+
+  return filter;
+}
+
+function getAgingDateFilter(bucket, now = new Date()) {
+  if (!bucket) return {};
+
+  const day = 24 * 60 * 60 * 1000;
+  const daysAgo = (days) => new Date(now.getTime() - days * day);
+
+  if (bucket === 'current') return { dueDate: { $gte: now } };
+  if (bucket === '1_30') return { dueDate: { $lt: now, $gte: daysAgo(30) } };
+  if (bucket === '31_60') return { dueDate: { $lt: daysAgo(30), $gte: daysAgo(60) } };
+  if (bucket === '61_90') return { dueDate: { $lt: daysAgo(60), $gte: daysAgo(90) } };
+  if (bucket === '90_plus') return { dueDate: { $lt: daysAgo(90) } };
+  return {};
+}
+
+function emptyBucketTotals() {
+  return BUCKET_KEYS.reduce((acc, key) => {
+    acc[key] = 0;
+    return acc;
+  }, {});
+}
+
+function normalizeBucketTotals(rows) {
+  const buckets = emptyBucketTotals();
+  let invoiceCount = 0;
+
+  for (const row of rows) {
+    if (row?._id && Object.prototype.hasOwnProperty.call(buckets, row._id)) {
+      buckets[row._id] = Math.round((row.totalOutstanding || 0) * 100) / 100;
+      invoiceCount += row.count || 0;
+    }
+  }
+
+  return {
+    buckets: { ...buckets, over_90: buckets['90_plus'] },
+    totalOutstanding: Math.round(Object.values(buckets).reduce((sum, value) => sum + value, 0) * 100) / 100,
+    invoiceCount,
+  };
+}
+
+function mapArInvoice(inv) {
+  const amount = inv.grandTotalRounded ?? inv.grandTotal ?? inv.totalAmount ?? 0;
+  const outstandingAmount = inv.amountDue ?? 0;
+
+  return {
+    _id: inv._id,
+    type: 'AR',
+    entityId: inv.customerId,
+    entityName: inv.customerName,
+    reference: inv.invoiceNumber,
+    amount,
+    outstandingAmount,
+    dueDate: inv.dueDate,
+    status: inv.status,
+    createdAt: inv.createdAt,
+  };
+}
+
+function mapApInvoice(inv) {
+  return {
+    _id: inv._id,
+    type: 'AP',
+    entityId: inv.supplierId,
+    entityName: inv.supplierName,
+    reference: inv.apInvoiceNumber || inv.supplierInvoiceNumber,
+    amount: inv.totalAmount || 0,
+    outstandingAmount: inv.outstandingAmount || 0,
+    dueDate: inv.dueDate,
+    status: inv.status,
+    createdAt: inv.createdAt,
+  };
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function sumMoney(items, field) {
+  return roundMoney(items.reduce((sum, item) => sum + roundMoney(item[field] || 0), 0));
+}
+
+async function aggregateOpenAmount(Model, match, amountField) {
+  const [row] = await Model.aggregate([
+    { $match: match },
+    { $group: { _id: null, total: { $sum: amountField } } },
+  ]);
+  return roundMoney(row?.total || 0);
+}
+
+function allocateAcrossItems(items, field, totalAmount) {
+  let remaining = roundMoney(totalAmount);
+  const allocations = [];
+
+  for (const item of items) {
+    if (remaining <= 0) break;
+    const amount = Math.min(roundMoney(item[field] || 0), remaining);
+    if (amount <= 0) continue;
+    allocations.push({ item, amount: roundMoney(amount) });
+    remaining = roundMoney(remaining - amount);
+  }
+
+  return allocations;
+}
 
 class OpenItemsService {
   /**
@@ -9,93 +165,98 @@ class OpenItemsService {
   async getOpenItems(params = {}) {
     const {
       cursor, limit = 25, sortBy = 'dueDate', sortOrder = 'asc',
-      entityType = 'ALL', customerId, supplierId,
+      entityType = 'ALL', customerId, supplierId, agingBucket,
     } = params;
 
-    let arItems = [];
-    let apItems = [];
+    const safeLimit = normalizeLimit(limit);
+    const safeSortBy = normalizeSort(sortBy);
+    const safeSortOrder = sortOrder === 'desc' ? 'desc' : 'asc';
+    const sort = buildCursorSort(safeSortBy, safeSortOrder);
+    const cursorFilter = coerceCursorFieldTypes(
+      buildCursorQuery(cursor, safeSortBy, safeSortOrder),
+      safeSortBy,
+    );
+    const agingFilter = getAgingDateFilter(agingBucket);
+    const projection = {
+      __v: 0,
+      lineItems: 0,
+      payments: 0,
+      vatBreakdown: 0,
+      advanceDeductions: 0,
+    };
 
-    // Fetch AR open items
+    const queries = [];
+
     if (entityType === 'ALL' || entityType === 'AR') {
-      try {
+      queries.push((async () => {
         const Invoice = (await import('../qop/invoice.model.js')).default;
-
-        const arFilter = { status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] } };
+        const arFilter = {
+          isDeleted: false,
+          status: { $in: OPEN_AR_STATUSES },
+          amountDue: { $gt: 0 },
+          ...agingFilter,
+          ...cursorFilter,
+        };
         if (customerId) arFilter.customerId = customerId;
 
-        const invoices = await Invoice.find(arFilter)
-          .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
-          .lean();
+        const docs = await Invoice.find(arFilter)
+          .sort(sort)
+          .limit(safeLimit + 1)
+          .select(projection)
+          .lean()
+          .setOptions({ includeDeleted: true });
 
-        arItems = invoices.map((inv) => ({
-          _id: inv._id,
-          type: 'AR',
-          entityId: inv.customerId,
-          reference: inv.invoiceNumber,
-          amount: inv.totalGross || inv.totalAmount || 0,
-          outstandingAmount: inv.amountDue || 0,
-          dueDate: inv.dueDate,
-          status: inv.status,
-          createdAt: inv.createdAt,
-        }));
-      } catch {
+        return docs.map(mapArInvoice);
+      })().catch(() => {
         logger.warn('QOP Invoice model not available for open items', {
           module: 'accounting',
           action: 'openItems.list',
         });
-      }
+        return [];
+      }));
     }
 
-    // Fetch AP open items
     if (entityType === 'ALL' || entityType === 'AP') {
-      try {
-        const apInvoiceRepository = (await import('./apInvoice.repository.js')).default;
-        const apResult = await apInvoiceRepository.findOpenPayables({ limit: 100000, sortBy, sortOrder });
-        const apDocs = apResult.data || [];
+      queries.push((async () => {
+        const ApInvoice = (await import('./apInvoice.model.js')).default;
+        const apFilter = {
+          isDeleted: false,
+          status: { $in: OPEN_AP_STATUSES },
+          outstandingAmount: { $gt: 0 },
+          ...agingFilter,
+          ...cursorFilter,
+        };
+        if (supplierId) apFilter.supplierId = supplierId;
 
-        apItems = apDocs
-          .filter((inv) => (!supplierId || String(inv.supplierId) === String(supplierId)))
-          .map((inv) => ({
-            _id: inv._id,
-            type: 'AP',
-            entityId: inv.supplierId,
-            reference: inv.apInvoiceNumber || inv.supplierInvoiceNumber,
-            amount: inv.totalAmount || 0,
-            outstandingAmount: inv.outstandingAmount || 0,
-            dueDate: inv.dueDate,
-            status: inv.status,
-            createdAt: inv.createdAt,
-          }));
-      } catch {
+        const docs = await ApInvoice.find(apFilter)
+          .sort(sort)
+          .limit(safeLimit + 1)
+          .select(projection)
+          .lean()
+          .setOptions({ includeDeleted: true });
+
+        return docs.map(mapApInvoice);
+      })().catch(() => {
         logger.warn('AP invoice repository not available for open items', {
           module: 'accounting',
           action: 'openItems.list',
         });
-      }
+        return [];
+      }));
     }
 
-    // Merge and sort
-    let combined = [...arItems, ...apItems];
+    const itemGroups = await Promise.all(queries);
+    const combined = itemGroups.flat();
     combined.sort((a, b) => {
-      const aVal = a[sortBy] || a.dueDate;
-      const bVal = b[sortBy] || b.dueDate;
+      const aVal = a[safeSortBy] || a.dueDate;
+      const bVal = b[safeSortBy] || b.dueDate;
       const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-      return sortOrder === 'asc' ? cmp : -cmp;
+      if (cmp !== 0) return safeSortOrder === 'asc' ? cmp : -cmp;
+      const idCmp = String(a._id).localeCompare(String(b._id));
+      return safeSortOrder === 'asc' ? idCmp : -idCmp;
     });
 
-    // Cursor pagination on combined set
-    if (cursor) {
-      const cursorIdx = combined.findIndex((item) => String(item._id) === String(cursor));
-      if (cursorIdx >= 0) {
-        combined = combined.slice(cursorIdx + 1);
-      }
-    }
-
-    const hasMore = combined.length > limit;
-    const data = hasMore ? combined.slice(0, limit) : combined;
-    const nextCursor = hasMore && data.length ? data[data.length - 1]._id : null;
-
-    return { data, pagination: { hasMore, nextCursor } };
+    return buildCursorResponse(combined, safeLimit, safeSortBy);
   }
 
   /**
@@ -109,29 +270,8 @@ class OpenItemsService {
     if (entityType === 'ALL' || entityType === 'AR') {
       try {
         const Invoice = (await import('../qop/invoice.model.js')).default;
-        const invoices = await Invoice.find({
-          status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
-        }).lean();
-
-        const buckets = { current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0 };
-
-        for (const inv of invoices) {
-          const dueDate = new Date(inv.dueDate);
-          const daysOverdue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
-          const amount = inv.amountDue || 0;
-
-          if (daysOverdue <= 0) buckets.current += amount;
-          else if (daysOverdue <= 30) buckets['1_30'] += amount;
-          else if (daysOverdue <= 60) buckets['31_60'] += amount;
-          else if (daysOverdue <= 90) buckets['61_90'] += amount;
-          else buckets['90_plus'] += amount;
-        }
-
-        result.ar = {
-          buckets,
-          totalOutstanding: Object.values(buckets).reduce((s, v) => s + v, 0),
-          invoiceCount: invoices.length,
-        };
+        const rows = await Invoice.aggregate(this._agingPipeline(OPEN_AR_STATUSES, '$amountDue', now));
+        result.ar = normalizeBucketTotals(rows);
       } catch {
         logger.warn('QOP Invoice model not available for AR aging', {
           module: 'accounting',
@@ -143,30 +283,8 @@ class OpenItemsService {
     if (entityType === 'ALL' || entityType === 'AP') {
       try {
         const ApInvoice = (await import('./apInvoice.model.js')).default;
-        const apInvoices = await ApInvoice.find({
-          isDeleted: false,
-          status: { $in: ['RECORDED', 'APPROVED', 'PARTIALLY_PAID'] },
-        }).lean();
-
-        const buckets = { current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0 };
-
-        for (const inv of apInvoices) {
-          const dueDate = new Date(inv.dueDate);
-          const daysOverdue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
-          const amount = inv.outstandingAmount || 0;
-
-          if (daysOverdue <= 0) buckets.current += amount;
-          else if (daysOverdue <= 30) buckets['1_30'] += amount;
-          else if (daysOverdue <= 60) buckets['31_60'] += amount;
-          else if (daysOverdue <= 90) buckets['61_90'] += amount;
-          else buckets['90_plus'] += amount;
-        }
-
-        result.ap = {
-          buckets,
-          totalOutstanding: Object.values(buckets).reduce((s, v) => s + v, 0),
-          invoiceCount: apInvoices.length,
-        };
+        const rows = await ApInvoice.aggregate(this._agingPipeline(OPEN_AP_STATUSES, '$outstandingAmount', now));
+        result.ap = normalizeBucketTotals(rows);
       } catch {
         logger.warn('AP Invoice model not available for AP aging', {
           module: 'accounting',
@@ -178,6 +296,46 @@ class OpenItemsService {
     return result;
   }
 
+  _agingPipeline(statuses, amountField, now) {
+    return [
+      {
+        $match: {
+          isDeleted: false,
+          status: { $in: statuses },
+        },
+      },
+      {
+        $addFields: {
+          agingDays: {
+            $dateDiff: { startDate: '$dueDate', endDate: now, unit: 'day' },
+          },
+        },
+      },
+      {
+        $addFields: {
+          agingBucket: {
+            $switch: {
+              branches: [
+                { case: { $lte: ['$agingDays', 0] }, then: 'current' },
+                { case: { $lte: ['$agingDays', 30] }, then: '1_30' },
+                { case: { $lte: ['$agingDays', 60] }, then: '31_60' },
+                { case: { $lte: ['$agingDays', 90] }, then: '61_90' },
+              ],
+              default: '90_plus',
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: '$agingBucket',
+          count: { $sum: 1 },
+          totalOutstanding: { $sum: amountField },
+        },
+      },
+    ];
+  }
+
   /**
    * Generate a statement for a customer (AR) or supplier (AP) over a date range.
    * Returns structured data suitable for PDF generation via doctpl module.
@@ -185,6 +343,8 @@ class OpenItemsService {
   async generateStatement(entityId, entityType, dateRange = {}) {
     const { dateFrom, dateTo } = dateRange;
     const items = [];
+    let entityName = null;
+    let currency = 'CHF';
 
     if (entityType === 'customer') {
       // AR statement — invoices + payments for this customer
@@ -202,7 +362,10 @@ class OpenItemsService {
           .lean();
 
         for (const inv of invoices) {
+          entityName ||= inv.customerName;
+          currency = inv.currency || currency;
           items.push({
+            recordId: inv._id,
             date: inv.invoiceDate || inv.createdAt,
             type: 'INVOICE',
             reference: inv.invoiceNumber,
@@ -265,7 +428,10 @@ class OpenItemsService {
           .lean();
 
         for (const inv of invoices) {
+          entityName ||= inv.supplierName;
+          currency = inv.currency || currency;
           items.push({
+            recordId: inv._id,
             date: inv.invoiceDate || inv.createdAt,
             type: 'AP_INVOICE',
             reference: inv.apInvoiceNumber || inv.supplierInvoiceNumber,
@@ -289,13 +455,29 @@ class OpenItemsService {
 
     return {
       entityId,
+      entityName,
       entityType,
+      currency,
       dateFrom: dateFrom || null,
       dateTo: dateTo || null,
       items,
-      totalDebit: items.reduce((sum, i) => sum + i.debit, 0),
-      totalCredit: items.reduce((sum, i) => sum + i.credit, 0),
+      totalDebit: roundMoney(items.reduce((sum, i) => sum + i.debit, 0)),
+      totalCredit: roundMoney(items.reduce((sum, i) => sum + i.credit, 0)),
+      closingBalance: roundMoney(items.reduce((sum, i) => sum + (i.debit || 0) - (i.credit || 0), 0)),
       generatedAt: new Date(),
+    };
+  }
+
+  async generateStatementOutput(entityId, entityType, dateRange, options, userId, meta = {}) {
+    const accountingDocumentOutputService = (await import('./accountingDocumentOutput.service.js')).default;
+    const statement = await this.generateStatement(entityId, entityType, dateRange);
+    const output = await accountingDocumentOutputService.createStatementOutput(statement, options, userId, meta);
+
+    return {
+      ...statement,
+      document: output.document,
+      fileName: output.fileName,
+      emailQueued: output.emailQueued,
     };
   }
 
@@ -310,12 +492,12 @@ class OpenItemsService {
     // AR total
     try {
       const Invoice = (await import('../qop/invoice.model.js')).default;
-      const arInvoices = await Invoice.find({
+      arTotal = await aggregateOpenAmount(Invoice, {
         customerId: entityId,
+        isDeleted: false,
         status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
-      }).lean();
-
-      arTotal = arInvoices.reduce((sum, inv) => sum + (inv.amountDue || 0), 0);
+        amountDue: { $gt: 0 },
+      }, '$amountDue');
     } catch {
       logger.warn('QOP Invoice model not available for net position', {
         module: 'accounting',
@@ -326,13 +508,12 @@ class OpenItemsService {
     // AP total
     try {
       const ApInvoice = (await import('./apInvoice.model.js')).default;
-      const apInvoices = await ApInvoice.find({
+      apTotal = await aggregateOpenAmount(ApInvoice, {
         supplierId: entityId,
         isDeleted: false,
         status: { $in: ['RECORDED', 'APPROVED', 'PARTIALLY_PAID'] },
-      }).lean();
-
-      apTotal = apInvoices.reduce((sum, inv) => sum + (inv.outstandingAmount || 0), 0);
+        outstandingAmount: { $gt: 0 },
+      }, '$outstandingAmount');
     } catch {
       logger.warn('AP Invoice model not available for net position', {
         module: 'accounting',
@@ -345,6 +526,166 @@ class OpenItemsService {
       arTotal: Math.round(arTotal * 100) / 100,
       apTotal: Math.round(apTotal * 100) / 100,
       netPosition: Math.round((arTotal - apTotal) * 100) / 100,
+    };
+  }
+
+  async netItems(data, userId) {
+    const {
+      customerId,
+      supplierId = customerId,
+      arInvoiceIds = [],
+      apInvoiceIds = [],
+      amount,
+      reason = '',
+    } = data;
+
+    if (!arInvoiceIds.length || !apInvoiceIds.length) {
+      throw new AppError(
+        'At least one AR invoice and one AP invoice are required for netting',
+        400,
+        ERROR_CODES.INVALID_INPUT,
+      );
+    }
+
+    const session = await mongoose.startSession();
+    let netAmount = 0;
+    let arAllocations = [];
+    let apAllocations = [];
+
+    try {
+      await session.withTransaction(async () => {
+        const [Invoice, ApInvoice] = await Promise.all([
+          import('../qop/invoice.model.js').then((module) => module.default),
+          import('./apInvoice.model.js').then((module) => module.default),
+        ]);
+
+        const [arInvoices, apInvoices] = await Promise.all([
+          Invoice.find({
+            _id: { $in: arInvoiceIds },
+            customerId,
+            isDeleted: false,
+            status: { $in: OPEN_AR_STATUSES },
+            amountDue: { $gt: 0 },
+          }).session(session).lean(),
+          ApInvoice.find({
+            _id: { $in: apInvoiceIds },
+            supplierId,
+            isDeleted: false,
+            status: { $in: OPEN_AP_STATUSES },
+            outstandingAmount: { $gt: 0 },
+          }).session(session).lean(),
+        ]);
+
+        if (arInvoices.length !== arInvoiceIds.length) {
+          const found = new Set(arInvoices.map((invoice) => String(invoice._id)));
+          const missing = arInvoiceIds.find((id) => !found.has(String(id)));
+          throw new NotFoundError('Open AR invoice', missing);
+        }
+        if (apInvoices.length !== apInvoiceIds.length) {
+          const found = new Set(apInvoices.map((invoice) => String(invoice._id)));
+          const missing = apInvoiceIds.find((id) => !found.has(String(id)));
+          throw new NotFoundError('Open AP invoice', missing);
+        }
+
+        const maxNettableAmount = Math.min(
+          sumMoney(arInvoices, 'amountDue'),
+          sumMoney(apInvoices, 'outstandingAmount'),
+        );
+        netAmount = amount === undefined || amount === null
+          ? maxNettableAmount
+          : roundMoney(amount);
+
+        if (netAmount <= 0 || netAmount > maxNettableAmount) {
+          throw new ConflictError('Netting amount must be greater than zero and cannot exceed open AR/AP balances');
+        }
+
+        arAllocations = allocateAcrossItems(arInvoices, 'amountDue', netAmount);
+        apAllocations = allocateAcrossItems(apInvoices, 'outstandingAmount', netAmount);
+
+        for (const { item: invoice, amount: allocationAmount } of arAllocations) {
+          const newAmountPaid = roundMoney((invoice.amountPaid || 0) + allocationAmount);
+          const newAmountDue = roundMoney((invoice.amountDue || 0) - allocationAmount);
+          const update = await Invoice.updateOne(
+            {
+              _id: invoice._id,
+              customerId,
+              isDeleted: false,
+              status: { $in: OPEN_AR_STATUSES },
+              amountDue: { $gte: allocationAmount },
+            },
+            {
+              $set: {
+                amountPaid: newAmountPaid,
+                amountDue: newAmountDue,
+                status: newAmountDue <= 0 ? 'PAID' : 'PARTIALLY_PAID',
+                ...(newAmountDue <= 0 ? { paidAt: new Date() } : {}),
+              },
+            },
+            { session },
+          );
+          if (update.matchedCount !== 1) {
+            throw new ConflictError('AR invoice changed while netting was being posted');
+          }
+        }
+
+        for (const { item: invoice, amount: allocationAmount } of apAllocations) {
+          const newPaidAmount = roundMoney((invoice.paidAmount || 0) + allocationAmount);
+          const newOutstandingAmount = roundMoney((invoice.outstandingAmount || 0) - allocationAmount);
+          const update = await ApInvoice.updateOne(
+            {
+              _id: invoice._id,
+              supplierId,
+              isDeleted: false,
+              status: { $in: OPEN_AP_STATUSES },
+              outstandingAmount: { $gte: allocationAmount },
+            },
+            {
+              $set: {
+                paidAmount: newPaidAmount,
+                outstandingAmount: newOutstandingAmount,
+                status: newOutstandingAmount <= 0 ? 'PAID' : 'PARTIALLY_PAID',
+              },
+              $inc: { version: 1 },
+            },
+            { session },
+          );
+          if (update.matchedCount !== 1) {
+            throw new ConflictError('AP invoice changed while netting was being posted');
+          }
+        }
+
+        const [payableAccountId, receivableAccountId] = await Promise.all([
+          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AP_PAYABLE, { session }),
+          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE, { session }),
+        ]);
+
+        await journalEntryService.createFromEvent(
+          'NETTING',
+          arAllocations[0]?.item?._id || null,
+          payableAccountId,
+          receivableAccountId,
+          netAmount,
+          `Open-item netting${reason ? `: ${reason}` : ''}`,
+          userId,
+          { session },
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
+
+    return {
+      customerId,
+      supplierId,
+      amount: netAmount,
+      arAllocations: arAllocations.map(({ item, amount: allocationAmount }) => ({
+        invoiceId: item._id,
+        amount: allocationAmount,
+      })),
+      apAllocations: apAllocations.map(({ item, amount: allocationAmount }) => ({
+        invoiceId: item._id,
+        amount: allocationAmount,
+      })),
     };
   }
 }

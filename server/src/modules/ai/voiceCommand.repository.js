@@ -38,7 +38,8 @@ class VoiceCommandRepository {
   }
 
   async findActive(language) {
-    return VoiceCommand.find({ language, isActive: true })
+    const languageFilter = Array.isArray(language) ? { $in: language } : language;
+    return VoiceCommand.find({ language: languageFilter, isActive: true })
       .sort({ intent: 1 })
       .lean();
   }
@@ -59,12 +60,13 @@ class VoiceCommandRepository {
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {} }) {
+    const resolvedSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
     const filter = {
       ...buildFilter(filters, ALLOWED_FILTERS),
-      ...buildCursorQuery(cursor, sortBy, sortOrder),
+      ...buildCursorQuery(cursor, resolvedSortBy, sortOrder),
     };
 
-    const sort = buildCursorSort(sortBy, sortOrder);
+    const sort = buildCursorSort(resolvedSortBy, sortOrder);
 
     const docs = await VoiceCommand.find(filter)
       .sort(sort)
@@ -72,7 +74,7 @@ class VoiceCommandRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    return buildCursorResponse(docs, limit, resolvedSortBy);
   }
 }
 

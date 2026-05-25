@@ -75,6 +75,13 @@ class ArReceivablesController {
     } catch (err) { next(err); }
   }
 
+  async getCustomerCreditBalance(req, res, next) {
+    try {
+      const data = await arReceivablesService.getCustomerCreditBalance(req.params.customerId);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async listPayments(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
@@ -94,7 +101,17 @@ class ArReceivablesController {
   async generateDunning(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      const result = await arReceivablesService.generateDunningLetters(req.body.invoiceIds, req.body.level, req.user._id, meta);
+      const result = await arReceivablesService.generateDunningLettersWithOutput(
+        req.body.invoiceIds,
+        req.body.level,
+        {
+          format: req.body.format,
+          sendEmail: req.body.sendEmail === true,
+          recipientEmail: req.body.recipientEmail,
+        },
+        req.user._id,
+        meta,
+      );
       return res.success({ data: result, message: 'Dunning letters generated successfully', statusCode: 201 });
     } catch (err) { next(err); }
   }

@@ -2,6 +2,21 @@ import mongoose from 'mongoose';
 
 export const AP_STATUSES = ['RECORDED', 'APPROVED', 'PAID', 'PARTIALLY_PAID', 'DISPUTED', 'CANCELLED'];
 
+const allocationSchema = new mongoose.Schema(
+  {
+    accountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Account',
+      required: true,
+    },
+    amount: { type: Number, required: true, min: 0 },
+    costCenter: { type: String, trim: true, maxlength: 50 },
+    projectReference: { type: String, trim: true, maxlength: 100 },
+    orderReference: { type: String, trim: true, maxlength: 100 },
+  },
+  { _id: false },
+);
+
 const lineItemSchema = new mongoose.Schema(
   {
     position: { type: Number },
@@ -17,6 +32,14 @@ const lineItemSchema = new mongoose.Schema(
       default: null,
     },
     costCenter: { type: String, trim: true, maxlength: 50 },
+    allocations: {
+      type: [allocationSchema],
+      validate: {
+        validator: (allocations) => !allocations || allocations.length <= 10,
+        message: 'A line item can be split across at most 10 allocations',
+      },
+      default: undefined,
+    },
   },
   { _id: false },
 );
@@ -38,6 +61,20 @@ const apInvoiceSchema = new mongoose.Schema(
       required: true,
       trim: true,
       maxlength: 255,
+    },
+    supplierIban: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      maxlength: 34,
+      default: null,
+    },
+    supplierBic: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      maxlength: 11,
+      default: null,
     },
     supplierInvoiceNumber: {
       type: String,
@@ -69,6 +106,12 @@ const apInvoiceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AccountingDocument',
       default: null,
+    },
+    paymentBatchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PaymentBatch',
+      default: null,
+      index: true,
     },
     projectReference: { type: String, trim: true, maxlength: 100 },
     orderReference: { type: String, trim: true, maxlength: 100 },
@@ -109,6 +152,10 @@ const apInvoiceSchema = new mongoose.Schema(
 apInvoiceSchema.index({ supplierId: 1, supplierInvoiceNumber: 1 }, { unique: true });
 apInvoiceSchema.index({ dueDate: 1 });
 apInvoiceSchema.index({ supplierId: 1 });
+apInvoiceSchema.index({ isDeleted: 1, status: 1, dueDate: 1, _id: 1 });
+apInvoiceSchema.index({ isDeleted: 1, status: 1, paymentBatchId: 1 });
+apInvoiceSchema.index({ supplierId: 1, status: 1, dueDate: 1 });
+apInvoiceSchema.index({ isDeleted: 1, status: 1, outstandingAmount: 1, dueDate: 1 });
 apInvoiceSchema.index({ isDeleted: 1, createdAt: -1 });
 
 // --- Soft-delete pre-hook ---

@@ -1,20 +1,26 @@
 import { Router } from 'express';
+import multer from 'multer';
 import bankingController from './banking.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   createBankAccountSchema, updateBankAccountSchema, listBankAccountsSchema,
-  importStatementSchema, listTransactionsSchema, transactionIdParamSchema,
-  bankAccountIdParamSchema,
+  listTransactionsSchema, transactionIdParamSchema,
+  bankAccountIdParamSchema, retrieveStatementsSchema,
 } from './banking.validation.js';
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
 
 // Named routes BEFORE /:id
 router.get('/transactions', authenticate, requirePermission('accounting:bank:read'), validate(listTransactionsSchema), (req, res, next) => bankingController.getTransactions(req, res, next));
 router.get('/transactions/:id', authenticate, requirePermission('accounting:bank:read'), validate(transactionIdParamSchema), (req, res, next) => bankingController.getTransaction(req, res, next));
-router.post('/import', authenticate, requirePermission('accounting:bank:manage'), (req, res, next) => bankingController.importStatement(req, res, next));
-router.post('/retrieve', authenticate, requirePermission('accounting:bank:manage'), (req, res, next) => bankingController.retrieveStatements(req, res, next));
+router.post('/import', authenticate, requirePermission('accounting:bank:manage'), upload.single('file'), (req, res, next) => bankingController.importStatement(req, res, next));
+router.post('/payment-status/import', authenticate, requirePermission('accounting:bank:manage'), upload.single('file'), (req, res, next) => bankingController.importPaymentStatus(req, res, next));
+router.post('/retrieve', authenticate, requirePermission('accounting:bank:manage'), validate(retrieveStatementsSchema), (req, res, next) => bankingController.retrieveStatements(req, res, next));
 
 // Standard CRUD
 router.get('/', authenticate, requirePermission('accounting:bank:read'), validate(listBankAccountsSchema), (req, res, next) => bankingController.listAccounts(req, res, next));

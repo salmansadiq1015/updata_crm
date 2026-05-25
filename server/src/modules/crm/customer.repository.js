@@ -14,8 +14,6 @@ const ALLOWED_FILTERS = {
   newsletterOptIn: 'boolean',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'name', 'customerNumber', '_id'];
-
 class CustomerRepository {
   async create(data) {
     const customer = new Customer(data);
@@ -53,7 +51,65 @@ class CustomerRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    const response = buildCursorResponse(docs, limit, sortBy);
+    response.data = await this._attachComputedFields(response.data);
+    return response;
+  }
+
+  async _attachComputedFields(customers) {
+    if (!customers.length) return customers;
+
+    const customerIds = customers.map((customer) => customer._id);
+    const [Site, Installation, MaintenanceInterval] = await Promise.all([
+      import('./site.model.js').then((module) => module.default),
+      import('./installation.model.js').then((module) => module.default),
+      import('./maintenanceInterval.model.js').then((module) => module.default),
+    ]);
+
+    const [siteCounts, installationCounts, lastServiceRows] = await Promise.all([
+      Site.aggregate([
+        { $match: { customerId: { $in: customerIds }, isDeleted: false } },
+        { $group: { _id: '$customerId', total: { $sum: 1 } } },
+      ]),
+      Site.aggregate([
+        { $match: { customerId: { $in: customerIds }, isDeleted: false } },
+        { $lookup: { from: Installation.collection.name, localField: '_id', foreignField: 'siteId', as: 'installations' } },
+        { $unwind: '$installations' },
+        { $match: { 'installations.isDeleted': false } },
+        { $group: { _id: '$customerId', total: { $sum: 1 } } },
+      ]),
+      Site.aggregate([
+        { $match: { customerId: { $in: customerIds }, isDeleted: false } },
+        { $lookup: { from: Installation.collection.name, localField: '_id', foreignField: 'siteId', as: 'installations' } },
+        { $unwind: '$installations' },
+        { $match: { 'installations.isDeleted': false } },
+        {
+          $lookup: {
+            from: MaintenanceInterval.collection.name,
+            localField: 'installations._id',
+            foreignField: 'installationId',
+            as: 'maintenanceIntervals',
+          },
+        },
+        { $unwind: '$maintenanceIntervals' },
+        { $match: { 'maintenanceIntervals.lastServiceDate': { $ne: null } } },
+        { $group: { _id: '$customerId', lastServiceDate: { $max: '$maintenanceIntervals.lastServiceDate' } } },
+      ]),
+    ]);
+
+    const siteCountByCustomer = new Map(siteCounts.map((row) => [String(row._id), row.total]));
+    const installationCountByCustomer = new Map(installationCounts.map((row) => [String(row._id), row.total]));
+    const lastServiceByCustomer = new Map(lastServiceRows.map((row) => [String(row._id), row.lastServiceDate]));
+
+    return customers.map((customer) => {
+      const key = String(customer._id);
+      return {
+        ...customer,
+        totalSitesCount: siteCountByCustomer.get(key) || 0,
+        totalInstallationsCount: installationCountByCustomer.get(key) || 0,
+        lastServiceDate: lastServiceByCustomer.get(key) || null,
+      };
+    });
   }
 
   async findDuplicates(name, postalCode) {

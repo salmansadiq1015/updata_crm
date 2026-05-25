@@ -4,6 +4,9 @@ import { objectId, cursorPagination } from '../../shared/validation/commonSchema
 const REFERENCE_TYPES = [
   'AR_INVOICE', 'AR_PAYMENT', 'AP_INVOICE', 'AP_PAYMENT',
   'BANK_FEE', 'MANUAL', 'REVERSAL', 'WRITE_OFF',
+  'INVOICE_FINALIZED', 'INVOICE_PAYMENT',
+  'AUTO_RECONCILIATION', 'MANUAL_RECONCILIATION', 'CATEGORIZATION',
+  'NETTING',
 ];
 
 export const createJournalSchema = {

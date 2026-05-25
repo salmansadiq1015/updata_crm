@@ -2,6 +2,16 @@ import mongoose from 'mongoose';
 
 export const BATCH_STATUSES = ['CREATED', 'EXPORTED', 'CONFIRMED', 'REJECTED'];
 
+const pain002TransactionStatusSchema = new mongoose.Schema(
+  {
+    instructionId: { type: String, trim: true, maxlength: 100 },
+    endToEndId: { type: String, trim: true, maxlength: 100 },
+    status: { type: String, trim: true, maxlength: 20 },
+    reason: { type: String, trim: true, maxlength: 500 },
+  },
+  { _id: false },
+);
+
 const paymentBatchSchema = new mongoose.Schema(
   {
     batchNumber: {
@@ -22,6 +32,16 @@ const paymentBatchSchema = new mongoose.Schema(
       ref: 'FileMetadata',
       default: null,
     },
+    exportedAt: { type: Date, default: null },
+    exportedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    pain002Status: { type: String, trim: true, maxlength: 20, default: null },
+    pain002Reason: { type: String, trim: true, maxlength: 500, default: null },
+    pain002ReceivedAt: { type: Date, default: null },
+    pain002TransactionStatuses: [pain002TransactionStatusSchema],
     invoiceIds: [
       {
         type: mongoose.Schema.Types.ObjectId,

@@ -104,7 +104,7 @@ The module shall be deemed ready for acceptance when assignments can be created,
 
 ## 5. Module: Mobile technician app
 
-The contractor shall implement a mobile application for iOS and Android to support field staff.
+<!-- The contractor shall implement a mobile application for iOS and Android to support field staff. -->
 
 ### 5.1 Scope of services
 

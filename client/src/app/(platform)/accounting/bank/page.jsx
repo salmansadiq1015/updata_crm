@@ -23,12 +23,18 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('de-CH') : '—';
 
 function BankAccountForm({ open, onClose, de }) {
   const { createBankAccount } = useBankMutations();
-  const [form, setForm] = useState({ bankName: '', iban: '', currency: 'CHF', openingBalance: '0' });
+  const [form, setForm] = useState({ bankName: '', iban: '', currency: 'CHF' });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await createBankAccount.mutateAsync({ ...form, openingBalance: Number(form.openingBalance) });
+    await createBankAccount.mutateAsync({
+      name: form.bankName,
+      bankName: form.bankName,
+      iban: form.iban,
+      currency: form.currency,
+      connectionType: 'MANUAL',
+    });
     onClose();
   };
 
@@ -47,21 +53,15 @@ function BankAccountForm({ open, onClose, de }) {
             <Label className="text-xs">IBAN</Label>
             <Input className="h-8 font-mono tracking-wider" value={form.iban} onChange={(e) => set('iban', e.target.value.toUpperCase())} required placeholder="CH56 0483 5012 3456 7800 9" maxLength={30} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
-              <Select value={form.currency} onValueChange={(v) => set('currency', v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CHF">CHF</SelectItem>
-                  <SelectItem value="EUR">EUR</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Eröffnungssaldo' : 'Opening Balance'}</Label>
-              <Input type="number" step="0.05" className="h-8 font-mono" value={form.openingBalance} onChange={(e) => set('openingBalance', e.target.value)} />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
+            <Select value={form.currency} onValueChange={(v) => set('currency', v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CHF">CHF</SelectItem>
+                <SelectItem value="EUR">EUR</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={createBankAccount.isPending}>{de ? 'Abbrechen' : 'Cancel'}</Button>
@@ -75,17 +75,20 @@ function BankAccountForm({ open, onClose, de }) {
   );
 }
 
-function ImportDialog({ open, onClose, de }) {
+function ImportDialog({ open, onClose, de, accounts }) {
   const { importStatement } = useBankMutations();
   const fileRef = useRef(null);
   const [file, setFile] = useState(null);
+  const [bankAccountId, setBankAccountId] = useState('');
+  const [format, setFormat] = useState('camt053');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file) return;
-    await importStatement.mutateAsync(file);
+    if (!file || !bankAccountId) return;
+    await importStatement.mutateAsync({ file, bankAccountId, format });
     onClose();
     setFile(null);
+    setBankAccountId('');
   };
 
   return (
@@ -96,8 +99,31 @@ function ImportDialog({ open, onClose, de }) {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
           <p className="text-xs text-muted-foreground">
-            {de ? 'Unterstützte Formate: MT940, CAMT.053, CSV' : 'Supported formats: MT940, CAMT.053, CSV'}
+            {de ? 'Unterstützte Formate: camt.053 und camt.054 XML' : 'Supported formats: camt.053 and camt.054 XML'}
           </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Bankkonto' : 'Bank account'}</Label>
+              <Select value={bankAccountId} onValueChange={setBankAccountId}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={de ? 'Auswählen' : 'Select'} /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account._id} value={account._id}>{account.displayName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Format</Label>
+              <Select value={format} onValueChange={setFormat}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="camt053">camt.053</SelectItem>
+                  <SelectItem value="camt054">camt.054</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div
             className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
             onClick={() => fileRef.current?.click()}
@@ -112,7 +138,7 @@ function ImportDialog({ open, onClose, de }) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{de ? 'Abbrechen' : 'Cancel'}</Button>
-            <Button type="submit" disabled={!file || importStatement.isPending}>
+            <Button type="submit" disabled={!file || !bankAccountId || importStatement.isPending}>
               {importStatement.isPending ? (de ? 'Importiere...' : 'Importing...') : (de ? 'Importieren' : 'Import')}
             </Button>
           </DialogFooter>
@@ -246,6 +272,7 @@ export default function BankPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
   const [importOpen, setImportOpen] = useState(false);
+  const { data: bankAccounts = [] } = useBankAccounts();
 
   return (
     <div className="flex flex-col gap-5 max-w-7xl mx-auto">
@@ -269,7 +296,7 @@ export default function BankPage() {
         </TabsContent>
       </Tabs>
 
-      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} de={de} />
+      <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} de={de} accounts={bankAccounts} />
     </div>
   );
 }

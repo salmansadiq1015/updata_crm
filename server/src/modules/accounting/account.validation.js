@@ -48,3 +48,12 @@ export const balanceQuerySchema = {
     endDate: Joi.date().iso(),
   }),
 };
+
+export const overviewQuerySchema = {
+  params: Joi.object({ id: objectId.required() }),
+  query: Joi.object({
+    startDate: Joi.date().iso(),
+    endDate: Joi.date().iso(),
+    limit: Joi.number().integer().min(1).max(10000).default(10000),
+  }),
+};

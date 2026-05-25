@@ -13,7 +13,7 @@ const router = Router();
 
 const widgetLimiter = createLimiter({
   windowMs: 60 * 60 * 1000,
-  max: 30,
+  max: 20,
   message: 'Too many widget submissions, please try again later',
 });
 

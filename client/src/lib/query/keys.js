@@ -124,6 +124,7 @@ export const queryKeys = {
       detail: (id) => ['crm', 'spareParts', 'detail', id],
       search: (q) => ['crm', 'spareParts', 'search', q],
       byInstallation: (installationId) => ['crm', 'spareParts', 'byInstallation', installationId],
+      orderRequests: (filters) => ['crm', 'spareParts', 'orderRequests', filters],
     },
     maintenance: {
       all: () => ['crm', 'maintenance'],

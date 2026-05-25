@@ -19,7 +19,7 @@ const arPaymentAllocationSchema = new mongoose.Schema(
     allocatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
     allocatedAt: {
       type: Date,

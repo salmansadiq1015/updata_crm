@@ -5,12 +5,62 @@ export const DOCUMENT_TYPES = [
   'RECEIPT',
   'BANK_STATEMENT',
   'AR_INVOICE_PDF',
+  'OPEN_ITEM_STATEMENT',
+  'DUNNING_LETTER',
   'PAYMENT_CONFIRMATION',
   'OTHER',
 ];
 
 export const OCR_STATUSES = ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'NOT_APPLICABLE'];
 export const PROCESSING_STATUSES = ['UNPROCESSED', 'IN_REVIEW', 'PROCESSED'];
+export const LINKED_RECORD_TYPES = [
+  'AR_INVOICE',
+  'AP_INVOICE',
+  'AR_PAYMENT',
+  'PAYMENT_BATCH',
+  'BANK_STATEMENT',
+  'BANK_TRANSACTION',
+  'JOURNAL_ENTRY',
+  'OTHER',
+];
+
+const linkedRecordSchema = new mongoose.Schema(
+  {
+    recordType: {
+      type: String,
+      enum: LINKED_RECORD_TYPES,
+      required: true,
+    },
+    recordId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+  },
+  { _id: false },
+);
+
+const assignmentHistorySchema = new mongoose.Schema(
+  {
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    assignedAt: { type: Date, default: Date.now },
+    note: { type: String, trim: true, maxlength: 500, default: '' },
+    reason: {
+      type: String,
+      enum: ['MANUAL', 'BULK', 'AUTO_RULE'],
+      default: 'MANUAL',
+    },
+  },
+  { _id: false },
+);
 
 const accountingDocumentSchema = new mongoose.Schema(
   {
@@ -67,6 +117,9 @@ const accountingDocumentSchema = new mongoose.Schema(
     },
     notes: { type: String, maxlength: 2000, default: '' },
     projectReference: { type: String, trim: true, maxlength: 100, default: '' },
+    fullText: { type: String, maxlength: 200000, default: '' },
+    linkedRecords: [linkedRecordSchema],
+    assignmentHistory: [assignmentHistorySchema],
     retentionUntil: {
       type: Date,
       required: true,
@@ -75,6 +128,13 @@ const accountingDocumentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
+    },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
   },
   {
@@ -90,6 +150,17 @@ accountingDocumentSchema.index({ ocrStatus: 1 });
 accountingDocumentSchema.index({ assignedTo: 1 });
 accountingDocumentSchema.index({ processingStatus: 1 });
 accountingDocumentSchema.index({ createdAt: -1 });
+accountingDocumentSchema.index({ isDeleted: 1, createdAt: -1 });
+accountingDocumentSchema.index({ 'linkedRecords.recordType': 1, 'linkedRecords.recordId': 1 });
+accountingDocumentSchema.index(
+  { fileName: 'text', notes: 'text', projectReference: 'text', fullText: 'text' },
+  { weights: { fileName: 10, projectReference: 5, notes: 3, fullText: 1 } },
+);
+
+accountingDocumentSchema.pre(/^find/, function () {
+  if (this.getOptions().includeDeleted) return;
+  this.where({ isDeleted: false });
+});
 
 const AccountingDocument = mongoose.model('AccountingDocument', accountingDocumentSchema);
 export default AccountingDocument;

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import sparePartController from './sparePart.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
@@ -9,12 +10,17 @@ import {
   deleteSparePartSchema,
   listSparePartsSchema,
   searchSparePartsSchema,
+  listOrderRequestsSchema,
   exportSparePartsSchema,
+  importSparePartsSchema,
   linkSparePartSchema,
   unlinkSparePartSchema,
+  flagSparePartOrderSchema,
+  updateSparePartOrderStatusSchema,
 } from './sparePart.validation.js';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // List (cursor-paginated)
 router.get('/', authenticate, requirePermission('crm:read'), validate(listSparePartsSchema), (req, res, next) => sparePartController.list(req, res, next));
@@ -25,8 +31,12 @@ router.post('/', authenticate, requirePermission('crm:write'), validate(createSp
 // Text search — BEFORE /:id
 router.get('/search', authenticate, requirePermission('crm:read'), validate(searchSparePartsSchema), (req, res, next) => sparePartController.search(req, res, next));
 
+router.get('/order-requests', authenticate, requirePermission('crm:read'), validate(listOrderRequestsSchema), (req, res, next) => sparePartController.listOrderRequests(req, res, next));
+
 // CSV export — BEFORE /:id
 router.get('/export', authenticate, requirePermission('crm:read'), validate(exportSparePartsSchema), (req, res, next) => sparePartController.exportCsv(req, res, next));
+
+router.post('/import', authenticate, requirePermission('crm:write'), upload.single('file'), validate(importSparePartsSchema), (req, res, next) => sparePartController.importCsv(req, res, next));
 
 // Get by ID
 router.get('/:id', authenticate, requirePermission('crm:read'), validate(sparePartIdParamSchema), (req, res, next) => sparePartController.getById(req, res, next));
@@ -42,6 +52,8 @@ const installationSparePartsRouter = Router({ mergeParams: true });
 
 installationSparePartsRouter.get('/', authenticate, requirePermission('crm:read'), (req, res, next) => sparePartController.getByInstallation(req, res, next));
 installationSparePartsRouter.post('/', authenticate, requirePermission('crm:write'), validate(linkSparePartSchema), (req, res, next) => sparePartController.linkToInstallation(req, res, next));
+installationSparePartsRouter.post('/:sparePartId/order-flag', authenticate, requirePermission('crm:write'), validate(flagSparePartOrderSchema), (req, res, next) => sparePartController.flagForOrdering(req, res, next));
+installationSparePartsRouter.patch('/:sparePartId/order-status', authenticate, requirePermission('crm:write'), validate(updateSparePartOrderStatusSchema), (req, res, next) => sparePartController.updateOrderStatus(req, res, next));
 installationSparePartsRouter.delete('/:sparePartId', authenticate, requirePermission('crm:delete'), validate(unlinkSparePartSchema), (req, res, next) => sparePartController.unlinkFromInstallation(req, res, next));
 
 export { installationSparePartsRouter };

@@ -1,6 +1,7 @@
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
+import accountMappingService, { ACCOUNT_MAPPING } from './accountMapping.service.js';
 
 /**
  * Register accounting module event handlers.
@@ -9,16 +10,19 @@ import logger from '../../shared/logger/index.js';
  * and triggers accounting-side actions (journal entries, OCR, aging updates).
  */
 export function registerAccountingEvents() {
-  // INVOICE_FINALIZED (from QOP) → post revenue journal entry (debit AR, credit Revenue)
   eventBus.subscribe(EVENT_TYPES.INVOICE_FINALIZED, async (data) => {
     try {
       const journalEntryService = (await import('./journalEntry.service.js')).default;
+      const [receivableAccountId, revenueAccountId] = await Promise.all([
+        accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE),
+        accountMappingService.resolveGlobal(ACCOUNT_MAPPING.SALES_REVENUE),
+      ]);
 
       await journalEntryService.createFromEvent(
         'INVOICE_FINALIZED',
         data.invoiceId,
-        data.customerId, // debit: AR account (placeholder — real mapping in production)
-        data.customerId, // credit: Revenue account (placeholder)
+        receivableAccountId,
+        revenueAccountId,
         data.totalAmount || data.totalGross || 0,
         `Revenue: Invoice ${data.invoiceNumber || data.invoiceId} finalized`,
         data.userId || null,
@@ -39,16 +43,19 @@ export function registerAccountingEvents() {
     }
   });
 
-  // INVOICE_PAYMENT_RECORDED (from QOP) → journal entry (debit Bank, credit AR)
   eventBus.subscribe(EVENT_TYPES.INVOICE_PAYMENT_RECORDED, async (data) => {
     try {
       const journalEntryService = (await import('./journalEntry.service.js')).default;
+      const [bankAccountId, receivableAccountId] = await Promise.all([
+        accountMappingService.resolveGlobal(ACCOUNT_MAPPING.BANK_CLEARING),
+        accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE),
+      ]);
 
       await journalEntryService.createFromEvent(
         'INVOICE_PAYMENT',
         data.invoiceId || data.paymentId,
-        data.bankAccountId || data.customerId, // debit: Bank (placeholder)
-        data.customerId, // credit: AR account (placeholder)
+        bankAccountId,
+        receivableAccountId,
         data.amount || 0,
         `Payment recorded for invoice ${data.invoiceNumber || data.invoiceId}`,
         data.userId || null,
@@ -69,10 +76,9 @@ export function registerAccountingEvents() {
     }
   });
 
-  // INVOICE_PAID (from QOP) → close AR open item
   eventBus.subscribe(EVENT_TYPES.INVOICE_PAID, async (data) => {
     try {
-      logger.info('Invoice fully paid — AR open item closed', {
+      logger.info('Invoice fully paid - AR open item closed', {
         module: 'accounting',
         action: 'event.invoice_paid',
         invoiceId: data.invoiceId,
@@ -87,10 +93,9 @@ export function registerAccountingEvents() {
     }
   });
 
-  // INVOICE_OVERDUE (from QOP) → update aging, flag for dunning
   eventBus.subscribe(EVENT_TYPES.INVOICE_OVERDUE, async (data) => {
     try {
-      logger.info('Invoice overdue — aging updated, dunning flagged', {
+      logger.info('Invoice overdue - aging updated, dunning flagged', {
         module: 'accounting',
         action: 'event.invoice_overdue',
         invoiceId: data.invoiceId,
@@ -105,7 +110,6 @@ export function registerAccountingEvents() {
     }
   });
 
-  // ACCOUNTING_DOCUMENT_UPLOADED → auto-queue OCR for supplier invoices
   eventBus.subscribe(EVENT_TYPES.ACCOUNTING_DOCUMENT_UPLOADED, async (data) => {
     try {
       if (data.documentType === 'SUPPLIER_INVOICE') {

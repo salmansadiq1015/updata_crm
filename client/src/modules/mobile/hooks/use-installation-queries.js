@@ -3,13 +3,19 @@
 import { queryKeys } from '@/lib/query/keys';
 import { installationService } from '../services/installation-service';
 import { useOfflineQuery } from './use-offline-query';
+import { db, upsertCrmAddressBook } from '../db/mobile-db';
 
 export function useInstallations(siteId) {
   return useOfflineQuery({
     queryKey: queryKeys.mobile.installations.bySite(siteId),
     queryFn: () => installationService.getInstallations(siteId),
-    offlineFn: () => Promise.resolve([]),
-    onServerData: async () => {},
+    offlineFn: () => db.crmInstallations.where('site_id').equals(siteId).toArray(),
+    onServerData: async (installations) => {
+      await upsertCrmAddressBook(
+        { installations: installations.map((item) => ({ ...item, site_id: item.site_id || siteId })) },
+        new Date().toISOString(),
+      );
+    },
     enabled: !!siteId,
     staleTime: 30 * 60 * 1000,
   });
@@ -19,8 +25,11 @@ export function useInstallationDetail(id) {
   return useOfflineQuery({
     queryKey: queryKeys.mobile.installations.detail(id),
     queryFn: () => installationService.getInstallationById(id),
-    offlineFn: () => Promise.resolve(null),
-    onServerData: async () => {},
+    offlineFn: () => db.crmInstallations.get(id),
+    onServerData: async (installation) => {
+      if (!installation) return;
+      await upsertCrmAddressBook({ installations: [installation] }, new Date().toISOString());
+    },
     enabled: !!id,
     staleTime: 30 * 60 * 1000,
   });

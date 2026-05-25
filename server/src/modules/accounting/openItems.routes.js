@@ -4,6 +4,7 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   listOpenItemsSchema, agingSchema, statementSchema, netPositionSchema,
+  netItemsSchema,
 } from './openItems.validation.js';
 
 const router = Router();
@@ -12,5 +13,6 @@ router.get('/', authenticate, requirePermission('accounting:openitems:read'), va
 router.get('/aging', authenticate, requirePermission('accounting:openitems:read'), validate(agingSchema), (req, res, next) => openItemsController.getAging(req, res, next));
 router.post('/statement/:entityId', authenticate, requirePermission('accounting:openitems:read'), validate(statementSchema), (req, res, next) => openItemsController.generateStatement(req, res, next));
 router.post('/net/:entityId', authenticate, requirePermission('accounting:openitems:read'), validate(netPositionSchema), (req, res, next) => openItemsController.getNetPosition(req, res, next));
+router.post('/netting', authenticate, requirePermission('accounting:openitems:manage'), validate(netItemsSchema), (req, res, next) => openItemsController.netItems(req, res, next));
 
 export default router;

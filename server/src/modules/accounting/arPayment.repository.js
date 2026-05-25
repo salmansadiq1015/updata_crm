@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import ArPayment from './arPayment.model.js';
 import ArPaymentAllocation from './arPaymentAllocation.model.js';
 import {
@@ -7,13 +8,14 @@ import {
 } from '../../shared/utils/pagination.js';
 
 class ArPaymentRepository {
-  async create(data) {
+  async create(data, options = {}) {
     const payment = new ArPayment(data);
-    return payment.save();
+    return payment.save({ session: options.session });
   }
 
-  async findById(id) {
+  async findById(id, options = {}) {
     return ArPayment.findById(id)
+      .session(options.session || null)
       .populate([
         { path: 'createdBy', select: 'firstName lastName email' },
       ])
@@ -48,12 +50,80 @@ class ArPaymentRepository {
       { $set: { allocatedAmount: newAllocated, unallocatedAmount: newUnallocated } },
     );
   }
+
+  async applyAllocationDelta(id, amount, options = {}) {
+    const paymentId = typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id;
+
+    return ArPayment.collection.updateOne(
+      { _id: paymentId, unallocatedAmount: { $gte: amount } },
+      [
+        {
+          $set: {
+            allocatedAmount: { $round: [{ $add: ['$allocatedAmount', amount] }, 2] },
+            unallocatedAmount: { $round: [{ $subtract: ['$unallocatedAmount', amount] }, 2] },
+          },
+        },
+      ],
+      { session: options.session },
+    );
+  }
+
+  async getCustomerCreditBalance(customerId, options = {}) {
+    const normalizedCustomerId = typeof customerId === 'string'
+      ? new mongoose.Types.ObjectId(customerId)
+      : customerId;
+
+    const [summary] = await ArPayment.aggregate([
+      {
+        $match: {
+          customerId: normalizedCustomerId,
+          unallocatedAmount: { $gt: 0 },
+        },
+      },
+      {
+        $group: {
+          _id: '$currency',
+          totalCredit: { $sum: '$unallocatedAmount' },
+          paymentCount: { $sum: 1 },
+          oldestCreditDate: { $min: '$paymentDate' },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          currency: '$_id',
+          totalCredit: { $round: ['$totalCredit', 2] },
+          paymentCount: 1,
+          oldestCreditDate: 1,
+        },
+      },
+    ]).session(options.session || null);
+
+    const payments = await ArPayment.find({
+      customerId: normalizedCustomerId,
+      unallocatedAmount: { $gt: 0 },
+    })
+      .session(options.session || null)
+      .sort({ paymentDate: 1, _id: 1 })
+      .limit(100)
+      .select('_id paymentDate amount allocatedAmount unallocatedAmount currency paymentReference source bankAccountId bankTransactionId')
+      .lean();
+
+    return {
+      customerId,
+      currency: summary?.currency || payments[0]?.currency || 'CHF',
+      totalCredit: summary?.totalCredit || 0,
+      paymentCount: summary?.paymentCount || 0,
+      oldestCreditDate: summary?.oldestCreditDate || null,
+      payments,
+    };
+  }
 }
 
 class ArPaymentAllocationRepository {
-  async create(data) {
+  async create(data, options = {}) {
     const allocation = new ArPaymentAllocation(data);
-    return allocation.save();
+    return allocation.save({ session: options.session });
   }
 
   async findByPaymentId(paymentId) {

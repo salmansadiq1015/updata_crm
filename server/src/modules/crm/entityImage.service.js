@@ -5,7 +5,6 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
 import { NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
-import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };

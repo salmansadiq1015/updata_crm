@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 
 const customerSchema = new mongoose.Schema(
   {
@@ -51,6 +52,7 @@ const customerSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    migration: { type: migrationTraceSchema, default: () => ({}) },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
@@ -67,6 +69,7 @@ customerSchema.index({ isDeleted: 1, status: 1 });
 customerSchema.index({ createdAt: -1 });
 customerSchema.index({ type: 1 });
 customerSchema.index({ name: 1, postalCode: 1 }); // duplicate detection
+customerSchema.index({ 'migration.sourceSystem': 1, 'migration.sourceId': 1 });
 customerSchema.index(
   { name: 'text', city: 'text', email: 'text' },
   { weights: { name: 10, email: 5, city: 2 } },

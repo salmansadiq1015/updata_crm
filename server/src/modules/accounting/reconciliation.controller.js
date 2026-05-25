@@ -36,6 +36,19 @@ class ReconciliationController {
     } catch (err) { next(err); }
   }
 
+  async matchAp(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await reconciliationService.manualMatchAp(
+        req.body.transactionId,
+        req.body.apInvoiceId,
+        req.user._id,
+        meta,
+      );
+      return res.success({ data: result, message: 'AP transaction matched successfully' });
+    } catch (err) { next(err); }
+  }
+
   async categorize(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

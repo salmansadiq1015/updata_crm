@@ -4,14 +4,14 @@ class WidgetAdminController {
   async listSubmissions(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
-      const result = await widgetSubmissionService.listSubmissions(query);
+      const result = await widgetSubmissionService.list(query);
       return res.success({ data: result.data, pagination: result.pagination });
     } catch (err) { next(err); }
   }
 
   async getSubmission(req, res, next) {
     try {
-      const data = await widgetSubmissionService.getSubmission(req.params.id);
+      const data = await widgetSubmissionService.getById(req.params.id);
       return res.success({ data });
     } catch (err) { next(err); }
   }
@@ -27,14 +27,17 @@ class WidgetAdminController {
   async updateConfig(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      const data = await widgetSubmissionService.updateConfig(req.body, req.user._id, meta);
+      const body = req.body || {};
+      const { widgetId = 'default', ...configData } = body;
+      const data = await widgetSubmissionService.updateConfig(widgetId, configData, req.user._id, meta);
       return res.success({ data, message: 'Widget config updated successfully' });
     } catch (err) { next(err); }
   }
 
   async getConfig(req, res, next) {
     try {
-      const data = await widgetSubmissionService.getConfig();
+      const query = req._validatedQuery || req.query || {};
+      const data = await widgetSubmissionService.getConfig(query.widgetId || 'default');
       return res.success({ data });
     } catch (err) { next(err); }
   }

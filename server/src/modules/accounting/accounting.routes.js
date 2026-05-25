@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import accountRoutes from './account.routes.js';
+import accountMappingRoutes from './accountMapping.routes.js';
 import journalEntryRoutes from './journalEntry.routes.js';
 import arReceivablesRoutes from './arReceivables.routes.js';
 import apInvoiceRoutes from './apInvoice.routes.js';
@@ -27,6 +28,7 @@ import openItemsRoutes from './openItems.routes.js';
 const router = Router();
 
 router.use('/accounts', accountRoutes);
+router.use('/account-mappings', accountMappingRoutes);
 router.use('/journal', journalEntryRoutes);
 router.use('/ar', arReceivablesRoutes);
 router.use('/ap/invoices', apInvoiceRoutes);

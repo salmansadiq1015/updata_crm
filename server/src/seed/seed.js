@@ -18,7 +18,44 @@ import logger from '../shared/logger/index.js';
  */
 
 // All permission definitions: { module, action, description }
-const PERMISSION_DEFINITIONS = [
+export const ACCOUNTING_PERMISSION_KEYS = [
+  'accounting:read',
+  'accounting:write',
+  'accounting:admin',
+  'accounting:chart:read',
+  'accounting:chart:manage',
+  'accounting:journal:read',
+  'accounting:journal:write',
+  'accounting:journal:export',
+  'accounting:ar:read',
+  'accounting:ar:manage',
+  'accounting:ar:dunning',
+  'accounting:ap:read',
+  'accounting:ap:manage',
+  'accounting:ap:approve',
+  'accounting:ap:approve_high',
+  'accounting:ap:upload',
+  'accounting:documents:read',
+  'accounting:documents:manage',
+  'accounting:bank:read',
+  'accounting:bank:manage',
+  'accounting:reconciliation:manage',
+  'accounting:cash:read',
+  'accounting:cash:manage',
+  'accounting:openitems:read',
+  'accounting:openitems:manage',
+];
+
+const accountingPermissionDefinitions = ACCOUNTING_PERMISSION_KEYS.map((key) => {
+  const [module, ...actionParts] = key.split(':');
+  return {
+    module,
+    action: actionParts.join(':'),
+    description: `Accounting permission: ${key}`,
+  };
+});
+
+export const PERMISSION_DEFINITIONS = [
   // Users
   { module: 'users', action: 'read', description: 'View user profiles' },
   { module: 'users', action: 'write', description: 'Create and update users' },
@@ -66,9 +103,7 @@ const PERMISSION_DEFINITIONS = [
   { module: 'invoicing', action: 'admin', description: 'Full invoice administration' },
 
   // Accounting
-  { module: 'accounting', action: 'read', description: 'View accounting data' },
-  { module: 'accounting', action: 'write', description: 'Create and update accounting entries' },
-  { module: 'accounting', action: 'admin', description: 'Full accounting administration' },
+  ...accountingPermissionDefinitions,
 
   // Reports
   { module: 'reports', action: 'read', description: 'View reports' },
@@ -108,7 +143,7 @@ const PERMISSION_DEFINITIONS = [
 ];
 
 // Role definitions with permission keys
-const ROLE_DEFINITIONS = [
+export const ROLE_DEFINITIONS = [
   {
     name: 'Admin',
     description: 'Full system access, user management',
@@ -150,7 +185,7 @@ const ROLE_DEFINITIONS = [
     permissionKeys: [
       'crm:read',
       'invoicing:read', 'invoicing:write', 'invoicing:delete', 'invoicing:admin',
-      'accounting:read', 'accounting:write', 'accounting:admin',
+      ...ACCOUNTING_PERMISSION_KEYS,
       'reports:read', 'reports:write',
       'quotations:read',
       'tasks:read',

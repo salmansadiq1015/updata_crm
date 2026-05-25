@@ -9,6 +9,28 @@ import logger from '../../shared/logger/index.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
+const DEFAULT_MAINTENANCE_TEMPLATES = {
+  boiler: [{ maintenanceType: 'annual_service', frequencyMonths: 12 }],
+  heat_pump: [{ maintenanceType: 'annual_service', frequencyMonths: 12 }],
+  solar_thermal: [{ maintenanceType: 'general_inspection', frequencyMonths: 12 }],
+  radiator_system: [{ maintenanceType: 'general_inspection', frequencyMonths: 24 }],
+  ventilation: [{ maintenanceType: 'filter_change', frequencyMonths: 6 }],
+  hot_water: [{ maintenanceType: 'annual_service', frequencyMonths: 12 }],
+};
+
+function addMonths(date, months) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
+function determineMaintenanceStatus(nextDueDate, now = new Date()) {
+  if (!nextDueDate) return 'ok';
+  if (nextDueDate <= now) return 'overdue';
+  const lookahead = new Date(now);
+  lookahead.setDate(lookahead.getDate() + 30);
+  return nextDueDate <= lookahead ? 'due' : 'ok';
+}
 
 class InstallationService {
   async create(siteId, data, createdBy, meta = {}) {
@@ -25,6 +47,8 @@ class InstallationService {
       installationNumber,
       createdBy,
     });
+
+    await this._createDefaultMaintenanceIntervals(installation);
 
     await this._invalidateSiteInstallationsCache(siteId);
 
@@ -49,6 +73,27 @@ class InstallationService {
     logger.info('Installation created', { module: 'crm', action: 'create', installationId: installation._id, siteId, installationNumber });
 
     return installationRepository.findById(installation._id);
+  }
+
+  async _createDefaultMaintenanceIntervals(installation) {
+    const templates = DEFAULT_MAINTENANCE_TEMPLATES[installation.type] || [];
+    if (!templates.length) return;
+
+    const MaintenanceInterval = (await import('./maintenanceInterval.model.js')).default;
+    const referenceDate = installation.commissioningDate || new Date();
+    await MaintenanceInterval.insertMany(
+      templates.map((template) => {
+        const nextDueDate = addMonths(referenceDate, template.frequencyMonths);
+        return {
+          ...template,
+          installationId: installation._id,
+          lastServiceDate: installation.commissioningDate || null,
+          nextDueDate,
+          maintenanceStatus: determineMaintenanceStatus(nextDueDate),
+        };
+      }),
+      { ordered: true },
+    );
   }
 
   async getById(id) {

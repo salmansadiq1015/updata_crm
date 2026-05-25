@@ -12,16 +12,16 @@ const ALLOWED_FILTERS = {
   parentId: 'objectId',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'accountNumber', 'name', '_id'];
-
 class AccountRepository {
   async create(data) {
     const account = new Account(data);
     return account.save();
   }
 
-  async findById(id) {
-    return Account.findById(id).lean();
+  async findById(id, options = {}) {
+    return Account.findById(id)
+      .session(options.session || null)
+      .lean();
   }
 
   async findByAccountNumber(accountNumber) {

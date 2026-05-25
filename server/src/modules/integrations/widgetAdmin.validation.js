@@ -25,6 +25,7 @@ export const markProcessedSchema = {
 
 export const updateWidgetConfigSchema = {
   body: Joi.object({
+    widgetId: Joi.string(),
     branding: Joi.object(),
     fields: Joi.object(),
     requestTypes: Joi.array(),

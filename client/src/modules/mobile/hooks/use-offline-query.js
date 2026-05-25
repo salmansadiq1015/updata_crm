@@ -35,8 +35,8 @@ export function useOfflineQuery({
   });
 
   const offlineData = useLiveQuery(
-    () => (!isOnline && offlineFn ? offlineFn() : undefined),
-    [isOnline]
+    () => (!isOnline && enabled && offlineFn ? offlineFn() : undefined),
+    [isOnline, enabled, ...queryKey]
   );
 
   if (!isOnline && offlineFn) {

@@ -14,6 +14,13 @@ const lineItemSchema = Joi.object({
   unitPrice: Joi.number().min(0).required(),
   discountPercent: Joi.number().min(0).max(100).default(0),
   vatRate: Joi.number().min(0).required(),
+  sourceOrderLinePosition: Joi.number().integer().min(1).allow(null),
+  sourceOrderLineQuantity: Joi.number().min(0).allow(null),
+});
+
+const orderLineSelectionSchema = Joi.object({
+  sourceOrderLinePosition: Joi.number().integer().min(1).required(),
+  quantity: Joi.number().greater(0),
 });
 
 export const createInvoiceSchema = {
@@ -59,6 +66,18 @@ export const createFinalSchema = {
     dueDate: Joi.date().iso().required(),
     paymentTermsDays: Joi.number().integer().min(0).default(30),
     paymentTermsText: Joi.string().max(1000).allow('', null),
+  }),
+};
+
+export const createFromOrderSchema = {
+  body: Joi.object({
+    sourceOrderId: objectId.required(),
+    lineSelections: Joi.array().items(orderLineSelectionSchema).min(1).max(50),
+    title: Joi.string().trim().max(500).allow('', null),
+    dueDate: Joi.date().iso().required(),
+    paymentTermsDays: Joi.number().integer().min(0).default(30),
+    paymentTermsText: Joi.string().max(1000).allow('', null),
+    globalDiscountPercent: Joi.number().min(0).max(100),
   }),
 };
 
@@ -110,6 +129,17 @@ export const finalizeSchema = {
 
 export const sendSchema = {
   params: Joi.object({ id: objectId.required() }),
+};
+
+export const createCreditNoteSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    title: Joi.string().trim().max(500).allow('', null),
+    reason: Joi.string().trim().max(2000).allow('', null),
+    dueDate: Joi.date().iso(),
+    cancelOriginal: Joi.boolean().default(true),
+    lineItems: Joi.array().items(lineItemSchema),
+  }).default({}),
 };
 
 export const recordPaymentSchema = {

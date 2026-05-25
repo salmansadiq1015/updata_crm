@@ -108,6 +108,18 @@ const config = Object.freeze({
     password: envVars.SMTP_PASSWORD,
   },
 
+  company: {
+    name: envVars.COMPANY_NAME,
+    street: envVars.COMPANY_STREET,
+    buildingNumber: envVars.COMPANY_BUILDING_NUMBER,
+    zip: envVars.COMPANY_ZIP,
+    city: envVars.COMPANY_CITY,
+    country: envVars.COMPANY_COUNTRY,
+    phone: envVars.COMPANY_PHONE,
+    email: envVars.COMPANY_EMAIL,
+    qrIban: envVars.COMPANY_QR_IBAN,
+  },
+
   rateLimit: {
     global: envVars.RATE_LIMIT_GLOBAL,
     windowMs: envVars.RATE_LIMIT_WINDOW_MS,
@@ -128,6 +140,14 @@ const config = Object.freeze({
     apiKey: envVars.OPENAI_API_KEY,
     model: envVars.OPENAI_MODEL,
     maxTokens: envVars.OPENAI_MAX_TOKENS,
+  },
+
+  ocr: {
+    provider: envVars.OCR_PROVIDER,
+    httpEndpoint: envVars.OCR_HTTP_ENDPOINT,
+    httpApiKey: envVars.OCR_HTTP_API_KEY,
+    timeoutMs: envVars.OCR_TIMEOUT_MS,
+    lowConfidenceThreshold: envVars.OCR_LOW_CONFIDENCE_THRESHOLD,
   },
 
   maintenance: {

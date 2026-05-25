@@ -109,6 +109,16 @@ class ApInvoiceController {
       return res.success({ data: batch });
     } catch (err) { next(err); }
   }
+
+  async exportPaymentBatchPain001(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const file = await apInvoiceService.exportPaymentBatchPain001(req.params.batchId, req.user._id, meta);
+      res.setHeader('Content-Type', file.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+      return res.status(200).send(file.xml);
+    } catch (err) { next(err); }
+  }
 }
 
 const apInvoiceController = new ApInvoiceController();

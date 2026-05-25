@@ -5,7 +5,7 @@ export const ACTION_TYPES = ['NAVIGATE', 'SEARCH', 'UPDATE', 'CREATE'];
 const voiceCommandSchema = new mongoose.Schema(
   {
     intent: { type: String, required: true, trim: true },
-    language: { type: String, required: true, maxlength: 5 },
+    language: { type: String, required: true, maxlength: 12 },
     phrases: [{ type: String, required: true }],
     actionType: { type: String, enum: ACTION_TYPES, required: true },
     actionTarget: { type: String, required: true },

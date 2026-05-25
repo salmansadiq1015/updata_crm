@@ -64,6 +64,17 @@ const configSchema = Joi.object({
   SMTP_MAIL: Joi.string().email().allow('').default(''),
   SMTP_PASSWORD: Joi.string().allow('').default(''),
 
+  // Company / invoice document defaults
+  COMPANY_NAME: Joi.string().default('MB Boiler & Heizung AG'),
+  COMPANY_STREET: Joi.string().default('Buchenstrasse'),
+  COMPANY_BUILDING_NUMBER: Joi.string().allow('').default('57B'),
+  COMPANY_ZIP: Joi.string().default('4142'),
+  COMPANY_CITY: Joi.string().default('Muenchenstein'),
+  COMPANY_COUNTRY: Joi.string().default('CH'),
+  COMPANY_PHONE: Joi.string().allow('').default(''),
+  COMPANY_EMAIL: Joi.string().email().allow('').default(''),
+  COMPANY_QR_IBAN: Joi.string().default('CH4431999123000889012'),
+
   // Rate Limiting
   RATE_LIMIT_GLOBAL: Joi.number().default(100),
   RATE_LIMIT_WINDOW_MS: Joi.number().default(60000),
@@ -81,6 +92,13 @@ const configSchema = Joi.object({
   OPENAI_API_KEY: Joi.string().allow('').default(''),
   OPENAI_MODEL: Joi.string().default('gpt-4o'),
   OPENAI_MAX_TOKENS: Joi.number().default(2000),
+
+  // Accounting OCR
+  OCR_PROVIDER: Joi.string().valid('disabled', 'http', 'text').default('disabled'),
+  OCR_HTTP_ENDPOINT: Joi.string().uri().allow('').default(''),
+  OCR_HTTP_API_KEY: Joi.string().allow('').default(''),
+  OCR_TIMEOUT_MS: Joi.number().integer().min(1000).default(30000),
+  OCR_LOW_CONFIDENCE_THRESHOLD: Joi.number().min(0).max(1).default(0.8),
 
   // Maintenance
   MAINTENANCE_LOOKAHEAD_DAYS: Joi.number().integer().min(1).default(30),

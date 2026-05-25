@@ -23,6 +23,7 @@ const fmt = (n, currency = 'CHF') =>
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('de-CH') : '—';
 
 const AR_STATUS_CONFIG = {
+  SENT:             { label: 'Offen',          labelEn: 'Open',           badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
   OPEN:             { label: 'Offen',          labelEn: 'Open',           badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
   PARTIALLY_PAID:   { label: 'Teilbezahlt',    labelEn: 'Partially Paid', badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
   PAID:             { label: 'Bezahlt',        labelEn: 'Paid',           badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
@@ -36,19 +37,16 @@ function ARStatusBadge({ status, de }) {
 }
 
 function RecordPaymentDialog({ invoice, open, onClose, de }) {
-  const { recordPayment } = useArMutations();
-  const [form, setForm] = useState({ amount: '', reference: '', method: 'bank_transfer', note: '' });
+  const { recordInvoicePayment } = useArMutations();
+  const [form, setForm] = useState({ amount: '', reference: '' });
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await recordPayment.mutateAsync({
-      invoiceId: invoice._id,
+    await recordInvoicePayment.mutateAsync({
+      invoice,
       amount: Number(form.amount),
-      reference: form.reference || undefined,
-      method: form.method,
-      note: form.note || undefined,
-      date: new Date().toISOString(),
+      paymentReference: form.reference || invoice.invoiceNumber,
     });
     onClose();
   };
@@ -71,16 +69,8 @@ function RecordPaymentDialog({ invoice, open, onClose, de }) {
               <Input type="number" step="0.05" min="0.05" className="h-8" value={form.amount} onChange={(e) => set('amount', e.target.value)} required />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Zahlungsart' : 'Method'}</Label>
-              <Select value={form.method} onValueChange={(v) => set('method', v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bank_transfer">{de ? 'Überweisung' : 'Bank Transfer'}</SelectItem>
-                  <SelectItem value="cash">{de ? 'Bargeld' : 'Cash'}</SelectItem>
-                  <SelectItem value="card">{de ? 'Karte' : 'Card'}</SelectItem>
-                  <SelectItem value="other">{de ? 'Sonstiges' : 'Other'}</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs">{de ? 'Zuordnung' : 'Allocation'}</Label>
+              <Input className="h-8 font-mono" value={invoice?.invoiceNumber || ''} disabled />
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -88,9 +78,9 @@ function RecordPaymentDialog({ invoice, open, onClose, de }) {
             <Input className="h-8 font-mono" value={form.reference} onChange={(e) => set('reference', e.target.value)} placeholder="ESR / IBAN Ref..." />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={recordPayment.isPending}>{de ? 'Abbrechen' : 'Cancel'}</Button>
-            <Button type="submit" disabled={recordPayment.isPending || !form.amount}>
-              {recordPayment.isPending ? '...' : (de ? 'Erfassen' : 'Record')}
+            <Button type="button" variant="outline" onClick={onClose} disabled={recordInvoicePayment.isPending}>{de ? 'Abbrechen' : 'Cancel'}</Button>
+            <Button type="submit" disabled={recordInvoicePayment.isPending || !form.amount}>
+              {recordInvoicePayment.isPending ? '...' : (de ? 'Erfassen' : 'Record')}
             </Button>
           </DialogFooter>
         </form>
@@ -152,7 +142,8 @@ function ReceivablesTab({ de }) {
                 </tr>
               ))
             ) : items.map((inv) => {
-              const isOverdue = (inv.status === 'OPEN' || inv.status === 'PARTIALLY_PAID') && new Date(inv.dueDate) < new Date();
+              const isOpen = ['SENT', 'OPEN', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status);
+              const isOverdue = isOpen && new Date(inv.dueDate) < new Date();
               return (
                 <tr key={inv._id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="px-3 py-3 font-mono text-xs">{inv.invoiceNumber}</td>
@@ -169,10 +160,10 @@ function ReceivablesTab({ de }) {
                     }
                   </td>
                   <td className="px-3 py-3 text-center">
-                    <ARStatusBadge status={isOverdue && inv.status === 'OPEN' ? 'OVERDUE' : inv.status} de={de} />
+                    <ARStatusBadge status={isOverdue && ['OPEN', 'SENT'].includes(inv.status) ? 'OVERDUE' : inv.status} de={de} />
                   </td>
                   <td className="px-3 py-3 text-right">
-                    {(inv.status === 'OPEN' || inv.status === 'PARTIALLY_PAID' || (isOverdue && inv.outstandingAmount > 0)) && (
+                    {isOpen && (inv.outstandingAmount ?? 0) > 0 && (
                       <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => setPayTarget(inv)}>
                         {de ? 'Zahlung' : 'Payment'}
                       </Button>
@@ -214,7 +205,7 @@ function DunningTab({ de }) {
   });
 
   const handleGenerate = () => {
-    generateDunning.mutate({ invoiceIds: [...selected] });
+    generateDunning.mutate({ invoiceIds: [...selected], level: 1, format: 'pdf' });
     setSelected(new Set());
   };
 

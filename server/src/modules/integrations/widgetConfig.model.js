@@ -49,7 +49,5 @@ const widgetConfigSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-widgetConfigSchema.index({ widgetId: 1 }, { unique: true });
-
 const WidgetConfig = mongoose.model('WidgetConfig', widgetConfigSchema);
 export default WidgetConfig;

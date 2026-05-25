@@ -22,6 +22,7 @@ import {
   BookOpen, ClipboardList, MessageSquare, Bell, Smartphone,
   FileCheck, Clock4, Files, LayoutTemplate,
   Type, TrendingUp, Ruler, RefreshCw,
+  ShoppingCart,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import {
@@ -45,6 +46,7 @@ const navSectionDefs = [
       { labelKey: 'sidebar.sites', href: '/crm/sites', icon: MapPinned, permission: 'crm:read' },
       { labelKey: 'sidebar.installations', href: '/crm/installations', icon: Flame, permission: 'crm:read' },
       { labelKey: 'sidebar.maintenance', href: '/crm/maintenance', icon: Wrench, permission: 'crm:read' },
+      { labelKey: 'sidebar.procurement', href: '/crm/spare-parts/procurement', icon: ShoppingCart, permission: 'crm:read' },
       { labelKey: 'sidebar.addressBook', href: '/crm/address-book', icon: BookOpen, permission: 'crm:read' },
       { labelKey: 'sidebar.projects', href: '/projects', icon: FolderKanban, permission: 'projects:read' },
       { labelKey: 'sidebar.scheduling', href: '/scheduling', icon: CalendarClock, permission: 'scheduling:read' },

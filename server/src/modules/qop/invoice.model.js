@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
+import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 
-export const INVOICE_STATUSES = ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'];
+export const INVOICE_STATUSES = ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
 export const INVOICE_TYPES = ['STANDARD', 'ADVANCE', 'FINAL', 'CREDIT_NOTE'];
 export const PAYMENT_METHODS = ['bank_transfer', 'cash', 'card', 'other'];
 
@@ -15,6 +16,8 @@ const lineItemSchema = new mongoose.Schema(
     discountPercent: { type: Number, default: 0, min: 0, max: 100 },
     vatRate: { type: Number, required: true, min: 0 },
     lineTotal: { type: Number, default: 0 },
+    sourceOrderLinePosition: { type: Number, min: 1, default: null },
+    sourceOrderLineQuantity: { type: Number, min: 0, default: null },
   },
   { _id: false },
 );
@@ -87,6 +90,11 @@ const invoiceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    creditNoteForInvoiceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Invoice',
+      default: null,
+    },
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',
@@ -152,6 +160,15 @@ const invoiceSchema = new mongoose.Schema(
     paidAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
     cancellationReason: { type: String, maxlength: 2000, default: null },
+    writtenOffAt: { type: Date, default: null },
+    writeOffReason: { type: String, maxlength: 2000, default: null },
+    pdfDocumentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AccountingDocument',
+      default: null,
+    },
+    pdfGeneratedAt: { type: Date, default: null },
+    qrBillReference: { type: String, trim: true, maxlength: 27, default: null },
     status: {
       type: String,
       enum: INVOICE_STATUSES,
@@ -169,6 +186,7 @@ const invoiceSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    migration: { type: migrationTraceSchema, default: () => ({}) },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
@@ -182,10 +200,15 @@ const invoiceSchema = new mongoose.Schema(
 // --- Indexes ---
 invoiceSchema.index({ customerId: 1, status: 1 });
 invoiceSchema.index({ sourceOrderId: 1 });
+invoiceSchema.index({ creditNoteForInvoiceId: 1 });
 invoiceSchema.index({ status: 1, dueDate: 1 });
+invoiceSchema.index({ isDeleted: 1, status: 1, dueDate: 1, _id: 1 });
+invoiceSchema.index({ isDeleted: 1, status: 1, amountDue: 1 });
+invoiceSchema.index({ customerId: 1, status: 1, dueDate: 1 });
 invoiceSchema.index({ invoiceType: 1 });
 invoiceSchema.index({ projectId: 1 });
 invoiceSchema.index({ isDeleted: 1, createdAt: -1 });
+invoiceSchema.index({ 'migration.sourceSystem': 1, 'migration.sourceId': 1 });
 invoiceSchema.index(
   { invoiceNumber: 'text', title: 'text', customerName: 'text' },
   { weights: { invoiceNumber: 10, title: 5, customerName: 3 } },

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 
 const installationSchema = new mongoose.Schema(
   {
@@ -44,6 +45,7 @@ const installationSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    migration: { type: migrationTraceSchema, default: () => ({}) },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
@@ -63,6 +65,7 @@ installationSchema.index(
   { partialFilterExpression: { serialNumber: { $ne: null } } },
 );
 installationSchema.index({ isDeleted: 1, status: 1 });
+installationSchema.index({ 'migration.sourceSystem': 1, 'migration.sourceId': 1 });
 
 // --- Soft-delete pre-hook ---
 installationSchema.pre(/^find/, function () {

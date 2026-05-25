@@ -17,7 +17,11 @@ const permissionSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
-      enum: ['read', 'write', 'delete', 'admin'],
+      maxlength: 100,
+      validate: {
+        validator: (value) => /^[a-z0-9][a-z0-9:_-]*$/.test(value),
+        message: 'Permission action must use lowercase letters, numbers, colon, underscore, or hyphen.',
+      },
     },
     description: {
       type: String,

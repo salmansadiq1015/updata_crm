@@ -11,7 +11,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
  * Each mutation does its own toast + cache invalidation; pages pass callbacks
  * (`onSuccess`) only when they need to close a dialog or reset selection.
  */
-export function useSparePartMutations({ onCreate, onUpdate, onDelete, onLink, onUnlink, onExport } = {}) {
+export function useSparePartMutations({ onCreate, onUpdate, onDelete, onLink, onUnlink, onOrderStatus, onExport } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -71,6 +71,19 @@ export function useSparePartMutations({ onCreate, onUpdate, onDelete, onLink, on
     onError: (err) => showError(err.message),
   });
 
+  const updateOrderStatus = useMutation({
+    mutationFn: ({ installationId, sparePartId, data }) =>
+      sparePartService.updateOrderStatus(installationId, sparePartId, data),
+    onSuccess: (res, { installationId }) => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: queryKeys.crm.spareParts.byInstallation(installationId) });
+      queryClient.invalidateQueries({ queryKey: ['crm', 'spareParts', 'orderRequests'] });
+      showSuccess(t('crm.sparePartOrderUpdated', 'Order request updated'));
+      onOrderStatus?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
   const exportCsv = useMutation({
     mutationFn: (filters) => sparePartService.exportCsv(filters),
     onSuccess: (res) => {
@@ -80,5 +93,5 @@ export function useSparePartMutations({ onCreate, onUpdate, onDelete, onLink, on
     onError: (err) => showError(err.message),
   });
 
-  return { create, update, remove, linkToInstallation, unlinkFromInstallation, exportCsv };
+  return { create, update, remove, linkToInstallation, unlinkFromInstallation, updateOrderStatus, exportCsv };
 }

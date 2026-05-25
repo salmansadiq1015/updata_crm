@@ -4,8 +4,8 @@ import { objectId, cursorPagination } from '../../shared/validation/commonSchema
 export const createInstallationSchema = {
   body: Joi.object({
     type: Joi.string().valid('boiler', 'heat_pump', 'solar_thermal', 'radiator_system', 'ventilation', 'hot_water', 'other').required(),
-    manufacturer: Joi.string().trim().max(100).allow('', null),
-    model: Joi.string().trim().max(100).allow('', null),
+    manufacturer: Joi.string().trim().max(100).required(),
+    model: Joi.string().trim().max(100).required(),
     serialNumber: Joi.string().trim().max(100).allow('', null),
     commissioningDate: Joi.date().iso().allow(null),
     warrantyEndDate: Joi.date().iso().allow(null),

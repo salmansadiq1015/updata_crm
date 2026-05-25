@@ -165,6 +165,7 @@ export const translations = {
     'sidebar.sites': 'Objekte',
     'sidebar.installations': 'Anlagen',
     'sidebar.maintenance': 'Wartung',
+    'sidebar.procurement': 'Beschaffung',
     'sidebar.addressBook': 'Adressbuch',
     'sidebar.projects': 'Projekte',
     'sidebar.scheduling': 'Einsatzplanung',
@@ -1567,6 +1568,7 @@ export const translations = {
 
     // Mobile Technician App
     'mobile.nav.orders': 'Aufträge',
+    'mobile.nav.addressBook': 'Adressen',
     'mobile.nav.chat': 'Chat',
     'mobile.nav.timer': 'Timer',
     'mobile.nav.notifications': 'Meldungen',
@@ -1877,6 +1879,7 @@ export const translations = {
     'sidebar.sites': 'Objects',
     'sidebar.installations': 'Installations',
     'sidebar.maintenance': 'Maintenance',
+    'sidebar.procurement': 'Procurement',
     'sidebar.addressBook': 'Address Book',
     'sidebar.projects': 'Projects',
     'sidebar.scheduling': 'Scheduling',
@@ -3275,6 +3278,7 @@ export const translations = {
 
     // Mobile Technician App
     'mobile.nav.orders': 'Orders',
+    'mobile.nav.addressBook': 'Contacts',
     'mobile.nav.chat': 'Chat',
     'mobile.nav.timer': 'Timer',
     'mobile.nav.notifications': 'Alerts',

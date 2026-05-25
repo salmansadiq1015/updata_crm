@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 
 const siteSchema = new mongoose.Schema(
   {
@@ -43,6 +44,7 @@ const siteSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    migration: { type: migrationTraceSchema, default: () => ({}) },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
@@ -58,6 +60,7 @@ siteSchema.index({ customerId: 1 });
 siteSchema.index({ customerId: 1, siteNumber: 1 }, { unique: true });
 siteSchema.index({ postalCode: 1 });
 siteSchema.index({ isDeleted: 1, status: 1 });
+siteSchema.index({ 'migration.sourceSystem': 1, 'migration.sourceId': 1 });
 
 // --- Soft-delete pre-hook ---
 siteSchema.pre(/^find/, function () {

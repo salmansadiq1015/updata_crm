@@ -67,6 +67,15 @@ export const searchSparePartsSchema = {
   }),
 };
 
+export const listOrderRequestsSchema = {
+  query: Joi.object({
+    cursor: Joi.string().allow(null, ''),
+    limit: Joi.number().integer().min(1).max(100).default(50),
+    status: Joi.string().valid('open', 'all', 'requested', 'ordered', 'received', 'cancelled').default('open'),
+    urgency: Joi.string().valid('low', 'normal', 'high', 'urgent'),
+  }),
+};
+
 export const exportSparePartsSchema = {
   query: Joi.object({
     category: Joi.string().valid(...CATEGORIES),
@@ -79,6 +88,12 @@ export const exportSparePartsSchema = {
 };
 
 // --- Installation ↔ SparePart linking ---
+
+export const importSparePartsSchema = {
+  body: Joi.object({
+    upsert: Joi.boolean().truthy('true').falsy('false').default(false),
+  }),
+};
 
 export const linkSparePartSchema = {
   params: Joi.object({ id: objectId.required() }),
@@ -94,5 +109,29 @@ export const unlinkSparePartSchema = {
   params: Joi.object({
     id: objectId.required(),
     sparePartId: objectId.required(),
+  }),
+};
+
+export const flagSparePartOrderSchema = {
+  params: Joi.object({
+    id: objectId.required(),
+    sparePartId: objectId.required(),
+  }),
+  body: Joi.object({
+    quantity: Joi.number().integer().min(1).max(999).required(),
+    urgency: Joi.string().valid('low', 'normal', 'high', 'urgent').default('normal'),
+    notes: Joi.string().trim().max(1000).allow('', null),
+  }),
+};
+
+export const updateSparePartOrderStatusSchema = {
+  params: Joi.object({
+    id: objectId.required(),
+    sparePartId: objectId.required(),
+  }),
+  body: Joi.object({
+    status: Joi.string().valid('ordered', 'received', 'cancelled').required(),
+    receivedQuantity: Joi.number().integer().min(1).max(999),
+    notes: Joi.string().trim().max(1000).allow('', null),
   }),
 };

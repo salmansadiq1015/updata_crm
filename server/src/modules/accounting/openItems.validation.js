@@ -25,10 +25,26 @@ export const statementSchema = {
     dateFrom: Joi.date().iso(),
     dateTo: Joi.date().iso(),
   }),
+  body: Joi.object({
+    format: Joi.string().valid('json', 'pdf').default('json'),
+    sendEmail: Joi.boolean().default(false),
+    recipientEmail: Joi.string().email().trim().max(255),
+  }).default({}),
 };
 
 export const netPositionSchema = {
   params: Joi.object({
     entityId: objectId.required(),
+  }),
+};
+
+export const netItemsSchema = {
+  body: Joi.object({
+    customerId: objectId.required(),
+    supplierId: objectId,
+    arInvoiceIds: Joi.array().items(objectId.required()).min(1).max(100).required(),
+    apInvoiceIds: Joi.array().items(objectId.required()).min(1).max(100).required(),
+    amount: Joi.number().precision(2).positive(),
+    reason: Joi.string().trim().max(500).allow('', null),
   }),
 };

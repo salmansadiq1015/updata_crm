@@ -13,7 +13,17 @@ const ALLOWED_FILTERS = {
   projectManagerId: 'objectId',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'name', 'projectNumber', 'plannedStartDate', '_id'];
+const ALLOWED_SORT_FIELDS = [
+  'createdAt',
+  'name',
+  'projectNumber',
+  'plannedStartDate',
+  'plannedEndDate',
+  'status',
+  'projectType',
+  'customerId',
+  '_id',
+];
 
 const POPULATE_FIELDS = [
   { path: 'customerId', select: 'customerNumber name' },
@@ -40,13 +50,22 @@ class ProjectRepository {
     };
 
     if (search) {
+      const Customer = (await import('../crm/customer.model.js')).default;
+      const matchingCustomers = await Customer.find({ name: { $regex: search, $options: 'i' } })
+        .select('_id')
+        .limit(1000)
+        .lean();
+      const customerIds = matchingCustomers.map((customer) => customer._id);
+
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
         { projectNumber: { $regex: search, $options: 'i' } },
+        ...(customerIds.length > 0 ? [{ customerId: { $in: customerIds } }] : []),
       ];
     }
 
-    const sort = buildCursorSort(sortBy, sortOrder);
+    const resolvedSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
+    const sort = buildCursorSort(resolvedSortBy, sortOrder);
 
     const docs = await Project.find(filter)
       .sort(sort)
@@ -55,7 +74,7 @@ class ProjectRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    return buildCursorResponse(docs, limit, resolvedSortBy);
   }
 
   async textSearch(searchTerm, limit = 25) {
@@ -118,6 +137,34 @@ class ProjectRepository {
       { $group: { _id: '$status', count: { $sum: 1 } } },
       { $project: { _id: 0, status: '$_id', count: 1 } },
     ]);
+  }
+
+  async countByType() {
+    return Project.aggregate([
+      { $match: { isDeleted: false } },
+      { $group: { _id: '$projectType', count: { $sum: 1 } } },
+      { $project: { _id: 0, projectType: '$_id', count: 1 } },
+    ]);
+  }
+
+  async getBudgetSummary() {
+    const [summary] = await Project.aggregate([
+      { $match: { isDeleted: false } },
+      {
+        $group: {
+          _id: null,
+          estimatedBudgetTotal: { $sum: { $ifNull: ['$estimatedBudget', 0] } },
+          budgetedProjects: {
+            $sum: {
+              $cond: [{ $ne: ['$estimatedBudget', null] }, 1, 0],
+            },
+          },
+        },
+      },
+      { $project: { _id: 0, estimatedBudgetTotal: 1, budgetedProjects: 1 } },
+    ]);
+
+    return summary || { estimatedBudgetTotal: 0, budgetedProjects: 0 };
   }
 
   async findUpcomingMilestones(days = 7) {

@@ -70,6 +70,10 @@ export const paymentIdParamSchema = {
   params: Joi.object({ id: objectId.required() }),
 };
 
+export const customerCreditBalanceSchema = {
+  params: Joi.object({ customerId: objectId.required() }),
+};
+
 export const dunningOverdueSchema = {
   query: cursorPagination.keys({
     customerId: objectId,
@@ -80,6 +84,9 @@ export const generateDunningSchema = {
   body: Joi.object({
     invoiceIds: Joi.array().items(objectId).min(1).required(),
     level: Joi.number().integer().min(1).max(3).required(),
+    format: Joi.string().valid('json', 'pdf').default('json'),
+    sendEmail: Joi.boolean().default(false),
+    recipientEmail: Joi.string().email().trim().max(255),
   }),
 };
 

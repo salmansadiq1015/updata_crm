@@ -46,6 +46,7 @@ const bankTransactionSchema = new mongoose.Schema(
 bankTransactionSchema.index({ bankAccountId: 1 });
 bankTransactionSchema.index({ transactionDate: 1 });
 bankTransactionSchema.index({ reference: 1 });
+bankTransactionSchema.index({ bankAccountId: 1, statementId: 1 });
 
 const BankTransaction = mongoose.model('BankTransaction', bankTransactionSchema);
 export default BankTransaction;

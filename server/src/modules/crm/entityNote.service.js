@@ -4,7 +4,6 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
-import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
@@ -15,6 +14,8 @@ class EntityNoteService {
   }
 
   async create(entityType, entityId, data, authorId, meta = {}) {
+    await this._assertEntityExists(entityType, entityId);
+
     const editableUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const note = await entityNoteRepository.create({
@@ -110,6 +111,21 @@ class EntityNoteService {
 
   async _invalidateCache(entityType, entityId) {
     await cacheManager.del(this._cacheKey(entityType, entityId));
+  }
+
+  async _assertEntityExists(entityType, entityId) {
+    const modelByType = {
+      customer: () => import('./customer.model.js'),
+      site: () => import('./site.model.js'),
+      installation: () => import('./installation.model.js'),
+    };
+
+    const loadModel = modelByType[entityType];
+    if (!loadModel) throw new NotFoundError('CRM entity', `${entityType}:${entityId}`);
+
+    const { default: Model } = await loadModel();
+    const entity = await Model.findById(entityId).select('_id').lean();
+    if (!entity) throw new NotFoundError(entityType, entityId);
   }
 }
 

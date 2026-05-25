@@ -14,15 +14,40 @@ const ALLOWED_FILTERS = {
   projectId: 'objectId',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'invoiceNumber', 'customerName', 'grandTotalRounded', 'dueDate', '_id'];
-
 const POPULATE_FIELDS = [
   { path: 'customerId', select: 'customerNumber name' },
   { path: 'contactId', select: 'firstName lastName email' },
   { path: 'projectId', select: 'projectNumber name' },
   { path: 'sourceOrderId', select: 'orderNumber' },
   { path: 'createdBy', select: 'firstName lastName' },
+  { path: 'pdfDocumentId', select: 'fileName filePath fileHash createdAt' },
 ];
+
+function coerceCursorFieldTypes(filter, sortBy) {
+  if (!filter || !['dueDate', 'createdAt'].includes(sortBy)) return filter;
+  const coerceValue = (value) => (typeof value === 'string' ? new Date(value) : value);
+
+  if (filter.$or) {
+    return {
+      ...filter,
+      $or: filter.$or.map((clause) => {
+        if (!clause[sortBy]) return clause;
+        if (typeof clause[sortBy] === 'object' && clause[sortBy] !== null) {
+          const op = Object.keys(clause[sortBy])[0];
+          return { ...clause, [sortBy]: { [op]: coerceValue(clause[sortBy][op]) } };
+        }
+        return { ...clause, [sortBy]: coerceValue(clause[sortBy]) };
+      }),
+    };
+  }
+
+  if (filter[sortBy] && typeof filter[sortBy] === 'object') {
+    const op = Object.keys(filter[sortBy])[0];
+    return { ...filter, [sortBy]: { [op]: coerceValue(filter[sortBy][op]) } };
+  }
+
+  return filter;
+}
 
 class InvoiceRepository {
   async create(data) {
@@ -39,7 +64,7 @@ class InvoiceRepository {
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
     const filter = {
       ...buildFilter(filters, ALLOWED_FILTERS),
-      ...buildCursorQuery(cursor, sortBy, sortOrder),
+      ...coerceCursorFieldTypes(buildCursorQuery(cursor, sortBy, sortOrder), sortBy),
     };
 
     if (search) {

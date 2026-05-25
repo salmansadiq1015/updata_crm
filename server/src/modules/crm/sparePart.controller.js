@@ -17,6 +17,14 @@ class SparePartController {
     } catch (err) { next(err); }
   }
 
+  async listOrderRequests(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await sparePartService.listOrderRequests(query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
+
   async search(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
@@ -28,12 +36,21 @@ class SparePartController {
   async exportCsv(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
-      const { format, ...filters } = query;
+      const { format: _format, ...filters } = query;
       const csv = await sparePartService.exportCsv(filters);
       const filename = `spare-parts-${new Date().toISOString().split('T')[0]}.csv`;
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       return res.send(csv);
+    } catch (err) { next(err); }
+  }
+
+  async importCsv(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const body = req._validatedBody || req.body;
+      const result = await sparePartService.importCsv(req.file?.buffer, { upsert: body.upsert }, req.user._id, meta);
+      return res.success({ data: result, message: 'Spare parts imported successfully', statusCode: 201 });
     } catch (err) { next(err); }
   }
 
@@ -91,6 +108,34 @@ class SparePartController {
         meta,
       );
       return res.success({ message: 'Spare part unlinked from installation' });
+    } catch (err) { next(err); }
+  }
+
+  async flagForOrdering(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const data = await sparePartService.flagForOrdering(
+        req.params.id,
+        req.params.sparePartId,
+        req.body,
+        req.user._id,
+        meta,
+      );
+      return res.success({ data, message: 'Spare part flagged for ordering' });
+    } catch (err) { next(err); }
+  }
+
+  async updateOrderStatus(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const data = await sparePartService.updateOrderStatus(
+        req.params.id,
+        req.params.sparePartId,
+        req.body,
+        req.user._id,
+        meta,
+      );
+      return res.success({ data, message: 'Spare part order status updated' });
     } catch (err) { next(err); }
   }
 }

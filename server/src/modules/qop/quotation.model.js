@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 
 export const QUOTATION_STATUSES = [
   'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED',
@@ -132,6 +133,7 @@ const quotationSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    migration: { type: migrationTraceSchema, default: () => ({}) },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
@@ -148,6 +150,7 @@ quotationSchema.index({ status: 1, validUntil: 1 });
 quotationSchema.index({ assignedUserId: 1, status: 1 });
 quotationSchema.index({ projectId: 1 });
 quotationSchema.index({ isDeleted: 1, createdAt: -1 });
+quotationSchema.index({ 'migration.sourceSystem': 1, 'migration.sourceId': 1 });
 quotationSchema.index(
   { quotationNumber: 'text', title: 'text', customerName: 'text' },
   { weights: { quotationNumber: 10, title: 5, customerName: 3 } },

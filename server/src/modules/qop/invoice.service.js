@@ -1,4 +1,5 @@
 import invoiceRepository from './invoice.repository.js';
+import invoicePdfService from './invoicePdf.service.js';
 import counterService from './counter.service.js';
 import { calculateTotals, roundToFiveRappen } from './vatCalculation.js';
 import auditService from '../auth/audit.service.js';
@@ -16,12 +17,166 @@ const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 const INVOICE_TRANSITIONS = {
   DRAFT: ['SENT', 'CANCELLED'],
-  SENT: ['PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'],
-  PARTIALLY_PAID: ['PAID', 'OVERDUE', 'CANCELLED'],
+  SENT: ['PARTIALLY_PAID', 'PAID', 'OVERDUE'],
+  PARTIALLY_PAID: ['PAID', 'OVERDUE'],
   PAID: [],
-  OVERDUE: ['PARTIALLY_PAID', 'PAID', 'CANCELLED'],
+  OVERDUE: ['PARTIALLY_PAID', 'PAID'],
   CANCELLED: [],
 };
+
+function isFinalizedInvoice(invoice) {
+  return Boolean(invoice.pdfDocumentId || invoice.pdfGeneratedAt || invoice.qrBillReference || invoice.sentAt);
+}
+
+function buildCreditNoteTotals(sourceInvoice, lineItems) {
+  const sourceTotal = sourceInvoice.invoiceType === 'FINAL'
+    ? sourceInvoice.netSubtotal || sourceInvoice.amountDue || 0
+    : sourceInvoice.grandTotalRounded || sourceInvoice.amountDue || 0;
+
+  if (!lineItems?.length) {
+    const subtotal = -Math.abs(sourceInvoice.subtotal || sourceTotal);
+    const vatBreakdown = (sourceInvoice.vatBreakdown || []).map((vat) => ({
+      rate: vat.rate,
+      base: -Math.abs(vat.base || 0),
+      amount: -Math.abs(vat.amount || 0),
+    }));
+    const vatTotal = vatBreakdown.reduce((sum, vat) => sum + vat.amount, 0);
+    const grandTotal = Math.round((subtotal + vatTotal) * 100) / 100;
+    const grandTotalRounded = sourceInvoice.currency === 'CHF' ? roundToFiveRappen(grandTotal) : grandTotal;
+
+    return {
+      lineItems: (sourceInvoice.lineItems || []).map((item) => ({
+        ...item,
+        lineTotal: -Math.abs(item.lineTotal || ((item.quantity || 0) * (item.unitPrice || 0))),
+      })),
+      subtotal,
+      vatBreakdown,
+      grandTotal,
+      roundingAmount: Math.round((grandTotalRounded - grandTotal) * 100) / 100,
+      grandTotalRounded,
+      amountDue: grandTotalRounded,
+    };
+  }
+
+  const totals = calculateTotals(lineItems, 0, sourceInvoice.currency || 'CHF');
+  return {
+    ...totals,
+    lineItems: totals.lineItems.map((item) => ({ ...item, lineTotal: -Math.abs(item.lineTotal) })),
+    subtotal: -Math.abs(totals.subtotal),
+    vatBreakdown: totals.vatBreakdown.map((vat) => ({
+      ...vat,
+      base: -Math.abs(vat.base),
+      amount: -Math.abs(vat.amount),
+    })),
+    grandTotal: -Math.abs(totals.grandTotal),
+    roundingAmount: -Math.abs(totals.roundingAmount || 0),
+    grandTotalRounded: -Math.abs(totals.grandTotalRounded),
+    amountDue: -Math.abs(totals.grandTotalRounded),
+  };
+}
+
+function roundQuantity(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 10000) / 10000;
+}
+
+function getSourceOrderLinePosition(lineItem) {
+  const position = Number(lineItem?.sourceOrderLinePosition ?? lineItem?.position);
+  return Number.isInteger(position) && position > 0 ? position : null;
+}
+
+function buildLineSelectionMap(lineSelections = []) {
+  const selections = new Map();
+  for (const selection of lineSelections) {
+    const position = Number(selection.sourceOrderLinePosition);
+    if (!Number.isInteger(position) || position < 1) {
+      throw new ConflictError('Invalid source order line position');
+    }
+    if (selections.has(position)) {
+      throw new ConflictError(`Duplicate order line selection for position ${position}`);
+    }
+    selections.set(position, selection.quantity === undefined ? null : roundQuantity(selection.quantity));
+  }
+  return selections;
+}
+
+function calculateInvoicedOrderLineQuantities(invoices = []) {
+  const invoicedByPosition = new Map();
+
+  for (const invoice of invoices) {
+    if (!invoice || invoice.isDeleted || invoice.status === 'CANCELLED' || invoice.invoiceType === 'ADVANCE') {
+      continue;
+    }
+
+    const sign = invoice.invoiceType === 'CREDIT_NOTE' ? -1 : 1;
+    for (const lineItem of invoice.lineItems || []) {
+      const sourcePosition = getSourceOrderLinePosition(lineItem);
+      if (!sourcePosition) continue;
+
+      const current = invoicedByPosition.get(sourcePosition) || 0;
+      invoicedByPosition.set(
+        sourcePosition,
+        roundQuantity(current + sign * roundQuantity(lineItem.quantity)),
+      );
+    }
+  }
+
+  return invoicedByPosition;
+}
+
+function buildOrderInvoiceLines(order, existingInvoices, lineSelections) {
+  const orderLines = order.lineItems || [];
+  const selections = lineSelections?.length ? buildLineSelectionMap(lineSelections) : null;
+  const invoicedByPosition = calculateInvoicedOrderLineQuantities(existingInvoices);
+  const selectedLines = [];
+  const availability = [];
+
+  for (const orderLine of orderLines) {
+    const sourcePosition = Number(orderLine.position);
+    if (!Number.isInteger(sourcePosition) || sourcePosition < 1) continue;
+
+    const orderedQuantity = roundQuantity(orderLine.quantity);
+    const invoicedQuantity = Math.max(0, roundQuantity(invoicedByPosition.get(sourcePosition) || 0));
+    const remainingQuantity = Math.max(0, roundQuantity(orderedQuantity - invoicedQuantity));
+    const requestedQuantity = selections?.has(sourcePosition)
+      ? selections.get(sourcePosition) ?? remainingQuantity
+      : remainingQuantity;
+
+    availability.push({
+      sourceOrderLinePosition: sourcePosition,
+      description: orderLine.description,
+      orderedQuantity,
+      invoicedQuantity,
+      remainingQuantity,
+      isFullyInvoiced: remainingQuantity <= 0,
+    });
+
+    if (selections && !selections.has(sourcePosition)) continue;
+    if (requestedQuantity <= 0) continue;
+    if (requestedQuantity > remainingQuantity) {
+      throw new ConflictError(
+        `Order line ${sourcePosition} has only ${remainingQuantity} remaining, requested ${requestedQuantity}`,
+      );
+    }
+
+    selectedLines.push({
+      ...orderLine,
+      position: selectedLines.length + 1,
+      quantity: requestedQuantity,
+      sourceOrderLinePosition: sourcePosition,
+      sourceOrderLineQuantity: orderedQuantity,
+    });
+  }
+
+  if (selections) {
+    for (const sourcePosition of selections.keys()) {
+      if (!availability.some((line) => line.sourceOrderLinePosition === sourcePosition)) {
+        throw new ConflictError(`Order line ${sourcePosition} does not exist on this order`);
+      }
+    }
+  }
+
+  return { lineItems: selectedLines, availability };
+}
 
 class InvoiceService {
   async create(data, createdBy, meta = {}) {
@@ -64,6 +219,87 @@ class InvoiceService {
     });
 
     logger.info('Invoice created', { module: 'qop', action: 'create', invoiceId: invoice._id, invoiceNumber });
+
+    return invoiceRepository.findById(invoice._id);
+  }
+
+  async createFromOrder(data, createdBy, meta = {}) {
+    const { default: orderRepository } = await import('./order.repository.js');
+
+    const order = await orderRepository.findById(data.sourceOrderId);
+    if (!order) throw new NotFoundError('Order', data.sourceOrderId);
+    if (order.status === 'CANCELLED') {
+      throw new ConflictError('Cannot create an invoice from a cancelled order');
+    }
+
+    const existingInvoices = await invoiceRepository.findByOrderId(order._id);
+    const { lineItems } = buildOrderInvoiceLines(order, existingInvoices, data.lineSelections);
+    if (!lineItems.length) {
+      throw new ConflictError('No remaining order line quantity is available to invoice');
+    }
+
+    const totals = calculateTotals(
+      lineItems,
+      data.globalDiscountPercent ?? order.globalDiscountPercent ?? 0,
+      order.currency || 'CHF',
+    );
+    const invoiceNumber = await counterService.getNextInvoiceNumber(order.departmentId);
+
+    const invoice = await invoiceRepository.create({
+      invoiceNumber,
+      invoiceType: 'STANDARD',
+      sourceOrderId: order._id,
+      sourceQuotationId: order.sourceQuotationId || null,
+      customerId: order.customerId?._id || order.customerId,
+      customerName: order.customerName,
+      contactId: order.contactId?._id || order.contactId || null,
+      projectId: order.projectId?._id || order.projectId || null,
+      departmentId: order.departmentId || null,
+      language: order.language,
+      title: data.title || `Invoice for order ${order.orderNumber}`,
+      ...totals,
+      currency: order.currency,
+      globalDiscountPercent: data.globalDiscountPercent ?? order.globalDiscountPercent ?? 0,
+      dueDate: data.dueDate,
+      paymentTermsDays: data.paymentTermsDays || 30,
+      paymentTermsText: data.paymentTermsText ?? order.paymentTerms ?? '',
+      amountDue: totals.grandTotalRounded,
+      createdBy,
+    });
+
+    await orderRepository.addInvoiceId(order._id, invoice._id);
+    await this._invalidateListCache();
+
+    eventBus.publish(EVENT_TYPES.INVOICE_CREATED, {
+      invoiceId: invoice._id,
+      invoiceNumber,
+      invoiceType: 'STANDARD',
+      sourceOrderId: order._id,
+      createdBy,
+    }, { source: 'qop:invoices' });
+
+    auditService.logEvent({
+      eventType: 'invoice.created_from_order',
+      userId: createdBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: {
+        invoiceId: invoice._id,
+        invoiceNumber,
+        sourceOrderId: order._id,
+        lineCount: lineItems.length,
+      },
+      module: 'qop',
+    });
+
+    logger.info('Invoice created from order', {
+      module: 'qop',
+      action: 'createFromOrder',
+      invoiceId: invoice._id,
+      invoiceNumber,
+      sourceOrderId: order._id,
+    });
 
     return invoiceRepository.findById(invoice._id);
   }
@@ -293,6 +529,94 @@ class InvoiceService {
     return invoiceRepository.findById(invoice._id);
   }
 
+  async createCreditNote(originalInvoiceId, data = {}, createdBy, meta = {}) {
+    const Invoice = (await import('./invoice.model.js')).default;
+    const original = await Invoice.findOne({
+      _id: originalInvoiceId,
+      isDeleted: false,
+      invoiceType: { $ne: 'CREDIT_NOTE' },
+    }).lean();
+    if (!original) throw new NotFoundError('Invoice', originalInvoiceId);
+    if (original.status === 'DRAFT') {
+      throw new ConflictError('Draft invoices can be deleted or edited; credit notes require a finalized invoice');
+    }
+    if (original.status === 'CANCELLED') {
+      throw new ConflictError('Invoice is already cancelled');
+    }
+
+    const invoiceNumber = await counterService.getNextInvoiceNumber(original.departmentId);
+    const creditTotals = buildCreditNoteTotals(original, data.lineItems);
+    const creditNote = await invoiceRepository.create({
+      invoiceNumber,
+      invoiceType: 'CREDIT_NOTE',
+      sourceOrderId: original.sourceOrderId || null,
+      sourceQuotationId: original.sourceQuotationId || null,
+      creditNoteForInvoiceId: original._id,
+      customerId: original.customerId,
+      customerName: original.customerName,
+      contactId: original.contactId || null,
+      projectId: original.projectId || null,
+      departmentId: original.departmentId || null,
+      language: original.language || 'de',
+      title: data.title || `Credit note for ${original.invoiceNumber}`,
+      currency: original.currency || 'CHF',
+      dueDate: data.dueDate || new Date(),
+      paymentTermsDays: 0,
+      paymentTermsText: data.reason || `Credit note for invoice ${original.invoiceNumber}`,
+      ...creditTotals,
+      createdBy,
+    });
+
+    if (data.cancelOriginal !== false) {
+      const update = await Invoice.updateOne(
+        {
+          _id: original._id,
+          isDeleted: false,
+          status: { $ne: 'CANCELLED' },
+        },
+        {
+          $set: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancellationReason: data.reason || `Cancelled by credit note ${invoiceNumber}`,
+            updatedBy: createdBy,
+          },
+          $inc: { version: 1 },
+        },
+      );
+      if (update.matchedCount !== 1) {
+        throw new ConflictError('Original invoice changed while credit note was being created');
+      }
+    }
+
+    await this._invalidateInvoiceCache(original._id);
+    await this._invalidateListCache();
+
+    auditService.logEvent({
+      eventType: 'invoice.credit_note_created',
+      userId: createdBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: {
+        originalInvoiceId,
+        creditNoteId: creditNote._id,
+        creditNoteNumber: invoiceNumber,
+        cancelledOriginal: data.cancelOriginal !== false,
+      },
+      module: 'qop',
+    });
+
+    logger.info('Credit note created', {
+      module: 'qop',
+      action: 'createCreditNote',
+      originalInvoiceId,
+      creditNoteId: creditNote._id,
+    });
+
+    return invoiceRepository.findById(creditNote._id);
+  }
+
   async getById(id) {
     const cacheKey = `qop:invoice:${id}`;
     const invoice = await cacheManager.getOrSet(
@@ -324,9 +648,9 @@ class InvoiceService {
     const existing = await invoiceRepository.findById(id);
     if (!existing) throw new NotFoundError('Invoice', id);
 
-    if (existing.status !== 'DRAFT') {
+    if (existing.status !== 'DRAFT' || isFinalizedInvoice(existing)) {
       throw new AppError(
-        'Only DRAFT invoices can be edited',
+        'Only unfinalized DRAFT invoices can be edited',
         400,
         ERROR_CODES.INVOICE_NOT_EDITABLE,
       );
@@ -342,7 +666,7 @@ class InvoiceService {
       totals.amountDue = totals.grandTotalRounded;
     }
 
-    const { version, ...updateData } = data;
+    const { version: _version, ...updateData } = data;
     const updated = await invoiceRepository.updateById(id, { ...updateData, ...totals, updatedBy });
 
     await this._invalidateInvoiceCache(id);
@@ -373,8 +697,12 @@ class InvoiceService {
       throw new ConflictError(`Cannot transition invoice from ${currentStatus} to ${targetStatus}`);
     }
 
+    if (targetStatus === 'CANCELLED' && currentStatus !== 'DRAFT') {
+      throw new ConflictError('Finalized invoices can only be cancelled by issuing a credit note');
+    }
+
     // DRAFT -> SENT requires finalization
-    if (currentStatus === 'DRAFT' && targetStatus === 'SENT' && !invoice.sentAt) {
+    if (currentStatus === 'DRAFT' && targetStatus === 'SENT' && !isFinalizedInvoice(invoice)) {
       throw new AppError(
         'Invoice must be finalized before it can be sent',
         400,
@@ -427,19 +755,11 @@ class InvoiceService {
     const invoice = await Invoice.findById(id);
     if (!invoice) throw new NotFoundError('Invoice', id);
 
-    if (invoice.status !== 'DRAFT') {
+    if (invoice.status !== 'DRAFT' || isFinalizedInvoice(invoice)) {
       throw new AppError(
-        'Only DRAFT invoices can be finalized',
+        'Only unfinalized DRAFT invoices can be finalized',
         400,
         ERROR_CODES.INVOICE_NOT_EDITABLE,
-      );
-    }
-
-    if (invoice.sentAt) {
-      throw new AppError(
-        'Invoice is already finalized',
-        400,
-        ERROR_CODES.INVOICE_ALREADY_FINALIZED,
       );
     }
 
@@ -447,11 +767,9 @@ class InvoiceService {
       invoice.invoiceDate = new Date();
     }
 
-    // Placeholder: generate PDF document
-    // await documentGenerator.generateInvoicePdf(invoice);
-
-    invoice.sentAt = null; // Will be set on actual send
     await invoice.save();
+
+    await invoicePdfService.generateAndStore(id, userId, meta);
 
     await this._invalidateInvoiceCache(id);
 
@@ -476,6 +794,13 @@ class InvoiceService {
     return invoiceRepository.findById(id);
   }
 
+  async generatePdf(id, userId, meta = {}) {
+    const result = await invoicePdfService.generateAndStore(id, userId, meta);
+    await this._invalidateInvoiceCache(id);
+    await this._invalidateListCache();
+    return result;
+  }
+
   async send(id, userId, meta = {}) {
     const Invoice = (await import('./invoice.model.js')).default;
 
@@ -484,6 +809,11 @@ class InvoiceService {
 
     if (invoice.status !== 'DRAFT') {
       throw new ConflictError(`Cannot send invoice in ${invoice.status} status`);
+    }
+
+    if (!invoice.pdfDocumentId) {
+      await invoicePdfService.generateAndStore(id, userId, meta);
+      await this._invalidateInvoiceCache(id);
     }
 
     invoice.status = 'SENT';
@@ -626,7 +956,7 @@ class InvoiceService {
     return invoice.payments || [];
   }
 
-  async getAgingReport(filters = {}) {
+  async getAgingReport(_filters = {}) {
     return invoiceRepository.findAgingReport();
   }
 
@@ -635,12 +965,14 @@ class InvoiceService {
     const order = await orderRepository.findById(orderId);
     if (!order) throw new NotFoundError('Order', orderId);
 
+    const orderInvoices = await invoiceRepository.findByOrderId(order._id);
     const advances = await invoiceRepository.findAdvancesByProject(
       order.projectId?._id || order.projectId,
     );
     const orderAdvances = advances.filter(
       (inv) => String(inv.sourceOrderId) === String(order._id),
     );
+    const { availability } = buildOrderInvoiceLines(order, orderInvoices, null);
 
     const projectTotal = order.grandTotalRounded || 0;
     const advancesInvoiced = orderAdvances.reduce((s, a) => s + (a.grandTotalRounded || 0), 0);
@@ -655,6 +987,9 @@ class InvoiceService {
       advancesInvoiced: roundToFiveRappen(advancesInvoiced),
       remainingForFinal: roundToFiveRappen(projectTotal - advancesInvoiced),
       percentInvoiced,
+      lineItems: availability,
+      remainingLineCount: availability.filter((line) => !line.isFullyInvoiced).length,
+      isFullyInvoiced: availability.length > 0 && availability.every((line) => line.isFullyInvoiced),
       advances: orderAdvances.map((a) => ({
         _id: a._id,
         invoiceNumber: a.invoiceNumber,

@@ -11,6 +11,7 @@ import logger from '../../shared/logger/index.js';
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 const DASHBOARD_TTL = { l1Ttl: 30, l2Ttl: 60 };
+const PROJECT_STATUSES = ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'ARCHIVED'];
 
 class ProjectService {
   async create(data, createdBy, meta = {}) {
@@ -204,17 +205,66 @@ class ProjectService {
     return cacheManager.getOrSet(
       cacheKey,
       async () => {
-        const statusCounts = await projectRepository.countByStatus();
-        const total = statusCounts.reduce((sum, s) => sum + s.count, 0);
-
         const Project = (await import('./project.model.js')).default;
-        const overdue = await Project.countDocuments({
-          isDeleted: false,
-          status: 'IN_PROGRESS',
-          plannedEndDate: { $lt: new Date() },
-        });
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const next30Days = new Date(today);
+        next30Days.setDate(next30Days.getDate() + 30);
 
-        return { statusCounts, total, overdue };
+        const [
+          statusCounts,
+          typeCounts,
+          overdue,
+          startingSoon,
+          endingSoon,
+          budget,
+        ] = await Promise.all([
+          projectRepository.countByStatus(),
+          projectRepository.countByType(),
+          Project.countDocuments({
+            isDeleted: false,
+            status: { $in: ['PLANNING', 'IN_PROGRESS', 'ON_HOLD'] },
+            plannedEndDate: { $lt: today },
+          }),
+          Project.countDocuments({
+            isDeleted: false,
+            status: { $in: ['DRAFT', 'PLANNING'] },
+            plannedStartDate: { $gte: today, $lte: next30Days },
+          }),
+          Project.countDocuments({
+            isDeleted: false,
+            status: { $in: ['PLANNING', 'IN_PROGRESS'] },
+            plannedEndDate: { $gte: today, $lte: next30Days },
+          }),
+          projectRepository.getBudgetSummary(),
+        ]);
+
+        const byStatus = PROJECT_STATUSES.reduce((acc, status) => {
+          acc[status] = 0;
+          return acc;
+        }, {});
+        for (const item of statusCounts) {
+          byStatus[item.status] = item.count;
+        }
+
+        const total = statusCounts.reduce((sum, status) => sum + status.count, 0);
+
+        return {
+          total,
+          byStatus,
+          statusCounts,
+          byType: typeCounts.reduce((acc, item) => {
+            acc[item.projectType] = item.count;
+            return acc;
+          }, {}),
+          risk: {
+            overdue,
+            startingSoon,
+            endingSoon,
+          },
+          budget,
+          refreshedAt: new Date(),
+        };
       },
       DASHBOARD_TTL,
     );
@@ -229,7 +279,7 @@ class ProjectService {
     );
   }
 
-  async bulkUpdate(ids, data, updatedBy, meta = {}) {
+  async bulkUpdate(ids, data, updatedBy, _meta = {}) {
     if (!ids?.length) return { modifiedCount: 0 };
     const projects = await projectRepository.findByIds(ids);
     if (projects.length !== ids.length) {
@@ -247,7 +297,7 @@ class ProjectService {
     return { modifiedCount };
   }
 
-  async bulkDeactivate(ids, deactivatedBy, meta = {}) {
+  async bulkDeactivate(ids, deactivatedBy, _meta = {}) {
     if (!ids?.length) return { deactivatedCount: 0 };
     const deactivatedCount = await projectRepository.bulkUpdate(ids, { status: 'ARCHIVED' });
     for (const id of ids) await this._invalidateProjectCache(id);
@@ -404,7 +454,8 @@ class ProjectService {
       p.createdAt ? new Date(p.createdAt).toISOString() : '',
     ].map(escape).join(';')).join('\n');
 
-    return `﻿${header}\n${body}`;
+    const bom = '\uFEFF';
+    return `${bom}${header}\n${body}`;
   }
 
   async _checkNameUniqueness(name, customerId, excludeId = null) {

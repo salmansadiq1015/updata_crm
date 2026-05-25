@@ -7,6 +7,7 @@ import {
   writeOffSchema, recordPaymentSchema, allocatePaymentSchema,
   listPaymentsSchema, paymentIdParamSchema, dunningOverdueSchema,
   generateDunningSchema, dunningTemplateSchema,
+  customerCreditBalanceSchema,
 } from './arReceivables.validation.js';
 
 const router = Router();
@@ -24,6 +25,7 @@ router.post('/payments', authenticate, requirePermission('accounting:ar:manage')
 router.post('/payments/import', authenticate, requirePermission('accounting:ar:manage'), (req, res, next) => arReceivablesController.importPayments(req, res, next));
 router.get('/payments/:id', authenticate, requirePermission('accounting:ar:manage'), validate(paymentIdParamSchema), (req, res, next) => arReceivablesController.getPaymentById(req, res, next));
 router.post('/payments/:id/allocate', authenticate, requirePermission('accounting:ar:manage'), validate(allocatePaymentSchema), (req, res, next) => arReceivablesController.allocatePayment(req, res, next));
+router.get('/customers/:customerId/credit-balance', authenticate, requirePermission('accounting:ar:read'), validate(customerCreditBalanceSchema), (req, res, next) => arReceivablesController.getCustomerCreditBalance(req, res, next));
 
 // --- Dunning ---
 router.get('/dunning/overdue', authenticate, requirePermission('accounting:ar:dunning'), validate(dunningOverdueSchema), (req, res, next) => arReceivablesController.getOverdue(req, res, next));

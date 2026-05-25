@@ -13,6 +13,11 @@ export const createBankAccountSchema = {
     bankName: Joi.string().trim().max(200).allow('', null),
     currency: Joi.string().valid(...CURRENCIES),
     connectionType: Joi.string().valid(...CONNECTION_TYPES),
+    connectionConfig: Joi.object({
+      statementDirectory: Joi.string().trim().max(1000),
+      processedDirectory: Joi.string().trim().max(1000),
+      failedDirectory: Joi.string().trim().max(1000),
+    }).unknown(true),
     autoRetrieveEnabled: Joi.boolean(),
     autoRetrieveSchedule: Joi.string().trim().max(50).allow('', null),
   }),
@@ -27,6 +32,11 @@ export const updateBankAccountSchema = {
     bankName: Joi.string().trim().max(200).allow('', null),
     currency: Joi.string().valid(...CURRENCIES),
     connectionType: Joi.string().valid(...CONNECTION_TYPES),
+    connectionConfig: Joi.object({
+      statementDirectory: Joi.string().trim().max(1000),
+      processedDirectory: Joi.string().trim().max(1000),
+      failedDirectory: Joi.string().trim().max(1000),
+    }).unknown(true),
     autoRetrieveEnabled: Joi.boolean(),
     autoRetrieveSchedule: Joi.string().trim().max(50).allow('', null),
     status: Joi.string().valid('ACTIVE', 'INACTIVE'),
@@ -56,4 +66,10 @@ export const transactionIdParamSchema = {
 
 export const bankAccountIdParamSchema = {
   params: Joi.object({ id: objectId.required() }),
+};
+
+export const retrieveStatementsSchema = {
+  body: Joi.object({
+    bankAccountId: objectId.required(),
+  }),
 };

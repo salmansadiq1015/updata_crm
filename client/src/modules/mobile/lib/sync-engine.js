@@ -8,10 +8,13 @@ import {
   getFailedSyncCount,
   getSyncMeta,
   setSyncMeta,
+  upsertCrmAddressBook,
 } from '../db/mobile-db';
-import { SYNC_CONFIG, SYNC_QUEUE_STATUS } from '../constants/mobile-constants';
+import { SYNC_CONFIG, SYNC_QUEUE_STATUS, SYNC_STATUS } from '../constants/mobile-constants';
 import { useSyncStore } from '../stores/sync-store';
 import { isActuallyOnline } from './connectivity';
+import { normalizeInstallation } from '../services/installation-service';
+import { normalizeNote } from '../services/crm-note-service';
 
 let syncInProgress = false;
 let pollTimer = null;
@@ -180,9 +183,163 @@ async function processItem(item) {
       }
       break;
 
+    case 'ACCOUNTING_DOCUMENT':
+      if (item.operation === 'CREATE') {
+        const formData = new FormData();
+        const doc = await db.accountingDocuments.get(item.entity_id);
+        if (!doc?.file_blob) {
+          throw new Error('Offline accounting document file is missing');
+        }
+
+        formData.append('file', doc.file_blob, doc.file_name || `document-${item.entity_id}.jpg`);
+        Object.entries(item.payload.metadata || {}).forEach(([k, v]) => {
+          if (v != null && v !== '') formData.append(k, String(v));
+        });
+
+        await apiClient.post(
+          ENDPOINTS.ACCOUNTING.ACC_DOCUMENT_UPLOAD,
+          formData,
+          {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: SYNC_CONFIG.UPLOAD_TIMEOUT,
+          }
+        );
+
+        await db.accountingDocuments.update(item.entity_id, {
+          sync_status: 'SYNCED',
+          synced_at: new Date().toISOString(),
+        });
+      }
+      break;
+
+    case 'INSTALLATION_CAPTURE':
+      if (item.operation === 'CREATE') {
+        const localInstallation = await db.crmInstallations.get(item.entity_id);
+        const response = await apiClient.post(
+          ENDPOINTS.MOBILE.SITE_INSTALLATIONS(item.payload.site_id),
+          item.payload.data
+        );
+        const installation = normalizeInstallation(response.data, item.payload.site_id);
+        let nameplateImageId = null;
+        let nameplateSyncStatus = localInstallation?.nameplate_file_blob ? SYNC_STATUS.SYNCED : null;
+
+        if (installation?.id && localInstallation?.nameplate_file_blob) {
+          try {
+            const uploadResponse = await uploadInstallationNameplate(
+              apiClient,
+              ENDPOINTS,
+              installation.id,
+              localInstallation.nameplate_file_blob
+            );
+            nameplateImageId = uploadResponse?._id || uploadResponse?.id || null;
+          } catch (error) {
+            console.warn('Nameplate upload failed after installation sync:', error);
+            nameplateSyncStatus = SYNC_STATUS.SYNC_FAILED;
+          }
+        }
+
+        if (installation?.id) {
+          await db.transaction('rw', db.crmInstallations, db.syncQueue, async () => {
+            if (installation.id !== item.entity_id) {
+              await db.crmInstallations.delete(item.entity_id);
+            }
+            await db.crmInstallations.put({
+              ...installation,
+              nameplate_image_id: nameplateImageId || localInstallation?.nameplate_image_id || null,
+              nameplate_thumbnail_blob: localInstallation?.nameplate_thumbnail_blob || null,
+              nameplate_file_blob: nameplateSyncStatus === SYNC_STATUS.SYNC_FAILED ? localInstallation?.nameplate_file_blob : null,
+              nameplate_sync_status: nameplateSyncStatus,
+              sync_status: SYNC_STATUS.SYNCED,
+              last_synced_at: new Date().toISOString(),
+            });
+          });
+        }
+      } else if (item.operation === 'UPDATE') {
+        const localInstallation = await db.crmInstallations.get(item.entity_id);
+        const response = await apiClient.put(
+          ENDPOINTS.MOBILE.INSTALLATION_BY_ID(item.entity_id),
+          {
+            ...item.payload.data,
+            baseUpdatedAt: item.payload.base_updated_at,
+          }
+        );
+        const installation = normalizeInstallation(response.data, item.payload.site_id);
+        let nameplateImageId = localInstallation?.nameplate_image_id || null;
+        let nameplateSyncStatus = localInstallation?.nameplate_file_blob ? SYNC_STATUS.SYNCED : localInstallation?.nameplate_sync_status || null;
+
+        if (installation?.id && localInstallation?.nameplate_file_blob) {
+          try {
+            const uploadResponse = await uploadInstallationNameplate(
+              apiClient,
+              ENDPOINTS,
+              installation.id,
+              localInstallation.nameplate_file_blob
+            );
+            nameplateImageId = uploadResponse?._id || uploadResponse?.id || nameplateImageId;
+          } catch (error) {
+            console.warn('Nameplate upload failed after installation update sync:', error);
+            nameplateSyncStatus = SYNC_STATUS.SYNC_FAILED;
+          }
+        }
+
+        if (installation?.id) {
+          await db.crmInstallations.put({
+            ...installation,
+            nameplate_image_id: nameplateImageId,
+            nameplate_thumbnail_blob: localInstallation?.nameplate_thumbnail_blob || null,
+            nameplate_file_blob: nameplateSyncStatus === SYNC_STATUS.SYNC_FAILED ? localInstallation?.nameplate_file_blob : null,
+            nameplate_sync_status: nameplateSyncStatus,
+            sync_status: SYNC_STATUS.SYNCED,
+            last_synced_at: new Date().toISOString(),
+          });
+        }
+      }
+      break;
+
+    case 'NOTE':
+      if (item.operation === 'CREATE') {
+        const response = await apiClient.post(
+          ENDPOINTS.MOBILE.NOTE(item.payload.entity_type, item.payload.entity_id),
+          item.payload.data
+        );
+        const note = normalizeNote(
+          response.data?.data || response.data,
+          item.payload.entity_type,
+          item.payload.entity_id,
+        );
+        const localNote = await db.crmNotes.get(item.entity_id);
+        await db.transaction('rw', db.crmNotes, async () => {
+          if (note.id && note.id !== item.entity_id) {
+            await db.crmNotes.delete(item.entity_id);
+          }
+          await db.crmNotes.put({
+            ...note,
+            is_warning: note.is_warning || localNote?.is_warning || false,
+            is_pinned: note.is_pinned || localNote?.is_pinned || false,
+            sync_status: SYNC_STATUS.SYNCED,
+            last_synced_at: new Date().toISOString(),
+          });
+        });
+      }
+      break;
+
     default:
       console.warn('Unknown sync entity type:', item.entity_type);
   }
+}
+
+async function uploadInstallationNameplate(apiClient, ENDPOINTS, installationId, file) {
+  const formData = new FormData();
+  formData.append('image', file, `nameplate-${installationId}.jpg`);
+  formData.append('caption', 'Nameplate');
+  formData.append('category', 'nameplate');
+
+  const response = await apiClient.post(
+    ENDPOINTS.MOBILE.INSTALLATION_NAMEPLATE(installationId),
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  );
+  return response.data?.data || response.data || response;
 }
 
 async function pullInboundChanges() {
@@ -195,10 +352,10 @@ async function pullInboundChanges() {
 
   const response = await apiClient.post(ENDPOINTS.MOBILE.SYNC, {
     lastSyncTimestamp: lastSync,
-    outbound: { workReports: [], timeEntries: [], photos: [], chatMessages: [], materialItems: [] },
+    outbound: { workReports: [], timeEntries: [], photos: [], chatMessages: [], materialItems: [], notes: [] },
   });
 
-  const { syncTimestamp, inbound } = response;
+  const { syncTimestamp, inbound } = response.data || response;
 
   if (inbound?.orders?.length > 0) {
     await db.orders.bulkPut(
@@ -215,6 +372,10 @@ async function pullInboundChanges() {
 
   if (inbound?.catalogUpdates?.length > 0) {
     await db.catalogItems.bulkPut(inbound.catalogUpdates);
+  }
+
+  if (inbound?.crmAddressBook) {
+    await upsertCrmAddressBook(inbound.crmAddressBook, syncTimestamp);
   }
 
   await setSyncMeta('last_sync_timestamp', syncTimestamp);

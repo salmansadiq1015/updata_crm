@@ -1,6 +1,5 @@
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
-import cacheManager from '../../shared/cache/CacheManager.js';
 
 /**
  * Speech-to-Text provider abstraction.
@@ -84,10 +83,11 @@ class SttGatewayService {
   async _transcribeWhisper(audioBuffer, { language, customVocabulary = [] } = {}) {
     const openai = await this._getClient();
 
-    // Build prompt from custom vocabulary for better accuracy
+    const localePrompt = this._buildLocalePrompt(language);
     const vocabPrompt = customVocabulary.length > 0
       ? `Fachbegriffe: ${customVocabulary.join(', ')}`
       : '';
+    const prompt = [localePrompt, vocabPrompt].filter(Boolean).join('\n');
 
     const file = new File([audioBuffer], 'audio.wav', { type: 'audio/wav' });
 
@@ -95,7 +95,7 @@ class SttGatewayService {
       model: 'whisper-1',
       file,
       language: language?.split('-')[0] || 'de',
-      prompt: vocabPrompt,
+      prompt,
       response_format: 'verbose_json',
       timestamp_granularities: ['word'],
     });
@@ -137,6 +137,20 @@ class SttGatewayService {
       this._client = new OpenAI({ apiKey: config.ai.apiKey });
     }
     return this._client;
+  }
+
+  _buildLocalePrompt(language) {
+    const normalized = String(language || '').toLowerCase();
+    if (normalized === 'de-ch' || normalized === 'gsw' || normalized === 'gsw-ch') {
+      return [
+        'Transkribiere Schweizerdeutsch und Deutsch fuer Heizungs-, Service- und Baustellenrapporte.',
+        'Typische Begriffe: Auftrag, Rapport, Heizung, Boiler, Waermepumpe, Kessel, Brenner, Stoerung, Anlage, Offerte.',
+      ].join(' ');
+    }
+    if (normalized === 'fr-ch' || normalized === 'it-ch') {
+      return 'Transkribiere Schweizer Service- und Heizungsfachsprache mit korrekten Namen, Adressen und technischen Begriffen.';
+    }
+    return '';
   }
 
   /**

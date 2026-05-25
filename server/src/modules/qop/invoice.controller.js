@@ -1,5 +1,4 @@
 import invoiceService from './invoice.service.js';
-import queueManager from '../../shared/queue/QueueManager.js';
 
 class InvoiceController {
   async create(req, res, next) {
@@ -7,6 +6,14 @@ class InvoiceController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const invoice = await invoiceService.create(req.body, req.user._id, meta);
       return res.success({ data: invoice, message: 'Invoice created successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  async createFromOrder(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const invoice = await invoiceService.createFromOrder(req.body, req.user._id, meta);
+      return res.success({ data: invoice, message: 'Order invoice created successfully', statusCode: 201 });
     } catch (err) { next(err); }
   }
 
@@ -23,6 +30,14 @@ class InvoiceController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const invoice = await invoiceService.createFinalInvoice(req.body, req.user._id, meta);
       return res.success({ data: invoice, message: 'Final invoice created successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  async createCreditNote(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const invoice = await invoiceService.createCreditNote(req.params.id, req.body, req.user._id, meta);
+      return res.success({ data: invoice, message: 'Credit note created successfully', statusCode: 201 });
     } catch (err) { next(err); }
   }
 
@@ -97,12 +112,9 @@ class InvoiceController {
 
   async generateDocument(req, res, next) {
     try {
-      await queueManager.addJob('document-generation', {
-        documentType: 'invoice',
-        documentId: req.params.id,
-        requestedBy: req.user._id,
-      });
-      return res.success({ data: { jobQueued: true }, message: 'Document generation queued' });
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await invoiceService.generatePdf(req.params.id, req.user._id, meta);
+      return res.success({ data: result, message: 'Invoice PDF generated successfully' });
     } catch (err) { next(err); }
   }
 

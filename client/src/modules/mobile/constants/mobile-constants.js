@@ -55,6 +55,12 @@ export const MESSAGE_TYPE = Object.freeze({
   FILE: 'FILE',
 });
 
+export const ACCOUNTING_DOCUMENT_TYPE = Object.freeze({
+  SUPPLIER_INVOICE: 'SUPPLIER_INVOICE',
+  RECEIPT: 'RECEIPT',
+  OTHER: 'OTHER',
+});
+
 export const CATALOG_SOURCE = Object.freeze({
   IGH: 'IGH',
   INTERNAL: 'INTERNAL',
@@ -85,6 +91,9 @@ export const SYNC_ENTITY_TYPE = Object.freeze({
   MATERIAL_ITEM: 'MATERIAL_ITEM',
   SMALL_ORDER: 'SMALL_ORDER',
   DOCUMENT: 'DOCUMENT',
+  ACCOUNTING_DOCUMENT: 'ACCOUNTING_DOCUMENT',
+  INSTALLATION_CAPTURE: 'INSTALLATION_CAPTURE',
+  NOTE: 'NOTE',
 });
 
 export const SYNC_OPERATION = Object.freeze({
@@ -109,6 +118,9 @@ export const SYNC_PRIORITY = Object.freeze({
   [SYNC_ENTITY_TYPE.MATERIAL_ITEM]: 50,
   [SYNC_ENTITY_TYPE.SMALL_ORDER]: 50,
   [SYNC_ENTITY_TYPE.DOCUMENT]: 50,
+  [SYNC_ENTITY_TYPE.ACCOUNTING_DOCUMENT]: 35,
+  [SYNC_ENTITY_TYPE.INSTALLATION_CAPTURE]: 25,
+  [SYNC_ENTITY_TYPE.NOTE]: 15,
 });
 
 export const SYNC_CONFIG = Object.freeze({
@@ -126,12 +138,15 @@ export const PHOTO_CONFIG = Object.freeze({
   MAX_DIMENSION: 2048,
   THUMBNAIL_DIMENSION: 256,
   JPEG_QUALITY: 0.85,
+  MIN_JPEG_QUALITY: 0.55,
   THUMBNAIL_QUALITY: 0.7,
   MAX_FILE_SIZE: 20 * 1024 * 1024,
+  MAX_COMPRESSED_SIZE: 2 * 1024 * 1024,
 });
 
 export const MOBILE_NAV_TABS = Object.freeze([
   { key: 'orders', labelKey: 'mobile.nav.orders', href: '/orders', icon: 'ClipboardList' },
+  { key: 'addressBook', labelKey: 'mobile.nav.addressBook', href: '/address-book', icon: 'BookOpen' },
   { key: 'chat', labelKey: 'mobile.nav.chat', href: '/chat', icon: 'MessageSquare' },
   { key: 'timer', labelKey: 'mobile.nav.timer', href: '/timer', icon: 'Timer' },
   { key: 'notifications', labelKey: 'mobile.nav.notifications', href: '/m/notifications', icon: 'Bell' },

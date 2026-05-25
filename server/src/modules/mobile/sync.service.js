@@ -6,6 +6,8 @@ class SyncService {
       workReports: [],
       timeEntries: [],
       photos: [],
+      installationCaptures: [],
+      notes: [],
       conflicts: [],
     };
 
@@ -62,6 +64,71 @@ class SyncService {
         // Material items are typically part of work reports; process as needed
         logger.info('Material items sync received', { module: 'mobile', count: syncData.outbound.materialItems.length });
       }
+
+      if (syncData.outbound.installationCaptures?.length) {
+        const { default: installationService } = await import('../crm/installation.service.js');
+        const { default: installationRepository } = await import('../crm/installation.repository.js');
+
+        for (const item of syncData.outbound.installationCaptures) {
+          try {
+            let result;
+            if (item.operation === 'CREATE') {
+              result = await installationService.create(item.siteId, item.data, userId, meta);
+            } else if (item.operation === 'UPDATE') {
+              const existing = await installationRepository.findById(item.installationId);
+              if (
+                item.baseUpdatedAt &&
+                existing?.updatedAt &&
+                new Date(existing.updatedAt).getTime() > new Date(item.baseUpdatedAt).getTime()
+              ) {
+                outboundResults.conflicts.push({
+                  localId: item.localId,
+                  serverId: item.installationId,
+                  entityType: 'INSTALLATION_CAPTURE',
+                  status: 'CONFLICT',
+                  serverUpdatedAt: existing.updatedAt,
+                });
+                continue;
+              }
+              result = await installationService.update(item.installationId, item.data, userId, meta);
+            }
+
+            outboundResults.installationCaptures.push({
+              localId: item.localId,
+              serverId: result?._id || item.installationId,
+              status: 'SUCCESS',
+            });
+          } catch (err) {
+            outboundResults.installationCaptures.push({
+              localId: item.localId,
+              serverId: item.installationId || null,
+              status: 'FAILED',
+              error: err.message,
+            });
+          }
+        }
+      }
+
+      if (syncData.outbound.notes?.length) {
+        const { default: entityNoteService } = await import('../crm/entityNote.service.js');
+
+        for (const item of syncData.outbound.notes) {
+          try {
+            const entityType = item.entityType || item.entity_type;
+            const entityId = item.entityId || item.entity_id;
+            const result = await entityNoteService.create(
+              entityType,
+              entityId,
+              item.data,
+              userId,
+              meta,
+            );
+            outboundResults.notes.push({ localId: item.localId, serverId: result._id, status: 'SUCCESS' });
+          } catch (err) {
+            outboundResults.notes.push({ localId: item.localId, serverId: null, status: 'FAILED', error: err.message });
+          }
+        }
+      }
     }
 
     // Pull inbound changes
@@ -83,6 +150,14 @@ class SyncService {
       logger.warn('Failed to pull inbound notifications during sync', { module: 'mobile', error: err.message });
     }
 
+    let crmAddressBook = { customers: [], contacts: [], sites: [], installations: [], notes: [], deleted: {} };
+    try {
+      const { default: crmAddressBookService } = await import('./crmAddressBook.service.js');
+      crmAddressBook = await crmAddressBookService.listChanges(syncData.lastSyncTimestamp);
+    } catch (err) {
+      logger.warn('Failed to pull CRM address book during sync', { module: 'mobile', error: err.message });
+    }
+
     logger.info('Full sync completed', { module: 'mobile', action: 'sync.full', userId });
 
     return {
@@ -90,15 +165,98 @@ class SyncService {
       inbound: {
         orders,
         notifications,
+        crmAddressBook,
         catalogUpdates: [],
       },
       outboundResults,
     };
   }
 
-  async getSyncStatus(userId) {
-    // Placeholder
-    return { pendingItems: 0, lastSync: null };
+  async getSyncStatus(_userId) {
+    const userId = _userId;
+    const [orders, notifications, reportCount, deviceCount] = await Promise.all([
+      this._countAssignedOrders(userId),
+      this._countUnreadNotifications(userId),
+      this._countPendingReports(userId),
+      this._countActiveDevices(userId),
+    ]);
+
+    const pendingItems = orders + notifications + reportCount;
+
+    return {
+      pendingItems,
+      lastSync: null,
+      serverTimestamp: new Date(),
+      breakdown: {
+        orders,
+        notifications,
+        workReports: reportCount,
+      },
+      device: {
+        registered: deviceCount > 0,
+        activeTokens: deviceCount,
+      },
+    };
+  }
+
+  async _countAssignedOrders(userId) {
+    try {
+      const Assignment = (await import('../deploy/assignment.model.js')).default;
+      return Assignment.countDocuments({
+        employeeId: userId,
+        status: { $in: ['PLANNED', 'CONFIRMED', 'IN_PROGRESS'] },
+        isDeleted: false,
+      });
+    } catch (err) {
+      logger.warn('Failed to count assigned orders for mobile sync status', {
+        module: 'mobile',
+        error: err.message,
+      });
+      return 0;
+    }
+  }
+
+  async _countUnreadNotifications(userId) {
+    try {
+      const InAppNotification = (await import('../notifications/inAppNotification.model.js')).default;
+      return InAppNotification.countDocuments({
+        userId,
+        isRead: false,
+        isDismissed: false,
+      });
+    } catch (err) {
+      logger.warn('Failed to count notifications for mobile sync status', {
+        module: 'mobile',
+        error: err.message,
+      });
+      return 0;
+    }
+  }
+
+  async _countPendingReports(userId) {
+    try {
+      const { default: workReportRepository } = await import('./workReport.repository.js');
+      return workReportRepository.countPendingSyncByTechnician(userId);
+    } catch (err) {
+      logger.warn('Failed to count work reports for mobile sync status', {
+        module: 'mobile',
+        error: err.message,
+      });
+      return 0;
+    }
+  }
+
+  async _countActiveDevices(userId) {
+    try {
+      const DeviceToken = (await import('./deviceToken.model.js')).default;
+      return DeviceToken.countDocuments({ userId, isActive: true });
+    } catch (err) {
+      logger.warn('Failed to count active devices for mobile sync status', {
+        module: 'mobile',
+        error: err.message,
+      });
+      return 0;
+    }
   }
 }
 

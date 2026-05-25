@@ -14,17 +14,25 @@ const ALLOWED_FILTERS = {
 };
 
 class BankTransactionRepository {
-  async create(data) {
+  async create(data, options = {}) {
     const txn = new BankTransaction(data);
-    return txn.save();
+    return txn.save({ session: options.session });
   }
 
   async bulkCreate(records) {
     return BankTransaction.insertMany(records, { ordered: false });
   }
 
-  async findById(id) {
-    return BankTransaction.findById(id).lean();
+  async existsStatement(bankAccountId, statementId) {
+    if (!statementId) return false;
+    const existing = await BankTransaction.exists({ bankAccountId, statementId });
+    return Boolean(existing);
+  }
+
+  async findById(id, options = {}) {
+    return BankTransaction.findById(id)
+      .session(options.session || null)
+      .lean();
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {} }) {
@@ -70,12 +78,20 @@ class BankTransactionRepository {
     }).lean();
   }
 
-  async updateReconciliation(id, status, matchData = {}) {
+  async updateReconciliation(id, status, matchData = {}, options = {}) {
     return BankTransaction.findByIdAndUpdate(
       id,
       { reconciliationStatus: status, ...matchData },
-      { returnDocument: 'after', runValidators: true },
+      { returnDocument: 'after', runValidators: true, session: options.session },
     ).lean();
+  }
+
+  async markReconciledIfUnmatched(id, status, matchData = {}, options = {}) {
+    return BankTransaction.updateOne(
+      { _id: id, reconciliationStatus: 'UNMATCHED' },
+      { $set: { reconciliationStatus: status, ...matchData } },
+      { session: options.session, runValidators: true },
+    );
   }
 }
 

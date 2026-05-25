@@ -39,6 +39,24 @@ class AccountController {
       return res.success({ data: balance });
     } catch (err) { next(err); }
   }
+
+  async getOverview(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const overview = await accountService.getOverview(req.params.id, query);
+      return res.success({ data: overview });
+    } catch (err) { next(err); }
+  }
+
+  async exportOverviewCsv(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const csv = await accountService.exportOverviewCsv(req.params.id, query);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="account-${req.params.id}-overview.csv"`);
+      return res.send(csv);
+    } catch (err) { next(err); }
+  }
 }
 
 const accountController = new AccountController();

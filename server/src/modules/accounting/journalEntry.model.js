@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 export const REFERENCE_TYPES = [
   'AR_INVOICE', 'AR_PAYMENT', 'AP_INVOICE', 'AP_PAYMENT',
   'BANK_FEE', 'MANUAL', 'REVERSAL', 'WRITE_OFF',
+  'INVOICE_FINALIZED', 'INVOICE_PAYMENT',
+  'AUTO_RECONCILIATION', 'MANUAL_RECONCILIATION', 'CATEGORIZATION',
+  'NETTING',
 ];
 
 const journalEntrySchema = new mongoose.Schema(
@@ -64,7 +67,7 @@ const journalEntrySchema = new mongoose.Schema(
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
     },
   },
   {

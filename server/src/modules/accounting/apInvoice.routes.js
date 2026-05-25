@@ -15,6 +15,7 @@ router.get('/open-payables', authenticate, requirePermission('accounting:ap:read
 router.get('/aging', authenticate, requirePermission('accounting:ap:read'), (req, res, next) => apInvoiceController.getAging(req, res, next));
 router.get('/summary', authenticate, requirePermission('accounting:ap:read'), (req, res, next) => apInvoiceController.getSummary(req, res, next));
 router.post('/payment-batch', authenticate, requirePermission('accounting:ap:manage'), validate(createBatchSchema), (req, res, next) => apInvoiceController.createPaymentBatch(req, res, next));
+router.post('/payment-batch/:batchId/export-pain001', authenticate, requirePermission('accounting:ap:manage'), validate(batchIdParamSchema), (req, res, next) => apInvoiceController.exportPaymentBatchPain001(req, res, next));
 router.get('/payment-batch/:batchId', authenticate, requirePermission('accounting:ap:read'), validate(batchIdParamSchema), (req, res, next) => apInvoiceController.getPaymentBatch(req, res, next));
 
 // Standard CRUD

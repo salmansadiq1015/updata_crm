@@ -28,6 +28,51 @@ const installationSparePartSchema = new mongoose.Schema(
       maxlength: 1000,
       default: null,
     },
+    needsOrdering: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    orderQuantity: {
+      type: Number,
+      min: 1,
+      default: null,
+    },
+    orderUrgency: {
+      type: String,
+      enum: ['low', 'normal', 'high', 'urgent'],
+      default: null,
+      index: true,
+    },
+    orderNotes: {
+      type: String,
+      maxlength: 1000,
+      default: null,
+    },
+    orderFlaggedAt: {
+      type: Date,
+      default: null,
+    },
+    orderFlaggedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    orderFulfilledAt: {
+      type: Date,
+      default: null,
+    },
+    orderFulfilledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    orderStatus: {
+      type: String,
+      enum: ['requested', 'ordered', 'received', 'cancelled'],
+      default: null,
+      index: true,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -45,6 +90,7 @@ installationSparePartSchema.index(
   { installationId: 1, sparePartId: 1 },
   { unique: true },
 );
+installationSparePartSchema.index({ orderStatus: 1, orderUrgency: 1, orderFlaggedAt: -1 });
 
 const InstallationSparePart = mongoose.model('InstallationSparePart', installationSparePartSchema);
 export default InstallationSparePart;

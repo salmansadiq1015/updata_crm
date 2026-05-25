@@ -42,12 +42,14 @@ class MaintenanceIntervalService {
       throw new ConflictError('Cannot add maintenance interval to a decommissioned installation');
     }
 
-    const nextDueDate = MaintenanceIntervalService._calculateNextDueDate(data.lastServiceDate, data.frequencyMonths);
+    const referenceDate = data.lastServiceDate || installation.commissioningDate;
+    const nextDueDate = MaintenanceIntervalService._calculateNextDueDate(referenceDate, data.frequencyMonths);
     const maintenanceStatus = MaintenanceIntervalService._determineStatus(nextDueDate);
 
     const interval = await maintenanceIntervalRepository.create({
       ...data,
       installationId,
+      lastServiceDate: data.lastServiceDate || null,
       nextDueDate,
       maintenanceStatus,
     });
@@ -212,7 +214,7 @@ class MaintenanceIntervalService {
       r.notes,
     ].map(escape).join(';')).join('\n');
 
-    return `﻿${header}\n${body}`;
+    return `\uFEFF${header}\n${body}`;
   }
 
   async _invalidateInstallationMaintenanceCache(installationId) {

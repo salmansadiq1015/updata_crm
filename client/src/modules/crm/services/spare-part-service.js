@@ -26,6 +26,10 @@ export const sparePartService = {
     const res = await apiClient.get(ENDPOINTS.CRM.SPARE_PARTS_SEARCH, { params });
     return res.data;
   },
+  async listOrderRequests(params = {}) {
+    const res = await apiClient.get(ENDPOINTS.CRM.SPARE_PART_ORDER_REQUESTS, { params });
+    return res;
+  },
   async exportCsv(params = {}) {
     const res = await apiClient.get(ENDPOINTS.CRM.SPARE_PARTS_EXPORT, {
       params,
@@ -40,6 +44,13 @@ export const sparePartService = {
   },
   async linkToInstallation(installationId, data) {
     const res = await apiClient.post(ENDPOINTS.CRM.INSTALLATION_SPARE_PARTS(installationId), data);
+    return res.data;
+  },
+  async updateOrderStatus(installationId, sparePartId, data) {
+    const res = await apiClient.patch(
+      ENDPOINTS.CRM.INSTALLATION_SPARE_PART_ORDER_STATUS(installationId, sparePartId),
+      data,
+    );
     return res.data;
   },
   async unlinkFromInstallation(installationId, sparePartId) {

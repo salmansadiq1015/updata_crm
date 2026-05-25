@@ -1,4 +1,6 @@
 import bankingService from './banking.service.js';
+import { AppError } from '../../shared/errors/AppError.js';
+import ERROR_CODES from '../../shared/errors/errorCodes.js';
 
 class BankingController {
   async createAccount(req, res, next) {
@@ -37,6 +39,9 @@ class BankingController {
 
   async importStatement(req, res, next) {
     try {
+      if (!req.file?.buffer) {
+        throw new AppError('Bank statement file is required', 400, ERROR_CODES.FILE_UPLOAD_FAILED);
+      }
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const result = await bankingService.importStatement(
         req.params.bankAccountId || req.body.bankAccountId,
@@ -46,6 +51,17 @@ class BankingController {
         meta,
       );
       return res.success({ data: result, message: 'Bank statement imported successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async importPaymentStatus(req, res, next) {
+    try {
+      if (!req.file?.buffer) {
+        throw new AppError('Payment status report file is required', 400, ERROR_CODES.FILE_UPLOAD_FAILED);
+      }
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await bankingService.importPaymentStatus(req.file.buffer, req.user._id, meta);
+      return res.success({ data: result, message: 'Payment status report imported successfully' });
     } catch (err) { next(err); }
   }
 
@@ -66,7 +82,8 @@ class BankingController {
 
   async retrieveStatements(req, res, next) {
     try {
-      const result = await bankingService.retrieveStatements(req.body.bankAccountId);
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await bankingService.retrieveStatements(req.body.bankAccountId, req.user._id, meta);
       return res.success({ data: result });
     } catch (err) { next(err); }
   }

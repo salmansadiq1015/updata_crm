@@ -6,6 +6,19 @@ class OcrResultRepository {
     return result.save();
   }
 
+  async upsertByDocumentId(documentId, data, options = {}) {
+    return OcrResult.findOneAndUpdate(
+      { documentId },
+      { ...data, documentId },
+      {
+        upsert: true,
+        returnDocument: 'after',
+        runValidators: true,
+        session: options.session,
+      },
+    ).lean();
+  }
+
   async findByDocumentId(documentId) {
     return OcrResult.findOne({ documentId }).lean();
   }

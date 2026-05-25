@@ -35,8 +35,7 @@ const widgetSubmissionSchema = new mongoose.Schema(
 );
 
 widgetSubmissionSchema.index({ processingStatus: 1, createdAt: -1 });
-widgetSubmissionSchema.index({ contactEmail: 1, createdAt: -1 });
-widgetSubmissionSchema.index({ referenceNumber: 1 }, { unique: true });
+widgetSubmissionSchema.index({ contactEmail: 1, requestType: 1, createdAt: -1 });
 widgetSubmissionSchema.index({ createdAt: -1 });
 
 widgetSubmissionSchema.pre(/^find/, function () {

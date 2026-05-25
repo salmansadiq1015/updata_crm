@@ -59,6 +59,19 @@ class AccountingDocumentController {
     } catch (err) { next(err); }
   }
 
+  async rejectOcr(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await accountingDocumentService.rejectOcrResult(
+        req.params.id,
+        req.body.reason,
+        req.user._id,
+        meta,
+      );
+      return res.success({ data: result, message: 'OCR result rejected' });
+    } catch (err) { next(err); }
+  }
+
   async assign(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
@@ -67,6 +80,7 @@ class AccountingDocumentController {
         req.body.userId,
         req.user._id,
         meta,
+        req.body.note || '',
       );
       return res.success({ data: doc, message: 'Document assigned successfully' });
     } catch (err) { next(err); }
@@ -80,8 +94,55 @@ class AccountingDocumentController {
         req.body.userId,
         req.user._id,
         meta,
+        req.body.note || '',
       );
       return res.success({ data: result, message: `${result.modifiedCount} document(s) assigned` });
+    } catch (err) { next(err); }
+  }
+
+  async createAutoAllocationRule(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const rule = await accountingDocumentService.createAutoAllocationRule(req.body, req.user._id, meta);
+      return res.success({ data: rule, message: 'Auto-allocation rule created', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  async listAutoAllocationRules(req, res, next) {
+    try {
+      const rules = await accountingDocumentService.listAutoAllocationRules(req.query);
+      return res.success({ data: rules });
+    } catch (err) { next(err); }
+  }
+
+  async updateAutoAllocationRule(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const rule = await accountingDocumentService.updateAutoAllocationRule(
+        req.params.ruleId,
+        req.body,
+        req.user._id,
+        meta,
+      );
+      return res.success({ data: rule, message: 'Auto-allocation rule updated' });
+    } catch (err) { next(err); }
+  }
+
+  async bulkDownload(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const archive = await accountingDocumentService.bulkDownload(req.body.documentIds, req.user._id, meta);
+      res.setHeader('Content-Type', archive.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${archive.fileName}"`);
+      return res.status(200).send(archive.buffer);
+    } catch (err) { next(err); }
+  }
+
+  async delete(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await accountingDocumentService.deleteDocument(req.params.id, req.user._id, meta);
+      return res.success({ data: result, message: 'Document deleted successfully' });
     } catch (err) { next(err); }
   }
 }

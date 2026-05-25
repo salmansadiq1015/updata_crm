@@ -4,6 +4,7 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   createInvoiceSchema,
+  createFromOrderSchema,
   createAdvanceSchema,
   createFinalSchema,
   updateInvoiceSchema,
@@ -12,12 +13,14 @@ import {
   transitionStatusSchema,
   finalizeSchema,
   sendSchema,
+  createCreditNoteSchema,
   recordPaymentSchema,
 } from './invoice.validation.js';
 
 const router = Router();
 
 // Named routes BEFORE /:id
+router.post('/from-order', authenticate, requirePermission('invoicing:write'), validate(createFromOrderSchema), (req, res, next) => invoiceController.createFromOrder(req, res, next));
 router.post('/advance', authenticate, requirePermission('invoicing:write'), validate(createAdvanceSchema), (req, res, next) => invoiceController.createAdvance(req, res, next));
 router.post('/final', authenticate, requirePermission('invoicing:write'), validate(createFinalSchema), (req, res, next) => invoiceController.createFinal(req, res, next));
 
@@ -31,6 +34,7 @@ router.put('/:id', authenticate, requirePermission('invoicing:write'), validate(
 router.patch('/:id/status', authenticate, requirePermission('invoicing:write'), validate(transitionStatusSchema), (req, res, next) => invoiceController.transitionStatus(req, res, next));
 router.post('/:id/finalize', authenticate, requirePermission('invoicing:write'), validate(finalizeSchema), (req, res, next) => invoiceController.finalize(req, res, next));
 router.post('/:id/send', authenticate, requirePermission('invoicing:write'), validate(sendSchema), (req, res, next) => invoiceController.send(req, res, next));
+router.post('/:id/credit-note', authenticate, requirePermission('invoicing:write'), validate(createCreditNoteSchema), (req, res, next) => invoiceController.createCreditNote(req, res, next));
 router.post('/:id/payments', authenticate, requirePermission('invoicing:write'), validate(recordPaymentSchema), (req, res, next) => invoiceController.recordPayment(req, res, next));
 router.get('/:id/payments', authenticate, requirePermission('invoicing:read'), validate(invoiceIdParamSchema), (req, res, next) => invoiceController.getPayments(req, res, next));
 router.post('/:id/documents/generate', authenticate, requirePermission('invoicing:write'), validate(invoiceIdParamSchema), (req, res, next) => invoiceController.generateDocument(req, res, next));

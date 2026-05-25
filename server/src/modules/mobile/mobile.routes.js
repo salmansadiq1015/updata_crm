@@ -9,8 +9,10 @@ import catalogRoutes from './catalog.routes.js';
 import { chatProjectRouter, chatRouter } from './chat.routes.js';
 import smallOrderRoutes from './smallOrder.routes.js';
 import { installationSiteRouter, installationRouter } from './installation.routes.js';
+import { sparePartRouter, installationSparePartRouter } from './sparePart.routes.js';
 import quotationRoute from './quotation.routes.js';
 import syncRoutes from './sync.routes.js';
+import noteRoutes from './note.routes.js';
 import { deviceRouter, notificationRouter } from './notification.routes.js';
 
 /**
@@ -71,7 +73,10 @@ router.use('/projects/:id/small-orders', smallOrderRoutes);
 
 // --- Installations ---
 router.use('/sites/:siteId/installations', installationSiteRouter);
+router.use('/spare-parts', sparePartRouter);
+router.use('/installations/:id/spare-parts', installationSparePartRouter);
 router.use('/installations', installationRouter);
+router.use('/notes', noteRoutes);
 
 // --- Sync ---
 router.use('/sync', syncRoutes);

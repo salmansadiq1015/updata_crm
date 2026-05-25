@@ -62,12 +62,16 @@ class WidgetSubmissionRepository {
     return buildCursorResponse(docs, limit, sortBy);
   }
 
-  async findRecentByEmail(email, hoursBack = 24) {
+  async findRecentByEmail(email, requestType, hoursBack = 24) {
     const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
-    return WidgetSubmission.find({
-      contactEmail: email,
+    const query = {
+      contactEmail: String(email).toLowerCase(),
       createdAt: { $gte: since },
-    })
+      processingStatus: { $ne: 'duplicate' },
+    };
+    if (requestType) query.requestType = requestType;
+
+    return WidgetSubmission.find(query)
       .sort({ createdAt: -1 })
       .lean();
   }

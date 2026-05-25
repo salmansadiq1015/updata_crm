@@ -6,7 +6,7 @@ const ACTION_TYPES = ['NAVIGATE', 'SEARCH', 'UPDATE', 'CREATE'];
 export const createCommandSchema = {
   body: Joi.object({
     intent: Joi.string().required(),
-    language: Joi.string().required().max(5),
+    language: Joi.string().required().max(12),
     phrases: Joi.array().items(Joi.string()).min(1).required(),
     actionType: Joi.string().valid(...ACTION_TYPES).required(),
     actionTarget: Joi.string().required(),
@@ -19,7 +19,7 @@ export const updateCommandSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     intent: Joi.string(),
-    language: Joi.string().max(5),
+    language: Joi.string().max(12),
     phrases: Joi.array().items(Joi.string()).min(1),
     actionType: Joi.string().valid(...ACTION_TYPES),
     actionTarget: Joi.string(),

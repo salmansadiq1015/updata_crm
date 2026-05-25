@@ -471,7 +471,11 @@ export const sendInvoiceSentEmail = async (email, data, pdfAttachment = null) =>
     },
   };
   if (pdfAttachment) {
-    options.attachments = [{ filename: `Rechnung_${data.invoiceNumber}.pdf`, content: pdfAttachment }];
+    options.attachments = [{
+      filename: pdfAttachment.filename || `Rechnung_${data.invoiceNumber}.pdf`,
+      content: pdfAttachment.content || pdfAttachment,
+      contentType: pdfAttachment.contentType || 'application/pdf',
+    }];
   }
   return sendMail(options);
 };

@@ -16,6 +16,9 @@ class SiteService {
     const customerRepository = (await import('./customer.repository.js')).default;
     const customer = await customerRepository.findById(customerId);
     if (!customer) throw new NotFoundError('Customer', customerId);
+    if (customer.status !== 'active') {
+      throw new ConflictError('Cannot create a site for an archived customer');
+    }
 
     const siteNumber = await counterService.getNextSiteNumber(customerId);
 
@@ -112,25 +115,46 @@ class SiteService {
       throw new ConflictError('Site is already inactive');
     }
 
-    // Check for active installations (lazy import to avoid circular deps)
-    const Installation = (await import('./installation.model.js')).default;
-    const activeInstallations = await Installation.countDocuments({
+    const [Installation, MaintenanceInterval] = await Promise.all([
+      import('./installation.model.js').then((module) => module.default),
+      import('./maintenanceInterval.model.js').then((module) => module.default),
+    ]);
+
+    const activeInstallations = await Installation.find({
       siteId: id,
       status: 'active',
       isDeleted: false,
-    });
-    if (activeInstallations > 0) {
-      throw new ConflictError('Cannot deactivate site with active installations. Please decommission all installations first.');
+    }).select('_id').lean();
+    const activeInstallationIds = activeInstallations.map((installation) => installation._id);
+
+    if (activeInstallationIds.length > 0) {
+      await Installation.updateMany(
+        { _id: { $in: activeInstallationIds }, status: 'active', isDeleted: false },
+        {
+          $set: {
+            status: 'decommissioned',
+            decommissionedDate: new Date(),
+            decommissionReason: 'Site deactivated',
+          },
+        },
+        { runValidators: true },
+      );
+      await MaintenanceInterval.updateMany(
+        { installationId: { $in: activeInstallationIds } },
+        { $set: { maintenanceStatus: 'ok' } },
+      );
     }
 
     const updated = await siteRepository.updateById(id, { status: 'inactive' });
     await this._invalidateSiteCache(id);
     await this._invalidateCustomerSitesCache(site.customerId);
+    await cacheManager.del('crm:maintenance:dashboard');
 
     eventBus.publish(EVENT_TYPES.SITE_DEACTIVATED, {
       siteId: id,
       customerId: site.customerId,
       deactivatedBy,
+      decommissionedInstallations: activeInstallationIds.length,
     }, { source: 'crm:sites' });
 
     auditService.logEvent({

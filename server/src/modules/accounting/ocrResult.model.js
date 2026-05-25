@@ -22,10 +22,14 @@ const ocrResultSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    provider: { type: String, trim: true, maxlength: 50, default: 'unknown' },
+    rawText: { type: String, maxlength: 20000, default: '' },
+    rawPayload: { type: mongoose.Schema.Types.Mixed, default: null },
     confidenceScores: {
       type: mongoose.Schema.Types.Mixed,
       required: true,
     },
+    lowConfidenceFields: [{ type: String, trim: true, maxlength: 100 }],
     status: {
       type: String,
       enum: OCR_RESULT_STATUSES,
@@ -37,6 +41,13 @@ const ocrResultSchema = new mongoose.Schema(
       default: null,
     },
     confirmedAt: { type: Date, default: null },
+    rejectedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    rejectedAt: { type: Date, default: null },
+    errorMessage: { type: String, maxlength: 1000, default: '' },
     processingTimeMs: { type: Number },
   },
   {

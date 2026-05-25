@@ -1,17 +1,141 @@
+import mongoose from 'mongoose';
 import { arPaymentRepository, arPaymentAllocationRepository } from './arPayment.repository.js';
 import journalEntryService from './journalEntry.service.js';
+import accountMappingService, { ACCOUNT_MAPPING } from './accountMapping.service.js';
 import dunningTemplateRepository from './dunningTemplate.repository.js';
-import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
-import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
+import { NotFoundError } from '../../shared/errors/AppError.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
-import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import {
+  buildCursorQuery,
+  buildCursorSort,
+  buildCursorResponse,
+} from '../../shared/utils/pagination.js';
 
-const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
+const OPEN_AR_STATUSES = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'];
+const AGING_BUCKET_KEYS = ['current', '1_30', '31_60', '61_90', '90_plus'];
+const RECEIVABLE_SORT_FIELDS = ['createdAt', 'dueDate', 'invoiceNumber', 'customerName', 'amountDue', '_id'];
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function sumAllocationsByInvoice(allocations) {
+  const grouped = new Map();
+
+  for (const allocation of allocations) {
+    const invoiceId = String(allocation.invoiceId || '');
+    const amount = roundMoney(allocation.amount);
+    grouped.set(invoiceId, roundMoney((grouped.get(invoiceId) || 0) + amount));
+  }
+
+  return grouped;
+}
+
+function normalizeLimit(limit) {
+  const parsed = Number(limit) || 25;
+  return Math.min(Math.max(parsed, 1), 100);
+}
+
+function normalizeSort(sortBy) {
+  return RECEIVABLE_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
+}
+
+function coerceCursorFieldTypes(filter, sortBy) {
+  if (!filter || !['dueDate', 'createdAt'].includes(sortBy)) return filter;
+  const coerceValue = (value) => (typeof value === 'string' ? new Date(value) : value);
+
+  if (filter.$or) {
+    return {
+      ...filter,
+      $or: filter.$or.map((clause) => {
+        if (!clause[sortBy]) return clause;
+        if (typeof clause[sortBy] === 'object' && clause[sortBy] !== null) {
+          const op = Object.keys(clause[sortBy])[0];
+          return { ...clause, [sortBy]: { [op]: coerceValue(clause[sortBy][op]) } };
+        }
+        return { ...clause, [sortBy]: coerceValue(clause[sortBy]) };
+      }),
+    };
+  }
+
+  if (filter[sortBy] && typeof filter[sortBy] === 'object') {
+    const op = Object.keys(filter[sortBy])[0];
+    return { ...filter, [sortBy]: { [op]: coerceValue(filter[sortBy][op]) } };
+  }
+
+  return filter;
+}
+
+function emptyAgingBuckets() {
+  return AGING_BUCKET_KEYS.reduce((acc, key) => {
+    acc[key] = 0;
+    return acc;
+  }, {});
+}
+
+function normalizeAgingRows(rows) {
+  const buckets = emptyAgingBuckets();
+  let invoiceCount = 0;
+
+  for (const row of rows) {
+    if (row?._id && Object.prototype.hasOwnProperty.call(buckets, row._id)) {
+      buckets[row._id] = Math.round((row.totalOutstanding || 0) * 100) / 100;
+      invoiceCount += row.count || 0;
+    }
+  }
+
+  return {
+    buckets: { ...buckets, over_90: buckets['90_plus'] },
+    totalOutstanding: Math.round(Object.values(buckets).reduce((sum, value) => sum + value, 0) * 100) / 100,
+    invoiceCount,
+  };
+}
+
+function buildAgingPipeline(now = new Date()) {
+  return [
+    {
+      $match: {
+        isDeleted: false,
+        status: { $in: OPEN_AR_STATUSES },
+        amountDue: { $gt: 0 },
+      },
+    },
+    {
+      $addFields: {
+        agingDays: {
+          $dateDiff: { startDate: '$dueDate', endDate: now, unit: 'day' },
+        },
+      },
+    },
+    {
+      $addFields: {
+        agingBucket: {
+          $switch: {
+            branches: [
+              { case: { $lte: ['$agingDays', 0] }, then: 'current' },
+              { case: { $lte: ['$agingDays', 30] }, then: '1_30' },
+              { case: { $lte: ['$agingDays', 60] }, then: '31_60' },
+              { case: { $lte: ['$agingDays', 90] }, then: '61_90' },
+            ],
+            default: '90_plus',
+          },
+        },
+      },
+    },
+    {
+      $group: {
+        _id: '$agingBucket',
+        count: { $sum: 1 },
+        totalOutstanding: { $sum: '$amountDue' },
+      },
+    },
+  ];
+}
 
 class ArReceivablesService {
   async recordPayment(data, userId, meta = {}) {
@@ -24,11 +148,16 @@ class ArReceivablesService {
 
     // Create journal entry: debit Bank, credit AR
     if (data.bankAccountId) {
+      const [bankAccountId, receivableAccountId] = await Promise.all([
+        accountMappingService.resolveGlobal(ACCOUNT_MAPPING.BANK_CLEARING),
+        accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE),
+      ]);
+
       await journalEntryService.createFromEvent(
         'AR_PAYMENT',
         payment._id,
-        data.bankAccountId,
-        data.customerId, // AR account — placeholder, real mapping in production
+        bankAccountId,
+        receivableAccountId,
         data.amount,
         `AR Payment received - ${data.paymentReference || payment._id}`,
         userId,
@@ -58,52 +187,131 @@ class ArReceivablesService {
   }
 
   async allocatePayment(paymentId, allocations, userId, meta = {}) {
-    const payment = await arPaymentRepository.findById(paymentId);
-    if (!payment) throw new NotFoundError('ArPayment', paymentId);
-
-    const totalAllocating = allocations.reduce((sum, a) => sum + a.amount, 0);
-    if (totalAllocating > payment.unallocatedAmount) {
+    if (!Array.isArray(allocations) || allocations.length === 0) {
       throw new AppError(
-        'Allocation total exceeds unallocated amount',
+        'At least one allocation is required',
         400,
         ERROR_CODES.ACCT_AR_ALLOCATION_EXCEEDS_PAYMENT,
       );
     }
 
-    const results = [];
-
-    for (const alloc of allocations) {
-      const allocation = await arPaymentAllocationRepository.create({
-        paymentId: payment._id,
-        invoiceId: alloc.invoiceId,
-        amount: alloc.amount,
-        allocatedBy: userId,
-      });
-      results.push(allocation);
-
-      // Lazy import QOP Invoice model to update payment status
-      try {
-        const Invoice = (await import('../qop/invoice.model.js')).default;
-        const invoice = await Invoice.findById(alloc.invoiceId);
-        if (invoice) {
-          const newAmountPaid = (invoice.amountPaid || 0) + alloc.amount;
-          const newAmountDue = (invoice.totalGross || invoice.totalAmount || 0) - newAmountPaid;
-          const updateData = { amountPaid: newAmountPaid, amountDue: newAmountDue };
-          if (newAmountDue <= 0) updateData.status = 'PAID';
-          else if (newAmountPaid > 0) updateData.status = 'PARTIALLY_PAID';
-          await Invoice.findByIdAndUpdate(alloc.invoiceId, { $set: updateData });
-        }
-      } catch {
-        // QOP module may not be available — log and continue
-        logger.warn('Could not update QOP invoice for allocation', { invoiceId: alloc.invoiceId });
-      }
+    const groupedAllocations = sumAllocationsByInvoice(allocations);
+    const totalAllocating = roundMoney([...groupedAllocations.values()].reduce((sum, amount) => sum + amount, 0));
+    if (totalAllocating <= 0) {
+      throw new AppError(
+        'Allocation total must be greater than zero',
+        400,
+        ERROR_CODES.ACCT_AR_ALLOCATION_EXCEEDS_PAYMENT,
+      );
     }
 
-    // Update payment allocated/unallocated amounts
-    const newAllocated = payment.allocatedAmount + totalAllocating;
-    const newUnallocated = payment.unallocatedAmount - totalAllocating;
-    await arPaymentRepository.updateAllocatedAmount(payment._id, newAllocated, newUnallocated);
+    const session = await mongoose.startSession();
+    const results = [];
+    let payment;
 
+    try {
+      await session.withTransaction(async () => {
+        payment = await arPaymentRepository.findById(paymentId, { session });
+        if (!payment) throw new NotFoundError('ArPayment', paymentId);
+
+        if (totalAllocating > roundMoney(payment.unallocatedAmount)) {
+          throw new AppError(
+            'Allocation total exceeds unallocated amount',
+            400,
+            ERROR_CODES.ACCT_AR_ALLOCATION_EXCEEDS_PAYMENT,
+          );
+        }
+
+        const Invoice = (await import('../qop/invoice.model.js')).default;
+        const invoiceIds = [...groupedAllocations.keys()];
+        const invoices = await Invoice.find({ _id: { $in: invoiceIds } })
+          .session(session)
+          .lean();
+        const invoicesById = new Map(invoices.map((invoice) => [String(invoice._id), invoice]));
+
+        for (const [invoiceId, amount] of groupedAllocations) {
+          const invoice = invoicesById.get(invoiceId);
+          if (!invoice) throw new NotFoundError('Invoice', invoiceId);
+
+          if (String(invoice.customerId) !== String(payment.customerId)) {
+            throw new AppError(
+              'Payment customer does not match invoice customer',
+              400,
+              ERROR_CODES.ACCT_AR_PAYMENT_EXCEEDS_OUTSTANDING,
+            );
+          }
+
+          if (!OPEN_AR_STATUSES.includes(invoice.status) || roundMoney(invoice.amountDue) <= 0) {
+            throw new AppError(
+              'Invoice is not open for allocation',
+              400,
+              ERROR_CODES.ACCT_AR_PAYMENT_EXCEEDS_OUTSTANDING,
+            );
+          }
+
+          if (amount > roundMoney(invoice.amountDue)) {
+            throw new AppError(
+              'Allocation exceeds invoice outstanding amount',
+              400,
+              ERROR_CODES.ACCT_AR_PAYMENT_EXCEEDS_OUTSTANDING,
+            );
+          }
+        }
+
+        const paymentUpdate = await arPaymentRepository.applyAllocationDelta(payment._id, totalAllocating, { session });
+        if (paymentUpdate.matchedCount !== 1) {
+          throw new AppError(
+            'Payment unallocated amount changed during allocation',
+            409,
+            ERROR_CODES.ACCT_AR_ALLOCATION_EXCEEDS_PAYMENT,
+          );
+        }
+
+        results.length = 0;
+        for (const alloc of allocations) {
+          const allocation = await arPaymentAllocationRepository.create({
+            paymentId: payment._id,
+            invoiceId: alloc.invoiceId,
+            amount: roundMoney(alloc.amount),
+            allocatedBy: userId,
+          }, { session });
+          results.push(allocation);
+        }
+
+        for (const [invoiceId, amount] of groupedAllocations) {
+          const invoice = invoicesById.get(invoiceId);
+          const newAmountPaid = roundMoney((invoice.amountPaid || 0) + amount);
+          const newAmountDue = roundMoney((invoice.amountDue || 0) - amount);
+          const updateData = {
+            amountPaid: newAmountPaid,
+            amountDue: newAmountDue,
+            status: newAmountDue <= 0 ? 'PAID' : 'PARTIALLY_PAID',
+          };
+          if (newAmountDue <= 0) updateData.paidAt = new Date();
+
+          const invoiceUpdate = await Invoice.updateOne(
+            {
+              _id: invoiceId,
+              isDeleted: false,
+              status: { $in: OPEN_AR_STATUSES },
+              amountDue: { $gte: amount },
+            },
+            { $set: updateData },
+            { session },
+          );
+
+          if (invoiceUpdate.matchedCount !== 1) {
+            throw new AppError(
+              'Invoice outstanding amount changed during allocation',
+              409,
+              ERROR_CODES.ACCT_AR_PAYMENT_EXCEEDS_OUTSTANDING,
+            );
+          }
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
     eventBus.publish(EVENT_TYPES.ACCOUNTING_AR_PAYMENT_ALLOCATED, {
       paymentId: payment._id,
       allocations: allocations.map((a) => ({ invoiceId: a.invoiceId, amount: a.amount })),
@@ -127,8 +335,20 @@ class ArReceivablesService {
     try {
       const Invoice = (await import('../qop/invoice.model.js')).default;
       const { cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', ...filters } = queryParams;
+      const safeLimit = normalizeLimit(limit);
+      const safeSortBy = normalizeSort(sortBy);
+      const safeSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
+      const cursorFilter = coerceCursorFieldTypes(
+        buildCursorQuery(cursor, safeSortBy, safeSortOrder),
+        safeSortBy,
+      );
 
-      const filter = { status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] } };
+      const filter = {
+        isDeleted: false,
+        status: { $in: OPEN_AR_STATUSES },
+        amountDue: { $gt: 0 },
+        ...cursorFilter,
+      };
       if (filters.customerId) filter.customerId = filters.customerId;
       if (filters.dueDateFrom || filters.dueDateTo) {
         filter.dueDate = {};
@@ -145,15 +365,12 @@ class ArReceivablesService {
       }
 
       const docs = await Invoice.find(filter)
-        .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
-        .limit(limit + 1)
+        .sort(buildCursorSort(safeSortBy, safeSortOrder))
+        .limit(safeLimit + 1)
+        .select('-__v -lineItems -payments -vatBreakdown -advanceDeductions')
         .lean();
 
-      const hasMore = docs.length > limit;
-      const data = hasMore ? docs.slice(0, limit) : docs;
-      const nextCursor = hasMore && data.length ? data[data.length - 1]._id : null;
-
-      return { data, pagination: { hasMore, nextCursor } };
+      return buildCursorResponse(docs, safeLimit, safeSortBy);
     } catch {
       logger.warn('QOP Invoice model not available for open receivables');
       return { data: [], pagination: { hasMore: false, nextCursor: null } };
@@ -165,40 +382,12 @@ class ArReceivablesService {
       const Invoice = (await import('../qop/invoice.model.js')).default;
       const now = new Date();
 
-      const invoices = await Invoice.find({
-        status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
-      }).lean();
-
-      const buckets = { current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0 };
-      const bucketDetails = { current: [], '1_30': [], '31_60': [], '61_90': [], '90_plus': [] };
-
-      for (const inv of invoices) {
-        const dueDate = new Date(inv.dueDate);
-        const daysOverdue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
-        const amount = inv.amountDue || 0;
-
-        if (daysOverdue <= 0) {
-          buckets.current += amount;
-          bucketDetails.current.push(inv);
-        } else if (daysOverdue <= 30) {
-          buckets['1_30'] += amount;
-          bucketDetails['1_30'].push(inv);
-        } else if (daysOverdue <= 60) {
-          buckets['31_60'] += amount;
-          bucketDetails['31_60'].push(inv);
-        } else if (daysOverdue <= 90) {
-          buckets['61_90'] += amount;
-          bucketDetails['61_90'].push(inv);
-        } else {
-          buckets['90_plus'] += amount;
-          bucketDetails['90_plus'].push(inv);
-        }
-      }
-
-      return { buckets, totalOutstanding: Object.values(buckets).reduce((s, v) => s + v, 0), invoiceCount: invoices.length };
+      const rows = await Invoice.aggregate(buildAgingPipeline(now));
+      return normalizeAgingRows(rows);
     } catch {
       logger.warn('QOP Invoice model not available for aging report');
-      return { buckets: { current: 0, '1_30': 0, '31_60': 0, '61_90': 0, '90_plus': 0 }, totalOutstanding: 0, invoiceCount: 0 };
+      const buckets = emptyAgingBuckets();
+      return { buckets: { ...buckets, over_90: 0 }, totalOutstanding: 0, invoiceCount: 0 };
     }
   }
 
@@ -207,21 +396,62 @@ class ArReceivablesService {
       const Invoice = (await import('../qop/invoice.model.js')).default;
       const now = new Date();
 
-      const outstanding = await Invoice.find({
-        status: { $in: ['SENT', 'PARTIALLY_PAID', 'OVERDUE'] },
-      }).lean();
+      const [summary] = await Invoice.aggregate([
+        {
+          $match: {
+            isDeleted: false,
+            status: { $in: OPEN_AR_STATUSES },
+            amountDue: { $gt: 0 },
+          },
+        },
+        {
+          $addFields: {
+            daysOutstanding: {
+              $max: [
+                0,
+                {
+                  $dateDiff: {
+                    startDate: { $ifNull: ['$createdAt', '$invoiceDate'] },
+                    endDate: now,
+                    unit: 'day',
+                  },
+                },
+              ],
+            },
+            isOverdue: { $lt: ['$dueDate', now] },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalOutstanding: { $sum: '$amountDue' },
+            openCount: { $sum: 1 },
+            overdueAmount: {
+              $sum: { $cond: ['$isOverdue', '$amountDue', 0] },
+            },
+            overdueCount: {
+              $sum: { $cond: ['$isOverdue', 1, 0] },
+            },
+            totalDaysOutstanding: { $sum: '$daysOutstanding' },
+          },
+        },
+      ]);
 
-      const totalOutstanding = outstanding.reduce((sum, inv) => sum + (inv.amountDue || 0), 0);
-      const overdue = outstanding.filter((inv) => new Date(inv.dueDate) < now);
-      const overdueCount = overdue.length;
+      const totalOutstanding = roundMoney(summary?.totalOutstanding || 0);
+      const openCount = summary?.openCount || 0;
+      const overdueAmount = roundMoney(summary?.overdueAmount || 0);
+      const overdueCount = summary?.overdueCount || 0;
+      const avgDaysOutstanding = openCount ? Math.round((summary?.totalDaysOutstanding || 0) / openCount) : 0;
 
-      const totalDaysOutstanding = outstanding.reduce((sum, inv) => {
-        const days = Math.max(0, Math.floor((now - new Date(inv.createdAt || inv.invoiceDate)) / (1000 * 60 * 60 * 24)));
-        return sum + days;
-      }, 0);
-      const avgDaysOutstanding = outstanding.length ? Math.round(totalDaysOutstanding / outstanding.length) : 0;
-
-      return { totalOutstanding, overdueCount, avgDaysOutstanding, totalInvoices: outstanding.length };
+      return {
+        totalOutstanding,
+        openAmount: totalOutstanding,
+        openCount,
+        overdueAmount,
+        overdueCount,
+        avgDaysOutstanding,
+        totalInvoices: openCount,
+      };
     } catch {
       logger.warn('QOP Invoice model not available for summary');
       return { totalOutstanding: 0, overdueCount: 0, avgDaysOutstanding: 0, totalInvoices: 0 };
@@ -230,22 +460,63 @@ class ArReceivablesService {
 
   async writeOff(invoiceId, reason, userId, meta = {}) {
     const Invoice = (await import('../qop/invoice.model.js')).default;
-    const invoice = await Invoice.findById(invoiceId).lean();
-    if (!invoice) throw new NotFoundError('Invoice', invoiceId);
+    const session = await mongoose.startSession();
+    let invoice;
 
-    // Create write-off journal entry
-    await journalEntryService.createFromEvent(
-      'WRITE_OFF',
-      invoiceId,
-      invoiceId, // write-off expense account — placeholder
-      invoice.customerId, // AR account — placeholder
-      invoice.amountDue || 0,
-      `Write-off: ${reason}`,
-      userId,
-    );
+    try {
+      await session.withTransaction(async () => {
+        invoice = await Invoice.findOne({
+          _id: invoiceId,
+          isDeleted: false,
+          status: { $in: OPEN_AR_STATUSES },
+          amountDue: { $gt: 0 },
+        }).session(session).lean();
+        if (!invoice) throw new NotFoundError('Invoice', invoiceId);
 
-    // Update invoice status
-    await Invoice.findByIdAndUpdate(invoiceId, { $set: { status: 'WRITTEN_OFF' } });
+        const [writeOffExpenseAccountId, receivableAccountId] = await Promise.all([
+          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.WRITE_OFF_EXPENSE, { session }),
+          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE, { session }),
+        ]);
+
+        await journalEntryService.createFromEvent(
+          'WRITE_OFF',
+          invoiceId,
+          writeOffExpenseAccountId,
+          receivableAccountId,
+          invoice.amountDue || 0,
+          `Write-off: ${reason}`,
+          userId,
+          { session },
+        );
+
+        const update = await Invoice.updateOne(
+          {
+            _id: invoiceId,
+            isDeleted: false,
+            status: { $in: OPEN_AR_STATUSES },
+            amountDue: { $gt: 0 },
+          },
+          {
+            $set: {
+              status: 'WRITTEN_OFF',
+              amountDue: 0,
+              writtenOffAt: new Date(),
+              writeOffReason: reason,
+            },
+          },
+          { session },
+        );
+        if (update.matchedCount !== 1) {
+          throw new AppError(
+            'Invoice changed while write-off was being posted',
+            409,
+            ERROR_CODES.ACCT_AR_PAYMENT_EXCEEDS_OUTSTANDING,
+          );
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
 
     auditService.logEvent({
       eventType: 'ar_invoice.written_off',
@@ -265,7 +536,7 @@ class ArReceivablesService {
   async getOverdueForDunning(queryParams) {
     try {
       const Invoice = (await import('../qop/invoice.model.js')).default;
-      const { cursor, limit = 25, customerId } = queryParams;
+      const { limit = 25, customerId } = queryParams;
       const now = new Date();
 
       const filter = {
@@ -298,20 +569,93 @@ class ArReceivablesService {
   }
 
   async generateDunningLetters(invoiceIds, level, userId, meta = {}) {
+    return this.generateDunningLettersWithOutput(invoiceIds, level, {}, userId, meta);
+  }
+
+  async _resolveInvoiceRecipient(invoice) {
+    if (invoice.contactId) {
+      try {
+        const Contact = (await import('../crm/contact.model.js')).default;
+        const contact = await Contact.findById(invoice.contactId).select('email firstName lastName').lean();
+        if (contact?.email) {
+          return {
+            email: contact.email,
+            name: [contact.firstName, contact.lastName].filter(Boolean).join(' '),
+          };
+        }
+      } catch {
+        logger.warn('Contact model not available for dunning recipient lookup', {
+          module: 'accounting',
+          action: 'dunning.recipient',
+        });
+      }
+    }
+
+    try {
+      const Customer = (await import('../crm/customer.model.js')).default;
+      const customer = await Customer.findById(invoice.customerId).select('email name companyName').lean();
+      return {
+        email: customer?.email || null,
+        name: customer?.companyName || customer?.name || invoice.customerName,
+      };
+    } catch {
+      return { email: null, name: invoice.customerName };
+    }
+  }
+
+  async generateDunningLettersWithOutput(invoiceIds, level, options = {}, userId, meta = {}) {
+    const accountingDocumentOutputService = (await import('./accountingDocumentOutput.service.js')).default;
     const template = await dunningTemplateRepository.findByLevel(level);
     if (!template) throw new NotFoundError('DunningTemplate', level);
 
+    const Invoice = (await import('../qop/invoice.model.js')).default;
+    const invoices = await Invoice.find({
+      _id: { $in: invoiceIds },
+      isDeleted: false,
+      status: { $in: OPEN_AR_STATUSES },
+      amountDue: { $gt: 0 },
+    }).lean();
+    if (invoices.length !== invoiceIds.length) {
+      const found = new Set(invoices.map((invoice) => String(invoice._id)));
+      const missing = invoiceIds.find((id) => !found.has(String(id)));
+      throw new NotFoundError('Open invoice for dunning', missing);
+    }
+
     const letters = [];
-    for (const invoiceId of invoiceIds) {
-      letters.push({
-        invoiceId,
+    for (const invoice of invoices) {
+      const recipient = await this._resolveInvoiceRecipient(invoice);
+      const templateData = {
+        invoice,
+        invoiceNumber: invoice.invoiceNumber,
+        customerName: recipient.name || invoice.customerName,
+        amountDue: roundMoney(invoice.amountDue),
+        dueDate: invoice.dueDate,
         level,
-        subject: template.subject,
-        bodyHtml: template.bodyHtml,
+        graceDays: template.graceDays,
+        feeAmount: template.feeAmount || 0,
+        currency: invoice.currency || 'CHF',
+      };
+      const letter = {
+        invoiceId: invoice._id,
+        invoiceNumber: invoice.invoiceNumber,
+        customerId: invoice.customerId,
+        customerName: templateData.customerName,
+        recipientEmail: recipient.email,
+        amountDue: templateData.amountDue,
+        dueDate: invoice.dueDate,
+        currency: templateData.currency,
+        level,
+        subject: accountingDocumentOutputService.renderTemplate(template.subject, templateData),
+        bodyHtml: accountingDocumentOutputService.renderTemplate(template.bodyHtml, templateData),
         feeAmount: template.feeAmount,
         generatedAt: new Date(),
         generatedBy: userId,
-      });
+      };
+      letters.push(
+        options.format === 'pdf' || options.sendEmail
+          ? await accountingDocumentOutputService.createDunningOutput(letter, options, userId, meta)
+          : letter,
+      );
     }
 
     eventBus.publish(EVENT_TYPES.ACCOUNTING_AR_DUNNING_GENERATED, {
@@ -345,6 +689,10 @@ class ArReceivablesService {
     const payment = await arPaymentRepository.findById(id);
     if (!payment) throw new NotFoundError('ArPayment', id);
     return payment;
+  }
+
+  async getCustomerCreditBalance(customerId) {
+    return arPaymentRepository.getCustomerCreditBalance(customerId);
   }
 
   async getDunningTemplates() {

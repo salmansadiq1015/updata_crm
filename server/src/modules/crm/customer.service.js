@@ -13,6 +13,7 @@ const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 class CustomerService {
   async create(data, createdBy, meta = {}) {
+    const duplicates = await customerRepository.findDuplicates(data.name, data.postalCode);
     const customerNumber = await counterService.getNextCustomerNumber();
 
     const customer = await customerRepository.create({
@@ -43,7 +44,12 @@ class CustomerService {
 
     logger.info('Customer created', { module: 'crm', action: 'create', customerId: customer._id, customerNumber });
 
-    return customerRepository.findById(customer._id);
+    const created = await customerRepository.findById(customer._id);
+    return {
+      ...created,
+      duplicateWarning: duplicates.length > 0,
+      duplicateCandidates: duplicates,
+    };
   }
 
   async getById(id) {
@@ -189,7 +195,7 @@ class CustomerService {
     logger.info('Customers merged', { module: 'crm', action: 'merge', sourceId, targetId });
   }
 
-  async bulkUpdate(ids, data, updatedBy, meta = {}) {
+  async bulkUpdate(ids, data, updatedBy, _meta = {}) {
     if (!ids?.length) return { modifiedCount: 0 };
     const customers = await customerRepository.findByIds(ids);
     if (customers.length !== ids.length) {
@@ -206,7 +212,7 @@ class CustomerService {
     return { modifiedCount };
   }
 
-  async bulkDeactivate(ids, deactivatedBy, meta = {}) {
+  async bulkDeactivate(ids, deactivatedBy, _meta = {}) {
     if (!ids?.length) return { deactivatedCount: 0 };
     const deactivatedCount = await customerRepository.bulkSoftDelete(ids);
     for (const id of ids) await this._invalidateCustomerCache(id);
@@ -252,7 +258,7 @@ class CustomerService {
       c.createdAt ? new Date(c.createdAt).toISOString() : '',
     ].map(escape).join(';')).join('\n');
 
-    return `﻿${header}\n${body}`;
+    return `\uFEFF${header}\n${body}`;
   }
 
   /**
@@ -267,12 +273,6 @@ class CustomerService {
     if (!exists) throw new NotFoundError('Customer', customerId);
 
     const AuditLog = (await import('../auth/auditLog.model.js')).default;
-    const {
-      buildCursorQuery,
-      buildCursorSort,
-      buildCursorResponse,
-    } = await import('../../shared/utils/pagination.js');
-
     // --- 1. Audit-log entries (existing behaviour) -------------------------
     const auditFilter = {
       module: 'crm',

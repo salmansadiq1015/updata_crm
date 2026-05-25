@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 
 const contactSchema = new mongoose.Schema(
   {
@@ -26,6 +27,7 @@ const contactSchema = new mongoose.Schema(
     email: { type: String, trim: true, lowercase: true, maxlength: 255, default: null },
     isPrimary: { type: Boolean, default: false },
     notes: { type: String, maxlength: 2000, default: null },
+    migration: { type: migrationTraceSchema, default: () => ({}) },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
@@ -45,7 +47,9 @@ contactSchema.index(
   { firstName: 'text', lastName: 'text', email: 'text' },
   { weights: { firstName: 10, lastName: 10, email: 5 } },
 );
+contactSchema.index({ email: 1 });
 contactSchema.index({ isDeleted: 1 });
+contactSchema.index({ 'migration.sourceSystem': 1, 'migration.sourceId': 1 });
 
 // --- Virtual ---
 contactSchema.virtual('fullName').get(function () {

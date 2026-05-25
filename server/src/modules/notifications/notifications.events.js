@@ -287,6 +287,32 @@ export function registerNotificationsEvents() {
     }
   });
 
+  // --- Website Widget Events ---
+  eventBus.subscribe(EVENT_TYPES.WIDGET_SUBMISSION_RECEIVED, async (data) => {
+    const payload = data.payload || data;
+    if (payload.assignedTo?.length > 0) {
+      await dispatch(payload, {
+        type: 'website_service_request',
+        category: 'CUSTOMER',
+        priority: payload.requestType === 'heizungsstoerung' ? 'HIGH' : 'NORMAL',
+        channels: ['IN_APP', 'PUSH', 'EMAIL'],
+        recipientIds: payload.assignedTo,
+        payload: {
+          referenceNumber: payload.referenceNumber,
+          requestType: payload.requestType,
+          contactEmail: payload.contactEmail,
+          crmCustomerId: payload.crmCustomerId,
+          crmContactId: payload.crmContactId,
+        },
+        sourceModule: 'crm',
+        sourceEvent: 'WIDGET_SUBMISSION_RECEIVED',
+        sourceEntityType: 'WidgetSubmission',
+        sourceEntityId: payload.submissionId,
+        idempotencyKey: `widget-submission:${payload.submissionId}`,
+      });
+    }
+  });
+
   // --- Accounting Events ---
   eventBus.subscribe(EVENT_TYPES.ACCOUNTING_AP_INVOICE_RECORDED, async (data) => {
     const payload = data.payload || data;

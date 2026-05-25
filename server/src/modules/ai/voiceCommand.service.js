@@ -8,6 +8,14 @@ import logger from '../../shared/logger/index.js';
 
 const ACTIVE_COMMANDS_TTL = { l1Ttl: 120, l2Ttl: 600 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
+const SWISS_GERMAN_ALIASES = {
+  auftrag: ['uftrag', 'uuftrag', 'uftraag'],
+  erstellen: ['erstelle', 'mache', 'mach'],
+  öffnen: ['oeffnen', 'ufmache', 'aufmache'],
+  suchen: ['sueche', 'suche'],
+  rapport: ['raport', 'rapport'],
+  heute: ['huet', 'hüt', 'hut'],
+};
 
 class VoiceCommandService {
   /**
@@ -204,40 +212,38 @@ class VoiceCommandService {
   async matchCommand(transcript, language) {
     if (!transcript || !language) return null;
 
-    const cacheKey = `ai:commands:active:${language}`;
+    const languages = this._resolveLanguageFallbacks(language);
+    const cacheKey = `ai:commands:active:${languages.join('|')}`;
 
     const commands = await cacheManager.getOrSet(
       cacheKey,
-      () => voiceCommandRepository.findActive(language),
+      () => voiceCommandRepository.findActive(languages),
       ACTIVE_COMMANDS_TTL,
     );
 
     if (!commands || commands.length === 0) return null;
 
-    const lowerTranscript = transcript.toLowerCase().trim();
+    const normalizedTranscript = this._normalizeForMatching(transcript);
     let bestMatch = null;
     let bestScore = 0;
+    let bestPhrase = null;
 
     for (const command of commands) {
       for (const phrase of command.phrases) {
-        const lowerPhrase = phrase.toLowerCase().trim();
+        const normalizedPhrase = this._normalizeForMatching(phrase);
+        const score = this._scorePhraseMatch(normalizedTranscript, normalizedPhrase);
 
-        if (lowerTranscript.includes(lowerPhrase)) {
-          // Score based on how much of the transcript the phrase covers
-          const score = lowerPhrase.length / lowerTranscript.length;
-
-          if (score > bestScore) {
-            bestScore = score;
-            bestMatch = command;
-          }
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = command;
+          bestPhrase = phrase;
         }
       }
     }
 
-    if (!bestMatch) return null;
+    if (!bestMatch || bestScore < 0.58) return null;
 
-    // Convert score to confidence (0-1). A phrase covering >50% of text = high confidence
-    const confidence = Math.min(1, bestScore * 1.5);
+    const confidence = Math.min(1, bestScore);
 
     logger.debug('Voice command matched', {
       module: 'ai',
@@ -245,12 +251,91 @@ class VoiceCommandService {
       intent: bestMatch.intent,
       confidence,
       language,
+      matchedPhrase: bestPhrase,
     });
 
     return {
       ...bestMatch,
       matchConfidence: Math.round(confidence * 100) / 100,
     };
+  }
+
+  _resolveLanguageFallbacks(language) {
+    const normalized = String(language || '').toLowerCase();
+    const base = normalized.split('-')[0];
+    const languages = new Set([normalized]);
+
+    if (base) languages.add(base);
+    if (normalized === 'de-ch' || normalized === 'gsw' || normalized === 'gsw-ch') {
+      languages.add('de-CH');
+      languages.add('de');
+      languages.add('gsw-CH');
+      languages.add('gsw');
+    }
+
+    return [...languages];
+  }
+
+  _normalizeForMatching(value) {
+    let normalized = String(value || '')
+      .toLowerCase()
+      .replace(/ä/g, 'ae')
+      .replace(/ö/g, 'oe')
+      .replace(/ü/g, 'ue')
+      .replace(/ß/g, 'ss')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    for (const [standard, aliases] of Object.entries(SWISS_GERMAN_ALIASES)) {
+      for (const alias of aliases) {
+        const pattern = new RegExp(`\\b${alias}\\b`, 'g');
+        normalized = normalized.replace(pattern, standard);
+      }
+    }
+
+    return normalized.replace(/\s+/g, ' ').trim();
+  }
+
+  _scorePhraseMatch(transcript, phrase) {
+    if (!transcript || !phrase) return 0;
+    if (transcript.includes(phrase)) {
+      return Math.min(1, 0.75 + (phrase.length / Math.max(transcript.length, phrase.length)) * 0.25);
+    }
+
+    const transcriptTokens = transcript.split(' ');
+    const phraseTokens = phrase.split(' ');
+    const phraseTokenSet = new Set(phraseTokens);
+    const matchingTokens = transcriptTokens.filter((token) => phraseTokenSet.has(token)).length;
+    const tokenCoverage = matchingTokens / phraseTokens.length;
+    const distance = this._levenshtein(transcript, phrase);
+    const distanceScore = 1 - (distance / Math.max(transcript.length, phrase.length));
+
+    return Math.max(tokenCoverage * 0.85, distanceScore);
+  }
+
+  _levenshtein(left, right) {
+    const rows = left.length + 1;
+    const cols = right.length + 1;
+    const matrix = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+    for (let row = 0; row < rows; row++) matrix[row][0] = row;
+    for (let col = 0; col < cols; col++) matrix[0][col] = col;
+
+    for (let row = 1; row < rows; row++) {
+      for (let col = 1; col < cols; col++) {
+        const cost = left[row - 1] === right[col - 1] ? 0 : 1;
+        matrix[row][col] = Math.min(
+          matrix[row - 1][col] + 1,
+          matrix[row][col - 1] + 1,
+          matrix[row - 1][col - 1] + cost,
+        );
+      }
+    }
+
+    return matrix[left.length][right.length];
   }
 
   async _invalidateActiveCommandsCache(language) {

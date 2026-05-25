@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   Thermometer,
   Flame,
@@ -9,14 +10,20 @@ import {
   Wind,
   Calendar,
   ChevronRight,
+  Plus,
+  Pencil,
   History,
   Info,
   AlertTriangle,
+  PackageSearch,
+  Pin,
+  Save,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { MobileHeader } from '@/modules/mobile/components/mobile-header';
 import { EmptyState } from '@/modules/mobile/components/empty-state';
 import { useInstallations, useInstallationHistory } from '@/modules/mobile/hooks/use-installation-queries';
+import { useCreateCrmNote, useEntityNotes, useEntityWarningMap } from '@/modules/mobile/hooks/use-crm-notes';
 import { cn } from '@/lib/utils';
 
 const SYSTEM_ICONS = {
@@ -34,7 +41,14 @@ export default function InstallationsPage() {
 
   const { data: installations, isLoading, isOffline } = useInstallations(siteId);
 
-  const items = Array.isArray(installations) ? installations : installations?.data || [];
+  const items = useMemo(
+    () => (Array.isArray(installations) ? installations : installations?.data || []),
+    [installations],
+  );
+  const installationIds = useMemo(() => items.map((item) => item.id).filter(Boolean), [items]);
+  const { warnings: siteWarnings } = useEntityNotes('site', siteId);
+  const installationWarningMap = useEntityWarningMap('installation', installationIds);
+  const createNote = useCreateCrmNote();
 
   if (isLoading) return <InstallationsSkeleton />;
 
@@ -44,9 +58,18 @@ export default function InstallationsPage() {
         title={lang === 'de' ? 'Anlagen' : 'Installations'}
         showBack
         right={
-          <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-lg">
-            {items.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-lg">
+              {items.length}
+            </span>
+            <Link
+              href={`/installations/${siteId}/capture`}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground"
+              aria-label={lang === 'de' ? 'Anlage erfassen' : 'Capture installation'}
+            >
+              <Plus className="h-4 w-4" />
+            </Link>
+          </div>
         }
       />
 
@@ -65,11 +88,21 @@ export default function InstallationsPage() {
           </div>
         ) : (
           <div className="px-4 py-4 space-y-3">
+            <WarningList notes={siteWarnings} lang={lang} compact={false} />
+            <InlineNoteComposer
+              lang={lang}
+              entityType="site"
+              entityId={siteId}
+              createNote={createNote}
+              placeholder={lang === 'de' ? 'Standortnotiz fuer das Team' : 'Site note for the team'}
+            />
             {items.map((inst) => (
               <InstallationCard
                 key={inst.id}
                 installation={inst}
                 lang={lang}
+                warnings={installationWarningMap.get(inst.id) || []}
+                createNote={createNote}
                 expanded={expandedId === inst.id}
                 onToggle={() =>
                   setExpandedId((prev) => (prev === inst.id ? null : inst.id))
@@ -83,7 +116,7 @@ export default function InstallationsPage() {
   );
 }
 
-function InstallationCard({ installation, lang, expanded, onToggle }) {
+function InstallationCard({ installation, lang, warnings, createNote, expanded, onToggle }) {
   const Icon = SYSTEM_ICONS[installation.system_type] || Thermometer;
   const isWarrantyActive =
     installation.warranty_until &&
@@ -107,6 +140,11 @@ function InstallationCard({ installation, lang, expanded, onToggle }) {
             {installation.serial_number && ` · ${installation.serial_number}`}
           </p>
         </div>
+        {warnings.length > 0 && (
+          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-amber-100 px-2 text-[11px] font-semibold text-amber-800">
+            {warnings.length}
+          </span>
+        )}
         <ChevronRight
           className={cn(
             'h-4 w-4 text-muted-foreground transition-transform',
@@ -117,6 +155,8 @@ function InstallationCard({ installation, lang, expanded, onToggle }) {
 
       {expanded && (
         <div className="px-4 pb-4 pt-1 space-y-3 border-t border-border">
+          <WarningList notes={warnings} lang={lang} />
+
           {/* Details grid */}
           <div className="grid grid-cols-2 gap-2">
             {installation.model && (
@@ -200,9 +240,172 @@ function InstallationCard({ installation, lang, expanded, onToggle }) {
 
           {/* Service history */}
           <InstallationHistory installationId={installation.id} lang={lang} />
+          <InlineNoteComposer
+            lang={lang}
+            entityType="installation"
+            entityId={installation.id}
+            createNote={createNote}
+            placeholder={lang === 'de' ? 'Notiz zur Anlage' : 'Installation note'}
+          />
+
+          {installation.sync_status === 'PENDING_SYNC' ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+              {lang === 'de' ? 'Wartet auf Synchronisierung' : 'Waiting for sync'}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href={`/installations/${installation.site_id}/spare-parts?installationId=${installation.id}`}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border text-xs font-medium text-foreground"
+              >
+                <PackageSearch className="h-3.5 w-3.5" />
+                {lang === 'de' ? 'Teile' : 'Parts'}
+              </Link>
+              <Link
+                href={`/installations/${installation.site_id}/capture?installationId=${installation.id}`}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border text-xs font-medium text-foreground"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                {lang === 'de' ? 'Bearbeiten' : 'Edit'}
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+function WarningList({ notes, lang, compact = true }) {
+  if (!Array.isArray(notes) || notes.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {notes.slice(0, compact ? 2 : 4).map((note) => {
+        const title = note.category === 'access_info'
+          ? (lang === 'de' ? 'Zugang' : 'Access')
+          : (lang === 'de' ? 'Hinweis' : 'Warning');
+        const NoteIcon = note.is_pinned ? Pin : AlertTriangle;
+
+        return (
+          <div
+            key={note.id}
+            className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+          >
+            <NoteIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-medium">{title}</p>
+              <p className="break-words">{note.text}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function InlineNoteComposer({ lang, entityType, entityId, createNote, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [category, setCategory] = useState('general');
+  const [isWarning, setIsWarning] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const trimmed = text.trim();
+    if (!trimmed || isSaving) return;
+
+    setIsSaving(true);
+    setError('');
+    try {
+      await createNote({
+        entityType,
+        entityId,
+        text: trimmed,
+        category,
+        isWarning,
+        isPinned: isWarning || category === 'access_info',
+      });
+      setText('');
+      setCategory('general');
+      setIsWarning(false);
+      setOpen(false);
+    } catch (err) {
+      setError(err?.message || (lang === 'de' ? 'Notiz konnte nicht gespeichert werden.' : 'Could not save note.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-border text-xs font-medium text-foreground"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {lang === 'de' ? 'Notiz hinzufuegen' : 'Add note'}
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+      <textarea
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        maxLength={2000}
+        rows={3}
+        className="min-h-20 w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+        placeholder={placeholder}
+      />
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <select
+          value={category}
+          onChange={(event) => {
+            const nextCategory = event.target.value;
+            setCategory(nextCategory);
+            if (nextCategory === 'warning') setIsWarning(true);
+          }}
+          className="h-9 rounded-lg border border-border bg-background px-2 text-xs outline-none"
+        >
+          <option value="general">{lang === 'de' ? 'Allgemein' : 'General'}</option>
+          <option value="warning">{lang === 'de' ? 'Warnung' : 'Warning'}</option>
+          <option value="access_info">{lang === 'de' ? 'Zugang' : 'Access'}</option>
+          <option value="technical">{lang === 'de' ? 'Technisch' : 'Technical'}</option>
+        </select>
+        <label className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs">
+          <input
+            type="checkbox"
+            checked={isWarning}
+            onChange={(event) => setIsWarning(event.target.checked)}
+            className="h-3.5 w-3.5"
+          />
+          {lang === 'de' ? 'Warnen' : 'Warn'}
+        </label>
+      </div>
+      {error && <p className="text-xs font-medium text-red-600">{error}</p>}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="h-9 rounded-lg border border-border text-xs font-medium"
+        >
+          {lang === 'de' ? 'Abbrechen' : 'Cancel'}
+        </button>
+        <button
+          type="submit"
+          disabled={!text.trim() || isSaving}
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-primary text-xs font-medium text-primary-foreground disabled:opacity-50"
+        >
+          <Save className="h-3.5 w-3.5" />
+          {isSaving ? (lang === 'de' ? 'Speichert' : 'Saving') : lang === 'de' ? 'Speichern' : 'Save'}
+        </button>
+      </div>
+    </form>
   );
 }
 

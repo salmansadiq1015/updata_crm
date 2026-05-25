@@ -7,6 +7,8 @@ import {
   MessageSquare,
   Timer,
   Bell,
+  ScanLine,
+  BookOpen,
   Settings,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -18,13 +20,17 @@ const ICON_MAP = {
   MessageSquare,
   Timer,
   Bell,
+  ScanLine,
+  BookOpen,
   Settings,
 };
 
 const NAV_ITEMS = [
   { key: 'orders', href: '/orders', icon: 'ClipboardList', labelKey: 'mobile.nav.orders', labelFallback: 'Aufträge' },
+  { key: 'addressBook', href: '/address-book', icon: 'BookOpen', labelKey: 'mobile.nav.addressBook', labelFallback: 'Adressen' },
   { key: 'chat', href: '/chat', icon: 'MessageSquare', labelKey: 'mobile.nav.chat', labelFallback: 'Chat' },
   { key: 'timer', href: '/timer', icon: 'Timer', labelKey: 'mobile.nav.timer', labelFallback: 'Timer' },
+  { key: 'scan', href: '/m/accounting/scan', icon: 'ScanLine', labelKey: 'mobile.nav.scan', labelFallback: 'Scan' },
   { key: 'notifications', href: '/m/notifications', icon: 'Bell', labelKey: 'mobile.nav.notifications', labelFallback: 'Meldungen' },
   { key: 'settings', href: '/settings', icon: 'Settings', labelKey: 'mobile.nav.settings', labelFallback: 'Einstellungen' },
 ];
@@ -57,7 +63,7 @@ export function BottomNav() {
               href={item.href}
               className={cn(
                 'flex flex-col items-center justify-center gap-0.5',
-                'min-w-[64px] min-h-[44px] px-2 py-1',
+                'min-w-[44px] flex-1 min-h-[44px] px-0.5 py-1',
                 'transition-colors duration-150',
                 isActive
                   ? 'text-primary'
@@ -82,7 +88,7 @@ export function BottomNav() {
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium leading-tight">
+              <span className="max-w-full truncate text-[10px] font-medium leading-tight">
                 {t(item.labelKey, item.labelFallback)}
               </span>
             </Link>

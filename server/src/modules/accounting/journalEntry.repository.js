@@ -6,13 +6,14 @@ import {
 } from '../../shared/utils/pagination.js';
 
 class JournalEntryRepository {
-  async create(data) {
+  async create(data, options = {}) {
     const entry = new JournalEntry(data);
-    return entry.save();
+    return entry.save({ session: options.session });
   }
 
-  async findById(id) {
+  async findById(id, options = {}) {
     return JournalEntry.findById(id)
+      .session(options.session || null)
       .populate([
         { path: 'debitAccountId', select: 'accountNumber name' },
         { path: 'creditAccountId', select: 'accountNumber name' },
@@ -54,6 +55,26 @@ class JournalEntryRepository {
     return buildCursorResponse(docs, limit, sortBy);
   }
 
+  async findForExport({ startDate, endDate, limit = 100000 }) {
+    const filter = {};
+    if (startDate || endDate) {
+      filter.entryDate = {};
+      if (startDate) filter.entryDate.$gte = new Date(startDate);
+      if (endDate) filter.entryDate.$lte = new Date(endDate);
+    }
+
+    return JournalEntry.find(filter)
+      .sort({ entryDate: 1, entryNumber: 1, _id: 1 })
+      .limit(limit)
+      .populate([
+        { path: 'debitAccountId', select: 'accountNumber name' },
+        { path: 'creditAccountId', select: 'accountNumber name' },
+        { path: 'createdBy', select: 'firstName lastName email' },
+      ])
+      .select('-__v')
+      .lean();
+  }
+
   async findByReference(referenceType, referenceId) {
     return JournalEntry.find({ referenceType, referenceId })
       .populate([
@@ -67,10 +88,11 @@ class JournalEntryRepository {
    * Set reversedBy on the original entry.
    * Uses native driver to bypass Mongoose immutability hooks.
    */
-  async setReversedBy(entryId, reversalEntryId) {
-    await JournalEntry.collection.updateOne(
-      { _id: entryId },
+  async setReversedBy(entryId, reversalEntryId, options = {}) {
+    return JournalEntry.collection.updateOne(
+      { _id: entryId, reversedBy: null },
       { $set: { reversedBy: reversalEntryId } },
+      { session: options.session },
     );
   }
 }

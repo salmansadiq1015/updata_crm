@@ -26,6 +26,13 @@ export const matchSchema = {
   }),
 };
 
+export const matchApSchema = {
+  body: Joi.object({
+    transactionId: objectId.required(),
+    apInvoiceId: objectId.required(),
+  }),
+};
+
 export const categorizeSchema = {
   body: Joi.object({
     transactionId: objectId.required(),

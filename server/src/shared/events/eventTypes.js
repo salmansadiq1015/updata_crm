@@ -72,6 +72,8 @@ const EVENT_TYPES = Object.freeze({
   SPARE_PART_DELETED: 'spare_part.deleted',
   SPARE_PART_LINKED: 'spare_part.linked',
   SPARE_PART_UNLINKED: 'spare_part.unlinked',
+  SPARE_PART_ORDER_REQUESTED: 'spare_part.order_requested',
+  SPARE_PART_ORDER_STATUS_UPDATED: 'spare_part.order_status_updated',
 
   // CRM — Newsletters
   NEWSLETTER_CREATED: 'newsletter.created',

@@ -18,9 +18,9 @@ export const createCustomerSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(255),
     type: Joi.string().valid('private', 'business').required(),
-    street: Joi.string().trim().max(255).allow('', null),
-    postalCode: swissPostalCode.allow('', null),
-    city: Joi.string().trim().max(100).allow('', null),
+    street: Joi.string().trim().max(255).required(),
+    postalCode: swissPostalCode.required(),
+    city: Joi.string().trim().max(100).required(),
     canton: canton.allow('', null),
     country: Joi.string().trim().max(2).default('CH'),
     phone: phone.allow('', null),

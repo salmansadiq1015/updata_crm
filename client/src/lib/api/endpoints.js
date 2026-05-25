@@ -78,8 +78,10 @@ export const ENDPOINTS = Object.freeze({
     SPARE_PARTS: '/crm/spare-parts',
     SPARE_PART_BY_ID: (id) => `/crm/spare-parts/${id}`,
     SPARE_PARTS_SEARCH: '/crm/spare-parts/search',
+    SPARE_PART_ORDER_REQUESTS: '/crm/spare-parts/order-requests',
     SPARE_PARTS_EXPORT: '/crm/spare-parts/export',
     INSTALLATION_SPARE_PARTS: (installationId) => `/crm/installations/${installationId}/spare-parts`,
+    INSTALLATION_SPARE_PART_ORDER_STATUS: (installationId, sparePartId) => `/crm/installations/${installationId}/spare-parts/${sparePartId}/order-status`,
     INSTALLATION_SPARE_PART_UNLINK: (installationId, sparePartId) => `/crm/installations/${installationId}/spare-parts/${sparePartId}`,
     // Notes (polymorphic — site or installation)
     SITE_NOTES: (siteId) => `/crm/sites/${siteId}/notes`,
@@ -241,6 +243,16 @@ export const ENDPOINTS = Object.freeze({
     SITE_INSTALLATIONS: (id) => `/mobile/sites/${id}/installations`,
     INSTALLATION_BY_ID: (id) => `/mobile/installations/${id}`,
     INSTALLATION_HISTORY: (id) => `/mobile/installations/${id}/history`,
+    INSTALLATION_NAMEPLATE: (id) => `/mobile/installations/${id}/nameplate`,
+    INSTALLATION_NAMEPLATE_OCR: (id) => (
+      id ? `/mobile/installations/${id}/nameplate/ocr` : '/mobile/installations/nameplate/ocr'
+    ),
+    NOTE: (entityType, entityId) => `/mobile/notes/${entityType}/${entityId}`,
+    SPARE_PART_SEARCH: '/mobile/spare-parts/search',
+    INSTALLATION_SPARE_PARTS: (id) => `/mobile/installations/${id}/spare-parts`,
+    INSTALLATION_SPARE_PART_ORDER_FLAG: (id, sparePartId) => (
+      `/mobile/installations/${id}/spare-parts/${sparePartId}/order-flag`
+    ),
     SYNC: '/mobile/sync',
     SYNC_STATUS: '/mobile/sync/status',
     DEVICE_REGISTER: '/mobile/devices/register',
@@ -369,6 +381,7 @@ export const ENDPOINTS = Object.freeze({
     BANK_TRANSACTIONS: '/accounting/bank/transactions',
     BANK_TRANSACTION_BY_ID: (id) => `/accounting/bank/transactions/${id}`,
     BANK_IMPORT: '/accounting/bank/import',
+    BANK_PAYMENT_STATUS_IMPORT: '/accounting/bank/payment-status/import',
     BANK_RETRIEVE: '/accounting/bank/retrieve',
     // Documents
     ACC_DOCUMENTS: '/accounting/documents',

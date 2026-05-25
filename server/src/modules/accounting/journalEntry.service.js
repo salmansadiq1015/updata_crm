@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import journalEntryRepository from './journalEntry.repository.js';
 import counterService from './accounting.counter.service.js';
 import accountRepository from './account.repository.js';
@@ -10,33 +11,44 @@ import { AppError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import { toCsv, formatDateOnly } from '../../shared/utils/csv.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 class JournalEntryService {
   async createManual(data, userId, meta = {}) {
-    // Validate accounts exist and are not groups
-    const debitAccount = await accountRepository.findById(data.debitAccountId);
-    if (!debitAccount) throw new NotFoundError('Debit Account', data.debitAccountId);
-    if (debitAccount.isGroup) {
-      throw new AppError('Cannot post to a group account', 400, ERROR_CODES.ACCT_ACCOUNT_IS_GROUP);
+    const session = await mongoose.startSession();
+    let entry;
+    let entryNumber;
+
+    try {
+      await session.withTransaction(async () => {
+        // Validate accounts exist and are not groups
+        const debitAccount = await accountRepository.findById(data.debitAccountId, { session });
+        if (!debitAccount) throw new NotFoundError('Debit Account', data.debitAccountId);
+        if (debitAccount.isGroup) {
+          throw new AppError('Cannot post to a group account', 400, ERROR_CODES.ACCT_ACCOUNT_IS_GROUP);
+        }
+
+        const creditAccount = await accountRepository.findById(data.creditAccountId, { session });
+        if (!creditAccount) throw new NotFoundError('Credit Account', data.creditAccountId);
+        if (creditAccount.isGroup) {
+          throw new AppError('Cannot post to a group account', 400, ERROR_CODES.ACCT_ACCOUNT_IS_GROUP);
+        }
+
+        entryNumber = await counterService.getNextJournalEntryNumber({ session });
+
+        entry = await journalEntryRepository.create({
+          ...data,
+          entryNumber,
+          referenceType: data.referenceType || 'MANUAL',
+          createdBy: userId,
+        }, { session });
+      });
+    } finally {
+      await session.endSession();
     }
-
-    const creditAccount = await accountRepository.findById(data.creditAccountId);
-    if (!creditAccount) throw new NotFoundError('Credit Account', data.creditAccountId);
-    if (creditAccount.isGroup) {
-      throw new AppError('Cannot post to a group account', 400, ERROR_CODES.ACCT_ACCOUNT_IS_GROUP);
-    }
-
-    const entryNumber = await counterService.getNextJournalEntryNumber();
-
-    const entry = await journalEntryRepository.create({
-      ...data,
-      entryNumber,
-      referenceType: data.referenceType || 'MANUAL',
-      createdBy: userId,
-    });
 
     await this._invalidateListCache();
 
@@ -64,8 +76,8 @@ class JournalEntryService {
     return journalEntryRepository.findById(entry._id);
   }
 
-  async createFromEvent(referenceType, referenceId, debitAccountId, creditAccountId, amount, description, userId) {
-    const entryNumber = await counterService.getNextJournalEntryNumber();
+  async createFromEvent(referenceType, referenceId, debitAccountId, creditAccountId, amount, description, userId, options = {}) {
+    const entryNumber = await counterService.getNextJournalEntryNumber({ session: options.session });
 
     const entry = await journalEntryRepository.create({
       entryNumber,
@@ -77,7 +89,7 @@ class JournalEntryService {
       referenceType,
       referenceId,
       createdBy: userId,
-    });
+    }, { session: options.session });
 
     await this._invalidateListCache();
 
@@ -96,32 +108,49 @@ class JournalEntryService {
   }
 
   async reverse(entryId, reason, userId, meta = {}) {
-    const original = await journalEntryRepository.findById(entryId);
-    if (!original) throw new NotFoundError('JournalEntry', entryId);
+    const session = await mongoose.startSession();
+    let original;
+    let reversalEntry;
 
-    if (original.reversedBy) {
-      throw new ConflictError('Journal entry has already been reversed');
-    }
+    try {
+      await session.withTransaction(async () => {
+        original = await journalEntryRepository.findById(entryId, { session });
+        if (!original) throw new NotFoundError('JournalEntry', entryId);
 
-    const entryNumber = await counterService.getNextJournalEntryNumber();
+        if (original.reversedBy) {
+          throw new ConflictError('Journal entry has already been reversed');
+        }
 
-    // Create reversal with swapped debit/credit
-    const reversalEntry = await journalEntryRepository.create({
-      entryNumber,
-      entryDate: new Date(),
-      description: `Reversal: ${reason}`,
-      debitAccountId: original.creditAccountId._id || original.creditAccountId,
-      creditAccountId: original.debitAccountId._id || original.debitAccountId,
-      amount: original.amount,
-      currency: original.currency,
-      referenceType: 'REVERSAL',
-      referenceId: original.referenceId,
-      reversalOf: original._id,
-      createdBy: userId,
-    });
+        const entryNumber = await counterService.getNextJournalEntryNumber({ session });
+
+        // Create reversal with swapped debit/credit
+        reversalEntry = await journalEntryRepository.create({
+          entryNumber,
+          entryDate: new Date(),
+          description: `Reversal: ${reason}`,
+          debitAccountId: original.creditAccountId._id || original.creditAccountId,
+          creditAccountId: original.debitAccountId._id || original.debitAccountId,
+          amount: original.amount,
+          currency: original.currency,
+          referenceType: 'REVERSAL',
+          referenceId: original.referenceId,
+          reversalOf: original._id,
+          createdBy: userId,
+        }, { session });
 
     // Update original with reversedBy — native driver bypasses immutability hooks
-    await journalEntryRepository.setReversedBy(original._id, reversalEntry._id);
+        const reversalUpdate = await journalEntryRepository.setReversedBy(
+          original._id,
+          reversalEntry._id,
+          { session },
+        );
+        if (reversalUpdate.matchedCount !== 1) {
+          throw new ConflictError('Journal entry has already been reversed');
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
 
     await this._invalidateListCache();
     await cacheManager.del(`accounting:journal:${entryId}`);
@@ -169,23 +198,38 @@ class JournalEntryService {
   }
 
   async exportCsv({ startDate, endDate }) {
-    const result = await journalEntryRepository.findWithCursor({
-      limit: 100000,
-      sortBy: 'entryNumber',
-      sortOrder: 'asc',
-      filters: { entryDateFrom: startDate, entryDateTo: endDate },
-    });
+    const entries = await journalEntryRepository.findForExport({ startDate, endDate });
+    const headers = [
+      'EntryNumber',
+      'EntryDate',
+      'DebitAccount',
+      'DebitAccountName',
+      'CreditAccount',
+      'CreditAccountName',
+      'Amount',
+      'Currency',
+      'Description',
+      'ReferenceType',
+      'ReferenceId',
+      'CreatedByEmail',
+    ];
 
-    const entries = result.data || [];
-    const header = 'EntryNumber,Date,Description,DebitAccount,CreditAccount,Amount,Currency,ReferenceType';
-    const rows = entries.map((e) => {
-      const debitAcct = e.debitAccountId?.accountNumber || '';
-      const creditAcct = e.creditAccountId?.accountNumber || '';
-      const date = new Date(e.entryDate).toISOString().split('T')[0];
-      return [e.entryNumber, date, `"${e.description}"`, debitAcct, creditAcct, e.amount, e.currency, e.referenceType].join(',');
-    });
+    const rows = entries.map((entry) => ({
+      EntryNumber: entry.entryNumber,
+      EntryDate: formatDateOnly(entry.entryDate),
+      DebitAccount: entry.debitAccountId?.accountNumber || '',
+      DebitAccountName: entry.debitAccountId?.name || '',
+      CreditAccount: entry.creditAccountId?.accountNumber || '',
+      CreditAccountName: entry.creditAccountId?.name || '',
+      Amount: Number(entry.amount || 0).toFixed(2),
+      Currency: entry.currency || 'CHF',
+      Description: entry.description || '',
+      ReferenceType: entry.referenceType || '',
+      ReferenceId: entry.referenceId || '',
+      CreatedByEmail: entry.createdBy?.email || '',
+    }));
 
-    return [header, ...rows].join('\n');
+    return toCsv(headers, rows);
   }
 
   async _invalidateListCache() {

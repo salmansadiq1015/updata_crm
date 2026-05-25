@@ -79,6 +79,10 @@ export function useArMutations() {
     mutationFn: arService.recordPayment,
     onSuccess: () => { invalidate(); toast.success('Payment recorded'); },
   });
+  const recordInvoicePayment = useMutation({
+    mutationFn: arService.recordAndAllocateInvoicePayment,
+    onSuccess: () => { invalidate(); toast.success('Payment recorded and allocated'); },
+  });
   const allocatePayment = useMutation({
     mutationFn: ({ id, data }) => arService.allocatePayment(id, data),
     onSuccess: () => { invalidate(); toast.success('Payment allocated'); },
@@ -91,7 +95,7 @@ export function useArMutations() {
     mutationFn: arService.generateDunning,
     onSuccess: () => { inv(qc, ['accounting', 'ar-overdue']); toast.success('Dunning letters generated'); },
   });
-  return { recordPayment, allocatePayment, writeOff, generateDunning };
+  return { recordPayment, recordInvoicePayment, allocatePayment, writeOff, generateDunning };
 }
 
 // ── Bank ──────────────────────────────────────────────────────

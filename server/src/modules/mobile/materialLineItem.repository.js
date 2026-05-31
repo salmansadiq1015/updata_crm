@@ -12,6 +12,28 @@ class MaterialLineItemRepository {
       .lean();
   }
 
+  async findByOrderId(orderId) {
+    return MaterialLineItem.find({ orderId })
+      .sort({ sortOrder: 1, createdAt: 1 })
+      .lean();
+  }
+
+  async findByIdAndOrderId(id, orderId) {
+    return MaterialLineItem.findOne({ _id: id, orderId }).lean();
+  }
+
+  async updateByIdAndOrderId(id, orderId, data) {
+    return MaterialLineItem.findOneAndUpdate(
+      { _id: id, orderId },
+      data,
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+  }
+
+  async deleteByIdAndOrderId(id, orderId) {
+    return MaterialLineItem.deleteOne({ _id: id, orderId });
+  }
+
   async bulkCreate(items) {
     return MaterialLineItem.insertMany(items);
   }

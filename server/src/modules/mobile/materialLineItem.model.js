@@ -7,7 +7,12 @@ const materialLineItemSchema = new mongoose.Schema(
     workReportId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'WorkReport',
-      required: true,
+      default: null,
+    },
+    orderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Assignment',
+      default: null,
     },
     catalogSource: {
       type: String,
@@ -41,6 +46,7 @@ const materialLineItemSchema = new mongoose.Schema(
 
 // --- Indexes ---
 materialLineItemSchema.index({ workReportId: 1 });
+materialLineItemSchema.index({ orderId: 1 });
 
 const MaterialLineItem = mongoose.model('MaterialLineItem', materialLineItemSchema);
 export default MaterialLineItem;

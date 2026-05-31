@@ -6,6 +6,7 @@ class SyncService {
       workReports: [],
       timeEntries: [],
       photos: [],
+      materialItems: [],
       installationCaptures: [],
       notes: [],
       conflicts: [],
@@ -61,8 +62,17 @@ class SyncService {
       }
 
       if (syncData.outbound.materialItems?.length) {
-        // Material items are typically part of work reports; process as needed
-        logger.info('Material items sync received', { module: 'mobile', count: syncData.outbound.materialItems.length });
+        const { default: materialService } = await import('./material.service.js');
+        outboundResults.materialItems = [];
+        for (const item of syncData.outbound.materialItems) {
+          try {
+            const orderId = item.orderId || item.data?.orderId;
+            const result = await materialService.create(orderId, item.data || item, { _id: userId, permissions: [] }, meta);
+            outboundResults.materialItems.push({ localId: item.localId, serverId: result.id, status: 'SUCCESS' });
+          } catch (err) {
+            outboundResults.materialItems.push({ localId: item.localId, serverId: null, status: 'FAILED', error: err.message });
+          }
+        }
       }
 
       if (syncData.outbound.installationCaptures?.length) {

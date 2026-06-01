@@ -46,12 +46,18 @@ class DocumentService {
       bucket: 'documents',
     });
 
+    // Versioning: if a document with the same fileName already exists for this
+    // project, the new upload becomes the next version and links to the prior one.
+    const prior = await documentRepository.findLatestByFileName(projectId, fileData.originalName);
+
     const doc = await documentRepository.create({
       projectId,
       fileId: fileMeta._id,
       fileName: fileData.originalName,
       category: fileData.category || 'OTHER',
       description: fileData.description || null,
+      version: prior ? prior.version + 1 : 1,
+      previousVersionId: prior ? prior._id : null,
       uploadedBy,
     });
 
@@ -83,6 +89,64 @@ class DocumentService {
     });
 
     return this._enrichDocument(await documentRepository.findById(doc._id));
+  }
+
+  /**
+   * Create a ProjectDocument that references an already-stored file (no re-upload).
+   * Used by mobile uploads (photos/documents targeting an order that belongs to a
+   * project) so they appear in the PM Documents tab. Additive — never replaces the
+   * mobile FileMetadata / MobilePhoto write.
+   *
+   * Returns the created document, or null when the project no longer exists.
+   */
+  async createFromStoredFile(projectId, {
+    fileId, fileName, category = 'OTHER', uploadedBy, isGenerated = false,
+  }, meta = {}) {
+    const Project = (await import('./project.model.js')).default;
+    const project = await Project.findById(projectId).select('_id').lean();
+    if (!project) return null;
+
+    const prior = await documentRepository.findLatestByFileName(projectId, fileName);
+
+    const doc = await documentRepository.create({
+      projectId,
+      fileId,
+      fileName,
+      category,
+      version: prior ? prior.version + 1 : 1,
+      previousVersionId: prior ? prior._id : null,
+      isGenerated,
+      uploadedBy,
+    });
+
+    await this._invalidateCache(projectId);
+
+    eventBus.publish(EVENT_TYPES.PROJECT_DOCUMENT_UPLOADED, {
+      documentId: doc._id,
+      projectId,
+      fileName,
+      category,
+      uploadedBy,
+    }, { source: 'pm:documents' });
+
+    auditService.logEvent({
+      eventType: 'project_document.uploaded',
+      userId: uploadedBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: doc._id, projectId, fileName, origin: 'mobile' },
+      module: 'pm',
+    });
+
+    logger.info('Project document linked from mobile upload', {
+      module: 'pm',
+      action: 'createFromStoredFile',
+      documentId: doc._id,
+      projectId,
+    });
+
+    return doc;
   }
 
   async listByProject(projectId, filters = {}) {

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import config from '../../config/index.js';
 import projectRoutes from './project.routes.js';
 import statusController from './status.controller.js';
 import prepActionController from './prepAction.controller.js';
@@ -40,7 +41,7 @@ const router = Router();
 // File upload config
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: config.pm.documentMaxUploadBytes },
 });
 
 // --- Project routes ---

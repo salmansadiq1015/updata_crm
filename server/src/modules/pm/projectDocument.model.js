@@ -28,6 +28,11 @@ const projectDocumentSchema = new mongoose.Schema(
     },
     description: { type: String, maxlength: 2000, default: null },
     version: { type: Number, default: 1, min: 1 },
+    previousVersionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ProjectDocument',
+      default: null,
+    },
     isGenerated: { type: Boolean, default: false },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,

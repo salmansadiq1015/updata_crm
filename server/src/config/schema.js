@@ -105,6 +105,7 @@ const configSchema = Joi.object({
 
   // Project Management
   PROJECT_ARCHIVE_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
+  PROJECT_DOCUMENT_MAX_UPLOAD_MB: Joi.number().integer().min(1).default(50),
 
   // Misc
   AUTO_MIGRATE: Joi.boolean().default(false),

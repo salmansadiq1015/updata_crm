@@ -32,6 +32,12 @@ class DocumentRepository {
       .lean();
   }
 
+  async findLatestByFileName(projectId, fileName) {
+    return ProjectDocument.findOne({ projectId, fileName })
+      .sort({ version: -1 })
+      .lean();
+  }
+
   async updateById(id, data) {
     return ProjectDocument.findByIdAndUpdate(id, data, {
       returnDocument: 'after',

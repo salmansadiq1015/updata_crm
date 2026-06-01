@@ -272,6 +272,18 @@ class DocumentService {
       .populate('siteId', 'name street postalCode city canton');
     if (!project) throw new NotFoundError('Project', projectId);
 
+    // Schedule milestones for the project (name + date + status), so PM templates
+    // (status report / completion certificate) can render the milestone timeline.
+    const ScheduleEntry = (await import('./scheduleEntry.model.js')).default;
+    const scheduleEntries = await ScheduleEntry.find({ projectId, entryType: 'MILESTONE' })
+      .sort({ sortOrder: 1 })
+      .lean();
+    const milestones = scheduleEntries.map((e) => ({
+      name: e.name,
+      date: e.milestoneDate ? e.milestoneDate.toISOString().split('T')[0] : null,
+      status: e.status,
+    }));
+
     const templateData = {
       documentNumber: project.projectNumber,
       documentDate: new Date().toISOString().split('T')[0],
@@ -284,9 +296,13 @@ class DocumentService {
       projectName: project.name,
       projectNumber: project.projectNumber,
       projectType: project.projectType,
+      description: project.description || null,
       projectManager: project.projectManagerId
         ? `${project.projectManagerId.firstName} ${project.projectManagerId.lastName}`
         : null,
+      pmEmail: project.projectManagerId ? project.projectManagerId.email || null : null,
+      pmPhone: project.projectManagerId ? project.projectManagerId.phone || null : null,
+      milestones,
       site: project.siteId ? {
         name: project.siteId.name,
         address: `${project.siteId.street || ''}, ${project.siteId.postalCode || ''} ${project.siteId.city || ''}`.trim(),

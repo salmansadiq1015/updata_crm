@@ -34,6 +34,10 @@ const TEMPLATES = [
   { templateType: 'cover_letter',          name: 'Begleitschreiben',          sections: LETTER_SECTIONS(),            tableColumns: [] },
   { templateType: 'service_report',        name: 'Servicebericht',            sections: DEFAULT_SECTIONS(),           tableColumns: DEFAULT_COLUMNS() },
   { templateType: 'inspection_certificate',name: 'Inspektionszertifikat',     sections: DEFAULT_SECTIONS(),           tableColumns: DEFAULT_COLUMNS() },
+  // PM project documents — text-style documents (header/body/footer, no line-item table).
+  { templateType: 'project_appointment_confirmation', name: 'Terminbestätigung',     sections: LETTER_SECTIONS(), tableColumns: [] },
+  { templateType: 'project_status_report',            name: 'Projekt-Statusbericht', sections: LETTER_SECTIONS(), tableColumns: [] },
+  { templateType: 'project_completion_certificate',   name: 'Abschlusszertifikat',   sections: LETTER_SECTIONS(), tableColumns: [] },
 ];
 
 export async function seedDoctplTemplates(adminUserId) {

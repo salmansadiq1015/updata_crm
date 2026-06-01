@@ -9,6 +9,9 @@ export const TEMPLATE_TYPES = [
   'cover_letter',
   'service_report',
   'inspection_certificate',
+  'project_appointment_confirmation',
+  'project_status_report',
+  'project_completion_certificate',
 ];
 
 const sectionSchema = new mongoose.Schema(

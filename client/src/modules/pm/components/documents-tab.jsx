@@ -15,9 +15,11 @@ import { DOCUMENT_CATEGORY_CONFIG } from '@/modules/pm/constants/pm-constants';
 import { EmptyState } from '@/shared/components/empty-state';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { DocumentViewer, getFileIcon, formatFileSize, isPreviewable } from '@/shared/components/document-viewer';
+import { DocumentGenerateDialog, templateLabel } from '@/modules/pm/components/document-generate-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -29,22 +31,28 @@ import {
   Pencil, Trash2, Loader2, Download, Upload,
   FileText, Search, X, FolderOpen, Eye,
   CloudUpload, FileUp, Grid3X3, List, LayoutGrid,
+  Sparkles, Mail, RefreshCw, FilePen,
 } from 'lucide-react';
 
 // ── Document card (premium) ──────────────────────────────────
 
-function DocumentCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview }) {
+function DocumentCard({
+  doc, language, canWrite, onEdit, onDelete, onDownload, onPreview,
+  onEmail, onRegenerate, onResumeDraft,
+}) {
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
   const CategoryIcon = categoryCfg?.icon || FileText;
+  const isDraft = doc.status === 'DRAFT';
 
   return (
     <div
       className={cn(
         'group relative rounded-xl border border-border/60 bg-card p-4 transition-all duration-200 cursor-pointer',
         'hover:border-border hover:shadow-md hover:shadow-primary/[0.03]',
+        isDraft && 'border-dashed border-amber-400/50 bg-amber-500/[0.02]',
       )}
-      onClick={() => onPreview(doc)}
+      onClick={() => (isDraft ? onResumeDraft?.(doc) : onPreview(doc))}
     >
       <div className="flex items-start gap-3.5">
         <div className={cn(
@@ -62,8 +70,14 @@ function DocumentCard({ doc, language, canWrite, onEdit, onDelete, onDownload, o
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-[13px] truncate leading-tight">{doc.originalName || doc.fileName}</span>
-            {doc.isGenerated && (
+            <span className="font-medium text-[13px] truncate leading-tight">
+              {isDraft ? templateLabel(doc.templateType, language) : (doc.originalName || doc.fileName)}
+            </span>
+            {isDraft ? (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium border-amber-400/60 text-amber-600 dark:text-amber-400">
+                {language === 'de' ? 'Entwurf' : 'Draft'}
+              </Badge>
+            ) : doc.isGenerated && (
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium">
                 {language === 'de' ? 'Generiert' : 'Generated'}
               </Badge>
@@ -94,42 +108,92 @@ function DocumentCard({ doc, language, canWrite, onEdit, onDelete, onDownload, o
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-200">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-lg"
-            onClick={(e) => { e.stopPropagation(); onPreview(doc); }}
-            title={language === 'de' ? 'Vorschau' : 'Preview'}
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-lg"
-            onClick={(e) => { e.stopPropagation(); onDownload(doc); }}
-            title={language === 'de' ? 'Herunterladen' : 'Download'}
-          >
-            <Download className="h-3.5 w-3.5" />
-          </Button>
-          {canWrite && (
+          {isDraft ? (
+            <>
+              {canWrite && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg text-primary"
+                  onClick={(e) => { e.stopPropagation(); onResumeDraft?.(doc); }}
+                  title={language === 'de' ? 'Entwurf bearbeiten / generieren' : 'Edit draft / generate'}
+                >
+                  <FilePen className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {canWrite && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
+                  onClick={(e) => { e.stopPropagation(); onDelete(doc); }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </>
+          ) : (
             <>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-lg"
-                onClick={(e) => { e.stopPropagation(); onEdit(doc); }}
+                onClick={(e) => { e.stopPropagation(); onPreview(doc); }}
+                title={language === 'de' ? 'Vorschau' : 'Preview'}
               >
-                <Pencil className="h-3.5 w-3.5" />
+                <Eye className="h-3.5 w-3.5" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
-                onClick={(e) => { e.stopPropagation(); onDelete(doc); }}
+                className="h-8 w-8 rounded-lg"
+                onClick={(e) => { e.stopPropagation(); onDownload(doc); }}
+                title={language === 'de' ? 'Herunterladen' : 'Download'}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Download className="h-3.5 w-3.5" />
               </Button>
+              {canWrite && doc.isGenerated && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg"
+                  onClick={(e) => { e.stopPropagation(); onEmail?.(doc); }}
+                  title={language === 'de' ? 'Per E-Mail senden' : 'Email document'}
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {canWrite && doc.isGenerated && doc.templateType && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg"
+                  onClick={(e) => { e.stopPropagation(); onRegenerate?.(doc); }}
+                  title={language === 'de' ? 'Neu generieren' : 'Regenerate'}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {canWrite && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg"
+                    onClick={(e) => { e.stopPropagation(); onEdit(doc); }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
+                    onClick={(e) => { e.stopPropagation(); onDelete(doc); }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              )}
             </>
           )}
         </div>
@@ -329,6 +393,11 @@ export function DocumentsTab({ projectId }) {
   const [viewMode, setViewMode] = useState('list');
   const [previewDoc, setPreviewDoc] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [resumeDraft, setResumeDraft] = useState(null);
+  const [emailDoc, setEmailDoc] = useState(null);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
 
   const params = useMemo(() => {
     const p = {};
@@ -363,13 +432,34 @@ export function DocumentsTab({ projectId }) {
     );
   }, [documents, searchTerm]);
 
-  const { upload, updateMetadata, remove } = useDocumentMutations(projectId, {
+  const { upload, updateMetadata, remove, generate, emailDocument } = useDocumentMutations(projectId, {
     onDelete: () => setDeleteTarget(null),
+    onEmail: () => { setEmailDoc(null); setEmailTo(''); setEmailMessage(''); },
   });
 
   const handleUpload = useCallback((file) => {
     upload.mutate({ file, options: { category: uploadCategory } });
   }, [upload, uploadCategory]);
+
+  const handleRegenerate = useCallback((doc) => {
+    generate.mutate({ templateType: doc.templateType, overrides: doc.overrides || {} });
+  }, [generate]);
+
+  const openEmail = useCallback((doc) => {
+    setEmailDoc(doc);
+    setEmailTo('');
+    setEmailMessage('');
+  }, []);
+
+  const handleSendEmail = useCallback(() => {
+    if (!emailDoc || !emailTo) return;
+    emailDocument.mutate({ docId: emailDoc._id, to: emailTo, message: emailMessage });
+  }, [emailDoc, emailTo, emailMessage, emailDocument]);
+
+  const openResumeDraft = useCallback((doc) => {
+    setResumeDraft(doc);
+    setGenerateOpen(true);
+  }, []);
 
   const handleDownload = useCallback(async (doc) => {
     try {
@@ -443,6 +533,14 @@ export function DocumentsTab({ projectId }) {
                 </SelectContent>
               </Select>
             </FormField>
+            <Button
+              type="button"
+              className="ml-auto gap-2 h-9"
+              onClick={() => { setResumeDraft(null); setGenerateOpen(true); }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {language === 'de' ? 'Dokument erstellen' : 'Create Document'}
+            </Button>
           </div>
           <UploadZone
             language={language}
@@ -563,6 +661,9 @@ export function DocumentsTab({ projectId }) {
               onDelete={setDeleteTarget}
               onDownload={handleDownload}
               onPreview={handlePreview}
+              onEmail={openEmail}
+              onRegenerate={handleRegenerate}
+              onResumeDraft={openResumeDraft}
             />
           ))}
         </div>
@@ -646,6 +747,58 @@ export function DocumentsTab({ projectId }) {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Create / generate document dialog ─────────────────── */}
+      <DocumentGenerateDialog
+        open={generateOpen}
+        onOpenChange={(v) => { setGenerateOpen(v); if (!v) setResumeDraft(null); }}
+        projectId={projectId}
+        draft={resumeDraft}
+      />
+
+      {/* ── Email document dialog ─────────────────────────────── */}
+      <Dialog open={!!emailDoc} onOpenChange={(v) => { if (!v) setEmailDoc(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-primary" />
+              {language === 'de' ? 'Dokument per E-Mail senden' : 'Email Document'}
+            </DialogTitle>
+            <DialogDescription>
+              {emailDoc?.originalName || emailDoc?.fileName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <FormBody>
+            <FormField label={language === 'de' ? 'Empfaenger E-Mail' : 'Recipient email'}>
+              <Input
+                type="email"
+                value={emailTo}
+                onChange={(e) => setEmailTo(e.target.value)}
+                placeholder="name@example.ch"
+              />
+            </FormField>
+            <FormField label={language === 'de' ? 'Nachricht (optional)' : 'Message (optional)'}>
+              <Textarea
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+                placeholder={language === 'de' ? 'Optionale Nachricht…' : 'Optional message…'}
+                rows={3}
+              />
+            </FormField>
+          </FormBody>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setEmailDoc(null)} disabled={emailDocument.isPending}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button type="button" className="gap-2" onClick={handleSendEmail} disabled={emailDocument.isPending || !emailTo}>
+              {emailDocument.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+              {language === 'de' ? 'Senden' : 'Send'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

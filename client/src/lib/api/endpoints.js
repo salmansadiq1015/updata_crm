@@ -137,6 +137,8 @@ export const ENDPOINTS = Object.freeze({
     DOCUMENT_BY_ID: (id, docId) => `/pm/projects/${id}/documents/${docId}`,
     DOCUMENT_DOWNLOAD: (id, docId) => `/pm/projects/${id}/documents/${docId}/download`,
     DOCUMENTS_GENERATE: (id) => `/pm/projects/${id}/documents/generate`,
+    DOCUMENTS_DRAFT: (id) => `/pm/projects/${id}/documents/draft`,
+    DOCUMENT_EMAIL: (id, docId) => `/pm/projects/${id}/documents/${docId}/email`,
   },
   TASKS: {
     LIST: '/tasks',

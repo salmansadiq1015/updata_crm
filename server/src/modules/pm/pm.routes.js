@@ -10,6 +10,7 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import { transitionStatusSchema, statusHistorySchema } from './status.validation.js';
 import {
   createPrepActionSchema, updatePrepActionSchema, prepActionIdParamSchema,
+  prepActionAttachmentDownloadSchema,
 } from './prepAction.validation.js';
 import {
   createEntrySchema, updateEntrySchema, deleteEntrySchema,
@@ -97,6 +98,40 @@ prepActionRouter.delete(
   validate(prepActionIdParamSchema),
   (req, res, next) => prepActionController.delete(req, res, next),
 );
+
+// --- Attachments (mirror the project-document upload pattern) ---
+prepActionRouter.get(
+  '/:actionId/attachments',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(prepActionIdParamSchema),
+  (req, res, next) => prepActionController.listAttachments(req, res, next),
+);
+prepActionRouter.post(
+  '/:actionId/attachments',
+  authenticate,
+  requirePermission('projects:write'),
+  upload.single('file'),
+  validate(prepActionIdParamSchema),
+  (req, res, next) => prepActionController.uploadAttachment(req, res, next),
+);
+prepActionRouter.get(
+  '/:actionId/attachments/:fileId/download',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(prepActionAttachmentDownloadSchema),
+  (req, res, next) => prepActionController.downloadAttachment(req, res, next),
+);
+
+// --- Change history (read-only audit timeline) ---
+prepActionRouter.get(
+  '/:actionId/history',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(prepActionIdParamSchema),
+  (req, res, next) => prepActionController.history(req, res, next),
+);
+
 router.use('/projects/:id/prep-actions', prepActionRouter);
 
 // --- Schedule sub-routes ---

@@ -92,3 +92,11 @@ export const updatePrepActionSchema = {
 export const prepActionIdParamSchema = {
   params: Joi.object({ actionId: objectId.required() }),
 };
+
+export const prepActionAttachmentDownloadSchema = {
+  params: Joi.object({
+    id: objectId.required(),
+    actionId: objectId.required(),
+    fileId: objectId.required(),
+  }),
+};

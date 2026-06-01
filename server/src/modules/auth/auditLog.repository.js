@@ -66,6 +66,34 @@ class AuditLogRepository {
     return AuditLog.find(filter).sort({ timestamp: -1 }).lean().cursor();
   }
 
+  /**
+   * Fetch audit entries for a specific entity, identified by a value stored
+   * inside the Mixed `details` sub-document (e.g. details.actionId === <id>).
+   *
+   * @param {object} params
+   * @param {string} params.module        - owning module (e.g. 'pm')
+   * @param {string} params.detailsKey     - key inside details holding the id (e.g. 'actionId')
+   * @param {string} params.entityId       - the entity id to match
+   * @param {string} [params.eventTypePrefix] - optional eventType prefix filter (e.g. 'prep_action.')
+   * @param {number} [params.limit=100]
+   */
+  async findByEntity({ module, detailsKey, entityId, eventTypePrefix, limit = 100 }) {
+    // `details` is a Mixed sub-document, so the id may be stored as either an
+    // ObjectId or a string depending on the caller. Match both candidates.
+    const candidates = Array.isArray(entityId) ? entityId : [entityId];
+    const filter = {
+      module,
+      [`details.${detailsKey}`]: { $in: candidates },
+    };
+    if (eventTypePrefix) {
+      filter.eventType = { $regex: `^${eventTypePrefix}` };
+    }
+    return AuditLog.find(filter)
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .lean();
+  }
+
   async count(filters = {}) {
     const filter = {};
     if (filters.userId) filter.userId = filters.userId;

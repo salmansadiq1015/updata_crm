@@ -79,6 +79,8 @@ export const queryKeys = {
     prepActions: {
       byProject: (projectId) => ['pm', 'prepActions', projectId],
       detail: (projectId, actionId) => ['pm', 'prepActions', projectId, actionId],
+      attachments: (projectId, actionId) => ['pm', 'prepActions', projectId, actionId, 'attachments'],
+      history: (projectId, actionId) => ['pm', 'prepActions', projectId, actionId, 'history'],
     },
     schedule: {
       byProject: (projectId) => ['pm', 'schedule', projectId],

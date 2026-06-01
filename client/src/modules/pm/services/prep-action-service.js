@@ -26,4 +26,30 @@ export const prepActionService = {
     const res = await apiClient.delete(ENDPOINTS.PM.PREP_ACTION_BY_ID(projectId, actionId));
     return res.data;
   },
+
+  async getAttachments(projectId, actionId) {
+    const res = await apiClient.get(ENDPOINTS.PM.PREP_ACTION_ATTACHMENTS(projectId, actionId));
+    return res.data;
+  },
+
+  async uploadAttachment(projectId, actionId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post(
+      ENDPOINTS.PM.PREP_ACTION_ATTACHMENTS(projectId, actionId),
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return res.data;
+  },
+
+  async getAttachmentDownloadUrl(projectId, actionId, fileId) {
+    const res = await apiClient.get(ENDPOINTS.PM.PREP_ACTION_ATTACHMENT_DOWNLOAD(projectId, actionId, fileId));
+    return res.data;
+  },
+
+  async getHistory(projectId, actionId) {
+    const res = await apiClient.get(ENDPOINTS.PM.PREP_ACTION_HISTORY(projectId, actionId));
+    return res.data;
+  },
 };

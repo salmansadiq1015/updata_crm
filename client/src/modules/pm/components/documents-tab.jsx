@@ -204,17 +204,19 @@ function DocumentCard({
 
 // ── Document grid card ───────────────────────────────────────
 
-function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview }) {
+function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview, onResumeDraft }) {
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
+  const isDraft = doc.status === 'DRAFT';
 
   return (
     <div
       className={cn(
         'group relative rounded-xl border border-border/60 bg-card overflow-hidden transition-all duration-200 cursor-pointer',
         'hover:border-border hover:shadow-md hover:shadow-primary/[0.03]',
+        isDraft && 'border-dashed border-amber-400/50 bg-amber-500/[0.02]',
       )}
-      onClick={() => onPreview(doc)}
+      onClick={() => (isDraft ? onResumeDraft?.(doc) : onPreview(doc))}
     >
       <div className={cn(
         'h-28 flex items-center justify-center relative',
@@ -238,20 +240,41 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
         )} />
 
         <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200">
-          <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onPreview(doc); }}>
-            <Eye className="h-3 w-3" />
-          </Button>
-          <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onDownload(doc); }}>
-            <Download className="h-3 w-3" />
-          </Button>
-          {canWrite && (
+          {isDraft ? (
+            canWrite && (
+              <>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm text-primary"
+                  onClick={(e) => { e.stopPropagation(); onResumeDraft?.(doc); }}
+                  title={language === 'de' ? 'Entwurf bearbeiten / generieren' : 'Edit draft / generate'}
+                >
+                  <FilePen className="h-3 w-3" />
+                </Button>
+                <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(doc); }}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </>
+            )
+          ) : (
             <>
-              <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onEdit(doc); }}>
-                <Pencil className="h-3 w-3" />
+              <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onPreview(doc); }}>
+                <Eye className="h-3 w-3" />
               </Button>
-              <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(doc); }}>
-                <Trash2 className="h-3 w-3" />
+              <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onDownload(doc); }}>
+                <Download className="h-3 w-3" />
               </Button>
+              {canWrite && (
+                <>
+                  <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onEdit(doc); }}>
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                  <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(doc); }}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </>
+              )}
             </>
           )}
         </div>
@@ -679,6 +702,7 @@ export function DocumentsTab({ projectId }) {
               onDelete={setDeleteTarget}
               onDownload={handleDownload}
               onPreview={handlePreview}
+              onResumeDraft={openResumeDraft}
             />
           ))}
         </div>

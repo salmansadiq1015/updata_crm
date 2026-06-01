@@ -336,6 +336,16 @@ class DocumentService {
     const safeOverrides = overrides && typeof overrides === 'object' ? overrides : {};
     const templateData = { ...baseData, ...safeOverrides };
 
+    // The shared renderer keys the document title off `data.templateType` and only
+    // renders `data.introduction` for the letter body. For PM template types,
+    // inject the type (so the header title resolves) and compose the enriched
+    // introduction the BodyRenderer actually consumes (project, PM contact,
+    // milestones, intro/notes overrides). Other template types are untouched.
+    templateData.templateType = templateType;
+    const { buildPmDocumentBody } = await import('./pmDocumentBody.js');
+    const bodyFields = buildPmDocumentBody(templateType, templateData);
+    Object.assign(templateData, bodyFields);
+
     const documentGenerationService = (await import('../doctpl/documentGeneration.service.js')).default;
     const generatedDoc = await documentGenerationService.generate({
       templateType,
@@ -468,9 +478,14 @@ class DocumentService {
    * Loads the stored PDF buffer via the file service and reuses the shared mail
    * pipeline (sendProjectDocumentEmail).
    */
-  async emailDocument(documentId, { to, message } = {}, userId, meta = {}) {
+  async emailDocument(documentId, { to, message, projectId } = {}, userId, meta = {}) {
     const doc = await documentRepository.findById(documentId);
     if (!doc) throw new NotFoundError('ProjectDocument', documentId);
+    // Defense-in-depth: when the caller supplies the route's projectId, ensure the
+    // document actually belongs to that project (prevents cross-project emailing).
+    if (projectId && String(doc.projectId) !== String(projectId)) {
+      throw new NotFoundError('ProjectDocument', documentId);
+    }
     if (!doc.fileId) {
       const { ConflictError } = await import('../../shared/errors/AppError.js');
       throw new ConflictError('Cannot email a draft document — generate it first');

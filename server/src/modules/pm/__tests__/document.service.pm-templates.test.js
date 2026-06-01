@@ -165,6 +165,14 @@ describe('documentService.generate — PM document template types (PROJ-005)', (
     expect(data.customer).toMatchObject({ name: 'Müller AG' });
     expect(data.projectManager).toBe('Anna Schmid');
 
+    // Renderer-consumed fields injected so the PDF is NOT empty:
+    // templateType drives the header title, introduction is the only body field.
+    expect(data.templateType).toBe(templateType);
+    expect(typeof data.introduction).toBe('string');
+    expect(data.introduction).toContain('Replace the aging boiler with a heat pump.');
+    expect(data.introduction).toContain('anna.schmid@example.ch');
+    expect(data.introduction).toContain('Kickoff');
+
     // A ProjectDocument was created and returned
     const createArg = mockCreate.mock.calls[0][0];
     expect(createArg).toMatchObject({ projectId, fileId: 'file-gen', isGenerated: true });

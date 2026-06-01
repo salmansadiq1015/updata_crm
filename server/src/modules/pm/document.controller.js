@@ -106,7 +106,7 @@ class DocumentController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const result = await documentService.emailDocument(
         req.params.docId,
-        { to: req.body.to, message: req.body.message },
+        { to: req.body.to, message: req.body.message, projectId: req.params.id },
         req.user._id,
         meta,
       );

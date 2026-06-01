@@ -5,6 +5,7 @@ import { AuthEmailWorker } from './authEmail.job.js';
 import { AuditLogWorker } from './auditLog.job.js';
 import { AuditCleanupWorker } from './auditCleanup.job.js';
 import { MaintenanceCheckWorker } from './maintenanceCheck.job.js';
+import { ProjectArchiveWorker } from './projectArchive.job.js';
 import { PrepActionOverdueWorker } from './prepActionOverdue.job.js';
 import { AppointmentReminderWorker } from './appointmentReminder.job.js';
 import { DailyReportReminderWorker } from './dailyReportReminder.job.js';
@@ -126,6 +127,24 @@ export function registerJobs() {
   // Daily maintenance check at 06:00 Zurich time
   queueManager.addScheduledJob('maintenance-check', 'daily-maintenance-scan', {}, '0 6 * * *').catch((err) => {
     logger.warn('Failed to schedule maintenance check', {
+      module: 'jobs',
+      error: { message: err.message },
+    });
+  });
+
+  // Project archive — daily transition of COMPLETED projects past retention to ARCHIVED
+  const projectArchive = new ProjectArchiveWorker();
+  queueManager.registerQueue('project-archive', projectArchive.getHandler(), {
+    concurrency: 1,
+    jobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 30000 },
+    },
+  });
+
+  // Daily project archive at 03:00 Zurich time
+  queueManager.addScheduledJob('project-archive', 'daily-project-archive', {}, '0 3 * * *').catch((err) => {
+    logger.warn('Failed to schedule project archive', {
       module: 'jobs',
       error: { message: err.message },
     });
@@ -530,7 +549,7 @@ export function registerJobs() {
   logger.info('Background jobs registered', {
     module: 'jobs',
     action: 'register',
-    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'ai-agent', 'ai-agent-timeout'],
+    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'ai-agent', 'ai-agent-timeout'],
   });
 }
 

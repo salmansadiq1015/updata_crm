@@ -211,6 +211,8 @@ class ProjectService {
         const next30Days = new Date(today);
         next30Days.setDate(next30Days.getDate() + 30);
 
+        const ScheduleEntry = (await import('./scheduleEntry.model.js')).default;
+
         const [
           statusCounts,
           typeCounts,
@@ -218,6 +220,7 @@ class ProjectService {
           startingSoon,
           endingSoon,
           budget,
+          upcomingMilestones,
         ] = await Promise.all([
           projectRepository.countByStatus(),
           projectRepository.countByType(),
@@ -237,6 +240,12 @@ class ProjectService {
             plannedEndDate: { $gte: today, $lte: next30Days },
           }),
           projectRepository.getBudgetSummary(),
+          ScheduleEntry.countDocuments({
+            isDeleted: false,
+            entryType: 'MILESTONE',
+            milestoneDate: { $gte: today, $lte: next30Days },
+            status: { $nin: ['COMPLETED', 'CANCELLED', 'WAIVED'] },
+          }),
         ]);
 
         const byStatus = PROJECT_STATUSES.reduce((acc, status) => {
@@ -263,6 +272,7 @@ class ProjectService {
             endingSoon,
           },
           budget,
+          upcomingMilestones,
           refreshedAt: new Date(),
         };
       },
@@ -391,9 +401,10 @@ class ProjectService {
       await prepActionRepository.create({
         projectId: newProject._id,
         actionType: action.actionType,
-        name: action.name,
+        title: action.title,
         description: action.description,
-        sortOrder: action.sortOrder,
+        isMandatory: action.isMandatory,
+        dueDate: null,
         createdBy,
       });
     }

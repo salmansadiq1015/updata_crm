@@ -42,6 +42,7 @@ jest.unstable_mockModule('../../../shared/events/eventTypes.js', () => ({
   default: {
     CUSTOMER_UPDATED: 'CUSTOMER_UPDATED',
     PROJECT_STATUS_CHANGED: 'PROJECT_STATUS_CHANGED',
+    PREP_ACTION_CREATED: 'PREP_ACTION_CREATED',
     PREP_ACTION_UPDATED: 'PREP_ACTION_UPDATED',
     PREP_ACTION_OVERDUE: 'PREP_ACTION_OVERDUE',
   },
@@ -72,6 +73,56 @@ beforeAll(async () => {
 
 afterEach(() => {
   jest.clearAllMocks();
+});
+
+describe('PREP_ACTION_CREATED handler', () => {
+  const basePayload = {
+    actionId: 'action-123',
+    projectId: 'project-456',
+    title: 'Install boiler',
+    assignedToId: 'user-789',
+  };
+
+  it('calls notificationService.create with the assignee when assignedToId is set', async () => {
+    mockNotificationCreate.mockResolvedValue({ _id: 'notif-100' });
+
+    await listeners['PREP_ACTION_CREATED']({ payload: basePayload });
+
+    expect(mockNotificationCreate).toHaveBeenCalledTimes(1);
+    const [data, userId] = mockNotificationCreate.mock.calls[0];
+
+    expect(data.recipientIds).toEqual([basePayload.assignedToId]);
+    expect(data.type).toBe('prep_action_assigned');
+    expect(data.category).toBe('PROJECT');
+    expect(data.priority).toBe('NORMAL');
+    expect(data.channels).toEqual(expect.arrayContaining(['IN_APP', 'EMAIL']));
+    expect(data.sourceModule).toBe('pm');
+    expect(data.sourceEvent).toBe('PREP_ACTION_CREATED');
+    expect(data.sourceEntityType).toBe('PreparatoryAction');
+    expect(data.sourceEntityId).toBe(basePayload.actionId);
+    expect(data.payload).toMatchObject({
+      title: basePayload.title,
+      projectId: basePayload.projectId,
+      actionId: basePayload.actionId,
+    });
+    expect(userId).toBeNull();
+  });
+
+  it('does not notify when assignedToId is missing', async () => {
+    await listeners['PREP_ACTION_CREATED']({
+      payload: { ...basePayload, assignedToId: null },
+    });
+
+    expect(mockNotificationCreate).not.toHaveBeenCalled();
+  });
+
+  it('logs error but does not throw when notificationService.create rejects', async () => {
+    mockNotificationCreate.mockRejectedValue(new Error('DB down'));
+
+    await expect(
+      listeners['PREP_ACTION_CREATED']({ payload: basePayload }),
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe('PREP_ACTION_OVERDUE handler', () => {

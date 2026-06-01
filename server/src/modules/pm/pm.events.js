@@ -75,6 +75,44 @@ export function registerPmEvents() {
     }
   });
 
+  // --- PREP_ACTION_CREATED ---
+  eventBus.on(EVENT_TYPES.PREP_ACTION_CREATED, async (event) => {
+    try {
+      const { actionId, projectId, title, assignedToId } = event.payload;
+
+      if (!assignedToId) return;
+
+      try {
+        const notificationService = (await import('../notifications/notification.service.js')).default;
+
+        await notificationService.create({
+          channels: ['IN_APP', 'EMAIL'],
+          recipientIds: [assignedToId],
+          type: 'prep_action_assigned',
+          category: 'PROJECT',
+          priority: 'NORMAL',
+          payload: { title, projectId, actionId },
+          sourceModule: 'pm',
+          sourceEvent: 'PREP_ACTION_CREATED',
+          sourceEntityType: 'PreparatoryAction',
+          sourceEntityId: actionId,
+        }, null);
+      } catch (notifErr) {
+        logger.error('Failed to dispatch prep action assigned notification', {
+          module: 'pm',
+          action: 'event.prep_action_created.notify',
+          error: { message: notifErr.message },
+        });
+      }
+    } catch (err) {
+      logger.error('Failed to handle PREP_ACTION_CREATED event', {
+        module: 'pm',
+        action: 'event.prep_action_created',
+        error: { message: err.message, stack: err.stack },
+      });
+    }
+  });
+
   // --- PREP_ACTION_OVERDUE ---
   eventBus.on(EVENT_TYPES.PREP_ACTION_OVERDUE, async (event) => {
     try {

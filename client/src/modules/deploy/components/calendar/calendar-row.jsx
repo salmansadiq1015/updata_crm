@@ -8,6 +8,7 @@ import {
 } from '../../constants/deploy-constants';
 import { EmployeeAvatarRow } from '../shared/employee-avatar-row';
 import { CalendarAssignmentBlock } from './calendar-assignment-block';
+import { CalendarPmScheduleBlock } from './calendar-pm-schedule-block';
 import { CalendarAvailabilityBar } from './calendar-availability-bar';
 import {
   differenceInMinutes, startOfDay, isSameDay, isWithinInterval,
@@ -64,6 +65,38 @@ function computeBlockStyle(assignment, days, view) {
   };
 }
 
+/**
+ * Position a PM schedule entry (full-day, date-based) across the day columns.
+ * PM entries have no time-of-day, so they span whole days. Returns null when
+ * the entry does not intersect the visible days.
+ */
+function computePmBlockStyle(entry, days) {
+  const start = startOfDay(new Date(entry.startDatetime));
+  const end = startOfDay(new Date(entry.endDatetime || entry.startDatetime));
+  const dayWidth = 100 / days.length;
+
+  // First and last visible day index the entry covers (clamped to range).
+  let startIdx = -1;
+  let endIdx = -1;
+  days.forEach((d, i) => {
+    const day = startOfDay(d);
+    if (day >= start && day <= end) {
+      if (startIdx === -1) startIdx = i;
+      endIdx = i;
+    }
+  });
+  if (startIdx === -1) return null;
+
+  const span = endIdx - startIdx + 1;
+  return {
+    left: `${startIdx * dayWidth}%`,
+    width: `${Math.max(dayWidth * 0.6, span * dayWidth)}%`,
+    height: 18,
+    // Pin PM band to the bottom of the row, below assignment blocks.
+    bottom: 2,
+  };
+}
+
 export const CalendarRow = memo(function CalendarRow({
   employee,
   days,
@@ -73,6 +106,7 @@ export const CalendarRow = memo(function CalendarRow({
 }) {
   const assignments = employee.assignments || [];
   const availability = employee.availability || [];
+  const pmScheduleEntries = employee.pmScheduleEntries || [];
 
   const availabilityMap = useMemo(() => {
     const map = {};
@@ -133,6 +167,19 @@ export const CalendarRow = memo(function CalendarRow({
               assignment={assignment}
               style={blockStyle}
               onClick={onAssignmentClick}
+            />
+          );
+        })}
+
+        {/* Read-only PM schedule entries (project work) as a bottom band */}
+        {pmScheduleEntries.map((entry) => {
+          const blockStyle = computePmBlockStyle(entry, days);
+          if (!blockStyle) return null;
+          return (
+            <CalendarPmScheduleBlock
+              key={`pm-${entry._id}`}
+              entry={entry}
+              style={blockStyle}
             />
           );
         })}

@@ -36,6 +36,76 @@ class ScheduleService {
     );
   }
 
+  /**
+   * Internal-team schedule entries within a date range, mapped into the item
+   * shape the Field Deployment (deploy) calendar renders. These are READ-ONLY
+   * in deploy: they are owned by PM, so they carry no assignment id and are
+   * flagged source: 'pm_schedule' so the UI styles/badges them distinctly and
+   * links to the owning project instead of opening the assignment editor.
+   *
+   * Returned item shape (per entry):
+   *   {
+   *     _id, source: 'pm_schedule', readOnly: true,
+   *     employeeId,            // responsibleTeamId (User) — the calendar row key
+   *     title,                 // "<entry name> · <projectNumber>"
+   *     startDatetime, endDatetime,  // PHASE span, or milestone single day
+   *     isFullDay: true,
+   *     status,                // PM entry status
+   *     entryType,             // PHASE | MILESTONE
+   *     projectId, projectNumber, projectName,  // for the deep-link / context
+   *     assignmentType: 'PROJECT_WORK',  // so existing type styling has a fallback
+   *   }
+   *
+   * @param {Date|string} from
+   * @param {Date|string} to
+   * @param {string[]} [userIds] optional restriction to these responsible users
+   */
+  async findInternalTeamEntriesInRange(from, to, userIds) {
+    const start = from instanceof Date ? from : new Date(from);
+    const end = to instanceof Date ? to : new Date(to);
+
+    const entries = await scheduleRepository.findInternalTeamEntriesInRange(start, end, userIds);
+
+    return entries.map((entry) => {
+      const isPhase = entry.entryType === 'PHASE';
+      const startDatetime = isPhase ? entry.startDate : entry.milestoneDate;
+      // Milestones are a single day; give them a same-day end so the calendar
+      // can position them as a zero/short-width full-day block.
+      const endDatetime = isPhase ? entry.endDate : entry.milestoneDate;
+
+      const project = entry.projectId && typeof entry.projectId === 'object' ? entry.projectId : null;
+      const projectId = project?._id || entry.projectId || null;
+      const projectNumber = project?.projectNumber || null;
+      const projectName = project?.name || null;
+
+      const employee = entry.responsibleTeamId && typeof entry.responsibleTeamId === 'object'
+        ? entry.responsibleTeamId
+        : null;
+      const employeeId = employee?._id || entry.responsibleTeamId || null;
+      const employeeName = employee?.firstName
+        ? `${employee.firstName} ${employee.lastName || ''}`.trim()
+        : null;
+
+      return {
+        _id: String(entry._id),
+        source: 'pm_schedule',
+        readOnly: true,
+        employeeId: employeeId ? String(employeeId) : null,
+        employeeName,
+        title: projectNumber ? `${entry.name} · ${projectNumber}` : entry.name,
+        startDatetime,
+        endDatetime,
+        isFullDay: true,
+        status: entry.status,
+        entryType: entry.entryType,
+        assignmentType: 'PROJECT_WORK',
+        projectId: projectId ? String(projectId) : null,
+        projectNumber,
+        projectName,
+      };
+    });
+  }
+
   /** Start/end (ms) for an entry. Milestones are a single day (zero-width). */
   _entryRange(entry) {
     if (entry.entryType === 'PHASE') {

@@ -62,6 +62,15 @@ export const ALLOCATION_PERCENT_COLORS = Object.freeze({
   100: { bg: 'bg-blue-800 dark:bg-blue-200', text: 'text-white dark:text-blue-900', label: '100%' },
 });
 
+// Read-only project work sourced from PM construction schedules
+// (responsibleType: INTERNAL_TEAM). Surfaced in the deploy calendar so
+// dispatchers see project work alongside deployments. Styled distinctly
+// (dashed border / project color) and links to the owning project.
+export const PM_SCHEDULE_META = Object.freeze({
+  PHASE: { label: 'Projektphase', calendarColor: '#0ea5e9' },
+  MILESTONE: { label: 'Meilenstein', calendarColor: '#6366f1' },
+});
+
 export const ASSIGNMENT_TYPES = Object.keys(ASSIGNMENT_TYPE_META);
 export const ASSIGNMENT_STATUSES = Object.keys(ASSIGNMENT_STATUS_META);
 export const PRIORITIES = Object.keys(PRIORITY_META);

@@ -40,6 +40,28 @@ class CalendarService {
           status,
         });
 
+        // Fetch PM construction-schedule entries whose responsibility is an
+        // INTERNAL TEAM (responsibleTeamId → User) intersecting this range, so
+        // dispatchers see project work alongside deployments. These are owned
+        // by PM and are READ-ONLY here (source: 'pm_schedule'); the deploy
+        // module never edits/deletes them — the UI deep-links to the project.
+        // Failure is non-fatal: the deploy calendar must still render.
+        let pmScheduleEntries = [];
+        try {
+          const scheduleService = (await import('../pm/schedule.service.js')).default;
+          pmScheduleEntries = await scheduleService.findInternalTeamEntriesInRange(
+            start,
+            end,
+            employeeIds,
+          );
+        } catch (err) {
+          logger.warn('Failed to load PM schedule entries for deploy calendar (non-blocking)', {
+            module: 'deploy',
+            action: 'calendar.pmScheduleMerge',
+            error: err.message,
+          });
+        }
+
         // Fetch availability
         let availability = [];
         if (employeeIds?.length) {
@@ -69,50 +91,48 @@ class CalendarService {
         // Group by employee
         const employeeMap = new Map();
 
-        for (const assignment of assignments) {
-          const empId = (assignment.employeeId?._id || assignment.employeeId).toString();
+        const ensureEmployee = (empId, name) => {
           if (!employeeMap.has(empId)) {
             employeeMap.set(empId, {
               employeeId: empId,
-              employeeName: assignment.employeeId?.firstName
-                ? `${assignment.employeeId.firstName} ${assignment.employeeId.lastName}`
-                : null,
+              employeeName: name || null,
               availability: [],
               assignments: [],
               coarseAllocations: [],
+              pmScheduleEntries: [],
             });
+          } else if (name && !employeeMap.get(empId).employeeName) {
+            employeeMap.get(empId).employeeName = name;
           }
-          employeeMap.get(empId).assignments.push(assignment);
+          return employeeMap.get(empId);
+        };
+
+        for (const assignment of assignments) {
+          const empId = (assignment.employeeId?._id || assignment.employeeId).toString();
+          const name = assignment.employeeId?.firstName
+            ? `${assignment.employeeId.firstName} ${assignment.employeeId.lastName}`
+            : null;
+          ensureEmployee(empId, name).assignments.push(assignment);
+        }
+
+        // Merge PM internal-team schedule entries into the same employee rows.
+        for (const pmEntry of pmScheduleEntries) {
+          if (!pmEntry.employeeId) continue;
+          const empId = pmEntry.employeeId.toString();
+          ensureEmployee(empId, pmEntry.employeeName).pmScheduleEntries.push(pmEntry);
         }
 
         for (const avail of availability) {
           const empId = (avail.employeeId?._id || avail.employeeId).toString();
-          if (!employeeMap.has(empId)) {
-            employeeMap.set(empId, {
-              employeeId: empId,
-              employeeName: null,
-              availability: [],
-              assignments: [],
-              coarseAllocations: [],
-            });
-          }
-          employeeMap.get(empId).availability.push(avail);
+          ensureEmployee(empId, null).availability.push(avail);
         }
 
         for (const alloc of coarseAllocations) {
           const empId = (alloc.employeeId?._id || alloc.employeeId).toString();
-          if (!employeeMap.has(empId)) {
-            employeeMap.set(empId, {
-              employeeId: empId,
-              employeeName: alloc.employeeId?.firstName
-                ? `${alloc.employeeId.firstName} ${alloc.employeeId.lastName}`
-                : null,
-              availability: [],
-              assignments: [],
-              coarseAllocations: [],
-            });
-          }
-          employeeMap.get(empId).coarseAllocations.push(alloc);
+          const name = alloc.employeeId?.firstName
+            ? `${alloc.employeeId.firstName} ${alloc.employeeId.lastName}`
+            : null;
+          ensureEmployee(empId, name).coarseAllocations.push(alloc);
         }
 
         return Array.from(employeeMap.values());

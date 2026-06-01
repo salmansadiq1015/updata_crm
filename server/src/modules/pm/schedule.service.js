@@ -15,7 +15,15 @@ class ScheduleService {
     const cacheKey = `pm:schedule:project:${projectId}`;
     return cacheManager.getOrSet(
       cacheKey,
-      () => scheduleRepository.findByProjectId(projectId),
+      async () => {
+        const entries = await scheduleRepository.findByProjectId(projectId);
+        return Promise.all(
+          entries.map(async (entry) => ({
+            ...entry,
+            confirmations: await scheduleRepository.findConfirmationsByEntry(entry._id),
+          })),
+        );
+      },
       ENTITY_TTL,
     );
   }
@@ -192,6 +200,8 @@ class ScheduleService {
       createdBy: userId,
     });
 
+    await this._invalidateCache(entry.projectId);
+
     // Enqueue email job
     await queueManager.addJob('auth-email', 'send-partner-confirmation', {
       email: data.partnerContactEmail,
@@ -244,6 +254,11 @@ class ScheduleService {
       responseAt: new Date(),
       responseNotes: data.responseNotes || null,
     });
+
+    const entry = await scheduleRepository.findById(existing.scheduleEntryId);
+    if (entry?.projectId) {
+      await this._invalidateCache(entry.projectId);
+    }
 
     eventBus.publish(EVENT_TYPES.PARTNER_CONFIRMATION_RESPONSE, {
       confirmationId,

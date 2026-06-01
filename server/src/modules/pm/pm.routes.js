@@ -20,6 +20,7 @@ import {
 import {
   listDocumentsSchema, uploadDocumentSchema, generateDocumentSchema,
   documentIdParamSchema, updateDocumentSchema, restoreDocumentSchema,
+  saveDraftSchema, emailDocumentSchema,
 } from './document.validation.js';
 
 /**
@@ -210,6 +211,20 @@ documentRouter.post(
   requirePermission('projects:write'),
   validate(generateDocumentSchema),
   (req, res, next) => documentController.generate(req, res, next),
+);
+documentRouter.post(
+  '/draft',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(saveDraftSchema),
+  (req, res, next) => documentController.saveDraft(req, res, next),
+);
+documentRouter.post(
+  '/:docId/email',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(emailDocumentSchema),
+  (req, res, next) => documentController.email(req, res, next),
 );
 documentRouter.get(
   '/:docId',

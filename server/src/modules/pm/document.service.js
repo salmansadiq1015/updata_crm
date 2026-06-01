@@ -264,7 +264,12 @@ class DocumentService {
     return this._enrichDocument(await documentRepository.findById(docId));
   }
 
-  async generate(projectId, templateType, userId, meta = {}) {
+  /**
+   * Build the templateData object that populates a PM document template from
+   * project data. Shared by generate() and the draft preview so the client can
+   * show exactly what will be rendered before finalizing (PROJ-005 AC-4).
+   */
+  async buildTemplateData(projectId) {
     const Project = (await import('./project.model.js')).default;
     const project = await Project.findById(projectId)
       .populate('customerId', 'name customerNumber street postalCode city canton')
@@ -284,7 +289,7 @@ class DocumentService {
       status: e.status,
     }));
 
-    const templateData = {
+    return {
       documentNumber: project.projectNumber,
       documentDate: new Date().toISOString().split('T')[0],
       customer: project.customerId ? {
@@ -310,6 +315,26 @@ class DocumentService {
       plannedStartDate: project.plannedStartDate?.toISOString().split('T')[0],
       plannedEndDate: project.plannedEndDate?.toISOString().split('T')[0],
     };
+  }
+
+  /**
+   * Generate a finalized PDF document from a PM template (PROJ-005 AC-1,2,3).
+   *
+   * @param {string} projectId
+   * @param {string} templateType
+   * @param {string} userId
+   * @param {object} [meta]
+   * @param {object} [overrides] - Optional fields shallow-merged over the computed
+   *   templateData (e.g. custom intro/body/notes, recipient name). Backward
+   *   compatible — defaults to {} so existing callers keep working (AC-4).
+   * @param {string|null} [draftId] - When finalizing an existing draft, the draft
+   *   row is replaced by the generated document (AF-2 → finalize).
+   */
+  async generate(projectId, templateType, userId, meta = {}, overrides = {}, draftId = null) {
+    const baseData = await this.buildTemplateData(projectId);
+    // Shallow-merge overrides over computed templateData (AC-4).
+    const safeOverrides = overrides && typeof overrides === 'object' ? overrides : {};
+    const templateData = { ...baseData, ...safeOverrides };
 
     const documentGenerationService = (await import('../doctpl/documentGeneration.service.js')).default;
     const generatedDoc = await documentGenerationService.generate({
@@ -322,14 +347,32 @@ class DocumentService {
       meta,
     });
 
-    const doc = await documentRepository.create({
-      projectId,
-      fileId: generatedDoc.fileId,
-      fileName: generatedDoc.fileName,
-      category: 'REPORTS',
-      isGenerated: true,
-      uploadedBy: userId,
-    });
+    let doc;
+    if (draftId) {
+      // Finalize an existing draft in place: attach the generated file, flip to FINAL.
+      doc = await documentRepository.updateById(draftId, {
+        fileId: generatedDoc.fileId,
+        fileName: generatedDoc.fileName,
+        category: 'REPORTS',
+        isGenerated: true,
+        status: 'FINAL',
+        templateType,
+        overrides: safeOverrides,
+      });
+      if (!doc) throw new NotFoundError('ProjectDocument', draftId);
+    } else {
+      doc = await documentRepository.create({
+        projectId,
+        fileId: generatedDoc.fileId,
+        fileName: generatedDoc.fileName,
+        category: 'REPORTS',
+        isGenerated: true,
+        status: 'FINAL',
+        templateType,
+        overrides: safeOverrides,
+        uploadedBy: userId,
+      });
+    }
 
     await this._invalidateCache(projectId);
 
@@ -359,6 +402,118 @@ class DocumentService {
     });
 
     return this._enrichDocument(await documentRepository.findById(doc._id));
+  }
+
+  /**
+   * Save an in-progress generated document as a DRAFT without producing a PDF
+   * (PROJ-005 AF-2). Captures templateType + overrides so the user can reopen and
+   * finalize it later. Creates a new draft, or updates an existing one when
+   * draftId is supplied. No file is attached (fileId stays null).
+   */
+  async saveDraft(projectId, { templateType, overrides = {}, draftId = null }, userId, meta = {}) {
+    const Project = (await import('./project.model.js')).default;
+    const project = await Project.findById(projectId).select('_id projectNumber').lean();
+    if (!project) throw new NotFoundError('Project', projectId);
+
+    const safeOverrides = overrides && typeof overrides === 'object' ? overrides : {};
+    const fileName = `Entwurf_${templateType}_${project.projectNumber || projectId}.pdf`;
+
+    let doc;
+    if (draftId) {
+      doc = await documentRepository.updateById(draftId, {
+        templateType,
+        overrides: safeOverrides,
+        fileName,
+      });
+      if (!doc) throw new NotFoundError('ProjectDocument', draftId);
+    } else {
+      doc = await documentRepository.create({
+        projectId,
+        fileId: null,
+        fileName,
+        category: 'REPORTS',
+        isGenerated: true,
+        status: 'DRAFT',
+        templateType,
+        overrides: safeOverrides,
+        uploadedBy: userId,
+      });
+    }
+
+    await this._invalidateCache(projectId);
+
+    auditService.logEvent({
+      eventType: 'project_document.draft_saved',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: doc._id, projectId, templateType },
+      module: 'pm',
+    });
+
+    logger.info('Project document draft saved', {
+      module: 'pm',
+      action: 'saveDraft',
+      documentId: doc._id,
+      projectId,
+      templateType,
+    });
+
+    return this._enrichDocument(await documentRepository.findById(doc._id));
+  }
+
+  /**
+   * Email a generated document to a recipient as a PDF attachment (PROJ-005 AC-5).
+   * Loads the stored PDF buffer via the file service and reuses the shared mail
+   * pipeline (sendProjectDocumentEmail).
+   */
+  async emailDocument(documentId, { to, message } = {}, userId, meta = {}) {
+    const doc = await documentRepository.findById(documentId);
+    if (!doc) throw new NotFoundError('ProjectDocument', documentId);
+    if (!doc.fileId) {
+      const { ConflictError } = await import('../../shared/errors/AppError.js');
+      throw new ConflictError('Cannot email a draft document — generate it first');
+    }
+
+    const fileService = (await import('../files/file.service.js')).default;
+    const fileMeta = await fileService.getById(doc.fileId);
+    if (!fileMeta) throw new NotFoundError('File', doc.fileId);
+    const content = await fileService.downloadBuffer(fileMeta.key);
+
+    const Project = (await import('./project.model.js')).default;
+    const project = await Project.findById(doc.projectId).select('name projectNumber').lean();
+
+    const { sendProjectDocumentEmail } = await import('../../shared/mail/mail.js');
+    const info = await sendProjectDocumentEmail(to, {
+      projectName: project?.name || '',
+      projectNumber: project?.projectNumber || '',
+      fileName: doc.originalName || doc.fileName,
+      message: message || '',
+    }, {
+      filename: doc.originalName || doc.fileName,
+      content,
+      contentType: fileMeta.mimeType || 'application/pdf',
+    });
+
+    auditService.logEvent({
+      eventType: 'project_document.emailed',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId, projectId: doc.projectId, to },
+      module: 'pm',
+    });
+
+    logger.info('Project document emailed', {
+      module: 'pm',
+      action: 'emailDocument',
+      documentId,
+      to,
+    });
+
+    return { sent: true, messageId: info?.messageId || null, to };
   }
 
   async _invalidateCache(projectId) {

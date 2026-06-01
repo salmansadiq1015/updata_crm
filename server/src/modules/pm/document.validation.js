@@ -21,10 +21,44 @@ export const uploadDocumentSchema = {
   }),
 };
 
+// Overridable subset the client edit-step may send (shallow-merged over computed
+// templateData). Kept permissive but bounded; unknown keys are stripped.
+const overridesSchema = Joi.object({
+  documentDate: Joi.string().trim().max(40),
+  projectName: Joi.string().trim().max(300),
+  projectManager: Joi.string().trim().max(200),
+  pmEmail: Joi.string().trim().max(200).allow('', null),
+  pmPhone: Joi.string().trim().max(60).allow('', null),
+  description: Joi.string().max(5000).allow('', null),
+  recipientName: Joi.string().trim().max(200).allow('', null),
+  intro: Joi.string().max(5000).allow('', null),
+  body: Joi.string().max(20000).allow('', null),
+  notes: Joi.string().max(5000).allow('', null),
+}).default({});
+
 export const generateDocumentSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     templateType: Joi.string().required().trim().max(100),
+    overrides: overridesSchema,
+    draftId: objectId.allow(null),
+  }),
+};
+
+export const saveDraftSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    templateType: Joi.string().required().trim().max(100),
+    overrides: overridesSchema,
+    draftId: objectId.allow(null),
+  }),
+};
+
+export const emailDocumentSchema = {
+  params: Joi.object({ id: objectId.required(), docId: objectId.required() }),
+  body: Joi.object({
+    to: Joi.string().email().required(),
+    message: Joi.string().max(2000).allow('', null),
   }),
 };
 

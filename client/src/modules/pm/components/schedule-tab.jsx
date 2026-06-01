@@ -28,13 +28,187 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/formatters';
+import { useDebounce } from '@/shared/hooks/use-debounce';
+import { ENDPOINTS } from '@/lib/api/endpoints';
+import apiClient from '@/lib/api/client';
+import { customerService } from '@/modules/crm/services/customer-service';
 import {
   Plus, Pencil, Trash2, Loader2, ArrowRight, Milestone,
   Send, MessageSquare, Calendar, Users, Building2,
   List, BarChart3, ChevronDown, ChevronRight, Clock, Download,
+  User, Check, AlertTriangle,
 } from 'lucide-react';
+
+// ── Form pickers (mirror project-filter-bar.jsx patterns) ───────
+
+/** Internal-team picker backed by the users list endpoint. */
+function InternalUserPicker({ value, onChange, language }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
+
+  const { data: usersData } = useQuery({
+    queryKey: queryKeys.users.list({ status: 'active', limit: 100, q: debouncedSearch }),
+    queryFn: async () => {
+      const res = await apiClient.get(ENDPOINTS.USERS.LIST, {
+        params: { status: 'active', limit: 100, ...(debouncedSearch ? { search: debouncedSearch } : {}) },
+      });
+      return res.data;
+    },
+  });
+  const users = Array.isArray(usersData) ? usersData : [];
+  const selected = users.find((u) => u._id === value) || null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 h-9 rounded-md border border-input bg-background px-3 text-sm text-left transition-colors hover:bg-accent/40"
+        >
+          <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">
+            {selected ? `${selected.firstName} ${selected.lastName}` : (language === 'de' ? 'Mitarbeiter wählen' : 'Select team member')}
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 shadow-lg" align="start">
+        <div className="px-2 pt-2 pb-1.5 border-b">
+          <Input
+            placeholder={language === 'de' ? 'Suchen...' : 'Search...'}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-xs"
+            autoFocus
+          />
+        </div>
+        <div className="max-h-52 overflow-y-auto py-1">
+          <button
+            type="button"
+            className={cn('w-full flex items-center gap-2 px-2.5 py-2 text-xs hover:bg-accent', !value && 'bg-accent/50')}
+            onClick={() => { onChange(null); setOpen(false); setSearch(''); }}
+          >
+            <span className="h-5 w-5 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center shrink-0">
+              <User className="h-3 w-3 text-muted-foreground/60" />
+            </span>
+            <span className="text-muted-foreground">{language === 'de' ? 'Keine' : 'None'}</span>
+            {!value && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
+          </button>
+          {users.map((u) => (
+            <button
+              type="button"
+              key={u._id}
+              className={cn('w-full flex items-center gap-2 px-2.5 py-2 text-xs hover:bg-accent', u._id === value && 'bg-accent/50')}
+              onClick={() => { onChange(u._id); setOpen(false); setSearch(''); }}
+            >
+              <span className="h-5 w-5 rounded-full bg-primary/15 text-primary text-[9px] font-semibold flex items-center justify-center shrink-0">
+                {u.firstName?.[0]}{u.lastName?.[0]}
+              </span>
+              <span className="truncate">{u.firstName} {u.lastName}</span>
+              {u._id === value && <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />}
+            </button>
+          ))}
+          {users.length === 0 && (
+            <p className="px-3 py-3 text-xs text-muted-foreground text-center">
+              {language === 'de' ? 'Keine Nutzer gefunden' : 'No users found'}
+            </p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Partner-company picker — reuses customerService.searchCustomers. */
+function PartnerCompanyPicker({ value, onChange, language }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
+
+  const { data: customers = [] } = useQuery({
+    queryKey: queryKeys.crm.customers.search(debouncedSearch),
+    queryFn: () => customerService.searchCustomers(debouncedSearch, 20),
+    enabled: debouncedSearch.length >= 2,
+  });
+
+  const { data: selectedCustomerData } = useQuery({
+    queryKey: ['customerName', value],
+    queryFn: async () => {
+      if (!value) return null;
+      const res = await apiClient.get(`/crm/customers/${value}`);
+      return res.data;
+    },
+    enabled: !!value,
+    staleTime: 60000,
+  });
+
+  const displayName = customers.find((c) => c._id === value)?.name || selectedCustomerData?.name || null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 h-9 rounded-md border border-input bg-background px-3 text-sm text-left transition-colors hover:bg-accent/40"
+        >
+          <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">
+            {displayName ?? (language === 'de' ? 'Partnerfirma wählen' : 'Select partner company')}
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 shadow-lg" align="start">
+        <div className="px-2 pt-2 pb-1.5 border-b">
+          <Input
+            placeholder={language === 'de' ? 'Firma suchen...' : 'Search company...'}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-xs"
+            autoFocus
+          />
+        </div>
+        <div className="max-h-52 overflow-y-auto py-1">
+          <button
+            type="button"
+            className={cn('w-full flex items-center gap-2 px-2.5 py-2 text-xs hover:bg-accent', !value && 'bg-accent/50')}
+            onClick={() => { onChange(null); setOpen(false); setSearch(''); }}
+          >
+            <span className="h-5 w-5 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center shrink-0">
+              <Building2 className="h-3 w-3 text-muted-foreground/60" />
+            </span>
+            <span className="text-muted-foreground">{language === 'de' ? 'Keine' : 'None'}</span>
+            {!value && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
+          </button>
+          {customers.map((c) => (
+            <button
+              type="button"
+              key={c._id}
+              className={cn('w-full flex items-center gap-2 px-2.5 py-2 text-xs hover:bg-accent', c._id === value && 'bg-accent/50')}
+              onClick={() => { onChange(c._id); setOpen(false); setSearch(''); }}
+            >
+              <Building2 className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+              <span className="truncate">{c.name}</span>
+              {c._id === value && <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />}
+            </button>
+          ))}
+          {debouncedSearch.length < 2 && customers.length === 0 && (
+            <p className="px-3 py-3 text-xs text-muted-foreground text-center">
+              {language === 'de' ? 'Mind. 2 Zeichen eingeben' : 'Type at least 2 characters'}
+            </p>
+          )}
+          {debouncedSearch.length >= 2 && customers.length === 0 && (
+            <p className="px-3 py-3 text-xs text-muted-foreground text-center">
+              {language === 'de' ? 'Keine Firmen gefunden' : 'No companies found'}
+            </p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // ── Timeline visualization ──────────────────────────────────────
 
@@ -257,7 +431,7 @@ export function ScheduleTab({ projectId }) {
   // ── Entry form ──────────────────────────────────────────────
 
   const isEdit = !!editEntry;
-  const defaultEntryValues = { name: '', entryType: 'PHASE', startDate: '', endDate: '', milestoneDate: '', responsibleType: 'INTERNAL_TEAM', notes: '', sortOrder: 0 };
+  const defaultEntryValues = { name: '', entryType: 'PHASE', startDate: '', endDate: '', milestoneDate: '', responsibleType: 'INTERNAL_TEAM', responsibleTeamId: null, partnerCompanyId: null, predecessorId: null, notes: '', sortOrder: 0 };
 
   const entryForm = useForm({
     resolver: zodResolver(isEdit ? updateEntrySchema : createEntrySchema),
@@ -265,6 +439,12 @@ export function ScheduleTab({ projectId }) {
   });
 
   const watchEntryType = entryForm.watch('entryType');
+
+  // Predecessor options: project's other entries (exclude self to avoid a self-reference).
+  const predecessorOptions = useMemo(
+    () => entries.filter((e) => !editEntry || e._id !== editEntry._id),
+    [entries, editEntry],
+  );
 
   const openCreateEntry = () => {
     setEditEntry(null);
@@ -281,6 +461,9 @@ export function ScheduleTab({ projectId }) {
       endDate: entry.endDate ? new Date(entry.endDate).toISOString().split('T')[0] : '',
       milestoneDate: entry.milestoneDate ? new Date(entry.milestoneDate).toISOString().split('T')[0] : '',
       responsibleType: entry.responsibleType || 'INTERNAL_TEAM',
+      responsibleTeamId: entry.responsibleTeamId || null,
+      partnerCompanyId: entry.partnerCompanyId || null,
+      predecessorId: entry.predecessorId || null,
       status: entry.status,
       notes: entry.notes || '',
       sortOrder: entry.sortOrder ?? 0,
@@ -294,6 +477,10 @@ export function ScheduleTab({ projectId }) {
     else { delete cleaned.startDate; delete cleaned.endDate; }
     if (!cleaned.notes) delete cleaned.notes;
 
+    // Keep only the responsible-party id matching the selected type.
+    if (cleaned.responsibleType === 'INTERNAL_TEAM') cleaned.partnerCompanyId = null;
+    else if (cleaned.responsibleType === 'PARTNER_COMPANY') cleaned.responsibleTeamId = null;
+
     if (isEdit) {
       updateEntry.mutate({ entryId: editEntry._id, data: cleaned });
     } else {
@@ -303,6 +490,8 @@ export function ScheduleTab({ projectId }) {
 
   // ── Send confirmation form ─────────────────────────────────
 
+  const [shortNotice, setShortNotice] = useState(null); // { businessDays, leadDays } when under lead-time
+
   const sendForm = useForm({
     resolver: zodResolver(sendConfirmationSchema),
     defaultValues: { partnerContactEmail: '', partnerCompanyId: '', partnerName: '' },
@@ -310,6 +499,7 @@ export function ScheduleTab({ projectId }) {
 
   const openSendConfirmation = (entry) => {
     setConfirmSendEntry(entry);
+    setShortNotice(null);
     sendForm.reset({
       partnerContactEmail: '',
       partnerCompanyId: entry.partnerCompanyId || '',
@@ -318,8 +508,18 @@ export function ScheduleTab({ projectId }) {
     setConfirmSendOpen(true);
   };
 
-  const onSendConfirmationSubmit = (data) => {
-    sendConfirmation.mutate({ entryId: confirmSendEntry._id, data });
+  const onSendConfirmationSubmit = (data, acknowledge = false) => {
+    sendConfirmation.mutate(
+      { entryId: confirmSendEntry._id, data: { ...data, ...(acknowledge ? { acknowledgeShortNotice: true } : {}) } },
+      {
+        onError: (err) => {
+          // Soft warning from the server: under lead-time and not acknowledged.
+          if (err?.data?.shortNotice) {
+            setShortNotice({ businessDays: err.data.businessDays, leadDays: err.data.leadDays });
+          }
+        },
+      },
+    );
   };
 
   // ── Update confirmation response ───────────────────────────
@@ -478,7 +678,15 @@ export function ScheduleTab({ projectId }) {
                   </Select>
                 </FormField>
                 <FormField label={language === 'de' ? 'Verantwortlich' : 'Responsible'}>
-                  <Select value={entryForm.watch('responsibleType')} onValueChange={(v) => entryForm.setValue('responsibleType', v)}>
+                  <Select
+                    value={entryForm.watch('responsibleType')}
+                    onValueChange={(v) => {
+                      entryForm.setValue('responsibleType', v);
+                      // Reset the opposite party's id when switching type.
+                      if (v === 'INTERNAL_TEAM') entryForm.setValue('partnerCompanyId', null);
+                      else entryForm.setValue('responsibleTeamId', null);
+                    }}
+                  >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Object.entries(RESPONSIBLE_TYPE_CONFIG).map(([key, cfg]) => (
@@ -488,6 +696,23 @@ export function ScheduleTab({ projectId }) {
                   </Select>
                 </FormField>
               </div>
+
+              {/* Responsible-party picker (internal team member or partner company) */}
+              <Controller
+                name={entryForm.watch('responsibleType') === 'PARTNER_COMPANY' ? 'partnerCompanyId' : 'responsibleTeamId'}
+                control={entryForm.control}
+                render={({ field }) => (
+                  <FormField label={entryForm.watch('responsibleType') === 'PARTNER_COMPANY'
+                    ? (language === 'de' ? 'Partnerfirma' : 'Partner Company')
+                    : (language === 'de' ? 'Teammitglied' : 'Team Member')}>
+                    {entryForm.watch('responsibleType') === 'PARTNER_COMPANY' ? (
+                      <PartnerCompanyPicker value={field.value || null} onChange={field.onChange} language={language} />
+                    ) : (
+                      <InternalUserPicker value={field.value || null} onChange={field.onChange} language={language} />
+                    )}
+                  </FormField>
+                )}
+              />
 
               <FormField label={language === 'de' ? 'Name' : 'Name'} required error={entryForm.formState.errors.name?.message}>
                 <Input {...entryForm.register('name')} placeholder={language === 'de' ? 'z.B. Rohbauphase' : 'e.g. Foundation Phase'} />
@@ -507,6 +732,22 @@ export function ScheduleTab({ projectId }) {
                   <Input type="date" {...entryForm.register('milestoneDate')} />
                 </FormField>
               )}
+
+              {/* Predecessor: other entries in this project (cascades on date move) */}
+              <FormField label={language === 'de' ? 'Vorgänger' : 'Predecessor'}>
+                <Select
+                  value={entryForm.watch('predecessorId') || 'none'}
+                  onValueChange={(v) => entryForm.setValue('predecessorId', v === 'none' ? null : v)}
+                >
+                  <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Kein Vorgänger' : 'No predecessor'} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{language === 'de' ? 'Kein Vorgänger' : 'No predecessor'}</SelectItem>
+                    {predecessorOptions.map((e) => (
+                      <SelectItem key={e._id} value={e._id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
 
               {isEdit && (
                 <FormField label={t('pm.status', 'Status')}>
@@ -556,7 +797,7 @@ export function ScheduleTab({ projectId }) {
       </Dialog>
 
       {/* ── Send confirmation dialog ───────────────────────── */}
-      <Dialog open={confirmSendOpen} onOpenChange={(v) => { if (!v) { setConfirmSendOpen(false); setConfirmSendEntry(null); } else setConfirmSendOpen(v); }}>
+      <Dialog open={confirmSendOpen} onOpenChange={(v) => { if (!v) { setConfirmSendOpen(false); setConfirmSendEntry(null); setShortNotice(null); } else setConfirmSendOpen(v); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -564,7 +805,7 @@ export function ScheduleTab({ projectId }) {
               {t('pm.sendConfirmation', 'Send Confirmation')}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={sendForm.handleSubmit(onSendConfirmationSubmit)} className="flex flex-1 flex-col overflow-hidden">
+          <form onSubmit={sendForm.handleSubmit((data) => onSendConfirmationSubmit(data, false))} className="flex flex-1 flex-col overflow-hidden">
             <FormBody>
               {confirmSendEntry && (
                 <div className="rounded-xl bg-muted/50 border border-border/50 p-3.5 text-sm">
@@ -585,13 +826,45 @@ export function ScheduleTab({ projectId }) {
                 <Input {...sendForm.register('partnerName')} />
               </FormField>
 
-              <FormField label={language === 'de' ? 'Partner-ID' : 'Partner Company ID'} required error={sendForm.formState.errors.partnerCompanyId?.message}>
-                <Input {...sendForm.register('partnerCompanyId')} placeholder="ObjectId" />
-              </FormField>
+              <Controller
+                name="partnerCompanyId"
+                control={sendForm.control}
+                render={({ field }) => (
+                  <FormField label={language === 'de' ? 'Partnerfirma' : 'Partner Company'} required error={sendForm.formState.errors.partnerCompanyId?.message}>
+                    <PartnerCompanyPicker value={field.value || null} onChange={(v) => field.onChange(v || '')} language={language} />
+                  </FormField>
+                )}
+              />
+
+              {shortNotice && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-sm">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div className="space-y-2">
+                      <p className="text-amber-800 dark:text-amber-300">
+                        {language === 'de'
+                          ? `Nur ${shortNotice.businessDays} Arbeitstage bis zum Termin (empfohlen: mind. ${shortNotice.leadDays}). Trotzdem senden?`
+                          : `Only ${shortNotice.businessDays} business days until the scheduled date (recommended minimum ${shortNotice.leadDays}). Send anyway?`}
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-amber-400 text-amber-800 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                        disabled={sendConfirmation.isPending}
+                        onClick={() => onSendConfirmationSubmit(sendForm.getValues(), true)}
+                      >
+                        {sendConfirmation.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                        {language === 'de' ? 'Trotzdem senden' : 'Send anyway'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </FormBody>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setConfirmSendOpen(false); setConfirmSendEntry(null); }}>
+              <Button type="button" variant="outline" onClick={() => { setConfirmSendOpen(false); setConfirmSendEntry(null); setShortNotice(null); }}>
                 {t('common.cancel', 'Cancel')}
               </Button>
               <Button type="submit" disabled={sendConfirmation.isPending}>

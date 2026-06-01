@@ -67,13 +67,23 @@ jest.unstable_mockModule('../../../shared/events/eventTypes.js', () => ({
 }));
 
 // Mock queueManager
+const mockAddJob = jest.fn();
 jest.unstable_mockModule('../../../shared/queue/QueueManager.js', () => ({
-  default: { addJob: jest.fn() },
+  default: { addJob: mockAddJob },
+}));
+
+// Mock project.model.js (dynamically imported inside sendConfirmation)
+jest.unstable_mockModule('../project.model.js', () => ({
+  default: {
+    findById: jest.fn(() => ({
+      select: () => ({ lean: async () => ({ name: 'Proj', projectNumber: 'P-1' }) }),
+    })),
+  },
 }));
 
 // Mock config
 jest.unstable_mockModule('../../../config/index.js', () => ({
-  default: { redis: { keyPrefix: 'test:' } },
+  default: { redis: { keyPrefix: 'test:' }, pm: { scheduleConfirmationLeadDays: 5 } },
 }));
 
 // Mock logger
@@ -130,5 +140,72 @@ describe('getSchedule', () => {
     const result = await scheduleService.getSchedule('proj-empty');
 
     expect(result).toEqual([]);
+  });
+});
+
+describe('sendConfirmation — configurable lead-time soft warning', () => {
+  const daysFromNow = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return d;
+  };
+
+  const sendData = {
+    partnerCompanyId: 'partner-1',
+    partnerContactEmail: 'p@example.com',
+    partnerName: 'Partner',
+  };
+
+  it('throws a shortNotice ConflictError when under the lead-time and not acknowledged', async () => {
+    // Milestone tomorrow → ~1 business day, well under the 5-day lead time.
+    mockFindById.mockResolvedValue({
+      _id: 'entry-1', projectId: 'proj-1', entryType: 'MILESTONE',
+      milestoneDate: daysFromNow(1), name: 'Kickoff',
+    });
+
+    await expect(
+      scheduleService.sendConfirmation('entry-1', sendData, 'user-1'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      data: { shortNotice: true, leadDays: 5 },
+    });
+
+    // Must not enqueue an email or create a confirmation when blocked.
+    expect(mockAddJob).not.toHaveBeenCalled();
+    expect(mockCreateConfirmation).not.toHaveBeenCalled();
+  });
+
+  it('sends (enqueues email) when under the lead-time but acknowledged', async () => {
+    mockFindById.mockResolvedValue({
+      _id: 'entry-1', projectId: 'proj-1', entryType: 'MILESTONE',
+      milestoneDate: daysFromNow(1), name: 'Kickoff',
+    });
+    mockCreateConfirmation.mockResolvedValue({ _id: 'conf-1' });
+
+    const result = await scheduleService.sendConfirmation(
+      'entry-1', { ...sendData, acknowledgeShortNotice: true }, 'user-1',
+    );
+
+    expect(result).toMatchObject({ _id: 'conf-1' });
+    expect(mockCreateConfirmation).toHaveBeenCalledTimes(1);
+    expect(mockAddJob).toHaveBeenCalledTimes(1);
+    expect(mockAddJob).toHaveBeenCalledWith(
+      'auth-email', 'send-partner-confirmation', expect.objectContaining({ email: 'p@example.com' }),
+    );
+  });
+
+  it('sends without acknowledgment when over the lead-time threshold', async () => {
+    // Milestone ~30 calendar days out → comfortably over 5 business days.
+    mockFindById.mockResolvedValue({
+      _id: 'entry-2', projectId: 'proj-1', entryType: 'MILESTONE',
+      milestoneDate: daysFromNow(30), name: 'Handover',
+    });
+    mockCreateConfirmation.mockResolvedValue({ _id: 'conf-2' });
+
+    const result = await scheduleService.sendConfirmation('entry-2', sendData, 'user-1');
+
+    expect(result).toMatchObject({ _id: 'conf-2' });
+    expect(mockCreateConfirmation).toHaveBeenCalledTimes(1);
+    expect(mockAddJob).toHaveBeenCalledTimes(1);
   });
 });

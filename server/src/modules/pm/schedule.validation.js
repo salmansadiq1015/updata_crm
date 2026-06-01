@@ -60,6 +60,7 @@ export const sendConfirmationSchema = {
     partnerName: Joi.string().max(255).allow(null, ''),
     siteAddress: Joi.string().max(500).allow(null, ''),
     contactPerson: Joi.string().max(255).allow(null, ''),
+    acknowledgeShortNotice: Joi.boolean().default(false),
   }),
 };
 

@@ -4,7 +4,7 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
-import { NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
+import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
@@ -188,13 +188,17 @@ class ScheduleService {
     const Project = (await import('./project.model.js')).default;
     const project = entry.projectId ? await Project.findById(entry.projectId).select('name projectNumber').lean() : null;
 
+    const leadDays = config.pm.scheduleConfirmationLeadDays;
     const targetDate = entry.entryType === 'PHASE' ? entry.startDate : entry.milestoneDate;
     if (targetDate) {
       const businessDays = this._getBusinessDaysUntil(targetDate);
-      if (businessDays < 5) {
-        throw new ValidationError(
-          'Confirmation must be sent at least 5 business days before the scheduled date',
-          [{ field: 'scheduledDate', message: `Only ${businessDays} business days until the scheduled date (minimum 5 required)` }],
+      // Soft warning: under the lead-time, allow sending only when the caller
+      // has acknowledged the short notice. Otherwise raise a distinguishable
+      // ConflictError carrying a flag so the client can re-confirm "send anyway".
+      if (businessDays < leadDays && data.acknowledgeShortNotice !== true) {
+        throw new ConflictError(
+          `Only ${businessDays} business days until the scheduled date (recommended minimum ${leadDays})`,
+          { shortNotice: true, businessDays, leadDays },
         );
       }
     }

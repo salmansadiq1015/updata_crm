@@ -5,6 +5,8 @@ import {
   sendWelcomeEmail,
   sendActivationEmail,
   sendPasswordChangedEmail,
+  sendProjectStatusNotification,
+  sendPartnerConfirmationEmail,
 } from '../shared/mail/mail.js';
 import logger from '../shared/logger/index.js';
 
@@ -51,6 +53,51 @@ async function loadInvoicePdfAttachment(invoice) {
     content,
     contentType: document.mimeType || 'application/pdf',
   };
+}
+
+async function sendStatusNotificationJob(data) {
+  const Project = (await import('../modules/pm/project.model.js')).default;
+  const project = await Project.findById(data.projectId)
+    .select('name projectNumber projectManagerId')
+    .lean();
+  if (!project) return { skipped: true, reason: 'project_not_found' };
+  if (!project.projectManagerId || String(project.projectManagerId) === String(data.changedBy)) {
+    return { skipped: true, reason: 'no_distinct_recipient' };
+  }
+  const User = (await import('../modules/auth/user.model.js')).default;
+  const pm = await User.findById(project.projectManagerId).select('email firstName lastName').lean();
+  if (!pm?.email) return { skipped: true, reason: 'no_recipient_email' };
+  const actor = data.changedBy
+    ? await User.findById(data.changedBy).select('firstName lastName').lean()
+    : null;
+  await sendProjectStatusNotification(pm.email, {
+    recipientName: [pm.firstName, pm.lastName].filter(Boolean).join(' ') || pm.email,
+    projectName: project.name,
+    projectNumber: project.projectNumber,
+    fromStatus: data.fromStatus,
+    toStatus: data.toStatus,
+    changedBy: actor ? [actor.firstName, actor.lastName].filter(Boolean).join(' ') : '',
+    comment: data.comment || '',
+    projectUrl: '',
+  });
+  return { sent: true, jobType: 'send-status-notification', email: pm.email };
+}
+
+async function sendPartnerConfirmationJob(data) {
+  if (!data.email) return { skipped: true, reason: 'no_recipient_email' };
+  await sendPartnerConfirmationEmail(data.email, {
+    partnerName: data.partnerName,
+    projectName: data.projectName,
+    projectNumber: data.projectNumber,
+    entryName: data.entryName,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    siteAddress: data.siteAddress,
+    contactPerson: data.contactPerson,
+    notes: data.notes,
+    confirmationUrl: '',
+  });
+  return { sent: true, jobType: 'send-partner-confirmation', email: data.email };
 }
 
 async function sendInvoiceJob(data) {
@@ -114,6 +161,12 @@ export class AuthEmailWorker extends BaseWorker {
 
       case 'send-invoice':
         return sendInvoiceJob(data);
+
+      case 'send-status-notification':
+        return sendStatusNotificationJob(data);
+
+      case 'send-partner-confirmation':
+        return sendPartnerConfirmationJob(data);
 
       default:
         logger.warn('Unknown auth email job type', {

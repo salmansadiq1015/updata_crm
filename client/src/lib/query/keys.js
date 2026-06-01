@@ -89,7 +89,7 @@ export const queryKeys = {
       byEntry: (projectId, entryId) => ['pm', 'confirmations', projectId, entryId],
     },
     documents: {
-      byProject: (projectId, category) => ['pm', 'documents', projectId, category],
+      byProject: (projectId, category, filters) => ['pm', 'documents', projectId, category, filters ?? null],
     },
   },
   crm: {

@@ -321,6 +321,8 @@ export function DocumentsTab({ projectId }) {
 
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [editDoc, setEditDoc] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploadCategory, setUploadCategory] = useState('OTHER');
@@ -331,11 +333,18 @@ export function DocumentsTab({ projectId }) {
   const params = useMemo(() => {
     const p = {};
     if (categoryFilter !== 'ALL') p.category = categoryFilter;
+    if (dateFrom) p.startDate = new Date(dateFrom).toISOString();
+    if (dateTo) {
+      // Include the whole end day (server compares with $lte on createdAt).
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      p.endDate = end.toISOString();
+    }
     return p;
-  }, [categoryFilter]);
+  }, [categoryFilter, dateFrom, dateTo]);
 
   const { data: docData, isLoading } = useQuery({
-    queryKey: queryKeys.pm.documents.byProject(projectId, categoryFilter),
+    queryKey: queryKeys.pm.documents.byProject(projectId, categoryFilter, { dateFrom, dateTo }),
     queryFn: () => documentService.getDocuments(projectId, params),
     enabled: !!projectId,
   });
@@ -474,6 +483,39 @@ export function DocumentsTab({ projectId }) {
             ))}
           </SelectContent>
         </Select>
+
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="date"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="h-9 w-[140px] text-xs"
+            title={language === 'de' ? 'Von' : 'From'}
+            aria-label={language === 'de' ? 'Von Datum' : 'From date'}
+          />
+          <span className="text-muted-foreground text-xs">–</span>
+          <Input
+            type="date"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="h-9 w-[140px] text-xs"
+            title={language === 'de' ? 'Bis' : 'To'}
+            aria-label={language === 'de' ? 'Bis Datum' : 'To date'}
+          />
+          {(dateFrom || dateTo) && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-md"
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              title={language === 'de' ? 'Datumsfilter zuruecksetzen' : 'Clear date filter'}
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
 
         <div className="flex items-center gap-0.5 ml-auto bg-muted/50 rounded-lg p-0.5 border border-border/40">
           <Button

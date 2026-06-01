@@ -103,7 +103,7 @@ describe('ProjectArchiveWorker', () => {
   });
 
   describe('when a project was completed BEFORE the cutoff (eligible)', () => {
-    it('calls transitionStatus with ARCHIVED, override=true, and systemUserId', async () => {
+    it('calls transitionStatus with ARCHIVED, a retention comment, and systemUserId', async () => {
       const now = Date.now();
       const retentionDays = 90;
       // Completed 100 days ago — beyond the 90-day retention window
@@ -127,8 +127,7 @@ describe('ProjectArchiveWorker', () => {
         { toString: expect.any(Function) }, // project._id object
         'ARCHIVED',
         {
-          override: true,
-          overrideReason: 'Auto-archived after retention period',
+          comment: 'Auto-archived after retention period',
         },
         expect.objectContaining({ _val: '000000000000000000000000' }), // SYSTEM_USER_ID
       );
@@ -191,7 +190,7 @@ describe('ProjectArchiveWorker', () => {
       expect(mockTransitionStatus).toHaveBeenCalledWith(
         { toString: expect.any(Function) },
         'ARCHIVED',
-        { override: true, overrideReason: 'Auto-archived after retention period' },
+        { comment: 'Auto-archived after retention period' },
         expect.objectContaining({ _val: '000000000000000000000000' }),
       );
       expect(result).toEqual({ archived: 1, skipped: 1, errors: 0 });

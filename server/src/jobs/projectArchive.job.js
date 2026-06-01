@@ -110,12 +110,13 @@ export class ProjectArchiveWorker extends BaseWorker {
       }
 
       try {
+        // COMPLETED -> ARCHIVED is a valid transition with no preconditions, so this
+        // is a normal status change (not an override). Record the reason as a comment.
         await statusService.transitionStatus(
           project._id,
           'ARCHIVED',
           {
-            override: true,
-            overrideReason: 'Auto-archived after retention period',
+            comment: 'Auto-archived after retention period',
           },
           SYSTEM_USER_ID,
         );

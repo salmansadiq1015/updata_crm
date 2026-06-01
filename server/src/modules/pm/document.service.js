@@ -150,8 +150,13 @@ class DocumentService {
   }
 
   async listByProject(projectId, filters = {}) {
+    // Cache key must include every filter that affects the result set, otherwise
+    // different date-ranges/searches collide on the same key and return stale data.
     const categoryPart = filters.category || 'all';
-    const cacheKey = `pm:documents:project:${projectId}:${categoryPart}`;
+    const startPart = filters.startDate ? new Date(filters.startDate).getTime() : '';
+    const endPart = filters.endDate ? new Date(filters.endDate).getTime() : '';
+    const searchPart = filters.search || '';
+    const cacheKey = `pm:documents:project:${projectId}:${categoryPart}:${startPart}:${endPart}:${searchPart}`;
     return cacheManager.getOrSet(
       cacheKey,
       async () => this._enrichDocuments(await documentRepository.findByProjectId(projectId, filters)),

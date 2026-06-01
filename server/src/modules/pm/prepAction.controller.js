@@ -1,4 +1,5 @@
 import prepActionService from './prepAction.service.js';
+import { ValidationError } from '../../shared/errors/AppError.js';
 
 class PrepActionController {
   async list(req, res, next) {
@@ -49,6 +50,7 @@ class PrepActionController {
   async uploadAttachment(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      if (!req.file) throw new ValidationError('A file is required');
       const { buffer, originalname, mimetype, size } = req.file;
       const fileData = {
         buffer,

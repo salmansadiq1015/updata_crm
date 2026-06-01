@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -212,76 +212,255 @@ function PartnerCompanyPicker({ value, onChange, language }) {
 
 // ── Timeline visualization ──────────────────────────────────────
 
-function ScheduleTimeline({ entries, language }) {
-  if (entries.length === 0) return null;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-  const allDates = entries.flatMap((e) => {
+/** Start/end (ms) for an entry, whichever kind. Milestones are zero-width. */
+function entryRange(entry) {
+  if (entry.entryType === 'PHASE') {
+    return { start: new Date(entry.startDate).getTime(), end: new Date(entry.endDate).getTime() };
+  }
+  const t = new Date(entry.milestoneDate).getTime();
+  return { start: t, end: t };
+}
+
+/**
+ * Client-side conflict check. Returns a Map<entryId, string[]> of human-readable
+ * reasons. Two checks (lightweight, advisory — never blocks a move):
+ *  1. Predecessor violation: an entry starts before its predecessor's end.
+ *  2. Sibling overlap: two entries with the same responsible party (team member
+ *     or partner company) have overlapping date ranges.
+ */
+function computeConflicts(entries, language) {
+  const de = language === 'de';
+  const conflicts = new Map();
+  const add = (id, msg) => {
+    const list = conflicts.get(id) || [];
+    list.push(msg);
+    conflicts.set(id, list);
+  };
+  const byId = new Map(entries.map((e) => [e._id, e]));
+
+  for (const entry of entries) {
+    const r = entryRange(entry);
+    if (isNaN(r.start) || isNaN(r.end)) continue;
+
+    // 1. Predecessor relationship: must start on/after predecessor's end.
+    if (entry.predecessorId) {
+      const pred = byId.get(entry.predecessorId);
+      if (pred) {
+        const pr = entryRange(pred);
+        if (!isNaN(pr.end) && r.start < pr.end) {
+          add(entry._id, de
+            ? `Beginnt vor Ende des Vorgängers „${pred.name}"`
+            : `Starts before predecessor "${pred.name}" ends`);
+        }
+      }
+    }
+
+    // 2. Sibling overlap with the same responsible party.
+    const party = entry.partnerCompanyId || entry.responsibleTeamId;
+    if (!party) continue;
+    for (const other of entries) {
+      if (other._id === entry._id) continue;
+      const otherParty = other.partnerCompanyId || other.responsibleTeamId;
+      if (otherParty !== party) continue;
+      const or = entryRange(other);
+      if (isNaN(or.start) || isNaN(or.end)) continue;
+      // Overlap if ranges intersect (strict, so back-to-back is fine).
+      if (r.start < or.end && or.start < r.end) {
+        add(entry._id, de
+          ? `Überschneidung mit „${other.name}" (gleiche Zuständigkeit)`
+          : `Overlaps "${other.name}" (same responsible party)`);
+        break;
+      }
+    }
+  }
+  return conflicts;
+}
+
+function ScheduleTimeline({ entries, language, canWrite, onReschedule, onEditEntry }) {
+  const containerRef = useRef(null);
+  // Local drag state: { id, kind, deltaDays, startX } while dragging; null otherwise.
+  const [drag, setDrag] = useState(null);
+  const dragRef = useRef(null);
+
+  // Keep a ref in sync so pointer move/up handlers (bound once) read fresh values.
+  useEffect(() => { dragRef.current = drag; }, [drag]);
+
+  const conflicts = useMemo(() => computeConflicts(entries, language), [entries, language]);
+
+  const allDates = useMemo(() => entries.flatMap((e) => {
     if (e.entryType === 'PHASE') return [new Date(e.startDate), new Date(e.endDate)];
     return [new Date(e.milestoneDate)];
-  }).filter((d) => !isNaN(d));
+  }).filter((d) => !isNaN(d)), [entries]);
 
-  if (allDates.length === 0) return null;
+  if (entries.length === 0 || allDates.length === 0) return null;
 
   const minTime = Math.min(...allDates.map((d) => d.getTime()));
   const maxTime = Math.max(...allDates.map((d) => d.getTime()));
-  const range = maxTime - minTime || 1;
+  const range = maxTime - minTime || DAY_MS;
 
   const todayPos = ((Date.now() - minTime) / range) * 100;
+  const toPercent = (dateStr) => ((new Date(dateStr).getTime() - minTime) / range) * 100;
 
-  const toPercent = (dateStr) => {
-    const t = new Date(dateStr).getTime();
-    return ((t - minTime) / range) * 100;
+  // Convert a horizontal pixel delta into a whole-day delta using the live scale:
+  // (px / containerWidthPx) * rangeMs → ms, snapped to whole days. The container's
+  // rendered width maps 1:1 to `range`, so this inverts the date→x mapping exactly.
+  const pxToDays = (deltaPx) => {
+    const width = containerRef.current?.offsetWidth || 1;
+    const deltaMs = (deltaPx / width) * range;
+    return Math.round(deltaMs / DAY_MS);
   };
 
+  const DRAG_THRESHOLD_PX = 4; // below this, treat as a tap (don't reschedule)
+
+  const beginDrag = (e, entry) => {
+    if (!canWrite) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    setDrag({ id: entry._id, kind: entry.entryType, startX, deltaDays: 0, moved: false });
+
+    const handleMove = (ev) => {
+      const deltaPx = ev.clientX - startX;
+      const deltaDays = pxToDays(deltaPx);
+      const moved = Math.abs(ev.clientX - startX) > DRAG_THRESHOLD_PX;
+      setDrag((d) => (d ? { ...d, deltaDays, deltaPx, moved } : d));
+    };
+
+    const handleUp = (ev) => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      const cur = dragRef.current;
+      setDrag(null);
+      if (!cur) return;
+      const movedPx = Math.abs(ev.clientX - startX);
+      if (movedPx <= DRAG_THRESHOLD_PX) {
+        // Treated as a tap → open the edit dialog (accessible fallback).
+        onEditEntry?.(entry);
+        return;
+      }
+      if (!cur.deltaDays) return; // dragged but not far enough to shift a full day
+      const shiftMs = cur.deltaDays * DAY_MS;
+      if (entry.entryType === 'PHASE') {
+        const newStart = new Date(new Date(entry.startDate).getTime() + shiftMs);
+        const newEnd = new Date(new Date(entry.endDate).getTime() + shiftMs);
+        onReschedule?.(entry, {
+          startDate: newStart.toISOString().split('T')[0],
+          endDate: newEnd.toISOString().split('T')[0],
+        });
+      } else {
+        const newDate = new Date(new Date(entry.milestoneDate).getTime() + shiftMs);
+        onReschedule?.(entry, { milestoneDate: newDate.toISOString().split('T')[0] });
+      }
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+  };
+
+  // Visual offset (in %) applied to the bar currently being dragged.
+  const dragOffsetPercent = (entry) => {
+    if (!drag || drag.id !== entry._id || !drag.moved) return 0;
+    return ((drag.deltaDays * DAY_MS) / range) * 100;
+  };
+
+  const hasConflicts = conflicts.size > 0;
+
   return (
-    <div className="relative rounded-xl border border-border bg-card p-6 shadow-theme-sm overflow-x-auto">
-      <div className="relative min-w-[600px]" style={{ height: entries.length * 48 + 32 }}>
-        {/* Today marker */}
-        {todayPos >= 0 && todayPos <= 100 && (
-          <div
-            className="absolute top-0 bottom-0 w-px bg-red-400 z-10"
-            style={{ left: `${todayPos}%` }}
-          >
-            <span className="absolute -top-5 -translate-x-1/2 text-[10px] text-red-500 font-medium whitespace-nowrap">
-              {language === 'de' ? 'Heute' : 'Today'}
+    <div className="space-y-2">
+      {(canWrite || hasConflicts) && (
+        <div className="flex items-center gap-4 px-1 text-[11px] text-muted-foreground flex-wrap">
+          {canWrite && (
+            <span>{language === 'de' ? 'Balken ziehen, um Termine zu verschieben' : 'Drag a bar to reschedule'}</span>
+          )}
+          {hasConflicts && (
+            <span className="inline-flex items-center gap-1 text-destructive">
+              <span className="h-2.5 w-2.5 rounded-sm ring-2 ring-destructive inline-block" />
+              {language === 'de' ? 'Terminkonflikt' : 'Schedule conflict'}
             </span>
-          </div>
-        )}
+          )}
+        </div>
+      )}
 
-        {entries.map((entry, idx) => {
-          const statusCfg = SCHEDULE_STATUS_CONFIG[entry.status];
-          const y = idx * 48 + 16;
+      <div className="relative rounded-xl border border-border bg-card p-6 shadow-theme-sm overflow-x-auto">
+        <div ref={containerRef} className="relative min-w-[600px]" style={{ height: entries.length * 48 + 32 }}>
+          {/* Today marker */}
+          {todayPos >= 0 && todayPos <= 100 && (
+            <div
+              className="absolute top-0 bottom-0 w-px bg-red-400 z-10"
+              style={{ left: `${todayPos}%` }}
+            >
+              <span className="absolute -top-5 -translate-x-1/2 text-[10px] text-red-500 font-medium whitespace-nowrap">
+                {language === 'de' ? 'Heute' : 'Today'}
+              </span>
+            </div>
+          )}
 
-          if (entry.entryType === 'PHASE') {
-            const left = toPercent(entry.startDate);
-            const right = toPercent(entry.endDate);
-            const width = Math.max(right - left, 1);
+          {entries.map((entry, idx) => {
+            const statusCfg = SCHEDULE_STATUS_CONFIG[entry.status];
+            const y = idx * 48 + 16;
+            const reasons = conflicts.get(entry._id);
+            const conflicted = !!reasons;
+            const offset = dragOffsetPercent(entry);
+            const isDragging = drag?.id === entry._id && drag.moved;
+            const conflictTitle = reasons?.join(' • ');
 
-            return (
-              <div key={entry._id} className="absolute flex items-center" style={{ top: y, left: `${left}%`, width: `${width}%`, height: 32 }}>
-                <div className={cn(
-                  'h-7 w-full rounded-md flex items-center px-2 text-xs font-medium truncate border',
-                  statusCfg?.bgColor || 'bg-muted', statusCfg?.textColor || 'text-foreground',
-                  statusCfg?.borderColor || 'border-border',
-                )}>
-                  {entry.name}
+            if (entry.entryType === 'PHASE') {
+              const left = toPercent(entry.startDate);
+              const right = toPercent(entry.endDate);
+              const width = Math.max(right - left, 1);
+
+              return (
+                <div
+                  key={entry._id}
+                  className="absolute flex items-center"
+                  style={{ top: y, left: `calc(${left}% + ${offset}%)`, width: `${width}%`, height: 32, zIndex: isDragging ? 20 : undefined }}
+                >
+                  <div
+                    onPointerDown={(e) => beginDrag(e, entry)}
+                    title={conflictTitle}
+                    className={cn(
+                      'h-7 w-full rounded-md flex items-center px-2 text-xs font-medium truncate border select-none',
+                      statusCfg?.bgColor || 'bg-muted', statusCfg?.textColor || 'text-foreground',
+                      statusCfg?.borderColor || 'border-border',
+                      canWrite && 'cursor-grab active:cursor-grabbing touch-none',
+                      isDragging && 'shadow-lg ring-2 ring-primary/50',
+                      conflicted && 'ring-2 ring-destructive',
+                    )}
+                  >
+                    {conflicted && <AlertTriangle className="h-3 w-3 mr-1 shrink-0 text-destructive" />}
+                    {entry.name}
+                  </div>
                 </div>
+              );
+            }
+
+            const pos = toPercent(entry.milestoneDate);
+            return (
+              <div
+                key={entry._id}
+                className="absolute flex items-center gap-1"
+                style={{ top: y, left: `calc(${pos}% + ${offset}%)`, transform: 'translateX(-50%)', zIndex: isDragging ? 20 : undefined }}
+              >
+                <div
+                  onPointerDown={(e) => beginDrag(e, entry)}
+                  title={conflictTitle}
+                  className={cn(
+                    'h-5 w-5 rotate-45 rounded-sm border select-none',
+                    statusCfg?.bgColor, statusCfg?.borderColor || 'border-border',
+                    canWrite && 'cursor-grab active:cursor-grabbing touch-none',
+                    isDragging && 'shadow-lg ring-2 ring-primary/50',
+                    conflicted && 'ring-2 ring-destructive',
+                  )}
+                />
+                <span className="text-[11px] font-medium whitespace-nowrap inline-flex items-center gap-1">
+                  {conflicted && <AlertTriangle className="h-3 w-3 text-destructive" />}
+                  {entry.name}
+                </span>
               </div>
             );
-          }
-
-          const pos = toPercent(entry.milestoneDate);
-          return (
-            <div
-              key={entry._id}
-              className="absolute flex items-center gap-1"
-              style={{ top: y, left: `${pos}%`, transform: 'translateX(-50%)' }}
-            >
-              <div className={cn('h-5 w-5 rotate-45 rounded-sm border', statusCfg?.bgColor, statusCfg?.borderColor || 'border-border')} />
-              <span className="text-[11px] font-medium whitespace-nowrap">{entry.name}</span>
-            </div>
-          );
-        })}
+          })}
+        </div>
       </div>
     </div>
   );
@@ -634,7 +813,13 @@ export function ScheduleTab({ projectId }) {
           description={language === 'de' ? 'Noch keine Einträge erstellt.' : 'No schedule entries created yet.'}
         />
       ) : viewMode === 'timeline' ? (
-        <ScheduleTimeline entries={entries} language={language} />
+        <ScheduleTimeline
+          entries={entries}
+          language={language}
+          canWrite={canWrite}
+          onEditEntry={canWrite ? openEditEntry : undefined}
+          onReschedule={(entry, dates) => updateEntry.mutate({ entryId: entry._id, data: dates })}
+        />
       ) : (
         <div className="space-y-3">
           {entries.map((entry) => (

@@ -81,16 +81,30 @@ export function registerPmEvents() {
       const { actionId, projectId, title, dueDate, assignedToId } = event.payload;
 
       try {
-        const queueManager = (await import('../../shared/queue/QueueManager.js')).default;
-        await queueManager.addJob('notification-dispatch', 'prep-action-overdue-alert', {
-          type: 'prep_action_overdue',
-          actionId,
-          projectId,
-          title,
-          dueDate,
-          assignedToId,
-          timestamp: new Date().toISOString(),
-        });
+        const notificationService = (await import('../notifications/notification.service.js')).default;
+        const recipientIds = [];
+        if (assignedToId) recipientIds.push(assignedToId);
+
+        const Project = (await import('./project.model.js')).default;
+        const project = await Project.findById(projectId).select('projectManagerId').lean();
+        if (project?.projectManagerId && String(project.projectManagerId) !== String(assignedToId)) {
+          recipientIds.push(project.projectManagerId);
+        }
+
+        if (recipientIds.length > 0) {
+          await notificationService.create({
+            channels: ['IN_APP', 'EMAIL'],
+            recipientIds,
+            type: 'prep_action_overdue',
+            category: 'PROJECT',
+            priority: 'HIGH',
+            payload: { title, dueDate, projectId, actionId },
+            sourceModule: 'pm',
+            sourceEvent: 'PREP_ACTION_OVERDUE',
+            sourceEntityType: 'PreparatoryAction',
+            sourceEntityId: actionId,
+          }, null);
+        }
       } catch (notifErr) {
         logger.error('Failed to dispatch prep action overdue notification', {
           module: 'pm',

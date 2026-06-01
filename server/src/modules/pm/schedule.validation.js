@@ -64,6 +64,27 @@ export const sendConfirmationSchema = {
   }),
 };
 
+export const conflictsSchema = {
+  params: Joi.object({ id: objectId.required() }),
+};
+
+export const bulkConfirmationSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    items: Joi.array().min(1).max(100).items(
+      Joi.object({
+        entryId: objectId.required(),
+        partnerContactEmail: Joi.string().email().required().trim().lowercase(),
+        partnerCompanyId: objectId.required(),
+        partnerName: Joi.string().max(255).allow(null, ''),
+        siteAddress: Joi.string().max(500).allow(null, ''),
+        contactPerson: Joi.string().max(255).allow(null, ''),
+        acknowledgeShortNotice: Joi.boolean().default(false),
+      }),
+    ).required(),
+  }),
+};
+
 export const exportScheduleSchema = {
   params: Joi.object({ id: objectId.required() }),
   query: Joi.object({

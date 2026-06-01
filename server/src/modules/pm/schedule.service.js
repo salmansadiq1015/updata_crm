@@ -36,6 +36,75 @@ class ScheduleService {
     );
   }
 
+  /** Start/end (ms) for an entry. Milestones are a single day (zero-width). */
+  _entryRange(entry) {
+    if (entry.entryType === 'PHASE') {
+      return {
+        start: entry.startDate ? new Date(entry.startDate).getTime() : NaN,
+        end: entry.endDate ? new Date(entry.endDate).getTime() : NaN,
+      };
+    }
+    const t = entry.milestoneDate ? new Date(entry.milestoneDate).getTime() : NaN;
+    return { start: t, end: t };
+  }
+
+  /**
+   * Server-side, advisory (non-blocking) conflict detection over a project's
+   * schedule entries. Mirrors the client-side highlight logic so both surface
+   * the same conflicts. Detects:
+   *   - predecessor_violation: entry starts before its predecessor's end.
+   *   - resource_overlap: two entries with the SAME responsible party
+   *     (same responsibleTeamId OR same partnerCompanyId) whose date ranges
+   *     intersect (strict, so back-to-back ranges are fine).
+   * Returns: { conflicts: [{ entryId, reasons: [{ type, otherEntryId? }] }] }
+   */
+  async detectConflicts(projectId) {
+    const entries = await scheduleRepository.findByProjectId(projectId);
+    const byId = new Map(entries.map((e) => [String(e._id), e]));
+    const reasonsByEntry = new Map();
+    const addReason = (id, reason) => {
+      const key = String(id);
+      if (!reasonsByEntry.has(key)) reasonsByEntry.set(key, []);
+      reasonsByEntry.get(key).push(reason);
+    };
+
+    for (const entry of entries) {
+      const r = this._entryRange(entry);
+      if (Number.isNaN(r.start) || Number.isNaN(r.end)) continue;
+
+      // 1. Predecessor relationship: must start on/after the predecessor's end.
+      if (entry.predecessorId) {
+        const pred = byId.get(String(entry.predecessorId));
+        if (pred) {
+          const pr = this._entryRange(pred);
+          if (!Number.isNaN(pr.end) && r.start < pr.end) {
+            addReason(entry._id, { type: 'predecessor_violation', otherEntryId: String(pred._id) });
+          }
+        }
+      }
+
+      // 2. Resource overlap with the same responsible party.
+      const party = entry.partnerCompanyId || entry.responsibleTeamId;
+      if (!party) continue;
+      for (const other of entries) {
+        if (String(other._id) === String(entry._id)) continue;
+        const otherParty = other.partnerCompanyId || other.responsibleTeamId;
+        if (!otherParty || String(otherParty) !== String(party)) continue;
+        const or = this._entryRange(other);
+        if (Number.isNaN(or.start) || Number.isNaN(or.end)) continue;
+        if (r.start < or.end && or.start < r.end) {
+          addReason(entry._id, { type: 'resource_overlap', otherEntryId: String(other._id) });
+        }
+      }
+    }
+
+    const conflicts = Array.from(reasonsByEntry.entries()).map(([entryId, reasons]) => ({
+      entryId,
+      reasons,
+    }));
+    return { conflicts };
+  }
+
   async addEntry(projectId, data, createdBy, meta = {}) {
     // Lazy import to avoid circular dependencies
     const Project = (await import('./project.model.js')).default;
@@ -255,6 +324,64 @@ class ScheduleService {
     });
 
     return confirmation;
+  }
+
+  /**
+   * Bulk partner confirmations. Loops sendConfirmation per item, collecting a
+   * per-item result so a short-notice item (or a hard error) is reported rather
+   * than aborting the whole batch. Items flagged 'short_notice' carry the
+   * businessDays/leadDays so the caller can re-submit with acknowledgeShortNotice.
+   * Returns: { results: [{ entryId, status, businessDays?, leadDays?, message? }],
+   *            summary: { sent, shortNotice, error } }
+   */
+  async sendBulkConfirmations(items, userId, meta = {}) {
+    const results = [];
+    for (const item of items) {
+      const { entryId, ...data } = item;
+      try {
+        await this.sendConfirmation(entryId, data, userId, meta);
+        results.push({ entryId, status: 'sent' });
+      } catch (err) {
+        // Distinguish the soft short-notice warning (a ConflictError carrying a
+        // shortNotice flag) from a genuine error — never abort the batch.
+        if (err?.data?.shortNotice) {
+          results.push({
+            entryId,
+            status: 'short_notice',
+            businessDays: err.data.businessDays,
+            leadDays: err.data.leadDays,
+            message: err.message,
+          });
+        } else {
+          results.push({ entryId, status: 'error', message: err.message });
+        }
+      }
+    }
+
+    const summary = {
+      sent: results.filter((r) => r.status === 'sent').length,
+      shortNotice: results.filter((r) => r.status === 'short_notice').length,
+      error: results.filter((r) => r.status === 'error').length,
+    };
+
+    auditService.logEvent({
+      eventType: 'partner_confirmation.bulk_sent',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { total: items.length, ...summary },
+      module: 'pm',
+    });
+
+    logger.info('Bulk partner confirmations processed', {
+      module: 'pm',
+      action: 'sendBulkConfirmations',
+      total: items.length,
+      ...summary,
+    });
+
+    return { results, summary };
   }
 
   async updateConfirmationResponse(confirmationId, data, userId, meta = {}) {

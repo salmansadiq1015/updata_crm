@@ -16,6 +16,7 @@ import {
 import {
   createEntrySchema, updateEntrySchema, deleteEntrySchema,
   sendConfirmationSchema, updateConfirmationSchema, exportScheduleSchema,
+  conflictsSchema, bulkConfirmationSchema,
 } from './schedule.validation.js';
 import {
   listDocumentsSchema, uploadDocumentSchema, generateDocumentSchema,
@@ -145,11 +146,25 @@ scheduleRouter.get(
   (req, res, next) => scheduleController.getSchedule(req, res, next),
 );
 scheduleRouter.get(
+  '/conflicts',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(conflictsSchema),
+  (req, res, next) => scheduleController.getConflicts(req, res, next),
+);
+scheduleRouter.get(
   '/export',
   authenticate,
   requirePermission('projects:read'),
   validate(exportScheduleSchema),
   (req, res, next) => scheduleController.exportSchedule(req, res, next),
+);
+scheduleRouter.post(
+  '/confirmations/bulk',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(bulkConfirmationSchema),
+  (req, res, next) => scheduleController.sendBulkConfirmations(req, res, next),
 );
 scheduleRouter.post(
   '/entries',

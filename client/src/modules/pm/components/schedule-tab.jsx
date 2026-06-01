@@ -39,8 +39,9 @@ import {
   Plus, Pencil, Trash2, Loader2, ArrowRight, Milestone,
   Send, MessageSquare, Calendar, Users, Building2,
   List, BarChart3, ChevronDown, ChevronRight, Clock, Download,
-  User, Check, AlertTriangle,
+  User, Check, AlertTriangle, CheckSquare, Square, X,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // ── Form pickers (mirror project-filter-bar.jsx patterns) ───────
 
@@ -278,7 +279,7 @@ function computeConflicts(entries, language) {
   return conflicts;
 }
 
-function ScheduleTimeline({ entries, language, canWrite, onReschedule, onEditEntry }) {
+function ScheduleTimeline({ entries, language, canWrite, serverConflicts, onReschedule, onEditEntry }) {
   const containerRef = useRef(null);
   // Local drag state: { id, kind, deltaDays, startX } while dragging; null otherwise.
   const [drag, setDrag] = useState(null);
@@ -287,7 +288,10 @@ function ScheduleTimeline({ entries, language, canWrite, onReschedule, onEditEnt
   // Keep a ref in sync so pointer move/up handlers (bound once) read fresh values.
   useEffect(() => { dragRef.current = drag; }, [drag]);
 
-  const conflicts = useMemo(() => computeConflicts(entries, language), [entries, language]);
+  // Prefer authoritative server conflicts when available; otherwise fall back to
+  // the lightweight client-side computation (both produce Map<entryId, string[]>).
+  const clientConflicts = useMemo(() => computeConflicts(entries, language), [entries, language]);
+  const conflicts = serverConflicts && serverConflicts.size > 0 ? serverConflicts : clientConflicts;
 
   const allDates = useMemo(() => entries.flatMap((e) => {
     if (e.entryType === 'PHASE') return [new Date(e.startDate), new Date(e.endDate)];
@@ -468,13 +472,14 @@ function ScheduleTimeline({ entries, language, canWrite, onReschedule, onEditEnt
 
 // ── Entry card (list view) ──────────────────────────────────────
 
-function EntryCard({ entry, language, canWrite, onEdit, onDelete, onSendConfirmation, onUpdateConfirmation }) {
+function EntryCard({ entry, language, canWrite, onEdit, onDelete, onSendConfirmation, onUpdateConfirmation, conflictReasons, selectMode, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const typeCfg = SCHEDULE_ENTRY_TYPE_CONFIG[entry.entryType];
   const statusCfg = SCHEDULE_STATUS_CONFIG[entry.status];
   const responsibleCfg = RESPONSIBLE_TYPE_CONFIG[entry.responsibleType];
   const TypeIcon = typeCfg?.icon || ArrowRight;
   const isPartner = entry.responsibleType === 'PARTNER_COMPANY';
+  const selectable = isPartner && entry.partnerCompanyId;
 
   const dateLabel = entry.entryType === 'PHASE'
     ? `${formatDate(entry.startDate)} – ${formatDate(entry.endDate)}`
@@ -483,8 +488,17 @@ function EntryCard({ entry, language, canWrite, onEdit, onDelete, onSendConfirma
   const confirmations = entry.confirmations || [];
 
   return (
-    <div className="rounded-lg border bg-card shadow-theme-sm transition-all hover:shadow-theme-md">
+    <div className={cn('rounded-lg border bg-card shadow-theme-sm transition-all hover:shadow-theme-md', selected && 'ring-2 ring-primary')}>
       <div className="flex items-center gap-3 p-4">
+        {selectMode && (
+          <Checkbox
+            checked={selected}
+            disabled={!selectable}
+            onCheckedChange={() => selectable && onToggleSelect?.(entry)}
+            className="shrink-0"
+            aria-label={language === 'de' ? 'Auswählen' : 'Select'}
+          />
+        )}
         <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0', statusCfg?.bgColor || 'bg-muted')}>
           <TypeIcon className={cn('h-4 w-4', statusCfg?.textColor || 'text-muted-foreground')} />
         </div>
@@ -494,6 +508,15 @@ function EntryCard({ entry, language, canWrite, onEdit, onDelete, onSendConfirma
             <Badge variant="outline" className="text-[10px] px-1.5 py-0">
               {language === 'de' ? typeCfg?.label : typeCfg?.labelEn}
             </Badge>
+            {conflictReasons?.length > 0 && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] text-destructive"
+                title={conflictReasons.join(' • ')}
+              >
+                <AlertTriangle className="h-3 w-3" />
+                {language === 'de' ? 'Konflikt' : 'Conflict'}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             <span className={cn('inline-flex items-center gap-1', statusCfg?.textColor)}>
@@ -588,6 +611,13 @@ export function ScheduleTab({ projectId }) {
   const [confirmResponseEntry, setConfirmResponseEntry] = useState(null);
   const [confirmResponseConf, setConfirmResponseConf] = useState(null);
 
+  // Multi-select + bulk confirmation
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkResults, setBulkResults] = useState(null);
+  const [bulkEmails, setBulkEmails] = useState({}); // entryId -> email
+
   const { data: scheduleData, isLoading } = useQuery({
     queryKey: queryKeys.pm.schedule.byProject(projectId),
     queryFn: () => scheduleService.getSchedule(projectId),
@@ -599,13 +629,93 @@ export function ScheduleTab({ projectId }) {
     return Array.isArray(raw) ? raw : [];
   }, [scheduleData]);
 
-  const { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, exportSchedule } = useScheduleMutations(projectId, {
+  // Server-side conflict detection (advisory, non-blocking).
+  const { data: conflictsData } = useQuery({
+    queryKey: queryKeys.pm.schedule.conflicts(projectId),
+    queryFn: () => scheduleService.getConflicts(projectId),
+    enabled: !!projectId,
+  });
+
+  // Map<entryId, string[]> of localized reasons, derived from the server result.
+  const serverConflicts = useMemo(() => {
+    const map = new Map();
+    const list = conflictsData?.conflicts || [];
+    const byId = new Map(entries.map((e) => [e._id, e]));
+    const de = language === 'de';
+    for (const c of list) {
+      const reasons = (c.reasons || []).map((r) => {
+        const other = r.otherEntryId ? byId.get(r.otherEntryId) : null;
+        const name = other?.name || (de ? 'anderem Eintrag' : 'another entry');
+        if (r.type === 'predecessor_violation') {
+          return de ? `Beginnt vor Ende des Vorgängers „${name}"` : `Starts before predecessor "${name}" ends`;
+        }
+        return de ? `Überschneidung mit „${name}" (gleiche Zuständigkeit)` : `Overlaps "${name}" (same responsible party)`;
+      });
+      map.set(c.entryId, reasons);
+    }
+    return map;
+  }, [conflictsData, entries, language]);
+
+  const { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, sendBulkConfirmations, exportSchedule } = useScheduleMutations(projectId, {
     onAddEntry: () => { setFormOpen(false); entryForm.reset(defaultEntryValues); },
     onUpdateEntry: () => { setFormOpen(false); setEditEntry(null); },
     onDeleteEntry: () => setDeleteTarget(null),
     onSendConfirmation: () => { setConfirmSendOpen(false); setConfirmSendEntry(null); },
     onUpdateConfirmation: () => { setConfirmResponseOpen(false); setConfirmResponseEntry(null); setConfirmResponseConf(null); },
+    onBulkConfirmation: (res) => { setBulkResults(res?.results || []); },
   });
+
+  // ── Multi-select / bulk confirmation helpers ──────────────────
+  const selectablePartnerEntries = useMemo(
+    () => entries.filter((e) => e.responsibleType === 'PARTNER_COMPANY' && e.partnerCompanyId),
+    [entries],
+  );
+
+  const toggleSelect = useCallback((entry) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(entry._id)) next.delete(entry._id); else next.add(entry._id);
+      return next;
+    });
+  }, []);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const selectedEntries = useMemo(
+    () => entries.filter((e) => selectedIds.has(e._id) && e.partnerCompanyId),
+    [entries, selectedIds],
+  );
+
+  const openBulkDialog = () => {
+    setBulkResults(null);
+    // Prefill each selected entry's email from the most recent confirmation, if any.
+    const seed = {};
+    for (const e of selectedEntries) {
+      const lastEmail = (e.confirmations || [])[0]?.partnerContactEmail || '';
+      seed[e._id] = lastEmail;
+    }
+    setBulkEmails(seed);
+    setBulkOpen(true);
+  };
+
+  const allBulkEmailsValid = selectedEntries.length > 0
+    && selectedEntries.every((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((bulkEmails[e._id] || '').trim()));
+
+  const submitBulk = (acknowledgeShortNotice = false) => {
+    const items = selectedEntries.map((e) => ({
+      entryId: e._id,
+      partnerCompanyId: e.partnerCompanyId,
+      partnerContactEmail: (bulkEmails[e._id] || '').trim().toLowerCase(),
+      partnerName: e.partnerName || '',
+      ...(acknowledgeShortNotice ? { acknowledgeShortNotice: true } : {}),
+    }));
+    sendBulkConfirmations.mutate(items);
+  };
+
+  const shortNoticeResults = (bulkResults || []).filter((r) => r.status === 'short_notice');
 
   // ── Entry form ──────────────────────────────────────────────
 
@@ -797,6 +907,20 @@ export function ScheduleTab({ projectId }) {
             </button>
           </div>
 
+          {canWrite && selectablePartnerEntries.length > 0 && viewMode === 'list' && (
+            selectMode ? (
+              <Button size="sm" variant="outline" onClick={exitSelectMode}>
+                <X className="h-4 w-4 mr-1.5" />
+                {language === 'de' ? 'Auswahl beenden' : 'Done'}
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setSelectMode(true)}>
+                <CheckSquare className="h-4 w-4 mr-1.5" />
+                {language === 'de' ? 'Mehrfachauswahl' : 'Select'}
+              </Button>
+            )
+          )}
+
           {canWrite && (
             <Button size="sm" onClick={openCreateEntry}>
               <Plus className="h-4 w-4 mr-1.5" />
@@ -805,6 +929,34 @@ export function ScheduleTab({ projectId }) {
           )}
         </div>
       </div>
+
+      {/* ── Bulk-select action bar ─────────────────────────── */}
+      {selectMode && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="font-medium">{selectedIds.size}</span>
+            <span className="text-muted-foreground">
+              {language === 'de' ? 'Partner-Termine ausgewählt' : 'partner appointments selected'}
+            </span>
+            <button
+              type="button"
+              className="text-xs text-primary hover:underline"
+              onClick={() => setSelectedIds(new Set(selectablePartnerEntries.map((e) => e._id)))}
+            >
+              {language === 'de' ? 'Alle' : 'Select all'}
+            </button>
+            {selectedIds.size > 0 && (
+              <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setSelectedIds(new Set())}>
+                {language === 'de' ? 'Zurücksetzen' : 'Clear'}
+              </button>
+            )}
+          </div>
+          <Button size="sm" disabled={selectedIds.size === 0} onClick={openBulkDialog}>
+            <Send className="h-4 w-4 mr-1.5" />
+            {language === 'de' ? 'Bestätigungen senden' : 'Send confirmations'}
+          </Button>
+        </div>
+      )}
 
       {/* Content */}
       {entries.length === 0 ? (
@@ -817,6 +969,7 @@ export function ScheduleTab({ projectId }) {
           entries={entries}
           language={language}
           canWrite={canWrite}
+          serverConflicts={serverConflicts}
           onEditEntry={canWrite ? openEditEntry : undefined}
           onReschedule={(entry, dates) => updateEntry.mutate({ entryId: entry._id, data: dates })}
         />
@@ -832,6 +985,10 @@ export function ScheduleTab({ projectId }) {
               onDelete={setDeleteTarget}
               onSendConfirmation={openSendConfirmation}
               onUpdateConfirmation={openUpdateConfirmation}
+              conflictReasons={serverConflicts.get(entry._id)}
+              selectMode={selectMode}
+              selected={selectedIds.has(entry._id)}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </div>
@@ -1105,6 +1262,121 @@ export function ScheduleTab({ projectId }) {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bulk confirmation dialog ───────────────────────── */}
+      <Dialog open={bulkOpen} onOpenChange={(v) => { if (!v) { setBulkOpen(false); setBulkResults(null); } else setBulkOpen(v); }}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4.5 w-4.5 text-primary" />
+              {language === 'de' ? 'Bestätigungen senden' : 'Send confirmations'}
+            </DialogTitle>
+            <DialogDescription>
+              {language === 'de'
+                ? `${selectedEntries.length} Partner-Termin(e). E-Mail je Termin angeben.`
+                : `${selectedEntries.length} partner appointment(s). Provide an email per appointment.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <FormBody>
+            {!bulkResults && (
+              <div className="space-y-2.5">
+                {selectedEntries.map((e) => (
+                    <div key={e._id} className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium truncate">{e.name}</span>
+                        <span className="text-[11px] text-muted-foreground shrink-0">
+                          {e.entryType === 'PHASE' ? formatDate(e.startDate) : formatDate(e.milestoneDate)}
+                        </span>
+                      </div>
+                      <Input
+                        type="email"
+                        value={bulkEmails[e._id] || ''}
+                        onChange={(ev) => setBulkEmails((p) => ({ ...p, [e._id]: ev.target.value }))}
+                        placeholder={language === 'de' ? 'Partner E-Mail' : 'Partner email'}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                ))}
+              </div>
+            )}
+
+            {/* Per-item result summary */}
+            {bulkResults && (
+              <div className="space-y-2">
+                {bulkResults.map((r) => {
+                  const entry = entries.find((e) => e._id === r.entryId);
+                  const statusMeta = {
+                    sent: { color: 'text-emerald-600', label: language === 'de' ? 'Gesendet' : 'Sent', Icon: Check },
+                    short_notice: { color: 'text-amber-600', label: language === 'de' ? 'Kurzfristig' : 'Short notice', Icon: AlertTriangle },
+                    error: { color: 'text-destructive', label: language === 'de' ? 'Fehler' : 'Error', Icon: X },
+                  }[r.status] || { color: 'text-muted-foreground', label: r.status, Icon: AlertTriangle };
+                  const SIcon = statusMeta.Icon;
+                  return (
+                    <div key={r.entryId} className="flex items-start justify-between gap-2 rounded-lg border border-border/60 p-2.5 text-sm">
+                      <span className="truncate">{entry?.name || r.entryId}</span>
+                      <span className={cn('inline-flex items-center gap-1 text-xs shrink-0', statusMeta.color)}>
+                        <SIcon className="h-3.5 w-3.5" />
+                        {statusMeta.label}
+                        {r.status === 'short_notice' && r.businessDays != null && (
+                          <span className="text-muted-foreground">
+                            ({r.businessDays}/{r.leadDays} {language === 'de' ? 'Tage' : 'days'})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+
+                {shortNoticeResults.length > 0 && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-sm space-y-2">
+                    <p className="text-amber-800 dark:text-amber-300 text-xs">
+                      {language === 'de'
+                        ? `${shortNoticeResults.length} Termin(e) unter der Vorlaufzeit. Trotzdem senden?`
+                        : `${shortNoticeResults.length} appointment(s) under the lead time. Send anyway?`}
+                    </p>
+                    <Button
+                      type="button" size="sm" variant="outline"
+                      className="h-7 text-xs border-amber-400 text-amber-800 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
+                      disabled={sendBulkConfirmations.isPending}
+                      onClick={() => {
+                        // Re-submit only the short-notice items with acknowledgement.
+                        const shortIds = new Set(shortNoticeResults.map((r) => r.entryId));
+                        const items = selectedEntries
+                          .filter((e) => shortIds.has(e._id))
+                          .map((e) => ({
+                            entryId: e._id,
+                            partnerCompanyId: e.partnerCompanyId,
+                            partnerContactEmail: (bulkEmails[e._id] || '').trim().toLowerCase(),
+                            partnerName: e.partnerName || '',
+                            acknowledgeShortNotice: true,
+                          }));
+                        sendBulkConfirmations.mutate(items);
+                      }}
+                    >
+                      {sendBulkConfirmations.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                      {language === 'de' ? 'Kurzfristige trotzdem senden' : 'Send short-notice anyway'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </FormBody>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => { setBulkOpen(false); setBulkResults(null); }}>
+              {bulkResults ? t('common.close', 'Close') : t('common.cancel', 'Cancel')}
+            </Button>
+            {!bulkResults && (
+              <Button type="button" disabled={!allBulkEmailsValid || sendBulkConfirmations.isPending} onClick={() => submitBulk(false)}>
+                {sendBulkConfirmations.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Send className="h-4 w-4 mr-1.5" />
+                {language === 'de' ? `Senden (${selectedEntries.length})` : `Send (${selectedEntries.length})`}
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -143,6 +143,106 @@ describe('getSchedule', () => {
   });
 });
 
+describe('detectConflicts', () => {
+  const day = (s) => new Date(`2026-01-${s}T00:00:00Z`);
+
+  it('flags a predecessor violation (entry starts before predecessor end)', async () => {
+    const entries = [
+      { _id: 'p1', entryType: 'PHASE', startDate: day('01'), endDate: day('10') },
+      { _id: 'p2', entryType: 'PHASE', startDate: day('05'), endDate: day('15'), predecessorId: 'p1' },
+    ];
+    mockFindByProjectId.mockResolvedValue(entries);
+
+    const { conflicts } = await scheduleService.detectConflicts('proj-1');
+
+    const c = conflicts.find((x) => x.entryId === 'p2');
+    expect(c).toBeDefined();
+    expect(c.reasons).toContainEqual({ type: 'predecessor_violation', otherEntryId: 'p1' });
+  });
+
+  it('flags a resource overlap for the same responsible party', async () => {
+    const entries = [
+      { _id: 'a', entryType: 'PHASE', startDate: day('01'), endDate: day('10'), partnerCompanyId: 'partner-x' },
+      { _id: 'b', entryType: 'PHASE', startDate: day('05'), endDate: day('12'), partnerCompanyId: 'partner-x' },
+    ];
+    mockFindByProjectId.mockResolvedValue(entries);
+
+    const { conflicts } = await scheduleService.detectConflicts('proj-1');
+
+    const a = conflicts.find((x) => x.entryId === 'a');
+    const b = conflicts.find((x) => x.entryId === 'b');
+    expect(a.reasons).toContainEqual({ type: 'resource_overlap', otherEntryId: 'b' });
+    expect(b.reasons).toContainEqual({ type: 'resource_overlap', otherEntryId: 'a' });
+  });
+
+  it('does not flag non-overlapping ranges or different parties', async () => {
+    const entries = [
+      // back-to-back (strict overlap → no conflict), same predecessor relation valid
+      { _id: 'p1', entryType: 'PHASE', startDate: day('01'), endDate: day('05') },
+      { _id: 'p2', entryType: 'PHASE', startDate: day('05'), endDate: day('10'), predecessorId: 'p1' },
+      // overlapping in time but DIFFERENT responsible parties → no conflict
+      { _id: 'r1', entryType: 'PHASE', startDate: day('01'), endDate: day('10'), partnerCompanyId: 'partner-a' },
+      { _id: 'r2', entryType: 'PHASE', startDate: day('02'), endDate: day('09'), partnerCompanyId: 'partner-b' },
+      { _id: 'r3', entryType: 'PHASE', startDate: day('02'), endDate: day('09'), responsibleTeamId: 'team-c' },
+    ];
+    mockFindByProjectId.mockResolvedValue(entries);
+
+    const { conflicts } = await scheduleService.detectConflicts('proj-1');
+
+    expect(conflicts).toEqual([]);
+  });
+});
+
+describe('sendBulkConfirmations', () => {
+  const daysFromNow = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return d;
+  };
+
+  it('returns per-item statuses (sent + short_notice + error) without aborting the batch', async () => {
+    // entry-ok: far out → sends; entry-short: tomorrow → short notice; entry-missing: not found → error.
+    mockFindById.mockImplementation(async (id) => {
+      if (id === 'entry-ok') return { _id: 'entry-ok', projectId: 'proj-1', entryType: 'MILESTONE', milestoneDate: daysFromNow(30), name: 'OK' };
+      if (id === 'entry-short') return { _id: 'entry-short', projectId: 'proj-1', entryType: 'MILESTONE', milestoneDate: daysFromNow(1), name: 'Soon' };
+      return null; // entry-missing → NotFoundError
+    });
+    mockCreateConfirmation.mockResolvedValue({ _id: 'conf' });
+
+    const items = [
+      { entryId: 'entry-ok', partnerCompanyId: 'p1', partnerContactEmail: 'a@x.com' },
+      { entryId: 'entry-short', partnerCompanyId: 'p1', partnerContactEmail: 'b@x.com' },
+      { entryId: 'entry-missing', partnerCompanyId: 'p1', partnerContactEmail: 'c@x.com' },
+    ];
+
+    const { results, summary } = await scheduleService.sendBulkConfirmations(items, 'user-1');
+
+    expect(results).toHaveLength(3);
+    expect(results[0]).toMatchObject({ entryId: 'entry-ok', status: 'sent' });
+    expect(results[1]).toMatchObject({ entryId: 'entry-short', status: 'short_notice', leadDays: 5 });
+    expect(results[1].businessDays).toBeDefined();
+    expect(results[2]).toMatchObject({ entryId: 'entry-missing', status: 'error' });
+    expect(results[2].message).toEqual(expect.any(String));
+
+    expect(summary).toEqual({ sent: 1, shortNotice: 1, error: 1 });
+    // Only the successful item enqueued an email — batch was not aborted by the error.
+    expect(mockAddJob).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends short-notice items when acknowledged', async () => {
+    mockFindById.mockResolvedValue({ _id: 'e', projectId: 'proj-1', entryType: 'MILESTONE', milestoneDate: daysFromNow(1), name: 'Soon' });
+    mockCreateConfirmation.mockResolvedValue({ _id: 'conf' });
+
+    const { results, summary } = await scheduleService.sendBulkConfirmations(
+      [{ entryId: 'e', partnerCompanyId: 'p1', partnerContactEmail: 'a@x.com', acknowledgeShortNotice: true }],
+      'user-1',
+    );
+
+    expect(results[0]).toMatchObject({ entryId: 'e', status: 'sent' });
+    expect(summary).toEqual({ sent: 1, shortNotice: 0, error: 0 });
+  });
+});
+
 describe('sendConfirmation — configurable lead-time soft warning', () => {
   const daysFromNow = (n) => {
     const d = new Date();

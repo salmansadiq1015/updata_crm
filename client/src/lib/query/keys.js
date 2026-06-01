@@ -84,6 +84,7 @@ export const queryKeys = {
     },
     schedule: {
       byProject: (projectId) => ['pm', 'schedule', projectId],
+      conflicts: (projectId) => ['pm', 'schedule', projectId, 'conflicts'],
     },
     confirmations: {
       byEntry: (projectId, entryId) => ['pm', 'confirmations', projectId, entryId],

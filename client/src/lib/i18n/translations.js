@@ -1106,6 +1106,8 @@ export const translations = {
 
     // CRM — Contacts
     'crm.contacts.title': 'Kontakte',
+    'crm.contacts.description': 'Alle Ansprechpartner ueber alle Kunden hinweg.',
+    'crm.contacts.searchPlaceholder': 'Nach Name oder E-Mail suchen...',
     'crm.contacts.newContact': 'Neuer Kontakt',
     'crm.contacts.editContact': 'Kontakt bearbeiten',
     'crm.contacts.formDesc': 'Kontakt wie Ansprechpartner oder Hausverwaltung hinzufuegen.',
@@ -2821,6 +2823,8 @@ export const translations = {
 
     // CRM — Contacts
     'crm.contacts.title': 'Contacts',
+    'crm.contacts.description': 'All points of contact across every customer.',
+    'crm.contacts.searchPlaceholder': 'Search by name or email...',
     'crm.contacts.newContact': 'New contact',
     'crm.contacts.editContact': 'Edit contact',
     'crm.contacts.formDesc': 'Add a point of contact such as a representative or property manager.',

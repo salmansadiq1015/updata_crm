@@ -18,9 +18,10 @@ import { ProjectStatusBadge } from './project-status-badge';
 import { cn } from '@/lib/utils';
 import { Loader2, ArrowRight, AlertTriangle, ShieldAlert } from 'lucide-react';
 
-export function StatusTransitionDialog({ open, onOpenChange, currentStatus, onSubmit, isLoading, canOverride }) {
+export function StatusTransitionDialog({ open, onOpenChange, currentStatus, onSubmit, isLoading, canOverride, conflictError }) {
   const { t, language } = useLanguage();
   const validTargets = STATUS_TRANSITIONS[currentStatus] || [];
+  const outstandingActions = conflictError?.data?.outstanding ?? null;
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(transitionStatusSchema),
@@ -97,6 +98,25 @@ export function StatusTransitionDialog({ open, onOpenChange, currentStatus, onSu
             >
               <Textarea {...register('comment')} rows={2} placeholder={language === 'de' ? 'Optionaler Kommentar...' : 'Optional comment...'} />
             </FormField>
+
+            {outstandingActions && outstandingActions.length > 0 && (
+              <Alert variant="destructive" className="border-destructive/50 bg-destructive/5">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <p className="font-medium mb-2">
+                    {t('pm.outstandingActionsTitle', 'Outstanding mandatory actions:')}
+                  </p>
+                  <ul className="space-y-1 list-disc list-inside">
+                    {outstandingActions.map((action) => (
+                      <li key={action.id} className="text-sm">
+                        <span className="font-medium">{action.title}</span>
+                        <span className="ml-1.5 text-xs text-muted-foreground uppercase">({action.status})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {canOverride && (
               <div className="space-y-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-4">

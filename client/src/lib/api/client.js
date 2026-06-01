@@ -207,6 +207,7 @@ export function normalizeApiError(error) {
       (isTimeout ? 'TIMEOUT' : isOffline ? 'OFFLINE' : isNetworkError ? 'NETWORK_ERROR' : isCanceled ? 'CANCELED' : 'UNKNOWN'),
     message,
     details,
+    data: envelopeError?.data ?? null,
     requestId: data?.meta?.requestId || response?.headers?.['x-request-id'] || null,
     isNetworkError,
     isTimeout,

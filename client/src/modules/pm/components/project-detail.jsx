@@ -332,11 +332,12 @@ export function ProjectDetail() {
 
       <StatusTransitionDialog
         open={statusDialogOpen}
-        onOpenChange={setStatusDialogOpen}
+        onOpenChange={(val) => { if (!val) transition.reset(); setStatusDialogOpen(val); }}
         currentStatus={project.status}
         onSubmit={(data) => transition.mutate(data)}
         isLoading={transition.isPending}
         canOverride={canOverride}
+        conflictError={transition.error}
       />
 
       <ConfirmDialog

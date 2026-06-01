@@ -463,13 +463,14 @@ export function ProjectsTable() {
         <StatusTransitionDialog
           open={statusDialogOpen}
           onOpenChange={(open) => {
+            if (!open) { statusTransition.reset(); setStatusDialogProject(null); }
             setStatusDialogOpen(open);
-            if (!open) setStatusDialogProject(null);
           }}
           currentStatus={statusDialogProject.status}
           onSubmit={(data) => statusTransition.mutate(data)}
           isLoading={statusTransition.isPending}
           canOverride={hasPermission('projects:admin')}
+          conflictError={statusTransition.error}
         />
       )}
     </div>

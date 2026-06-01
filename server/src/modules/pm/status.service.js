@@ -42,16 +42,17 @@ class StatusService {
     // IN_PROGRESS from PLANNING or ON_HOLD — check mandatory prep actions
     if (targetStatus === 'IN_PROGRESS' && (currentStatus === 'PLANNING' || currentStatus === 'ON_HOLD')) {
       const PreparatoryAction = (await import('./preparatoryAction.model.js')).default;
-      const incompleteCount = await PreparatoryAction.countDocuments({
+      const incompleteActions = await PreparatoryAction.find({
         projectId,
         isMandatory: true,
         status: { $nin: ['COMPLETED'] },
         isDeleted: false,
-      });
+      }).select('title status').lean();
 
-      if (incompleteCount > 0 && !override) {
+      if (incompleteActions.length > 0 && !override) {
         throw new ConflictError(
-          `Cannot transition to IN_PROGRESS: ${incompleteCount} mandatory preparatory action(s) are not completed`,
+          `Cannot transition to IN_PROGRESS: ${incompleteActions.length} mandatory preparatory action(s) are not completed`,
+          { outstanding: incompleteActions.map((a) => ({ id: String(a._id), title: a.title, status: a.status })) },
         );
       }
 

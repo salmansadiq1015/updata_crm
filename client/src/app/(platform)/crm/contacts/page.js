@@ -17,6 +17,7 @@ import { Search, Building2, Mail } from 'lucide-react';
 export default function ContactsPage() {
   const { t } = useLanguage();
   const [search, setSearch] = useState('');
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 });
   const debouncedSearch = useDebounce(search, 300);
   const q = debouncedSearch.trim();
 
@@ -31,7 +32,7 @@ export default function ContactsPage() {
   const columns = useMemo(() => [
     {
       accessorKey: 'name',
-      header: t('crm.contacts.firstName', 'Name'),
+      header: t('common.name', 'Name'),
       size: 280,
       Cell: ({ row }) => {
         const c = row.original;
@@ -139,6 +140,8 @@ export default function ContactsPage() {
         isLoading={isFetching && contacts.length === 0}
         rowCount={contacts.length}
         manualPagination={false}
+        pagination={pagination}
+        onPaginationChange={setPagination}
         manualSorting={false}
         manualFiltering={false}
         enableGlobalFilter={false}

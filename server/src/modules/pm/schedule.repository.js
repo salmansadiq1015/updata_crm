@@ -80,6 +80,13 @@ class ScheduleRepository {
       .lean();
   }
 
+  async findConfirmationsByEntryIds(scheduleEntryIds) {
+    if (!scheduleEntryIds || scheduleEntryIds.length === 0) return [];
+    return PartnerConfirmation.find({ scheduleEntryId: { $in: scheduleEntryIds } })
+      .sort({ createdAt: -1 })
+      .lean();
+  }
+
   async updateConfirmationById(id, data) {
     return PartnerConfirmation.findByIdAndUpdate(id, data, {
       returnDocument: 'after',

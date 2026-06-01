@@ -3,6 +3,7 @@ import { jest, describe, it, beforeAll, afterEach, expect } from '@jest/globals'
 // Mock scheduleRepository
 const mockFindByProjectId = jest.fn();
 const mockFindConfirmationsByEntry = jest.fn();
+const mockFindConfirmationsByEntryIds = jest.fn();
 const mockFindById = jest.fn();
 const mockCreate = jest.fn();
 const mockUpdateById = jest.fn();
@@ -16,6 +17,7 @@ jest.unstable_mockModule('../schedule.repository.js', () => ({
   default: {
     findByProjectId: mockFindByProjectId,
     findConfirmationsByEntry: mockFindConfirmationsByEntry,
+    findConfirmationsByEntryIds: mockFindConfirmationsByEntryIds,
     findById: mockFindById,
     create: mockCreate,
     updateById: mockUpdateById,
@@ -103,17 +105,15 @@ describe('getSchedule', () => {
     };
 
     mockFindByProjectId.mockResolvedValue(entries);
-    mockFindConfirmationsByEntry.mockImplementation((entryId) => {
-      if (String(entryId) === 'entry-1') return Promise.resolve([confirmation]);
-      return Promise.resolve([]);
-    });
+    // Batched lookup returns all confirmations across the project's entries.
+    mockFindConfirmationsByEntryIds.mockResolvedValue([confirmation]);
 
     const result = await scheduleService.getSchedule('proj-abc');
 
     expect(mockFindByProjectId).toHaveBeenCalledWith('proj-abc');
-    expect(mockFindConfirmationsByEntry).toHaveBeenCalledTimes(2);
-    expect(mockFindConfirmationsByEntry).toHaveBeenCalledWith('entry-1');
-    expect(mockFindConfirmationsByEntry).toHaveBeenCalledWith('entry-2');
+    // Single batched query (no N+1).
+    expect(mockFindConfirmationsByEntryIds).toHaveBeenCalledTimes(1);
+    expect(mockFindConfirmationsByEntryIds).toHaveBeenCalledWith(['entry-1', 'entry-2']);
 
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ _id: 'entry-1', name: 'Phase 1' });
@@ -125,9 +125,10 @@ describe('getSchedule', () => {
   it('returns an empty array when the project has no entries', async () => {
     mockFindByProjectId.mockResolvedValue([]);
 
+    mockFindConfirmationsByEntryIds.mockResolvedValue([]);
+
     const result = await scheduleService.getSchedule('proj-empty');
 
     expect(result).toEqual([]);
-    expect(mockFindConfirmationsByEntry).not.toHaveBeenCalled();
   });
 });

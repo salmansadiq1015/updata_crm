@@ -17,12 +17,20 @@ class ScheduleService {
       cacheKey,
       async () => {
         const entries = await scheduleRepository.findByProjectId(projectId);
-        return Promise.all(
-          entries.map(async (entry) => ({
-            ...entry,
-            confirmations: await scheduleRepository.findConfirmationsByEntry(entry._id),
-          })),
+        // Single batched query, then group confirmations by entry in memory (avoids N+1).
+        const confirmations = await scheduleRepository.findConfirmationsByEntryIds(
+          entries.map((e) => e._id),
         );
+        const byEntry = new Map();
+        for (const c of confirmations) {
+          const key = String(c.scheduleEntryId);
+          if (!byEntry.has(key)) byEntry.set(key, []);
+          byEntry.get(key).push(c);
+        }
+        return entries.map((entry) => ({
+          ...entry,
+          confirmations: byEntry.get(String(entry._id)) || [],
+        }));
       },
       ENTITY_TTL,
     );

@@ -63,8 +63,8 @@ class ProjectService {
   }
 
   async list(queryParams) {
-    const { cursor, limit, sortBy, sortOrder, search, ...filters } = queryParams;
-    const filterKey = Object.entries(filters)
+    const { cursor, limit, sortBy, sortOrder, search, plannedStartFrom, plannedStartTo, includeDeleted, ...filters } = queryParams;
+    const filterKey = Object.entries({ ...filters, plannedStartFrom, plannedStartTo, includeDeleted })
       .filter(([, v]) => v !== undefined)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${k}=${v}`)
@@ -73,7 +73,7 @@ class ProjectService {
 
     return cacheManager.getOrSet(
       cacheKey,
-      () => projectRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters, search }),
+      () => projectRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters, search, plannedStartFrom, plannedStartTo, includeDeleted }),
       LIST_TTL,
     );
   }

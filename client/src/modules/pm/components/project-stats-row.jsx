@@ -14,6 +14,7 @@ export function ProjectStatsRow() {
   const { data: summary, isLoading } = useQuery({
     queryKey: queryKeys.pm.dashboard.summary(),
     queryFn: () => projectService.getDashboardSummary(),
+    refetchInterval: 60000,
   });
 
   if (isLoading) {

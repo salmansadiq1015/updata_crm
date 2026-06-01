@@ -57,6 +57,9 @@ export const listProjectsSchema = {
     projectManagerId: objectId,
     search: Joi.string().trim().max(100),
     myOnly: Joi.boolean().default(false),
+    plannedStartFrom: Joi.date().iso(),
+    plannedStartTo: Joi.date().iso(),
+    includeDeleted: Joi.boolean().default(false),
   }),
 };
 

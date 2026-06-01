@@ -100,17 +100,11 @@ const navSectionDefs = [
   {
     titleKey: 'sidebar.fieldOps',
     items: [
-      {
-        type: 'group', key: 'fieldOps', labelKey: 'sidebar.fieldOps', icon: ClipboardList,
-        basePath: '/field-ops', permission: 'mobile:read',
-        children: [
-          { type: 'leaf', labelKey: 'sidebar.fieldOpsOrders', href: '/field-ops/orders', icon: ClipboardList, permission: 'mobile:read' },
-          { type: 'leaf', labelKey: 'sidebar.fieldOpsReports', href: '/field-ops/reports', icon: FileCheck, permission: 'mobile:read' },
-          { type: 'leaf', labelKey: 'sidebar.fieldOpsTime', href: '/field-ops/time', icon: Clock4, permission: 'mobile:read' },
-          { type: 'leaf', labelKey: 'sidebar.fieldOpsChat', href: '/field-ops/chat', icon: MessageSquare, permission: 'mobile:read' },
-          { type: 'leaf', labelKey: 'sidebar.fieldOpsNotifications', href: '/field-ops/notifications', icon: Bell, permission: 'mobile:read' },
-        ],
-      },
+      { type: 'leaf', labelKey: 'sidebar.fieldOpsOrders', href: '/field-ops/orders', icon: ClipboardList, permission: 'mobile:read' },
+      { type: 'leaf', labelKey: 'sidebar.fieldOpsReports', href: '/field-ops/reports', icon: FileCheck, permission: 'mobile:read' },
+      { type: 'leaf', labelKey: 'sidebar.fieldOpsTime', href: '/field-ops/time', icon: Clock4, permission: 'mobile:read' },
+      { type: 'leaf', labelKey: 'sidebar.fieldOpsChat', href: '/field-ops/chat', icon: MessageSquare, permission: 'mobile:read' },
+      { type: 'leaf', labelKey: 'sidebar.fieldOpsNotifications', href: '/field-ops/notifications', icon: Bell, permission: 'mobile:read' },
     ],
   },
   {
@@ -155,10 +149,9 @@ function isGroupActive(group, pathname) {
 
 // ── Shared nav content (used by both desktop + mobile) ──────
 
-function LeafLink({ leaf, collapsed, nested, onNavigate }) {
+function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
   const pathname = usePathname();
   const { t } = useLanguage();
-  const notificationUnread = useUnreadCount();
   const isActive = isLeafActive(leaf.href, pathname);
   const Icon = leaf.icon;
   const label = t(leaf.labelKey);
@@ -190,9 +183,9 @@ function LeafLink({ leaf, collapsed, nested, onNavigate }) {
           isActive ? 'text-[oklch(0.75_0.18_292)]' : 'text-white/30 group-hover:text-white/55',
           nested && 'h-[15px] w-[15px]'
         )} />
-        {leaf.href === '/notifications' && notificationUnread > 0 && (
+        {leaf.href === '/notifications' && unreadCount > 0 && (
           <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
-            {notificationUnread > 99 ? '99+' : notificationUnread}
+            {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </span>
@@ -231,7 +224,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate }) {
   return linkEl;
 }
 
-function SidebarGroup({ group, collapsed, onNavigate }) {
+function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
   const pathname = usePathname();
   const { hasPermission } = usePermissions();
   const { t } = useLanguage();
@@ -250,6 +243,7 @@ function SidebarGroup({ group, collapsed, onNavigate }) {
           <TooltipTrigger asChild>
             <PopoverTrigger asChild>
               <button
+                type="button"
                 className={cn(
                   'group relative flex w-full items-center justify-center rounded-xl py-2.5 transition-all duration-200',
                   groupActive ? 'bg-white/[0.08] text-white sidebar-active-glow' : 'text-white/45 hover:bg-white/[0.05]'
@@ -267,7 +261,7 @@ function SidebarGroup({ group, collapsed, onNavigate }) {
           <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/30">{label}</p>
           <div className="space-y-0.5">
             {children.map((leaf) => (
-              <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested={false} onNavigate={onNavigate} />
+              <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested={false} onNavigate={onNavigate} unreadCount={unreadCount} />
             ))}
           </div>
         </PopoverContent>
@@ -278,6 +272,9 @@ function SidebarGroup({ group, collapsed, onNavigate }) {
   return (
     <div>
       <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={`sidebar-group-${group.key}`}
         onClick={() => toggleGroup(group.key)}
         className={cn(
           'group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all duration-200',
@@ -292,6 +289,7 @@ function SidebarGroup({ group, collapsed, onNavigate }) {
         {expanded && (
           <motion.div
             key="group-children"
+            id={`sidebar-group-${group.key}`}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -300,7 +298,7 @@ function SidebarGroup({ group, collapsed, onNavigate }) {
           >
             <div className="mt-0.5 space-y-0.5 border-l border-white/[0.06] ml-[19px]">
               {children.map((leaf) => (
-                <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested onNavigate={onNavigate} />
+                <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested onNavigate={onNavigate} unreadCount={unreadCount} />
               ))}
             </div>
           </motion.div>
@@ -313,6 +311,7 @@ function SidebarGroup({ group, collapsed, onNavigate }) {
 function SidebarNav({ collapsed, onNavigate }) {
   const { hasPermission } = usePermissions();
   const { t } = useLanguage();
+  const notificationUnread = useUnreadCount();
 
   return (
     <LayoutGroup id={collapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}>
@@ -334,13 +333,22 @@ function SidebarNav({ collapsed, onNavigate }) {
               {collapsed && sIdx > 0 && <div className="mx-3 mb-2 h-px bg-white/[0.06]" />}
 
               <div className="space-y-0.5">
-                {visibleItems.map((item) =>
-                  item.type === 'group' ? (
-                    <SidebarGroup key={item.key} group={item} collapsed={collapsed} onNavigate={onNavigate} />
-                  ) : (
-                    <LeafLink key={item.href} leaf={item} collapsed={collapsed} nested={false} onNavigate={onNavigate} />
-                  )
-                )}
+                {visibleItems.map((item) => {
+                  if (item.type === 'group') {
+                    const visibleKids = getVisibleChildren(item, hasPermission);
+                    if (visibleKids.length === 1) {
+                      return (
+                        <LeafLink key={item.key} leaf={visibleKids[0]} collapsed={collapsed} nested={false} onNavigate={onNavigate} unreadCount={notificationUnread} />
+                      );
+                    }
+                    return (
+                      <SidebarGroup key={item.key} group={item} collapsed={collapsed} onNavigate={onNavigate} unreadCount={notificationUnread} />
+                    );
+                  }
+                  return (
+                    <LeafLink key={item.href} leaf={item} collapsed={collapsed} nested={false} onNavigate={onNavigate} unreadCount={notificationUnread} />
+                  );
+                })}
               </div>
             </div>
           );

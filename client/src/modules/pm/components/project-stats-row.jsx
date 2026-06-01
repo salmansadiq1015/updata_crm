@@ -44,7 +44,7 @@ export function ProjectStatsRow() {
       />
       <PremiumStatCard
         label={t('pm.overdueProjects', 'Overdue')}
-        value={summary.overdue ?? 0}
+        value={summary.risk?.overdue ?? 0}
         icon={AlertTriangle}
         accent="amber"
       />

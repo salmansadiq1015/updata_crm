@@ -76,7 +76,7 @@ export function ProjectDetail() {
 
   const canWrite = hasPermission('projects:write');
   const canDelete = hasPermission('projects:delete');
-  const canOverride = hasPermission('projects:status:override');
+  const canOverride = hasPermission('projects:admin');
 
   const { data: project, isLoading } = useQuery({
     queryKey: queryKeys.pm.projects.detail(id),

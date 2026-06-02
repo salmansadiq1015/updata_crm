@@ -14,7 +14,6 @@ export const attachmentService = {
     const res = await apiClient.post(
       ENDPOINTS.CRM.CUSTOMER_ATTACHMENTS(customerId),
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
     );
     return res.data;
   },

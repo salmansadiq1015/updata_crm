@@ -23,30 +23,38 @@ export function useAttachmentMutations(customerId) {
   const upload = useMutation({
     mutationFn: (file) => attachmentService.upload(customerId, file),
     onSuccess: () => { invalidate(); showSuccess('File uploaded'); },
-    onError: (err) => showError(err.message),
+    onError: (err) => showError(err),
   });
 
   const rename = useMutation({
     mutationFn: ({ fileId, originalName }) =>
       attachmentService.rename(customerId, fileId, originalName),
     onSuccess: () => { invalidate(); showSuccess('File renamed'); },
-    onError: (err) => showError(err.message),
+    onError: (err) => showError(err),
   });
 
   const remove = useMutation({
     mutationFn: (fileId) => attachmentService.remove(customerId, fileId),
     onSuccess: () => { invalidate(); showSuccess('File deleted'); },
-    onError: (err) => showError(err.message),
+    onError: (err) => showError(err),
   });
 
   const bulkRemove = useMutation({
     mutationFn: (fileIds) => attachmentService.bulkRemove(customerId, fileIds),
     onSuccess: (data) => {
       invalidate();
-      showSuccess(`${data?.deleted ?? 'Files'} file(s) deleted`);
+      const n = data?.deleted ?? 0;
+      if (n === 0) showError('No files were deleted');
+      else showSuccess(`${n} file(s) deleted`);
     },
-    onError: (err) => showError(err.message),
+    onError: (err) => showError(err),
   });
 
-  return { upload, rename, remove, bulkRemove };
+  const download = useMutation({
+    mutationFn: (fileId) => attachmentService.getDownloadUrl(fileId),
+    onSuccess: (url) => { if (url) window.open(url, '_blank'); },
+    onError: (err) => showError(err),
+  });
+
+  return { upload, rename, remove, bulkRemove, download };
 }

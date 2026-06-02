@@ -221,6 +221,9 @@ export function ImagesPanel({ entityType, entityId }) {
       {lightbox && (
         <Dialog open onOpenChange={(v) => !v && setLightbox(null)}>
           <DialogContent className="max-w-4xl p-0 gap-0 rounded-2xl border border-white/[0.08] bg-[#060A10] shadow-2xl overflow-hidden">
+            <DialogTitle className="sr-only">
+              {lightbox.caption || t('crm.images.preview', 'Bildvorschau')}
+            </DialogTitle>
             {/* Image area */}
             <div className="relative">
               <img
@@ -334,8 +337,16 @@ function ImageTile({ image: img, canDelete, onDelete, onView, t }) {
 // ─── Premium Upload Dialog ───────────────────────────────────────────────────
 
 function UploadImageDialog({ file, caption, category, isPending, onCaptionChange, onCategoryChange, onUpload, onClose, onReplace, t }) {
-  const url = useMemo(() => file ? URL.createObjectURL(file) : null, [file]);
-  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  // StrictMode-safe object URL: create it INSIDE the effect and revoke the same
+  // instance in cleanup. (Using useMemo here breaks in dev StrictMode — the effect
+  // cleanup revokes the blob but useMemo never recreates it, leaving a dead src.)
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    if (!file) { setUrl(null); return; }
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
 
   const activeMeta = IMAGE_CATEGORY_META[category] || IMAGE_CATEGORY_META.general;
   const ActiveIcon = activeMeta.icon;
@@ -369,7 +380,7 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
           {/* Image preview card */}
-          <div className="relative rounded-2xl overflow-hidden bg-[#060A10] ring-1 ring-white/[0.07] group">
+          <div className="relative rounded-2xl overflow-hidden bg-[#060A10] ring-1 ring-white/[0.07] group min-h-[13rem] flex items-center justify-center">
             {/* Gradient overlay at bottom */}
             <div className="absolute inset-0 bg-gradient-to-t from-[#060A10]/90 via-transparent to-transparent pointer-events-none z-10" />
 
@@ -379,11 +390,10 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
                 src={url}
                 alt={caption || t('crm.images.preview', 'Vorschau')}
                 className="w-full object-contain max-h-72 select-none"
-                style={{ imageRendering: 'auto' }}
               />
             ) : (
               <div className="h-52 flex items-center justify-center">
-                <FileImage className="h-12 w-12 text-white/10" />
+                <Loader2 className="h-8 w-8 text-white/15 animate-spin" />
               </div>
             )}
 

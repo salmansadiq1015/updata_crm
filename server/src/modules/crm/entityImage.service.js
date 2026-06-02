@@ -14,6 +14,27 @@ class EntityImageService {
     return `crm:images:${entityType}:${entityId}`;
   }
 
+  /**
+   * Resolve a single image record's file IDs into pre-signed download URLs.
+   * Presigned URLs are valid ~15 min; the list cache TTL is <=2 min, so caching
+   * the enriched records is safe (URLs won't expire within the cache window).
+   */
+  async _enrichImage(img, fileService) {
+    if (!img) return img;
+    const [url, thumbnailUrl, mediumUrl] = await Promise.all([
+      img.fileId ? fileService.getDownloadUrl(img.fileId).catch(() => null) : null,
+      img.thumbnailFileId ? fileService.getDownloadUrl(img.thumbnailFileId).catch(() => null) : null,
+      img.mediumFileId ? fileService.getDownloadUrl(img.mediumFileId).catch(() => null) : null,
+    ]);
+    return { ...img, url, thumbnailUrl, mediumUrl };
+  }
+
+  async _enrichImages(images) {
+    if (!Array.isArray(images) || images.length === 0) return images || [];
+    const fileService = (await import('../files/file.service.js')).default;
+    return Promise.all(images.map((img) => this._enrichImage(img, fileService)));
+  }
+
   async create(entityType, entityId, fileData, uploadedBy, meta = {}) {
     const existingCount = await entityImageRepository.countByEntity(entityType, entityId);
     if (existingCount >= 50) {
@@ -126,15 +147,19 @@ class EntityImageService {
 
     logger.info('Entity image created', { module: 'crm', action: 'image.create', imageId: entityImage._id, entityType, entityId });
 
-    // Return with populated fileId
-    return entityImageRepository.findById(entityImage._id);
+    // Return with resolved download URLs so the client can render immediately.
+    const created = await entityImageRepository.findById(entityImage._id);
+    return this._enrichImage(created, fileService);
   }
 
   async listByEntity(entityType, entityId) {
     const cacheKey = this._cacheKey(entityType, entityId);
     return cacheManager.getOrSet(
       cacheKey,
-      () => entityImageRepository.findByEntity(entityType, entityId),
+      async () => {
+        const images = await entityImageRepository.findByEntity(entityType, entityId);
+        return this._enrichImages(images);
+      },
       LIST_TTL,
     );
   }

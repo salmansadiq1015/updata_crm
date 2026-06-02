@@ -8,6 +8,7 @@ import logger from '../../shared/logger/index.js';
 class AttachmentController {
   async list(req, res, next) {
     try {
+      const { limit = 100 } = req._validatedQuery || {};
       const files = await FileMetadata.find({
         module: 'crm',
         entityType: 'customer',
@@ -15,7 +16,7 @@ class AttachmentController {
       })
         .populate('uploadedBy', 'firstName lastName')
         .sort({ createdAt: -1 })
-        .limit(200)
+        .limit(Math.min(Number(limit), 200))
         .select('-__v')
         .lean();
       return res.success({ data: files });

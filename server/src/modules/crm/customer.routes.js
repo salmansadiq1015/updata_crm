@@ -224,8 +224,8 @@ router.post('/:id/images', authenticate, requirePermission('crm:write'), setCust
 // Attachment sub-routes — bulk-delete registered BEFORE /:fileId to avoid param collision
 router.get('/:id/attachments', authenticate, requirePermission('crm:read'), validate(listAttachmentsSchema), (req, res, next) => attachmentController.list(req, res, next));
 router.post('/:id/attachments', authenticate, requirePermission('crm:write'), uploadAttachment.single('file'), validate(uploadAttachmentSchema), (req, res, next) => attachmentController.upload(req, res, next));
-router.post('/:id/attachments/bulk-delete', authenticate, requirePermission('crm:write'), validate(bulkDeleteAttachmentSchema), (req, res, next) => attachmentController.bulkRemove(req, res, next));
+router.post('/:id/attachments/bulk-delete', authenticate, requirePermission('crm:delete'), validate(bulkDeleteAttachmentSchema), (req, res, next) => attachmentController.bulkRemove(req, res, next));
 router.patch('/:id/attachments/:fileId', authenticate, requirePermission('crm:write'), validate(renameAttachmentSchema), (req, res, next) => attachmentController.rename(req, res, next));
-router.delete('/:id/attachments/:fileId', authenticate, requirePermission('crm:write'), validate(deleteAttachmentSchema), (req, res, next) => attachmentController.remove(req, res, next));
+router.delete('/:id/attachments/:fileId', authenticate, requirePermission('crm:delete'), validate(deleteAttachmentSchema), (req, res, next) => attachmentController.remove(req, res, next));
 
 export default router;

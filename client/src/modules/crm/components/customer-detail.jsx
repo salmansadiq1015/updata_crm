@@ -7,7 +7,6 @@ import { useQuery } from '@tanstack/react-query';
 import { customerService } from '@/modules/crm/services/customer-service';
 import { useCustomerDocuments } from '@/modules/qop/hooks/use-qop-queries';
 import { useCustomerAttachments, useAttachmentMutations } from '@/modules/crm/hooks/use-customer-attachments';
-import { attachmentService } from '@/modules/crm/services/attachment-service';
 import { QuotationStatusBadge, OrderStatusBadge, InvoiceStatusBadge } from '@/modules/qop/components/status-badge';
 import { queryKeys } from '@/lib/query/keys';
 import { usePermissions } from '@/shared/hooks/use-permissions';

@@ -11,9 +11,13 @@ export const attachmentService = {
   async upload(customerId, file) {
     const formData = new FormData();
     formData.append('file', file);
+    // Must set multipart Content-Type explicitly: the apiClient instance defaults
+    // to 'application/json', and axios v1 will otherwise serialize FormData to JSON
+    // (the File becomes {}), so multer never receives a file → 400 FILE_REQUIRED.
     const res = await apiClient.post(
       ENDPOINTS.CRM.CUSTOMER_ATTACHMENTS(customerId),
       formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
     );
     return res.data;
   },

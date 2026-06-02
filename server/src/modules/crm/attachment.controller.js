@@ -38,7 +38,10 @@ class AttachmentController {
         entityType: 'customer',
         entityId: req.params.id,
         uploadedBy: req.user._id,
-        bucket: 'documents',
+        // 'general' bucket → validateFile falls back to the permissive ALLOWED_MIME_TYPES.all
+        // policy (images + office docs + pdf + csv/text), so scans/photos of contracts are
+        // accepted alongside documents, matching a real customer document repository.
+        bucket: 'general',
       });
 
       let url = null;

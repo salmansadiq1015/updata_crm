@@ -36,11 +36,23 @@ import {
   ChevronRight, Copy, Hash, Calendar, BellRing, FileText,
   UsersIcon, ClipboardList, Activity, GitMerge,
   Upload, Download, Trash2, Loader2, X,
-  File,
+  File, Image as ImageIcon,
 } from 'lucide-react';
 import { pickCustomerAccent, CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 
 const cantonName = (code) => CH_CANTONS.find((c) => c.code === code)?.name || code;
+
+// Accepted attachment types — documents + images (scans/photos of contracts).
+// Mirrors the server 'general' bucket policy (ALLOWED_MIME_TYPES.all minus audio/video).
+const ATTACHMENT_ACCEPT = [
+  'image/*',
+  '.pdf', 'application/pdf',
+  '.doc', '.docx', 'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls', '.xlsx', 'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.csv', 'text/csv', '.txt', 'text/plain',
+].join(',');
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 function fmtBytes(n) {
@@ -52,6 +64,7 @@ function fmtBytes(n) {
 
 function fileTypeIcon(mimeType) {
   if (!mimeType) return { Icon: File, color: 'text-white/30' };
+  if (mimeType.startsWith('image/')) return { Icon: ImageIcon, color: 'text-blue-400' };
   if (mimeType === 'application/pdf') return { Icon: FileText, color: 'text-red-400' };
   if (mimeType.includes('document') || mimeType.includes('word')) return { Icon: FileText, color: 'text-blue-400' };
   if (mimeType.includes('sheet') || mimeType.includes('excel') || mimeType === 'text/csv') return { Icon: FileText, color: 'text-green-400' };
@@ -110,7 +123,7 @@ function DocumentsAnimatedEmpty({ customerId, de, canWrite }) {
               : <Upload className="h-3 w-3" />}
             {de ? 'Datei hochladen' : 'Upload File'}
           </Button>
-          <input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain" onChange={handleFileInput} />
+          <input ref={fileInputRef} type="file" multiple className="hidden" accept={ATTACHMENT_ACCEPT} onChange={handleFileInput} />
         </>
       )}
     </div>
@@ -249,7 +262,7 @@ function CustomerAttachmentsSection({ customerId, attachments, canWrite, de }) {
                 : <Upload className="h-3 w-3" />}
               {de ? 'Hochladen' : 'Upload File'}
             </Button>
-            <input ref={fileInputRef} type="file" multiple className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain" onChange={handleFileInput} />
+            <input ref={fileInputRef} type="file" multiple className="hidden" accept={ATTACHMENT_ACCEPT} onChange={handleFileInput} />
           </>
         )}
       </div>

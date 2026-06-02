@@ -91,6 +91,10 @@ export const ENDPOINTS = Object.freeze({
     SITE_IMAGES: (siteId) => `/crm/sites/${siteId}/images`,
     INSTALLATION_IMAGES: (installationId) => `/crm/installations/${installationId}/images`,
     IMAGE_BY_ID: (id) => `/crm/images/${id}`,
+    // Attachments (customer file uploads)
+    CUSTOMER_ATTACHMENTS: (customerId) => `/crm/customers/${customerId}/attachments`,
+    CUSTOMER_ATTACHMENT_BY_ID: (customerId, fileId) => `/crm/customers/${customerId}/attachments/${fileId}`,
+    CUSTOMER_ATTACHMENTS_BULK_DELETE: (customerId) => `/crm/customers/${customerId}/attachments/bulk-delete`,
     // Newsletters
     NEWSLETTERS: '/crm/newsletters',
     NEWSLETTER_BY_ID: (id) => `/crm/newsletters/${id}`,
@@ -99,6 +103,9 @@ export const ENDPOINTS = Object.freeze({
     NEWSLETTER_SEND: (id) => `/crm/newsletters/${id}/send`,
     NEWSLETTER_STATS: (id) => `/crm/newsletters/${id}/stats`,
     NEWSLETTER_COUNT_RECIPIENTS: '/crm/newsletters/count-recipients',
+  },
+  FILES: {
+    DOWNLOAD: (fileId) => `/files/${fileId}/download`,
   },
   INTEGRATIONS: {
     // Widget submissions (from company website)

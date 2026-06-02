@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -44,9 +44,10 @@ const cantonName = (code) => CH_CANTONS.find((c) => c.code === code)?.name || co
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 function fmtBytes(n) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1048576) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1048576).toFixed(1)} MB`;
+  const bytes = n ?? 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
 function fileTypeIcon(mimeType) {
@@ -187,12 +188,21 @@ function CustomerAttachmentsSection({ customerId, attachments, canWrite, de }) {
       return next;
     });
 
+  // Prune selection when the attachment list changes (e.g. after delete/upload refresh)
+  useEffect(() => {
+    setSelected((prev) => {
+      const currentIds = new Set(attachments.map((f) => f._id));
+      const pruned = new Set([...prev].filter((id) => currentIds.has(id)));
+      return pruned.size === prev.size ? prev : pruned;
+    });
+  }, [attachments]);
+
   const toggleAll = () =>
     setSelected(selected.size === attachments.length ? new Set() : new Set(attachments.map((f) => f._id)));
 
   const openRename = (file) => {
     setRenameTarget({ id: file._id });
-    setRenameName(file.originalName);
+    setRenameName(file.originalName ?? '');
   };
 
   const handleRename = async () => {

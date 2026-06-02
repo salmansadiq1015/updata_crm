@@ -52,7 +52,7 @@ export function CustomerActivityPanel({ customerId }) {
     queryKey: queryKeys.crm.customers.activity(customerId, {}),
     queryFn: ({ pageParam = null }) => customerService.getActivity(customerId, { cursor: pageParam || '', limit: 25 }),
     initialPageParam: null,
-    getNextPageParam: (last) => (last?.pagination?.hasMore ? last?.pagination?.cursor : null),
+    getNextPageParam: (last) => (last?.pagination?.hasNext ? last?.pagination?.nextCursor : null),
     enabled: !!customerId,
   });
 

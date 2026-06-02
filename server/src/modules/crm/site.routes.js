@@ -7,7 +7,7 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   createSiteSchema, updateSiteSchema, siteIdParamSchema,
-  customerIdParamSchema, listSitesSchema, siteActivitySchema,
+  customerIdParamSchema, listSitesSchema, siteActivitySchema, siteActivityExportSchema,
 } from './site.validation.js';
 import { createNoteSchema } from './note.validation.js';
 import { createImageSchema } from './image.validation.js';
@@ -25,6 +25,7 @@ router.get('/', authenticate, requirePermission('crm:read'), validate(listSitesS
 router.get('/:id', authenticate, requirePermission('crm:read'), validate(siteIdParamSchema), (req, res, next) => siteController.getById(req, res, next));
 router.patch('/:id', authenticate, requirePermission('crm:write'), validate(updateSiteSchema), (req, res, next) => siteController.update(req, res, next));
 router.post('/:id/deactivate', authenticate, requirePermission('crm:delete'), validate(siteIdParamSchema), (req, res, next) => siteController.deactivate(req, res, next));
+router.get('/:id/activity/export', authenticate, requirePermission('crm:read'), validate(siteActivityExportSchema), (req, res, next) => siteController.exportActivity(req, res, next));
 router.get('/:id/activity', authenticate, requirePermission('crm:read'), validate(siteActivitySchema), (req, res, next) => siteController.getActivity(req, res, next));
 
 // Notes sub-routes

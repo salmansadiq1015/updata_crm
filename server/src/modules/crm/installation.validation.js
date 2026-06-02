@@ -62,5 +62,20 @@ export const installationActivitySchema = {
   params: Joi.object({ id: objectId.required() }),
   query: cursorPagination.keys({
     eventType: Joi.string().trim().max(100),
+    type: Joi.string().trim().max(50),
+    dateFrom: Joi.date().iso(),
+    dateTo: Joi.date().iso(),
+    order: Joi.string().valid('asc', 'desc').default('desc'),
+  }),
+};
+
+export const installationActivityExportSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  query: Joi.object({
+    format: Joi.string().valid('csv', 'pdf').default('csv'),
+    type: Joi.string().trim().max(50),
+    dateFrom: Joi.date().iso(),
+    dateTo: Joi.date().iso(),
+    order: Joi.string().valid('asc', 'desc').default('desc'),
   }),
 };

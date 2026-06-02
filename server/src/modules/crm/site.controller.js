@@ -54,6 +54,17 @@ class SiteController {
       return res.success({ data: result.data, pagination: result.pagination });
     } catch (err) { next(err); }
   }
+
+  async exportActivity(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const { content, mimeType, extension } = await siteService.exportActivity(req.params.id, query);
+      const filename = `site-${req.params.id}-activity-${new Date().toISOString().split('T')[0]}.${extension}`;
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(content);
+    } catch (err) { next(err); }
+  }
 }
 
 const siteController = new SiteController();

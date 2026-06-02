@@ -9,7 +9,7 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import {
   createInstallationSchema, updateInstallationSchema, decommissionSchema,
   installationIdParamSchema, siteIdParamSchema, listInstallationsSchema,
-  installationActivitySchema,
+  installationActivitySchema, installationActivityExportSchema,
 } from './installation.validation.js';
 import { createNoteSchema } from './note.validation.js';
 import { createImageSchema } from './image.validation.js';
@@ -28,6 +28,7 @@ router.get('/', authenticate, requirePermission('crm:read'), validate(listInstal
 router.get('/:id', authenticate, requirePermission('crm:read'), validate(installationIdParamSchema), (req, res, next) => installationController.getById(req, res, next));
 router.patch('/:id', authenticate, requirePermission('crm:write'), validate(updateInstallationSchema), (req, res, next) => installationController.update(req, res, next));
 router.post('/:id/decommission', authenticate, requirePermission('crm:delete'), validate(decommissionSchema), (req, res, next) => installationController.decommission(req, res, next));
+router.get('/:id/activity/export', authenticate, requirePermission('crm:read'), validate(installationActivityExportSchema), (req, res, next) => installationController.exportActivity(req, res, next));
 router.get('/:id/activity', authenticate, requirePermission('crm:read'), validate(installationActivitySchema), (req, res, next) => installationController.getActivity(req, res, next));
 
 // Notes sub-routes

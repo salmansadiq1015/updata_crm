@@ -4,8 +4,11 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
+import { buildEntityTimeline, exportCsv, exportPdf } from './activityTimeline.service.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
+
+const EXPORT_MAX_ENTRIES = 1000;
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
@@ -170,23 +173,50 @@ class SiteService {
     return updated;
   }
 
-  async getActivity(siteId, { cursor, limit = 25, eventType } = {}) {
+  /**
+   * Unified site activity timeline: merges notes, images, maintenance,
+   * service orders, QOP documents (via parent customer) and audit events
+   * into one chronologically-sorted, cursor-paginated feed.
+   */
+  async getActivity(siteId, { cursor, limit = 25, type, dateFrom, dateTo, order = 'desc' } = {}) {
     const exists = await siteRepository.findById(siteId);
     if (!exists) throw new NotFoundError('Site', siteId);
 
-    const AuditLog = (await import('../auth/auditLog.model.js')).default;
-    const { buildCursorQuery, buildCursorSort, buildCursorResponse } = await import('../../shared/utils/pagination.js');
+    return buildEntityTimeline({
+      entityType: 'site',
+      entityId: siteId,
+      type,
+      dateFrom,
+      dateTo,
+      order,
+      cursor,
+      limit,
+    });
+  }
 
-    const filter = {
-      module: 'crm',
-      'details.siteId': siteId,
-      ...buildCursorQuery(cursor, 'timestamp', 'desc'),
-    };
-    if (eventType) filter.eventType = eventType;
+  /**
+   * Export the (filtered) site activity timeline as CSV or PDF.
+   * Returns { content, mimeType, extension }.
+   */
+  async exportActivity(siteId, { format = 'csv', type, dateFrom, dateTo, order = 'desc' } = {}) {
+    const exists = await siteRepository.findById(siteId);
+    if (!exists) throw new NotFoundError('Site', siteId);
 
-    const sort = buildCursorSort('timestamp', 'desc');
-    const docs = await AuditLog.find(filter).sort(sort).limit(limit + 1).lean();
-    return buildCursorResponse(docs, limit, 'timestamp');
+    const entries = await buildEntityTimeline({
+      entityType: 'site',
+      entityId: siteId,
+      type,
+      dateFrom,
+      dateTo,
+      order,
+      maxEntries: EXPORT_MAX_ENTRIES,
+    });
+
+    if (format === 'pdf') {
+      const buffer = await exportPdf(entries, { title: `Site ${exists.siteNumber || ''} — Activity` });
+      return { content: buffer, mimeType: 'application/pdf', extension: 'pdf' };
+    }
+    return { content: exportCsv(entries), mimeType: 'text/csv; charset=utf-8', extension: 'csv' };
   }
 
   async _invalidateSiteCache(id) {

@@ -144,6 +144,9 @@ export const queryKeys = {
       bySite: (siteId) => ['crm', 'images', 'bySite', siteId],
       byInstallation: (installationId) => ['crm', 'images', 'byInstallation', installationId],
     },
+    activity: {
+      timeline: (entityType, entityId, filters) => ['crm', 'activity', entityType, entityId, filters ?? null],
+    },
     newsletters: {
       all: () => ['crm', 'newsletters'],
       list: (filters) => ['crm', 'newsletters', 'list', filters],

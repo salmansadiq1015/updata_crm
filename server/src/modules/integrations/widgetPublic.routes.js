@@ -19,7 +19,7 @@ const widgetLimiter = createLimiter({
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
 });
 
 router.get('/config', widgetLimiter, validate(widgetIdQuerySchema), (req, res, next) => widgetPublicController.getConfig(req, res, next));

@@ -3,26 +3,12 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
 
 export function registerIntegrationsEvents() {
-  // When widget submission is received → process it (create CRM contact + order/lead)
-  eventBus.subscribe(EVENT_TYPES.WIDGET_SUBMISSION_RECEIVED, async (data) => {
-    try {
-      const payload = data.payload || data;
-      logger.info('Widget submission received — processing CRM contact creation', {
-        module: 'integrations',
-        action: 'event.widget_submission_received',
-        submissionId: payload.submissionId,
-        contactEmail: payload.contactEmail ? `***${payload.contactEmail.split('@')[1]}` : null,
-      });
-      // CRM contact creation would be triggered here via lazy import of CRM service
-      // For now, log the event — actual CRM integration depends on Module 02 API
-    } catch (err) {
-      logger.error('Failed to process widget submission event', {
-        module: 'integrations',
-        action: 'event.widget_submission_received',
-        error: { message: err.message, stack: err.stack },
-      });
-    }
-  });
+  // NOTE: WIDGET_SUBMISSION_RECEIVED is intentionally not subscribed here.
+  // - CRM contact/customer creation is performed synchronously in
+  //   widgetSubmission.service.js (_createCrmServiceRequest) during submit().
+  // - The dispatcher IN_APP/PUSH/EMAIL notification (AC-11) is handled by
+  //   notifications.events.js using payload.assignedTo.
+  // The previous log-only handler was removed to avoid confusion / duplication.
 
   // When appointment is created/updated/cancelled → sync to connected calendars
   eventBus.subscribe(EVENT_TYPES.SCHEDULE_APPOINTMENT_CONFIRMED, async (data) => {
@@ -136,7 +122,7 @@ export function registerIntegrationsEvents() {
     module: 'integrations',
     action: 'events.register',
     subscribedEvents: [
-      'WIDGET_SUBMISSION_RECEIVED', 'SCHEDULE_APPOINTMENT_CONFIRMED',
+      'SCHEDULE_APPOINTMENT_CONFIRMED',
       'SCHEDULE_APPOINTMENT_CANCELLED', 'INTEGRATION_STATUS_CHANGED',
       'INTEGRATION_SYNC_COMPLETED', 'INTEGRATION_SYNC_FAILED',
     ],

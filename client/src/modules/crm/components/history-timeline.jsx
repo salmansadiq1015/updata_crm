@@ -72,12 +72,12 @@ export function HistoryTimeline({ entityType, entityId }) {
           summary: m.notes,
         });
       }
-      if (m.nextServiceDate && new Date(m.nextServiceDate) > new Date()) {
+      if (m.nextDueDate && new Date(m.nextDueDate) > new Date()) {
         const typeMeta = MAINTENANCE_TYPE_META[m.maintenanceType] || MAINTENANCE_TYPE_META.other;
         const label = m.maintenanceType === 'other' && m.customTypeLabel ? m.customTypeLabel : typeMeta.label;
         entries.push({
           id: `maint-next-${m._id}`,
-          date: m.nextServiceDate,
+          date: m.nextDueDate,
           type: 'maintenance_scheduled',
           title: `${label} geplant`,
           summary: `Alle ${m.frequencyMonths} Monate`,

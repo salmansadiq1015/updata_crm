@@ -3,7 +3,7 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
-import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
+import { NotFoundError, ConflictError, AuthorizationError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
@@ -62,6 +62,11 @@ class EntityNoteService {
   async update(id, data, updatedBy, meta = {}) {
     const note = await entityNoteRepository.findById(id);
     if (!note) throw new NotFoundError('EntityNote', id);
+
+    // Only the original author may edit their note (CRM-011 AC-5).
+    if (note.authorId?.toString() !== updatedBy?.toString()) {
+      throw new AuthorizationError('Only the note author can edit this note');
+    }
 
     if (new Date() > note.editableUntil) {
       throw new ConflictError('Note can only be edited within 24 hours of creation');

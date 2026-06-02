@@ -699,11 +699,16 @@ describe('CRM Service Contracts', () => {
     const customer = await seedCustomer({ createdBy: user._id });
     const site = await seedSite(customer._id, { createdBy: user._id });
 
+    // Use a relative commissioning date so nextDueDate (=+6 months) always sits
+    // outside the 30-day "due" lookahead window — otherwise the test ages into a
+    // 'due' status once "now" comes within 30 days of a hardcoded due date.
+    const commissioningDate = new Date();
+    commissioningDate.setUTCHours(0, 0, 0, 0);
     const installation = await installationService.create(site._id, {
       type: 'ventilation',
       manufacturer: 'Zehnder',
       model: 'ComfoAir',
-      commissioningDate: new Date('2026-01-01T00:00:00.000Z'),
+      commissioningDate,
     }, user._id);
 
     const intervals = await MaintenanceInterval.find({ installationId: installation._id }).lean();
@@ -713,7 +718,10 @@ describe('CRM Service Contracts', () => {
       frequencyMonths: 6,
       maintenanceStatus: 'ok',
     });
-    expect(new Date(intervals[0].nextDueDate).toISOString()).toBe('2026-07-01T00:00:00.000Z');
+    // Mirror the service's _calculateNextDueDate (setMonth + frequencyMonths) exactly.
+    const expectedDue = new Date(commissioningDate);
+    expectedDue.setMonth(expectedDue.getMonth() + 6);
+    expect(new Date(intervals[0].nextDueDate).toISOString()).toBe(expectedDue.toISOString());
   });
 
   test('maintenance creation uses commissioning date when no last service date exists', async () => {

@@ -91,6 +91,14 @@ class WidgetSubmissionRepository {
     }).lean();
   }
 
+  async pushAttachment(id, attachment) {
+    return WidgetSubmission.findByIdAndUpdate(
+      id,
+      { $push: { attachments: attachment } },
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+  }
+
   async softDelete(id) {
     return WidgetSubmission.findByIdAndUpdate(
       id,

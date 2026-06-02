@@ -45,7 +45,7 @@ export function MaintenanceDashboard() {
   const overdueItems = overdueRes?.data ?? [];
   const dueItems = dueRes?.data ?? [];
 
-  const stats = dashboard || { overdueCount: 0, dueCount: 0, scheduledCount: 0, okCount: 0, total: 0 };
+  const stats = dashboard || { overdue: 0, due: 0, scheduled: 0, ok: 0, total: 0 };
 
   const exportCsv = useMutation({
     mutationFn: (status) => maintenanceService.exportCsv({ status }),
@@ -89,7 +89,7 @@ export function MaintenanceDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label={t('crm.maintenance.stats.overdue', 'Overdue')}
-          value={stats.overdueCount ?? 0}
+          value={stats.overdue ?? 0}
           icon={AlertTriangle}
           accent="red"
           loading={loadingDash}
@@ -98,7 +98,7 @@ export function MaintenanceDashboard() {
         />
         <StatCard
           label={t('crm.maintenance.stats.due', 'Due')}
-          value={stats.dueCount ?? 0}
+          value={stats.due ?? 0}
           icon={Clock}
           accent="amber"
           loading={loadingDash}
@@ -107,14 +107,14 @@ export function MaintenanceDashboard() {
         />
         <StatCard
           label={t('crm.maintenance.stats.scheduled', 'Scheduled')}
-          value={stats.scheduledCount ?? 0}
+          value={stats.scheduled ?? 0}
           icon={Calendar}
           accent="sky"
           loading={loadingDash}
         />
         <StatCard
           label={t('crm.maintenance.stats.ok', 'OK')}
-          value={stats.okCount ?? 0}
+          value={stats.ok ?? 0}
           icon={CheckCircle2}
           accent="emerald"
           loading={loadingDash}

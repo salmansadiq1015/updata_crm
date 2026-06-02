@@ -18,7 +18,16 @@ const widgetSubmissionSchema = new mongoose.Schema(
     requestType: { type: String, enum: REQUEST_TYPES, required: true },
     description: { type: String, required: true, maxlength: 5000 },
     preferredWindow: { type: String, maxlength: 100, default: null },
-    attachments: [{ type: mongoose.Schema.Types.Mixed }],
+    attachments: [
+      {
+        fileId: { type: mongoose.Schema.Types.ObjectId, ref: 'File', default: null },
+        key: { type: String, default: null },
+        originalName: { type: String, default: null },
+        mimeType: { type: String, default: null },
+        sizeBytes: { type: Number, default: null },
+        _id: false,
+      },
+    ],
     captchaScore: { type: Number, min: 0, max: 1, default: null },
     ipAddress: { type: String, default: null },
     userAgent: { type: String, default: null },

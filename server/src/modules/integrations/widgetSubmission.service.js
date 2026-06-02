@@ -15,8 +15,12 @@ const DUPLICATE_WINDOW_HOURS = 1;
 const DUPLICATE_DESCRIPTION_PREFIX_LENGTH = 160;
 const SYSTEM_USER_ID = new mongoose.Types.ObjectId('000000000000000000000000');
 
+const MAX_ATTACHMENTS = 1;
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
+
 let widgetSubmissionRepository;
 let widgetConfigRepository;
+let fileService;
 
 async function getSubmissionRepo() {
   if (!widgetSubmissionRepository) {
@@ -24,6 +28,14 @@ async function getSubmissionRepo() {
     widgetSubmissionRepository = mod.default;
   }
   return widgetSubmissionRepository;
+}
+
+async function getFileService() {
+  if (!fileService) {
+    const mod = await import('../files/file.service.js');
+    fileService = mod.default;
+  }
+  return fileService;
 }
 
 async function getConfigRepo() {
@@ -126,6 +138,17 @@ class WidgetSubmissionService {
       { source: 'integrations:widget' },
     );
 
+    // AC-10: send confirmation email to the submitting customer (non-fatal).
+    await this._sendConfirmationEmail({
+      contactEmail: normalized.contactEmail,
+      contactName: normalized.contactName,
+      contactPhone: normalized.contactPhone,
+      referenceNumber,
+      requestType: normalized.requestType,
+      description: normalized.description,
+      preferredWindow: normalized.preferredWindow,
+    });
+
     logger.info('Widget submission received', {
       module: 'integrations',
       action: 'widget.submit',
@@ -142,11 +165,111 @@ class WidgetSubmissionService {
     };
   }
 
+  /**
+   * Send the customer-facing confirmation email (AC-10).
+   * Non-fatal: a mail failure (including unconfigured SMTP transport) is
+   * logged as a warning and never breaks submission creation.
+   */
+  async _sendConfirmationEmail(data) {
+    if (!data.contactEmail) return;
+    try {
+      const { default: sendMail } = await import('../../shared/mail/mail.js');
+      await sendMail({
+        email: data.contactEmail,
+        subject: `Ihre Anfrage ${data.referenceNumber} ist eingegangen`,
+        template: 'widgetSubmissionConfirmation.ejs',
+        data: {
+          contactName: data.contactName || 'Kunde',
+          contactPhone: data.contactPhone || null,
+          referenceNumber: data.referenceNumber,
+          requestType: data.requestType,
+          description: data.description,
+          preferredWindow: data.preferredWindow || null,
+        },
+      });
+    } catch (err) {
+      logger.warn('Failed to send widget submission confirmation email', {
+        module: 'integrations',
+        action: 'widget.confirmation_email',
+        referenceNumber: data.referenceNumber,
+        error: err.message,
+      });
+    }
+  }
+
   async getById(id) {
     const repo = await getSubmissionRepo();
     const submission = await repo.findById(id);
     if (!submission) throw new NotFoundError('WidgetSubmission', id);
     return submission;
+  }
+
+  /**
+   * Upload a single photo attachment for a widget submission.
+   * Accepts a multer file object ({ buffer, originalname, mimetype, size })
+   * or the normalized shape ({ buffer, originalName, mimeType, sizeBytes, uploadedBy }).
+   * Spec limits: max 1 attachment, max 5 MB.
+   */
+  async uploadAttachment(submissionId, file = {}) {
+    const buffer = file.buffer;
+    const originalName = file.originalName || file.originalname || 'attachment';
+    const mimeType = file.mimeType || file.mimetype || 'application/octet-stream';
+    const sizeBytes = file.sizeBytes ?? file.size ?? (buffer ? buffer.length : 0);
+    const uploadedBy = file.uploadedBy || SYSTEM_USER_ID;
+
+    if (!buffer) {
+      throw new AppError('No file provided', 400, ERROR_CODES.VALIDATION_ERROR);
+    }
+
+    if (sizeBytes > MAX_ATTACHMENT_SIZE_BYTES) {
+      throw new AppError(
+        'Attachment exceeds the maximum allowed size of 5 MB',
+        400,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+
+    const repo = await getSubmissionRepo();
+    const submission = await repo.findById(submissionId);
+    if (!submission) throw new NotFoundError('WidgetSubmission', submissionId);
+
+    if ((submission.attachments?.length || 0) >= MAX_ATTACHMENTS) {
+      throw new AppError(
+        'A photo has already been uploaded for this submission (max 1)',
+        409,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+
+    const files = await getFileService();
+    const fileMetadata = await files.upload({
+      buffer,
+      originalName,
+      mimeType,
+      sizeBytes,
+      module: 'integrations',
+      entityType: 'widget_submission',
+      entityId: submissionId,
+      uploadedBy,
+      bucket: 'general',
+    });
+
+    await repo.pushAttachment(submissionId, {
+      fileId: fileMetadata._id,
+      key: fileMetadata.key,
+      originalName: fileMetadata.originalName,
+      mimeType: fileMetadata.mimeType,
+      sizeBytes: fileMetadata.sizeBytes,
+    });
+
+    logger.info('Widget submission attachment uploaded', {
+      module: 'integrations',
+      action: 'widget.attachment.upload',
+      submissionId,
+      fileId: fileMetadata._id,
+    });
+
+    return fileMetadata;
   }
 
   async list(queryParams = {}) {

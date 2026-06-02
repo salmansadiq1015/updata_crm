@@ -154,6 +154,12 @@ const config = Object.freeze({
     lookaheadDays: envVars.MAINTENANCE_LOOKAHEAD_DAYS,
   },
 
+  pm: {
+    archiveRetentionDays: envVars.PROJECT_ARCHIVE_RETENTION_DAYS,
+    documentMaxUploadBytes: envVars.PROJECT_DOCUMENT_MAX_UPLOAD_MB * 1024 * 1024,
+    scheduleConfirmationLeadDays: envVars.SCHEDULE_CONFIRMATION_LEAD_DAYS,
+  },
+
   autoMigrate: envVars.AUTO_MIGRATE,
 });
 

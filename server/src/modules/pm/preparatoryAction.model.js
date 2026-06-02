@@ -33,6 +33,32 @@ const materialItemSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const attachmentSchema = new mongoose.Schema(
+  {
+    fileId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileMetadata',
+      required: true,
+    },
+    fileName: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 500,
+    },
+    uploadedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: true },
+);
+
 const materialOrderDetailsSchema = new mongoose.Schema(
   {
     supplier: { type: String, trim: true, maxlength: 255, default: null },
@@ -104,6 +130,10 @@ const preparatoryActionSchema = new mongoose.Schema(
     materialOrderDetails: {
       type: materialOrderDetailsSchema,
       default: null,
+    },
+    attachments: {
+      type: [attachmentSchema],
+      default: [],
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

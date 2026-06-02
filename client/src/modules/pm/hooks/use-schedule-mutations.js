@@ -6,7 +6,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onDeleteEntry, onSendConfirmation, onUpdateConfirmation } = {}) {
+export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onDeleteEntry, onSendConfirmation, onUpdateConfirmation, onBulkConfirmation } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -45,6 +45,19 @@ export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onD
     onError: (err) => showError(err.message),
   });
 
+  const sendBulkConfirmations = useMutation({
+    mutationFn: (items) => scheduleService.sendBulkConfirmations(projectId, items),
+    onSuccess: (res) => {
+      invalidate();
+      const s = res?.summary;
+      if (s) {
+        showSuccess(t('pm.bulkConfirmationsSent', `Confirmations: ${s.sent} sent, ${s.shortNotice} short-notice, ${s.error} failed`));
+      }
+      onBulkConfirmation?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
   const exportSchedule = useMutation({
     mutationFn: (format) => scheduleService.exportSchedule(projectId, format),
     onSuccess: (res) => {
@@ -53,5 +66,5 @@ export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onD
     onError: (err) => showError(err.message),
   });
 
-  return { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, exportSchedule };
+  return { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, sendBulkConfirmations, exportSchedule };
 }

@@ -14,6 +14,7 @@ export function ProjectStatsRow() {
   const { data: summary, isLoading } = useQuery({
     queryKey: queryKeys.pm.dashboard.summary(),
     queryFn: () => projectService.getDashboardSummary(),
+    refetchInterval: 60000,
   });
 
   if (isLoading) {
@@ -44,7 +45,7 @@ export function ProjectStatsRow() {
       />
       <PremiumStatCard
         label={t('pm.overdueProjects', 'Overdue')}
-        value={summary.overdue ?? 0}
+        value={summary.risk?.overdue ?? 0}
         icon={AlertTriangle}
         accent="amber"
       />

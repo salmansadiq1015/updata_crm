@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useMemo, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { queryKeys } from '@/lib/query/keys';
@@ -10,6 +10,10 @@ import { usePrepActionMutations } from '@/modules/pm/hooks/use-prep-action-mutat
 import { createPrepActionSchema, updatePrepActionSchema } from '@/modules/pm/validations/prep-action';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { useDebounce } from '@/shared/hooks/use-debounce';
+import { ENDPOINTS } from '@/lib/api/endpoints';
+import apiClient from '@/lib/api/client';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   PREP_ACTION_TYPE_CONFIG, PREP_ACTION_STATUS_CONFIG,
   FUNDING_STATUS_CONFIG, DELIVERY_STATUS_CONFIG,
@@ -29,13 +33,106 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { formatDate } from '@/lib/formatters';
+import { formatDate, formatDateTime } from '@/lib/formatters';
+import { showError, showSuccess } from '@/lib/toast';
 import {
   Plus, Pencil, Trash2, Loader2, AlertTriangle, CheckCircle2,
-  ListChecks, Clock,
+  ListChecks, Clock, User, Check, Hash, Paperclip, Download, Upload,
+  History, FileText,
 } from 'lucide-react';
 
-function ActionCard({ action, language, onEdit, onDelete, canWrite }) {
+/** Minimal user picker backed by the users list endpoint — mirrors project-filter-bar.jsx */
+function UserPickerField({ value, onChange }) {
+  const { language } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
+
+  const { data: usersData } = useQuery({
+    queryKey: queryKeys.users.list({ status: 'active', limit: 100, q: debouncedSearch }),
+    queryFn: async () => {
+      const res = await apiClient.get(ENDPOINTS.USERS.LIST, {
+        params: { status: 'active', limit: 100, ...(debouncedSearch ? { search: debouncedSearch } : {}) },
+      });
+      return res.data;
+    },
+  });
+  const users = Array.isArray(usersData) ? usersData : [];
+  const selected = users.find((u) => u._id === value) || null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'flex items-center gap-2 h-10 w-full rounded-md border bg-background px-3 text-sm transition-colors hover:bg-accent/40',
+            value && 'border-primary/40',
+          )}
+        >
+          {selected ? (
+            <>
+              <span className="h-5 w-5 rounded-full bg-primary/15 text-primary text-[9px] font-semibold flex items-center justify-center shrink-0">
+                {selected.firstName?.[0]}{selected.lastName?.[0]}
+              </span>
+              <span className="truncate">{selected.firstName} {selected.lastName}</span>
+            </>
+          ) : (
+            <>
+              <User className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-muted-foreground">{language === 'de' ? 'Niemand zugewiesen' : 'Unassigned'}</span>
+            </>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60 p-0 shadow-lg" align="start">
+        <div className="px-2 pt-2 pb-1.5 border-b">
+          <Input
+            placeholder={language === 'de' ? 'Suchen...' : 'Search...'}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-xs"
+            autoFocus
+          />
+        </div>
+        <div className="max-h-52 overflow-y-auto py-1">
+          <button
+            type="button"
+            className={cn('w-full flex items-center gap-2 px-2.5 py-2 text-xs hover:bg-accent', !value && 'bg-accent/50')}
+            onClick={() => { onChange(null); setOpen(false); setSearch(''); }}
+          >
+            <span className="h-5 w-5 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center shrink-0">
+              <User className="h-3 w-3 text-muted-foreground/60" />
+            </span>
+            <span className="text-muted-foreground">{language === 'de' ? 'Niemand' : 'Unassigned'}</span>
+            {!value && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
+          </button>
+          {users.map((u) => (
+            <button
+              type="button"
+              key={u._id}
+              className={cn('w-full flex items-center gap-2 px-2.5 py-2 text-xs hover:bg-accent', u._id === value && 'bg-accent/50')}
+              onClick={() => { onChange(u._id); setOpen(false); setSearch(''); }}
+            >
+              <span className="h-5 w-5 rounded-full bg-primary/15 text-primary text-[9px] font-semibold flex items-center justify-center shrink-0">
+                {u.firstName?.[0]}{u.lastName?.[0]}
+              </span>
+              <span className="truncate">{u.firstName} {u.lastName}</span>
+              {u._id === value && <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />}
+            </button>
+          ))}
+          {users.length === 0 && (
+            <p className="px-3 py-3 text-xs text-muted-foreground text-center">
+              {language === 'de' ? 'Keine Nutzer gefunden' : 'No users found'}
+            </p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ActionCard({ action, language, onEdit, onDelete, onManage, canWrite }) {
   const typeCfg = PREP_ACTION_TYPE_CONFIG[action.actionType];
   const statusCfg = PREP_ACTION_STATUS_CONFIG[action.status];
   const TypeIcon = typeCfg?.icon || ListChecks;
@@ -75,20 +172,215 @@ function ActionCard({ action, language, onEdit, onDelete, canWrite }) {
             <span className="text-muted-foreground/60">
               {language === 'de' ? typeCfg?.label : typeCfg?.labelEn}
             </span>
+            {action.externalReference && (
+              <span className="flex items-center gap-1 text-muted-foreground/80">
+                <Hash className="h-3 w-3" />
+                {action.externalReference}
+              </span>
+            )}
           </div>
         </div>
-        {canWrite && (
-          <div className="flex items-center gap-1 shrink-0">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(action)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => onDelete(action)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => onManage(action)}
+            title={language === 'de' ? 'Anhänge & Verlauf' : 'Attachments & history'}
+          >
+            <Paperclip className="h-3.5 w-3.5" />
+            {action.attachments?.length > 0 && (
+              <span className="ml-0.5 text-[10px] tabular-nums">{action.attachments.length}</span>
+            )}
+          </Button>
+          {canWrite && (
+            <>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(action)}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => onDelete(action)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+// Map prep-action audit eventTypes to readable labels.
+const HISTORY_EVENT_LABELS = {
+  'prep_action.created': { en: 'Created', de: 'Erstellt' },
+  'prep_action.updated': { en: 'Updated', de: 'Aktualisiert' },
+  'prep_action.deleted': { en: 'Deleted', de: 'Gelöscht' },
+  'prep_action.attachment_added': { en: 'Attachment added', de: 'Anhang hinzugefügt' },
+};
+
+function ManageActionDialog({ open, onClose, projectId, action, language, t, canWrite }) {
+  const queryClient = useQueryClient();
+  const fileRef = useRef(null);
+  const actionId = action?._id;
+
+  const { data: attachments = [], isLoading: loadingAttachments } = useQuery({
+    queryKey: queryKeys.pm.prepActions.attachments(projectId, actionId),
+    queryFn: () => prepActionService.getAttachments(projectId, actionId),
+    enabled: open && !!actionId,
+  });
+
+  const { data: history = [], isLoading: loadingHistory } = useQuery({
+    queryKey: queryKeys.pm.prepActions.history(projectId, actionId),
+    queryFn: () => prepActionService.getHistory(projectId, actionId),
+    enabled: open && !!actionId,
+  });
+
+  const upload = useMutation({
+    mutationFn: (file) => prepActionService.uploadAttachment(projectId, actionId, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.pm.prepActions.attachments(projectId, actionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.pm.prepActions.history(projectId, actionId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.pm.prepActions.byProject(projectId) });
+      showSuccess(language === 'de' ? 'Anhang hochgeladen' : 'Attachment uploaded');
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const handleDownload = async (att) => {
+    try {
+      const result = await prepActionService.getAttachmentDownloadUrl(projectId, actionId, att.fileId);
+      const url = result?.url || result;
+      if (url) window.open(url, '_blank');
+    } catch (err) {
+      showError(err.message);
+    }
+  };
+
+  const attachList = Array.isArray(attachments) ? attachments : [];
+  const historyList = Array.isArray(history) ? history : [];
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="truncate">{action?.title}</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5 pt-2">
+          {/* Attachments */}
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Paperclip className="h-3.5 w-3.5" />
+                {language === 'de' ? 'Anhänge' : 'Attachments'}
+              </h4>
+              {canWrite && (
+                <>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={upload.isPending}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {upload.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Upload className="h-3 w-3 mr-1" />}
+                    {language === 'de' ? 'Hochladen' : 'Upload'}
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {loadingAttachments ? (
+              <div className="space-y-2">
+                {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-9 rounded-md" />)}
+              </div>
+            ) : attachList.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic py-1">
+                {language === 'de' ? 'Keine Anhänge.' : 'No attachments.'}
+              </p>
+            ) : (
+              <ul className="space-y-1.5">
+                {attachList.map((att) => (
+                  <li
+                    key={att._id || att.fileId}
+                    className="flex items-center gap-2 rounded-md border bg-card px-2.5 py-2 text-xs"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="flex-1 min-w-0 truncate">{att.fileName}</span>
+                    {att.uploadedAt && (
+                      <span className="text-muted-foreground/70 shrink-0">{formatDate(att.uploadedAt)}</span>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => handleDownload(att)}
+                      title={language === 'de' ? 'Herunterladen' : 'Download'}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <Separator />
+
+          {/* Change history */}
+          <section className="space-y-2">
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <History className="h-3.5 w-3.5" />
+              {language === 'de' ? 'Änderungsverlauf' : 'Change History'}
+            </h4>
+
+            {loadingHistory ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-md" />)}
+              </div>
+            ) : historyList.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic py-1">
+                {language === 'de' ? 'Noch kein Verlauf.' : 'No history yet.'}
+              </p>
+            ) : (
+              <div className="relative space-y-0">
+                <div className="absolute left-[5px] top-2 bottom-2 w-px bg-border" />
+                {historyList.map((entry, idx) => {
+                  const label = HISTORY_EVENT_LABELS[entry.eventType];
+                  const changedFields = entry.details?.changedFields;
+                  return (
+                    <div key={entry._id || idx} className="relative flex gap-3 pb-4 last:pb-0">
+                      <div className="relative z-10 mt-1 h-[11px] w-[11px] rounded-full ring-4 ring-background shrink-0 bg-primary/60" />
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <p className="text-xs font-medium">
+                          {label ? (language === 'de' ? label.de : label.en) : entry.eventType}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatDateTime(entry.timestamp)}
+                        </p>
+                        {Array.isArray(changedFields) && changedFields.length > 0 && (
+                          <p className="text-[11px] text-muted-foreground/80">
+                            {(language === 'de' ? 'Felder: ' : 'Fields: ') + changedFields.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -100,6 +392,7 @@ export function PrepActionsTab({ projectId }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editAction, setEditAction] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [manageAction, setManageAction] = useState(null);
 
   const { data: actions = [], isLoading } = useQuery({
     queryKey: queryKeys.pm.prepActions.byProject(projectId),
@@ -116,16 +409,16 @@ export function PrepActionsTab({ projectId }) {
   const isEdit = !!editAction;
   const schema = isEdit ? updatePrepActionSchema : createPrepActionSchema;
 
-  const { register, handleSubmit, watch, setValue, reset, control, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, setValue, getValues, reset, control, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
-    defaultValues: { actionType: 'OTHER', title: '', isMandatory: false },
+    defaultValues: { actionType: 'OTHER', title: '', isMandatory: false, assignedToId: null, externalReference: '' },
   });
 
   const watchType = watch('actionType');
 
   const openCreate = () => {
     setEditAction(null);
-    reset({ actionType: 'OTHER', title: '', description: '', isMandatory: false, dueDate: '' });
+    reset({ actionType: 'OTHER', title: '', description: '', isMandatory: false, dueDate: '', assignedToId: null, externalReference: '' });
     setFormOpen(true);
   };
 
@@ -138,6 +431,8 @@ export function PrepActionsTab({ projectId }) {
       status: action.status,
       dueDate: action.dueDate ? new Date(action.dueDate).toISOString().split('T')[0] : '',
       actionType: action.actionType,
+      assignedToId: action.assignedToId || null,
+      externalReference: action.externalReference || '',
       fundingDetails: action.fundingDetails || undefined,
       materialOrderDetails: action.materialOrderDetails || undefined,
     });
@@ -148,6 +443,8 @@ export function PrepActionsTab({ projectId }) {
     const cleaned = { ...data };
     if (!cleaned.description) delete cleaned.description;
     if (!cleaned.dueDate) delete cleaned.dueDate;
+    if (!cleaned.externalReference) cleaned.externalReference = null;
+    if (!cleaned.assignedToId) cleaned.assignedToId = null;
     if (isEdit) {
       update.mutate({ actionId: editAction._id, data: cleaned });
     } else {
@@ -212,6 +509,7 @@ export function PrepActionsTab({ projectId }) {
               language={language}
               onEdit={openEdit}
               onDelete={setDeleteTarget}
+              onManage={setManageAction}
               canWrite={canWrite}
             />
           ))}
@@ -265,6 +563,30 @@ export function PrepActionsTab({ projectId }) {
                 )}
               />
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  {t('pm.assignedTo', 'Assigned To')}
+                </Label>
+                <UserPickerField
+                  value={watch('assignedToId') || null}
+                  onChange={(v) => setValue('assignedToId', v, { shouldDirty: true })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1">
+                  <Hash className="h-3 w-3" />
+                  {t('pm.reference', 'Reference')}
+                </Label>
+                <Input
+                  {...register('externalReference')}
+                  placeholder={language === 'de' ? 'Externe Referenz' : 'External reference'}
+                />
+                {errors.externalReference && <p className="text-xs text-destructive">{errors.externalReference.message}</p>}
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
               <Switch checked={watch('isMandatory')} onCheckedChange={(v) => setValue('isMandatory', v)} />
               <Label className="text-xs">{t('pm.mandatory', 'Mandatory')}</Label>
@@ -332,7 +654,7 @@ export function PrepActionsTab({ projectId }) {
                   <div className="space-y-1"><Label className="text-xs">{t('pm.orderDate', 'Order Date')}</Label><Input type="date" {...register('materialOrderDetails.orderDate')} /></div>
                   <div className="space-y-1"><Label className="text-xs">{t('pm.expectedDelivery', 'Expected Delivery')}</Label><Input type="date" {...register('materialOrderDetails.expectedDeliveryDate')} /></div>
                 </div>
-                <MaterialItemsList control={control} register={register} language={language} />
+                <MaterialItemsList control={control} register={register} setValue={setValue} getValues={getValues} language={language} />
               </>
             )}
 
@@ -348,6 +670,16 @@ export function PrepActionsTab({ projectId }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ManageActionDialog
+        open={!!manageAction}
+        onClose={() => setManageAction(null)}
+        projectId={projectId}
+        action={manageAction}
+        language={language}
+        t={t}
+        canWrite={canWrite}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

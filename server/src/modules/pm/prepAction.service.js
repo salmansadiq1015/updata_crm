@@ -40,6 +40,7 @@ class PrepActionService {
       actionType: data.actionType,
       title: data.title,
       isMandatory: data.isMandatory || false,
+      assignedToId: data.assignedToId || null,
       createdBy,
     }, { source: 'pm:prep-actions' });
 
@@ -138,6 +139,95 @@ class PrepActionService {
       action: 'delete',
       actionId: id,
       projectId: existing.projectId,
+    });
+  }
+
+  async addAttachment(actionId, fileData, uploadedBy, meta = {}) {
+    const existing = await prepActionRepository.findById(actionId);
+    if (!existing) throw new NotFoundError('PreparatoryAction', actionId);
+
+    // Mirror the project-document upload flow: persist the file via file.service,
+    // then store the fileId reference on the action.
+    const fileService = (await import('../files/file.service.js')).default;
+    const fileMeta = await fileService.upload({
+      buffer: fileData.buffer,
+      originalName: fileData.originalName,
+      mimeType: fileData.mimeType,
+      sizeBytes: fileData.sizeBytes,
+      module: 'pm',
+      entityType: 'prep-action',
+      entityId: actionId,
+      uploadedBy,
+      bucket: 'documents',
+    });
+
+    const attachment = {
+      fileId: fileMeta._id,
+      fileName: fileData.originalName,
+      uploadedBy,
+      uploadedAt: new Date(),
+    };
+
+    const updated = await prepActionRepository.addAttachment(actionId, attachment);
+
+    await this._invalidateCache(existing.projectId);
+
+    auditService.logEvent({
+      eventType: 'prep_action.attachment_added',
+      userId: uploadedBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { actionId, projectId: existing.projectId, fileId: fileMeta._id, fileName: fileData.originalName },
+      module: 'pm',
+    });
+
+    logger.info('Preparatory action attachment added', {
+      module: 'pm',
+      action: 'attachment.add',
+      actionId,
+      projectId: existing.projectId,
+      fileId: fileMeta._id,
+    });
+
+    return updated.attachments;
+  }
+
+  async listAttachments(actionId) {
+    const action = await prepActionRepository.findById(actionId);
+    if (!action) throw new NotFoundError('PreparatoryAction', actionId);
+    return action.attachments || [];
+  }
+
+  async getAttachmentDownloadUrl(actionId, fileId) {
+    const action = await prepActionRepository.findById(actionId);
+    if (!action) throw new NotFoundError('PreparatoryAction', actionId);
+
+    const attachment = (action.attachments || []).find(
+      (a) => String(a.fileId) === String(fileId),
+    );
+    if (!attachment) throw new NotFoundError('Attachment', fileId);
+
+    const fileService = (await import('../files/file.service.js')).default;
+    return fileService.getDownloadUrl(attachment.fileId);
+  }
+
+  async getHistory(actionId) {
+    const action = await prepActionRepository.findById(actionId);
+    if (!action) throw new NotFoundError('PreparatoryAction', actionId);
+
+    const mongoose = (await import('mongoose')).default;
+    const candidates = [String(actionId)];
+    if (mongoose.Types.ObjectId.isValid(actionId)) {
+      candidates.push(new mongoose.Types.ObjectId(actionId));
+    }
+
+    return auditService.queryByEntity({
+      module: 'pm',
+      detailsKey: 'actionId',
+      entityId: candidates,
+      eventTypePrefix: 'prep_action.',
+      limit: 100,
     });
   }
 

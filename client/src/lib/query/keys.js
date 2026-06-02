@@ -79,15 +79,18 @@ export const queryKeys = {
     prepActions: {
       byProject: (projectId) => ['pm', 'prepActions', projectId],
       detail: (projectId, actionId) => ['pm', 'prepActions', projectId, actionId],
+      attachments: (projectId, actionId) => ['pm', 'prepActions', projectId, actionId, 'attachments'],
+      history: (projectId, actionId) => ['pm', 'prepActions', projectId, actionId, 'history'],
     },
     schedule: {
       byProject: (projectId) => ['pm', 'schedule', projectId],
+      conflicts: (projectId) => ['pm', 'schedule', projectId, 'conflicts'],
     },
     confirmations: {
       byEntry: (projectId, entryId) => ['pm', 'confirmations', projectId, entryId],
     },
     documents: {
-      byProject: (projectId, category) => ['pm', 'documents', projectId, category],
+      byProject: (projectId, category, filters) => ['pm', 'documents', projectId, category, filters ?? null],
     },
   },
   crm: {

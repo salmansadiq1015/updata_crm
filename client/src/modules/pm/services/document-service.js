@@ -39,8 +39,26 @@ export const documentService = {
     return res.data;
   },
 
-  async generateDocument(projectId, templateType) {
-    const res = await apiClient.post(ENDPOINTS.PM.DOCUMENTS_GENERATE(projectId), { templateType });
+  async generateDocument(projectId, { templateType, overrides = {}, draftId = null } = {}) {
+    const res = await apiClient.post(ENDPOINTS.PM.DOCUMENTS_GENERATE(projectId), {
+      templateType,
+      overrides,
+      ...(draftId ? { draftId } : {}),
+    });
+    return res.data;
+  },
+
+  async saveDraft(projectId, { templateType, overrides = {}, draftId = null } = {}) {
+    const res = await apiClient.post(ENDPOINTS.PM.DOCUMENTS_DRAFT(projectId), {
+      templateType,
+      overrides,
+      ...(draftId ? { draftId } : {}),
+    });
+    return res.data;
+  },
+
+  async emailDocument(projectId, docId, { to, message } = {}) {
+    const res = await apiClient.post(ENDPOINTS.PM.DOCUMENT_EMAIL(projectId, docId), { to, message });
     return res.data;
   },
 };

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import config from '../../config/index.js';
 import projectRoutes from './project.routes.js';
 import statusController from './status.controller.js';
 import prepActionController from './prepAction.controller.js';
@@ -10,14 +11,17 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import { transitionStatusSchema, statusHistorySchema } from './status.validation.js';
 import {
   createPrepActionSchema, updatePrepActionSchema, prepActionIdParamSchema,
+  prepActionAttachmentDownloadSchema,
 } from './prepAction.validation.js';
 import {
   createEntrySchema, updateEntrySchema, deleteEntrySchema,
   sendConfirmationSchema, updateConfirmationSchema, exportScheduleSchema,
+  conflictsSchema, bulkConfirmationSchema,
 } from './schedule.validation.js';
 import {
   listDocumentsSchema, uploadDocumentSchema, generateDocumentSchema,
   documentIdParamSchema, updateDocumentSchema, restoreDocumentSchema,
+  saveDraftSchema, emailDocumentSchema,
 } from './document.validation.js';
 
 /**
@@ -39,7 +43,7 @@ const router = Router();
 // File upload config
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: config.pm.documentMaxUploadBytes },
 });
 
 // --- Project routes ---
@@ -97,6 +101,40 @@ prepActionRouter.delete(
   validate(prepActionIdParamSchema),
   (req, res, next) => prepActionController.delete(req, res, next),
 );
+
+// --- Attachments (mirror the project-document upload pattern) ---
+prepActionRouter.get(
+  '/:actionId/attachments',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(prepActionIdParamSchema),
+  (req, res, next) => prepActionController.listAttachments(req, res, next),
+);
+prepActionRouter.post(
+  '/:actionId/attachments',
+  authenticate,
+  requirePermission('projects:write'),
+  upload.single('file'),
+  validate(prepActionIdParamSchema),
+  (req, res, next) => prepActionController.uploadAttachment(req, res, next),
+);
+prepActionRouter.get(
+  '/:actionId/attachments/:fileId/download',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(prepActionAttachmentDownloadSchema),
+  (req, res, next) => prepActionController.downloadAttachment(req, res, next),
+);
+
+// --- Change history (read-only audit timeline) ---
+prepActionRouter.get(
+  '/:actionId/history',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(prepActionIdParamSchema),
+  (req, res, next) => prepActionController.history(req, res, next),
+);
+
 router.use('/projects/:id/prep-actions', prepActionRouter);
 
 // --- Schedule sub-routes ---
@@ -108,11 +146,25 @@ scheduleRouter.get(
   (req, res, next) => scheduleController.getSchedule(req, res, next),
 );
 scheduleRouter.get(
+  '/conflicts',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(conflictsSchema),
+  (req, res, next) => scheduleController.getConflicts(req, res, next),
+);
+scheduleRouter.get(
   '/export',
   authenticate,
   requirePermission('projects:read'),
   validate(exportScheduleSchema),
   (req, res, next) => scheduleController.exportSchedule(req, res, next),
+);
+scheduleRouter.post(
+  '/confirmations/bulk',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(bulkConfirmationSchema),
+  (req, res, next) => scheduleController.sendBulkConfirmations(req, res, next),
 );
 scheduleRouter.post(
   '/entries',
@@ -174,6 +226,20 @@ documentRouter.post(
   requirePermission('projects:write'),
   validate(generateDocumentSchema),
   (req, res, next) => documentController.generate(req, res, next),
+);
+documentRouter.post(
+  '/draft',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(saveDraftSchema),
+  (req, res, next) => documentController.saveDraft(req, res, next),
+);
+documentRouter.post(
+  '/:docId/email',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(emailDocumentSchema),
+  (req, res, next) => documentController.email(req, res, next),
 );
 documentRouter.get(
   '/:docId',

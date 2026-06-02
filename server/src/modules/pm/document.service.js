@@ -46,12 +46,18 @@ class DocumentService {
       bucket: 'documents',
     });
 
+    // Versioning: if a document with the same fileName already exists for this
+    // project, the new upload becomes the next version and links to the prior one.
+    const prior = await documentRepository.findLatestByFileName(projectId, fileData.originalName);
+
     const doc = await documentRepository.create({
       projectId,
       fileId: fileMeta._id,
       fileName: fileData.originalName,
       category: fileData.category || 'OTHER',
       description: fileData.description || null,
+      version: prior ? prior.version + 1 : 1,
+      previousVersionId: prior ? prior._id : null,
       uploadedBy,
     });
 
@@ -85,9 +91,72 @@ class DocumentService {
     return this._enrichDocument(await documentRepository.findById(doc._id));
   }
 
+  /**
+   * Create a ProjectDocument that references an already-stored file (no re-upload).
+   * Used by mobile uploads (photos/documents targeting an order that belongs to a
+   * project) so they appear in the PM Documents tab. Additive — never replaces the
+   * mobile FileMetadata / MobilePhoto write.
+   *
+   * Returns the created document, or null when the project no longer exists.
+   */
+  async createFromStoredFile(projectId, {
+    fileId, fileName, category = 'OTHER', uploadedBy, isGenerated = false,
+  }, meta = {}) {
+    const Project = (await import('./project.model.js')).default;
+    const project = await Project.findById(projectId).select('_id').lean();
+    if (!project) return null;
+
+    const prior = await documentRepository.findLatestByFileName(projectId, fileName);
+
+    const doc = await documentRepository.create({
+      projectId,
+      fileId,
+      fileName,
+      category,
+      version: prior ? prior.version + 1 : 1,
+      previousVersionId: prior ? prior._id : null,
+      isGenerated,
+      uploadedBy,
+    });
+
+    await this._invalidateCache(projectId);
+
+    eventBus.publish(EVENT_TYPES.PROJECT_DOCUMENT_UPLOADED, {
+      documentId: doc._id,
+      projectId,
+      fileName,
+      category,
+      uploadedBy,
+    }, { source: 'pm:documents' });
+
+    auditService.logEvent({
+      eventType: 'project_document.uploaded',
+      userId: uploadedBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: doc._id, projectId, fileName, origin: 'mobile' },
+      module: 'pm',
+    });
+
+    logger.info('Project document linked from mobile upload', {
+      module: 'pm',
+      action: 'createFromStoredFile',
+      documentId: doc._id,
+      projectId,
+    });
+
+    return doc;
+  }
+
   async listByProject(projectId, filters = {}) {
+    // Cache key must include every filter that affects the result set, otherwise
+    // different date-ranges/searches collide on the same key and return stale data.
     const categoryPart = filters.category || 'all';
-    const cacheKey = `pm:documents:project:${projectId}:${categoryPart}`;
+    const startPart = filters.startDate ? new Date(filters.startDate).getTime() : '';
+    const endPart = filters.endDate ? new Date(filters.endDate).getTime() : '';
+    const searchPart = filters.search || '';
+    const cacheKey = `pm:documents:project:${projectId}:${categoryPart}:${startPart}:${endPart}:${searchPart}`;
     return cacheManager.getOrSet(
       cacheKey,
       async () => this._enrichDocuments(await documentRepository.findByProjectId(projectId, filters)),
@@ -195,7 +264,12 @@ class DocumentService {
     return this._enrichDocument(await documentRepository.findById(docId));
   }
 
-  async generate(projectId, templateType, userId, meta = {}) {
+  /**
+   * Build the templateData object that populates a PM document template from
+   * project data. Shared by generate() and the draft preview so the client can
+   * show exactly what will be rendered before finalizing (PROJ-005 AC-4).
+   */
+  async buildTemplateData(projectId) {
     const Project = (await import('./project.model.js')).default;
     const project = await Project.findById(projectId)
       .populate('customerId', 'name customerNumber street postalCode city canton')
@@ -203,7 +277,19 @@ class DocumentService {
       .populate('siteId', 'name street postalCode city canton');
     if (!project) throw new NotFoundError('Project', projectId);
 
-    const templateData = {
+    // Schedule milestones for the project (name + date + status), so PM templates
+    // (status report / completion certificate) can render the milestone timeline.
+    const ScheduleEntry = (await import('./scheduleEntry.model.js')).default;
+    const scheduleEntries = await ScheduleEntry.find({ projectId, entryType: 'MILESTONE' })
+      .sort({ sortOrder: 1 })
+      .lean();
+    const milestones = scheduleEntries.map((e) => ({
+      name: e.name,
+      date: e.milestoneDate ? e.milestoneDate.toISOString().split('T')[0] : null,
+      status: e.status,
+    }));
+
+    return {
       documentNumber: project.projectNumber,
       documentDate: new Date().toISOString().split('T')[0],
       customer: project.customerId ? {
@@ -215,9 +301,13 @@ class DocumentService {
       projectName: project.name,
       projectNumber: project.projectNumber,
       projectType: project.projectType,
+      description: project.description || null,
       projectManager: project.projectManagerId
         ? `${project.projectManagerId.firstName} ${project.projectManagerId.lastName}`
         : null,
+      pmEmail: project.projectManagerId ? project.projectManagerId.email || null : null,
+      pmPhone: project.projectManagerId ? project.projectManagerId.phone || null : null,
+      milestones,
       site: project.siteId ? {
         name: project.siteId.name,
         address: `${project.siteId.street || ''}, ${project.siteId.postalCode || ''} ${project.siteId.city || ''}`.trim(),
@@ -225,6 +315,36 @@ class DocumentService {
       plannedStartDate: project.plannedStartDate?.toISOString().split('T')[0],
       plannedEndDate: project.plannedEndDate?.toISOString().split('T')[0],
     };
+  }
+
+  /**
+   * Generate a finalized PDF document from a PM template (PROJ-005 AC-1,2,3).
+   *
+   * @param {string} projectId
+   * @param {string} templateType
+   * @param {string} userId
+   * @param {object} [meta]
+   * @param {object} [overrides] - Optional fields shallow-merged over the computed
+   *   templateData (e.g. custom intro/body/notes, recipient name). Backward
+   *   compatible — defaults to {} so existing callers keep working (AC-4).
+   * @param {string|null} [draftId] - When finalizing an existing draft, the draft
+   *   row is replaced by the generated document (AF-2 → finalize).
+   */
+  async generate(projectId, templateType, userId, meta = {}, overrides = {}, draftId = null) {
+    const baseData = await this.buildTemplateData(projectId);
+    // Shallow-merge overrides over computed templateData (AC-4).
+    const safeOverrides = overrides && typeof overrides === 'object' ? overrides : {};
+    const templateData = { ...baseData, ...safeOverrides };
+
+    // The shared renderer keys the document title off `data.templateType` and only
+    // renders `data.introduction` for the letter body. For PM template types,
+    // inject the type (so the header title resolves) and compose the enriched
+    // introduction the BodyRenderer actually consumes (project, PM contact,
+    // milestones, intro/notes overrides). Other template types are untouched.
+    templateData.templateType = templateType;
+    const { buildPmDocumentBody } = await import('./pmDocumentBody.js');
+    const bodyFields = buildPmDocumentBody(templateType, templateData);
+    Object.assign(templateData, bodyFields);
 
     const documentGenerationService = (await import('../doctpl/documentGeneration.service.js')).default;
     const generatedDoc = await documentGenerationService.generate({
@@ -237,14 +357,32 @@ class DocumentService {
       meta,
     });
 
-    const doc = await documentRepository.create({
-      projectId,
-      fileId: generatedDoc.fileId,
-      fileName: generatedDoc.fileName,
-      category: 'REPORTS',
-      isGenerated: true,
-      uploadedBy: userId,
-    });
+    let doc;
+    if (draftId) {
+      // Finalize an existing draft in place: attach the generated file, flip to FINAL.
+      doc = await documentRepository.updateById(draftId, {
+        fileId: generatedDoc.fileId,
+        fileName: generatedDoc.fileName,
+        category: 'REPORTS',
+        isGenerated: true,
+        status: 'FINAL',
+        templateType,
+        overrides: safeOverrides,
+      });
+      if (!doc) throw new NotFoundError('ProjectDocument', draftId);
+    } else {
+      doc = await documentRepository.create({
+        projectId,
+        fileId: generatedDoc.fileId,
+        fileName: generatedDoc.fileName,
+        category: 'REPORTS',
+        isGenerated: true,
+        status: 'FINAL',
+        templateType,
+        overrides: safeOverrides,
+        uploadedBy: userId,
+      });
+    }
 
     await this._invalidateCache(projectId);
 
@@ -274,6 +412,123 @@ class DocumentService {
     });
 
     return this._enrichDocument(await documentRepository.findById(doc._id));
+  }
+
+  /**
+   * Save an in-progress generated document as a DRAFT without producing a PDF
+   * (PROJ-005 AF-2). Captures templateType + overrides so the user can reopen and
+   * finalize it later. Creates a new draft, or updates an existing one when
+   * draftId is supplied. No file is attached (fileId stays null).
+   */
+  async saveDraft(projectId, { templateType, overrides = {}, draftId = null }, userId, meta = {}) {
+    const Project = (await import('./project.model.js')).default;
+    const project = await Project.findById(projectId).select('_id projectNumber').lean();
+    if (!project) throw new NotFoundError('Project', projectId);
+
+    const safeOverrides = overrides && typeof overrides === 'object' ? overrides : {};
+    const fileName = `Entwurf_${templateType}_${project.projectNumber || projectId}.pdf`;
+
+    let doc;
+    if (draftId) {
+      doc = await documentRepository.updateById(draftId, {
+        templateType,
+        overrides: safeOverrides,
+        fileName,
+      });
+      if (!doc) throw new NotFoundError('ProjectDocument', draftId);
+    } else {
+      doc = await documentRepository.create({
+        projectId,
+        fileId: null,
+        fileName,
+        category: 'REPORTS',
+        isGenerated: true,
+        status: 'DRAFT',
+        templateType,
+        overrides: safeOverrides,
+        uploadedBy: userId,
+      });
+    }
+
+    await this._invalidateCache(projectId);
+
+    auditService.logEvent({
+      eventType: 'project_document.draft_saved',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: doc._id, projectId, templateType },
+      module: 'pm',
+    });
+
+    logger.info('Project document draft saved', {
+      module: 'pm',
+      action: 'saveDraft',
+      documentId: doc._id,
+      projectId,
+      templateType,
+    });
+
+    return this._enrichDocument(await documentRepository.findById(doc._id));
+  }
+
+  /**
+   * Email a generated document to a recipient as a PDF attachment (PROJ-005 AC-5).
+   * Loads the stored PDF buffer via the file service and reuses the shared mail
+   * pipeline (sendProjectDocumentEmail).
+   */
+  async emailDocument(documentId, { to, message, projectId } = {}, userId, meta = {}) {
+    const doc = await documentRepository.findById(documentId);
+    if (!doc) throw new NotFoundError('ProjectDocument', documentId);
+    // Defense-in-depth: when the caller supplies the route's projectId, ensure the
+    // document actually belongs to that project (prevents cross-project emailing).
+    if (projectId && String(doc.projectId) !== String(projectId)) {
+      throw new NotFoundError('ProjectDocument', documentId);
+    }
+    if (!doc.fileId) {
+      const { ConflictError } = await import('../../shared/errors/AppError.js');
+      throw new ConflictError('Cannot email a draft document — generate it first');
+    }
+
+    const fileService = (await import('../files/file.service.js')).default;
+    const fileMeta = await fileService.getById(doc.fileId);
+    if (!fileMeta) throw new NotFoundError('File', doc.fileId);
+    const content = await fileService.downloadBuffer(fileMeta.key);
+
+    const Project = (await import('./project.model.js')).default;
+    const project = await Project.findById(doc.projectId).select('name projectNumber').lean();
+
+    const { sendProjectDocumentEmail } = await import('../../shared/mail/mail.js');
+    const info = await sendProjectDocumentEmail(to, {
+      projectName: project?.name || '',
+      projectNumber: project?.projectNumber || '',
+      fileName: doc.originalName || doc.fileName,
+      message: message || '',
+    }, {
+      filename: doc.originalName || doc.fileName,
+      content,
+      contentType: fileMeta.mimeType || 'application/pdf',
+    });
+
+    auditService.logEvent({
+      eventType: 'project_document.emailed',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId, projectId: doc.projectId, to },
+      module: 'pm',
+    });
+
+    logger.info('Project document emailed', {
+      module: 'pm',
+      action: 'emailDocument',
+      documentId,
+      to,
+    });
+
+    return { sent: true, messageId: info?.messageId || null, to };
   }
 
   async _invalidateCache(projectId) {

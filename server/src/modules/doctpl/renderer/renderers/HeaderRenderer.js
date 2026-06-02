@@ -11,6 +11,9 @@ const DOC_TITLES = {
   cover_letter: { de:'Begleitschreiben', fr:"Lettre d'accompagnement", it:"Lettera d'accompagnamento", en:'Cover Letter' },
   service_report: { de:'Servicebericht', fr:'Rapport de service', it:'Rapporto di servizio', en:'Service Report' },
   inspection_certificate: { de:'Inspektionszertifikat', fr:"Certificat d'inspection", it:"Certificato d'ispezione", en:'Inspection Certificate' },
+  project_appointment_confirmation: { de:'Terminbestätigung', fr:'Confirmation de rendez-vous', it:'Conferma di appuntamento', en:'Appointment Confirmation' },
+  project_status_report: { de:'Projekt-Statusbericht', fr:"Rapport d'état du projet", it:'Rapporto sullo stato del progetto', en:'Project Status Report' },
+  project_completion_certificate: { de:'Abnahmeprotokoll', fr:'Procès-verbal de réception', it:'Verbale di collaudo', en:'Completion Certificate' },
 };
 
 export default class HeaderRenderer {

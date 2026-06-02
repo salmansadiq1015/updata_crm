@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dokument</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+    .header { background-color: #1a365d; padding: 30px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+    .content { padding: 30px; color: #333333; line-height: 1.6; }
+    .doc-box { background-color: #f0f4f8; border-left: 4px solid #2b6cb0; padding: 16px; margin: 16px 0; }
+    .footer { padding: 20px 30px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1><%= appName %></h1>
+    </div>
+    <div class="content">
+      <h2>Dokument im Anhang</h2>
+      <p>Guten Tag,</p>
+      <p>Im Anhang finden Sie das angeforderte Dokument zum Projekt
+        <strong><%= projectName %></strong><% if (projectNumber) { %> (<%= projectNumber %>)<% } %>.</p>
+      <% if (message) { %>
+      <div class="doc-box">
+        <%= message %>
+      </div>
+      <% } %>
+      <div class="doc-box">
+        <strong>Datei:</strong> <%= fileName %>
+      </div>
+      <p>Bei Fragen stehen wir Ihnen gerne zur Verfuegung.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p>
+    </div>
+  </div>
+</body>
+</html>

@@ -102,6 +102,7 @@ export function errorHandler(err, req, res, _next) {
       code,
       message: statusCode >= 500 && !isOperational ? 'Internal Server Error' : message,
       details: statusCode >= 500 && !isOperational ? [] : details,
+      ...(err.data != null && statusCode < 500 ? { data: err.data } : {}),
     },
     meta: {
       requestId: req.requestId,

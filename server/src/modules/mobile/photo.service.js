@@ -36,6 +36,10 @@ class PhotoService {
       uploadedBy: userId,
     });
 
+    // Additive: if the order belongs to a project, also surface the photo in the
+    // PM Documents tab as a ProjectDocument. Best-effort — never blocks the upload.
+    await this._linkToProjectRepository(orderId, fileResult._id, fileData.originalName, userId, meta);
+
     eventBus.publish(EVENT_TYPES.MOBILE_PHOTO_UPLOADED, {
       photoId: photo._id,
       orderId,
@@ -56,6 +60,31 @@ class PhotoService {
     logger.info('Mobile photo uploaded', { module: 'mobile', action: 'photo.upload', photoId: photo._id, orderId });
 
     return photo;
+  }
+
+  /**
+   * If the order belongs to a project, create a ProjectDocument referencing the
+   * same stored file so the mobile photo appears in the PM Documents tab.
+   * Best-effort: any failure is logged and swallowed so the mobile upload succeeds.
+   */
+  async _linkToProjectRepository(orderId, fileId, fileName, userId, meta = {}) {
+    try {
+      const Order = (await import('../qop/order.model.js')).default;
+      const order = await Order.findById(orderId).select('projectId').lean();
+      if (!order || !order.projectId) return;
+
+      const { default: documentService } = await import('../pm/document.service.js');
+      await documentService.createFromStoredFile(order.projectId, {
+        fileId,
+        fileName: fileName || 'photo',
+        category: 'PHOTOS',
+        uploadedBy: userId,
+      }, meta);
+    } catch (err) {
+      logger.warn('Failed to link mobile photo to project repository', {
+        module: 'mobile', action: 'photo.linkProject', orderId, error: err.message,
+      });
+    }
   }
 
   async listByOrder(orderId) {

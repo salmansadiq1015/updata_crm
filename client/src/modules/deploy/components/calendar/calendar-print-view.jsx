@@ -3,7 +3,7 @@
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { ASSIGNMENT_TYPE_META, ASSIGNMENT_STATUS_META } from '../../constants/deploy-constants';
+import { ASSIGNMENT_TYPE_META, ASSIGNMENT_STATUS_META, PM_SCHEDULE_META } from '../../constants/deploy-constants';
 
 export function CalendarPrintView({ employees, days, title }) {
   const { t } = useLanguage();
@@ -19,7 +19,8 @@ export function CalendarPrintView({ employees, days, title }) {
 
       {employees.map((emp) => {
         const assignments = emp.assignments || [];
-        if (!assignments.length) return null;
+        const pmEntries = emp.pmScheduleEntries || [];
+        if (!assignments.length && !pmEntries.length) return null;
 
         return (
           <div key={emp.employeeId} className="mb-6 break-inside-avoid">
@@ -37,9 +38,31 @@ export function CalendarPrintView({ employees, days, title }) {
                 </tr>
               </thead>
               <tbody>
-                {assignments
+                {[
+                  ...assignments,
+                  ...pmEntries,
+                ]
                   .sort((a, b) => new Date(a.startDatetime) - new Date(b.startDatetime))
                   .map((a) => {
+                    if (a.source === 'pm_schedule') {
+                      const pmMeta = PM_SCHEDULE_META[a.entryType] || PM_SCHEDULE_META.PHASE;
+                      return (
+                        <tr key={`pm-${a._id}`} className="border-b border-gray-200">
+                          <td className="py-1 pr-2">
+                            {format(new Date(a.startDatetime), 'EEE d. MMM', { locale: de })}
+                          </td>
+                          <td className="py-1 pr-2 text-gray-400">
+                            {t('deploy.print.allDay', 'Ganztägig')}
+                          </td>
+                          <td className="py-1 pr-2 font-medium">
+                            {a.title}
+                            <span className="text-gray-400 ml-1">({t('deploy.pmSchedule.badge', 'Projektarbeit')})</span>
+                          </td>
+                          <td className="py-1 pr-2">{pmMeta.label}</td>
+                          <td className="py-1">{a.status}</td>
+                        </tr>
+                      );
+                    }
                     const typeMeta = ASSIGNMENT_TYPE_META[a.assignmentType] || ASSIGNMENT_TYPE_META.OTHER;
                     const statusMeta = ASSIGNMENT_STATUS_META[a.status] || {};
                     return (

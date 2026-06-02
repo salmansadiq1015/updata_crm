@@ -72,8 +72,45 @@ class DocumentController {
   async generate(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      const doc = await documentService.generate(req.params.id, req.body.templateType, req.user._id, meta);
+      const doc = await documentService.generate(
+        req.params.id,
+        req.body.templateType,
+        req.user._id,
+        meta,
+        req.body.overrides || {},
+        req.body.draftId || null,
+      );
       return res.success({ data: doc, message: 'Document generated successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  async saveDraft(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const doc = await documentService.saveDraft(
+        req.params.id,
+        {
+          templateType: req.body.templateType,
+          overrides: req.body.overrides || {},
+          draftId: req.body.draftId || null,
+        },
+        req.user._id,
+        meta,
+      );
+      return res.success({ data: doc, message: 'Draft saved successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  async email(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await documentService.emailDocument(
+        req.params.docId,
+        { to: req.body.to, message: req.body.message, projectId: req.params.id },
+        req.user._id,
+        meta,
+      );
+      return res.success({ data: result, message: 'Document emailed successfully' });
     } catch (err) { next(err); }
   }
 }

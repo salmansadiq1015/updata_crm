@@ -6,7 +6,9 @@ import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-export function useDocumentMutations(projectId, { onUpload, onDelete, onGenerate } = {}) {
+export function useDocumentMutations(projectId, {
+  onUpload, onDelete, onGenerate, onDraft, onEmail,
+} = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -32,11 +34,28 @@ export function useDocumentMutations(projectId, { onUpload, onDelete, onGenerate
     onError: (err) => showError(err.message),
   });
 
+  // Accepts either a bare templateType string (back-compat) or
+  // { templateType, overrides, draftId }.
   const generate = useMutation({
-    mutationFn: (templateType) => documentService.generateDocument(projectId, templateType),
+    mutationFn: (input) => documentService.generateDocument(
+      projectId,
+      typeof input === 'string' ? { templateType: input } : input,
+    ),
     onSuccess: (res) => { invalidate(); showSuccess(t('pm.documentGenerated', 'Document generated')); onGenerate?.(res); },
     onError: (err) => showError(err.message),
   });
 
-  return { upload, updateMetadata, remove, generate };
+  const saveDraft = useMutation({
+    mutationFn: (input) => documentService.saveDraft(projectId, input),
+    onSuccess: (res) => { invalidate(); showSuccess(t('pm.draftSaved', 'Draft saved')); onDraft?.(res); },
+    onError: (err) => showError(err.message),
+  });
+
+  const emailDocument = useMutation({
+    mutationFn: ({ docId, to, message }) => documentService.emailDocument(projectId, docId, { to, message }),
+    onSuccess: (res) => { invalidate(); showSuccess(t('pm.documentEmailed', 'Document emailed')); onEmail?.(res); },
+    onError: (err) => showError(err.message),
+  });
+
+  return { upload, updateMetadata, remove, generate, saveDraft, emailDocument };
 }

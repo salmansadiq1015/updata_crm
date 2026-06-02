@@ -27,7 +27,7 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
  *   without walking forward. The stack preserves user navigation so the Prev
  *   button works against the already-fetched page history.
  */
-export function useCursorList({ queryKey, queryFn, params = {}, initialSize = 25 }) {
+export function useCursorList({ queryKey, queryFn, params = {}, initialSize = 25, refetchInterval }) {
   const [cursorStack, setCursorStack] = useState([null]); // null = first page
   const [pageSize, setPageSize] = useState(initialSize);
 
@@ -42,6 +42,7 @@ export function useCursorList({ queryKey, queryFn, params = {}, initialSize = 25
     queryKey: queryKey(merged),
     queryFn: () => queryFn(merged),
     placeholderData: keepPreviousData,
+    ...(refetchInterval ? { refetchInterval } : {}),
   });
 
   const items = data?.data || [];

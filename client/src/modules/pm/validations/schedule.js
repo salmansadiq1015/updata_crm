@@ -43,6 +43,7 @@ export const sendConfirmationSchema = z.object({
   partnerContactEmail: z.string().email('Valid email is required').trim().toLowerCase(),
   partnerCompanyId: objectId,
   partnerName: z.string().max(255).nullable().optional(),
+  acknowledgeShortNotice: z.boolean().optional(),
 });
 
 export const updateConfirmationSchema = z.object({

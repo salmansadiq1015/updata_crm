@@ -103,6 +103,11 @@ const configSchema = Joi.object({
   // Maintenance
   MAINTENANCE_LOOKAHEAD_DAYS: Joi.number().integer().min(1).default(30),
 
+  // Project Management
+  PROJECT_ARCHIVE_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
+  PROJECT_DOCUMENT_MAX_UPLOAD_MB: Joi.number().integer().min(1).default(50),
+  SCHEDULE_CONFIRMATION_LEAD_DAYS: Joi.number().integer().min(0).default(5),
+
   // Misc
   AUTO_MIGRATE: Joi.boolean().default(false),
 }).unknown(true); // allow extra env vars we don't manage

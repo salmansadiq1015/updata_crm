@@ -1,4 +1,31 @@
+import logger from '../../shared/logger/index.js';
+
 class DocumentController {
+  /**
+   * If the order belongs to a project, create a ProjectDocument referencing the
+   * same stored file so the mobile document appears in the PM Documents tab.
+   * Best-effort: any failure is logged and swallowed so the mobile upload succeeds.
+   */
+  async _linkToProjectRepository(orderId, fileId, fileName, userId, meta = {}) {
+    try {
+      const { default: Order } = await import('../qop/order.model.js');
+      const order = await Order.findById(orderId).select('projectId').lean();
+      if (!order || !order.projectId) return;
+
+      const { default: documentService } = await import('../pm/document.service.js');
+      await documentService.createFromStoredFile(order.projectId, {
+        fileId,
+        fileName: fileName || 'document',
+        category: 'OTHER',
+        uploadedBy: userId,
+      }, meta);
+    } catch (err) {
+      logger.warn('Failed to link mobile document to project repository', {
+        module: 'mobile', action: 'document.linkProject', orderId, error: err.message,
+      });
+    }
+  }
+
   async listDocuments(req, res, next) {
     try {
       const { default: fileService } = await import('../files/file.service.js');
@@ -39,6 +66,17 @@ class DocumentController {
         entityId: req.params.id,
         uploadedBy: req.user._id,
       });
+
+      // Additive: if the order belongs to a project, also surface this document in
+      // the PM Documents tab. Best-effort — never blocks the mobile upload.
+      await this._linkToProjectRepository(
+        req.params.id,
+        file._id,
+        req.file.originalname,
+        req.user._id,
+        { ipAddress: req.ip, userAgent: req.get('user-agent') },
+      );
+
       return res.success({ data: file, message: 'Document uploaded successfully', statusCode: 201 });
     } catch (err) { next(err); }
   }

@@ -63,6 +63,14 @@ class AuditService {
   getExportCursor(filters) {
     return auditLogRepository.findForExport(filters);
   }
+
+  /**
+   * Query audit entries scoped to a single entity (by a value inside details).
+   * Used to surface a change-history timeline for a given record.
+   */
+  async queryByEntity(params) {
+    return auditLogRepository.findByEntity(params);
+  }
 }
 
 const auditService = new AuditService();

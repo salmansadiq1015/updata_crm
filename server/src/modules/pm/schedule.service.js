@@ -4,7 +4,7 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
-import { NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
+import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
@@ -15,9 +15,164 @@ class ScheduleService {
     const cacheKey = `pm:schedule:project:${projectId}`;
     return cacheManager.getOrSet(
       cacheKey,
-      () => scheduleRepository.findByProjectId(projectId),
+      async () => {
+        const entries = await scheduleRepository.findByProjectId(projectId);
+        // Single batched query, then group confirmations by entry in memory (avoids N+1).
+        const confirmations = await scheduleRepository.findConfirmationsByEntryIds(
+          entries.map((e) => e._id),
+        );
+        const byEntry = new Map();
+        for (const c of confirmations) {
+          const key = String(c.scheduleEntryId);
+          if (!byEntry.has(key)) byEntry.set(key, []);
+          byEntry.get(key).push(c);
+        }
+        return entries.map((entry) => ({
+          ...entry,
+          confirmations: byEntry.get(String(entry._id)) || [],
+        }));
+      },
       ENTITY_TTL,
     );
+  }
+
+  /**
+   * Internal-team schedule entries within a date range, mapped into the item
+   * shape the Field Deployment (deploy) calendar renders. These are READ-ONLY
+   * in deploy: they are owned by PM, so they carry no assignment id and are
+   * flagged source: 'pm_schedule' so the UI styles/badges them distinctly and
+   * links to the owning project instead of opening the assignment editor.
+   *
+   * Returned item shape (per entry):
+   *   {
+   *     _id, source: 'pm_schedule', readOnly: true,
+   *     employeeId,            // responsibleTeamId (User) — the calendar row key
+   *     title,                 // "<entry name> · <projectNumber>"
+   *     startDatetime, endDatetime,  // PHASE span, or milestone single day
+   *     isFullDay: true,
+   *     status,                // PM entry status
+   *     entryType,             // PHASE | MILESTONE
+   *     projectId, projectNumber, projectName,  // for the deep-link / context
+   *     assignmentType: 'PROJECT_WORK',  // so existing type styling has a fallback
+   *   }
+   *
+   * @param {Date|string} from
+   * @param {Date|string} to
+   * @param {string[]} [userIds] optional restriction to these responsible users
+   */
+  async findInternalTeamEntriesInRange(from, to, userIds) {
+    const start = from instanceof Date ? from : new Date(from);
+    const end = to instanceof Date ? to : new Date(to);
+
+    const entries = await scheduleRepository.findInternalTeamEntriesInRange(start, end, userIds);
+
+    return entries.map((entry) => {
+      const isPhase = entry.entryType === 'PHASE';
+      const startDatetime = isPhase ? entry.startDate : entry.milestoneDate;
+      // Milestones are a single day; give them a same-day end so the calendar
+      // can position them as a zero/short-width full-day block.
+      const endDatetime = isPhase ? entry.endDate : entry.milestoneDate;
+
+      const project = entry.projectId && typeof entry.projectId === 'object' ? entry.projectId : null;
+      const projectId = project?._id || entry.projectId || null;
+      const projectNumber = project?.projectNumber || null;
+      const projectName = project?.name || null;
+
+      const employee = entry.responsibleTeamId && typeof entry.responsibleTeamId === 'object'
+        ? entry.responsibleTeamId
+        : null;
+      const employeeId = employee?._id || entry.responsibleTeamId || null;
+      const employeeName = employee?.firstName
+        ? `${employee.firstName} ${employee.lastName || ''}`.trim()
+        : null;
+
+      return {
+        _id: String(entry._id),
+        source: 'pm_schedule',
+        readOnly: true,
+        employeeId: employeeId ? String(employeeId) : null,
+        employeeName,
+        title: projectNumber ? `${entry.name} · ${projectNumber}` : entry.name,
+        startDatetime,
+        endDatetime,
+        isFullDay: true,
+        status: entry.status,
+        entryType: entry.entryType,
+        assignmentType: 'PROJECT_WORK',
+        projectId: projectId ? String(projectId) : null,
+        projectNumber,
+        projectName,
+      };
+    });
+  }
+
+  /** Start/end (ms) for an entry. Milestones are a single day (zero-width). */
+  _entryRange(entry) {
+    if (entry.entryType === 'PHASE') {
+      return {
+        start: entry.startDate ? new Date(entry.startDate).getTime() : NaN,
+        end: entry.endDate ? new Date(entry.endDate).getTime() : NaN,
+      };
+    }
+    const t = entry.milestoneDate ? new Date(entry.milestoneDate).getTime() : NaN;
+    return { start: t, end: t };
+  }
+
+  /**
+   * Server-side, advisory (non-blocking) conflict detection over a project's
+   * schedule entries. Mirrors the client-side highlight logic so both surface
+   * the same conflicts. Detects:
+   *   - predecessor_violation: entry starts before its predecessor's end.
+   *   - resource_overlap: two entries with the SAME responsible party
+   *     (same responsibleTeamId OR same partnerCompanyId) whose date ranges
+   *     intersect (strict, so back-to-back ranges are fine).
+   * Returns: { conflicts: [{ entryId, reasons: [{ type, otherEntryId? }] }] }
+   */
+  async detectConflicts(projectId) {
+    const entries = await scheduleRepository.findByProjectId(projectId);
+    const byId = new Map(entries.map((e) => [String(e._id), e]));
+    const reasonsByEntry = new Map();
+    const addReason = (id, reason) => {
+      const key = String(id);
+      if (!reasonsByEntry.has(key)) reasonsByEntry.set(key, []);
+      reasonsByEntry.get(key).push(reason);
+    };
+
+    for (const entry of entries) {
+      const r = this._entryRange(entry);
+      if (Number.isNaN(r.start) || Number.isNaN(r.end)) continue;
+
+      // 1. Predecessor relationship: must start on/after the predecessor's end.
+      if (entry.predecessorId) {
+        const pred = byId.get(String(entry.predecessorId));
+        if (pred) {
+          const pr = this._entryRange(pred);
+          if (!Number.isNaN(pr.end) && r.start < pr.end) {
+            addReason(entry._id, { type: 'predecessor_violation', otherEntryId: String(pred._id) });
+          }
+        }
+      }
+
+      // 2. Resource overlap with the same responsible party.
+      const party = entry.partnerCompanyId || entry.responsibleTeamId;
+      if (!party) continue;
+      for (const other of entries) {
+        if (String(other._id) === String(entry._id)) continue;
+        const otherParty = other.partnerCompanyId || other.responsibleTeamId;
+        if (!otherParty || String(otherParty) !== String(party)) continue;
+        const or = this._entryRange(other);
+        if (Number.isNaN(or.start) || Number.isNaN(or.end)) continue;
+        if (r.start < or.end && or.start < r.end) {
+          addReason(entry._id, { type: 'resource_overlap', otherEntryId: String(other._id) });
+        }
+      }
+    }
+
+    const conflicts = Array.from(reasonsByEntry.entries()).map(([entryId, reasons]) => ({
+      entryId,
+      reasons,
+    }));
+    return { conflicts };
   }
 
   async addEntry(projectId, data, createdBy, meta = {}) {
@@ -172,13 +327,17 @@ class ScheduleService {
     const Project = (await import('./project.model.js')).default;
     const project = entry.projectId ? await Project.findById(entry.projectId).select('name projectNumber').lean() : null;
 
+    const leadDays = config.pm.scheduleConfirmationLeadDays;
     const targetDate = entry.entryType === 'PHASE' ? entry.startDate : entry.milestoneDate;
     if (targetDate) {
       const businessDays = this._getBusinessDaysUntil(targetDate);
-      if (businessDays < 5) {
-        throw new ValidationError(
-          'Confirmation must be sent at least 5 business days before the scheduled date',
-          [{ field: 'scheduledDate', message: `Only ${businessDays} business days until the scheduled date (minimum 5 required)` }],
+      // Soft warning: under the lead-time, allow sending only when the caller
+      // has acknowledged the short notice. Otherwise raise a distinguishable
+      // ConflictError carrying a flag so the client can re-confirm "send anyway".
+      if (businessDays < leadDays && data.acknowledgeShortNotice !== true) {
+        throw new ConflictError(
+          `Only ${businessDays} business days until the scheduled date (recommended minimum ${leadDays})`,
+          { shortNotice: true, businessDays, leadDays },
         );
       }
     }
@@ -191,6 +350,8 @@ class ScheduleService {
       sentAt: new Date(),
       createdBy: userId,
     });
+
+    await this._invalidateCache(entry.projectId);
 
     // Enqueue email job
     await queueManager.addJob('auth-email', 'send-partner-confirmation', {
@@ -235,6 +396,64 @@ class ScheduleService {
     return confirmation;
   }
 
+  /**
+   * Bulk partner confirmations. Loops sendConfirmation per item, collecting a
+   * per-item result so a short-notice item (or a hard error) is reported rather
+   * than aborting the whole batch. Items flagged 'short_notice' carry the
+   * businessDays/leadDays so the caller can re-submit with acknowledgeShortNotice.
+   * Returns: { results: [{ entryId, status, businessDays?, leadDays?, message? }],
+   *            summary: { sent, shortNotice, error } }
+   */
+  async sendBulkConfirmations(items, userId, meta = {}) {
+    const results = [];
+    for (const item of items) {
+      const { entryId, ...data } = item;
+      try {
+        await this.sendConfirmation(entryId, data, userId, meta);
+        results.push({ entryId, status: 'sent' });
+      } catch (err) {
+        // Distinguish the soft short-notice warning (a ConflictError carrying a
+        // shortNotice flag) from a genuine error — never abort the batch.
+        if (err?.data?.shortNotice) {
+          results.push({
+            entryId,
+            status: 'short_notice',
+            businessDays: err.data.businessDays,
+            leadDays: err.data.leadDays,
+            message: err.message,
+          });
+        } else {
+          results.push({ entryId, status: 'error', message: err.message });
+        }
+      }
+    }
+
+    const summary = {
+      sent: results.filter((r) => r.status === 'sent').length,
+      shortNotice: results.filter((r) => r.status === 'short_notice').length,
+      error: results.filter((r) => r.status === 'error').length,
+    };
+
+    auditService.logEvent({
+      eventType: 'partner_confirmation.bulk_sent',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { total: items.length, ...summary },
+      module: 'pm',
+    });
+
+    logger.info('Bulk partner confirmations processed', {
+      module: 'pm',
+      action: 'sendBulkConfirmations',
+      total: items.length,
+      ...summary,
+    });
+
+    return { results, summary };
+  }
+
   async updateConfirmationResponse(confirmationId, data, userId, meta = {}) {
     const existing = await scheduleRepository.findConfirmationById(confirmationId);
     if (!existing) throw new NotFoundError('PartnerConfirmation', confirmationId);
@@ -244,6 +463,11 @@ class ScheduleService {
       responseAt: new Date(),
       responseNotes: data.responseNotes || null,
     });
+
+    const entry = await scheduleRepository.findById(existing.scheduleEntryId);
+    if (entry?.projectId) {
+      await this._invalidateCache(entry.projectId);
+    }
 
     eventBus.publish(EVENT_TYPES.PARTNER_CONFIRMATION_RESPONSE, {
       confirmationId,

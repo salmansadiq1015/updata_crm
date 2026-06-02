@@ -8,6 +8,21 @@ class ScheduleController {
     } catch (err) { next(err); }
   }
 
+  async getConflicts(req, res, next) {
+    try {
+      const result = await scheduleService.detectConflicts(req.params.id);
+      return res.success({ data: result });
+    } catch (err) { next(err); }
+  }
+
+  async sendBulkConfirmations(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await scheduleService.sendBulkConfirmations(req.body.items, req.user._id, meta);
+      return res.success({ data: result, message: 'Bulk confirmations processed' });
+    } catch (err) { next(err); }
+  }
+
   async addEntry(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

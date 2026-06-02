@@ -31,6 +31,14 @@ class PrepActionRepository {
     );
   }
 
+  async addAttachment(id, attachment) {
+    return PreparatoryAction.findByIdAndUpdate(
+      id,
+      { $push: { attachments: attachment } },
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+  }
+
   async countMandatoryIncomplete(projectId) {
     return PreparatoryAction.countDocuments({
       projectId,

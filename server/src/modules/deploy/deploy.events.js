@@ -111,6 +111,33 @@ export function registerDeployEvents() {
     }
   });
 
+  // --- PM SCHEDULE ENTRY changes (CREATED / UPDATED / DELETED / CASCADED) ---
+  // PM internal-team schedule entries are surfaced read-only in the deploy
+  // calendar (see calendar.service.js). When they change, invalidate the
+  // deploy calendar cache so dispatchers see the updated project work.
+  const invalidateCalendarOnScheduleChange = async (event, eventName) => {
+    try {
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}deploy:calendar:*`);
+      logger.info('Deploy calendar caches invalidated after PM schedule change', {
+        module: 'deploy',
+        action: `event.${eventName}`,
+        entryId: event.payload?.entryId,
+        projectId: event.payload?.projectId,
+      });
+    } catch (err) {
+      logger.error('Failed to handle PM schedule change event in deploy', {
+        module: 'deploy',
+        action: `event.${eventName}`,
+        error: { message: err.message, stack: err.stack },
+      });
+    }
+  };
+
+  eventBus.on(EVENT_TYPES.SCHEDULE_ENTRY_CREATED, (e) => invalidateCalendarOnScheduleChange(e, 'schedule_entry_created'));
+  eventBus.on(EVENT_TYPES.SCHEDULE_ENTRY_UPDATED, (e) => invalidateCalendarOnScheduleChange(e, 'schedule_entry_updated'));
+  eventBus.on(EVENT_TYPES.SCHEDULE_ENTRY_DELETED, (e) => invalidateCalendarOnScheduleChange(e, 'schedule_entry_deleted'));
+  eventBus.on(EVENT_TYPES.SCHEDULE_ENTRIES_CASCADED, (e) => invalidateCalendarOnScheduleChange(e, 'schedule_entries_cascaded'));
+
   logger.info('Deploy event handlers registered', { module: 'deploy', action: 'events.register' });
 }
 

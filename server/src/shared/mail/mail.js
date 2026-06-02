@@ -520,6 +520,36 @@ export const sendTaskAssignedEmail = async (email, data) => {
 };
 
 /**
+ * Send a generated project document to a recipient with a PDF attachment.
+ * Used by the PM "Email document" action (PROJ-005 AC-5).
+ *
+ * @param {string} email
+ * @param {Object} data - { projectName, projectNumber, fileName, message }
+ * @param {Object|Buffer|null} pdfAttachment - { filename, content, contentType } or raw Buffer
+ */
+export const sendProjectDocumentEmail = async (email, data, pdfAttachment = null) => {
+  const options = {
+    email,
+    subject: `Dokument: ${data.projectName || data.fileName} - MB Boiler`,
+    template: "projectDocument.ejs",
+    data: {
+      projectName: data.projectName || "",
+      projectNumber: data.projectNumber || "",
+      fileName: data.fileName || "",
+      message: data.message || "",
+    },
+  };
+  if (pdfAttachment) {
+    options.attachments = [{
+      filename: pdfAttachment.filename || data.fileName || "Dokument.pdf",
+      content: pdfAttachment.content || pdfAttachment,
+      contentType: pdfAttachment.contentType || "application/pdf",
+    }];
+  }
+  return sendMail(options);
+};
+
+/**
  * Send task reminder notification.
  */
 export const sendTaskReminderEmail = async (email, data) => {

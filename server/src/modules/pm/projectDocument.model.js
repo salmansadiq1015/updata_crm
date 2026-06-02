@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 // --- Enum constants ---
 const DOCUMENT_CATEGORIES = ['PLANS', 'CONTRACTS', 'PHOTOS', 'CORRESPONDENCE', 'REPORTS', 'OTHER'];
+const DOCUMENT_STATUSES = ['FINAL', 'DRAFT'];
 
 const projectDocumentSchema = new mongoose.Schema(
   {
@@ -28,7 +29,23 @@ const projectDocumentSchema = new mongoose.Schema(
     },
     description: { type: String, maxlength: 2000, default: null },
     version: { type: Number, default: 1, min: 1 },
+    previousVersionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ProjectDocument',
+      default: null,
+    },
     isGenerated: { type: Boolean, default: false },
+    // PROJ-005: document-generation workflow.
+    // status FINAL = a generated/uploaded document with a real file;
+    // status DRAFT = an in-progress generated document (templateType + overrides
+    // captured) that has NOT yet been finalised into a PDF (fileId may be null).
+    status: {
+      type: String,
+      enum: DOCUMENT_STATUSES,
+      default: 'FINAL',
+    },
+    templateType: { type: String, default: null, trim: true, maxlength: 100 },
+    overrides: { type: mongoose.Schema.Types.Mixed, default: null },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -55,4 +72,4 @@ projectDocumentSchema.pre(/^find/, function () {
 
 const ProjectDocument = mongoose.model('ProjectDocument', projectDocumentSchema);
 export default ProjectDocument;
-export { DOCUMENT_CATEGORIES };
+export { DOCUMENT_CATEGORIES, DOCUMENT_STATUSES };

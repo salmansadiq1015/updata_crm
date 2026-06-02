@@ -20,7 +20,12 @@ export function useStatusMutations(projectId, { onTransition } = {}) {
       showSuccess(t('pm.statusChanged', 'Status changed'));
       onTransition?.();
     },
-    onError: (err) => showError(err.message),
+    onError: (err) => {
+      // Only show toast for errors that don't carry outstanding actions — those are
+      // rendered inline in the dialog so the user sees exactly what's blocking.
+      const hasOutstanding = Array.isArray(err?.data?.outstanding) && err.data.outstanding.length > 0;
+      if (!hasOutstanding) showError(err.message);
+    },
   });
 
   return { transition };

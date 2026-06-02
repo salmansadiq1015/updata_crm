@@ -43,11 +43,25 @@ class ProjectRepository {
       .lean();
   }
 
-  async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+  async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search, plannedStartFrom, plannedStartTo, includeDeleted = false }) {
+    const { includeDeleted: _drop, plannedStartFrom: _psfDrop, plannedStartTo: _pstDrop, ...safeFilters } = filters;
+
     const filter = {
-      ...buildFilter(filters, ALLOWED_FILTERS),
+      ...buildFilter(safeFilters, ALLOWED_FILTERS),
       ...buildCursorQuery(cursor, sortBy, sortOrder),
     };
+
+    // Apply soft-delete filter — mirror document.repository.js pattern
+    if (!includeDeleted) {
+      filter.isDeleted = { $ne: true };
+    }
+
+    // Date-range filter on plannedStartDate
+    if (plannedStartFrom || plannedStartTo) {
+      filter.plannedStartDate = {};
+      if (plannedStartFrom) filter.plannedStartDate.$gte = new Date(plannedStartFrom);
+      if (plannedStartTo) filter.plannedStartDate.$lte = new Date(plannedStartTo);
+    }
 
     if (search) {
       const Customer = (await import('../crm/customer.model.js')).default;
@@ -67,12 +81,19 @@ class ProjectRepository {
     const resolvedSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
     const sort = buildCursorSort(resolvedSortBy, sortOrder);
 
-    const docs = await Project.find(filter)
+    const query = Project.find(filter)
       .sort(sort)
       .limit(limit + 1)
       .populate(POPULATE_FIELDS)
-      .select('-__v')
-      .lean();
+      .select('-__v');
+
+    // When includeDeleted is true use .setOptions to bypass the soft-delete
+    // plugin — same mechanism as document.repository.js restore()
+    if (includeDeleted) {
+      query.setOptions({ includeDeleted: true });
+    }
+
+    const docs = await query.lean();
 
     return buildCursorResponse(docs, limit, resolvedSortBy);
   }

@@ -8,6 +8,16 @@ export const scheduleService = {
     return res.data;
   },
 
+  async getConflicts(projectId) {
+    const res = await apiClient.get(ENDPOINTS.PM.SCHEDULE_CONFLICTS(projectId));
+    return res.data;
+  },
+
+  async sendBulkConfirmations(projectId, items) {
+    const res = await apiClient.post(ENDPOINTS.PM.CONFIRMATIONS_BULK(projectId), { items });
+    return res.data;
+  },
+
   async addEntry(projectId, data) {
     const res = await apiClient.post(ENDPOINTS.PM.SCHEDULE_ENTRIES(projectId), data);
     return res.data;

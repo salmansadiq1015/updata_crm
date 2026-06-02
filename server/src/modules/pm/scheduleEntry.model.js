@@ -31,12 +31,15 @@ const scheduleEntrySchema = new mongoose.Schema(
       enum: RESPONSIBLE_TYPES,
       default: null,
     },
+    // No dedicated Team entity exists; internal responsibility points at a User.
     responsibleTeamId: {
       type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
       default: null,
     },
     partnerCompanyId: {
       type: mongoose.Schema.Types.ObjectId,
+      ref: 'Customer',
       default: null,
     },
     predecessorId: {

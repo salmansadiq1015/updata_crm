@@ -162,6 +162,33 @@ class CustomerService {
     await Contact.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } });
     await Site.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } });
 
+    // Reassign entity notes that target the source customer
+    const EntityNote = (await import('./entityNote.model.js')).default;
+    await EntityNote.updateMany(
+      { entityType: 'customer', entityId: sourceId },
+      { $set: { entityId: targetId } },
+    );
+
+    // Reassign QOP documents (quotations / orders / invoices).
+    // The QOP module may be absent in some deployments — guard with try/catch
+    // and degrade gracefully, mirroring activityTimeline.service.js.
+    try {
+      const [Quotation, Order, Invoice] = await Promise.all([
+        import('../qop/quotation.model.js').then((module) => module.default),
+        import('../qop/order.model.js').then((module) => module.default),
+        import('../qop/invoice.model.js').then((module) => module.default),
+      ]);
+      await Promise.all([
+        Quotation.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } }),
+        Order.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } }),
+        Invoice.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } }),
+      ]);
+    } catch (err) {
+      logger.warn('Could not reassign QOP documents during customer merge', {
+        module: 'crm', action: 'merge', sourceId, targetId, error: err.message,
+      });
+    }
+
     // Archive source with merge pointer
     await customerRepository.updateById(sourceId, {
       status: 'archived',

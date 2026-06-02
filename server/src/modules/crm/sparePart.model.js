@@ -4,10 +4,11 @@ const sparePartSchema = new mongoose.Schema(
   {
     partNumber: {
       type: String,
-      required: true,
-      unique: true,
       trim: true,
-      index: true,
+      default: null,
+      // Sparse unique index ignores null/missing; convert '' to null so
+      // multiple part-number-less docs do not collide on the unique index.
+      set: (v) => (v === '' ? null : v),
     },
     name: {
       type: String,
@@ -28,8 +29,10 @@ const sparePartSchema = new mongoose.Schema(
     },
     category: {
       type: String,
+      // Optional: enum still validates when a value is provided; a non-required
+      // enum field accepts undefined/null without error.
       enum: ['filter', 'gasket', 'pump_part', 'valve', 'sensor', 'igniter', 'burner_part', 'control_board', 'other'],
-      required: true,
+      default: null,
       index: true,
     },
     unitPrice: {
@@ -101,6 +104,9 @@ const sparePartSchema = new mongoose.Schema(
 );
 
 // --- Indexes ---
+// partNumber is optional; enforce uniqueness only for docs that have one.
+// sparse: true lets many docs omit partNumber (null/missing) without colliding.
+sparePartSchema.index({ partNumber: 1 }, { unique: true, sparse: true });
 sparePartSchema.index(
   { partNumber: 'text', name: 'text', manufacturer: 'text' },
 );

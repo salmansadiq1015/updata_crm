@@ -21,7 +21,12 @@ class CustomerRepository {
   }
 
   async findById(id) {
-    return Customer.findById(id).lean();
+    const doc = await Customer.findById(id).lean();
+    if (!doc) return doc;
+    // Attach the same computed fields the list path exposes (CRM-001 AC-8).
+    // _attachComputedFields operates on an array — wrap and unwrap the single doc.
+    const [enriched] = await this._attachComputedFields([doc]);
+    return enriched;
   }
 
   async findByCustomerNumber(customerNumber) {

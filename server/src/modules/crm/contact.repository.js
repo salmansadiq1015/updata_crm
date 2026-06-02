@@ -56,6 +56,8 @@ class ContactRepository {
         { firstName: { $regex: searchTerm, $options: 'i' } },
         { lastName: { $regex: searchTerm, $options: 'i' } },
         { email: { $regex: searchTerm, $options: 'i' } },
+        { phone: { $regex: searchTerm, $options: 'i' } },
+        { mobile: { $regex: searchTerm, $options: 'i' } },
       ],
     })
       .populate('customerId', 'name customerNumber')

@@ -39,14 +39,21 @@ export const createCustomerSchema = z.object({
     errorMap: () => ({ message: 'Typ ist erforderlich' }),
   }),
   // Address
-  street: z.string().max(255, 'Strasse darf maximal 255 Zeichen lang sein').optional().or(z.literal('')),
+  street: z
+    .string()
+    .trim()
+    .min(1, 'Strasse ist erforderlich')
+    .max(255, 'Strasse darf maximal 255 Zeichen lang sein'),
   postalCode: z
-    .union([
-      z.string().regex(SWISS_POSTAL_CODE, 'PLZ muss 4 Ziffern sein (1000-9999)'),
-      z.literal(''),
-    ])
-    .optional(),
-  city: z.string().max(100, 'Ort darf maximal 100 Zeichen lang sein').optional().or(z.literal('')),
+    .string()
+    .trim()
+    .min(1, 'PLZ ist erforderlich')
+    .regex(SWISS_POSTAL_CODE, 'PLZ muss 4 Ziffern sein (1000-9999)'),
+  city: z
+    .string()
+    .trim()
+    .min(1, 'Ort ist erforderlich')
+    .max(100, 'Ort darf maximal 100 Zeichen lang sein'),
   canton: z
     .union([
       z.enum(VALID_CANTONS, { errorMap: () => ({ message: 'Bitte gueltigen Kanton waehlen' }) }),

@@ -44,8 +44,8 @@ contactSchema.index(
   { partialFilterExpression: { isPrimary: true } },
 );
 contactSchema.index(
-  { firstName: 'text', lastName: 'text', email: 'text' },
-  { weights: { firstName: 10, lastName: 10, email: 5 } },
+  { firstName: 'text', lastName: 'text', email: 'text', phone: 'text', mobile: 'text' },
+  { weights: { firstName: 10, lastName: 10, email: 5, phone: 5, mobile: 5 } },
 );
 contactSchema.index({ email: 1 });
 contactSchema.index({ isDeleted: 1 });

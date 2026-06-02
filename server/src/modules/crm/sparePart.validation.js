@@ -5,11 +5,11 @@ const CATEGORIES = ['filter', 'gasket', 'pump_part', 'valve', 'sensor', 'igniter
 
 export const createSparePartSchema = {
   body: Joi.object({
-    partNumber: Joi.string().trim().required().max(100),
+    partNumber: Joi.string().trim().max(100).allow('', null).optional(),
     name: Joi.string().trim().required().max(255),
     description: Joi.string().max(2000).allow('', null),
     manufacturer: Joi.string().trim().max(255).allow('', null),
-    category: Joi.string().valid(...CATEGORIES).required(),
+    category: Joi.string().valid(...CATEGORIES).allow(null).optional(),
     unitPrice: Joi.number().min(0).allow(null),
     currency: Joi.string().max(3).default('CHF'),
     unit: Joi.string().max(20).default('pcs'),

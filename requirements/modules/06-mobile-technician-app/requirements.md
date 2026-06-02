@@ -136,7 +136,7 @@ The mobile app must provide technicians with comprehensive access to order detai
 ### Dependencies
 
 - MOB-001: Order list provides navigation to detail.
-- MOD-02 (CRM): Customer and site data.
+- MOD-03 (CRM & Asset Management): Customer and site data.
 - MOB-012: Offline data caching.
 
 ---
@@ -297,7 +297,7 @@ The mobile app must allow technicians to record service line items and materials
 ### Dependencies
 
 - MOB-003: Material list is part of the work report.
-- MOD-07 / IGH Integration: Catalog data source.
+- MOD-10 (Material Catalogs & Interfaces) / IGH Integration: Catalog data source.
 - MOB-012: Offline catalog caching.
 
 ---
@@ -572,7 +572,7 @@ The mobile app must allow technicians to record time spent on each order. Time r
 
 - MOB-003: Time data is part of the work report context.
 - MOB-009: Time report lock depends on report submission.
-- MOD-10: Central time management system.
+- Central time management (back-office time/payroll system).
 - MOB-012: Offline support.
 
 ---
@@ -635,7 +635,7 @@ The system must enforce a lock on time reports: time entries for an order can on
 
 - MOB-003: Work report submission triggers time release.
 - MOB-008: Time entries subject to lock.
-- MOD-10: Central time management receives released entries.
+- Central time management (back-office) receives released entries.
 
 ---
 
@@ -761,7 +761,7 @@ The mobile app must provide technicians with an overview of all installations at
 
 ### Dependencies
 
-- MOD-02 (CRM): Installation records source.
+- MOD-03 (CRM & Asset Management): Installation records source.
 - MOB-002: Installations accessible from order context.
 - MOB-012: Offline caching.
 
@@ -967,7 +967,7 @@ The mobile app must allow technicians to view quotation details associated with 
 
 ### Dependencies
 
-- MOD-08 (Quotation & Invoicing): Quotation data source.
+- MOD-08 (Quotations & Order Processing): Quotation data source.
 - MOB-002: Accessible from order detail view.
 
 ---

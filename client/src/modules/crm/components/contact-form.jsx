@@ -5,14 +5,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { createContactSchema } from '@/modules/crm/validations/contact';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { FormField, FormBody } from '@/components/ui/form-field';
-import { Loader2, User } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Loader2, UserRound, AlertCircle } from 'lucide-react';
 
 const BLANK = {
   firstName: '',
@@ -69,78 +69,144 @@ export function ContactForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
       reset(BLANK);
     } catch {
       // Keep the modal open on failure so the user can fix & retry.
-      // Parent's mutation onError has already surfaced a toast.
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <User className="h-4 w-4 text-primary" />
-            {isEdit
-              ? t('crm.contacts.editContact', 'Kontakt bearbeiten')
-              : t('crm.contacts.newContact', 'Neuer Kontakt')}
-          </DialogTitle>
-          <DialogDescription>
-            {t('crm.contacts.formDesc', 'Kontakt wie Ansprechpartner oder Hausverwaltung hinzufügen.')}
-          </DialogDescription>
+      <DialogContent className="sm:max-w-lg p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
+        {/* Fixed Header */}
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-violet-500/10 ring-1 ring-violet-500/20 shrink-0">
+              <UserRound className="h-5 w-5 text-violet-400" />
+            </div>
+            <div>
+              <DialogTitle className="text-[16px] font-semibold text-white/90">
+                {isEdit
+                  ? t('crm.contacts.editContact', 'Kontakt bearbeiten')
+                  : t('crm.contacts.newContact', 'Neuer Kontakt')}
+              </DialogTitle>
+              <DialogDescription className="text-[13px] text-white/45 mt-0.5">
+                {t('crm.contacts.formDesc', 'Kontakt wie Ansprechpartner oder Hausverwaltung hinzufügen.')}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)} className="flex flex-1 flex-col overflow-hidden">
-          <FormBody>
+        {/* Scrollable Body */}
+        <form onSubmit={handleSubmit(submit)} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin space-y-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+              {t('crm.contacts.sectionName', 'Name')}
+            </p>
             <div className="grid grid-cols-2 gap-4">
-              <FormField label={t('crm.contacts.firstName', 'Vorname')} required error={errors.firstName?.message}>
-                <Input {...register('firstName')} autoFocus />
-              </FormField>
-              <FormField label={t('crm.contacts.lastName', 'Nachname')} required error={errors.lastName?.message}>
-                <Input {...register('lastName')} />
-              </FormField>
+              <DarkField label={t('crm.contacts.firstName', 'Vorname')} required error={errors.firstName}>
+                <Input
+                  {...register('firstName')}
+                  autoFocus
+                  className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                />
+              </DarkField>
+              <DarkField label={t('crm.contacts.lastName', 'Nachname')} required error={errors.lastName}>
+                <Input
+                  {...register('lastName')}
+                  className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                />
+              </DarkField>
             </div>
 
-            <FormField label={t('crm.contacts.functionTitle', 'Funktion / Position')} error={errors.functionTitle?.message}>
-              <Input {...register('functionTitle')} placeholder={t('crm.contacts.functionPlaceholder', 'z.B. Hausverwaltung')} />
-            </FormField>
+            <DarkField label={t('crm.contacts.functionTitle', 'Funktion / Position')} error={errors.functionTitle}>
+              <Input
+                {...register('functionTitle')}
+                placeholder={t('crm.contacts.functionPlaceholder', 'z.B. Hausverwaltung')}
+                className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              />
+            </DarkField>
+
+            <Separator className="my-5 bg-white/6" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+              {t('crm.contacts.sectionContact', 'Kontaktdaten')}
+            </p>
 
             <div className="grid grid-cols-2 gap-4">
-              <FormField label={t('crm.phone', 'Telefon')} error={errors.phone?.message}>
-                <Input {...register('phone')} />
-              </FormField>
-              <FormField label={t('crm.mobile', 'Mobil')} error={errors.mobile?.message}>
-                <Input {...register('mobile')} />
-              </FormField>
+              <DarkField label={t('crm.phone', 'Telefon')} error={errors.phone}>
+                <Input
+                  {...register('phone')}
+                  className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                />
+              </DarkField>
+              <DarkField label={t('crm.mobile', 'Mobil')} error={errors.mobile}>
+                <Input
+                  {...register('mobile')}
+                  className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                />
+              </DarkField>
             </div>
 
-            <FormField label={t('crm.email', 'E-Mail')} error={errors.email?.message}>
-              <Input type="email" {...register('email')} />
-            </FormField>
+            <DarkField label={t('crm.email', 'E-Mail')} error={errors.email}>
+              <Input
+                type="email"
+                {...register('email')}
+                className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              />
+            </DarkField>
 
-            <FormField label={t('crm.notes', 'Notizen')} error={errors.notes?.message}>
-              <Textarea rows={2} {...register('notes')} />
-            </FormField>
+            <DarkField label={t('crm.notes', 'Notizen')} error={errors.notes}>
+              <Textarea
+                rows={2}
+                {...register('notes')}
+                className="bg-white/4 border-white/10 rounded-lg text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 resize-none"
+              />
+            </DarkField>
 
-            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+            <div className="flex items-center justify-between rounded-xl border border-white/6 bg-white/2 px-4 py-3">
               <div>
-                <Label className="text-[13px] font-medium">{t('crm.contacts.isPrimary', 'Primärkontakt')}</Label>
-                <p className="text-xs text-muted-foreground/70">{t('crm.contacts.isPrimaryHint', 'Als Hauptansprechpartner markieren')}</p>
+                <Label className="text-[13px] font-medium text-white/80">{t('crm.contacts.isPrimary', 'Primärkontakt')}</Label>
+                <p className="text-xs text-white/40 mt-0.5">{t('crm.contacts.isPrimaryHint', 'Als Hauptansprechpartner markieren')}</p>
               </div>
               <Switch checked={isPrimary} onCheckedChange={(v) => setValue('isPrimary', v, { shouldDirty: true })} />
             </div>
-          </FormBody>
+          </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+          {/* Fixed Footer */}
+          <div className="px-6 py-4 border-t border-white/6 shrink-0 flex items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={isLoading}
+              className="text-white/55 hover:text-white/80 hover:bg-white/5"
+            >
               {t('common.cancel', 'Abbrechen')}
             </Button>
-            <Button type="submit" disabled={isLoading} className="gap-2">
-              {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white gap-2"
+            >
+              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEdit ? t('common.save', 'Speichern') : t('common.create', 'Erstellen')}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
   );
 }
 
+function DarkField({ label, required, error, children }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+        {label}{required && <span className="text-red-400 ml-1">*</span>}
+      </Label>
+      {children}
+      {error && (
+        <p className="text-red-400 text-[11px] mt-1 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3 shrink-0" /> {error.message}
+        </p>
+      )}
+    </div>
+  );
+}

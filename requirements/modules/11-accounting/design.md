@@ -647,21 +647,21 @@ System processes pain.002:
 
 ## 4. Integration Points
 
-### 4.1 Module 02 -- Customer Management
+### 4.1 Module 03 -- CRM & Asset Management
 - AR invoices reference customers from the customer database.
 - Customer address, payment terms, and contact details are used in invoice generation.
 - Customer credit balances are tracked on the customer account.
 
-### 4.2 Module 03 -- Quotation Management
+### 4.2 Module 08 -- Quotations & Order Processing
 - Accepted quotations can trigger invoice creation via `POST /api/v1/accounting/ar/invoices/from-quotation/{quotationId}`.
 - Quotation line items are carried into invoice line items.
 
-### 4.3 Module 04 -- Order/Project Management
+### 4.3 Module 04 -- Project Management
 - Orders trigger invoice creation upon completion.
 - Supplier invoices are linked to projects/orders for cost tracking.
 - Project cost reports aggregate AP invoices allocated to the project.
 
-### 4.4 Module 07 -- Field-Service Reports
+### 4.4 Module 06 -- Mobile Technician App
 - Completed service reports can generate customer invoices.
 - Materials consumed in reports become invoice line items.
 

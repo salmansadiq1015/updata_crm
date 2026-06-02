@@ -91,41 +91,43 @@ export function SiteDetail() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/crm/customers" className="hover:text-foreground transition-colors">CRM</Link>
+      <nav className="flex items-center gap-1.5 text-sm text-white/35">
+        <Link href="/crm/customers" className="hover:text-white/65 transition-colors">CRM</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         {customerId ? (
-          <Link href={`/crm/customers/${customerId}`} className="hover:text-foreground transition-colors truncate max-w-[200px]">
+          <Link href={`/crm/customers/${customerId}`} className="hover:text-white/65 transition-colors truncate max-w-[200px]">
             {customerName || t('crm.customer', 'Kunde')}
           </Link>
         ) : (
           <span>{t('crm.customer', 'Kunde')}</span>
         )}
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium truncate">{site.name}</span>
+        <span className="text-white/70 font-medium truncate">{site.name}</span>
       </nav>
 
-      {/* Header */}
-      <div className="rounded-xl border border-border bg-card p-5 shadow-theme-sm">
-        <div className="flex items-start gap-4 flex-wrap">
-          <div className={cn('h-14 w-14 shrink-0 rounded-xl flex items-center justify-center ring-1 ring-border', typeMeta.bg)}>
+      {/* Hero Header card */}
+      <div className="rounded-2xl border border-white/7 bg-[#0D1117] overflow-hidden mb-6">
+        {/* Amber accent stripe for site/object */}
+        <div className="h-1 w-full bg-linear-to-r from-amber-500 via-amber-400 to-transparent" />
+        <div className="p-6 flex items-start gap-4 flex-wrap">
+          <div className={cn('h-14 w-14 shrink-0 rounded-2xl flex items-center justify-center ring-1 ring-amber-500/20', typeMeta.bg)}>
             <Building2 className={cn('h-7 w-7', typeMeta.color)} />
           </div>
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h1 className="text-xl font-bold tracking-tight">{site.name}</h1>
+              <h1 className="text-[22px] font-bold text-white/90 tracking-tight">{site.name}</h1>
               <span className={cn('inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full', typeMeta.bg, typeMeta.color)}>
                 {t(`crm.sites.type.${site.siteType}`, typeMeta.label)}
               </span>
               {!isActive && (
-                <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
+                <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-white/5 text-white/40">
                   {t('crm.sites.statusInactive', 'Inaktiv')}
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+            <div className="flex items-center gap-4 text-[13px] text-white/45 flex-wrap">
               {addressLine && (
                 <span className="inline-flex items-center gap-1.5">
                   <MapPin className="h-3.5 w-3.5" /> {addressLine}
@@ -137,7 +139,7 @@ export function SiteDetail() {
                 </span>
               )}
               {site.accessInstructions && (
-                <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                <span className="inline-flex items-center gap-1.5 text-amber-400">
                   <Key className="h-3.5 w-3.5" /> {t('crm.sites.accessInfoBadge', 'Zugangsinfos vorhanden')}
                 </span>
               )}
@@ -146,12 +148,22 @@ export function SiteDetail() {
 
           <div className="flex items-center gap-2">
             {canWrite && isActive && (
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setFormOpen(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white/80"
+                onClick={() => setFormOpen(true)}
+              >
                 <Pencil className="h-3.5 w-3.5" /> {t('common.edit', 'Bearbeiten')}
               </Button>
             )}
             {canDelete && isActive && (
-              <Button variant="outline" size="sm" className="gap-1.5 hover:text-destructive hover:border-destructive/40" onClick={() => setDeactivateOpen(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 border-white/10 bg-white/4 text-white/60 hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
+                onClick={() => setDeactivateOpen(true)}
+              >
                 <Archive className="h-3.5 w-3.5" /> {t('crm.sites.deactivate', 'Deaktivieren')}
               </Button>
             )}
@@ -159,15 +171,14 @@ export function SiteDetail() {
         </div>
 
         {site.accessInstructions && (
-          <>
-            <Separator className="my-4" />
+          <div className="px-6 pb-5">
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 mb-1">
                 <Key className="h-3.5 w-3.5" /> {t('crm.sites.accessInstructions', 'Zugangsinformationen')}
               </div>
-              <p className="text-sm whitespace-pre-wrap">{site.accessInstructions}</p>
+              <p className="text-[13px] text-white/70 whitespace-pre-wrap">{site.accessInstructions}</p>
             </div>
-          </>
+          </div>
         )}
       </div>
 
@@ -233,9 +244,10 @@ function SiteDetailSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-5 w-64" />
-      <div className="rounded-xl border border-border bg-card p-5">
-        <div className="flex gap-4">
-          <Skeleton className="h-14 w-14 rounded-xl" />
+      <div className="rounded-2xl border border-white/7 bg-[#0D1117] overflow-hidden">
+        <div className="h-1 bg-amber-500/40 w-full" />
+        <div className="p-6 flex gap-4">
+          <Skeleton className="h-14 w-14 rounded-2xl" />
           <div className="flex-1 space-y-2">
             <Skeleton className="h-6 w-64" />
             <Skeleton className="h-4 w-96" />

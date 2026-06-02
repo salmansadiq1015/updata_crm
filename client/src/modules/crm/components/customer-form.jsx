@@ -21,7 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {
   Loader2, User, Building2, Mail, MapPin, Bell,
-  ChevronLeft, Check, ArrowRight,
+  ChevronLeft, Check, ArrowRight, AlertCircle,
 } from 'lucide-react';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 import { DuplicateWarning } from './duplicate-warning';
@@ -51,7 +51,7 @@ const BLANK_VALUES = {
 };
 
 export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
-  const { t } = useLanguage(); // global t supports t(key, fallback)
+  const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -73,7 +73,6 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
       reset({
         ...BLANK_VALUES,
         ...defaultValues,
-        // normalise undefined to empty strings so inputs are controlled
         name: defaultValues.name || '',
         type: defaultValues.type || 'private',
         phone: defaultValues.phone || '',
@@ -99,8 +98,6 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   const debouncedName = useDebounce(watchedName, 400);
   const debouncedPlz = useDebounce(watchedPlz, 400);
 
-  // Duplicate detection — only runs on create (not edit) and only when name is at
-  // least 3 chars. We include the postalCode so matches are narrower once known.
   const dupesEnabled = !isEdit && open && !!debouncedName && debouncedName.trim().length >= 3;
   const { data: dupesData } = useQuery({
     queryKey: queryKeys.crm.customers.duplicates({ name: debouncedName, postalCode: debouncedPlz }),
@@ -110,16 +107,13 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   });
 
   const handleFormSubmit = async (data) => {
-    // Guard: only real-submit on the last step
     if (currentStep < STEPS.length - 1) return;
     try {
       await onSubmit(data);
-      // Only close the modal and reset the form once the server confirms success.
       onOpenChange(false);
       reset(BLANK_VALUES);
     } catch {
       // Keep modal open so the user can fix & retry.
-      // An error toast is already emitted by the parent's mutation onError.
     }
   };
 
@@ -134,23 +128,33 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   const typeVal = watch('type');
   const newsletterOptIn = watch('newsletterOptIn');
 
+  const inputCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20';
+  const selectTriggerCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 focus:border-violet-500/50 focus:ring-violet-500/20';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col">
+      <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col border border-white/8 bg-[#0D1117] shadow-2xl">
         {/* Header */}
-        <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
-          <DialogTitle className="text-lg font-bold">
-            {isEdit ? t('crm.editCustomer', 'Kunde bearbeiten') : t('crm.newCustomer', 'Neuer Kunde')}
-          </DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? t('crm.editDesc', 'Passen Sie die Kundeninformationen an.')
-              : t('crm.createDesc', 'Erstellen Sie einen neuen Kunden.')}
-          </DialogDescription>
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-blue-500/10 ring-1 ring-blue-500/20 shrink-0">
+              <Building2 className="h-5 w-5 text-blue-400" />
+            </div>
+            <div>
+              <DialogTitle className="text-[16px] font-semibold text-white/90">
+                {isEdit ? t('crm.editCustomer', 'Kunde bearbeiten') : t('crm.newCustomer', 'Neuer Kunde')}
+              </DialogTitle>
+              <DialogDescription className="text-[13px] text-white/45 mt-0.5">
+                {isEdit
+                  ? t('crm.editDesc', 'Passen Sie die Kundeninformationen an.')
+                  : t('crm.createDesc', 'Erstellen Sie einen neuen Kunden.')}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
         {/* Step indicator */}
-        <div className="px-6 pb-4 shrink-0">
+        <div className="px-6 py-4 shrink-0 border-b border-white/6">
           <div className="flex items-center gap-2">
             {stepMeta.map((s, i) => {
               const StepIcon = s.icon;
@@ -165,9 +169,9 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     disabled={i > currentStep}
                     className={cn(
                       'flex items-center gap-2 h-9 px-3 rounded-lg transition-all text-xs font-semibold flex-1 min-w-0',
-                      isCurrent && 'bg-primary/10 text-primary',
-                      isCompleted && 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10',
-                      !isCurrent && !isCompleted && 'text-muted-foreground',
+                      isCurrent && 'bg-blue-500/10 text-blue-400',
+                      isCompleted && 'text-emerald-400 hover:bg-emerald-500/10',
+                      !isCurrent && !isCompleted && 'text-white/35',
                     )}
                   >
                     <div className={cn(
@@ -175,8 +179,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                       isCompleted
                         ? 'bg-emerald-500/20'
                         : isCurrent
-                        ? 'bg-primary/15'
-                        : 'bg-muted',
+                        ? 'bg-blue-500/15'
+                        : 'bg-white/5',
                     )}>
                       {isCompleted ? <Check className="h-3.5 w-3.5" /> : <StepIcon className="h-3.5 w-3.5" />}
                     </div>
@@ -185,7 +189,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   {i < stepMeta.length - 1 && (
                     <div className={cn(
                       'h-px w-4 sm:w-6 transition-colors shrink-0',
-                      isCompleted ? 'bg-emerald-500' : 'bg-border',
+                      isCompleted ? 'bg-emerald-500' : 'bg-white/10',
                     )} />
                   )}
                 </div>
@@ -193,8 +197,6 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
             })}
           </div>
         </div>
-
-        <Separator className="shrink-0" />
 
         {/* Form */}
         <form
@@ -208,11 +210,11 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
         >
           {/* Step content */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 scrollbar-thin">
-            {/* Duplicate warning (create mode only, top of any step once matches found) */}
+            {/* Duplicate warning */}
             {!isEdit && dupesData?.hasDuplicates && (
               <DuplicateWarning
-                title={t('crm.duplicateWarningTitle', 'Moegliche Duplikate gefunden')}
-                description={t('crm.duplicateWarningDesc', 'Kunden mit aehnlichem Namen existieren bereits:')}
+                title={t('crm.duplicateWarningTitle', 'Mögliche Duplikate gefunden')}
+                description={t('crm.duplicateWarningDesc', 'Kunden mit ähnlichem Namen existieren bereits:')}
                 duplicates={dupesData.duplicates || []}
                 onDismiss={() => onOpenChange(false)}
                 className="mb-6"
@@ -223,73 +225,72 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
             {currentStep === 0 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
-                  <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center ring-1 ring-primary/20">
-                    <User className="h-4 w-4 text-primary" />
+                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center ring-1 ring-blue-500/20">
+                    <User className="h-4 w-4 text-blue-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold">{t('crm.stepBasic', 'Basis')}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {t('crm.basicHint', 'Name und Kundentyp')}
-                    </p>
+                    <h3 className="text-sm font-semibold text-white/80">{t('crm.stepBasic', 'Basis')}</h3>
+                    <p className="text-xs text-white/40">{t('crm.basicHint', 'Name und Kundentyp')}</p>
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="name" className="text-xs font-medium">
-                    {t('crm.name', 'Name')} <span className="text-destructive">*</span>
-                  </Label>
+                <DarkField label={t('crm.name', 'Name')} required error={errors.name}>
                   <Input
                     id="name"
                     placeholder={t('crm.namePlaceholder', 'z.B. Muster GmbH')}
                     autoFocus
                     {...register('name')}
+                    className={inputCls}
                   />
-                  {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
-                </div>
+                </DarkField>
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">
-                    {t('crm.type', 'Typ')} <span className="text-destructive">*</span>
+                  <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+                    {t('crm.type', 'Typ')} <span className="text-red-400">*</span>
                   </Label>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setValue('type', 'private', { shouldValidate: true })}
                       className={cn(
-                        'flex items-center gap-3 rounded-lg border p-4 text-left transition-all',
+                        'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
                         typeVal === 'private'
-                          ? 'border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/30'
-                          : 'border-border hover:border-border hover:bg-muted/50',
+                          ? 'border-blue-500/60 bg-blue-500/8 ring-1 ring-blue-500/30'
+                          : 'border-white/8 bg-white/2 hover:border-white/15 hover:bg-white/4',
                       )}
                     >
                       <div className="h-10 w-10 rounded-lg bg-blue-500/10 ring-1 ring-blue-500/20 flex items-center justify-center shrink-0">
-                        <User className="h-5 w-5 text-blue-500" />
+                        <User className="h-5 w-5 text-blue-400" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold">{t('crm.typePrivate', 'Privat')}</p>
-                        <p className="text-xs text-muted-foreground">Privatperson / Haushalt</p>
+                        <p className="text-sm font-semibold text-white/80">{t('crm.typePrivate', 'Privat')}</p>
+                        <p className="text-xs text-white/40">Privatperson / Haushalt</p>
                       </div>
                     </button>
                     <button
                       type="button"
                       onClick={() => setValue('type', 'business', { shouldValidate: true })}
                       className={cn(
-                        'flex items-center gap-3 rounded-lg border p-4 text-left transition-all',
+                        'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
                         typeVal === 'business'
-                          ? 'border-emerald-500/60 bg-emerald-500/5 ring-1 ring-emerald-500/30'
-                          : 'border-border hover:border-border hover:bg-muted/50',
+                          ? 'border-emerald-500/60 bg-emerald-500/8 ring-1 ring-emerald-500/30'
+                          : 'border-white/8 bg-white/2 hover:border-white/15 hover:bg-white/4',
                       )}
                     >
                       <div className="h-10 w-10 rounded-lg bg-emerald-500/10 ring-1 ring-emerald-500/20 flex items-center justify-center shrink-0">
-                        <Building2 className="h-5 w-5 text-emerald-500" />
+                        <Building2 className="h-5 w-5 text-emerald-400" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold">{t('crm.typeBusiness', 'Firma')}</p>
-                        <p className="text-xs text-muted-foreground">Unternehmen / Verwaltung</p>
+                        <p className="text-sm font-semibold text-white/80">{t('crm.typeBusiness', 'Firma')}</p>
+                        <p className="text-xs text-white/40">Unternehmen / Verwaltung</p>
                       </div>
                     </button>
                   </div>
-                  {errors.type && <p className="text-xs text-destructive">{errors.type.message}</p>}
+                  {errors.type && (
+                    <p className="text-red-400 text-[11px] mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3 shrink-0" /> {errors.type.message}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -299,29 +300,29 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="h-9 w-9 rounded-lg bg-sky-500/10 flex items-center justify-center ring-1 ring-sky-500/20">
-                    <Mail className="h-4 w-4 text-sky-500" />
+                    <Mail className="h-4 w-4 text-sky-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold">{t('crm.stepContact', 'Kontakt')}</h3>
-                    <p className="text-xs text-muted-foreground">Telefon, E-Mail und Website</p>
+                    <h3 className="text-sm font-semibold text-white/80">{t('crm.stepContact', 'Kontakt')}</h3>
+                    <p className="text-xs text-white/40">Telefon, E-Mail und Website</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label={t('crm.phone', 'Telefon')} error={errors.phone}>
-                    <Input placeholder="+41 44 123 45 67" {...register('phone')} />
-                  </Field>
-                  <Field label={t('crm.mobile', 'Mobil')} error={errors.mobile}>
-                    <Input placeholder="+41 79 123 45 67" {...register('mobile')} />
-                  </Field>
+                  <DarkField label={t('crm.phone', 'Telefon')} error={errors.phone}>
+                    <Input placeholder="+41 44 123 45 67" {...register('phone')} className={inputCls} />
+                  </DarkField>
+                  <DarkField label={t('crm.mobile', 'Mobil')} error={errors.mobile}>
+                    <Input placeholder="+41 79 123 45 67" {...register('mobile')} className={inputCls} />
+                  </DarkField>
                 </div>
 
-                <Field label={t('crm.email', 'E-Mail')} error={errors.email}>
-                  <Input type="email" placeholder="info@example.ch" autoFocus {...register('email')} />
-                </Field>
-                <Field label={t('crm.website', 'Website')} error={errors.website}>
-                  <Input type="url" placeholder="https://www.example.ch" {...register('website')} />
-                </Field>
+                <DarkField label={t('crm.email', 'E-Mail')} error={errors.email}>
+                  <Input type="email" placeholder="info@example.ch" autoFocus {...register('email')} className={inputCls} />
+                </DarkField>
+                <DarkField label={t('crm.website', 'Website')} error={errors.website}>
+                  <Input type="url" placeholder="https://www.example.ch" {...register('website')} className={inputCls} />
+                </DarkField>
               </div>
             )}
 
@@ -330,53 +331,53 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center ring-1 ring-amber-500/20">
-                    <MapPin className="h-4 w-4 text-amber-500" />
+                    <MapPin className="h-4 w-4 text-amber-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold">{t('crm.stepAddress', 'Adresse')}</h3>
-                    <p className="text-xs text-muted-foreground">Rechnungsadresse des Kunden</p>
+                    <h3 className="text-sm font-semibold text-white/80">{t('crm.stepAddress', 'Adresse')}</h3>
+                    <p className="text-xs text-white/40">Rechnungsadresse des Kunden</p>
                   </div>
                 </div>
 
-                <Field label={t('crm.street', 'Strasse')} error={errors.street}>
-                  <Input placeholder="Musterstrasse 1" autoFocus {...register('street')} />
-                </Field>
+                <DarkField label={t('crm.street', 'Strasse')} error={errors.street}>
+                  <Input placeholder="Musterstrasse 1" autoFocus {...register('street')} className={inputCls} />
+                </DarkField>
 
                 <div className="grid grid-cols-1 sm:grid-cols-[120px_1fr_150px] gap-4">
-                  <Field label={t('crm.postalCode', 'PLZ')} error={errors.postalCode}>
-                    <Input placeholder="8000" {...register('postalCode')} />
-                  </Field>
-                  <Field label={t('crm.city', 'Ort')} error={errors.city}>
-                    <Input placeholder="Zuerich" {...register('city')} />
-                  </Field>
-                  <Field label={t('crm.canton', 'Kanton')} error={errors.canton}>
+                  <DarkField label={t('crm.postalCode', 'PLZ')} error={errors.postalCode}>
+                    <Input placeholder="8000" {...register('postalCode')} className={inputCls} />
+                  </DarkField>
+                  <DarkField label={t('crm.city', 'Ort')} error={errors.city}>
+                    <Input placeholder="Zürich" {...register('city')} className={inputCls} />
+                  </DarkField>
+                  <DarkField label={t('crm.canton', 'Kanton')} error={errors.canton}>
                     <Select
                       value={watch('canton') || ''}
                       onValueChange={(v) => setValue('canton', v, { shouldValidate: true })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className={selectTriggerCls}>
                         <SelectValue placeholder="—" />
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4}>
+                      <SelectContent position="popper" sideOffset={4} className="bg-[#0D1117] border-white/10">
                         {CH_CANTONS.map((c) => (
-                          <SelectItem key={c.code} value={c.code}>
+                          <SelectItem key={c.code} value={c.code} className="text-white/80 focus:bg-white/5 focus:text-white/90">
                             <span className="flex items-center gap-2">
-                              <span className="font-mono text-[11px] text-muted-foreground">{c.code}</span>
+                              <span className="font-mono text-[11px] text-white/40">{c.code}</span>
                               {c.name}
                             </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  </Field>
+                  </DarkField>
                 </div>
 
-                <Field
+                <DarkField
                   label={`${t('crm.country', 'Land')} (ISO-2, z.B. CH, DE, AT)`}
                   error={errors.country}
                 >
-                  <Input placeholder="CH" maxLength={2} {...register('country')} />
-                </Field>
+                  <Input placeholder="CH" maxLength={2} {...register('country')} className={inputCls} />
+                </DarkField>
               </div>
             )}
 
@@ -385,19 +386,19 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center ring-1 ring-violet-500/20">
-                    <Bell className="h-4 w-4 text-violet-500" />
+                    <Bell className="h-4 w-4 text-violet-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold">{t('crm.stepPreferences', 'Einstellungen')}</h3>
-                    <p className="text-xs text-muted-foreground">Newsletter und Notizen</p>
+                    <h3 className="text-sm font-semibold text-white/80">{t('crm.stepPreferences', 'Einstellungen')}</h3>
+                    <p className="text-xs text-white/40">Newsletter und Notizen</p>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-border p-4">
+                <div className="rounded-xl border border-white/8 bg-white/2 p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{t('crm.newsletterOptIn', 'Newsletter abonniert')}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-sm font-medium text-white/80">{t('crm.newsletterOptIn', 'Newsletter abonniert')}</p>
+                      <p className="text-xs text-white/40 mt-1">
                         Einwilligung zum Erhalt von Newslettern und Marketing.
                       </p>
                     </div>
@@ -408,28 +409,28 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   </div>
 
                   {newsletterOptIn && (
-                    <div className="mt-4 pt-4 border-t border-border">
-                      <Label className="text-xs font-medium mb-1.5 block">
+                    <div className="mt-4 pt-4 border-t border-white/6">
+                      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
                         {t('crm.newsletterChannel', 'Kanal')}
                       </Label>
                       <Select
                         value={watch('newsletterChannel') || 'email'}
                         onValueChange={(v) => setValue('newsletterChannel', v)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className={selectTriggerCls}>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent position="popper" sideOffset={4}>
-                          <SelectItem value="email">{t('crm.channelEmail', 'E-Mail')}</SelectItem>
-                          <SelectItem value="whatsapp">{t('crm.channelWhatsapp', 'WhatsApp')}</SelectItem>
-                          <SelectItem value="both">{t('crm.channelBoth', 'Beide')}</SelectItem>
+                        <SelectContent position="popper" sideOffset={4} className="bg-[#0D1117] border-white/10">
+                          <SelectItem value="email" className="text-white/80 focus:bg-white/5">{t('crm.channelEmail', 'E-Mail')}</SelectItem>
+                          <SelectItem value="whatsapp" className="text-white/80 focus:bg-white/5">{t('crm.channelWhatsapp', 'WhatsApp')}</SelectItem>
+                          <SelectItem value="both" className="text-white/80 focus:bg-white/5">{t('crm.channelBoth', 'Beide')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   )}
                 </div>
 
-                <Field label={t('crm.notes', 'Notizen')} error={errors.notes}>
+                <DarkField label={t('crm.notes', 'Notizen')} error={errors.notes}>
                   <Controller
                     name="notes"
                     control={control}
@@ -444,23 +445,23 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                       />
                     )}
                   />
-                </Field>
+                </DarkField>
               </div>
             )}
           </div>
 
-          <Separator className="shrink-0" />
+          <Separator className="shrink-0 bg-white/6" />
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 shrink-0 bg-muted/20">
+          <div className="flex items-center justify-between px-6 py-4 shrink-0">
             <div className="flex items-center gap-2">
               {currentStep > 0 ? (
-                <Button type="button" variant="ghost" className="gap-1.5 h-9" onClick={goBack}>
+                <Button type="button" variant="ghost" className="gap-1.5 h-9 text-white/55 hover:text-white/80 hover:bg-white/5" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  {t('common.back', 'Zurueck')}
+                  {t('common.back', 'Zurück')}
                 </Button>
               ) : (
-                <Button type="button" variant="ghost" className="h-9" onClick={() => onOpenChange(false)}>
+                <Button type="button" variant="ghost" className="h-9 text-white/55 hover:text-white/80 hover:bg-white/5" onClick={() => onOpenChange(false)}>
                   {t('common.cancel', 'Abbrechen')}
                 </Button>
               )}
@@ -473,21 +474,25 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     key={i}
                     className={cn(
                       'h-1.5 rounded-full transition-all',
-                      i === currentStep ? 'w-4 bg-primary' : i < currentStep ? 'w-1.5 bg-emerald-500' : 'w-1.5 bg-border',
+                      i === currentStep ? 'w-4 bg-blue-400' : i < currentStep ? 'w-1.5 bg-emerald-500' : 'w-1.5 bg-white/15',
                     )}
                   />
                 ))}
               </div>
 
               {isLastStep ? (
-                <Button type="submit" className="h-9 gap-1.5 shadow-theme-sm" disabled={isLoading}>
+                <Button
+                  type="submit"
+                  className="h-9 gap-1.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white"
+                  disabled={isLoading}
+                >
                   {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {isEdit ? t('common.save', 'Speichern') : t('common.create', 'Erstellen')}
                 </Button>
               ) : (
                 <Button
                   type="button"
-                  className="h-9 gap-1.5"
+                  className="h-9 gap-1.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -506,14 +511,16 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   );
 }
 
-function Field({ label, error, children }) {
+function DarkField({ label, required, error, children }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-medium">{label}</Label>
+      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+        {label}{required && <span className="text-red-400 ml-1">*</span>}
+      </Label>
       {children}
       {error && (
-        <p className="text-xs text-destructive animate-in fade-in slide-in-from-top-1 duration-200">
-          {error.message}
+        <p className="text-red-400 text-[11px] mt-1 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3 shrink-0" /> {error.message}
         </p>
       )}
     </div>

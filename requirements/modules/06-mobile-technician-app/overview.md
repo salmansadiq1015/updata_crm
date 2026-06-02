@@ -20,6 +20,17 @@ The Mobile Technician App is a native mobile application for iOS and Android tha
 
 The app acts as the primary field interface to the MB Boiler & Heizung AG ERP platform, consuming APIs from the web-based backend modules while providing a purpose-built mobile experience optimized for use on construction sites and in customer premises.
 
+### 1.1 Application & Server Boundary
+
+The native **iOS and Android client app is a separate application** (its own codebase, build, and app-store delivery), but it runs against the **same shared backend/server** as the web application. There is one backend; there are two clients (web + mobile).
+
+Consequently, scope splits as follows:
+
+- **In scope for this server/platform:** all *server-side* mobile capabilities — the mobile BFF/API endpoints, the offline-sync backend (delta sync, conflict resolution), push-notification dispatch (via Module 13 → FCM/APNS), authentication/session handling for mobile, and the data contracts the app consumes. Every MOB-* requirement's backend behaviour is delivered here.
+- **Delivered as a separate client project:** the native iOS/Android UI implementation, on-device storage/encryption, camera/scanner integration, and app-store publishing. These consume the shared backend but are not part of the web-server deliverable.
+
+This matches the contract's treatment of the mobile app as a distinct application sharing the common backend.
+
 ---
 
 ## 2. Scope
@@ -124,10 +135,10 @@ Auto-sync must occur automatically when connectivity is restored, with conflict 
 |--------------------------|-----------------------|-------------------------------------------------------------------------|
 | Field Deployment Planning| MOD-05                | Assignment data is the source for the technician's order list.          |
 | Project Management       | MOD-04                | Project details, documents, and schedules are accessed via mobile.      |
-| CRM / Customer Data      | MOD-02                | Site and installation information is sourced from CRM.                  |
-| Material Catalog         | MOD-07 / IGH          | Material and service item catalogs for line item entry.                 |
+| CRM / Customer Data      | MOD-03                | Site and installation information is sourced from CRM.                  |
+| Material Catalog         | MOD-10 / IGH          | Material and service item catalogs for line item entry.                 |
 | Quotation & Invoicing    | MOD-08                | Quotation data (without prices) is displayed to technicians.            |
-| Time Management          | MOD-10                | Time records from mobile feed into central time management.             |
+| Time Management          | Back-office           | Time records from mobile feed into central time management.             |
 | Notification Service     | Platform Service      | Push notification delivery infrastructure.                              |
 | File Storage Service     | Platform Service      | Document and photo storage backend.                                     |
 

@@ -5,13 +5,14 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { createMaintenanceSchema } from '@/modules/crm/validations/maintenance';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FormField, FormBody } from '@/components/ui/form-field';
-import { Loader2, Wrench } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Loader2, Wrench, AlertCircle } from 'lucide-react';
 import { MAINTENANCE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { cn } from '@/lib/utils';
 
@@ -68,29 +69,46 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
     }
   };
 
+  const inputCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-orange-500/50 focus-visible:ring-orange-500/20';
+  const selectTriggerCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 focus:border-orange-500/50 focus:ring-orange-500/20';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-120">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Wrench className="h-4.5 w-4.5 text-primary" />
-            {isEdit ? t('crm.maintenance.editInterval', 'Wartungsintervall bearbeiten') : t('crm.maintenance.newIntervalTitle', 'Neues Wartungsintervall')}
-          </DialogTitle>
-          <DialogDescription>
-            {t('crm.maintenance.formDesc', 'Definieren Sie, wie oft diese Installation gewartet werden soll.')}
-          </DialogDescription>
+      <DialogContent className="sm:max-w-lg p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
+        {/* Fixed Header */}
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-orange-500/10 ring-1 ring-orange-500/20 shrink-0">
+              <Wrench className="h-5 w-5 text-orange-400" />
+            </div>
+            <div>
+              <DialogTitle className="text-[16px] font-semibold text-white/90">
+                {isEdit
+                  ? t('crm.maintenance.editInterval', 'Wartungsintervall bearbeiten')
+                  : t('crm.maintenance.newIntervalTitle', 'Neues Wartungsintervall')}
+              </DialogTitle>
+              <DialogDescription className="text-[13px] text-white/45 mt-0.5">
+                {t('crm.maintenance.formDesc', 'Definieren Sie, wie oft diese Installation gewartet werden soll.')}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(submit)} className="flex flex-1 flex-col overflow-hidden">
-          <FormBody>
-            <FormField label={t('crm.maintenance.maintenanceType', 'Wartungsart')} required error={errors.maintenanceType?.message}>
+        {/* Scrollable Body */}
+        <form onSubmit={handleSubmit(submit)} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin space-y-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+              {t('crm.maintenance.sectionType', 'Wartungsart')}
+            </p>
+
+            <DarkField label={t('crm.maintenance.maintenanceType', 'Wartungsart')} required error={errors.maintenanceType}>
               <Select value={type} onValueChange={(v) => setValue('maintenanceType', v, { shouldDirty: true })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
+                <SelectTrigger className={selectTriggerCls}><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-[#0D1117] border-white/10">
                   {Object.entries(MAINTENANCE_TYPE_META).map(([key, meta]) => {
                     const Icon = meta.icon;
                     return (
-                      <SelectItem key={key} value={key}>
+                      <SelectItem key={key} value={key} className="text-white/80 focus:bg-white/5 focus:text-white/90">
                         <span className="flex items-center gap-2">
                           <Icon className={cn('h-3.5 w-3.5', meta.color)} />
                           {t(`crm.maintenance.type.${key}`, meta.label)}
@@ -100,29 +118,39 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
                   })}
                 </SelectContent>
               </Select>
-            </FormField>
+            </DarkField>
 
             {type === 'other' && (
-              <FormField label={t('crm.maintenance.customLabel', 'Eigene Bezeichnung')} error={errors.customTypeLabel?.message}>
-                <Input {...register('customTypeLabel')} placeholder={t('crm.maintenance.customLabelPlaceholder', 'z.B. Kesselreinigung')} />
-              </FormField>
+              <DarkField label={t('crm.maintenance.customLabel', 'Eigene Bezeichnung')} error={errors.customTypeLabel}>
+                <Input
+                  {...register('customTypeLabel')}
+                  placeholder={t('crm.maintenance.customLabelPlaceholder', 'z.B. Kesselreinigung')}
+                  className={inputCls}
+                />
+              </DarkField>
             )}
 
+            <Separator className="my-5 bg-white/6" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+              {t('crm.maintenance.sectionSchedule', 'Zeitplan')}
+            </p>
+
             <div className="grid grid-cols-2 gap-4">
-              <FormField label={t('crm.maintenance.frequencyMonths', 'Intervall (Monate)')} required error={errors.frequencyMonths?.message}>
+              <DarkField label={t('crm.maintenance.frequencyMonths', 'Intervall (Monate)')} required error={errors.frequencyMonths}>
                 <Input
                   type="number"
                   min="1"
                   max="120"
                   {...register('frequencyMonths', { valueAsNumber: true })}
+                  className={inputCls}
                 />
-              </FormField>
-              <FormField label={t('crm.maintenance.lastServiceDate', 'Letzter Service')} error={errors.lastServiceDate?.message}>
-                <Input type="date" {...register('lastServiceDate')} />
-              </FormField>
+              </DarkField>
+              <DarkField label={t('crm.maintenance.lastServiceDate', 'Letzter Service')} error={errors.lastServiceDate}>
+                <Input type="date" {...register('lastServiceDate')} className={inputCls} />
+              </DarkField>
             </div>
 
-            <FormField label={t('crm.notes', 'Notizen')} error={errors.notes?.message}>
+            <DarkField label={t('crm.notes', 'Notizen')} error={errors.notes}>
               <Controller
                 name="notes"
                 control={control}
@@ -137,20 +165,47 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
                   />
                 )}
               />
-            </FormField>
-          </FormBody>
+            </DarkField>
+          </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+          {/* Fixed Footer */}
+          <div className="px-6 py-4 border-t border-white/6 shrink-0 flex items-center justify-between gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={isLoading}
+              className="text-white/55 hover:text-white/80 hover:bg-white/5"
+            >
               {t('common.cancel', 'Abbrechen')}
             </Button>
-            <Button type="submit" disabled={isLoading} className="gap-2">
-              {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white gap-2"
+            >
+              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEdit ? t('common.save', 'Speichern') : t('common.create', 'Erstellen')}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DarkField({ label, required, error, children }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+        {label}{required && <span className="text-red-400 ml-1">*</span>}
+      </Label>
+      {children}
+      {error && (
+        <p className="text-red-400 text-[11px] mt-1 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3 shrink-0" /> {error.message}
+        </p>
+      )}
+    </div>
   );
 }

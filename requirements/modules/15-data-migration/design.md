@@ -8,11 +8,11 @@ The data migration follows an **ETL (Extract-Transform-Load) pipeline** architec
 +------------------+     +------------------+     +------------------+
 | Source Systems   |     | Migration        |     | Target Platform  |
 |                  |     | Pipeline         |     |                  |
-| +- OF Software   |---->| +- Staging DB    |---->| +- CRM (02)      |
-| |  (DB export)   |     | +- ETL Engine    |     | +- Orders (03)   |
-| +- Messerli CRM  |---->| +- Validators    |---->| +- Plants (06)   |
-| |  (CSV/SQL)     |     | +- Deduplicator  |     | +- Quotes (07)   |
-| +- Documents     |---->| +- Progress Mgr  |---->| +- Finance (10)  |
+| +- OF Software   |---->| +- Staging DB    |---->| +- CRM (03)      |
+| |  (DB export)   |     | +- ETL Engine    |     | +- Orders (08)   |
+| +- Messerli CRM  |---->| +- Validators    |---->| +- Plants (03)   |
+| |  (CSV/SQL)     |     | +- Deduplicator  |     | +- Quotes (08)   |
+| +- Documents     |---->| +- Progress Mgr  |---->| +- Finance (11)  |
 |    (Files)       |     | +- Error Handler |     | +- Storage (14)  |
 +------------------+     +------------------+     +------------------+
                                 |
@@ -363,7 +363,7 @@ Interface: DataLoader
 
 ## 4. Data Mapping Schemas
 
-### 4.1 OF Addresses -> CRM Contacts (Module 02)
+### 4.1 OF Addresses -> CRM Contacts (Module 03)
 
 ```
 Source: OF.adressen
@@ -395,7 +395,7 @@ Mapping:
 +---------------------------+---------------------------+------------------------+
 ```
 
-### 4.2 OF Plants -> Plant Management (Module 06)
+### 4.2 OF Plants -> CRM & Asset Management (Module 03)
 
 ```
 Source: OF.anlagen
@@ -430,7 +430,7 @@ Mapping:
 +---------------------------+---------------------------+------------------------+
 ```
 
-### 4.3 OF Quotations -> Quotations (Module 07)
+### 4.3 OF Quotations -> Quotations (Module 08)
 
 ```
 Source: OF.offerten / OF.offerten_positionen
@@ -472,7 +472,7 @@ Line Item Mapping:
 +---------------------------+---------------------------+------------------------+
 ```
 
-### 4.4 OF Invoices -> Finance (Module 10)
+### 4.4 OF Invoices -> Accounting (Module 11)
 
 ```
 Source: OF.rechnungen / OF.rechnungen_positionen / OF.zahlungen

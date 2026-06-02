@@ -151,14 +151,14 @@
   --shadow-md: 0 4px 12px rgb(17 24 39 / 0.06), 0 1px 3px rgb(17 24 39 / 0.03);
   --shadow-lg: 0 8px 24px rgb(17 24 39 / 0.08), 0 2px 6px rgb(17 24 39 / 0.04);
 
-  /* Sidebar — always dark */
-  --sidebar: #0F172A;
+  /* Sidebar — always dark obsidian */
+  --sidebar: #080C14;
   --sidebar-foreground: #E5E7EB;
-  --sidebar-primary: #7B68EE;
+  --sidebar-primary: oklch(0.7 0.25 292);
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #1F2937;
   --sidebar-accent-foreground: #E5E7EB;
-  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-border: rgba(255,255,255,0.05);
   --sidebar-ring: #7B68EE;
 }
 
@@ -212,14 +212,14 @@
   --shadow-md: 0 4px 12px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.2);
   --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.3);
 
-  /* Sidebar — same dark */
-  --sidebar: #0B1220;
+  /* Sidebar — same dark obsidian */
+  --sidebar: #080C14;
   --sidebar-foreground: #E5E7EB;
-  --sidebar-primary: #9F7AEA;
+  --sidebar-primary: oklch(0.7 0.25 292);
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #1F2937;
   --sidebar-accent-foreground: #E5E7EB;
-  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-border: rgba(255,255,255,0.05);
   --sidebar-ring: #9F7AEA;
 }
 
@@ -380,20 +380,22 @@
 
 /* Sidebar glassmorphic utilities (always dark) */
 .sidebar-active-glow {
+  background: linear-gradient(90deg, oklch(0.65 0.25 292 / 14%) 0%, oklch(0.65 0.25 292 / 6%) 100%);
   box-shadow:
-    0 0 16px rgb(159 122 234 / 0.2),
-    inset 0 1px 0 rgb(255 255 255 / 0.06);
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    0 0 20px oklch(0.65 0.25 292 / 18%);
 }
 .sidebar-inner-glow {
   box-shadow:
-    inset 1px 0 0 rgb(255 255 255 / 0.04),
-    inset -1px 0 0 rgb(255 255 255 / 0.02),
-    4px 0 24px rgb(0 0 0 / 0.25);
+    inset 1px 0 0 rgba(255,255,255,0.03),
+    4px 0 32px rgba(0,0,0,0.5),
+    0 0 80px rgba(139,92,246,0.06) inset;
 }
 .sidebar-ambient {
   background:
-    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(0.65 0.22 292 / 5%) 0%, transparent 60%),
-    radial-gradient(ellipse 80% 40% at 50% 100%, oklch(0.65 0.22 292 / 3%) 0%, transparent 50%);
+    radial-gradient(ellipse 140% 45% at 50% 0%, oklch(0.65 0.25 292 / 7%) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 35% at 0% 60%, oklch(0.6 0.22 260 / 5%) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 30% at 100% 90%, oklch(0.55 0.2 310 / 4%) 0%, transparent 50%);
 }
 .scrollbar-dark {
   scrollbar-width: thin;

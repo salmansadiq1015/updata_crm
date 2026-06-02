@@ -70,8 +70,7 @@ Provide an embeddable web widget (JavaScript snippet or iframe) that can be plac
 ### Dependencies
 
 - Module 01 (Core Platform): API authentication (API key for widget)
-- Module 02 (CRM): Contact creation/matching
-- Module 03 (Order Management): Order/lead creation
+- Module 03 (CRM & Asset Management): Contact creation/matching and service-request (lead) creation (CRM-014)
 - Module 13 (Notifications): Confirmation email, dispatcher notification
 
 ### Tags
@@ -102,7 +101,7 @@ Integrate with the IGH (Interessengemeinschaft Haustechnik) catalog system to re
 
 1. MB Boiler & Heizung AG has an active IGH membership and API access credentials.
 2. IGH provides API documentation and a test/sandbox environment.
-3. Article master data schema in Module 08 supports IGH catalog fields.
+3. Article master data schema in Module 10 supports IGH catalog fields.
 
 ### Flow
 
@@ -113,16 +112,16 @@ Integrate with the IGH (Interessengemeinschaft Haustechnik) catalog system to re
 4. For each catalog item received:
    a. The connector maps IGH fields to the internal article data model.
    b. If the article already exists (matched by IGH article number), it is updated.
-   c. If the article is new, it is created in the article master (Module 08).
+   c. If the article is new, it is created in the article master (Module 10).
    d. Discontinued articles are flagged as inactive.
 5. The sync result (new, updated, deactivated, errors) is logged and reported.
-6. During quotation creation (Module 07), users can search the synced IGH catalog to add line items.
+6. During quotation creation (Module 08), users can search the synced IGH catalog to add line items.
 
 **Alternate Flows:**
 - **A1 - API Unavailable:** If the IGH API is unreachable during scheduled sync, the sync is retried up to 3 times over 1 hour. If all retries fail, the sync is skipped and an alert is raised.
 - **A2 - Data Mapping Error:** If an IGH catalog item has unexpected data format, the item is skipped, logged as an error, and included in the sync report.
 - **A3 - Manual Sync:** An admin can trigger a manual full or delta sync from the admin UI.
-- **A4 - Price Override:** Internal pricing (margins, customer-specific pricing) in Module 08 takes precedence over IGH list prices. The IGH list price is stored as a reference.
+- **A4 - Price Override:** Internal pricing (margins, customer-specific pricing) in Module 10 takes precedence over IGH list prices. The IGH list price is stored as a reference.
 
 ### Postconditions
 
@@ -142,8 +141,8 @@ Integrate with the IGH (Interessengemeinschaft Haustechnik) catalog system to re
 
 ### Dependencies
 
-- Module 08 (Articles & Inventory): Article data model, article creation/update API
-- Module 07 (Quotations): Catalog search during quotation line item entry
+- Module 10 (Material Catalogs & Interfaces): Article data model, article creation/update API
+- Module 08 (Quotations & Order Processing): Catalog search during quotation line item entry
 - Module 01 (Core Platform): Background job scheduling, configuration management
 
 ### Tags
@@ -162,7 +161,7 @@ Integrate with the IGH (Interessengemeinschaft Haustechnik) catalog system to re
 
 ### Description
 
-Integrate with Swiss banking systems to automate payment reconciliation. Import electronic bank statements in ISO 20022 format (camt.053 for end-of-day statements, camt.054 for detailed transaction notifications) and automatically match incoming payments against open invoices in the finance module (Module 10). This eliminates manual payment matching and reduces errors in accounts receivable.
+Integrate with Swiss banking systems to automate payment reconciliation. Import electronic bank statements in ISO 20022 format (camt.053 for end-of-day statements, camt.054 for detailed transaction notifications) and automatically match incoming payments against open invoices in the accounting module (Module 11). This eliminates manual payment matching and reduces errors in accounts receivable.
 
 ### Actors
 
@@ -174,7 +173,7 @@ Integrate with Swiss banking systems to automate payment reconciliation. Import 
 
 1. MB Boiler & Heizung AG has an e-banking contract with their bank that supports electronic statement delivery.
 2. Bank provides ISO 20022 camt.053/054 files via EBICS, SFTP, or API.
-3. The finance module (Module 10) has open invoices with QR-IBAN reference numbers.
+3. The accounting module (Module 11) has open invoices with QR-IBAN reference numbers.
 
 ### Flow
 
@@ -183,7 +182,7 @@ Integrate with Swiss banking systems to automate payment reconciliation. Import 
 2. The connector parses the ISO 20022 XML file and extracts individual transaction entries (credit/debit).
 3. For each incoming credit transaction:
    a. The connector extracts the payment reference (QR reference number / ESR reference / structured reference).
-   b. The connector searches for a matching open invoice in Module 10 by reference number.
+   b. The connector searches for a matching open invoice in Module 11 by reference number.
    c. If a match is found and the amount matches exactly, the invoice is automatically marked as paid.
    d. If a match is found but the amount differs (partial payment or overpayment), the payment is linked to the invoice and flagged for manual review.
    e. If no match is found, the payment is recorded as an unmatched incoming payment for manual assignment.
@@ -215,7 +214,7 @@ Integrate with Swiss banking systems to automate payment reconciliation. Import 
 
 ### Dependencies
 
-- Module 10 (Finance): Invoice data, payment recording, QR reference numbers
+- Module 11 (Accounting): Invoice data, payment recording, QR reference numbers
 - Module 01 (Core Platform): Background job scheduling, secure credential storage
 
 ### Tags
@@ -361,7 +360,7 @@ Connector for email dispatch via SMTP relay or transactional email service provi
 
 ### Description
 
-Integrate with an OCR (Optical Character Recognition) service to automate data extraction from scanned documents, primarily supplier invoices and delivery notes. The OCR service extracts structured data (supplier name, invoice number, date, line items, amounts, VAT) from uploaded document images or PDFs, reducing manual data entry in the finance module (Module 10).
+Integrate with an OCR (Optical Character Recognition) service to automate data extraction from scanned documents, primarily supplier invoices and delivery notes. The OCR service extracts structured data (supplier name, invoice number, date, line items, amounts, VAT) from uploaded document images or PDFs, reducing manual data entry in the accounting module (Module 11).
 
 ### Actors
 
@@ -387,7 +386,7 @@ Integrate with an OCR (Optical Character Recognition) service to automate data e
    - Bank account / payment reference
 4. The connector maps the extracted data to the internal supplier invoice schema.
 5. The extracted data is presented to the finance user for review and correction in a side-by-side view (original document + extracted fields).
-6. The user confirms or corrects the data and saves the supplier invoice in Module 10.
+6. The user confirms or corrects the data and saves the supplier invoice in Module 11.
 
 **Alternate Flows:**
 - **A1 - Low Confidence Extraction:** Fields with low confidence scores (< 80%) are highlighted in yellow for the user to verify.
@@ -398,7 +397,7 @@ Integrate with an OCR (Optical Character Recognition) service to automate data e
 ### Postconditions
 
 1. Structured invoice data is extracted and available for review.
-2. Confirmed data is saved as a supplier invoice in Module 10.
+2. Confirmed data is saved as a supplier invoice in Module 11.
 
 ### Acceptance Criteria
 
@@ -411,7 +410,7 @@ Integrate with an OCR (Optical Character Recognition) service to automate data e
 
 ### Dependencies
 
-- Module 10 (Finance): Supplier invoice data model, invoice creation API
+- Module 11 (Accounting): Supplier invoice data model, invoice creation API
 - INT-007 (Cloud Storage): Document storage
 - Module 01 (Core Platform): File upload infrastructure
 
@@ -510,7 +509,7 @@ Optional integration with external calendar systems (Google Calendar, Microsoft 
 **Main Flow:**
 1. A technician navigates to Settings > Calendar Integration and connects their Google or Outlook calendar via OAuth 2.0.
 2. The system creates a dedicated calendar (e.g., "MB Boiler Termine") in the technician's external calendar.
-3. When an appointment is created or updated in the ERP (Module 03/04), the system creates/updates a corresponding calendar event in the external calendar.
+3. When an appointment is created or updated in the ERP (Module 05), the system creates/updates a corresponding calendar event in the external calendar.
 4. The calendar event includes: appointment title, customer name, address, time, and a link back to the ERP.
 5. Changes in the ERP are reflected in the external calendar within 5 minutes (via polling or push).
 
@@ -534,8 +533,8 @@ Optional integration with external calendar systems (Google Calendar, Microsoft 
 
 ### Dependencies
 
-- Module 03 (Order Management): Appointment data
-- Module 04 (Task Management): Task scheduling data
+- Module 05 (Field Deployment Planning): Appointment data
+- Module 12 (Task Management): Task scheduling data
 - Module 01 (Core Platform): OAuth 2.0 infrastructure, user settings
 
 ### Tags

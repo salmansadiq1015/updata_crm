@@ -24,7 +24,7 @@ Extract all relevant operational data from the client's existing OF (Orgafile/fi
 
 1. The client has provided access to the OF software database or a complete data export in an evaluable format (SQL dump, CSV, or structured export).
 2. The OF data model documentation (or reverse-engineered schema) is available.
-3. The target platform schema (Modules 02, 03, 06, 07, 10) is finalized and deployed to the staging environment.
+3. The target platform schema (Modules 02, 03, 08, 10, 11) is finalized and deployed to the staging environment.
 4. A field mapping document has been created and approved by both parties.
 
 ### Flow
@@ -54,8 +54,8 @@ Extract all relevant operational data from the client's existing OF (Orgafile/fi
 
 ### Acceptance Criteria
 
-- [ ] AC-1: All address records from OF are migrated to the CRM module (Module 02) with all mapped fields populated.
-- [ ] AC-2: All plant/installation records from OF are migrated to the Plant Management module (Module 06).
+- [ ] AC-1: All address records from OF are migrated to the CRM module (Module 03) with all mapped fields populated.
+- [ ] AC-2: All plant/installation records from OF are migrated to the CRM & Asset Management module (Module 03).
 - [ ] AC-3: Historical service records from OF are migrated and linked to the corresponding plant records.
 - [ ] AC-4: The migration error rate is below 1% of total records (excluding known source data quality issues documented in the error report).
 - [ ] AC-5: Each migrated record contains a `source_system = 'OF'` and `source_id` reference for traceability.
@@ -64,9 +64,9 @@ Extract all relevant operational data from the client's existing OF (Orgafile/fi
 
 ### Dependencies
 
-- Module 02 (CRM): Target address/contact schema
-- Module 03 (Order Management): Target order schema
-- Module 06 (Plant Management): Target plant/installation schema
+- Module 03 (CRM & Asset Management): Target address/contact schema
+- Module 08 (Quotations & Order Processing): Target order schema
+- Module 03 (CRM & Asset Management): Target plant/installation schema
 - Module 14 (Integrations, INT-007): Cloud storage for document files
 - MIG-007: Validation rules
 
@@ -86,7 +86,7 @@ Extract all relevant operational data from the client's existing OF (Orgafile/fi
 
 ### Description
 
-Extract all relevant customer relationship data from the Messerli CRM system and import it into the new platform's CRM module (Module 02). Messerli CRM contains customer contacts, communication history, customer classifications/tags, and potentially sales-related data. Where entities exist in both Messerli and OF, cross-system deduplication must be performed.
+Extract all relevant customer relationship data from the Messerli CRM system and import it into the new platform's CRM module (Module 03). Messerli CRM contains customer contacts, communication history, customer classifications/tags, and potentially sales-related data. Where entities exist in both Messerli and OF, cross-system deduplication must be performed.
 
 ### Actors
 
@@ -143,7 +143,7 @@ Extract all relevant customer relationship data from the Messerli CRM system and
 
 ### Dependencies
 
-- Module 02 (CRM): Target contact/customer schema
+- Module 03 (CRM & Asset Management): Target contact/customer schema
 - MIG-001: OF data must be migrated first (for deduplication matching)
 - MIG-007: Validation rules
 
@@ -173,7 +173,7 @@ Migrate all customer, supplier, partner, and internal contact addresses from bot
 ### Preconditions
 
 1. Address data has been extracted from OF (MIG-001) and Messerli (MIG-002).
-2. Target address schema in Module 02 is finalized.
+2. Target address schema in Module 03 is finalized.
 3. Swiss postal code reference data is available for validation.
 
 ### Flow
@@ -186,7 +186,7 @@ Migrate all customer, supplier, partner, and internal contact addresses from bot
    c. **Normalize Phone:** Convert phone numbers to E.164 format (+41...). Handle various input formats (079..., 0041..., +41..., etc.).
    d. **Validate Email:** Validate email format and optionally check domain existence (MX record).
    e. **Classify:** Determine address type (customer, supplier, partner, internal) based on source data or explicit mapping.
-   f. **Geocode (Optional):** If geocoding is required for map-based features (Module 04 dispatching), geocode addresses via a geocoding API.
+   f. **Geocode (Optional):** If geocoding is required for map-based features (Module 05 dispatching), geocode addresses via a geocoding API.
 3. Validated and normalized addresses are loaded into the target CRM.
 4. Invalid addresses (e.g., non-existent ZIP code, invalid email format) are logged in the error report.
 
@@ -211,7 +211,7 @@ Migrate all customer, supplier, partner, and internal contact addresses from bot
 
 - MIG-001: OF data extraction
 - MIG-002: Messerli data extraction
-- Module 02 (CRM): Target address schema
+- Module 03 (CRM & Asset Management): Target address schema
 - MIG-007: Validation rules
 
 ### Tags
@@ -230,7 +230,7 @@ Migrate all customer, supplier, partner, and internal contact addresses from bot
 
 ### Description
 
-Migrate historical quotation data from the legacy systems into the new platform's Quotation module (Module 07). This includes quotation headers (customer, date, status, validity, amounts), line items (articles, quantities, prices), and associated documents (PDF quotation documents).
+Migrate historical quotation data from the legacy systems into the new platform's Quotation module (Module 08). This includes quotation headers (customer, date, status, validity, amounts), line items (articles, quantities, prices), and associated documents (PDF quotation documents).
 
 ### Actors
 
@@ -281,7 +281,7 @@ Migrate historical quotation data from the legacy systems into the new platform'
 
 - MIG-001/MIG-002: Source data extraction
 - MIG-003: Customer records migrated first
-- Module 07 (Quotations): Target quotation schema
+- Module 08 (Quotations & Order Processing): Target quotation schema
 - Module 14 (INT-007): Cloud storage for document files
 
 ### Tags
@@ -300,7 +300,7 @@ Migrate historical quotation data from the legacy systems into the new platform'
 
 ### Description
 
-Migrate historical invoice data from the legacy systems into the new platform's Finance module (Module 10). This includes invoice headers (customer, date, due date, amounts, payment status), line items, payment records, and associated PDF documents. Both customer invoices (accounts receivable) and, where available, supplier invoices (accounts payable) are in scope.
+Migrate historical invoice data from the legacy systems into the new platform's Accounting module (Module 11). This includes invoice headers (customer, date, due date, amounts, payment status), line items, payment records, and associated PDF documents. Both customer invoices (accounts receivable) and, where available, supplier invoices (accounts payable) are in scope.
 
 ### Actors
 
@@ -326,7 +326,7 @@ Migrate historical invoice data from the legacy systems into the new platform's 
    e. **Verify Financials:** Validate that line item totals + VAT = invoice total. Log discrepancies.
    f. **Migrate Documents:** Upload PDF invoices to cloud storage and link them.
    g. **Set Metadata:** Mark as `migrated = true` and `read_only = true`.
-3. Validated invoices are loaded into the target Finance module.
+3. Validated invoices are loaded into the target Accounting module.
 
 **Alternate Flows:**
 - **A1 - Open Invoices:** Open (unpaid) invoices require special attention. They must be verified with the client's finance team to ensure the outstanding balance is correct as of the migration date.
@@ -354,7 +354,7 @@ Migrate historical invoice data from the legacy systems into the new platform's 
 
 - MIG-001/MIG-002: Source data extraction
 - MIG-003: Customer/supplier records migrated first
-- Module 10 (Finance): Target invoice schema
+- Module 11 (Accounting): Target invoice schema
 - Module 14 (INT-007): Cloud storage for document files
 
 ### Tags
@@ -373,7 +373,7 @@ Migrate historical invoice data from the legacy systems into the new platform's 
 
 ### Description
 
-Migrate heating plant and installation data from the legacy OF software into the new platform's Plant Management module (Module 06). This is one of the most critical migration domains as it contains the technical backbone of the field-service operation: what equipment is installed at each customer site, when it was installed, maintenance history, warranty status, and component details.
+Migrate heating plant and installation data from the legacy OF software into the new platform's CRM & Asset Management module (Module 03). This is one of the most critical migration domains as it contains the technical backbone of the field-service operation: what equipment is installed at each customer site, when it was installed, maintenance history, warranty status, and component details.
 
 ### Actors
 
@@ -385,7 +385,7 @@ Migrate heating plant and installation data from the legacy OF software into the
 
 1. Plant/installation data has been extracted from the OF software.
 2. Customer/address records have been migrated (MIG-003) so that plants can be linked to customer locations.
-3. The plant data model in Module 06 is finalized.
+3. The plant data model in Module 03 is finalized.
 4. Equipment type and manufacturer reference data is available in the target system.
 
 ### Flow
@@ -400,7 +400,7 @@ Migrate heating plant and installation data from the legacy OF software into the
    e. **Map Maintenance History:** Migrate historical maintenance/service records, including service dates, work performed, parts replaced, and technician (if identifiable).
    f. **Map Documents:** Migrate associated documents (installation protocols, commissioning reports, equipment photos) to cloud storage.
    g. **Calculate Next Maintenance:** Based on the last maintenance date and the default maintenance interval for the equipment type, pre-populate the next maintenance due date.
-3. Validated plant records are loaded into the target Plant Management module.
+3. Validated plant records are loaded into the target CRM & Asset Management module.
 
 **Alternate Flows:**
 - **A1 - Unknown Equipment Type:** If the source data does not clearly identify the equipment manufacturer/model, the plant is created with a generic "Unknown" type and flagged for manual classification by a technician during the next site visit.
@@ -409,14 +409,14 @@ Migrate heating plant and installation data from the legacy OF software into the
 
 ### Postconditions
 
-1. All plant/installation records are available in the new Plant Management module.
+1. All plant/installation records are available in the new CRM & Asset Management module.
 2. Plants are linked to the correct customer and installation address.
 3. Maintenance history is preserved and linked.
 4. Next maintenance due dates are pre-calculated.
 
 ### Acceptance Criteria
 
-- [ ] AC-1: All plant records from the OF software are migrated to Module 06.
+- [ ] AC-1: All plant records from the OF software are migrated to Module 03.
 - [ ] AC-2: Plants are correctly linked to the migrated customer and installation address.
 - [ ] AC-3: Equipment type, manufacturer, model, and serial number are populated where available in the source data.
 - [ ] AC-4: Maintenance history records are migrated and linked to the correct plant.
@@ -429,7 +429,7 @@ Migrate heating plant and installation data from the legacy OF software into the
 
 - MIG-001: OF data extraction (primary source for plant data)
 - MIG-003: Customer/address records migrated first
-- Module 06 (Plant Management): Target plant schema
+- Module 03 (CRM & Asset Management): Target plant schema
 - Module 14 (INT-007): Cloud storage for documents
 
 ### Tags

@@ -251,7 +251,7 @@ The system shall provide templates for cover letters, service reports, inspectio
 
 - DOC-001: Base layout
 - DOC-009: CI Compliance
-- MOD-05: Mobile Field Service (service report data)
+- MOD-06: Mobile Technician App (service report data)
 - MOD-07: AI Assistant (voice-dictated content for reports)
 
 ---

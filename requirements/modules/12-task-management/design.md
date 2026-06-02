@@ -624,24 +624,24 @@ Module 04 calls: GET /api/v1/projects/{projectId}/tasks?status=OPEN,IN_PROGRESS
 
 ## 4. Integration Points
 
-### 4.1 Module 01 -- User Management
+### 4.1 Module 02 -- Authentication & User Management
 - Task assignees and creators reference User records.
 - Default personal task list is auto-created via a hook on user provisioning: when `user.created` event fires, the task module creates a TaskList with `is_default=TRUE` for that user.
 - User deactivation: tasks assigned to deactivated users are flagged; group list membership is revoked.
 
-### 4.2 Module 04 -- Order/Project Management
+### 4.2 Module 04 -- Project Management
 - Tasks can be linked to projects via `project_id` and orders via `order_id`.
 - The project "Tasks" tab is powered by `GET /api/v1/projects/{projectId}/tasks`.
 - Task completion summary is exposed via `GET /api/v1/projects/{projectId}/tasks/summary`.
 - Project closure checks for open tasks before proceeding.
 - **Template tasks:** Project templates (if supported by Module 04) can include task templates. When a project is instantiated from a template, the task module receives a `project.created_from_template` event and creates the predefined tasks.
 
-### 4.3 Module 05 -- Scheduling
+### 4.3 Module 05 -- Field Deployment Planning
 - Tasks with due dates may appear as reference items in scheduling views (read-only).
 - No bidirectional sync -- scheduling events and tasks are separate entities.
 - If a scheduling module calendar view exists, tasks can optionally be displayed as secondary items.
 
-### 4.4 Module 07 -- Field-Service Reports
+### 4.4 Module 06 -- Mobile Technician App
 - Field technicians may have tasks linked to service appointments (e.g., "Inspect boiler at site X").
 - Completing a field-service report can trigger task completion if a linked task exists.
 - The service report can reference the task ID for traceability.

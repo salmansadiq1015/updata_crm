@@ -43,14 +43,14 @@ function CustomerDocumentsTab({ customerId, de, language }) {
 
   if (isLoading) return <Skeleton className="h-32 w-full" />;
   if (!docs.length) return (
-    <p className="text-sm text-muted-foreground py-6 text-center">
+    <p className="text-[13px] text-white/40 py-6 text-center">
       {de ? 'Keine Dokumente.' : 'No documents.'}
     </p>
   );
 
   return (
-    <div className="rounded-lg border border-border overflow-hidden text-sm">
-      <div className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] bg-muted/50 border-b text-xs font-medium text-muted-foreground px-3 py-2">
+    <div className="rounded-xl border border-white/6 overflow-hidden bg-[#0B0F18] text-sm">
+      <div className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] bg-white/3 border-b border-white/6 text-[11px] font-semibold uppercase tracking-wider text-white/35 px-3 py-2">
         <div>{de ? 'Typ' : 'Type'}</div>
         <div>{de ? 'Nummer' : 'Number'}</div>
         <div>{de ? 'Titel' : 'Title'}</div>
@@ -61,12 +61,12 @@ function CustomerDocumentsTab({ customerId, de, language }) {
         const num = doc.quotationNumber || doc.orderNumber || doc.invoiceNumber;
         const StatusBadge = doc.docType === 'quotation' ? QuotationStatusBadge : doc.docType === 'order' ? OrderStatusBadge : InvoiceStatusBadge;
         return (
-          <div key={doc._id} className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] border-b last:border-0 px-3 py-2.5 hover:bg-muted/20">
+          <div key={doc._id} className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] border-b border-white/4 last:border-0 px-3 py-2.5 hover:bg-white/3 transition-colors">
             <div><StatusBadge status={doc.status} /></div>
-            <div className="font-mono text-muted-foreground">{num}</div>
-            <div className="truncate">{doc.title || doc.customerName || '—'}</div>
-            <div className="text-muted-foreground">{fmtDate(doc.createdAt)}</div>
-            <div className="text-right font-medium">{fmt(doc.grandTotalRounded)} {doc.currency}</div>
+            <div className="font-mono text-white/40 text-[13px]">{num}</div>
+            <div className="truncate text-[13px] text-white/80">{doc.title || doc.customerName || '—'}</div>
+            <div className="text-[13px] text-white/40">{fmtDate(doc.createdAt)}</div>
+            <div className="text-right font-medium text-[13px] text-white/80">{fmt(doc.grandTotalRounded)} {doc.currency}</div>
           </div>
         );
       })}
@@ -124,66 +124,67 @@ export function CustomerDetail() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/crm/customers" className="hover:text-foreground transition-colors">
+      <nav className="flex items-center gap-1.5 text-sm text-white/35">
+        <Link href="/crm/customers" className="hover:text-white/65 transition-colors">
           {t('crm.title', 'CRM')}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/crm/customers" className="hover:text-foreground transition-colors">
+        <Link href="/crm/customers" className="hover:text-white/65 transition-colors">
           {t('sidebar.customers', 'Customers')}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium truncate">{customer.name}</span>
+        <span className="text-white/70 font-medium truncate">{customer.name}</span>
       </nav>
 
       {/* Main layout */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}
         <div className="w-full lg:w-80 shrink-0 space-y-4">
-          {/* Profile card */}
-          <div className="relative rounded-xl border border-border bg-card overflow-hidden shadow-theme-sm">
-            <div className={cn('h-1 bg-linear-to-r', accent.bar)} />
+          {/* Hero profile card */}
+          <div className="rounded-2xl border border-white/7 bg-[#0D1117] overflow-hidden">
+            {/* Accent stripe */}
+            <div className={cn('h-1 w-full bg-linear-to-r', accent.bar)} />
             <div className="p-6 text-center">
               <div className="relative inline-flex mb-4">
-                <div className={cn('h-20 w-20 rounded-2xl flex items-center justify-center ring-2 shadow-theme-sm', accent.bg, accent.ring)}>
+                <div className={cn('h-20 w-20 rounded-2xl flex items-center justify-center ring-1', accent.bg, accent.ring)}>
                   <Icon className={cn('h-10 w-10', accent.text)} />
                 </div>
               </div>
 
-              <h1 className="text-lg font-bold tracking-tight mb-1 truncate">{customer.name}</h1>
+              <h1 className="text-[18px] font-bold text-white/90 tracking-tight mb-1 truncate">{customer.name}</h1>
               {customer.customerNumber && (
-                <p className="text-xs font-mono text-muted-foreground mb-3">{customer.customerNumber}</p>
+                <p className="text-xs font-mono text-white/35 mb-3">{customer.customerNumber}</p>
               )}
 
               <div className="flex items-center justify-center gap-2 flex-wrap">
                 <span className={cn(
                   'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
                   isArchived
-                    ? 'bg-muted text-muted-foreground'
-                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+                    ? 'bg-white/5 text-white/40'
+                    : 'bg-emerald-500/10 text-emerald-400',
                 )}>
-                  <span className={cn('h-1.5 w-1.5 rounded-full', isArchived ? 'bg-muted-foreground/40' : 'bg-emerald-500')} />
+                  <span className={cn('h-1.5 w-1.5 rounded-full', isArchived ? 'bg-white/20' : 'bg-emerald-500')} />
                   {isArchived ? t('crm.statusArchived', 'Archived') : t('crm.statusActive', 'Active')}
                 </span>
                 <span className={cn(
                   'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
                   isBusiness
-                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
-                    : 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+                    ? 'bg-emerald-500/10 text-emerald-400'
+                    : 'bg-blue-500/10 text-blue-400',
                 )}>
                   <span className={cn('h-1.5 w-1.5 rounded-full', isBusiness ? 'bg-emerald-500' : 'bg-blue-500')} />
                   {isBusiness ? t('crm.typeBusiness', 'Business') : t('crm.typePrivate', 'Private')}
                 </span>
               </div>
 
-              <Separator className="my-4" />
+              <Separator className="my-4 bg-white/6" />
 
               <div className="flex items-center justify-center gap-2">
                 {canWrite && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg" onClick={() => setFormOpen(true)}>
+                        <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:bg-white/8 hover:text-white/80" onClick={() => setFormOpen(true)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -198,7 +199,7 @@ export function CustomerDetail() {
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 rounded-lg"
+                          className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:bg-white/8 hover:text-white/80"
                           onClick={() => { navigator.clipboard.writeText(customer.email); showSuccess(t('crm.copyEmail', 'Email copied')); }}
                         >
                           <Mail className="h-4 w-4" />
@@ -214,7 +215,7 @@ export function CustomerDetail() {
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-9 w-9 rounded-lg"
+                        className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:bg-white/8 hover:text-white/80"
                         onClick={() => { navigator.clipboard.writeText(customer._id); showSuccess(t('crm.copyId', 'ID copied')); }}
                       >
                         <Hash className="h-4 w-4" />
@@ -230,7 +231,7 @@ export function CustomerDetail() {
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 rounded-lg hover:border-amber-500/40 hover:text-amber-600 hover:bg-amber-500/10"
+                          className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/10"
                           onClick={() => setMergeOpen(true)}
                         >
                           <GitMerge className="h-4 w-4" />
@@ -247,7 +248,7 @@ export function CustomerDetail() {
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 rounded-lg hover:border-destructive/40 hover:text-destructive hover:bg-destructive/10"
+                          className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
                           onClick={() => setArchiveOpen(true)}
                         >
                           <Archive className="h-4 w-4" />
@@ -262,46 +263,25 @@ export function CustomerDetail() {
           </div>
 
           {/* Contact card */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-1 shadow-theme-sm">
-            <SidebarRow t={t} icon={Mail} iconBg="bg-sky-500/10" iconColor="text-sky-500" label={t('crm.email', 'Email')} value={customer.email} />
-            <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-500" label={t('crm.phone', 'Phone')} value={formatPhone(customer.phone) || customer.phone} rawValue={customer.phone} />
-            <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-500" label={t('crm.mobile', 'Mobile')} value={formatPhone(customer.mobile) || customer.mobile} rawValue={customer.mobile} />
-            <SidebarRow t={t} icon={Globe} iconBg="bg-indigo-500/10" iconColor="text-indigo-500" label={t('crm.website', 'Website')} value={customer.website} />
+          <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-1">
+            <SidebarRow t={t} icon={Mail} iconBg="bg-sky-500/10" iconColor="text-sky-400" label={t('crm.email', 'Email')} value={customer.email} />
+            <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" label={t('crm.phone', 'Phone')} value={formatPhone(customer.phone) || customer.phone} rawValue={customer.phone} />
+            <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" label={t('crm.mobile', 'Mobile')} value={formatPhone(customer.mobile) || customer.mobile} rawValue={customer.mobile} />
+            <SidebarRow t={t} icon={Globe} iconBg="bg-indigo-500/10" iconColor="text-indigo-400" label={t('crm.website', 'Website')} value={customer.website} />
           </div>
 
           {/* Address card */}
           {fullAddress && (
-            <div className="rounded-xl border border-border bg-card p-4 space-y-1 shadow-theme-sm">
-              <SidebarRow t={t} icon={MapPin} iconBg="bg-amber-500/10" iconColor="text-amber-500" label={t('crm.address', 'Address')} value={fullAddress} />
+            <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-1">
+              <SidebarRow t={t} icon={MapPin} iconBg="bg-amber-500/10" iconColor="text-amber-400" label={t('crm.address', 'Address')} value={fullAddress} />
             </div>
           )}
 
           {/* Metadata card */}
-          <div className="rounded-xl border border-border bg-card p-4 space-y-1 shadow-theme-sm">
-            <SidebarRow
-              t={t}
-              icon={Calendar}
-              iconBg="bg-violet-500/10"
-              iconColor="text-violet-500"
-              label={t('crm.created', 'Created')}
-              value={formatDate(customer.createdAt)}
-            />
-            <SidebarRow
-              t={t}
-              icon={Calendar}
-              iconBg="bg-violet-500/10"
-              iconColor="text-violet-500"
-              label={t('crm.updated', 'Updated')}
-              value={formatDate(customer.updatedAt)}
-            />
-            <SidebarRow
-              t={t}
-              icon={BellRing}
-              iconBg="bg-amber-500/10"
-              iconColor="text-amber-500"
-              label={t('crm.newsletter', 'Newsletter')}
-              value={customer.newsletterOptIn ? t('crm.optedIn', 'Opted in') : t('crm.optedOut', 'Opted out')}
-            />
+          <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-1">
+            <SidebarRow t={t} icon={Calendar} iconBg="bg-violet-500/10" iconColor="text-violet-400" label={t('crm.created', 'Created')} value={formatDate(customer.createdAt)} />
+            <SidebarRow t={t} icon={Calendar} iconBg="bg-violet-500/10" iconColor="text-violet-400" label={t('crm.updated', 'Updated')} value={formatDate(customer.updatedAt)} />
+            <SidebarRow t={t} icon={BellRing} iconBg="bg-amber-500/10" iconColor="text-amber-400" label={t('crm.newsletter', 'Newsletter')} value={customer.newsletterOptIn ? t('crm.optedIn', 'Opted in') : t('crm.optedOut', 'Opted out')} />
           </div>
         </div>
 
@@ -332,26 +312,26 @@ export function CustomerDetail() {
             </TabsList>
 
             <TabsContent value="overview">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <OverviewInfoCard icon={Icon} iconBg={accent.bg} iconColor={accent.text} label={t('crm.type', 'Type')} value={isBusiness ? t('crm.typeBusiness', 'Business') : t('crm.typePrivate', 'Private')} />
-                <OverviewInfoCard icon={Hash} iconBg="bg-violet-500/10" iconColor="text-violet-500" label={t('crm.customerNumber', 'Customer number')} value={customer.customerNumber || '—'} />
-                <OverviewInfoCard icon={Mail} iconBg="bg-sky-500/10" iconColor="text-sky-500" label={t('crm.email', 'Email')} value={customer.email || '—'} />
-                <OverviewInfoCard icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-500" label={t('crm.phone', 'Phone')} value={formatPhone(customer.phone) || formatPhone(customer.mobile) || '—'} />
+              <div className="grid gap-3 sm:grid-cols-2 p-4 bg-white/2 rounded-xl border border-white/5">
+                <InfoGridCell label={t('crm.type', 'Type')} value={isBusiness ? t('crm.typeBusiness', 'Business') : t('crm.typePrivate', 'Private')} />
+                <InfoGridCell label={t('crm.customerNumber', 'Customer number')} value={customer.customerNumber || '—'} mono />
+                <InfoGridCell label={t('crm.email', 'Email')} value={customer.email || '—'} />
+                <InfoGridCell label={t('crm.phone', 'Phone')} value={formatPhone(customer.phone) || formatPhone(customer.mobile) || '—'} />
                 {fullAddress && (
-                  <OverviewInfoCard icon={MapPin} iconBg="bg-amber-500/10" iconColor="text-amber-500" label={t('crm.address', 'Address')} value={fullAddress} className="sm:col-span-2" />
-                )}
-                {customer.notes && (
-                  <div className={cn('rounded-xl border border-border bg-card ring-1 ring-foreground/5 hover:border-border transition-all p-4 flex items-start gap-3.5 sm:col-span-2')}>
-                    <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-rose-500/10">
-                      <FileText className="h-4.5 w-4.5 text-rose-500" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-muted-foreground mb-0.5">{t('crm.notes', 'Notes')}</p>
-                      <RichTextContent html={customer.notes} className="text-sm" />
-                    </div>
-                  </div>
+                  <InfoGridCell label={t('crm.address', 'Address')} value={fullAddress} className="sm:col-span-2" />
                 )}
               </div>
+              {customer.notes && (
+                <div className="mt-3 rounded-xl border border-white/5 bg-white/2 p-4 flex items-start gap-3.5">
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-rose-500/10">
+                    <FileText className="h-5 w-5 text-rose-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1">{t('crm.notes', 'Notes')}</p>
+                    <RichTextContent html={customer.notes} className="text-[13px] text-white/70" />
+                  </div>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="contacts">
@@ -407,29 +387,29 @@ function SidebarRow({ t, icon: Icon, iconBg, iconColor, label, value, rawValue }
   if (!value) {
     return (
       <div className="flex items-center gap-3 py-2 px-2 rounded-lg">
-        <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', iconBg || 'bg-muted')}>
-          <Icon className={cn('h-3.5 w-3.5 opacity-50', iconColor)} />
+        <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', iconBg || 'bg-white/5')}>
+          <Icon className={cn('h-3.5 w-3.5 opacity-40', iconColor)} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider font-medium">{label}</p>
-          <p className="text-sm text-muted-foreground/40">—</p>
+          <p className="text-[10px] text-white/30 uppercase tracking-wider font-medium">{label}</p>
+          <p className="text-[13px] text-white/20">—</p>
         </div>
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-muted/30 transition-colors group">
+    <div className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-white/3 transition-colors group">
       <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', iconBg)}>
         <Icon className={cn('h-3.5 w-3.5', iconColor)} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider font-medium">{label}</p>
-        <p className="text-sm font-medium truncate">{value}</p>
+        <p className="text-[10px] text-white/30 uppercase tracking-wider font-medium">{label}</p>
+        <p className="text-[13px] font-medium text-white/80 truncate">{value}</p>
       </div>
       <Button
         variant="ghost"
         size="icon"
-        className="h-7 w-7 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        className="h-7 w-7 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-white/40 hover:text-white/70 hover:bg-white/5"
         onClick={() => {
           navigator.clipboard.writeText(String(rawValue ?? value));
           showSuccess(t ? t('common.copied', 'Copied') : 'Copied');
@@ -441,16 +421,11 @@ function SidebarRow({ t, icon: Icon, iconBg, iconColor, label, value, rawValue }
   );
 }
 
-function OverviewInfoCard({ icon: Icon, iconBg, iconColor, label, value, className }) {
+function InfoGridCell({ label, value, mono, className }) {
   return (
-    <div className={cn('rounded-xl border border-border bg-card ring-1 ring-foreground/5 hover:border-border transition-all p-4 flex items-start gap-3.5', className)}>
-      <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center shrink-0', iconBg)}>
-        <Icon className={cn('h-4.5 w-4.5', iconColor)} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-        <p className="text-sm font-semibold break-words">{value}</p>
-      </div>
+    <div className={className}>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1">{label}</p>
+      <p className={cn('text-[13px] text-white/80', mono && 'font-mono')}>{value || '—'}</p>
     </div>
   );
 }
@@ -467,7 +442,7 @@ function DetailSkeleton() {
       </div>
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="w-full lg:w-80 shrink-0 space-y-4">
-          <div className="rounded-xl border border-border bg-card p-6 flex flex-col items-center">
+          <div className="rounded-2xl border border-white/7 bg-[#0D1117] p-6 flex flex-col items-center">
             <Skeleton className="h-20 w-20 rounded-2xl mb-4" />
             <Skeleton className="h-5 w-40 mb-2" />
             <Skeleton className="h-4 w-24 mb-4" />
@@ -475,32 +450,17 @@ function DetailSkeleton() {
               <Skeleton className="h-6 w-16 rounded-full" />
               <Skeleton className="h-6 w-16 rounded-full" />
             </div>
-            <Separator className="w-full my-4" />
+            <Separator className="w-full my-4 bg-white/6" />
             <div className="flex gap-2">
               <Skeleton className="h-9 w-9 rounded-lg" />
               <Skeleton className="h-9 w-9 rounded-lg" />
               <Skeleton className="h-9 w-9 rounded-lg" />
             </div>
           </div>
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <Skeleton className="h-8 w-8 rounded-lg shrink-0" />
-                <div className="flex-1 space-y-1"><Skeleton className="h-3 w-16" /><Skeleton className="h-4 w-32" /></div>
-              </div>
-            ))}
-          </div>
         </div>
         <div className="flex-1 space-y-6">
           <Skeleton className="h-10 w-96" />
-          <div className="grid gap-4 sm:grid-cols-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-border bg-card p-4 flex items-start gap-3.5">
-                <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
-                <div className="flex-1 space-y-1.5"><Skeleton className="h-3 w-16" /><Skeleton className="h-4 w-28" /></div>
-              </div>
-            ))}
-          </div>
+          <Skeleton className="h-48 w-full rounded-xl" />
         </div>
       </div>
     </div>

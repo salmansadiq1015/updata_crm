@@ -163,25 +163,28 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
       className={cn(
         'group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
         isActive
-          ? 'bg-white/[0.08] text-white sidebar-active-glow'
-          : 'text-white/45 hover:bg-white/[0.05] hover:text-white/80',
+          ? 'bg-gradient-to-r from-[oklch(0.65_0.25_292_/_15%)] to-transparent text-white sidebar-active-glow'
+          : 'text-white/35 hover:bg-white/[0.05] hover:text-white/65',
         leaf.disabled && 'opacity-20 pointer-events-none',
         collapsed && 'justify-center px-0 py-2.5',
-        nested && !collapsed && 'pl-9 py-1.5'
+        nested && !collapsed && 'pl-[28px] py-[7px]'
       )}
     >
       {isActive && !nested && (
         <motion.div
           layoutId="sidebar-active-pill"
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-primary-gradient shadow-[0_0_8px_oklch(0.65_0.22_292_/_50%)]"
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full bg-[oklch(0.75_0.25_292)] shadow-[0_0_8px_oklch(0.65_0.25_292/70%)]"
           transition={{ type: 'spring', stiffness: 380, damping: 28 }}
         />
+      )}
+      {isActive && nested && (
+        <span className="w-1.5 h-1.5 rounded-full bg-[oklch(0.75_0.25_292)] mr-1 shrink-0" />
       )}
       <span className="relative shrink-0">
         <Icon className={cn(
           'h-[18px] w-[18px] transition-all duration-200',
-          isActive ? 'text-[oklch(0.75_0.18_292)]' : 'text-white/30 group-hover:text-white/55',
-          nested && 'h-[15px] w-[15px]'
+          isActive ? 'text-[oklch(0.78_0.22_292)]' : 'text-white/30 group-hover:text-white/55',
+          nested && 'h-[14px] w-[14px]'
         )} />
         {leaf.href === '/notifications' && unreadCount > 0 && (
           <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
@@ -257,8 +260,8 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
             {label}
           </TooltipContent>
         </Tooltip>
-        <PopoverContent side="right" sideOffset={12} align="start" className="w-52 p-1.5 bg-[#1a1f2e] border-white/10">
-          <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/30">{label}</p>
+        <PopoverContent side="right" sideOffset={12} align="start" className="w-52 p-2 bg-[#0D1117] border border-white/[0.08] rounded-xl shadow-2xl">
+          <p className="px-2 py-1 text-[10px] text-violet-400 uppercase tracking-wider font-semibold">{label}</p>
           <div className="space-y-0.5">
             {children.map((leaf) => (
               <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested={false} onNavigate={onNavigate} unreadCount={unreadCount} />
@@ -277,13 +280,16 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
         aria-controls={`sidebar-group-${group.key}`}
         onClick={() => toggleGroup(group.key)}
         className={cn(
-          'group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all duration-200',
-          groupActive ? 'text-white' : 'text-white/55 hover:bg-white/[0.05] hover:text-white/80'
+          'group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
+          groupActive ? 'text-white' : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'
         )}
       >
-        <Icon className={cn('h-[18px] w-[18px] shrink-0', groupActive ? 'text-[oklch(0.75_0.18_292)]' : 'text-white/35 group-hover:text-white/60')} />
-        <span className="truncate whitespace-nowrap flex-1 text-left">{label}</span>
-        <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-white/30 transition-transform duration-200', expanded && 'rotate-180')} />
+        <Icon className={cn('h-[18px] w-[18px] shrink-0', groupActive ? 'text-[oklch(0.75_0.22_292)]' : 'text-white/30 group-hover:text-white/55')} />
+        <span className={cn('truncate whitespace-nowrap flex-1 text-left', groupActive ? 'text-white/85' : 'text-white/50')}>{label}</span>
+        {groupActive && (
+          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[oklch(0.75_0.25_292)] shadow-[0_0_6px_oklch(0.65_0.25_292)]" />
+        )}
+        <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-white/20 transition-transform duration-200 group-hover:text-white/40', expanded && 'rotate-180')} />
       </button>
       <AnimatePresence initial={false}>
         {expanded && (
@@ -296,7 +302,7 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            <div className="mt-0.5 space-y-0.5 border-l border-white/[0.06] ml-[19px]">
+            <div className="mt-0.5 space-y-0.5 border-l border-[oklch(0.65_0.25_292_/_22%)] ml-[22px]">
               {children.map((leaf) => (
                 <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested onNavigate={onNavigate} unreadCount={unreadCount} />
               ))}
@@ -324,7 +330,7 @@ function SidebarNav({ collapsed, onNavigate }) {
             <div key={section.titleKey} className={cn(sIdx > 0 && 'pt-4')}>
               {!collapsed && (
                 <div className="flex items-center gap-2.5 px-3 mb-1.5">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/20 select-none whitespace-nowrap">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/20 select-none whitespace-nowrap">
                     {t(section.titleKey)}
                   </p>
                   <div className="flex-1 h-px bg-gradient-to-r from-white/[0.06] to-transparent" />
@@ -363,23 +369,23 @@ function SidebarNav({ collapsed, onNavigate }) {
 function SidebarLogo({ collapsed }) {
   return (
     <div className={cn(
-      'relative flex items-center h-14 px-4 border-b border-white/[0.06]',
+      'relative flex items-center h-15 px-4 border-b border-white/6 bg-linear-to-b from-white/2 to-transparent',
       collapsed && 'justify-center px-0'
     )}>
       {collapsed ? (
-        <div className="h-9 w-9 rounded-xl bg-primary-gradient flex items-center justify-center shadow-[0_0_20px_oklch(0.65_0.22_292_/_35%)] transition-shadow hover:shadow-[0_0_28px_oklch(0.65_0.22_292_/_50%)]">
-          <Zap className="h-4.5 w-4.5 text-white" />
+        <div className="h-10 w-10 rounded-xl bg-linear-to-br from-violet-600 to-purple-700 flex items-center justify-center shadow-[0_0_24px_oklch(0.65_0.25_292/40%)]">
+          <Zap className="h-5 w-5 text-white" />
         </div>
       ) : (
         <Link href="/dashboard" className="flex items-center gap-3 group">
-          <div className="h-9 w-9 rounded-xl bg-primary-gradient flex items-center justify-center shadow-[0_0_20px_oklch(0.65_0.22_292_/_35%)] transition-shadow group-hover:shadow-[0_0_28px_oklch(0.65_0.22_292_/_50%)]">
-            <Zap className="h-4.5 w-4.5 text-white" />
+          <div className="h-10 w-10 rounded-xl bg-linear-to-br from-violet-600 to-purple-700 flex items-center justify-center shadow-[0_0_24px_oklch(0.65_0.25_292/40%)]">
+            <Zap className="h-5 w-5 text-white" />
           </div>
           <div className="min-w-0">
-            <span className="font-bold text-[15px] tracking-tight text-white/90 block leading-tight">
+            <span className="text-[15px] font-bold tracking-tight text-white/90 block leading-tight">
               MB Boiler
             </span>
-            <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-[oklch(0.65_0.22_292)] leading-none">
+            <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[oklch(0.7_0.25_292)] leading-none">
               ERP System
             </span>
           </div>
@@ -401,11 +407,11 @@ function SidebarUserCard({ collapsed }) {
 
   const cardContent = (
     <button className={cn(
-      'flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm transition-all duration-200',
-      'bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] hover:border-white/[0.10]',
+      'flex items-center gap-3 w-full rounded-xl px-3 py-2.5 transition-all duration-200',
+      'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.10]',
       collapsed && 'justify-center px-0 py-2.5'
     )}>
-      <Avatar className="h-8 w-8 ring-2 ring-[oklch(0.65_0.22_292_/_25%)] shadow-[0_0_12px_oklch(0.65_0.22_292_/_15%)]">
+      <Avatar className="h-8 w-8 ring-2 ring-[oklch(0.65_0.25_292/35%)] shadow-[0_0_16px_oklch(0.65_0.25_292/20%)]">
         <AvatarFallback className="text-[11px] font-bold bg-primary-gradient text-white">
           {initials}
         </AvatarFallback>
@@ -415,9 +421,9 @@ function SidebarUserCard({ collapsed }) {
           <p className="text-[13px] font-semibold truncate text-white/85 leading-tight">
             {user?.firstName} {user?.lastName}
           </p>
-          <p className="text-[11px] truncate text-white/30 leading-tight mt-0.5">
+          <span className="text-[10px] font-medium bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded-full">
             {roleName || user?.email}
-          </p>
+          </span>
         </div>
       )}
     </button>
@@ -482,9 +488,9 @@ export function Sidebar() {
   return (
     <TooltipProvider delayDuration={0}>
       <motion.aside
-        animate={{ width: collapsed ? 68 : 260 }}
+        animate={{ width: collapsed ? 68 : 256 }}
         transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-        className="relative flex flex-col h-screen overflow-hidden bg-sidebar text-sidebar-foreground border-r border-sidebar-border sidebar-inner-glow"
+        className="relative flex flex-col h-screen overflow-hidden bg-sidebar text-sidebar-foreground border-r border-[rgba(255,255,255,0.04)] sidebar-inner-glow"
       >
         {/* Ambient gradient */}
         <div className="pointer-events-none absolute inset-0 sidebar-ambient" />
@@ -501,22 +507,24 @@ export function Sidebar() {
           <SidebarUserCard collapsed={collapsed} />
 
           {/* Collapse toggle */}
-          <button
-            onClick={toggleCollapsed}
-            className={cn(
-              'flex items-center justify-center w-full rounded-lg py-1.5 transition-all duration-200',
-              'text-white/20 hover:text-white/50 hover:bg-white/[0.04]'
-            )}
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4" />
-            ) : (
-              <div className="flex items-center gap-2">
-                <PanelLeftClose className="h-4 w-4" />
-                <span className="text-[11px] font-medium">{t('sidebar.collapse', 'Collapse')}</span>
-              </div>
-            )}
-          </button>
+          <div className="py-1 mt-1">
+            <button
+              onClick={toggleCollapsed}
+              className={cn(
+                'flex items-center justify-center w-full rounded-lg py-1.5 transition-all duration-200',
+                'text-[11px] text-white/25 hover:text-white/55 hover:bg-white/[0.04]'
+              )}
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <PanelLeftClose className="h-4 w-4" />
+                  <span>{t('sidebar.collapse', 'Einklappen')}</span>
+                </div>
+              )}
+            </button>
+          </div>
         </div>
       </motion.aside>
     </TooltipProvider>

@@ -521,19 +521,19 @@ The Notification Service subscribes to the following events on the platform even
 
 | Event | Source Module | Notification Type | Default Channels |
 |---|---|---|---|
-| `task.assigned` | 04 - Task Mgmt | task_assigned | push, in_app |
-| `task.due_soon` | 11 - Project Mgmt | task_due_reminder | push, in_app |
-| `order.status_changed` | 03 - Orders | order_status_changed | push, in_app, email |
-| `order.appointment_confirmed` | 03 - Orders | appointment_confirmation | email, whatsapp |
-| `quotation.sent` | 07 - Quotations | quotation_follow_up | scheduled (in_app, email) |
-| `quotation.appointment_scheduled` | 07 - Quotations | appointment_reminder | scheduled (email, whatsapp) |
-| `report.incomplete_eod` | 05 - Mobile | daily_report_reminder | push, in_app |
-| `maintenance.due_soon` | 06 - Plants | maintenance_due | email, whatsapp |
-| `invoice.overdue` | 10 - Finance | invoice_overdue_reminder | email, whatsapp |
-| `chat.message_received` | 12 - Comms | chat_message | push, in_app |
-| `document.generated` | 09 - Documents | document_ready | in_app, email |
+| `task.assigned` | 12 - Task Management | task_assigned | push, in_app |
+| `task.due_soon` | 12 - Task Management | task_due_reminder | push, in_app |
+| `order.status_changed` | 08 - Quotations & Order Processing | order_status_changed | push, in_app, email |
+| `order.appointment_confirmed` | 05 - Field Deployment Planning | appointment_confirmation | email, whatsapp |
+| `quotation.sent` | 08 - Quotations & Order Processing | quotation_follow_up | scheduled (in_app, email) |
+| `quotation.appointment_scheduled` | 08 - Quotations & Order Processing | appointment_reminder | scheduled (email, whatsapp) |
+| `report.incomplete_eod` | 06 - Mobile Technician App | daily_report_reminder | push, in_app |
+| `maintenance.due_soon` | 03 - CRM & Asset Management | maintenance_due | email, whatsapp |
+| `invoice.overdue` | 11 - Accounting | invoice_overdue_reminder | email, whatsapp |
+| `chat.message_received` | 06 - Mobile Technician App | chat_message | push, in_app |
+| `document.generated` | 09 - Document Templates & Layout System | document_ready | in_app, email |
 | `user.device_registered` | 01 - Core | (internal) device_token_update | (internal) |
-| `customer.gdpr_deletion` | 02 - CRM | (internal) purge_notification_history | (internal) |
+| `customer.gdpr_deletion` | 03 - CRM & Asset Management | (internal) purge_notification_history | (internal) |
 
 ### 4.2 Events Published (by Notification Service)
 

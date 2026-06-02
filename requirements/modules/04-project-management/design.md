@@ -369,8 +369,8 @@ The Project Management module publishes and subscribes to events via the platfor
 
 | Event Name                          | Source Module    | Action                                                     |
 |-------------------------------------|------------------|-------------------------------------------------------------|
-| `customer.updated`                  | MOD-02 (CRM)    | Update cached customer data on affected projects.            |
-| `customer.site.updated`             | MOD-02 (CRM)    | Update cached site data on affected projects.                |
+| `customer.updated`                  | MOD-03 (CRM & Asset Management) | Update cached customer data on affected projects.            |
+| `customer.site.updated`             | MOD-03 (CRM & Asset Management) | Update cached site data on affected projects.                |
 | `schedule.assignment.created`       | MOD-05           | Update project schedule with deployment details.             |
 | `mobile.document.uploaded`          | MOD-06           | Store mobile-uploaded document in project repository.        |
 | `mobile.report.submitted`           | MOD-06           | Update project activity log with report submission.          |
@@ -379,7 +379,7 @@ The Project Management module publishes and subscribes to events via the platfor
 
 ## 4. Integration Points
 
-### 4.1 CRM Module (MOD-02)
+### 4.1 CRM Module (MOD-03)
 
 - **Direction**: Project Management reads from CRM.
 - **Data**: Customer records, site/location records, partner company contacts.

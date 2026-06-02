@@ -40,7 +40,7 @@ The module supports both fine-grained daily scheduling and coarse/high-level pla
 - **Employee HR Data**: Managing employee records, contracts, certifications, or personal data. This module only references employees for scheduling purposes.
 - **Project Details**: Full project management (creation, documents, preparatory actions) is handled by Module 04 (Project Management).
 - **Route Optimization**: Automatic route planning or travel time optimization is not included in this version.
-- **Payroll Integration**: Time data for payroll is managed by the time recording features in Module 06 and Module 10.
+- **Payroll Integration**: Time data for payroll is managed by the time recording features in Module 06 (mobile time recording).
 
 ---
 
@@ -92,8 +92,8 @@ The module supports both fine-grained daily scheduling and coarse/high-level pla
 |--------------------------|-----------------------|------------------------------------------------------------------------|
 | Project Management       | MOD-04                | Schedules reference projects; project milestones drive schedule dates.  |
 | Mobile Technician App    | MOD-06                | Assignment data is pushed to mobile for field staff consumption.        |
-| Customer / Site Data     | MOD-02 (CRM)         | Appointments reference customer sites and contact information.          |
-| Employee Master Data     | MOD-10 / HR System    | Employee availability, skills, and roles are sourced externally.        |
+| Customer / Site Data     | MOD-03 (CRM & Asset Management) | Appointments reference customer sites and contact information.          |
+| Employee Master Data     | External HR system    | Employee availability, skills, and roles are sourced externally.        |
 | Order Management         | MOD-08                | Service orders and work orders drive scheduling needs.                  |
 | Notification Service     | Platform Service      | Sends push/email notifications for schedule changes.                   |
 

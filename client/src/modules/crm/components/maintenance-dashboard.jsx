@@ -7,9 +7,7 @@ import { maintenanceService } from '@/modules/crm/services/maintenance-service';
 import { queryKeys } from '@/lib/query/keys';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { EmptyState } from '@/shared/components/empty-state';
-import { PageHeader } from '@/shared/components/page-header';
 import { PermissionGate } from '@/shared/components/permission-gate';
-import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -59,22 +57,33 @@ export function MaintenanceDashboard() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t('crm.maintenance.title', 'Maintenance')}
-        description={t('crm.maintenance.description', 'Overview of overdue, upcoming, and scheduled maintenance.')}
-      >
+      {/* Page Header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-orange-500/10 ring-1 ring-orange-500/20 shrink-0">
+            <Wrench className="h-5 w-5 text-orange-400" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-[18px] font-semibold text-white/90 leading-tight">
+              {t('crm.maintenance.title', 'Maintenance')}
+            </h1>
+            <p className="text-[13px] text-white/40 mt-0.5">
+              {t('crm.maintenance.description', 'Overview of overdue, upcoming, and scheduled maintenance.')}
+            </p>
+          </div>
+        </div>
         <PermissionGate permission="crm:read">
           <Button
             variant="outline"
             onClick={() => exportCsv.mutate(tab === 'due' ? 'due' : tab === 'overdue' ? 'overdue' : 'all')}
             disabled={exportCsv.isPending}
-            className="gap-2 h-9"
+            className="gap-2 h-9 border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white/80"
           >
             <Download className="h-4 w-4" />
             {exportCsv.isPending ? t('common.exporting', 'Exporting...') : t('crm.exportCsv', 'Export CSV')}
           </Button>
         </PermissionGate>
-      </PageHeader>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -146,10 +155,10 @@ export function MaintenanceDashboard() {
 
 function StatCard({ label, value, icon: Icon, accent, loading, active, onClick }) {
   const themes = {
-    red:     { bg: 'bg-red-500/10',     color: 'text-red-600 dark:text-red-400',        ring: 'ring-red-500/20' },
-    amber:   { bg: 'bg-amber-500/10',   color: 'text-amber-600 dark:text-amber-400',    ring: 'ring-amber-500/20' },
-    sky:     { bg: 'bg-sky-500/10',     color: 'text-sky-600 dark:text-sky-400',        ring: 'ring-sky-500/20' },
-    emerald: { bg: 'bg-emerald-500/10', color: 'text-emerald-600 dark:text-emerald-400',ring: 'ring-emerald-500/20' },
+    red:     { bg: 'bg-red-500/10',     color: 'text-red-400',     ring: 'ring-red-500/20',     activeBorder: 'border-red-500/40 ring-1 ring-red-500/20' },
+    amber:   { bg: 'bg-amber-500/10',   color: 'text-amber-400',   ring: 'ring-amber-500/20',   activeBorder: 'border-amber-500/40 ring-1 ring-amber-500/20' },
+    sky:     { bg: 'bg-sky-500/10',     color: 'text-sky-400',     ring: 'ring-sky-500/20',     activeBorder: 'border-sky-500/40 ring-1 ring-sky-500/20' },
+    emerald: { bg: 'bg-emerald-500/10', color: 'text-emerald-400', ring: 'ring-emerald-500/20', activeBorder: 'border-emerald-500/40 ring-1 ring-emerald-500/20' },
   };
   const theme = themes[accent] || themes.sky;
 
@@ -159,14 +168,14 @@ function StatCard({ label, value, icon: Icon, accent, loading, active, onClick }
       onClick={onClick}
       disabled={!onClick}
       className={cn(
-        'group relative overflow-hidden rounded-xl border bg-card p-5 shadow-theme-sm transition-all text-left',
-        onClick && 'hover:shadow-theme-md hover:-translate-y-0.5 cursor-pointer',
-        active ? 'border-primary ring-2 ring-primary/20' : 'border-border',
+        'group relative overflow-hidden rounded-xl border bg-[#0D1117] p-5 transition-all text-left',
+        onClick && 'hover:-translate-y-0.5 cursor-pointer',
+        active ? theme.activeBorder : 'border-white/6 hover:border-white/10',
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
+          <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wider">{label}</p>
           {loading ? (
             <Skeleton className="h-8 w-16 mt-2" />
           ) : (
@@ -184,40 +193,34 @@ function StatCard({ label, value, icon: Icon, accent, loading, active, onClick }
 function MaintenanceList({ items, loading, emptyMessage, allGoodMessage, t }) {
   if (loading) {
     return (
-      <Card>
-        <CardContent className="p-4 space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-border bg-card p-3.5 flex gap-3">
-              <Skeleton className="h-10 w-10 rounded-lg" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-64" />
-                <Skeleton className="h-3 w-40" />
-              </div>
+      <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-white/5 bg-white/2 p-3.5 flex gap-3">
+            <Skeleton className="h-10 w-10 rounded-lg" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-64" />
+              <Skeleton className="h-3 w-40" />
             </div>
-          ))}
-        </CardContent>
-      </Card>
+          </div>
+        ))}
+      </div>
     );
   }
   if (items.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-8">
-          <EmptyState
-            title={emptyMessage}
-            description={allGoodMessage}
-            icon={CheckCircle2}
-          />
-        </CardContent>
-      </Card>
+      <div className="rounded-xl border border-white/6 bg-[#0D1117] p-8">
+        <EmptyState
+          title={emptyMessage}
+          description={allGoodMessage}
+          icon={CheckCircle2}
+        />
+      </div>
     );
   }
   return (
-    <Card>
-      <CardContent className="p-4 space-y-2">
-        {items.map((m) => <MaintenanceDashboardRow key={m._id} item={m} t={t} />)}
-      </CardContent>
-    </Card>
+    <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-2">
+      {items.map((m) => <MaintenanceDashboardRow key={m._id} item={m} t={t} />)}
+    </div>
   );
 }
 
@@ -245,7 +248,7 @@ function MaintenanceDashboardRow({ item: m, t }) {
   return (
     <Link
       href={installation?._id ? `/crm/installations/${installation._id}` : '#'}
-      className="group/row block rounded-xl border border-border bg-card p-3.5 hover:shadow-theme-sm hover:border-primary/30 transition-all"
+      className="group/row block rounded-xl border border-white/5 bg-white/2 p-3.5 hover:border-white/10 hover:bg-white/4 transition-all"
     >
       <div className="flex items-start gap-3">
         <div className={cn('h-10 w-10 shrink-0 rounded-lg flex items-center justify-center', typeMeta.bg)}>
@@ -254,14 +257,14 @@ function MaintenanceDashboardRow({ item: m, t }) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <p className="text-sm font-semibold">{typeLabel}</p>
+            <p className="text-[13px] font-semibold text-white/80">{typeLabel}</p>
             <span className={cn('inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md', statusMeta.bg, statusMeta.color)}>
               <span className={cn('h-1 w-1 rounded-full', statusMeta.dot)} />
               {t(`crm.maintenance.status.${m.maintenanceStatus}`, statusMeta.label)}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+          <div className="flex items-center gap-2 text-xs text-white/40 flex-wrap">
             {instMeta && (
               <span className="inline-flex items-center gap-1">
                 <Wrench className="h-2.5 w-2.5" /> {t(`crm.installations.type.${installation?.type}`, instMeta.label)}
@@ -277,17 +280,17 @@ function MaintenanceDashboardRow({ item: m, t }) {
         </div>
 
         <div className="text-right shrink-0">
-          <p className={cn('text-xs font-semibold', m.maintenanceStatus === 'overdue' ? 'text-red-600' : 'text-amber-600')}>
+          <p className={cn('text-xs font-semibold', m.maintenanceStatus === 'overdue' ? 'text-red-400' : 'text-amber-400')}>
             {daysLabel}
           </p>
           {nextDate && (
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[10px] text-white/35">
               {formatDate(nextDate)}
             </p>
           )}
         </div>
 
-        <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0 mt-1" />
+        <ArrowRight className="h-4 w-4 text-white/25 opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0 mt-1" />
       </div>
     </Link>
   );

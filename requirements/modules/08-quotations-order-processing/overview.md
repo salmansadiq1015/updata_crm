@@ -92,11 +92,11 @@ This module is the commercial backbone of the MB Boiler & Heizung AG ERP system,
 | Dependency                            | Direction | Description                                                         |
 |---------------------------------------|-----------|---------------------------------------------------------------------|
 | MOD-03: CRM & Customer Management     | Inbound   | Customer and contact data sourced from CRM                          |
-| MOD-04: Scheduling & Dispatch         | Both      | Orders feed into scheduling; schedule data used for reminders       |
+| MOD-05: Field Deployment Planning     | Both      | Orders feed into scheduling; schedule data used for reminders       |
 | MOD-07: AI Assistant                   | Inbound   | Voice-created orders and quotations submitted to this module        |
 | MOD-09: Document Templates            | Outbound  | Quotation/order/invoice data sent to template engine for rendering  |
 | MOD-11: Accounting & Finance          | Outbound  | Invoice data exported to accounting module for ledger posting       |
-| MOD-05: Mobile Field Service          | Both      | Orders visible on mobile; technicians can trigger invoicing         |
+| MOD-06: Mobile Technician App         | Both      | Orders visible on mobile; technicians can trigger invoicing         |
 
 ---
 

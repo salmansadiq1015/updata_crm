@@ -8,12 +8,12 @@
 
 | Phase | Name | Duration | Modules | Goal |
 |-------|------|----------|---------|------|
-| **1** | Foundation | Weeks 1–4 | 01, 02 | Platform infrastructure, auth, CI/CD |
+| **1** | Foundation | Weeks 1–4 | 01, 02, 16 | Platform infrastructure, auth, CI/CD, data-protection & security baseline |
 | **2** | Core Business | Weeks 5–12 | 03, 10, 09, 08 | CRM, materials, documents, quotations |
 | **3** | Operations | Weeks 13–18 | 04, 05, 12, 11 | Projects, scheduling, tasks, accounting |
 | **4** | Mobile & Notifications | Weeks 19–24 | 06, 13, 14 | Mobile app MVP, notifications, integrations |
 | **5** | AI & Advanced | Weeks 25–28 | 07, 06+ | AI assistant, mobile offline/chat, advanced features |
-| **6** | Migration & Launch | Weeks 29–32 | 15 | Data migration, UAT, production go-live |
+| **6** | Migration & Launch | Weeks 29–32 | 15, 16 | Data migration, compliance/handover package, UAT, production go-live |
 
 ---
 
@@ -35,6 +35,7 @@
 | **12 Task Mgmt** | Task CRUD, assignment, due dates, basic reminders |
 | **06 Mobile App** | Order overview, work reports, photo docs, time tracking (online only) |
 | **13 Notifications** | Email dispatch, basic push notifications |
+| **16 Compliance & DP** | nDSG/revDSG baseline (DP-001), consent enforcement (DP-002), security baseline & encryption (DP-006), retention policy (DP-004) |
 
 ### Advanced (Phases 5–6)
 
@@ -49,6 +50,7 @@
 | **13 Notifications** | WhatsApp integration, notification preferences, scheduled notifications |
 | **14 Integrations** | IGH catalog sync, banking interface (ISO 20022), website widget, calendar sync |
 | **15 Data Migration** | Full migration from OF software + Messerli CRM |
+| **16 Compliance & DP** | Data-subject-rights tooling (DP-003), ROPA & sub-processor DPAs (DP-005), SBOM automation (OSS-001), source-code & IP handover package (SRC-001) |
 
 ---
 

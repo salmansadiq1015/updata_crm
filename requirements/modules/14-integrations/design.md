@@ -8,10 +8,10 @@ The Integrations module follows an **Adapter Pattern** architecture. Each extern
 +-------------------+     +-------------------+     +---------------------+
 | Business Modules  |     | Integration       |     | External Systems    |
 |                   |     | Service Layer     |     |                     |
-| - CRM (02)        |---->| +---------------+ |---->| - IGH Catalog API   |
-| - Orders (03)     |     | | Connector     | |     | - Swiss Bank (EBICS)|
-| - Quotations (07) |     | | Registry      | |     | - WhatsApp Bus. API |
-| - Finance (10)    |     | +---------------+ |     | - Email Provider    |
+| - CRM (03)        |---->| +---------------+ |---->| - IGH Catalog API   |
+| - Orders (08)     |     | | Connector     | |     | - Swiss Bank (EBICS)|
+| - Quotations (08) |     | | Registry      | |     | - WhatsApp Bus. API |
+| - Finance (11)    |     | +---------------+ |     | - Email Provider    |
 | - Notifications   |     | | Health Monitor| |     | - OCR Service       |
 |   (13)            |     | +---------------+ |     | - Cloud Storage     |
 |                   |     | | Circuit       | |     | - Google/Outlook    |
@@ -548,11 +548,11 @@ Disconnect calendar integration.
 
 | Event | Source Module | Integration Action |
 |---|---|---|
-| `order.created` (from widget) | 03 - Orders | Update widget submission status to `processed` |
-| `appointment.created` | 03 - Orders | Create external calendar event (if connected) |
-| `appointment.updated` | 03 - Orders | Update external calendar event |
-| `appointment.cancelled` | 03 - Orders | Delete external calendar event |
-| `invoice.created` | 10 - Finance | Register QR reference for bank matching |
+| `order.created` (from widget) | 08 - Quotations & Order Processing | Update widget submission status to `processed` |
+| `appointment.created` | 08 - Quotations & Order Processing | Create external calendar event (if connected) |
+| `appointment.updated` | 08 - Quotations & Order Processing | Update external calendar event |
+| `appointment.cancelled` | 08 - Quotations & Order Processing | Delete external calendar event |
+| `invoice.created` | 11 - Accounting | Register QR reference for bank matching |
 | `notification.send_email` | 13 - Notifications | Dispatch via SMTP connector |
 | `notification.send_whatsapp` | 13 - Notifications | Dispatch via WhatsApp connector |
 
@@ -560,11 +560,11 @@ Disconnect calendar integration.
 
 | Event | Description | Consumers |
 |---|---|---|
-| `widget.submission_received` | New website widget submission | CRM (02), Orders (03) |
-| `igh.sync_completed` | IGH catalog sync finished | Articles (08) |
-| `banking.transactions_imported` | Bank transactions imported | Finance (10) |
-| `banking.payment_matched` | Payment auto-matched to invoice | Finance (10) |
-| `ocr.extraction_completed` | OCR extraction finished | Finance (10) |
+| `widget.submission_received` | New website widget submission | CRM (03), Orders (08) |
+| `igh.sync_completed` | IGH catalog sync finished | Articles (10) |
+| `banking.transactions_imported` | Bank transactions imported | Finance (11) |
+| `banking.payment_matched` | Payment auto-matched to invoice | Finance (11) |
+| `ocr.extraction_completed` | OCR extraction finished | Finance (11) |
 | `email.delivery_status` | Email delivery callback | Notifications (13) |
 | `whatsapp.delivery_status` | WhatsApp delivery callback | Notifications (13) |
 | `integration.status_changed` | Integration health status change | Admin alerting |
@@ -583,7 +583,7 @@ Disconnect calendar integration.
   - Delta sync: Request changes since last sync timestamp
 - **Field Mapping:**
 
-| IGH Field | Internal Field (Module 08) |
+| IGH Field | Internal Field (Module 10) |
 |---|---|
 | `article_number` | `igh_article_number` |
 | `description_de` | `name_de` |

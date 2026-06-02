@@ -4,6 +4,7 @@ import fileController from './file.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { uploadSchema, getByIdSchema, listSchema } from './file.validation.js';
 import { uploadLimiter } from '../../shared/middleware/rateLimiter.js';
+import { authenticate } from '../../shared/middleware/authenticate.js';
 import config from '../../config/index.js';
 
 const router = Router();
@@ -40,6 +41,7 @@ router.get(
 // GET /api/v1/files/:id/download — Get pre-signed download URL
 router.get(
   '/:id/download',
+  authenticate,
   validate(getByIdSchema),
   (req, res, next) => fileController.download(req, res, next),
 );

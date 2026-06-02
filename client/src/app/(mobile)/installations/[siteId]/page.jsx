@@ -18,16 +18,12 @@ import {
   PackageSearch,
   Pin,
   Save,
-  Camera,
-  Loader2,
-  Key,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { MobileHeader } from '@/modules/mobile/components/mobile-header';
 import { EmptyState } from '@/modules/mobile/components/empty-state';
-import { useInstallations, useInstallationHistory, useSite } from '@/modules/mobile/hooks/use-installation-queries';
+import { useInstallations, useInstallationHistory } from '@/modules/mobile/hooks/use-installation-queries';
 import { useCreateCrmNote, useEntityNotes, useEntityWarningMap } from '@/modules/mobile/hooks/use-crm-notes';
-import { useCaptureCrmImage, useQueuedCrmImages } from '@/modules/mobile/hooks/use-crm-images';
 import { cn } from '@/lib/utils';
 
 const SYSTEM_ICONS = {
@@ -44,7 +40,6 @@ export default function InstallationsPage() {
   const [expandedId, setExpandedId] = useState(null);
 
   const { data: installations, isLoading, isOffline } = useInstallations(siteId);
-  const { data: site } = useSite(siteId);
 
   const items = useMemo(
     () => (Array.isArray(installations) ? installations : installations?.data || []),
@@ -79,11 +74,6 @@ export default function InstallationsPage() {
       />
 
       <div className="flex-1 overflow-y-auto">
-        {site?.access_instructions && (
-          <div className="px-4 pt-4">
-            <AccessInstructions value={site.access_instructions} lang={lang} />
-          </div>
-        )}
         {items.length === 0 ? (
           <div className="px-4 py-8">
             <EmptyState
@@ -257,27 +247,8 @@ function InstallationCard({ installation, lang, warnings, createNote, expanded, 
             createNote={createNote}
             placeholder={lang === 'de' ? 'Notiz zur Anlage' : 'Installation note'}
           />
-          <ImageCaptureButton lang={lang} entityType="installation" entityId={installation.id} />
 
-          {installation.sync_status === 'CONFLICT' ? (
-            <div className="space-y-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
-              <div className="flex items-start gap-2 font-medium">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                <p>
-                  {lang === 'de'
-                    ? 'Synchronisierungskonflikt: Diese Anlage wurde serverseitig geändert. Bitte erneut öffnen und lösen.'
-                    : 'Sync conflict: this installation was changed on the server. Please reopen and resolve.'}
-                </p>
-              </div>
-              <Link
-                href={`/installations/${installation.site_id}/capture?installationId=${installation.id}`}
-                className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-red-300 bg-white text-xs font-medium text-red-800"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                {lang === 'de' ? 'Konflikt lösen' : 'Resolve conflict'}
-              </Link>
-            </div>
-          ) : installation.sync_status === 'PENDING_SYNC' ? (
+          {installation.sync_status === 'PENDING_SYNC' ? (
             <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
               {lang === 'de' ? 'Wartet auf Synchronisierung' : 'Waiting for sync'}
             </div>
@@ -301,20 +272,6 @@ function InstallationCard({ installation, lang, warnings, createNote, expanded, 
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function AccessInstructions({ value, lang }) {
-  if (!value) return null;
-
-  return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-      <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-800">
-        <Key className="h-4 w-4 shrink-0" />
-        {lang === 'de' ? 'Zugang' : 'Access'}
-      </div>
-      <p className="whitespace-pre-wrap break-words text-sm text-amber-900">{value}</p>
     </div>
   );
 }
@@ -449,65 +406,6 @@ function InlineNoteComposer({ lang, entityType, entityId, createNote, placeholde
         </button>
       </div>
     </form>
-  );
-}
-
-function ImageCaptureButton({ lang, entityType, entityId }) {
-  const captureImage = useCaptureCrmImage();
-  const queued = useQueuedCrmImages(entityType, entityId);
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [error, setError] = useState('');
-
-  const onSelect = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || isCapturing) return;
-
-    setIsCapturing(true);
-    setError('');
-    try {
-      await captureImage({ entityType, entityId, file, category: 'general' });
-    } catch (err) {
-      setError(err?.message || (lang === 'de' ? 'Bild konnte nicht erfasst werden.' : 'Could not capture image.'));
-    } finally {
-      setIsCapturing(false);
-    }
-  };
-
-  return (
-    <div className="space-y-1">
-      <label
-        className={cn(
-          'inline-flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-border text-xs font-medium text-foreground',
-          isCapturing && 'opacity-50',
-        )}
-      >
-        {isCapturing ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Camera className="h-3.5 w-3.5" />
-        )}
-        {isCapturing
-          ? (lang === 'de' ? 'Wird erfasst' : 'Capturing')
-          : (lang === 'de' ? 'Bild erfassen' : 'Capture image')}
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          disabled={isCapturing}
-          onChange={onSelect}
-        />
-      </label>
-      {queued.length > 0 && (
-        <p className="text-[11px] text-amber-700">
-          {lang === 'de'
-            ? `${queued.length} Bild(er) warten auf Synchronisierung`
-            : `${queued.length} image(s) waiting for sync`}
-        </p>
-      )}
-      {error && <p className="text-[11px] font-medium text-red-600">{error}</p>}
-    </div>
   );
 }
 

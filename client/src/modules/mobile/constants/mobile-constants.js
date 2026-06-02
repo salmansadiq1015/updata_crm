@@ -81,7 +81,6 @@ export const SYNC_STATUS = Object.freeze({
   SYNCED: 'SYNCED',
   PENDING_SYNC: 'PENDING_SYNC',
   SYNC_FAILED: 'SYNC_FAILED',
-  CONFLICT: 'CONFLICT',
 });
 
 export const SYNC_ENTITY_TYPE = Object.freeze({
@@ -95,7 +94,6 @@ export const SYNC_ENTITY_TYPE = Object.freeze({
   ACCOUNTING_DOCUMENT: 'ACCOUNTING_DOCUMENT',
   INSTALLATION_CAPTURE: 'INSTALLATION_CAPTURE',
   NOTE: 'NOTE',
-  CRM_IMAGE: 'CRM_IMAGE',
 });
 
 export const SYNC_OPERATION = Object.freeze({
@@ -109,7 +107,6 @@ export const SYNC_QUEUE_STATUS = Object.freeze({
   IN_PROGRESS: 'IN_PROGRESS',
   COMPLETED: 'COMPLETED',
   FAILED: 'FAILED',
-  CONFLICT: 'CONFLICT',
 });
 
 // Queue processing priority (lower = higher priority)
@@ -124,17 +121,12 @@ export const SYNC_PRIORITY = Object.freeze({
   [SYNC_ENTITY_TYPE.ACCOUNTING_DOCUMENT]: 35,
   [SYNC_ENTITY_TYPE.INSTALLATION_CAPTURE]: 25,
   [SYNC_ENTITY_TYPE.NOTE]: 15,
-  [SYNC_ENTITY_TYPE.CRM_IMAGE]: 30,
 });
 
 export const SYNC_CONFIG = Object.freeze({
   MAX_RETRIES: 5,
   RETRY_DELAYS: [5000, 15000, 45000, 120000, 300000],
   POLL_INTERVAL: 5 * 60 * 1000,
-  // Network-aware periodic poll intervals (CRM-003 AC-8). Wi-Fi is treated as
-  // the default (cheaper/faster), cellular polls less often to save data/battery.
-  POLL_INTERVAL_WIFI: 30 * 60 * 1000,
-  POLL_INTERVAL_CELLULAR: 60 * 60 * 1000,
   PING_TIMEOUT: 5000,
   SYNC_TIMEOUT: 60000,
   UPLOAD_TIMEOUT: 30000,

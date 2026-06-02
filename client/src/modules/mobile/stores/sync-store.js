@@ -5,7 +5,6 @@ export const useSyncStore = create((set) => ({
   lastSyncAt: null,
   pendingCount: 0,
   failedCount: 0,
-  conflictCount: 0,
   currentOperation: null,
   progress: null,
 
@@ -31,12 +30,8 @@ export const useSyncStore = create((set) => ({
       syncStatus: state.syncStatus === 'offline' ? 'idle' : state.syncStatus,
     })),
 
-  setCounts: (pendingCount, failedCount, conflictCount) =>
-    set((state) => ({
-      pendingCount,
-      failedCount,
-      conflictCount: conflictCount ?? state.conflictCount,
-    })),
+  setCounts: (pendingCount, failedCount) =>
+    set({ pendingCount, failedCount }),
 
   setProgress: (current, total) =>
     set({ progress: { current, total } }),

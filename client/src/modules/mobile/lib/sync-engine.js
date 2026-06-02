@@ -3,21 +3,18 @@ import {
   getPendingSyncItems,
   markSyncItemCompleted,
   markSyncItemFailed,
-  markSyncItemConflict,
   clearCompletedSyncItems,
   getPendingSyncCount,
   getFailedSyncCount,
-  getConflictSyncCount,
   getSyncMeta,
   setSyncMeta,
   upsertCrmAddressBook,
 } from '../db/mobile-db';
-import { SYNC_CONFIG, SYNC_ENTITY_TYPE, SYNC_QUEUE_STATUS, SYNC_STATUS } from '../constants/mobile-constants';
+import { SYNC_CONFIG, SYNC_QUEUE_STATUS, SYNC_STATUS } from '../constants/mobile-constants';
 import { useSyncStore } from '../stores/sync-store';
 import { isActuallyOnline } from './connectivity';
 import { normalizeInstallation } from '../services/installation-service';
 import { normalizeNote } from '../services/crm-note-service';
-import { resolveImageEndpoint } from '../services/crm-image-service';
 
 let syncInProgress = false;
 let pollTimer = null;
@@ -73,23 +70,7 @@ async function processOutboundQueue() {
       await processItem(item);
       await markSyncItemCompleted(item.id);
     } catch (err) {
-      // A 409 on a queued installation update is an edit conflict: the server
-      // record changed since this offline edit was made. Retrying with the same
-      // stale baseUpdatedAt can never succeed, so mark it as a conflict (which
-      // stops it being re-queued) and flag the local record for resolution
-      // instead of silently exhausting retries.
-      if (
-        err?.statusCode === 409
-        && item.entity_type === SYNC_ENTITY_TYPE.INSTALLATION_CAPTURE
-        && item.operation === 'UPDATE'
-      ) {
-        await markSyncItemConflict(item.id, err.message);
-        await db.crmInstallations.update(item.entity_id, {
-          sync_status: SYNC_STATUS.CONFLICT,
-        });
-      } else {
-        await markSyncItemFailed(item.id, err.message, item.retry_count + 1);
-      }
+      await markSyncItemFailed(item.id, err.message, item.retry_count + 1);
     }
   }
 }
@@ -342,31 +323,6 @@ async function processItem(item) {
       }
       break;
 
-    case 'CRM_IMAGE':
-      if (item.operation === 'CREATE') {
-        const queued = await db.crmImageQueue.get(item.entity_id);
-        if (!queued?.blob) {
-          throw new Error('Offline CRM image blob is missing');
-        }
-
-        const formData = new FormData();
-        formData.append('image', queued.blob, `crm-image-${item.entity_id}.jpg`);
-        if (queued.caption) formData.append('caption', String(queued.caption));
-        if (queued.category) formData.append('category', String(queued.category));
-
-        await apiClient.post(
-          resolveImageEndpoint(item.payload.entity_type, item.payload.entity_id),
-          formData,
-          {
-            headers: { 'Content-Type': 'multipart/form-data' },
-            timeout: SYNC_CONFIG.UPLOAD_TIMEOUT,
-          },
-        );
-
-        await db.crmImageQueue.delete(item.entity_id);
-      }
-      break;
-
     default:
       console.warn('Unknown sync entity type:', item.entity_type);
   }
@@ -432,44 +388,14 @@ function getRetryDelay(retryCount) {
 async function updateCounts() {
   const pending = await getPendingSyncCount();
   const failed = await getFailedSyncCount();
-  const conflicts = await getConflictSyncCount();
-  useSyncStore.getState().setCounts(pending, failed, conflicts);
-}
-
-function getNetworkConnection() {
-  if (typeof navigator === 'undefined') return null;
-  return navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
-}
-
-// Choose the periodic poll interval based on the active network connection.
-// Cellular connections poll less frequently to save data/battery; everything
-// else (Wi-Fi, ethernet, or unknown) uses the Wi-Fi default. Defensive against
-// SSR/desktop where the Network Information API is unavailable (CRM-003 AC-8).
-function getPollInterval() {
-  const connection = getNetworkConnection();
-  if (!connection) return SYNC_CONFIG.POLL_INTERVAL_WIFI;
-
-  const type = connection.type;
-  const effectiveType = connection.effectiveType;
-
-  // `type` is the most explicit signal when present.
-  if (type === 'cellular') return SYNC_CONFIG.POLL_INTERVAL_CELLULAR;
-  if (type === 'wifi' || type === 'ethernet') return SYNC_CONFIG.POLL_INTERVAL_WIFI;
-
-  // Fall back to effectiveType (2g/3g/4g implies a cellular-grade connection)
-  // when `type` is unavailable, as many browsers only expose effectiveType.
-  if (['slow-2g', '2g', '3g', '4g'].includes(effectiveType)) {
-    return SYNC_CONFIG.POLL_INTERVAL_CELLULAR;
-  }
-
-  return SYNC_CONFIG.POLL_INTERVAL_WIFI;
+  useSyncStore.getState().setCounts(pending, failed);
 }
 
 export function startSyncPolling() {
   if (pollTimer) return;
   pollTimer = setInterval(() => {
     if (navigator.onLine) triggerSync();
-  }, getPollInterval());
+  }, SYNC_CONFIG.POLL_INTERVAL);
 }
 
 export function stopSyncPolling() {
@@ -479,40 +405,22 @@ export function stopSyncPolling() {
   }
 }
 
-// Re-evaluate the poll interval (e.g. after a network change) by restarting the
-// timer. Cheap no-op when polling is not currently active.
-function restartSyncPolling() {
-  if (!pollTimer) return;
-  stopSyncPolling();
-  startSyncPolling();
-}
-
 export function setupSyncListeners() {
   if (typeof window === 'undefined') return () => {};
 
-  const onOnline = () => {
-    // A reconnect can also mean a network-type change (e.g. cellular -> wifi),
-    // so re-pick the interval and flush pending changes immediately.
-    restartSyncPolling();
-    triggerSync();
-  };
+  const onOnline = () => triggerSync();
   const onVisible = () => {
     if (document.visibilityState === 'visible') triggerSync();
   };
-  const onConnectionChange = () => restartSyncPolling();
 
   window.addEventListener('online', onOnline);
   document.addEventListener('visibilitychange', onVisible);
-
-  const connection = getNetworkConnection();
-  connection?.addEventListener?.('change', onConnectionChange);
 
   startSyncPolling();
 
   return () => {
     window.removeEventListener('online', onOnline);
     document.removeEventListener('visibilitychange', onVisible);
-    connection?.removeEventListener?.('change', onConnectionChange);
     stopSyncPolling();
   };
 }

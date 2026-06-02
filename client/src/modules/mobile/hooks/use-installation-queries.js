@@ -1,27 +1,9 @@
 'use client';
 
-import { useLiveQuery } from 'dexie-react-hooks';
 import { queryKeys } from '@/lib/query/keys';
 import { installationService } from '../services/installation-service';
 import { useOfflineQuery } from './use-offline-query';
 import { db, upsertCrmAddressBook } from '../db/mobile-db';
-
-/**
- * Read a single CRM site directly from the offline Dexie cache (crmSites).
- * Site data — including `access_instructions` — is synced via the address-book
- * sync, so the offline cache is the source of truth here and works online too.
- */
-export function useSite(siteId) {
-  const site = useLiveQuery(
-    () => (siteId ? db.crmSites.get(siteId) : undefined),
-    [siteId],
-  );
-
-  return {
-    data: site || null,
-    isLoading: siteId ? site === undefined : false,
-  };
-}
 
 export function useInstallations(siteId) {
   return useOfflineQuery({

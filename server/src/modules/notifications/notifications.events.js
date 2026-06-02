@@ -330,7 +330,7 @@ export function registerNotificationsEvents() {
       await dispatch(payload, {
         type: 'website_service_request',
         category: 'CUSTOMER',
-        priority: payload.requestType === 'heizungsstoerung' ? 'HIGH' : 'NORMAL',
+        priority: payload.isHighPriority || payload.requestType === 'heizungsstoerung' ? 'HIGH' : 'NORMAL',
         channels: ['IN_APP', 'PUSH', 'EMAIL'],
         recipientIds: payload.assignedTo,
         payload: {

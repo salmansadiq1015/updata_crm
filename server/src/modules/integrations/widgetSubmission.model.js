@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 
 export const PROCESSING_STATUSES = ['pending', 'processed', 'duplicate', 'spam'];
-export const REQUEST_TYPES = ['heizungsstoerung', 'wartung', 'neuinstallation', 'beratung', 'other'];
+export const REQUEST_TYPES = ['heizungsstoerung', 'wartung', 'neuinstallation', 'beratung', 'sanitaer', 'other'];
+export const PRIORITIES = ['niedrig', 'mittel', 'hoch'];
 
 const widgetSubmissionSchema = new mongoose.Schema(
   {
@@ -16,6 +17,7 @@ const widgetSubmissionSchema = new mongoose.Schema(
       city: { type: String, maxlength: 100, default: null },
     },
     requestType: { type: String, enum: REQUEST_TYPES, required: true },
+    priority: { type: String, enum: PRIORITIES, default: 'mittel' },
     description: { type: String, required: true, maxlength: 5000 },
     preferredWindow: { type: String, maxlength: 100, default: null },
     attachments: [

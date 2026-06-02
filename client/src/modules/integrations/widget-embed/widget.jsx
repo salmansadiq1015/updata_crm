@@ -4,13 +4,135 @@ import { useState, useEffect, useCallback } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9097/api/v1';
 
+// CRM-014 AC-4: Sanitär category added (value 'sanitaer'). Existing kept.
 const REQUEST_TYPES = [
   { key: 'heizungsstoerung', label: 'Heizungsstörung' },
   { key: 'wartung', label: 'Wartung' },
   { key: 'neuinstallation', label: 'Neuinstallation' },
   { key: 'beratung', label: 'Beratung' },
+  { key: 'sanitaer', label: 'Sanitär' },
   { key: 'other', label: 'Sonstiges' },
 ];
+
+// CRM-014 AC-5: priority selector. Mittel is the default.
+const PRIORITIES = [
+  { key: 'niedrig', label: 'Niedrig' },
+  { key: 'mittel', label: 'Mittel' },
+  { key: 'hoch', label: 'Hoch' },
+];
+
+// CRM-014 AC-15: UI string translations for the labels/controls owned here.
+// Strings not present for a locale fall back to the German ('de') value.
+const LOCALES = ['de', 'fr', 'it', 'en'];
+
+const LOCALE_NAMES = { de: 'DE', fr: 'FR', it: 'IT', en: 'EN' };
+
+const UI_STRINGS = {
+  de: {
+    title: 'Kontaktformular',
+    name: 'Name',
+    email: 'E-Mail',
+    phone: 'Telefon',
+    company: 'Firma',
+    requestType: 'Anliegen',
+    priority: 'Priorität',
+    description: 'Nachricht',
+    selectPlaceholder: 'Bitte wählen...',
+    namePlaceholder: 'Max Mustermann',
+    emailPlaceholder: 'max@beispiel.ch',
+    phonePlaceholder: '+41 79 123 45 67',
+    companyPlaceholder: 'Firmenname (optional)',
+    descriptionPlaceholder: 'Beschreiben Sie Ihr Anliegen...',
+    submit: 'Anfrage senden',
+    submitting: 'Wird gesendet...',
+    required: 'Pflichtfeld',
+    invalidEmail: 'Ungültige E-Mail-Adresse',
+    contactRequired: 'Bitte E-Mail oder Telefon angeben',
+    configError: 'Widget-Konfiguration konnte nicht geladen werden.',
+    thankYou: 'Vielen Dank!',
+    confirmation: 'Vielen Dank! Wir melden uns bei Ihnen.',
+    submitError: 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.',
+    retry: 'Erneut versuchen',
+  },
+  fr: {
+    title: 'Formulaire de contact',
+    name: 'Nom',
+    email: 'E-mail',
+    phone: 'Téléphone',
+    company: 'Entreprise',
+    requestType: 'Demande',
+    priority: 'Priorité',
+    description: 'Message',
+    selectPlaceholder: 'Veuillez choisir...',
+    namePlaceholder: 'Jean Dupont',
+    emailPlaceholder: 'jean@exemple.ch',
+    phonePlaceholder: '+41 79 123 45 67',
+    companyPlaceholder: "Nom de l'entreprise (facultatif)",
+    descriptionPlaceholder: 'Décrivez votre demande...',
+    submit: 'Envoyer la demande',
+    submitting: 'Envoi en cours...',
+    required: 'Champ obligatoire',
+    invalidEmail: 'Adresse e-mail invalide',
+    contactRequired: 'Veuillez indiquer un e-mail ou un téléphone',
+    configError: 'La configuration du widget n’a pas pu être chargée.',
+    thankYou: 'Merci !',
+    confirmation: 'Merci ! Nous vous recontacterons.',
+    submitError: 'Une erreur est survenue. Veuillez réessayer.',
+    retry: 'Réessayer',
+  },
+  it: {
+    title: 'Modulo di contatto',
+    name: 'Nome',
+    email: 'E-mail',
+    phone: 'Telefono',
+    company: 'Azienda',
+    requestType: 'Richiesta',
+    priority: 'Priorità',
+    description: 'Messaggio',
+    selectPlaceholder: 'Si prega di scegliere...',
+    namePlaceholder: 'Mario Rossi',
+    emailPlaceholder: 'mario@esempio.ch',
+    phonePlaceholder: '+41 79 123 45 67',
+    companyPlaceholder: "Nome dell'azienda (facoltativo)",
+    descriptionPlaceholder: 'Descriva la sua richiesta...',
+    submit: 'Invia richiesta',
+    submitting: 'Invio in corso...',
+    required: 'Campo obbligatorio',
+    invalidEmail: 'Indirizzo e-mail non valido',
+    contactRequired: 'Si prega di indicare e-mail o telefono',
+    configError: 'Impossibile caricare la configurazione del widget.',
+    thankYou: 'Grazie!',
+    confirmation: 'Grazie! La ricontatteremo.',
+    submitError: 'Si è verificato un errore. Si prega di riprovare.',
+    retry: 'Riprova',
+  },
+  en: {
+    title: 'Contact form',
+    name: 'Name',
+    email: 'Email',
+    phone: 'Phone',
+    company: 'Company',
+    requestType: 'Request',
+    priority: 'Priority',
+    description: 'Message',
+    selectPlaceholder: 'Please select...',
+    namePlaceholder: 'John Doe',
+    emailPlaceholder: 'john@example.ch',
+    phonePlaceholder: '+41 79 123 45 67',
+    companyPlaceholder: 'Company name (optional)',
+    descriptionPlaceholder: 'Describe your request...',
+    submit: 'Send request',
+    submitting: 'Sending...',
+    required: 'Required field',
+    invalidEmail: 'Invalid email address',
+    contactRequired: 'Please provide an email or phone number',
+    configError: 'Widget configuration could not be loaded.',
+    thankYou: 'Thank you!',
+    confirmation: 'Thank you! We will get back to you.',
+    submitError: 'An error occurred. Please try again.',
+    retry: 'Try again',
+  },
+};
 
 const INITIAL_FORM = {
   name: '',
@@ -18,6 +140,7 @@ const INITIAL_FORM = {
   phone: '',
   company: '',
   requestType: '',
+  priority: 'mittel',
   description: '',
 };
 
@@ -27,10 +150,48 @@ export default function WidgetEmbed({ widgetId }) {
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState('idle'); // idle | submitting | success | error
+  const [locale, setLocale] = useState('de'); // CRM-014 AC-15
 
   // Derive branding from config
   const primaryColor = config?.branding?.primaryColor || '#0056b3';
   const companyName = config?.branding?.companyName || '';
+  const logoUrl = config?.branding?.logoUrl || ''; // CRM-014 AC-14
+
+  // CRM-014 AC-15: restrict the locale selector to configured languages when provided.
+  const availableLocales = (() => {
+    const configured = Array.isArray(config?.languages)
+      ? config.languages
+          .map((l) => String(l || '').toLowerCase())
+          .filter((l) => LOCALES.includes(l))
+      : [];
+    return configured.length ? configured : LOCALES;
+  })();
+
+  // Active UI string table (falls back to German per-key).
+  const t = (key) => UI_STRINGS[locale]?.[key] ?? UI_STRINGS.de[key];
+
+  // CRM-014 AC-15: per-category translated label from config when available.
+  const localizedRequestLabel = (rt) => {
+    if (!rt) return '';
+    const byLocale = {
+      de: rt.labelDe,
+      fr: rt.labelFr,
+      it: rt.labelIt,
+      en: rt.labelEn,
+    };
+    return byLocale[locale] || rt.labelDe || rt.label || rt.key;
+  };
+
+  // CRM-014 AC-15: per-locale confirmation message from config when available.
+  const localizedConfirmation = () => {
+    const byLocale = {
+      de: config?.confirmationMessageDe,
+      fr: config?.confirmationMessageFr,
+      it: config?.confirmationMessageIt,
+      en: config?.confirmationMessageEn,
+    };
+    return byLocale[locale] || config?.confirmationMessageDe || t('confirmation');
+  };
 
   // Fetch widget config on mount
   useEffect(() => {
@@ -51,28 +212,50 @@ export default function WidgetEmbed({ widgetId }) {
     return () => { cancelled = true; };
   }, [widgetId]);
 
+  // CRM-014 AC-15: when config restricts languages and the current locale is not
+  // among them, snap to the first configured language.
+  useEffect(() => {
+    if (!Array.isArray(config?.languages) || config.languages.length === 0) return;
+    const allowed = config.languages
+      .map((l) => String(l || '').toLowerCase())
+      .filter((l) => LOCALES.includes(l));
+    if (allowed.length && !allowed.includes(locale)) {
+      setLocale(allowed[0]);
+    }
+  }, [config, locale]);
+
   const setField = useCallback((key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setErrors((prev) => {
-      if (!prev[key]) return prev;
+      // Email/phone share the combined "contact" error (CRM-014 AC-3).
+      const clearKey = key === 'email' || key === 'phone' ? 'contact' : key;
+      if (!prev[key] && !prev[clearKey]) return prev;
       const next = { ...prev };
       delete next[key];
+      delete next[clearKey];
       return next;
     });
   }, []);
 
   const validate = useCallback(() => {
     const errs = {};
-    if (!form.name.trim()) errs.name = 'Pflichtfeld';
-    if (!form.email.trim()) {
-      errs.email = 'Pflichtfeld';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      errs.email = 'Ungültige E-Mail-Adresse';
+    if (!form.name.trim()) errs.name = t('required');
+
+    // CRM-014 AC-3: require at least one of email/phone. Only error if BOTH empty.
+    const hasEmail = !!form.email.trim();
+    const hasPhone = !!form.phone.trim();
+    if (!hasEmail && !hasPhone) {
+      errs.contact = t('contactRequired');
+    } else if (hasEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      // Validate email format only when an email was actually entered.
+      errs.email = t('invalidEmail');
     }
-    if (!form.requestType) errs.requestType = 'Pflichtfeld';
-    if (!form.description.trim()) errs.description = 'Pflichtfeld';
+
+    if (!form.requestType) errs.requestType = t('required');
+    if (!form.description.trim()) errs.description = t('required');
     return errs;
-  }, [form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, locale]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -90,14 +273,17 @@ export default function WidgetEmbed({ widgetId }) {
         widgetId: widgetId || undefined,
         contact: {
           name: form.name.trim(),
-          email: form.email.trim(),
+          // CRM-014 AC-3: send whichever of email/phone are filled.
+          email: form.email.trim() || undefined,
           phone: form.phone.trim() || undefined,
           address: form.company.trim()
             ? { street: form.company.trim() }
             : undefined,
         },
         requestType: form.requestType,
+        priority: form.priority, // CRM-014 AC-5
         description: form.description.trim(),
+        locale, // CRM-014 AC-15
       };
 
       const res = await fetch(`${API_URL}/public/widget/submissions`, {
@@ -111,7 +297,7 @@ export default function WidgetEmbed({ widgetId }) {
     } catch {
       setStatus('error');
     }
-  }, [form, widgetId, validate]);
+  }, [form, widgetId, validate, locale]);
 
   // --- CSS custom properties for theming ---
   const cssVars = {
@@ -136,23 +322,47 @@ export default function WidgetEmbed({ widgetId }) {
   return (
     <div style={{ ...cssVars, ...styles.root }}>
       <div style={styles.container}>
+        {/* Language selector (CRM-014 AC-15) — only when more than one option */}
+        {availableLocales.length > 1 && (
+          <div style={styles.langBar}>
+            {availableLocales.map((loc) => (
+              <button
+                key={loc}
+                type="button"
+                onClick={() => setLocale(loc)}
+                style={{
+                  ...styles.langButton,
+                  ...(locale === loc ? styles.langButtonActive : {}),
+                }}
+                aria-pressed={locale === loc}
+              >
+                {LOCALE_NAMES[loc] || loc.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Header */}
-        {companyName && (
-          <div style={styles.header}>
-            <h2 style={styles.title}>Kontaktformular</h2>
-            {companyName && <p style={styles.subtitle}>{companyName}</p>}
-          </div>
-        )}
-        {!companyName && (
-          <div style={styles.header}>
-            <h2 style={styles.title}>Kontaktformular</h2>
-          </div>
-        )}
+        <div style={styles.header}>
+          {/* Logo (CRM-014 AC-14). Plain <img>: the logo is an arbitrary
+              tenant-supplied external URL, unsuitable for next/image's
+              configured-domains model. */}
+          {logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt={companyName || t('title')}
+              style={styles.logo}
+            />
+          )}
+          <h2 style={styles.title}>{t('title')}</h2>
+          {companyName && <p style={styles.subtitle}>{companyName}</p>}
+        </div>
 
         {/* Config error */}
         {configError && (
           <div style={styles.alertError}>
-            Widget-Konfiguration konnte nicht geladen werden.
+            {t('configError')}
           </div>
         )}
 
@@ -163,10 +373,9 @@ export default function WidgetEmbed({ widgetId }) {
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
             </svg>
             <div>
-              <p style={styles.alertTitle}>Vielen Dank!</p>
+              <p style={styles.alertTitle}>{t('thankYou')}</p>
               <p style={styles.alertText}>
-                {config?.confirmationMessageDe ||
-                  'Vielen Dank! Wir melden uns bei Ihnen.'}
+                {localizedConfirmation()}
               </p>
             </div>
           </div>
@@ -175,13 +384,13 @@ export default function WidgetEmbed({ widgetId }) {
         {/* Error state */}
         {status === 'error' && (
           <div style={styles.alertError}>
-            <p>Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.</p>
+            <p>{t('submitError')}</p>
             <button
               type="button"
               onClick={() => setStatus('idle')}
               style={styles.retryLink}
             >
-              Erneut versuchen
+              {t('retry')}
             </button>
           </div>
         )}
@@ -190,12 +399,12 @@ export default function WidgetEmbed({ widgetId }) {
         {status !== 'success' && (
           <form onSubmit={handleSubmit} noValidate style={styles.form}>
             {/* Name */}
-            <FieldGroup label="Name" required error={errors.name}>
+            <FieldGroup label={t('name')} required error={errors.name}>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setField('name', e.target.value)}
-                placeholder="Max Mustermann"
+                placeholder={t('namePlaceholder')}
                 style={{
                   ...styles.input,
                   ...(errors.name ? styles.inputError : {}),
@@ -203,44 +412,47 @@ export default function WidgetEmbed({ widgetId }) {
               />
             </FieldGroup>
 
-            {/* Email */}
-            <FieldGroup label="E-Mail" required error={errors.email}>
+            {/* Email — CRM-014 AC-3: no longer required on its own */}
+            <FieldGroup label={t('email')} error={errors.email}>
               <input
                 type="email"
                 value={form.email}
                 onChange={(e) => setField('email', e.target.value)}
-                placeholder="max@beispiel.ch"
+                placeholder={t('emailPlaceholder')}
                 style={{
                   ...styles.input,
-                  ...(errors.email ? styles.inputError : {}),
+                  ...(errors.email || errors.contact ? styles.inputError : {}),
                 }}
               />
             </FieldGroup>
 
-            {/* Phone */}
-            <FieldGroup label="Telefon">
+            {/* Phone — CRM-014 AC-3: either email or phone required */}
+            <FieldGroup label={t('phone')} error={errors.contact}>
               <input
                 type="tel"
                 value={form.phone}
                 onChange={(e) => setField('phone', e.target.value)}
-                placeholder="+41 79 123 45 67"
-                style={styles.input}
+                placeholder={t('phonePlaceholder')}
+                style={{
+                  ...styles.input,
+                  ...(errors.contact ? styles.inputError : {}),
+                }}
               />
             </FieldGroup>
 
             {/* Company */}
-            <FieldGroup label="Firma">
+            <FieldGroup label={t('company')}>
               <input
                 type="text"
                 value={form.company}
                 onChange={(e) => setField('company', e.target.value)}
-                placeholder="Firmenname (optional)"
+                placeholder={t('companyPlaceholder')}
                 style={styles.input}
               />
             </FieldGroup>
 
             {/* Request Type */}
-            <FieldGroup label="Anliegen" required error={errors.requestType}>
+            <FieldGroup label={t('requestType')} required error={errors.requestType}>
               <select
                 value={form.requestType}
                 onChange={(e) => setField('requestType', e.target.value)}
@@ -252,25 +464,43 @@ export default function WidgetEmbed({ widgetId }) {
                 }}
               >
                 <option value="" disabled>
-                  Bitte wählen...
+                  {t('selectPlaceholder')}
                 </option>
                 {(config?.requestTypes?.length
                   ? config.requestTypes.filter((rt) => rt.isActive !== false)
                   : REQUEST_TYPES
                 ).map((rt) => (
                   <option key={rt.key} value={rt.key}>
-                    {rt.labelDe || rt.label}
+                    {localizedRequestLabel(rt)}
+                  </option>
+                ))}
+              </select>
+            </FieldGroup>
+
+            {/* Priority — CRM-014 AC-5 */}
+            <FieldGroup label={t('priority')}>
+              <select
+                value={form.priority}
+                onChange={(e) => setField('priority', e.target.value)}
+                style={{
+                  ...styles.input,
+                  ...styles.select,
+                }}
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.label}
                   </option>
                 ))}
               </select>
             </FieldGroup>
 
             {/* Description */}
-            <FieldGroup label="Nachricht" required error={errors.description}>
+            <FieldGroup label={t('description')} required error={errors.description}>
               <textarea
                 value={form.description}
                 onChange={(e) => setField('description', e.target.value)}
-                placeholder="Beschreiben Sie Ihr Anliegen..."
+                placeholder={t('descriptionPlaceholder')}
                 rows={4}
                 style={{
                   ...styles.input,
@@ -293,10 +523,10 @@ export default function WidgetEmbed({ widgetId }) {
               {status === 'submitting' ? (
                 <span style={styles.buttonContent}>
                   <Spinner />
-                  Wird gesendet...
+                  {t('submitting')}
                 </span>
               ) : (
-                'Anfrage senden'
+                t('submit')
               )}
             </button>
           </form>
@@ -373,6 +603,37 @@ const styles = {
     maxWidth: 520,
     margin: '0 auto',
     padding: '24px 16px',
+  },
+  langBar: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginBottom: 8,
+  },
+  langButton: {
+    padding: '4px 8px',
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--widget-muted)',
+    backgroundColor: 'transparent',
+    border: '1px solid var(--widget-border)',
+    borderRadius: 'var(--widget-radius)',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    lineHeight: 1,
+  },
+  langButtonActive: {
+    color: '#ffffff',
+    backgroundColor: 'var(--widget-primary)',
+    borderColor: 'var(--widget-primary)',
+  },
+  logo: {
+    display: 'block',
+    maxHeight: 56,
+    maxWidth: '100%',
+    width: 'auto',
+    margin: '0 auto 12px',
+    objectFit: 'contain',
   },
   header: {
     marginBottom: 24,

@@ -1,6 +1,8 @@
+import crypto from 'crypto';
 import newsletterRepository from './newsletter.repository.js';
 import NewsletterDelivery from './newsletterDelivery.model.js';
 import Customer from '../customer.model.js';
+import config from '../../../config/index.js';
 import cacheManager from '../../../shared/cache/CacheManager.js';
 import eventBus from '../../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../../shared/events/eventTypes.js';
@@ -262,16 +264,7 @@ class NewsletterService {
     }
 
     // nDSG compliance — build recipient query ensuring opt-in
-    const recipientQuery = {
-      isDeleted: false,
-      status: 'active',
-      newsletterOptIn: true,
-      email: { $ne: null, $exists: true },
-      ...(existing.recipientFilter || {}),
-    };
-
-    // Always enforce opt-in regardless of recipientFilter contents
-    recipientQuery.newsletterOptIn = true;
+    const recipientQuery = this._buildRecipientQuery(existing.recipientFilter);
 
     const recipients = await Customer.find(recipientQuery)
       .select('_id email name')
@@ -360,27 +353,103 @@ class NewsletterService {
    * Count opted-in recipients matching a filter (for preview).
    */
   async countRecipients(recipientFilter = {}) {
+    const query = this._buildRecipientQuery(recipientFilter);
+    return Customer.countDocuments(query);
+  }
+
+  // ── Recipient query (CRM-013 AC-2) ─────────────────────────
+
+  /**
+   * Translate a structured recipientFilter into a Customer query.
+   *
+   * Only model-backed fields are mapped explicitly (type → type,
+   * canton → canton, city → city). `newsletterOptIn: true` is ALWAYS
+   * forced (nDSG opt-out guard) regardless of the filter contents; the
+   * `optInOnly` flag is accepted for API symmetry but cannot relax this.
+   *
+   * Note: "installation type" filtering is intentionally unsupported — the
+   * Customer model has no installation-type field (documented limitation).
+   */
+  _buildRecipientQuery(recipientFilter = {}) {
+    const filter = recipientFilter || {};
     const query = {
       isDeleted: false,
       status: 'active',
-      newsletterOptIn: true,
       email: { $ne: null, $exists: true },
-      ...recipientFilter,
     };
-    // Always enforce opt-in
+
+    if (filter.type) query.type = filter.type;
+    if (filter.canton) query.canton = filter.canton;
+    if (filter.city) query.city = filter.city;
+
+    // Always enforce opt-in (opt-out guard) — never relaxed by the filter.
     query.newsletterOptIn = true;
 
-    return Customer.countDocuments(query);
+    return query;
+  }
+
+  // ── Unsubscribe (CRM-013 AC-10, nDSG) ──────────────────────
+
+  /**
+   * Deterministic HMAC-SHA256 unsubscribe token for a customer.
+   *
+   * Used to build per-recipient unsubscribe links and to verify the public
+   * (unauthenticated) unsubscribe endpoint. Keyed on the session secret so a
+   * token cannot be forged without the server secret.
+   */
+  unsubscribeToken(customerId) {
+    return crypto
+      .createHmac('sha256', config.session.secret)
+      .update(String(customerId))
+      .digest('hex');
+  }
+
+  /**
+   * Verify a token against a customerId in constant-time and, if valid, set
+   * the customer's newsletterOptIn to false.
+   *
+   * @returns {Promise<{ ok: boolean }>}
+   * @throws {ValidationError} on a missing/invalid token.
+   */
+  async unsubscribe(customerId, token) {
+    const expected = this.unsubscribeToken(customerId);
+
+    // Constant-time comparison — guard against length mismatch first since
+    // timingSafeEqual throws when buffers differ in length.
+    const provided = Buffer.from(String(token || ''), 'utf8');
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    const valid = provided.length === expectedBuf.length
+      && crypto.timingSafeEqual(provided, expectedBuf);
+
+    if (!valid) {
+      throw new ValidationError('Invalid unsubscribe token');
+    }
+
+    await Customer.updateOne(
+      { _id: customerId },
+      { $set: { newsletterOptIn: false } },
+    );
+
+    // Invalidate the customer entity cache so the change is reflected.
+    await cacheManager.del(`crm:customer:${customerId}`);
+
+    logger.info('Newsletter unsubscribe processed', {
+      module: 'crm',
+      action: 'newsletter.unsubscribe',
+      customerId: String(customerId),
+    });
+
+    return { ok: true };
   }
 
   // ── Cache helpers ──────────────────────────────────────────
 
   async _invalidateEntityCache(id) {
-    await cacheManager.delete(`crm:newsletter:${id}`);
+    await cacheManager.del(`crm:newsletter:${id}`);
   }
 
   async _invalidateListCache() {
-    await cacheManager.deleteByPattern('crm:newsletters:list:*');
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}crm:newsletters:list:*`);
   }
 }
 

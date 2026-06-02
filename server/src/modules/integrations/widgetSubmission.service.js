@@ -102,6 +102,7 @@ class WidgetSubmissionService {
       contactPhone: normalized.contactPhone,
       contactAddress: normalized.contactAddress,
       requestType: normalized.requestType,
+      priority: normalized.priority,
       description: normalized.description,
       preferredWindow: normalized.preferredWindow,
       captchaScore,
@@ -122,6 +123,10 @@ class WidgetSubmissionService {
       });
     }
 
+    // AC-12: urgent requests escalate to a high-priority notification when the
+    // request type is a heating failure OR the caller flagged it as high priority.
+    const isHighPriority = normalized.requestType === 'heizungsstoerung' || normalized.priority === 'hoch';
+
     eventBus.publish(
       EVENT_TYPES.WIDGET_SUBMISSION_RECEIVED,
       {
@@ -129,7 +134,10 @@ class WidgetSubmissionService {
         referenceNumber,
         widgetId: normalized.widgetId,
         requestType: normalized.requestType,
+        priority: normalized.priority,
+        isHighPriority,
         contactEmail: normalized.contactEmail,
+        contactPhone: normalized.contactPhone,
         crmCustomerId: crmLink?.customerId || null,
         crmContactId: crmLink?.contactId || null,
         assignedTo,
@@ -401,6 +409,7 @@ class WidgetSubmissionService {
         city: contactAddress.city || null,
       },
       requestType: data.requestType,
+      priority: data.priority || 'mittel',
       description: data.description || data.message,
       preferredWindow: data.preferredWindow || null,
       captchaToken: data.captchaToken || null,
@@ -429,10 +438,29 @@ class WidgetSubmissionService {
           import('../crm/counter.service.js'),
         ]);
 
-      let contact = await Contact.findOne({ email: normalized.contactEmail }).lean();
-      let customer = contact
-        ? await Customer.findById(contact.customerId).lean()
-        : await Customer.findOne({ email: normalized.contactEmail }).lean();
+      // AC-8: match an existing contact/customer by email first, then fall back
+      // to phone/mobile when email is absent or did not match.
+      const matchEmail = normalized.contactEmail || null;
+      const matchPhone = normalized.contactPhone || null;
+
+      let contact = matchEmail ? await Contact.findOne({ email: matchEmail }).lean() : null;
+      if (!contact && matchPhone) {
+        contact = await Contact.findOne({
+          $or: [{ phone: matchPhone }, { mobile: matchPhone }],
+        }).lean();
+      }
+
+      let customer = null;
+      if (contact) {
+        customer = await Customer.findById(contact.customerId).lean();
+      } else if (matchEmail) {
+        customer = await Customer.findOne({ email: matchEmail }).lean();
+      }
+      if (!customer && matchPhone) {
+        customer = await Customer.findOne({
+          $or: [{ phone: matchPhone }, { mobile: matchPhone }],
+        }).lean();
+      }
 
       if (!customer) {
         const customerNumber = await counterService.getNextCustomerNumber();
@@ -443,8 +471,8 @@ class WidgetSubmissionService {
           street: normalized.contactAddress.street,
           postalCode: normalized.contactAddress.zip,
           city: normalized.contactAddress.city,
-          phone: normalized.contactPhone,
-          email: normalized.contactEmail,
+          phone: matchPhone,
+          email: matchEmail,
           notes: `Website widget request ${submission.referenceNumber}`,
           createdBy: SYSTEM_USER_ID,
         });
@@ -456,8 +484,8 @@ class WidgetSubmissionService {
           customerId: customer._id,
           firstName: nameParts.firstName,
           lastName: nameParts.lastName,
-          phone: normalized.contactPhone,
-          email: normalized.contactEmail,
+          phone: matchPhone,
+          email: matchEmail,
           isPrimary: true,
           notes: `Created from website widget request ${submission.referenceNumber}`,
         });

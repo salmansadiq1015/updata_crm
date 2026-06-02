@@ -25,7 +25,7 @@ const newsletterDeliverySchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'sent', 'delivered', 'failed', 'opened'],
+      enum: ['pending', 'sent', 'delivered', 'failed', 'opened', 'bounced'],
       default: 'pending',
       index: true,
     },

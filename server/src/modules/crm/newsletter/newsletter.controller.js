@@ -82,6 +82,32 @@ class NewsletterController {
       return res.success({ data: { count } });
     } catch (err) { next(err); }
   }
+
+  /**
+   * Public (unauthenticated) unsubscribe endpoint — nDSG (CRM-013 AC-10).
+   * Verifies the HMAC token, sets newsletterOptIn=false, and returns a
+   * simple HTML confirmation page. Invalid tokens yield a 400 error.
+   */
+  async unsubscribe(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      await newsletterService.unsubscribe(query.customerId, query.token);
+      return res
+        .status(200)
+        .type('html')
+        .send(
+          '<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
+          + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+          + '<title>Abgemeldet / Unsubscribed</title></head>'
+          + '<body style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:60px auto;text-align:center;color:#333">'
+          + '<h2>Sie wurden abgemeldet.</h2>'
+          + '<p>Sie erhalten keine weiteren Newsletter von uns.</p>'
+          + '<hr style="border:none;border-top:1px solid #eee;margin:24px 0">'
+          + '<p style="color:#888">You have been unsubscribed and will no longer receive our newsletter.</p>'
+          + '</body></html>',
+        );
+    } catch (err) { next(err); }
+  }
 }
 
 const newsletterController = new NewsletterController();

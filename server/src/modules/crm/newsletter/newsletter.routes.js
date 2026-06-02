@@ -9,11 +9,21 @@ import {
   newsletterIdParamSchema,
   scheduleNewsletterSchema,
   countRecipientsSchema,
+  unsubscribeSchema,
 } from './newsletter.validation.js';
 
 const router = Router();
 
-// All routes require authentication and crm:admin permission
+// Public unsubscribe endpoint (CRM-013 AC-10, nDSG) — MUST stay above the
+// authenticate guard below so it is reachable without a session/token.
+// GET /api/v1/crm/newsletters/unsubscribe?customerId=<id>&token=<hmac>
+router.get(
+  '/unsubscribe',
+  validate(unsubscribeSchema),
+  (req, res, next) => newsletterController.unsubscribe(req, res, next),
+);
+
+// All routes below require authentication and crm:admin permission
 router.use(authenticate, requirePermission('crm:admin'));
 
 // Recipient count preview (before /:id routes)

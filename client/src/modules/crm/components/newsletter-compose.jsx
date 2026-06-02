@@ -13,17 +13,40 @@ import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { CH_CANTONS, CUSTOMER_TYPES } from '@/modules/crm/constants/customer-constants';
 import { cn } from '@/lib/utils';
 import {
-  Loader2, Send, Clock, Save, Users, ShieldCheck,
+  Loader2, Send, Clock, Save, Users, ShieldCheck, Filter, Info,
 } from 'lucide-react';
+
+const ALL_VALUE = '__all__';
+
+/**
+ * Build the structured recipientFilter sent to the server.
+ * Only includes keys that are actually set — the server always forces
+ * opt-in + active + valid email regardless of what we send here, so we
+ * never need to pass an opt-in flag.
+ */
+function buildRecipientFilter({ type, canton, city }) {
+  const filter = {};
+  if (type && type !== ALL_VALUE) filter.type = type;
+  if (canton && canton !== ALL_VALUE) filter.canton = canton;
+  const trimmedCity = (city || '').trim();
+  if (trimmedCity) filter.city = trimmedCity;
+  return filter;
+}
 
 const BLANK_VALUES = {
   subject: '',
   bodyHtml: '',
   bodyText: '',
   channels: ['email'],
-  recipientFilter: {},
+  filterType: ALL_VALUE,
+  filterCanton: ALL_VALUE,
+  filterCity: '',
   scheduledAt: '',
 };
 
@@ -53,13 +76,22 @@ export function NewsletterCompose({
     defaultValues: BLANK_VALUES,
   });
 
-  const recipientFilter = watch('recipientFilter');
+  const filterType = watch('filterType');
+  const filterCanton = watch('filterCanton');
+  const filterCity = watch('filterCity');
   const scheduledAt = watch('scheduledAt');
 
-  // Load recipient count preview
+  // Structured recipient filter built from the controls — only set keys.
+  const recipientFilter = buildRecipientFilter({
+    type: filterType,
+    canton: filterCanton,
+    city: filterCity,
+  });
+
+  // Load recipient count preview (driven by the structured filter above)
   const { data: recipientData, isFetching: countingRecipients } = useQuery({
     queryKey: queryKeys.crm.newsletters.recipientCount(recipientFilter),
-    queryFn: () => newsletterService.countRecipients(recipientFilter || {}),
+    queryFn: () => newsletterService.countRecipients(recipientFilter),
     enabled: open,
     staleTime: 30_000,
   });
@@ -70,12 +102,15 @@ export function NewsletterCompose({
   useEffect(() => {
     if (open) {
       if (newsletter) {
+        const rf = newsletter.recipientFilter || {};
         reset({
           subject: newsletter.subject || '',
           bodyHtml: newsletter.bodyHtml || '',
           bodyText: newsletter.bodyText || '',
           channels: newsletter.channels || ['email'],
-          recipientFilter: newsletter.recipientFilter || {},
+          filterType: rf.type || ALL_VALUE,
+          filterCanton: rf.canton || ALL_VALUE,
+          filterCity: rf.city || '',
           scheduledAt: newsletter.scheduledAt
             ? new Date(newsletter.scheduledAt).toISOString().slice(0, 16)
             : '',
@@ -86,14 +121,20 @@ export function NewsletterCompose({
     }
   }, [open, newsletter, reset]);
 
+  const buildPayload = (data) => ({
+    subject: data.subject,
+    bodyHtml: data.bodyHtml,
+    bodyText: data.bodyText,
+    channels: data.channels,
+    recipientFilter: buildRecipientFilter({
+      type: data.filterType,
+      canton: data.filterCanton,
+      city: data.filterCity,
+    }),
+  });
+
   const onSaveDraft = handleSubmit((data) => {
-    const payload = {
-      subject: data.subject,
-      bodyHtml: data.bodyHtml,
-      bodyText: data.bodyText,
-      channels: data.channels,
-      recipientFilter: data.recipientFilter,
-    };
+    const payload = buildPayload(data);
 
     if (isEdit) {
       onUpdate(newsletter._id, payload);
@@ -105,15 +146,10 @@ export function NewsletterCompose({
   const onScheduleSubmit = handleSubmit((data) => {
     if (!data.scheduledAt) return;
 
+    const payload = buildPayload(data);
+
     if (isEdit) {
       // Save first, then schedule
-      const payload = {
-        subject: data.subject,
-        bodyHtml: data.bodyHtml,
-        bodyText: data.bodyText,
-        channels: data.channels,
-        recipientFilter: data.recipientFilter,
-      };
       onUpdate(newsletter._id, payload);
       // Schedule after a short delay to ensure the update completes
       setTimeout(() => {
@@ -121,13 +157,6 @@ export function NewsletterCompose({
       }, 500);
     } else {
       // Create draft first, then schedule via parent callback
-      const payload = {
-        subject: data.subject,
-        bodyHtml: data.bodyHtml,
-        bodyText: data.bodyText,
-        channels: data.channels,
-        recipientFilter: data.recipientFilter,
-      };
       onCreate(payload);
     }
   });
@@ -207,6 +236,106 @@ export function NewsletterCompose({
             {errors.bodyHtml && (
               <p className="text-xs text-destructive">{errors.bodyHtml.message}</p>
             )}
+          </div>
+
+          <Separator />
+
+          {/* Recipient filters */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-1.5">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+              <Label className="mb-0">{t('crm.recipients', 'Recipients')}</Label>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Customer type */}
+              <div className="space-y-1.5">
+                <Label htmlFor="filterType" className="text-xs text-muted-foreground font-normal">
+                  {t('crm.type', 'Type')}
+                </Label>
+                <Controller
+                  name="filterType"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={isReadOnly}
+                    >
+                      <SelectTrigger id="filterType" size="sm">
+                        <SelectValue placeholder={t('crm.allTypes', 'All types')} />
+                      </SelectTrigger>
+                      <SelectContent position="popper" sideOffset={4}>
+                        <SelectItem value={ALL_VALUE}>{t('crm.allTypes', 'All types')}</SelectItem>
+                        <SelectItem value={CUSTOMER_TYPES.PRIVATE}>
+                          {t('crm.typePrivate', 'Private')}
+                        </SelectItem>
+                        <SelectItem value={CUSTOMER_TYPES.BUSINESS}>
+                          {t('crm.typeBusiness', 'Business')}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+
+              {/* Canton */}
+              <div className="space-y-1.5">
+                <Label htmlFor="filterCanton" className="text-xs text-muted-foreground font-normal">
+                  {t('crm.canton', 'Canton')}
+                </Label>
+                <Controller
+                  name="filterCanton"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={isReadOnly}
+                    >
+                      <SelectTrigger id="filterCanton" size="sm">
+                        <SelectValue placeholder={t('crm.allCantons', 'All cantons')} />
+                      </SelectTrigger>
+                      <SelectContent position="popper" sideOffset={4} className="max-h-72">
+                        <SelectItem value={ALL_VALUE}>{t('crm.allCantons', 'All cantons')}</SelectItem>
+                        {CH_CANTONS.map((c) => (
+                          <SelectItem key={c.code} value={c.code}>
+                            <span className="flex items-center gap-2">
+                              <span className="font-mono text-[11px] text-muted-foreground">{c.code}</span>
+                              {c.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+
+              {/* City */}
+              <div className="space-y-1.5">
+                <Label htmlFor="filterCity" className="text-xs text-muted-foreground font-normal">
+                  {t('crm.city', 'City')}
+                </Label>
+                <Input
+                  id="filterCity"
+                  {...register('filterCity')}
+                  placeholder={t('crm.cityPlaceholder', 'e.g. Zürich')}
+                  disabled={isReadOnly}
+                  className="h-8 text-[13px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>
+                {t(
+                  'crm.recipientFilterOptInNote',
+                  'Opted-out customers are always excluded, regardless of these filters.',
+                )}
+              </span>
+            </div>
           </div>
 
           <Separator />

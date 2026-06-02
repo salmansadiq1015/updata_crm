@@ -1,13 +1,28 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../../shared/validation/commonSchemas.js';
 
+/**
+ * Structured recipient filter (CRM-013 AC-2).
+ *
+ * Only fields backed by the Customer model are accepted; unknown keys are
+ * stripped by the validate() middleware to prevent NoSQL-injection via the
+ * recipient query. Note: "installation type" filtering is NOT supported —
+ * the Customer model has no installation-type field.
+ */
+const recipientFilterSchema = Joi.object({
+  type: Joi.string().valid('private', 'business'),
+  canton: Joi.string().trim().max(2),
+  city: Joi.string().trim().max(100),
+  optInOnly: Joi.boolean().default(true),
+});
+
 export const createNewsletterSchema = {
   body: Joi.object({
     subject: Joi.string().required().trim().max(255),
     bodyHtml: Joi.string().required(),
     bodyText: Joi.string().allow('', null),
     channels: Joi.array().items(Joi.string().valid('email')).default(['email']),
-    recipientFilter: Joi.object().default({}),
+    recipientFilter: recipientFilterSchema.default({ optInOnly: true }),
   }),
 };
 
@@ -18,7 +33,7 @@ export const updateNewsletterSchema = {
     bodyHtml: Joi.string(),
     bodyText: Joi.string().allow('', null),
     channels: Joi.array().items(Joi.string().valid('email')),
-    recipientFilter: Joi.object(),
+    recipientFilter: recipientFilterSchema,
   }).min(1),
 };
 
@@ -42,6 +57,14 @@ export const scheduleNewsletterSchema = {
 
 export const countRecipientsSchema = {
   body: Joi.object({
-    recipientFilter: Joi.object().default({}),
+    recipientFilter: recipientFilterSchema.default({ optInOnly: true }),
+  }),
+};
+
+// Public unsubscribe endpoint (CRM-013 AC-10, nDSG) — unauthenticated.
+export const unsubscribeSchema = {
+  query: Joi.object({
+    customerId: objectId.required(),
+    token: Joi.string().hex().required(),
   }),
 };

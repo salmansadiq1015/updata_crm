@@ -24,7 +24,8 @@ export class NewsletterDispatchWorker extends BaseWorker {
     const Newsletter = (await import('../modules/crm/newsletter/newsletter.model.js')).default;
     const NewsletterDelivery = (await import('../modules/crm/newsletter/newsletterDelivery.model.js')).default;
     const newsletterRepository = (await import('../modules/crm/newsletter/newsletter.repository.js')).default;
-    const queueManager = (await import('../shared/queue/QueueManager.js')).default;
+    const newsletterService = (await import('../modules/crm/newsletter/newsletter.service.js')).default;
+    const config = (await import('../config/index.js')).default;
 
     const newsletter = await Newsletter.findById(newsletterId);
     if (!newsletter) {
@@ -56,15 +57,25 @@ export class NewsletterDispatchWorker extends BaseWorker {
 
       for (const delivery of deliveries) {
         try {
+          // nDSG (CRM-013 AC-10): every newsletter email MUST carry a working
+          // per-recipient unsubscribe link. Build the absolute URL using the
+          // HMAC token helper so each link unsubscribes the right customer.
+          const token = newsletterService.unsubscribeToken(delivery.customerId);
+          const unsubscribeUrl = `${config.client.uri}/api/v1/crm/newsletters/unsubscribe`
+            + `?customerId=${encodeURIComponent(String(delivery.customerId))}`
+            + `&token=${encodeURIComponent(token)}`;
+          const unsubscribeFooter = `<p style="font-size:12px;color:#888">Abmelden / Unsubscribe: `
+            + `<a href="${unsubscribeUrl}">hier</a></p>`;
+          const bodyHtml = `${newsletter.bodyHtml || ''}${unsubscribeFooter}`;
+
           // Enqueue individual email via the existing email dispatch infrastructure
           const sendMail = (await import('../shared/mail/mail.js')).default;
           await sendMail({
             email: delivery.email,
             subject: newsletter.subject,
-            template: null,
-            data: {},
+            template: 'newsletter.ejs',
+            data: { subject: newsletter.subject, bodyHtml },
             fromName: 'MB Boiler',
-            _rawHtml: newsletter.bodyHtml,
           });
 
           // Mark delivery as sent

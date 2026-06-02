@@ -27,6 +27,27 @@ if (error) {
   process.exit(1);
 }
 
+/**
+ * Parse the optional maintenance templates override.
+ * Returns null when unset/blank so the built-in defaults are used as-is.
+ * Invalid JSON fails fast so misconfiguration is caught on startup.
+ */
+function parseMaintenanceTemplates(raw) {
+  if (!raw || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('MAINTENANCE_TEMPLATES_JSON must be a JSON object keyed by installation type');
+    }
+    return parsed;
+  } catch (err) {
+    console.error(`\n❌ Configuration validation failed:\n  - MAINTENANCE_TEMPLATES_JSON: ${err.message}\n`);
+    process.exit(1);
+  }
+}
+
+const maintenanceTemplates = parseMaintenanceTemplates(envVars.MAINTENANCE_TEMPLATES_JSON);
+
 const config = Object.freeze({
   env: envVars.NODE_ENV,
   isProduction: envVars.NODE_ENV === 'production',
@@ -152,6 +173,9 @@ const config = Object.freeze({
 
   maintenance: {
     lookaheadDays: envVars.MAINTENANCE_LOOKAHEAD_DAYS,
+    escalationDays: envVars.MAINTENANCE_ESCALATION_DAYS,
+    // Per-type template override (null when unset → built-in defaults are used).
+    templates: maintenanceTemplates,
   },
 
   crm: {

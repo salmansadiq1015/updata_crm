@@ -305,6 +305,24 @@ export function registerNotificationsEvents() {
     }
   });
 
+  eventBus.subscribe(EVENT_TYPES.MAINTENANCE_ESCALATED, async (data) => {
+    const payload = data.payload || data;
+    if (payload.assignedTo) {
+      await dispatch(payload, {
+        type: 'maintenance_escalated',
+        category: 'MAINTENANCE',
+        priority: 'CRITICAL',
+        channels: ['IN_APP', 'EMAIL'],
+        recipientIds: Array.isArray(payload.assignedTo) ? payload.assignedTo : [payload.assignedTo],
+        payload: { count: payload.count, daysOverdue: payload.daysOverdue },
+        sourceModule: 'crm',
+        sourceEvent: 'MAINTENANCE_ESCALATED',
+        sourceEntityType: 'MaintenanceInterval',
+        sourceEntityId: payload.maintenanceId,
+      });
+    }
+  });
+
   // --- Website Widget Events ---
   eventBus.subscribe(EVENT_TYPES.WIDGET_SUBMISSION_RECEIVED, async (data) => {
     const payload = data.payload || data;
@@ -407,7 +425,7 @@ export function registerNotificationsEvents() {
       'TASK_ASSIGNED', 'TASK_COMPLETED', 'TASK_OVERDUE', 'TASK_NOTE_ADDED', 'TASK_REMINDER_FIRED',
       'TASK_LIST_MEMBER_ADDED', 'SCHEDULE_ASSIGNMENT_CREATED', 'SCHEDULE_ASSIGNMENT_UPDATED',
       'SCHEDULE_ASSIGNMENT_CANCELLED', 'MOBILE_CHAT_MESSAGE_SENT', 'QUOTATION_EXPIRED',
-      'INVOICE_OVERDUE', 'DOCUMENT_TPL_GENERATED', 'MAINTENANCE_OVERDUE', 'MAINTENANCE_DUE', 'ACCOUNTING_AP_INVOICE_RECORDED',
+      'INVOICE_OVERDUE', 'DOCUMENT_TPL_GENERATED', 'MAINTENANCE_OVERDUE', 'MAINTENANCE_DUE', 'MAINTENANCE_ESCALATED', 'ACCOUNTING_AP_INVOICE_RECORDED',
       'MOBILE_REPORT_SUBMITTED', 'MOBILE_ORDER_STATUS_UPDATED',
     ],
   });

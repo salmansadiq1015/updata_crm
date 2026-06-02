@@ -190,6 +190,36 @@ function StatCard({ label, value, icon: Icon, accent, loading, active, onClick }
   );
 }
 
+/**
+ * Buckets maintenance items by the calendar month of their nextDueDate.
+ * Returns groups sorted chronologically; items without a date fall into a
+ * trailing "no date" bucket. Each header uses a de-CH "MMMM yyyy" label.
+ */
+function groupByMonth(items, t) {
+  const buckets = new Map();
+  const NO_DATE_KEY = 'none';
+
+  for (const m of items) {
+    const date = m.nextDueDate ? new Date(m.nextDueDate) : null;
+    const valid = date && !Number.isNaN(date.getTime());
+    const key = valid ? `${date.getFullYear()}-${String(date.getMonth()).padStart(2, '0')}` : NO_DATE_KEY;
+
+    if (!buckets.has(key)) {
+      buckets.set(key, {
+        key,
+        sortValue: valid ? date.getFullYear() * 12 + date.getMonth() : Number.POSITIVE_INFINITY,
+        label: valid
+          ? date.toLocaleDateString('de-CH', { month: 'long', year: 'numeric' })
+          : t('crm.maintenance.noDueDate', 'Kein Fälligkeitsdatum'),
+        items: [],
+      });
+    }
+    buckets.get(key).items.push(m);
+  }
+
+  return Array.from(buckets.values()).sort((a, b) => a.sortValue - b.sortValue);
+}
+
 function MaintenanceList({ items, loading, emptyMessage, allGoodMessage, t }) {
   if (loading) {
     return (
@@ -217,9 +247,27 @@ function MaintenanceList({ items, loading, emptyMessage, allGoodMessage, t }) {
       </div>
     );
   }
+
+  const groups = groupByMonth(items, t);
+
   return (
-    <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-2">
-      {items.map((m) => <MaintenanceDashboardRow key={m._id} item={m} t={t} />)}
+    <div className="space-y-5">
+      {groups.map((group) => (
+        <div key={group.key}>
+          <div className="flex items-center gap-3 mb-2 px-1">
+            <h3 className="text-[11px] font-semibold text-white/40 uppercase tracking-wider capitalize">
+              {group.label}
+            </h3>
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white/8 px-1.5 text-[10px] font-medium text-white/50">
+              {group.items.length}
+            </span>
+            <div className="h-px flex-1 bg-white/6" />
+          </div>
+          <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-2">
+            {group.items.map((m) => <MaintenanceDashboardRow key={m._id} item={m} t={t} />)}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -5,6 +5,7 @@ export const createMaintenanceSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     maintenanceType: Joi.string().valid('annual_service', 'filter_change', 'chimney_sweep', 'general_inspection', 'other').required(),
+    // CRM-007 AC-1: free-text label accepted for ANY type (not gated on type==='other').
     customTypeLabel: Joi.string().trim().max(100).allow('', null),
     frequencyMonths: Joi.number().integer().min(1).max(120).required(),
     lastServiceDate: Joi.date().iso().allow(null),
@@ -16,6 +17,7 @@ export const updateMaintenanceSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     maintenanceType: Joi.string().valid('annual_service', 'filter_change', 'chimney_sweep', 'general_inspection', 'other'),
+    // CRM-007 AC-1: free-text label accepted for ANY type (not gated on type==='other').
     customTypeLabel: Joi.string().trim().max(100).allow('', null),
     frequencyMonths: Joi.number().integer().min(1).max(120),
     lastServiceDate: Joi.date().iso().allow(null),

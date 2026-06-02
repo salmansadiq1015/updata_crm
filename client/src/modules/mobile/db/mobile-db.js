@@ -141,6 +141,22 @@ export async function markSyncItemFailed(id, errorMessage, retryCount) {
   });
 }
 
+export async function markSyncItemConflict(id, errorMessage) {
+  await db.syncQueue.update(id, {
+    status: 'CONFLICT',
+    error_message: errorMessage,
+    last_attempted_at: new Date().toISOString(),
+  });
+}
+
+export async function getConflictSyncItems() {
+  return db.syncQueue.where('status').equals('CONFLICT').toArray();
+}
+
+export async function getConflictSyncCount() {
+  return db.syncQueue.where('status').equals('CONFLICT').count();
+}
+
 export async function clearCompletedSyncItems(olderThanDays = 7) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - olderThanDays);

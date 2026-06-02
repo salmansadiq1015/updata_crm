@@ -100,6 +100,12 @@ class MaintenanceIntervalService {
       data.maintenanceStatus = MaintenanceIntervalService._determineStatus(data.nextDueDate);
     }
 
+    // Clear escalation whenever the interval leaves the overdue state (e.g. serviced
+    // or rescheduled) so a future lapse can escalate again (CRM-008 AC-7 idempotency).
+    if (data.maintenanceStatus !== undefined && data.maintenanceStatus !== 'overdue') {
+      data.escalated = false;
+    }
+
     const updated = await maintenanceIntervalRepository.updateById(id, data);
     await this._invalidateInstallationMaintenanceCache(existing.installationId);
     await this._invalidateDashboardCache();

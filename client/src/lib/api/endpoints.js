@@ -86,6 +86,7 @@ export const ENDPOINTS = Object.freeze({
     SPARE_PART_ORDER_REQUESTS: '/crm/spare-parts/order-requests',
     SPARE_PARTS_EXPORT: '/crm/spare-parts/export',
     INSTALLATION_SPARE_PARTS: (installationId) => `/crm/installations/${installationId}/spare-parts`,
+    INSTALLATION_SPARE_PART_ORDER_FLAG: (installationId, sparePartId) => `/crm/installations/${installationId}/spare-parts/${sparePartId}/order-flag`,
     INSTALLATION_SPARE_PART_ORDER_STATUS: (installationId, sparePartId) => `/crm/installations/${installationId}/spare-parts/${sparePartId}/order-status`,
     INSTALLATION_SPARE_PART_UNLINK: (installationId, sparePartId) => `/crm/installations/${installationId}/spare-parts/${sparePartId}`,
     // Notes (polymorphic — site or installation)
@@ -127,6 +128,7 @@ export const ENDPOINTS = Object.freeze({
     PROJECTS: '/pm/projects',
     PROJECT_BY_ID: (id) => `/pm/projects/${id}`,
     PROJECT_DUPLICATE: (id) => `/pm/projects/${id}/duplicate`,
+    PROJECT_ACTIVITY: (id) => `/pm/projects/${id}/activity`,
     PROJECT_ARCHIVE: (id) => `/pm/projects/${id}/archive`,
     PROJECT_RESTORE: (id) => `/pm/projects/${id}/restore`,
     PROJECT_FROM_TEMPLATE: '/pm/projects/from-template',
@@ -152,6 +154,7 @@ export const ENDPOINTS = Object.freeze({
     CONFIRMATION_BY_ID: (id, entryId, confId) => `/pm/projects/${id}/schedule/entries/${entryId}/confirmations/${confId}`,
     SCHEDULE_EXPORT: (id) => `/pm/projects/${id}/schedule/export`,
     DOCUMENTS: (id) => `/pm/projects/${id}/documents`,
+    DOCUMENTS_PREVIEW: (id) => `/pm/projects/${id}/documents/preview`,
     DOCUMENT_BY_ID: (id, docId) => `/pm/projects/${id}/documents/${docId}`,
     DOCUMENT_DOWNLOAD: (id, docId) => `/pm/projects/${id}/documents/${docId}/download`,
     DOCUMENT_RESTORE: (id, docId) => `/pm/projects/${id}/documents/${docId}/restore`,

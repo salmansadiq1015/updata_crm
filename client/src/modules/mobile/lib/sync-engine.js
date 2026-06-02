@@ -3,14 +3,16 @@ import {
   getPendingSyncItems,
   markSyncItemCompleted,
   markSyncItemFailed,
+  markSyncItemConflict,
   clearCompletedSyncItems,
   getPendingSyncCount,
   getFailedSyncCount,
+  getConflictSyncCount,
   getSyncMeta,
   setSyncMeta,
   upsertCrmAddressBook,
 } from '../db/mobile-db';
-import { SYNC_CONFIG, SYNC_QUEUE_STATUS, SYNC_STATUS } from '../constants/mobile-constants';
+import { SYNC_CONFIG, SYNC_ENTITY_TYPE, SYNC_QUEUE_STATUS, SYNC_STATUS } from '../constants/mobile-constants';
 import { useSyncStore } from '../stores/sync-store';
 import { isActuallyOnline } from './connectivity';
 import { normalizeInstallation } from '../services/installation-service';
@@ -71,7 +73,23 @@ async function processOutboundQueue() {
       await processItem(item);
       await markSyncItemCompleted(item.id);
     } catch (err) {
-      await markSyncItemFailed(item.id, err.message, item.retry_count + 1);
+      // A 409 on a queued installation update is an edit conflict: the server
+      // record changed since this offline edit was made. Retrying with the same
+      // stale baseUpdatedAt can never succeed, so mark it as a conflict (which
+      // stops it being re-queued) and flag the local record for resolution
+      // instead of silently exhausting retries.
+      if (
+        err?.statusCode === 409
+        && item.entity_type === SYNC_ENTITY_TYPE.INSTALLATION_CAPTURE
+        && item.operation === 'UPDATE'
+      ) {
+        await markSyncItemConflict(item.id, err.message);
+        await db.crmInstallations.update(item.entity_id, {
+          sync_status: SYNC_STATUS.CONFLICT,
+        });
+      } else {
+        await markSyncItemFailed(item.id, err.message, item.retry_count + 1);
+      }
     }
   }
 }
@@ -414,7 +432,8 @@ function getRetryDelay(retryCount) {
 async function updateCounts() {
   const pending = await getPendingSyncCount();
   const failed = await getFailedSyncCount();
-  useSyncStore.getState().setCounts(pending, failed);
+  const conflicts = await getConflictSyncCount();
+  useSyncStore.getState().setCounts(pending, failed, conflicts);
 }
 
 export function startSyncPolling() {

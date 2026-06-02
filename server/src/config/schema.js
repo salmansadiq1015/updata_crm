@@ -102,6 +102,10 @@ const configSchema = Joi.object({
 
   // Maintenance
   MAINTENANCE_LOOKAHEAD_DAYS: Joi.number().integer().min(1).default(30),
+  MAINTENANCE_ESCALATION_DAYS: Joi.number().integer().min(1).default(30),
+  // Optional JSON override of default maintenance templates, keyed by installation type.
+  // e.g. {"boiler":[{"maintenanceType":"annual_service","frequencyMonths":12}]}
+  MAINTENANCE_TEMPLATES_JSON: Joi.string().allow('').default(''),
 
   // CRM images (CRM-010)
   CRM_MAX_IMAGES_PER_ENTITY: Joi.number().integer().min(1).default(50),

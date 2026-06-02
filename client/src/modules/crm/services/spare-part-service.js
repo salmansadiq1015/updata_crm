@@ -46,6 +46,13 @@ export const sparePartService = {
     const res = await apiClient.post(ENDPOINTS.CRM.INSTALLATION_SPARE_PARTS(installationId), data);
     return res.data;
   },
+  async flagForOrdering(installationId, sparePartId, data) {
+    const res = await apiClient.post(
+      ENDPOINTS.CRM.INSTALLATION_SPARE_PART_ORDER_FLAG(installationId, sparePartId),
+      data,
+    );
+    return res.data;
+  },
   async updateOrderStatus(installationId, sparePartId, data) {
     const res = await apiClient.patch(
       ENDPOINTS.CRM.INSTALLATION_SPARE_PART_ORDER_STATUS(installationId, sparePartId),

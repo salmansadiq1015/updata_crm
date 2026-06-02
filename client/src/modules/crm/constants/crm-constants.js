@@ -63,4 +63,30 @@ export const IMAGE_CATEGORY_META = Object.freeze({
   general:      { label: 'Allgemein',   icon: ImageIcon,                color: 'text-slate-500', bg: 'bg-slate-500/10' },
 });
 
+export const SPARE_PART_CATEGORY_META = Object.freeze({
+  filter:        { label: 'Filter',          color: 'text-sky-500',    bg: 'bg-sky-500/10' },
+  gasket:        { label: 'Dichtung',        color: 'text-amber-500',  bg: 'bg-amber-500/10' },
+  pump_part:     { label: 'Pumpenteil',      color: 'text-blue-500',   bg: 'bg-blue-500/10' },
+  valve:         { label: 'Ventil',          color: 'text-teal-500',   bg: 'bg-teal-500/10' },
+  sensor:        { label: 'Sensor',          color: 'text-violet-500', bg: 'bg-violet-500/10' },
+  igniter:       { label: 'Zündung',         color: 'text-orange-500', bg: 'bg-orange-500/10' },
+  burner_part:   { label: 'Brennerteil',     color: 'text-rose-500',   bg: 'bg-rose-500/10' },
+  control_board: { label: 'Steuerplatine',   color: 'text-emerald-500',bg: 'bg-emerald-500/10' },
+  other:         { label: 'Sonstige',        color: 'text-slate-500',  bg: 'bg-slate-500/10' },
+});
+
+export const SPARE_PART_ORDER_STATUS_META = Object.freeze({
+  requested: { label: 'Angefragt',  color: 'text-amber-600',   bg: 'bg-amber-500/10',   dot: 'bg-amber-500' },
+  ordered:   { label: 'Bestellt',   color: 'text-sky-600',     bg: 'bg-sky-500/10',     dot: 'bg-sky-500' },
+  received:  { label: 'Erhalten',   color: 'text-emerald-600', bg: 'bg-emerald-500/10', dot: 'bg-emerald-500' },
+  cancelled: { label: 'Storniert',  color: 'text-slate-500',   bg: 'bg-slate-500/10',   dot: 'bg-slate-500' },
+});
+
+export const SPARE_PART_ORDER_URGENCY_META = Object.freeze({
+  low:    { label: 'Niedrig',  color: 'text-slate-500',  bg: 'bg-slate-500/10' },
+  normal: { label: 'Normal',   color: 'text-sky-500',    bg: 'bg-sky-500/10' },
+  high:   { label: 'Hoch',     color: 'text-amber-500',  bg: 'bg-amber-500/10' },
+  urgent: { label: 'Dringend', color: 'text-red-500',    bg: 'bg-red-500/10' },
+});
+
 export const PIN_ICON = Pin;

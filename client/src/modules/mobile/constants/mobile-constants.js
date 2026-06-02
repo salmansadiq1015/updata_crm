@@ -81,6 +81,7 @@ export const SYNC_STATUS = Object.freeze({
   SYNCED: 'SYNCED',
   PENDING_SYNC: 'PENDING_SYNC',
   SYNC_FAILED: 'SYNC_FAILED',
+  CONFLICT: 'CONFLICT',
 });
 
 export const SYNC_ENTITY_TYPE = Object.freeze({
@@ -108,6 +109,7 @@ export const SYNC_QUEUE_STATUS = Object.freeze({
   IN_PROGRESS: 'IN_PROGRESS',
   COMPLETED: 'COMPLETED',
   FAILED: 'FAILED',
+  CONFLICT: 'CONFLICT',
 });
 
 // Queue processing priority (lower = higher priority)

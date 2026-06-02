@@ -7,18 +7,11 @@ import auditService from '../auth/audit.service.js';
 import { buildEntityTimeline, exportCsv, exportPdf } from './activityTimeline.service.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
+import { getTemplatesForType } from './maintenanceTemplates.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 const EXPORT_MAX_ENTRIES = 1000;
-const DEFAULT_MAINTENANCE_TEMPLATES = {
-  boiler: [{ maintenanceType: 'annual_service', frequencyMonths: 12 }],
-  heat_pump: [{ maintenanceType: 'annual_service', frequencyMonths: 12 }],
-  solar_thermal: [{ maintenanceType: 'general_inspection', frequencyMonths: 12 }],
-  radiator_system: [{ maintenanceType: 'general_inspection', frequencyMonths: 24 }],
-  ventilation: [{ maintenanceType: 'filter_change', frequencyMonths: 6 }],
-  hot_water: [{ maintenanceType: 'annual_service', frequencyMonths: 12 }],
-};
 
 function addMonths(date, months) {
   const next = new Date(date);
@@ -78,7 +71,7 @@ class InstallationService {
   }
 
   async _createDefaultMaintenanceIntervals(installation) {
-    const templates = DEFAULT_MAINTENANCE_TEMPLATES[installation.type] || [];
+    const templates = getTemplatesForType(installation.type);
     if (!templates.length) return;
 
     const MaintenanceInterval = (await import('./maintenanceInterval.model.js')).default;
@@ -165,11 +158,12 @@ class InstallationService {
       decommissionReason: reason,
     });
 
-    // Set all maintenance intervals for this installation to 'ok' (lazy import)
+    // Set all maintenance intervals for this installation to 'ok' (lazy import).
+    // Also clear any escalation flag so the unit's intervals start clean.
     const MaintenanceInterval = (await import('./maintenanceInterval.model.js')).default;
     await MaintenanceInterval.updateMany(
       { installationId: id },
-      { $set: { maintenanceStatus: 'ok' } },
+      { $set: { maintenanceStatus: 'ok', escalated: false } },
     );
 
     await this._invalidateInstallationCache(id);

@@ -14,6 +14,7 @@ import { RichTextContent } from '@/components/ui/rich-text-content';
 import { NotesPanel } from './notes-panel';
 import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
+import { InstallationSparePartsPanel } from './installation-spare-parts-panel';
 import { EmptyState } from '@/shared/components/empty-state';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,7 @@ import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import {
   Pencil, PowerOff, ChevronRight, Wrench, FileText, Image as ImageIcon,
-  Calendar, Zap, Hash, ShieldCheck, Thermometer, Loader2, Activity, Flame,
+  Calendar, Zap, Hash, ShieldCheck, Thermometer, Loader2, Activity, Flame, Package,
 } from 'lucide-react';
 import {
   INSTALLATION_TYPE_META, FUEL_TYPE_META,
@@ -202,6 +203,9 @@ export function InstallationDetail() {
           <TabsTrigger value="maintenance" className="gap-1.5">
             <Wrench className="h-3.5 w-3.5" /> {t('crm.installations.tab.maintenance', 'Wartung')}
           </TabsTrigger>
+          <TabsTrigger value="spareParts" className="gap-1.5">
+            <Package className="h-3.5 w-3.5" /> {t('crm.installations.tab.spareParts', 'Ersatzteile')}
+          </TabsTrigger>
           <TabsTrigger value="notes" className="gap-1.5">
             <FileText className="h-3.5 w-3.5" /> {t('crm.installations.tab.notes', 'Notizen')}
           </TabsTrigger>
@@ -215,6 +219,9 @@ export function InstallationDetail() {
 
         <TabsContent value="maintenance">
           <MaintenancePanel installationId={id} />
+        </TabsContent>
+        <TabsContent value="spareParts">
+          <InstallationSparePartsPanel installationId={id} />
         </TabsContent>
         <TabsContent value="notes">
           <NotesPanel entityType="installation" entityId={id} />

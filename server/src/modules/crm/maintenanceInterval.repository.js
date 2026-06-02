@@ -11,6 +11,20 @@ const ALLOWED_FILTERS = {
 };
 
 class MaintenanceIntervalRepository {
+  /**
+   * Resolve the ids of all active (non-decommissioned, non-deleted) installations.
+   * Used to scope "active maintenance" queries so intervals belonging to a
+   * decommissioned installation are never counted (CRM-005 AC-4). Lazy import to
+   * avoid a circular dependency between the CRM repositories.
+   */
+  async _getActiveInstallationIds() {
+    const Installation = (await import('./installation.model.js')).default;
+    const installations = await Installation.find({ status: 'active' })
+      .select('_id')
+      .lean();
+    return installations.map((installation) => installation._id);
+  }
+
   async create(data) {
     const interval = new MaintenanceInterval(data);
     return interval.save();
@@ -38,9 +52,11 @@ class MaintenanceIntervalRepository {
   }
 
   async findDue(limit = 500) {
+    const activeIds = await this._getActiveInstallationIds();
     return MaintenanceInterval.find({
       maintenanceStatus: 'ok',
       nextDueDate: { $lte: new Date() },
+      installationId: { $in: activeIds },
     })
       .populate('installationId', 'installationNumber siteId status')
       .limit(limit)
@@ -48,9 +64,11 @@ class MaintenanceIntervalRepository {
   }
 
   async findOverdue(limit = 500) {
+    const activeIds = await this._getActiveInstallationIds();
     return MaintenanceInterval.find({
       maintenanceStatus: 'due',
       nextDueDate: { $lte: new Date() },
+      installationId: { $in: activeIds },
     })
       .populate('installationId', 'installationNumber siteId status')
       .limit(limit)
@@ -58,7 +76,11 @@ class MaintenanceIntervalRepository {
   }
 
   async findDashboard() {
+    const activeIds = await this._getActiveInstallationIds();
     const pipeline = [
+      {
+        $match: { installationId: { $in: activeIds } },
+      },
       {
         $group: {
           _id: '$maintenanceStatus',

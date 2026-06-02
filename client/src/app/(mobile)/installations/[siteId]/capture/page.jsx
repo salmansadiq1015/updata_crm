@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Camera, Save, ScanBarcode, Upload, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Camera, Loader2, Save, ScanBarcode, Upload, WifiOff, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { MobileHeader } from '@/modules/mobile/components/mobile-header';
 import { BarcodeScanner } from '@/modules/mobile/components/barcode-scanner';
 import { useCamera } from '@/modules/mobile/hooks/use-camera';
 import { useInstallationDetail } from '@/modules/mobile/hooks/use-installation-queries';
+import { installationService } from '@/modules/mobile/services/installation-service';
 import { useInstallationMutations } from '@/modules/mobile/hooks/use-installation-mutations';
 import { useNameplateOcr } from '@/modules/mobile/hooks/use-nameplate-ocr';
 import { useNetworkStatus } from '@/modules/mobile/hooks/use-network-status';
@@ -42,6 +43,8 @@ export default function InstallationCapturePage() {
   const lang = locale === 'en' ? 'en' : 'de';
   const [scannerOpen, setScannerOpen] = useState(false);
   const [nameplateCapture, setNameplateCapture] = useState(null);
+  const [conflict, setConflict] = useState(null);
+  const [isResolvingConflict, setIsResolvingConflict] = useState(false);
   const cameraInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const { processPhoto, isProcessing: isProcessingPhoto } = useCamera();
@@ -119,30 +122,83 @@ export default function InstallationCapturePage() {
     });
   };
 
-  const onSubmit = async (values) => {
+  const submitUpdate = async (values, baseUpdatedAtOverride) => {
     const payload = {
       ...normalizeInstallationCaptureForm(values),
       nameplateCapture,
     };
+    if (isEditing) {
+      await updateInstallation.mutateAsync({
+        id: installationId,
+        data: payload,
+        baseUpdatedAt:
+          baseUpdatedAtOverride
+          ?? installation?.updated_at
+          ?? installation?.last_synced_at
+          ?? null,
+      });
+    } else {
+      await createInstallation.mutateAsync(payload);
+    }
+    toast.success(
+      mutation.isOffline
+        ? lang === 'de' ? 'Anlage offline gespeichert' : 'Installation saved offline'
+        : lang === 'de' ? 'Anlage gespeichert' : 'Installation saved',
+    );
+    router.back();
+  };
+
+  const onSubmit = async (values) => {
     try {
-      if (isEditing) {
-        await updateInstallation.mutateAsync({
-          id: installationId,
-          data: payload,
-          baseUpdatedAt: installation?.updated_at || installation?.last_synced_at || null,
-        });
-      } else {
-        await createInstallation.mutateAsync(payload);
-      }
-      toast.success(
-        mutation.isOffline
-          ? lang === 'de' ? 'Anlage offline gespeichert' : 'Installation saved offline'
-          : lang === 'de' ? 'Anlage gespeichert' : 'Installation saved',
-      );
-      router.back();
+      await submitUpdate(values);
     } catch (error) {
+      // On a 409 conflict (server record changed since this edit started),
+      // fetch the current server version and let the user resolve it instead
+      // of silently failing with a toast.
+      if (isEditing && error?.statusCode === 409) {
+        try {
+          const serverRecord = await installationService.getInstallationById(installationId);
+          setConflict({ values, serverRecord });
+        } catch {
+          toast.error(
+            lang === 'de'
+              ? 'Konflikt erkannt, Serverstand konnte nicht geladen werden.'
+              : 'Conflict detected, could not load server version.',
+          );
+        }
+        return;
+      }
       toast.error(error?.message || (lang === 'de' ? 'Speichern fehlgeschlagen' : 'Save failed'));
     }
+  };
+
+  // "Keep mine": overwrite the server record by re-submitting with the SERVER's
+  // latest updatedAt as the new baseUpdatedAt so the conflict check passes.
+  const handleKeepMine = async () => {
+    if (!conflict || isResolvingConflict) return;
+    setIsResolvingConflict(true);
+    try {
+      const serverUpdatedAt =
+        conflict.serverRecord?.updated_at || conflict.serverRecord?.last_synced_at || null;
+      await submitUpdate(conflict.values, serverUpdatedAt);
+      setConflict(null);
+    } catch (error) {
+      toast.error(error?.message || (lang === 'de' ? 'Speichern fehlgeschlagen' : 'Save failed'));
+    } finally {
+      setIsResolvingConflict(false);
+    }
+  };
+
+  // "Use server version": discard local edits and reload the server record.
+  const handleUseServer = () => {
+    if (!conflict) return;
+    reset(defaultValues(conflict.serverRecord));
+    setNameplateCapture(null);
+    setConflict(null);
+    toast(
+      lang === 'de' ? 'Serverstand übernommen.' : 'Server version loaded.',
+      { icon: 'i' },
+    );
   };
 
   if (isEditing && isLoading) {
@@ -366,6 +422,105 @@ export default function InstallationCapturePage() {
           }}
         />
       )}
+
+      {conflict && (
+        <ConflictSheet
+          lang={lang}
+          serverRecord={conflict.serverRecord}
+          isResolving={isResolvingConflict}
+          onKeepMine={handleKeepMine}
+          onUseServer={handleUseServer}
+          onDismiss={() => setConflict(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConflictSheet({ lang, serverRecord, isResolving, onKeepMine, onUseServer, onDismiss }) {
+  const serverUpdatedAt = serverRecord?.updated_at || serverRecord?.last_synced_at;
+  const rows = [
+    { label: lang === 'de' ? 'Hersteller' : 'Manufacturer', value: serverRecord?.manufacturer },
+    { label: lang === 'de' ? 'Modell' : 'Model', value: serverRecord?.model },
+    { label: lang === 'de' ? 'Seriennr.' : 'Serial No.', value: serverRecord?.serial_number },
+  ].filter((row) => row.value);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/40">
+      <button
+        type="button"
+        className="flex-1"
+        aria-label={lang === 'de' ? 'Schliessen' : 'Close'}
+        onClick={isResolving ? undefined : onDismiss}
+      />
+      <div className="rounded-t-2xl border-t border-border bg-card px-4 pb-6 pt-4 shadow-xl">
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-muted" />
+
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold">
+              {lang === 'de' ? 'Bearbeitungskonflikt' : 'Edit conflict'}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {lang === 'de'
+                ? 'Diese Anlage wurde zwischenzeitlich an anderer Stelle geändert. Wie möchten Sie fortfahren?'
+                : 'This installation was changed elsewhere in the meantime. How would you like to proceed?'}
+            </p>
+          </div>
+        </div>
+
+        {rows.length > 0 && (
+          <div className="mt-3 rounded-xl border border-border bg-muted/30 p-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {lang === 'de' ? 'Aktueller Serverstand' : 'Current server version'}
+            </p>
+            <dl className="space-y-1">
+              {rows.map((row) => (
+                <div key={row.label} className="flex justify-between gap-3 text-xs">
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="truncate font-medium text-right">{row.value}</dd>
+                </div>
+              ))}
+              {serverUpdatedAt && (
+                <div className="flex justify-between gap-3 text-xs">
+                  <dt className="text-muted-foreground">
+                    {lang === 'de' ? 'Geändert' : 'Updated'}
+                  </dt>
+                  <dd className="font-medium text-right">
+                    {new Date(serverUpdatedAt).toLocaleString(lang === 'de' ? 'de-CH' : 'en-GB')}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        )}
+
+        <div className="mt-4 space-y-2">
+          <Button
+            type="button"
+            className="h-12 w-full"
+            disabled={isResolving}
+            onClick={onKeepMine}
+          >
+            {isResolving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            {lang === 'de' ? 'Meine Version behalten' : 'Keep mine'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 w-full"
+            disabled={isResolving}
+            onClick={onUseServer}
+          >
+            {lang === 'de' ? 'Serverstand übernehmen' : 'Use server version'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

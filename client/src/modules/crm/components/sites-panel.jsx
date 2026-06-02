@@ -8,6 +8,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { SiteForm } from './site-form';
+import { SitesMap } from './sites-map';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
 import { PermissionGate } from '@/shared/components/permission-gate';
@@ -19,7 +20,7 @@ import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import {
   Plus, Pencil, Archive, Building2, MapPin, ClipboardList,
-  ArrowRight, Key,
+  ArrowRight, Key, List, Map,
 } from 'lucide-react';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 
@@ -33,6 +34,7 @@ export function SitesPanel({ customerId }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editSite, setEditSite] = useState(null);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [view, setView] = useState('list');
 
   const { data: sites = [], isLoading } = useQuery({
     queryKey: queryKeys.crm.sites.byCustomer(customerId),
@@ -75,11 +77,45 @@ export function SitesPanel({ customerId }) {
             <h3 className="text-sm font-semibold">{t('crm.sites.titlePlural', 'Objekte & Standorte')}</h3>
             <span className="text-xs text-muted-foreground">({sites.length})</span>
           </div>
-          <PermissionGate permission="crm:write">
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => { setEditSite(null); setFormOpen(true); }}>
-              <Plus className="h-3.5 w-3.5" /> {t('crm.sites.newSite', 'Neues Objekt')}
-            </Button>
-          </PermissionGate>
+          <div className="flex items-center gap-2">
+            {sites.length > 0 && (
+              <div className="inline-flex items-center rounded-lg border border-border bg-muted/30 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setView('list')}
+                  aria-pressed={view === 'list'}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                    view === 'list'
+                      ? 'bg-background text-foreground shadow-theme-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  {t('crm.sites.viewList', 'Liste')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView('map')}
+                  aria-pressed={view === 'map'}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                    view === 'map'
+                      ? 'bg-background text-foreground shadow-theme-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <Map className="h-3.5 w-3.5" />
+                  {t('crm.sites.viewMap', 'Karte')}
+                </button>
+              </div>
+            )}
+            <PermissionGate permission="crm:write">
+              <Button size="sm" className="h-8 gap-1.5" onClick={() => { setEditSite(null); setFormOpen(true); }}>
+                <Plus className="h-3.5 w-3.5" /> {t('crm.sites.newSite', 'Neues Objekt')}
+              </Button>
+            </PermissionGate>
+          </div>
         </div>
 
         {sites.length === 0 ? (
@@ -87,6 +123,8 @@ export function SitesPanel({ customerId }) {
             title={t('crm.sites.empty', 'Keine Objekte')}
             description={t('crm.sites.emptyDesc', 'Fügen Sie Gebäude oder Standorte für diesen Kunden hinzu.')}
           />
+        ) : view === 'map' ? (
+          <SitesMap sites={sites} />
         ) : (
           <div className="space-y-2">
             {sites.map((s) => (

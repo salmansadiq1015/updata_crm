@@ -65,6 +65,7 @@ const EVENT_TYPES = Object.freeze({
   MAINTENANCE_INTERVAL_UPDATED: 'maintenance.interval.updated',
   MAINTENANCE_DUE: 'maintenance.due',
   MAINTENANCE_OVERDUE: 'maintenance.overdue',
+  MAINTENANCE_ESCALATED: 'maintenance.escalated',
 
   // CRM — Spare Parts
   SPARE_PART_CREATED: 'spare_part.created',
@@ -92,6 +93,7 @@ const EVENT_TYPES = Object.freeze({
   PROJECT_DELETED: 'project.deleted',
   PROJECT_DUPLICATED: 'project.duplicated',
   PROJECT_ARCHIVED: 'project.archived',
+  PROJECT_RESTORED: 'project.restored',
   PROJECT_STATUS_CHANGED: 'project.status_changed',
   PROJECT_STATUS_OVERRIDDEN: 'project.status_overridden',
 

@@ -3,6 +3,7 @@ import fileService from '../files/file.service.js';
 import FileMetadata from '../files/file.model.js';
 import storageService from '../../shared/storage/StorageService.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
+import logger from '../../shared/logger/index.js';
 
 class AttachmentController {
   async list(req, res, next) {
@@ -14,6 +15,7 @@ class AttachmentController {
       })
         .populate('uploadedBy', 'firstName lastName')
         .sort({ createdAt: -1 })
+        .limit(200)
         .select('-__v')
         .lean();
       return res.success({ data: files });
@@ -57,7 +59,8 @@ class AttachmentController {
       }
       file.originalName = req.body.originalName;
       await file.save();
-      return res.success({ data: file.toObject(), message: 'File renamed' });
+      const { __v, ...fileData } = file.toObject();
+      return res.success({ data: fileData, message: 'File renamed' });
     } catch (err) { next(err); }
   }
 
@@ -79,15 +82,33 @@ class AttachmentController {
       const { id: customerId } = req.params;
       const { fileIds } = req.body;
       let deleted = 0;
+      const errors = [];
+
       await Promise.all(
         fileIds.map(async (fileId) => {
           const file = await FileMetadata.findById(fileId);
-          if (!file || file.entityId?.toString() !== customerId) return;
-          await fileService.delete(fileId);
-          deleted++;
+          if (!file || file.entityId?.toString() !== customerId) {
+            logger.warn('bulkRemove: file not found or ownership mismatch', {
+              module: 'crm',
+              action: 'bulkRemove',
+              fileId,
+              requestedBy: req.user?._id,
+            });
+            return;
+          }
+          try {
+            await fileService.delete(fileId);
+            deleted++;
+          } catch (err) {
+            errors.push({ fileId, error: err.message });
+          }
         }),
       );
-      return res.success({ data: { deleted }, message: `${deleted} file(s) deleted` });
+
+      return res.success({
+        data: { deleted, ...(errors.length ? { errors } : {}) },
+        message: `${deleted} file(s) deleted`,
+      });
     } catch (err) { next(err); }
   }
 }

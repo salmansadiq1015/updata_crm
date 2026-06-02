@@ -1,8 +1,6 @@
 // server/src/modules/crm/attachment.validation.js
 import Joi from 'joi';
-import { objectId } from '../../shared/validation/commonSchemas.js';
-
-const customerIdParam = Joi.object({ id: objectId.required() });
+import { objectId, idParam, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
 const attachmentIdParams = Joi.object({
   id: objectId.required(),
@@ -10,11 +8,13 @@ const attachmentIdParams = Joi.object({
 });
 
 export const listAttachmentsSchema = {
-  params: customerIdParam,
+  params: idParam,
+  query: cursorPagination,
 };
 
+// No body schema — file arrives as multipart/form-data binary (validated by multer, not Joi)
 export const uploadAttachmentSchema = {
-  params: customerIdParam,
+  params: idParam,
 };
 
 export const renameAttachmentSchema = {
@@ -29,7 +29,7 @@ export const deleteAttachmentSchema = {
 };
 
 export const bulkDeleteAttachmentSchema = {
-  params: customerIdParam,
+  params: idParam,
   body: Joi.object({
     fileIds: Joi.array().items(objectId.required()).min(1).max(50).required(),
   }),

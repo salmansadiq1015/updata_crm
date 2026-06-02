@@ -92,9 +92,10 @@ export const ENDPOINTS = Object.freeze({
     SITE_NOTES: (siteId) => `/crm/sites/${siteId}/notes`,
     INSTALLATION_NOTES: (installationId) => `/crm/installations/${installationId}/notes`,
     NOTE_BY_ID: (id) => `/crm/notes/${id}`,
-    // Images (polymorphic — site or installation)
+    // Images (polymorphic — site, installation or customer)
     SITE_IMAGES: (siteId) => `/crm/sites/${siteId}/images`,
     INSTALLATION_IMAGES: (installationId) => `/crm/installations/${installationId}/images`,
+    CUSTOMER_IMAGES: (customerId) => `/crm/customers/${customerId}/images`,
     IMAGE_BY_ID: (id) => `/crm/images/${id}`,
     // Attachments (customer file uploads)
     CUSTOMER_ATTACHMENTS: (customerId) => `/crm/customers/${customerId}/attachments`,

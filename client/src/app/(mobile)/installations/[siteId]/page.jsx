@@ -18,12 +18,15 @@ import {
   PackageSearch,
   Pin,
   Save,
+  Camera,
+  Loader2,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { MobileHeader } from '@/modules/mobile/components/mobile-header';
 import { EmptyState } from '@/modules/mobile/components/empty-state';
 import { useInstallations, useInstallationHistory } from '@/modules/mobile/hooks/use-installation-queries';
 import { useCreateCrmNote, useEntityNotes, useEntityWarningMap } from '@/modules/mobile/hooks/use-crm-notes';
+import { useCaptureCrmImage, useQueuedCrmImages } from '@/modules/mobile/hooks/use-crm-images';
 import { cn } from '@/lib/utils';
 
 const SYSTEM_ICONS = {
@@ -247,6 +250,7 @@ function InstallationCard({ installation, lang, warnings, createNote, expanded, 
             createNote={createNote}
             placeholder={lang === 'de' ? 'Notiz zur Anlage' : 'Installation note'}
           />
+          <ImageCaptureButton lang={lang} entityType="installation" entityId={installation.id} />
 
           {installation.sync_status === 'PENDING_SYNC' ? (
             <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
@@ -406,6 +410,65 @@ function InlineNoteComposer({ lang, entityType, entityId, createNote, placeholde
         </button>
       </div>
     </form>
+  );
+}
+
+function ImageCaptureButton({ lang, entityType, entityId }) {
+  const captureImage = useCaptureCrmImage();
+  const queued = useQueuedCrmImages(entityType, entityId);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [error, setError] = useState('');
+
+  const onSelect = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || isCapturing) return;
+
+    setIsCapturing(true);
+    setError('');
+    try {
+      await captureImage({ entityType, entityId, file, category: 'general' });
+    } catch (err) {
+      setError(err?.message || (lang === 'de' ? 'Bild konnte nicht erfasst werden.' : 'Could not capture image.'));
+    } finally {
+      setIsCapturing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <label
+        className={cn(
+          'inline-flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-border text-xs font-medium text-foreground',
+          isCapturing && 'opacity-50',
+        )}
+      >
+        {isCapturing ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Camera className="h-3.5 w-3.5" />
+        )}
+        {isCapturing
+          ? (lang === 'de' ? 'Wird erfasst' : 'Capturing')
+          : (lang === 'de' ? 'Bild erfassen' : 'Capture image')}
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          disabled={isCapturing}
+          onChange={onSelect}
+        />
+      </label>
+      {queued.length > 0 && (
+        <p className="text-[11px] text-amber-700">
+          {lang === 'de'
+            ? `${queued.length} Bild(er) warten auf Synchronisierung`
+            : `${queued.length} image(s) waiting for sync`}
+        </p>
+      )}
+      {error && <p className="text-[11px] font-medium text-red-600">{error}</p>}
+    </div>
   );
 }
 

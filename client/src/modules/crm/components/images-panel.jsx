@@ -17,13 +17,13 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import { Upload, Trash2, ImageIcon, X, Loader2, Maximize2, CloudUpload, CheckCircle2, FileImage, RotateCcw } from 'lucide-react';
+import { Upload, Trash2, ImageIcon, X, Loader2, Maximize2, CloudUpload, CheckCircle2, FileImage, RotateCcw, Download } from 'lucide-react';
 import { IMAGE_CATEGORY_META } from '@/modules/crm/constants/crm-constants';
 
 /**
- * Polymorphic images panel for sites and installations.
+ * Polymorphic images panel for sites, installations and customers.
  * @param {Object} props
- * @param {'site'|'installation'} props.entityType
+ * @param {'site'|'installation'|'customer'} props.entityType
  * @param {string} props.entityId
  */
 export function ImagesPanel({ entityType, entityId }) {
@@ -39,10 +39,14 @@ export function ImagesPanel({ entityType, entityId }) {
   const [category, setCategory] = useState('general');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [lightbox, setLightbox] = useState(null);
+  // Drag-over state for the drop zone
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const queryKey = entityType === 'site'
     ? queryKeys.crm.images.bySite(entityId)
-    : queryKeys.crm.images.byInstallation(entityId);
+    : entityType === 'customer'
+      ? queryKeys.crm.images.byCustomer(entityId)
+      : queryKeys.crm.images.byInstallation(entityId);
 
   const { data: images = [], isLoading } = useQuery({
     queryKey,
@@ -85,11 +89,6 @@ export function ImagesPanel({ entityType, entityId }) {
     uploadMut.mutate({ file: pendingFile, meta: { caption, category, sortOrder: images.length } });
   };
 
-  if (isLoading) return <ImagesSkeleton />;
-
-  // Drag-over state for the drop zone
-  const [isDragOver, setIsDragOver] = useState(false);
-
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -99,6 +98,8 @@ export function ImagesPanel({ entityType, entityId }) {
     if (file.size > 5 * 1024 * 1024) { showError(t('crm.images.fileTooLarge', 'Max 5 MB')); return; }
     setPendingFile(file);
   }, [t]);
+
+  if (isLoading) return <ImagesSkeleton />;
 
   return (
     <Card className="border-white/[0.07] bg-[#0D1117] rounded-2xl">
@@ -231,13 +232,25 @@ export function ImagesPanel({ entityType, entityId }) {
                 alt={lightbox.caption || ''}
                 className="w-full max-h-[75vh] object-contain select-none"
               />
-              {/* Close button */}
-              <button
-                onClick={() => setLightbox(null)}
-                className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/60 hover:bg-black/80 border border-white/[0.12] text-white/70 hover:text-white flex items-center justify-center transition-all backdrop-blur-sm"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              {/* Top-right actions: download original + close */}
+              <div className="absolute top-3 right-3 flex items-center gap-2">
+                <a
+                  href={lightbox.url}
+                  download={lightbox.caption || 'image'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={t('crm.images.download', 'Original herunterladen')}
+                  className="h-8 w-8 rounded-full bg-black/60 hover:bg-black/80 border border-white/[0.12] text-white/70 hover:text-white flex items-center justify-center transition-all backdrop-blur-sm"
+                >
+                  <Download className="h-4 w-4" />
+                </a>
+                <button
+                  onClick={() => setLightbox(null)}
+                  className="h-8 w-8 rounded-full bg-black/60 hover:bg-black/80 border border-white/[0.12] text-white/70 hover:text-white flex items-center justify-center transition-all backdrop-blur-sm"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
               {/* Category badge */}
               {lightbox.category && (() => {
                 const m = IMAGE_CATEGORY_META[lightbox.category] || IMAGE_CATEGORY_META.general;

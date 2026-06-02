@@ -39,6 +39,10 @@ export const ALLOWED_MIME_TYPES = {
     'image/gif',
     'image/webp',
     'image/svg+xml',
+    // HEIF/HEIC accepted; normalized to JPEG when a decoder is available,
+    // otherwise stored as-is (CRM-010 AC-2).
+    'image/heic',
+    'image/heif',
   ],
   documents: [
     'application/pdf',

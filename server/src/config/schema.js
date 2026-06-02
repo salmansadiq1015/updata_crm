@@ -103,10 +103,16 @@ const configSchema = Joi.object({
   // Maintenance
   MAINTENANCE_LOOKAHEAD_DAYS: Joi.number().integer().min(1).default(30),
 
+  // CRM images (CRM-010)
+  CRM_MAX_IMAGES_PER_ENTITY: Joi.number().integer().min(1).default(50),
+  CRM_IMAGE_MAX_MB: Joi.number().min(0.1).default(2),
+
   // Project Management
   PROJECT_ARCHIVE_RETENTION_DAYS: Joi.number().integer().min(1).default(90),
   PROJECT_DOCUMENT_MAX_UPLOAD_MB: Joi.number().integer().min(1).default(50),
   SCHEDULE_CONFIRMATION_LEAD_DAYS: Joi.number().integer().min(0).default(5),
+  // Comma-separated extra recipients CC'd on every project status-change email.
+  PROJECT_STATUS_NOTIFICATION_CC: Joi.string().allow('').default(''),
 
   // Misc
   AUTO_MIGRATE: Joi.boolean().default(false),

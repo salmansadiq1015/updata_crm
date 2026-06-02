@@ -16,6 +16,7 @@ import { CustomerMergeDialog } from '@/modules/crm/components/customer-merge-dia
 import { CustomerActivityPanel } from '@/modules/crm/components/customer-activity-panel';
 import { ContactsPanel } from '@/modules/crm/components/contacts-panel';
 import { SitesPanel } from '@/modules/crm/components/sites-panel';
+import { ImagesPanel } from '@/modules/crm/components/images-panel';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
 import { RichTextContent } from '@/components/ui/rich-text-content';
@@ -675,6 +676,10 @@ export function CustomerDetail() {
                 <ClipboardList className="h-3.5 w-3.5" />
                 {de ? 'Dokumente' : 'Documents'}
               </TabsTrigger>
+              <TabsTrigger value="photos" className="gap-1.5">
+                <ImageIcon className="h-3.5 w-3.5" />
+                {t('crm.tabPhotos', 'Photos')}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
@@ -713,6 +718,9 @@ export function CustomerDetail() {
             </TabsContent>
             <TabsContent value="documents">
               <CustomerDocumentsTab customerId={customer._id} de={de} />
+            </TabsContent>
+            <TabsContent value="photos">
+              <ImagesPanel entityType="customer" entityId={customer._id} />
             </TabsContent>
           </Tabs>
         </div>

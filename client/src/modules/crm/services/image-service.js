@@ -2,21 +2,35 @@ import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 
 /**
- * Polymorphic image service — multipart upload for site or installation images.
- * entityType: 'site' | 'installation'
+ * Resolve the collection endpoint for an entity's images.
+ * @param {'site'|'installation'|'customer'} entityType
+ * @param {string} entityId
+ * @returns {string}
+ */
+function entityImagesUrl(entityType, entityId) {
+  switch (entityType) {
+    case 'site':
+      return ENDPOINTS.CRM.SITE_IMAGES(entityId);
+    case 'customer':
+      return ENDPOINTS.CRM.CUSTOMER_IMAGES(entityId);
+    case 'installation':
+    default:
+      return ENDPOINTS.CRM.INSTALLATION_IMAGES(entityId);
+  }
+}
+
+/**
+ * Polymorphic image service — multipart upload for site, installation or customer images.
+ * entityType: 'site' | 'installation' | 'customer'
  */
 export const imageService = {
   async listByEntity(entityType, entityId) {
-    const url = entityType === 'site'
-      ? ENDPOINTS.CRM.SITE_IMAGES(entityId)
-      : ENDPOINTS.CRM.INSTALLATION_IMAGES(entityId);
+    const url = entityImagesUrl(entityType, entityId);
     const res = await apiClient.get(url);
     return res.data;
   },
   async uploadForEntity(entityType, entityId, file, meta = {}) {
-    const url = entityType === 'site'
-      ? ENDPOINTS.CRM.SITE_IMAGES(entityId)
-      : ENDPOINTS.CRM.INSTALLATION_IMAGES(entityId);
+    const url = entityImagesUrl(entityType, entityId);
 
     const form = new FormData();
     form.append('image', file);

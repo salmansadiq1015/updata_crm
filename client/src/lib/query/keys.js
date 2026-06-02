@@ -143,6 +143,7 @@ export const queryKeys = {
     images: {
       bySite: (siteId) => ['crm', 'images', 'bySite', siteId],
       byInstallation: (installationId) => ['crm', 'images', 'byInstallation', installationId],
+      byCustomer: (customerId) => ['crm', 'images', 'byCustomer', customerId],
     },
     activity: {
       timeline: (entityType, entityId, filters) => ['crm', 'activity', entityType, entityId, filters ?? null],

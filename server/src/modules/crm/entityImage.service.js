@@ -4,6 +4,7 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
+import config from '../../config/index.js';
 import { NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 
@@ -12,6 +13,50 @@ const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 class EntityImageService {
   _cacheKey(entityType, entityId) {
     return `crm:images:${entityType}:${entityId}`;
+  }
+
+  /**
+   * Normalize an uploaded image (CRM-010 AC-2 + AC-3):
+   * - HEIF/HEIC → JPEG (broad browser compatibility)
+   * - Compress to at most config.crm.maxImageBytes (default 2 MB), reducing
+   *   JPEG quality then dimensions until under budget.
+   * Falls back to the original buffer if sharp cannot process it (e.g. HEIF
+   * decoder unavailable) — the 'images' bucket also allows heic/heif so the
+   * original still stores.
+   */
+  async _normalizeImage({ buffer, originalName, mimeType, sizeBytes }) {
+    const maxBytes = config.crm?.maxImageBytes ?? 2 * 1024 * 1024;
+    const isHeif = /hei[cf]/i.test(mimeType || '');
+
+    // Small, non-HEIF images need no processing.
+    if (!isHeif && sizeBytes <= maxBytes) {
+      return { buffer, originalName, mimeType, sizeBytes };
+    }
+
+    try {
+      let quality = 85;
+      let dimension = 4096;
+      let out = await sharp(buffer, { failOn: 'none' }).rotate().jpeg({ quality }).toBuffer();
+
+      // Iteratively shrink until under budget (bounded iterations).
+      while (out.length > maxBytes && quality > 40) {
+        quality -= 10;
+        dimension = Math.round(dimension * 0.85);
+        out = await sharp(buffer, { failOn: 'none' })
+          .rotate()
+          .resize(dimension, dimension, { fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality })
+          .toBuffer();
+      }
+
+      const jpgName = (originalName || 'image').replace(/\.[^.]+$/, '') + '.jpg';
+      return { buffer: out, originalName: jpgName, mimeType: 'image/jpeg', sizeBytes: out.length };
+    } catch (err) {
+      logger.warn('Image normalization failed — storing original', {
+        module: 'crm', action: 'image.normalize', mimeType, error: err.message,
+      });
+      return { buffer, originalName, mimeType, sizeBytes };
+    }
   }
 
   /**
@@ -36,21 +81,25 @@ class EntityImageService {
   }
 
   async create(entityType, entityId, fileData, uploadedBy, meta = {}) {
+    const maxImages = config.crm?.maxImagesPerEntity ?? 50;
     const existingCount = await entityImageRepository.countByEntity(entityType, entityId);
-    if (existingCount >= 50) {
-      throw new ValidationError('Maximum of 50 images per entity reached', [
-        { field: 'image', message: 'Maximum of 50 images per entity reached' },
+    if (existingCount >= maxImages) {
+      throw new ValidationError(`Maximum of ${maxImages} images per entity reached`, [
+        { field: 'image', message: `Maximum of ${maxImages} images per entity reached` },
       ]);
     }
+
+    // HEIF→JPEG conversion + 2 MB compression (CRM-010 AC-2 / AC-3).
+    const normalized = await this._normalizeImage(fileData);
 
     // Lazy import to avoid circular dependencies
     const fileService = (await import('../files/file.service.js')).default;
 
     const uploadedFile = await fileService.upload({
-      buffer: fileData.buffer,
-      originalName: fileData.originalName,
-      mimeType: fileData.mimeType,
-      sizeBytes: fileData.sizeBytes,
+      buffer: normalized.buffer,
+      originalName: normalized.originalName,
+      mimeType: normalized.mimeType,
+      sizeBytes: normalized.sizeBytes,
       module: 'crm',
       entityType,
       entityId,
@@ -63,14 +112,16 @@ class EntityImageService {
     let mediumFileId = null;
 
     try {
-      const baseName = fileData.originalName.replace(/\.[^.]+$/, '');
+      const baseName = normalized.originalName.replace(/\.[^.]+$/, '');
 
       const [thumbnailBuffer, mediumBuffer] = await Promise.all([
-        sharp(fileData.buffer)
+        sharp(normalized.buffer, { failOn: 'none' })
+          .rotate()
           .resize(200, 200, { fit: 'cover' })
           .jpeg({ quality: 80 })
           .toBuffer(),
-        sharp(fileData.buffer)
+        sharp(normalized.buffer, { failOn: 'none' })
+          .rotate()
           .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
           .jpeg({ quality: 85 })
           .toBuffer(),

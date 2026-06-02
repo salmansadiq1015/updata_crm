@@ -15,6 +15,7 @@ import { useSyncStore } from '../stores/sync-store';
 import { isActuallyOnline } from './connectivity';
 import { normalizeInstallation } from '../services/installation-service';
 import { normalizeNote } from '../services/crm-note-service';
+import { resolveImageEndpoint } from '../services/crm-image-service';
 
 let syncInProgress = false;
 let pollTimer = null;
@@ -320,6 +321,31 @@ async function processItem(item) {
             last_synced_at: new Date().toISOString(),
           });
         });
+      }
+      break;
+
+    case 'CRM_IMAGE':
+      if (item.operation === 'CREATE') {
+        const queued = await db.crmImageQueue.get(item.entity_id);
+        if (!queued?.blob) {
+          throw new Error('Offline CRM image blob is missing');
+        }
+
+        const formData = new FormData();
+        formData.append('image', queued.blob, `crm-image-${item.entity_id}.jpg`);
+        if (queued.caption) formData.append('caption', String(queued.caption));
+        if (queued.category) formData.append('category', String(queued.category));
+
+        await apiClient.post(
+          resolveImageEndpoint(item.payload.entity_type, item.payload.entity_id),
+          formData,
+          {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: SYNC_CONFIG.UPLOAD_TIMEOUT,
+          },
+        );
+
+        await db.crmImageQueue.delete(item.entity_id);
       }
       break;
 

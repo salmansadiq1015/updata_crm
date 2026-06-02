@@ -234,7 +234,7 @@ The system must support full lifecycle management of field appointments includin
 ### Dependencies
 
 - SCHED-002: Assignments are the basis for appointments.
-- MOD-02 (CRM): Customer contact data.
+- MOD-03 (CRM & Asset Management): Customer contact data.
 - MOD-06 (Mobile App): Technician sees appointment details.
 - Platform: Email / SMS notification service.
 

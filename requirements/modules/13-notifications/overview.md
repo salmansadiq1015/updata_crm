@@ -23,24 +23,24 @@ Centralized notification service handling all outbound communications across cha
 
 | Scenario | Trigger | Channel(s) | Source Module |
 |---|---|---|---|
-| New task assigned to technician | Task creation/assignment event | Push, In-App | 04-Task Management |
-| Daily reminder for incomplete reports | Scheduled (end of day) | Push, In-App | 05-Mobile/Field Service |
-| Appointment reminder to customer | Scheduled (configurable lead time) | Email, WhatsApp, SMS | 07-Quotations |
-| Quotation follow-up reminder | Scheduled (after quotation sent) | In-App, Email | 07-Quotations |
-| Maintenance due notification | Scheduled (based on maintenance plan) | Email, WhatsApp, Push | 06-Plant Management |
-| Document ready for download | Document generation event | Email, In-App | 09-Documents |
-| Chat message received | Real-time event | Push, In-App | 12-Communication |
-| Order status change | Order lifecycle event | Push, In-App, Email | 03-Order Management |
-| Invoice overdue reminder | Scheduled (based on payment terms) | Email, WhatsApp | 10-Finance |
-| Appointment confirmation to partner | Appointment confirmed event | Email, WhatsApp | 03-Order Management |
-| Task due date approaching | Scheduled (configurable lead time) | Push, In-App | 11-Project/Task Mgmt |
+| New task assigned to technician | Task creation/assignment event | Push, In-App | 12 - Task Management |
+| Daily reminder for incomplete reports | Scheduled (end of day) | Push, In-App | 06 - Mobile Technician App |
+| Appointment reminder to customer | Scheduled (configurable lead time) | Email, WhatsApp, SMS | 08 - Quotations & Order Processing |
+| Quotation follow-up reminder | Scheduled (after quotation sent) | In-App, Email | 08 - Quotations & Order Processing |
+| Maintenance due notification | Scheduled (based on maintenance plan) | Email, WhatsApp, Push | 03 - CRM & Asset Management |
+| Document ready for download | Document generation event | Email, In-App | 09 - Document Templates & Layout System |
+| Chat message received | Real-time event | Push, In-App | 06 - Mobile Technician App |
+| Order status change | Order lifecycle event | Push, In-App, Email | 08 - Quotations & Order Processing |
+| Invoice overdue reminder | Scheduled (based on payment terms) | Email, WhatsApp | 11 - Accounting |
+| Appointment confirmation to partner | Appointment confirmed event | Email, WhatsApp | 04 - Project Management |
+| Task due date approaching | Scheduled (configurable lead time) | Push, In-App | 12 - Task Management |
 
 ## 3. Boundaries
 
 - **Does NOT compose document content.** The Notifications module dispatches messages but does not generate PDF documents, quotation content, or invoice layouts. Document composition is the responsibility of Module 09 (Documents & Templates).
 - **Does NOT determine business rules for when to notify.** Consuming modules decide when a notification should be sent by publishing events or calling the notification API. This module is responsible for *how* the notification is delivered, not *why*.
-- **Does NOT manage customer communication preferences at a CRM level.** Marketing opt-in/opt-out for newsletters is managed by Module 02 (CRM). This module respects those preferences but does not own them.
-- **Does NOT provide a two-way messaging platform.** For interactive chat, see Module 12 (Communication Hub). This module handles outbound/one-directional notifications only.
+- **Does NOT manage customer communication preferences at a CRM level.** Marketing opt-in/opt-out for newsletters is managed by Module 03 (CRM & Asset Management). This module respects those preferences but does not own them.
+- **Does NOT provide a two-way messaging platform.** For interactive chat, see Module 06 (Mobile Technician App, project chat — MOB-010). This module handles outbound/one-directional notifications only.
 
 ## 4. Requirements Summary
 
@@ -61,16 +61,14 @@ Centralized notification service handling all outbound communications across cha
 | Module | Relationship |
 |---|---|
 | 01 - Core Platform | Event bus for trigger consumption; authentication for user context |
-| 02 - CRM | Customer contact data, communication preferences, opt-in status |
-| 03 - Order Management | Order lifecycle events triggering notifications |
-| 04 - Task Management | Task assignment and due date events |
-| 05 - Mobile/Field Service | Push notification delivery target; incomplete report triggers |
-| 06 - Plant Management | Maintenance schedule triggers |
-| 07 - Quotations | Quotation follow-up and appointment reminder triggers |
-| 09 - Documents & Templates | Document attachment references for email dispatch |
-| 10 - Finance | Invoice/payment reminder triggers |
-| 11 - Project & Task Mgmt | Task due date triggers |
-| 12 - Communication Hub | Chat message notification triggers |
+| 03 - CRM & Asset Management | Customer contact data, communication preferences, opt-in status; maintenance-due triggers |
+| 04 - Project Management | Partner appointment-confirmation triggers |
+| 05 - Field Deployment Planning | Appointment scheduling/assignment triggers |
+| 06 - Mobile Technician App | Push notification delivery target; incomplete-report and chat-message triggers |
+| 08 - Quotations & Order Processing | Order lifecycle, quotation follow-up, and appointment-reminder triggers |
+| 09 - Document Templates & Layout System | Document attachment references for email dispatch |
+| 11 - Accounting | Invoice/payment reminder triggers |
+| 12 - Task Management | Task assignment and due-date triggers |
 | 14 - Integrations | WhatsApp Business API connector, SMTP connector, SMS gateway |
 
 ## 6. Non-Functional Requirements

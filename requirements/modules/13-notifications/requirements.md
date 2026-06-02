@@ -93,9 +93,9 @@ Provide a reliable email dispatch service for transactional emails (appointment 
 
 ### Preconditions
 
-1. Recipient has a valid email address stored in the system (CRM Module 02).
+1. Recipient has a valid email address stored in the system (CRM Module 03).
 2. SMTP or email service provider credentials are configured and valid.
-3. For marketing/newsletter emails, the recipient has opted in (managed by CRM Module 02).
+3. For marketing/newsletter emails, the recipient has opted in (managed by CRM Module 03).
 
 ### Flow
 
@@ -113,7 +113,7 @@ Provide a reliable email dispatch service for transactional emails (appointment 
 - **A2 - Bounce Handling:** On hard bounce, the email address is flagged in the CRM record. On soft bounce, the service retries up to 3 times over 24 hours.
 - **A3 - Attachment Too Large:** If total attachment size exceeds 10 MB, the service replaces attachments with secure download links and notes this in the email body.
 - **A4 - Newsletter/Bulk:** For bulk email sends, the service uses batch processing with rate limiting to comply with email provider sending limits. Each email is personalized via the template engine.
-- **A5 - Unsubscribe:** Every marketing email includes a one-click unsubscribe link. Unsubscribe actions are propagated back to Module 02 (CRM) to update the customer's communication preferences.
+- **A5 - Unsubscribe:** Every marketing email includes a one-click unsubscribe link. Unsubscribe actions are propagated back to Module 03 (CRM & Asset Management) to update the customer's communication preferences.
 
 ### Postconditions
 
@@ -135,7 +135,7 @@ Provide a reliable email dispatch service for transactional emails (appointment 
 ### Dependencies
 
 - Module 01 (Core Platform): Event bus, user context
-- Module 02 (CRM): Customer email addresses, language preferences, opt-in status
+- Module 03 (CRM & Asset Management): Customer email addresses, language preferences, opt-in status
 - Module 09 (Documents & Templates): PDF attachments
 - Module 14 (Integrations): SMTP/email service connector
 - NOTIF-006: Template engine
@@ -207,7 +207,7 @@ Enable outbound WhatsApp messaging to customers and partner companies via the Wh
 
 ### Dependencies
 
-- Module 02 (CRM): Customer phone numbers, WhatsApp opt-in status, language preferences
+- Module 03 (CRM & Asset Management): Customer phone numbers, WhatsApp opt-in status, language preferences
 - Module 14 (Integrations): WhatsApp Business API connector (INT-004)
 - NOTIF-005: Notification preferences
 - NOTIF-006: Template engine (WhatsApp template management)
@@ -278,7 +278,7 @@ Provide a persistent, real-time notification feed within both the web applicatio
 ### Dependencies
 
 - Module 01 (Core Platform): WebSocket infrastructure, authentication
-- Module 05 (Mobile/Field Service): Mobile notification feed integration
+- Module 06 (Mobile Technician App): Mobile notification feed integration
 
 ### Tags
 
@@ -628,7 +628,7 @@ Maintain a complete, searchable history of all notifications sent by the system.
 
 - Module 01 (Core Platform): Database, search infrastructure
 - NOTIF-008: Delivery tracking data
-- Module 02 (CRM): GDPR data deletion events
+- Module 03 (CRM & Asset Management): GDPR data deletion events
 
 ### Tags
 

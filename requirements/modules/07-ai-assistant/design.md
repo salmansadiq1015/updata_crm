@@ -403,7 +403,7 @@ GET /api/v1/ai/analytics/corrections/top?limit=20&language=de-CH
 | Event                      | Target Module | Description                                         |
 |----------------------------|---------------|-----------------------------------------------------|
 | `order.create_requested`   | MOD-08        | Voice-created order data ready for order processing  |
-| `report.content_captured`  | MOD-05        | Voice-dictated report content for work order         |
+| `report.content_captured`  | MOD-06        | Voice-dictated report content for work order         |
 | `customer.address_captured`| MOD-03        | Voice-captured and validated address for CRM         |
 | `document.generate_requested` | MOD-09     | Voice-triggered document generation request          |
 

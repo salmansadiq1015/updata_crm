@@ -129,7 +129,7 @@ The system shall allow field technicians to dictate service reports, inspection 
 
 ### Dependencies
 
-- MOD-05: Mobile Field Service (work order context)
+- MOD-06: Mobile Technician App (work order context)
 - AI-003: Speech-to-Text Conversion
 - AI-005: Template-Based Document Creation (optional)
 

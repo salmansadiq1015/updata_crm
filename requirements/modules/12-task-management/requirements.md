@@ -10,7 +10,7 @@
 | **Title** | Task Creation & Management |
 | **Priority** | High |
 | **Complexity** | Medium |
-| **Dependencies** | Module 01 (User Management) |
+| **Dependencies** | Module 02 (Authentication & User Management) |
 | **Tags** | `tasks`, `CRUD`, `core` |
 
 ### Description
@@ -106,7 +106,7 @@ The system shall support multiple task lists per user to organize tasks by conte
 | **Title** | Task Assignment to Projects/Orders/Personal |
 | **Priority** | High |
 | **Complexity** | Medium |
-| **Dependencies** | TASK-001, Module 04 (Order/Project Management) |
+| **Dependencies** | TASK-001, Module 04 (Project Management) |
 | **Tags** | `tasks`, `projects`, `orders`, `assignment`, `integration` |
 
 ### Description
@@ -435,7 +435,7 @@ The system shall support adding notes (comments) and file attachments to tasks. 
 | **Title** | Group Lists |
 | **Priority** | Medium |
 | **Complexity** | Medium |
-| **Dependencies** | TASK-001, TASK-002, Module 01 (User Management) |
+| **Dependencies** | TASK-001, TASK-002, Module 02 (Authentication & User Management) |
 | **Tags** | `tasks`, `lists`, `collaboration`, `teams` |
 
 ### Description
@@ -580,7 +580,7 @@ The system shall provide a personal task overview dashboard that aggregates all 
 | **Title** | Project/Order Structure Integration |
 | **Priority** | High |
 | **Complexity** | High |
-| **Dependencies** | TASK-001, TASK-003, Module 04 (Order/Project Management) |
+| **Dependencies** | TASK-001, TASK-003, Module 04 (Project Management) |
 | **Tags** | `tasks`, `projects`, `orders`, `integration`, `cross-module` |
 
 ### Description

@@ -115,7 +115,7 @@ The system shall support full create, read, update, and delete (soft-delete) ope
 | **Title** | Article Usage in Quotations/Orders/Reports |
 | **Priority** | High |
 | **Complexity** | High |
-| **Dependencies** | MAT-001, MAT-002, Module 03, Module 04, Module 07 |
+| **Dependencies** | MAT-001, MAT-002, Module 08 (Quotations & Order Processing), Module 04 (Project Management), Module 06 (Mobile Technician App) |
 | **Tags** | `catalog`, `quotation`, `order`, `report`, `integration` |
 
 ### Description

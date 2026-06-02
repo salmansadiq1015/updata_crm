@@ -31,7 +31,7 @@ This means:
 
 - **Does NOT contain business logic.** Integrations are pure adapters/connectors. They translate between the platform's internal data formats and external system protocols. Business rules (e.g., when to send a WhatsApp message, how to apply a catalog price) reside in the consuming modules.
 - **Does NOT handle internal module-to-module communication.** Internal event bus, message passing, and API calls between platform modules are managed by Module 01 (Core Platform).
-- **Does NOT store master data.** Integrated data (e.g., IGH catalog items, bank transactions) is imported into the relevant module's data store (e.g., Module 08 for articles, Module 10 for payments). The integration module handles the transfer, not the storage.
+- **Does NOT store master data.** Integrated data (e.g., IGH catalog items, bank transactions) is imported into the relevant module's data store (e.g., Module 10 for articles, Module 11 for payments). The integration module handles the transfer, not the storage.
 - **Does NOT provide a general-purpose iPaaS.** This is not a low-code integration platform. Each connector is purpose-built for a specific external system.
 
 ## 4. Requirements Summary
@@ -53,12 +53,11 @@ This means:
 | Module | Relationship |
 |---|---|
 | 01 - Core Platform | Event bus, authentication, configuration management |
-| 02 - CRM | Customer data from website widget submissions |
-| 03 - Order Management | Orders created from website widget |
-| 07 - Quotations | IGH catalog data for quotation line items |
-| 08 - Articles & Inventory | IGH catalog article import |
-| 09 - Documents & Templates | Document storage in cloud storage |
-| 10 - Finance | Banking interface for payment reconciliation, OCR for supplier invoices |
+| 03 - CRM & Asset Management | Customer/contact matching and service-request (lead) creation from website widget submissions |
+| 08 - Quotations & Order Processing | IGH catalog data for quotation line items |
+| 09 - Document Templates & Layout System | Document storage in cloud storage |
+| 10 - Material Catalogs & Interfaces | IGH catalog article import |
+| 11 - Accounting | Banking interface for payment reconciliation, OCR for supplier invoices |
 | 13 - Notifications | WhatsApp and email connectors for notification dispatch |
 
 ## 6. Non-Functional Requirements

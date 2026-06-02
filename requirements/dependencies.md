@@ -69,6 +69,7 @@ One-Time:
 | **13 Notifications** | 01, 02 | 06 (and all modules publish events to it) |
 | **14 Integrations** | 01, 02 | 03, 08, 10, 11, 13 |
 | **15 Data Migration** | 01, 03, 08, 11 | — (one-time) |
+| **16 Compliance & DP** | 01, 02, 03, 11, 13, 14 | All modules (cross-cutting controls) |
 
 ---
 

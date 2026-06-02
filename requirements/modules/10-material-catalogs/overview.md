@@ -44,9 +44,9 @@ Managing materials, services, and text blocks used across quotations, orders, an
 - **Finance** -- rely on accurate catalog prices flowing into invoices.
 
 ## Integration Points
-- **Module 03 (Quotation Management)** -- articles inserted into quotation line items.
-- **Module 04 (Order/Project Management)** -- materials allocated to orders.
-- **Module 07 (Field-Service Reports)** -- materials consumed recorded against catalog.
+- **Module 08 (Quotations & Order Processing)** -- articles inserted into quotation line items.
+- **Module 04 (Project Management)** -- materials allocated to orders.
+- **Module 06 (Mobile Technician App)** -- materials consumed recorded against catalog.
 - **Module 11 (Accounting)** -- catalog prices feed into invoice generation.
 - **IGH external catalog** -- import/sync interface.
 

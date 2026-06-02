@@ -28,9 +28,9 @@ Integrated task and to-do system enabling individuals and teams at MB Boiler & H
 - Integration into project and order structures (tasks visible within project/order context).
 
 ## Out of Scope / Boundaries
-- **Project-level status management** -- project lifecycle states, milestones, and phase tracking belong to Module 04 (Order/Project Management).
-- **Scheduling and calendar** -- calendar views, appointment booking, and resource scheduling belong to Module 05 (Scheduling).
-- **Time tracking** -- logging hours against tasks is handled by Module 06 (Time Tracking) if applicable.
+- **Project-level status management** -- project lifecycle states, milestones, and phase tracking belong to Module 04 (Project Management).
+- **Scheduling and calendar** -- calendar views, appointment booking, and resource scheduling belong to Module 05 (Field Deployment Planning).
+- **Time tracking** -- logging hours against tasks is handled by Module 06 (Mobile Technician App) if applicable.
 - **Workflow automation** -- automated task creation from triggers (e.g., "when order status changes, create task") is a future enhancement, not in initial scope.
 
 ## Requirements Summary
@@ -59,9 +59,9 @@ Integrated task and to-do system enabling individuals and teams at MB Boiler & H
 - **Management** -- overview of team workload and task completion rates.
 
 ## Integration Points
-- **Module 04 (Order/Project Management)** -- tasks linked to projects/orders; task completion may influence project progress.
-- **Module 05 (Scheduling)** -- tasks with due dates may appear in scheduling views (read-only reference).
-- **Module 07 (Field-Service Reports)** -- field tasks may trigger or be triggered by service report workflows.
+- **Module 04 (Project Management)** -- tasks linked to projects/orders; task completion may influence project progress.
+- **Module 05 (Field Deployment Planning)** -- tasks with due dates may appear in scheduling views (read-only reference).
+- **Module 06 (Mobile Technician App)** -- field tasks may trigger or be triggered by service report workflows.
 - **Module 13 (Notifications)** -- reminder delivery via push notifications and in-app alerts.
 - **Mobile app** -- offline-capable task access with background sync.
 

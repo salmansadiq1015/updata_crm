@@ -14,7 +14,7 @@ Section 2 of the Statement of Work -- "Kunden-, Objekt- und Anlagenverwaltung" (
 |----------|--------------|
 | Customer master data CRUD | Quotation creation and pricing (Module 08) |
 | Multiple contacts per customer | Scheduling and dispatch (Module 05) |
-| Address book (accessible on mobile) | Invoice generation (Module 09) |
+| Address book (accessible on mobile) | Invoice generation (Module 08) |
 | Customer capture via mobile app | Project planning and tracking (Module 04) |
 | Site/object management | Technician skill management (Module 02/05) |
 | Technical installation management per site | |
@@ -97,11 +97,11 @@ Customer (Kunde)
 |  +-----------+  +-------------+                               |
 +---------------------------------------------------------------+
        |              |              |               |
-  Auth (02)    Scheduling (05)  Quotations (08)  Invoicing (09)
+  Auth (02)    Scheduling (05)  Quotations (08)  Invoicing (08)
 ```
 
 - **Upstream dependencies:** Core Platform (01), Authentication (02).
-- **Downstream consumers:** Scheduling (05), Field Service (06), Quotations (08), Invoicing (09), Reporting.
+- **Downstream consumers:** Scheduling (05), Field Service (06), Quotations (08), Invoicing (08), Reporting.
 
 ## 8. Key Constraints
 

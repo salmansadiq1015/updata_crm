@@ -77,9 +77,9 @@ This module provides operationally essential AR/AP and reconciliation functions.
 - **Management** -- cash management dashboards, open-item oversight.
 
 ## Integration Points
-- **Module 03 (Quotation Management)** -- accepted quotations may trigger invoice creation.
-- **Module 04 (Order/Project Management)** -- order completion triggers final invoicing; supplier invoices linked to orders.
-- **Module 07 (Field-Service Reports)** -- completed reports can generate customer invoices.
+- **Module 08 (Quotations & Order Processing)** -- accepted quotations may trigger invoice creation.
+- **Module 04 (Project Management)** -- order completion triggers final invoicing; supplier invoices linked to orders.
+- **Module 06 (Mobile Technician App)** -- completed reports can generate customer invoices.
 - **Module 10 (Material Catalogs)** -- catalog prices feed invoice line items.
 - **External bank systems** -- ISO 20022 camt.053/054 for statements, pain.001/002 for payments.
 - **OCR service** -- internal or third-party OCR engine for invoice data extraction.

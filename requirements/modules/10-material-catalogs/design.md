@@ -416,20 +416,20 @@ PriceUpdateBatch.status = APPLIED
 
 ## 4. Integration Points
 
-### 4.1 Module 03 -- Quotation Management
+### 4.1 Module 08 -- Quotations & Order Processing
 
 - **Quotation line items** reference catalog articles via `sourceArticleId`.
 - Line items store a snapshot of the article data at selection time.
 - The article picker component is shared across modules via a reusable UI component.
 - Price drift detection: when viewing a quotation, the system compares `snapshotPrice` against the current `Article.basePrice` and displays a visual indicator if they differ.
 
-### 4.2 Module 04 -- Order/Project Management
+### 4.2 Module 04 -- Project Management
 
 - Order material lists reference catalog articles identically to quotation line items.
 - When a quotation is converted to an order, line-item snapshots are carried forward.
 - Orders can add additional articles not in the original quotation.
 
-### 4.3 Module 07 -- Field-Service Reports
+### 4.3 Module 06 -- Mobile Technician App
 
 - Field technicians log consumed materials in service reports using the article picker.
 - Mobile article picker supports barcode scanning for rapid material identification.

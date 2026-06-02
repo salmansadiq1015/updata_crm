@@ -35,7 +35,7 @@ The system must allow authorized users to create, view, edit, and delete (soft-d
 ### Preconditions
 
 1. The user is authenticated and has the `project:create` or `project:edit` permission.
-2. At least one customer record exists in the CRM module (MOD-02) for association.
+2. At least one customer record exists in the CRM module (MOD-03) for association.
 3. Project types and templates have been configured by a system administrator.
 
 ### Main Flow
@@ -84,7 +84,7 @@ The system must allow authorized users to create, view, edit, and delete (soft-d
 
 ### Dependencies
 
-- MOD-02 (CRM): Customer and site records for association.
+- MOD-03 (CRM & Asset Management): Customer and site records for association.
 - Platform: Audit logging service.
 - Platform: Auto-numbering service.
 
@@ -247,7 +247,7 @@ The system must support tracking and managing preparatory actions that must be c
 
 - PROJ-001: Project must exist.
 - PROJ-002: Preparatory actions gate status transitions.
-- MOD-07 / Material Catalog: Material items referenced in material orders.
+- MOD-10 (Material Catalogs & Interfaces): Material items referenced in material orders.
 - Platform: Notification service.
 
 ---
@@ -335,7 +335,7 @@ The system must support creating and managing construction site schedules (Baupl
 
 - PROJ-001: Project must exist.
 - MOD-05 (Deployment Planning): Schedule feeds into resource deployment.
-- MOD-02 (CRM) / Partner Directory: Partner company contacts.
+- MOD-03 (CRM & Asset Management) / Partner Directory: Partner company contacts.
 - Platform: Email service for sending confirmations.
 - Platform: PDF generation service.
 

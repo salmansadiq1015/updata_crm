@@ -891,7 +891,7 @@ The system shall send appointment reminders to customers via WhatsApp and/or ema
 
 ### Preconditions
 
-1. Service appointment is scheduled (MOD-04: Scheduling & Dispatch).
+1. Service appointment is scheduled (MOD-05: Field Deployment Planning).
 2. Customer has a valid phone number (for WhatsApp) or email address.
 3. WhatsApp Business API is configured (for WhatsApp channel).
 4. Reminder templates are defined.
@@ -929,7 +929,7 @@ The system shall send appointment reminders to customers via WhatsApp and/or ema
 
 ### Dependencies
 
-- MOD-04: Scheduling & Dispatch
+- MOD-05: Field Deployment Planning
 - MOD-03: CRM & Customer Management
 - QOP-014: Multilingual Document Versions
 - External: WhatsApp Business API

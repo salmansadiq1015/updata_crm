@@ -69,11 +69,11 @@ This means:
 | Module | Relationship |
 |---|---|
 | 01 - Core Platform | Target database schema, user accounts for migration |
-| 02 - CRM | Target schema for customer/contact records |
-| 03 - Order Management | Target schema for orders (if historical orders are migrated) |
-| 06 - Plant Management | Target schema for plant/installation records |
-| 07 - Quotations | Target schema for quotation records |
-| 10 - Finance | Target schema for invoice records |
+| 03 - CRM & Asset Management | Target schema for customer/contact records |
+| 08 - Quotations & Order Processing | Target schema for orders (if historical orders are migrated) |
+| 03 - CRM & Asset Management | Target schema for plant/installation records |
+| 08 - Quotations & Order Processing | Target schema for quotation records |
+| 11 - Accounting | Target schema for invoice records |
 | 14 - Integrations | Cloud storage for document file migration |
 
 ## 6. Migration Timeline (Typical)

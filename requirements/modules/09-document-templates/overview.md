@@ -57,6 +57,10 @@ This module acts as the rendering layer -- it receives structured data from othe
 - **Email marketing or bulk mailing** -- This module handles transactional document dispatch, not marketing campaigns.
 - **Digital signature** -- Electronic/qualified digital signatures are not part of this module (may be a future enhancement).
 
+### 2.4 Clarification -- Correction Rounds (Contract §7.2)
+
+Graphical formatting of documents follows the agreed templates. Unlimited correction loops are **not** owed: the work price includes at most **[X]** correction rounds per template type (the value of **[X]** is fixed in the work contract, §7.2). Template designs must be approved per template type before downstream document-generation work depends on them; further changes beyond the agreed rounds are handled as change requests.
+
 ---
 
 ## 3. Key Actors
@@ -95,7 +99,7 @@ This module acts as the rendering layer -- it receives structured data from othe
 | MOD-08: Quotations & Order Processing | Inbound   | Receives structured document data (line items, totals, customer info)  |
 | MOD-03: CRM & Customer Management     | Inbound   | Customer address and contact data for document headers                 |
 | MOD-07: AI Assistant                   | Inbound   | Voice-dictated content merged into templates                          |
-| MOD-05: Mobile Field Service          | Outbound  | Generated PDFs made available for viewing on mobile devices            |
+| MOD-06: Mobile Technician App         | Outbound  | Generated PDFs made available for viewing on mobile devices            |
 | Email Service (Infrastructure)         | Outbound  | SMTP/API integration for email dispatch                               |
 
 ---

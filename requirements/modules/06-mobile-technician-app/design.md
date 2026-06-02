@@ -631,10 +631,10 @@ FOR EACH active technician:
 |-----------------|----------------------------------------------------------------------------|
 | MOD-04          | Project details, documents, schedules read via BFF. Mobile uploads go to project repo. |
 | MOD-05          | Assignments are the source of orders. Status updates flow back.           |
-| MOD-02 (CRM)   | Customer, site, installation data served via BFF.                         |
-| MOD-07 / IGH    | Material catalogs synced for offline search.                              |
+| MOD-03 (CRM & Asset Management) | Customer, site, installation data served via BFF.                         |
+| MOD-10 / IGH    | Material catalogs synced for offline search.                              |
 | MOD-08          | Quotation data (prices stripped for technicians). Work reports feed invoicing. |
-| MOD-10          | Time entries sync to central time management.                             |
+| Back-office     | Time entries sync to central time management.                             |
 
 ### 7.2 Platform Services
 

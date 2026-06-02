@@ -7,7 +7,7 @@
 The Document Templates & Layout System follows a server-side rendering architecture. Templates are stored as structured definitions (not WYSIWYG HTML), and a rendering engine combines templates with data payloads to produce PDF output.
 
 ```
-[Requesting Module (MOD-08, MOD-07, MOD-05)]
+[Requesting Module (MOD-08, MOD-07, MOD-06)]
             |
     [Document API]
             |

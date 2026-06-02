@@ -80,8 +80,8 @@ The assistant is designed for hands-free operation in the field, enabling techni
 | MOD-03: CRM & Customer Management | Outbound  | AI-extracted customer data is written to CRM records                  |
 | MOD-08: Quotations & Orders       | Outbound  | Voice-created orders are submitted to the order processing module     |
 | MOD-09: Document Templates        | Outbound  | Voice-dictated content is merged with templates for document output   |
-| MOD-04: Scheduling & Dispatch     | Outbound  | Voice commands can trigger scheduling lookups and updates             |
-| MOD-05: Mobile Field Service      | Inbound   | Mobile app provides the primary voice input interface                 |
+| MOD-05: Field Deployment Planning | Outbound  | Voice commands can trigger scheduling lookups and updates             |
+| MOD-06: Mobile Technician App     | Inbound   | Mobile app provides the primary voice input interface                 |
 
 ---
 

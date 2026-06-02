@@ -18,7 +18,7 @@
 
 The Project Management module provides the central capability for creating, organizing, tracking, and completing projects within the MB Boiler & Heizung AG ERP/Field-Service platform. Projects encompass construction work, renovation projects, heating system installations, and other multi-step engagements that require coordination of resources, partners, materials, and documentation.
 
-This module serves as the organizational backbone that ties together scheduling (Module 05), field deployment (Module 06), customer data (Module 02), and financial documents (Module 08) into a coherent project lifecycle.
+This module serves as the organizational backbone that ties together scheduling (Module 05), mobile field service (Module 06), customer data (Module 03), and financial documents (Module 08) into a coherent project lifecycle.
 
 ---
 
@@ -92,10 +92,10 @@ This module serves as the organizational backbone that ties together scheduling 
 
 | Dependency          | Module / System      | Nature                                                        |
 |---------------------|----------------------|---------------------------------------------------------------|
-| Customer Data       | MOD-02 (CRM)        | Projects are linked to customers/sites from the CRM module.  |
+| Customer Data       | MOD-03 (CRM & Asset Management) | Projects are linked to customers/sites from the CRM module.  |
 | Scheduling          | MOD-05 (Deployment)  | Project schedules feed into deployment planning calendars.    |
 | Mobile App          | MOD-06 (Mobile)      | Technicians access project info and documents via mobile.     |
-| Quotation/Invoicing | MOD-08 (Finance)     | Projects reference quotations; invoicing references projects. |
+| Quotation/Invoicing | MOD-08 (Quotations & Order Processing) | Projects reference quotations; invoicing references projects. |
 | Task Management     | MOD-12 (Tasks)       | Individual tasks within a project are managed in MOD-12.      |
 | Document Management | Platform Service     | Core file storage and retrieval service.                      |
 

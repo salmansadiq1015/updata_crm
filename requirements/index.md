@@ -11,7 +11,7 @@
 A tailored digital software solution for a Swiss HVAC company comprising:
 
 - **Web Application** — Administration, dispatching, project execution, office organisation
-- **Mobile Application** — iOS and Android app for field technicians
+- **Mobile Application** — iOS and Android app for field technicians (a *separate client application* that runs against the *same shared backend/server* as the web app; the mobile server-side surface — BFF, sync, push — is delivered here, the native client UI is a separate project)
 - **AI Assistant** — Voice-based data entry and document creation support
 
 The platform digitises end-to-end business operations: CRM, asset management, project management, field deployment, service reports, quotations, order processing, invoicing, accounting, document management, materials management, and task management — with data migration from legacy systems (OF software, Messerli CRM).
@@ -37,8 +37,9 @@ The platform digitises end-to-end business operations: CRM, asset management, pr
 | 13 | [Notifications](modules/13-notifications/overview.md) | `13-notifications/` | 9 | Supporting |
 | 14 | [Integrations](modules/14-integrations/overview.md) | `14-integrations/` | 9 | Supporting |
 | 15 | [Data Migration](modules/15-data-migration/overview.md) | `15-data-migration/` | 10 | One-time |
+| 16 | [Compliance, Data Protection & Handover](modules/16-compliance-data-protection/overview.md) | `16-compliance-data-protection/` | 8 | Foundation (cross-cutting) |
 
-**Total Requirements: 151**
+**Total Requirements: 159**
 
 ---
 
@@ -51,6 +52,8 @@ Each module contains three files:
 | `overview.md` | Purpose, scope, responsibilities, boundaries |
 | `requirements.md` | Detailed functional requirements with acceptance criteria |
 | `design.md` | API design, data models, event flows, integration points |
+
+> Module 16 (Compliance, Data Protection & Handover) is a cross-cutting module and contains `overview.md` + `requirements.md` only; it has no standalone `design.md` because its controls are implemented within the other modules' designs.
 
 ---
 
@@ -79,7 +82,8 @@ Each module contains three files:
 | **Notifications** | Centralized service (push, email, WhatsApp) |
 | **File Storage** | S3-compatible, managed by core platform |
 | **Event Bus** | Async domain events for module decoupling |
-| **Data Protection** | Swiss data protection law compliance |
+| **Data Protection** | Swiss data protection law (nDSG/revDSG) compliance — see [Module 16](modules/16-compliance-data-protection/overview.md) |
+| **Source Code & IP / OSS** | Rights handover and open-source disclosure — see [Module 16](modules/16-compliance-data-protection/overview.md) (SRC-001, OSS-001) |
 | **Multilingual** | DE, FR, IT, EN document generation |
 | **CI/Branding** | Museo Sans fonts, CMYK brand colors |
 

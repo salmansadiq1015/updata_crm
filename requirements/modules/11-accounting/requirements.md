@@ -10,7 +10,7 @@
 | **Title** | Accounts Receivable - Invoice Management |
 | **Priority** | High |
 | **Complexity** | High |
-| **Dependencies** | Module 02 (Customer Management), Module 10 (Material Catalogs) |
+| **Dependencies** | Module 03 (CRM & Asset Management), Module 10 (Material Catalogs) |
 | **Tags** | `accounting`, `AR`, `invoices`, `core` |
 
 ### Description
@@ -665,7 +665,7 @@ The system shall allow users to capture documents (receipts, invoices, delivery 
 | **Title** | Document Allocation to Employees |
 | **Priority** | Medium |
 | **Complexity** | Low |
-| **Dependencies** | ACC-009, Module 01 (User Management) |
+| **Dependencies** | ACC-009, Module 02 (Authentication & User Management) |
 | **Tags** | `accounting`, `documents`, `workflow`, `assignment` |
 
 ### Description

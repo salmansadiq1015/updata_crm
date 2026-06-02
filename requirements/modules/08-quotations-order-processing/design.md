@@ -724,9 +724,9 @@ GET    /api/v1/quotations/pipeline                    -- Quotation pipeline summ
 | Event                             | Source Module  | Action                                                     |
 |-----------------------------------|----------------|-------------------------------------------------------------|
 | `customer.updated`                | MOD-03         | Update denormalized customer name/address on open documents |
-| `appointment.scheduled`           | MOD-04         | Schedule appointment reminders                              |
-| `appointment.rescheduled`         | MOD-04         | Cancel existing reminders, schedule new ones                |
-| `appointment.cancelled`           | MOD-04         | Cancel pending reminders                                    |
+| `appointment.scheduled`           | MOD-05         | Schedule appointment reminders                              |
+| `appointment.rescheduled`         | MOD-05         | Cancel existing reminders, schedule new ones                |
+| `appointment.cancelled`           | MOD-05         | Cancel pending reminders                                    |
 | `ai.order.create_requested`       | MOD-07         | Create order from voice assistant data                      |
 | `document.generated`              | MOD-09         | Link generated PDF to the document record                   |
 
@@ -754,7 +754,7 @@ GET    /api/v1/quotations/pipeline                    -- Quotation pipeline summ
   ```
 - **Email dispatch:** `POST /api/v1/documents/{docId}/send`
 
-### 6.3 Scheduling & Dispatch (MOD-04)
+### 6.3 Scheduling & Dispatch (MOD-05)
 
 - Subscribe to appointment events for reminder scheduling.
 - Query appointments for reminder batch processing.

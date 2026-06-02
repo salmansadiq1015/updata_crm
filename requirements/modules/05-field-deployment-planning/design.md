@@ -442,7 +442,7 @@ Base path: `/api/v1/scheduling`
 - **Data**: New orders requiring technician assignment appear in the unassigned queue.
 - **Method**: Events (`order.created`, `order.cancelled`).
 
-### 4.5 CRM Module (MOD-02)
+### 4.5 CRM Module (MOD-03)
 
 - **Direction**: Deployment Planning reads from CRM.
 - **Data**: Customer contact info, site addresses for appointment management.

@@ -436,11 +436,40 @@ async function updateCounts() {
   useSyncStore.getState().setCounts(pending, failed, conflicts);
 }
 
+function getNetworkConnection() {
+  if (typeof navigator === 'undefined') return null;
+  return navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+}
+
+// Choose the periodic poll interval based on the active network connection.
+// Cellular connections poll less frequently to save data/battery; everything
+// else (Wi-Fi, ethernet, or unknown) uses the Wi-Fi default. Defensive against
+// SSR/desktop where the Network Information API is unavailable (CRM-003 AC-8).
+function getPollInterval() {
+  const connection = getNetworkConnection();
+  if (!connection) return SYNC_CONFIG.POLL_INTERVAL_WIFI;
+
+  const type = connection.type;
+  const effectiveType = connection.effectiveType;
+
+  // `type` is the most explicit signal when present.
+  if (type === 'cellular') return SYNC_CONFIG.POLL_INTERVAL_CELLULAR;
+  if (type === 'wifi' || type === 'ethernet') return SYNC_CONFIG.POLL_INTERVAL_WIFI;
+
+  // Fall back to effectiveType (2g/3g/4g implies a cellular-grade connection)
+  // when `type` is unavailable, as many browsers only expose effectiveType.
+  if (['slow-2g', '2g', '3g', '4g'].includes(effectiveType)) {
+    return SYNC_CONFIG.POLL_INTERVAL_CELLULAR;
+  }
+
+  return SYNC_CONFIG.POLL_INTERVAL_WIFI;
+}
+
 export function startSyncPolling() {
   if (pollTimer) return;
   pollTimer = setInterval(() => {
     if (navigator.onLine) triggerSync();
-  }, SYNC_CONFIG.POLL_INTERVAL);
+  }, getPollInterval());
 }
 
 export function stopSyncPolling() {
@@ -450,22 +479,40 @@ export function stopSyncPolling() {
   }
 }
 
+// Re-evaluate the poll interval (e.g. after a network change) by restarting the
+// timer. Cheap no-op when polling is not currently active.
+function restartSyncPolling() {
+  if (!pollTimer) return;
+  stopSyncPolling();
+  startSyncPolling();
+}
+
 export function setupSyncListeners() {
   if (typeof window === 'undefined') return () => {};
 
-  const onOnline = () => triggerSync();
+  const onOnline = () => {
+    // A reconnect can also mean a network-type change (e.g. cellular -> wifi),
+    // so re-pick the interval and flush pending changes immediately.
+    restartSyncPolling();
+    triggerSync();
+  };
   const onVisible = () => {
     if (document.visibilityState === 'visible') triggerSync();
   };
+  const onConnectionChange = () => restartSyncPolling();
 
   window.addEventListener('online', onOnline);
   document.addEventListener('visibilitychange', onVisible);
+
+  const connection = getNetworkConnection();
+  connection?.addEventListener?.('change', onConnectionChange);
 
   startSyncPolling();
 
   return () => {
     window.removeEventListener('online', onOnline);
     document.removeEventListener('visibilitychange', onVisible);
+    connection?.removeEventListener?.('change', onConnectionChange);
     stopSyncPolling();
   };
 }

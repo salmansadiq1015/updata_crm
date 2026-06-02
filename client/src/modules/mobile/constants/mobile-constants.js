@@ -131,6 +131,10 @@ export const SYNC_CONFIG = Object.freeze({
   MAX_RETRIES: 5,
   RETRY_DELAYS: [5000, 15000, 45000, 120000, 300000],
   POLL_INTERVAL: 5 * 60 * 1000,
+  // Network-aware periodic poll intervals (CRM-003 AC-8). Wi-Fi is treated as
+  // the default (cheaper/faster), cellular polls less often to save data/battery.
+  POLL_INTERVAL_WIFI: 30 * 60 * 1000,
+  POLL_INTERVAL_CELLULAR: 60 * 60 * 1000,
   PING_TIMEOUT: 5000,
   SYNC_TIMEOUT: 60000,
   UPLOAD_TIMEOUT: 30000,

@@ -116,6 +116,15 @@ function CustomerCard({ customer, lang }) {
   const phone = primaryContact?.mobile || primaryContact?.phone || customer.mobile || customer.phone;
   const email = primaryContact?.email || customer.email;
 
+  // Prefer the first site's address; fall back to the customer's own address.
+  const addressSource = firstSite || customer;
+  const address = [addressSource.street, addressSource.postal_code, addressSource.city]
+    .filter(Boolean)
+    .join(', ');
+  const mapsUrl = address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+    : null;
+
   return (
     <article className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start gap-3">
@@ -178,6 +187,18 @@ function CustomerCard({ customer, lang }) {
           >
             <AtSign className="h-3.5 w-3.5" />
             E-Mail
+          </a>
+        )}
+        {mapsUrl && (
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-muted text-xs font-medium text-foreground"
+            aria-label={lang === 'de' ? 'Auf Karte anzeigen' : 'Show on map'}
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            {lang === 'de' ? 'Karte' : 'Map'}
           </a>
         )}
         {firstSite && (

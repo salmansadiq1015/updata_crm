@@ -15,8 +15,9 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { formatSwissAddress } from '@/lib/formatters';
-import { Building2, Eye, ExternalLink, Filter, Search, X, MapPin, Home } from 'lucide-react';
+import { Building2, Eye, ExternalLink, Filter, Search, X, MapPin, Home, Map as MapIcon, List as ListIcon } from 'lucide-react';
 import { DotLabel } from '@/shared/components/filter-dot';
+import { SitesMap } from '@/modules/crm/components/sites-map';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 
@@ -33,6 +34,7 @@ export function SitesTable() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [cantonFilter, setCantonFilter] = useState('all');
+  const [view, setView] = useState('list');
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -174,6 +176,23 @@ export function SitesTable() {
             {items.length} {t('crm.sites.listDesc', 'objects in portfolio')}
           </p>
         </div>
+        {/* List | Map view toggle */}
+        <div className="ml-auto inline-flex items-center rounded-full border border-white/10 bg-white/4 p-0.5">
+          <button
+            type="button"
+            onClick={() => setView('list')}
+            className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'list' ? 'bg-violet-500/15 text-violet-300' : 'text-white/50 hover:text-white/80')}
+          >
+            <ListIcon className="h-3.5 w-3.5" /> {t('common.list', 'List')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('map')}
+            className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'map' ? 'bg-violet-500/15 text-violet-300' : 'text-white/50 hover:text-white/80')}
+          >
+            <MapIcon className="h-3.5 w-3.5" /> {t('common.map', 'Map')}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -250,40 +269,44 @@ export function SitesTable() {
         )}
       </div>
 
-      <DataTableShell
-        columns={columns}
-        data={items}
-        isLoading={isFetching && items.length === 0}
-        rowCount={items.length}
-        manualPagination
-        manualSorting
-        manualFiltering
-        enableGlobalFilter={false}
-        cursorPagination={{
-          pageSize, onPageSizeChange: setPageSize, hasNext, hasPrev, isFetching, onNext, onPrev,
-        }}
-        renderRowActions={({ row }) => {
-          const s = row.original;
-          const customerId = s.customerId?._id || s.customerId;
-          return (
-            <RowActionsMenu
-              items={[
-                {
-                  label: t('common.view', 'View'),
-                  icon: Eye,
-                  onSelect: () => router.push(`/crm/sites/${s._id}`),
-                },
-                {
-                  label: t('crm.openCustomer', 'Open customer'),
-                  icon: ExternalLink,
-                  hidden: !customerId,
-                  onSelect: () => router.push(`/crm/customers/${customerId}`),
-                },
-              ]}
-            />
-          );
-        }}
-      />
+      {view === 'map' ? (
+        <SitesMap sites={items} />
+      ) : (
+        <DataTableShell
+          columns={columns}
+          data={items}
+          isLoading={isFetching && items.length === 0}
+          rowCount={items.length}
+          manualPagination
+          manualSorting
+          manualFiltering
+          enableGlobalFilter={false}
+          cursorPagination={{
+            pageSize, onPageSizeChange: setPageSize, hasNext, hasPrev, isFetching, onNext, onPrev,
+          }}
+          renderRowActions={({ row }) => {
+            const s = row.original;
+            const customerId = s.customerId?._id || s.customerId;
+            return (
+              <RowActionsMenu
+                items={[
+                  {
+                    label: t('common.view', 'View'),
+                    icon: Eye,
+                    onSelect: () => router.push(`/crm/sites/${s._id}`),
+                  },
+                  {
+                    label: t('crm.openCustomer', 'Open customer'),
+                    icon: ExternalLink,
+                    hidden: !customerId,
+                    onSelect: () => router.push(`/crm/customers/${customerId}`),
+                  },
+                ]}
+              />
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

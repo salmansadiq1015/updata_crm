@@ -1,6 +1,8 @@
 # Module 03: CRM & Asset Management -- Audit
 
-Last updated: 2026-05-13
+Last updated: 2026-06-02
+
+> **2026-06-02 remediation:** Web/server scope brought to completion (except WhatsApp + client CAPTCHA, intentionally deferred as external-provider integrations). All 7 runtime defects fixed; the customer attachment upload 400 fixed. Mobile-only ACs (CRM-006, and the mobile clauses of CRM-003/004/010) are owned by the **separate mobile app** — this repo is the web application. Full server suite: 63 suites / 359 tests green. See `AUDIT_COMPLIANCE_REPORT.md` (section 0) for the per-requirement remediation table.
 
 ## Current Slice: CRM Mobile Installation Capture/OCR
 

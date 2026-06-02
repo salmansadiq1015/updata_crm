@@ -13,9 +13,21 @@ import {
 } from './customer.validation.js';
 import { createNoteSchema } from './note.validation.js';
 import { createImageSchema } from './image.validation.js';
+import attachmentController from './attachment.controller.js';
+import {
+  listAttachmentsSchema,
+  uploadAttachmentSchema,
+  renameAttachmentSchema,
+  deleteAttachmentSchema,
+  bulkDeleteAttachmentSchema,
+} from './attachment.validation.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+const uploadAttachment = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
 const setCustomerEntity = (req, res, next) => { req.entityType = 'customer'; next(); };
 
 // Named routes BEFORE /:id
@@ -208,5 +220,12 @@ router.post('/:id/notes', authenticate, requirePermission('crm:write'), setCusto
 // Images sub-routes
 router.get('/:id/images', authenticate, requirePermission('crm:read'), setCustomerEntity, (req, res, next) => imageController.listByEntity(req, res, next));
 router.post('/:id/images', authenticate, requirePermission('crm:write'), setCustomerEntity, upload.single('image'), validate(createImageSchema), (req, res, next) => imageController.create(req, res, next));
+
+// Attachment sub-routes — bulk-delete registered BEFORE /:fileId to avoid param collision
+router.get('/:id/attachments', authenticate, requirePermission('crm:read'), validate(listAttachmentsSchema), (req, res, next) => attachmentController.list(req, res, next));
+router.post('/:id/attachments', authenticate, requirePermission('crm:write'), uploadAttachment.single('file'), validate(uploadAttachmentSchema), (req, res, next) => attachmentController.upload(req, res, next));
+router.post('/:id/attachments/bulk-delete', authenticate, requirePermission('crm:write'), validate(bulkDeleteAttachmentSchema), (req, res, next) => attachmentController.bulkRemove(req, res, next));
+router.patch('/:id/attachments/:fileId', authenticate, requirePermission('crm:write'), validate(renameAttachmentSchema), (req, res, next) => attachmentController.rename(req, res, next));
+router.delete('/:id/attachments/:fileId', authenticate, requirePermission('crm:write'), validate(deleteAttachmentSchema), (req, res, next) => attachmentController.remove(req, res, next));
 
 export default router;

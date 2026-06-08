@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9097/api/v1';
+import { API_URL } from '@/lib/api/config';
 
 // CRM-014 AC-4: Sanitär category added (value 'sanitaer'). Existing kept.
 const REQUEST_TYPES = [

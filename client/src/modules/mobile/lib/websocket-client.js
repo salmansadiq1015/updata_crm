@@ -1,17 +1,16 @@
 'use client';
 
 import { io } from 'socket.io-client';
+import { resolveApiOrigin } from '@/lib/api/config';
 
 let socket = null;
 
 function getSocketUrl() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9097/api/v1';
-  try {
-    const url = new URL(apiUrl);
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return 'http://localhost:9097';
-  }
+  const configured = process.env.NEXT_PUBLIC_SOCKET_URL?.trim();
+  if (configured) return configured;
+  const origin = resolveApiOrigin();
+  if (origin) return origin;
+  return 'http://localhost:9097';
 }
 
 export function getSocket(token) {

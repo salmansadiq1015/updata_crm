@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { resolveApiOrigin } from '@/lib/api/config';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:9097';
+const BASE = resolveApiOrigin() || 'http://localhost:9097';
 
 export const healthService = {
   async getStatus() {

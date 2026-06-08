@@ -6,6 +6,11 @@ const withSerwist = withSerwistInit({
   disable: process.env.NODE_ENV === 'development',
 });
 
+const EMBED_PARENT_ORIGINS = [
+  'https://appnity.ch',
+  'https://www.appnity.ch',
+];
+
 function parseAllowedAncestors(raw) {
   if (!raw) return [];
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
@@ -16,7 +21,10 @@ function buildFrameAncestorsCsp(ancestors) {
   return `frame-ancestors 'self' ${ancestors.join(' ')}`;
 }
 
-const allowedAncestors = parseAllowedAncestors(process.env.ALLOWED_FRAME_ANCESTORS);
+const envAncestors = parseAllowedAncestors(process.env.ALLOWED_FRAME_ANCESTORS);
+const allowedAncestors = [...new Set([...EMBED_PARENT_ORIGINS, ...envAncestors])];
+
+const apiProxyTarget = (process.env.API_PROXY_TARGET || 'http://127.0.0.1:9097').replace(/\/$/, '');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -24,6 +32,19 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   turbopack: {},
+
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${apiProxyTarget}/api/:path*`,
+      },
+      {
+        source: '/socket.io/:path*',
+        destination: `${apiProxyTarget}/socket.io/:path*`,
+      },
+    ];
+  },
 
   async headers() {
     const rules = [
@@ -34,17 +55,14 @@ const nextConfig = {
           { key: 'Content-Security-Policy', value: 'frame-ancestors *' },
         ],
       },
-    ];
-
-    // Full app — only embeddable on configured parent origins
-    if (allowedAncestors.length > 0) {
-      rules.push({
+      // Full app — embeddable on appnity.ch (+ optional extra origins from env)
+      {
         source: '/:path*',
         headers: [
           { key: 'Content-Security-Policy', value: buildFrameAncestorsCsp(allowedAncestors) },
         ],
-      });
-    }
+      },
+    ];
 
     return rules;
   },

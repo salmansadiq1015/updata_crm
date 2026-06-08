@@ -1,6 +1,13 @@
 import { io } from 'socket.io-client';
+import { resolveApiOrigin } from '@/lib/api/config';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:9097';
+function getSocketUrl() {
+  const configured = process.env.NEXT_PUBLIC_SOCKET_URL?.trim();
+  if (configured) return configured;
+  const origin = resolveApiOrigin();
+  if (origin) return origin;
+  return 'http://localhost:9097';
+}
 
 let socket = null;
 
@@ -28,7 +35,7 @@ export function connectSocket(accessToken) {
     socket.disconnect();
   }
 
-  socket = io(SOCKET_URL, {
+  socket = io(getSocketUrl(), {
     auth: { token: accessToken },
     transports: ['websocket', 'polling'],
     autoConnect: true,

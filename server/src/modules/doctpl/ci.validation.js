@@ -33,6 +33,8 @@ export const updateCIConfigSchema = {
     colors: Joi.object({
       primary: Joi.string().trim().max(20),
       secondary: Joi.string().trim().max(20),
+      primaryCmyk: Joi.string().trim().max(50),
+      secondaryCmyk: Joi.string().trim().max(50),
       text: Joi.string().trim().max(20),
       muted: Joi.string().trim().max(20),
       border: Joi.string().trim().max(20),

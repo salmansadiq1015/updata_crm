@@ -4,7 +4,6 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { AppError, NotFoundError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
-import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 import { INTEGRATION_KEYS } from './integrationConfig.model.js';
 
@@ -44,6 +43,11 @@ class IntegrationConfigService {
       },
       LIST_TTL,
     );
+  }
+
+  async listAll() {
+    await this.ensureDefaults();
+    return this.getAll();
   }
 
   async getByKey(integrationKey) {
@@ -254,7 +258,10 @@ class IntegrationConfigService {
       }
     }
 
-    await cacheManager.del('integ:configs:all');
+    await Promise.all([
+      cacheManager.del('integ:configs:all'),
+      cacheManager.del('integ:dashboard'),
+    ]);
     logger.info('Integration config defaults ensured', {
       module: 'integrations',
       action: 'config.ensureDefaults',

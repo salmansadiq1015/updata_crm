@@ -1,5 +1,6 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
+import reactHooks from "eslint-plugin-react-hooks";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -15,6 +16,9 @@ const eslintConfig = defineConfig([
   // (setState for initialization, Date.now in render, dynamic icon refs, etc.)
   // that do not represent real bugs in this codebase.
   {
+    plugins: {
+      "react-hooks": reactHooks,
+    },
     rules: {
       'react-hooks/set-state-in-effect': 'warn',
       'react-hooks/purity': 'warn',

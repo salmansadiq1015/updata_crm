@@ -58,6 +58,7 @@ class IntegrationAdminController {
 
   async getDashboard(req, res, next) {
     try {
+      await integrationConfigService.ensureDefaults();
       const data = await integrationHealthService.getDashboard();
       return res.success({ data });
     } catch (err) { next(err); }

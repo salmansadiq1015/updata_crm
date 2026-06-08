@@ -11,6 +11,11 @@ import logger from '../../shared/logger/index.js';
 
 const QR_REFERENCE_TABLE = [0, 9, 4, 6, 8, 2, 7, 1, 3, 5];
 const PDF_MIME_TYPE = 'application/pdf';
+const MB_BLUE = '#1f4f9a';
+const MB_RED = '#d91f2e';
+const TEXT = '#111827';
+const MUTED = '#5f6f8f';
+const BORDER = '#d9dee8';
 
 function money(value) {
   return Number(value || 0).toFixed(2);
@@ -19,6 +24,45 @@ function money(value) {
 function formatDate(value) {
   if (!value) return '-';
   return new Intl.DateTimeFormat('de-CH').format(new Date(value));
+}
+
+function companyLine(...parts) {
+  return parts.filter(Boolean).join(' ').trim();
+}
+
+function drawTextLogo(doc, x, y) {
+  doc.save();
+  doc.font('Helvetica-Bold').fontSize(29).fillColor(MB_BLUE).text('M', x, y, { continued: true });
+  doc.fillColor(MB_RED).text('B');
+  doc.fontSize(9).fillColor(MB_BLUE).text('BOILER & HEIZUNG AG', x + 2, y + 31, { characterSpacing: 0.6 });
+  doc.restore();
+}
+
+function drawCompanyHeader(doc, margin, y) {
+  const pageWidth = doc.page.width;
+  drawTextLogo(doc, margin, y);
+
+  const addressLines = [
+    companyLine(config.company.street, config.company.buildingNumber),
+    companyLine(config.company.zip, config.company.city),
+  ].filter(Boolean);
+  doc.save().fontSize(8).fillColor(MB_BLUE);
+  addressLines.forEach((line, index) => doc.text(line, margin, y + 50 + (index * 11)));
+
+  const contactRows = [
+    ['Telefon', config.company.phone],
+    ['E-Mail', config.company.email],
+    ['WEB', 'www.mb-heizung.ch'],
+    ['MWST-Nr.', 'CHE-108.593.165'],
+  ].filter(([, value]) => value);
+  const labelX = pageWidth - margin - 134;
+  const valueX = pageWidth - margin - 72;
+  contactRows.forEach(([label, value], index) => {
+    const rowY = y + (index * 11);
+    doc.text(label, labelX, rowY, { width: 58 });
+    doc.text(value, valueX, rowY, { width: 72, align: 'right' });
+  });
+  doc.restore();
 }
 
 function sanitizeReferenceSeed(invoiceNumber) {
@@ -62,80 +106,110 @@ function writeInvoiceContent(doc, invoice) {
   const usableWidth = pageWidth - margin * 2;
   let y = 48;
 
-  doc.fontSize(18).font('Helvetica-Bold').text(config.company.name, margin, y);
-  doc.fontSize(9).font('Helvetica').text(
-    `${config.company.street} ${config.company.buildingNumber || ''}, ${config.company.zip} ${config.company.city}`,
-    margin,
-    y + 24,
-  );
-  if (config.company.email || config.company.phone) {
-    doc.text([config.company.email, config.company.phone].filter(Boolean).join(' | '), margin, y + 38);
-  }
+  drawCompanyHeader(doc, margin, y);
+  y += 105;
 
-  doc.fontSize(16).font('Helvetica-Bold').text('Rechnung', margin, y, { width: usableWidth, align: 'right' });
-  doc.fontSize(9).font('Helvetica').text(invoice.invoiceNumber, margin, y + 24, { width: usableWidth, align: 'right' });
+  doc.save().fontSize(9).fillColor(TEXT);
+  doc.text(invoice.customerName, margin, y);
+  if (invoice.customerAddress?.street) doc.text(invoice.customerAddress.street, margin, y + 13);
+  if (invoice.customerAddress?.zip || invoice.customerAddress?.city) {
+    doc.text(companyLine(invoice.customerAddress.zip, invoice.customerAddress.city), margin, y + 26);
+  }
+  doc.restore();
+
+  const invoiceTitle = invoice.invoiceType === 'ADVANCE'
+    ? 'Akontorechnung'
+    : invoice.invoiceType === 'FINAL'
+    ? 'Schlussrechnung'
+    : invoice.invoiceType === 'CREDIT_NOTE'
+    ? 'Gutschrift'
+    : 'Rechnung';
+  doc.save().fontSize(15).font('Helvetica-Bold').fillColor(MB_BLUE)
+    .text(`${invoiceTitle} ${invoice.invoiceNumber}`, margin, y, { width: usableWidth, align: 'right' });
+  doc.font('Helvetica').fontSize(9).fillColor(TEXT)
+    .text(`Oberwil, ${formatDate(invoice.invoiceDate)}`, margin, y + 22, { width: usableWidth, align: 'right' })
+    .text(`Fällig am: ${formatDate(invoice.dueDate)}`, margin, y + 36, { width: usableWidth, align: 'right' });
+  doc.restore();
   y += 82;
 
-  doc.moveTo(margin, y).lineTo(pageWidth - margin, y).lineWidth(1).strokeColor('#d9d9d9').stroke();
-  y += 24;
-
-  doc.fontSize(9).fillColor('#6b7280').text('Rechnung an', margin, y);
-  doc.fillColor('#111827').fontSize(11).font('Helvetica-Bold').text(invoice.customerName, margin, y + 16);
-  doc.font('Helvetica').fontSize(9)
-    .text(`Rechnungsdatum: ${formatDate(invoice.invoiceDate)}`, margin, y + 16, { width: usableWidth, align: 'right' })
-    .text(`Faellig am: ${formatDate(invoice.dueDate)}`, margin, y + 30, { width: usableWidth, align: 'right' });
-  y += 72;
+  if (invoice.title) {
+    doc.fontSize(10).font('Helvetica-Bold').fillColor(TEXT).text(invoice.title, margin, y, { width: usableWidth });
+    y += Math.max(18, doc.heightOfString(invoice.title, { width: usableWidth })) + 4;
+  }
 
   const columns = {
     position: margin,
-    description: margin + 42,
-    quantity: margin + 310,
-    unitPrice: margin + 370,
-    total: margin + 455,
+    code: margin + 34,
+    description: margin + 92,
+    quantity: margin + 316,
+    unit: margin + 360,
+    unitPrice: margin + 394,
+    total: margin + 468,
   };
 
-  doc.rect(margin, y, usableWidth, 22).fill('#f3f4f6');
-  doc.fillColor('#374151').fontSize(8).font('Helvetica-Bold')
-    .text('Pos.', columns.position, y + 7)
-    .text('Beschreibung', columns.description, y + 7)
-    .text('Menge', columns.quantity, y + 7)
-    .text('Preis', columns.unitPrice, y + 7)
-    .text('Total', columns.total, y + 7, { width: 90, align: 'right' });
-  y += 28;
+  doc.moveTo(margin, y).lineTo(pageWidth - margin, y).lineWidth(0.8).strokeColor(BORDER).stroke();
+  y += 8;
+  doc.fillColor(MB_BLUE).fontSize(8).font('Helvetica-Bold')
+    .text('Nr.', columns.position, y)
+    .text('Code', columns.code, y)
+    .text('Text', columns.description, y)
+    .text('Menge', columns.quantity, y, { width: 42, align: 'right' })
+    .text('ME', columns.unit, y)
+    .text('Preis', columns.unitPrice, y, { width: 58, align: 'right' })
+    .text('Total', columns.total, y, { width: 48, align: 'right' });
+  y += 14;
+  doc.moveTo(margin, y).lineTo(pageWidth - margin, y).lineWidth(0.8).strokeColor(BORDER).stroke();
+  y += 9;
 
   for (const item of invoice.lineItems || []) {
     if (y > 560) {
       doc.addPage();
       y = 48;
     }
-    doc.fillColor('#111827').font('Helvetica').fontSize(8)
+    const descriptionHeight = doc.heightOfString(item.description || '', { width: 210 });
+    doc.fillColor(TEXT).font('Helvetica').fontSize(8)
       .text(String(item.position || ''), columns.position, y)
-      .text(item.description || '', columns.description, y, { width: 250 })
-      .text(`${item.quantity || 0} ${item.unit || ''}`, columns.quantity, y)
-      .text(`${invoice.currency || 'CHF'} ${money(item.unitPrice)}`, columns.unitPrice, y)
-      .text(`${invoice.currency || 'CHF'} ${money(item.lineTotal)}`, columns.total, y, { width: 90, align: 'right' });
-    y += Math.max(18, doc.heightOfString(item.description || '', { width: 250 }) + 8);
+      .text(item.articleNumber || '', columns.code, y, { width: 52 })
+      .text(item.description || '', columns.description, y, { width: 210 })
+      .text(String(item.quantity || 0), columns.quantity, y, { width: 42, align: 'right' })
+      .text(item.unit || '', columns.unit, y, { width: 28 })
+      .text(money(item.unitPrice), columns.unitPrice, y, { width: 58, align: 'right' })
+      .text(money(item.lineTotal), columns.total, y, { width: 48, align: 'right' });
+    y += Math.max(18, descriptionHeight + 8);
   }
 
   y += 10;
-  doc.moveTo(margin, y).lineTo(pageWidth - margin, y).lineWidth(1).strokeColor('#e5e7eb').stroke();
+  doc.moveTo(margin, y).lineTo(pageWidth - margin, y).lineWidth(1).strokeColor(BORDER).stroke();
   y += 16;
 
   const totalsX = margin + 330;
-  doc.fontSize(9).fillColor('#111827').font('Helvetica')
-    .text('Zwischentotal', totalsX, y)
-    .text(`${invoice.currency || 'CHF'} ${money(invoice.subtotal)}`, totalsX, y, { width: 170, align: 'right' });
+  const currency = invoice.currency || 'CHF';
+  doc.fontSize(9).fillColor(TEXT).font('Helvetica')
+    .text('Total exkl. MWST', totalsX, y)
+    .text(`${currency} ${money(invoice.subtotal)}`, totalsX, y, { width: 170, align: 'right' });
   y += 16;
 
   for (const vat of invoice.vatBreakdown || []) {
-    doc.text(`MWST ${vat.rate}%`, totalsX, y)
-      .text(`${invoice.currency || 'CHF'} ${money(vat.amount)}`, totalsX, y, { width: 170, align: 'right' });
+    doc.text(`Mehrwertsteuer ${vat.rate}%`, totalsX, y)
+      .text(`${currency} ${money(vat.amount)}`, totalsX, y, { width: 170, align: 'right' });
+    y += 16;
+  }
+
+  for (const deduction of invoice.advanceDeductions || []) {
+    doc.text(`Abzug ${deduction.advanceInvoiceNumber}`, totalsX, y)
+      .text(`-${currency} ${money(deduction.totalAmount)}`, totalsX, y, { width: 170, align: 'right' });
     y += 16;
   }
 
   doc.font('Helvetica-Bold').fontSize(11)
-    .text('Rechnungstotal', totalsX, y + 4)
-    .text(`${invoice.currency || 'CHF'} ${money(invoice.grandTotalRounded)}`, totalsX, y + 4, { width: 170, align: 'right' });
+    .text('Gesamttotal inkl. MWST', totalsX, y + 4)
+    .text(`${currency} ${money(invoice.grandTotalRounded)}`, totalsX, y + 4, { width: 170, align: 'right' });
+
+  y += 42;
+  doc.font('Helvetica').fontSize(9).fillColor(MUTED)
+    .text(invoice.paymentTermsText || `Zahlungskondition: ${invoice.paymentTermsDays || 30} Tage netto`, margin, y, { width: usableWidth });
+  y += 18;
+  doc.text('Wir danken Ihnen für den geschätzten Auftrag.', margin, y, { width: usableWidth });
 }
 
 export async function generateInvoicePdfBuffer(invoice, qrReference = buildQrReference(invoice.invoiceNumber)) {

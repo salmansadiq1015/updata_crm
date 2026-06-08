@@ -112,6 +112,8 @@ const navSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.health', href: '/admin/health', icon: HeartPulse, permission: 'system:read' },
       { type: 'leaf', labelKey: 'sidebar.jobs', href: '/admin/jobs', icon: Cog, permission: 'system:admin' },
       { type: 'leaf', labelKey: 'sidebar.templates', href: '/admin/templates', icon: LayoutTemplate, permission: 'settings:admin' },
+      { type: 'leaf', labelKey: 'sidebar.migration', href: '/admin/migration', icon: RefreshCw, permission: 'settings:admin' },
+      { type: 'leaf', labelKey: 'sidebar.integrations', href: '/admin/integrations', icon: Zap, permission: 'integrations:admin' },
       { type: 'leaf', labelKey: 'sidebar.widget', href: '/admin/integrations/widget/submissions', icon: Webhook, permission: 'integrations:widget:manage' },
       { type: 'leaf', labelKey: 'sidebar.settings', href: '/settings', icon: Settings, disabled: true, permission: 'settings:read' },
     ],
@@ -475,6 +477,7 @@ export function Sidebar() {
   const { isCollapsed, toggleCollapsed } = useSidebarStore();
   const { t } = useLanguage();
   const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
   // Use default (expanded) until after hydration to prevent persisted-store mismatch
   const collapsed = mounted ? isCollapsed : false;

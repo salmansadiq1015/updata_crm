@@ -44,6 +44,29 @@ class ProjectController {
     } catch (err) { next(err); }
   }
 
+  async getActivity(req, res, next) {
+    try {
+      const data = await projectService.getActivity(req.params.id);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  async archive(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const project = await projectService.archive(req.params.id, req.user._id, meta);
+      return res.success({ data: project, message: 'Project archived successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async restore(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const project = await projectService.restore(req.params.id, req.user._id, meta);
+      return res.success({ data: project, message: 'Project restored successfully' });
+    } catch (err) { next(err); }
+  }
+
   async duplicate(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
@@ -88,7 +111,7 @@ class ProjectController {
   async exportCsv(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
-      const { format, ...filters } = query;
+      const { format: _format, ...filters } = query;
       const csv = await projectService.exportCsv(filters);
       const filename = `projects-${new Date().toISOString().split('T')[0]}.csv`;
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');

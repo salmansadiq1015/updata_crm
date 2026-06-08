@@ -6,7 +6,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-export function useProjectMutations({ onCreate, onUpdate, onDelete, onDuplicate, onBulkUpdate, onBulkDelete, onExport } = {}) {
+export function useProjectMutations({ onCreate, onUpdate, onDelete, onArchive, onRestore, onDuplicate, onBulkUpdate, onBulkDelete, onExport } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -39,8 +39,38 @@ export function useProjectMutations({ onCreate, onUpdate, onDelete, onDuplicate,
     mutationFn: (id) => projectService.deleteProject(id),
     onSuccess: (res) => {
       invalidate();
-      showSuccess(t('pm.projectDeleted', 'Project archived'));
+      showSuccess(t('pm.projectDeleted', 'Project deleted'));
       onDelete?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const archive = useMutation({
+    mutationFn: (id) => projectService.archiveProject(id),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('pm.projectArchived', 'Project archived'));
+      onArchive?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const restore = useMutation({
+    mutationFn: (id) => projectService.restoreProject(id),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('pm.projectRestored', 'Project restored'));
+      onRestore?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const createFromTemplate = useMutation({
+    mutationFn: (data) => projectService.createFromTemplate(data),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('pm.projectCreated', 'Project created'));
+      onCreate?.(res);
     },
     onError: (err) => showError(err.message),
   });
@@ -84,5 +114,5 @@ export function useProjectMutations({ onCreate, onUpdate, onDelete, onDuplicate,
     onError: (err) => showError(err.message),
   });
 
-  return { create, update, remove, duplicate, bulkUpdate, bulkDelete, exportCsv };
+  return { create, createFromTemplate, update, remove, archive, restore, duplicate, bulkUpdate, bulkDelete, exportCsv };
 }

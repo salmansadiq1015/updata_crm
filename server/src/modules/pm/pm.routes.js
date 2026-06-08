@@ -21,7 +21,7 @@ import {
 import {
   listDocumentsSchema, uploadDocumentSchema, generateDocumentSchema,
   documentIdParamSchema, updateDocumentSchema, restoreDocumentSchema,
-  saveDraftSchema, emailDocumentSchema,
+  saveDraftSchema, emailDocumentSchema, previewDocumentSchema,
 } from './document.validation.js';
 
 /**
@@ -53,7 +53,7 @@ router.use('/projects', projectRoutes);
 router.post(
   '/projects/:id/status',
   authenticate,
-  requirePermission('projects:write'),
+  requirePermission('project:status:update'),
   validate(transitionStatusSchema),
   (req, res, next) => statusController.transitionStatus(req, res, next),
 );
@@ -226,6 +226,13 @@ documentRouter.post(
   requirePermission('projects:write'),
   validate(generateDocumentSchema),
   (req, res, next) => documentController.generate(req, res, next),
+);
+documentRouter.post(
+  '/preview',
+  authenticate,
+  requirePermission('projects:read'),
+  validate(previewDocumentSchema),
+  (req, res, next) => documentController.preview(req, res, next),
 );
 documentRouter.post(
   '/draft',

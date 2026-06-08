@@ -22,6 +22,7 @@ const ALLOWED_SORT_FIELDS = [
   'status',
   'projectType',
   'customerId',
+  'customerName',
   '_id',
 ];
 
@@ -39,6 +40,14 @@ class ProjectRepository {
 
   async findById(id) {
     return Project.findById(id)
+      .populate(POPULATE_FIELDS)
+      .lean();
+  }
+
+  // Bypass the soft-delete pre-hook so a deleted project can be inspected/restored.
+  async findByIdWithDeleted(id) {
+    return Project.findById(id)
+      .setOptions({ includeDeleted: true })
       .populate(POPULATE_FIELDS)
       .lean();
   }
@@ -119,10 +128,30 @@ class ProjectRepository {
       .lean();
   }
 
+  // Pure soft-delete (PROJ-001 AC-6): mark deleted WITHOUT forcing ARCHIVED so the
+  // record keeps its original status and can be restored to it. Archiving is a
+  // distinct action (see archive()).
   async softDelete(id) {
     return Project.findByIdAndUpdate(
       id,
-      { isDeleted: true, deletedAt: new Date(), status: 'ARCHIVED' },
+      { isDeleted: true, deletedAt: new Date() },
+      { returnDocument: 'after' },
+    );
+  }
+
+  async restore(id) {
+    return Project.findByIdAndUpdate(
+      id,
+      { isDeleted: false, deletedAt: null },
+      { returnDocument: 'after' },
+    ).setOptions({ includeDeleted: true });
+  }
+
+  // Archive a project (PROJ-001 AC-7): status-only change, not a soft-delete.
+  async archive(id) {
+    return Project.findByIdAndUpdate(
+      id,
+      { status: 'ARCHIVED' },
       { returnDocument: 'after' },
     );
   }

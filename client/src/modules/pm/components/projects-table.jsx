@@ -18,6 +18,7 @@ import { PageHeader } from '@/shared/components/page-header';
 import { PermissionGate } from '@/shared/components/permission-gate';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { ProjectForm } from '@/modules/pm/components/project-form';
+import { CreateFromTemplateDialog } from '@/modules/pm/components/create-from-template-dialog';
 import { ProjectFilterBar } from '@/modules/pm/components/project-filter-bar';
 import { ProjectStatsRow } from '@/modules/pm/components/project-stats-row';
 import { ProjectStatusBadge } from '@/modules/pm/components/project-status-badge';
@@ -27,6 +28,7 @@ import {
   PROJECT_TYPE_CONFIG, pickProjectAccent, STATUS_TRANSITIONS, PROJECT_STATUS_CONFIG,
 } from '@/modules/pm/constants/pm-constants';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -34,6 +36,7 @@ import { formatDate, formatCurrency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import {
   Plus, Eye, Pencil, Copy, Archive, FolderKanban, Download, ArrowUpDown,
+  ChevronDown, FileText, LayoutTemplate, Trash2, ArchiveRestore, Milestone,
 } from 'lucide-react';
 
 export function ProjectsTable() {
@@ -59,9 +62,12 @@ export function ProjectsTable() {
 
   // ── Dialog/form state ─────────────────────────────────────────────
   const [formOpen, setFormOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [editProject, setEditProject] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
+  // 'archive' (status → ARCHIVED, non-Draft) or 'delete' (soft-delete a Draft)
+  const [confirmMode, setConfirmMode] = useState('archive');
   const [rowSelection, setRowSelection] = useState({});
   const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
 
@@ -111,10 +117,11 @@ export function ProjectsTable() {
     refetchInterval: 60000,
   });
 
-  const { create, update, remove, duplicate, bulkDelete, exportCsv } = useProjectMutations({
+  const { create, createFromTemplate, update, remove, archive, restore, duplicate, bulkDelete, exportCsv } = useProjectMutations({
     onCreate: () => setFormOpen(false),
     onUpdate: () => setFormOpen(false),
-    onDelete: () => setConfirmArchiveOpen(false),
+    onDelete: () => { setConfirmArchiveOpen(false); setArchiveTarget(null); },
+    onArchive: () => { setConfirmArchiveOpen(false); setArchiveTarget(null); },
     onDuplicate: (res) => {
       if (res?._id) router.push(`/projects/${res._id}`);
     },
@@ -183,9 +190,6 @@ export function ProjectsTable() {
                   </span>
                 )}
               </div>
-              {p.customerId?.name && (
-                <p className="text-xs text-muted-foreground truncate">{p.customerId.name}</p>
-              )}
             </div>
           </Link>
         );
@@ -203,6 +207,16 @@ export function ProjectsTable() {
             {language === 'de' ? cfg.label : cfg.labelEn}
           </span>
         );
+      },
+    },
+    {
+      accessorKey: 'customerName',
+      header: t('pm.customer', 'Customer'),
+      size: 200,
+      Cell: ({ row }) => {
+        const name = row.original.customerId?.name || row.original.customerName;
+        if (!name) return <span className="text-xs text-muted-foreground/60">—</span>;
+        return <span className="text-xs truncate">{name}</span>;
       },
     },
     {
@@ -291,6 +305,12 @@ export function ProjectsTable() {
     setEditProject(null);
   };
 
+  const handleTemplateSubmit = async (payload) => {
+    const res = await createFromTemplate.mutateAsync(payload);
+    setTemplateOpen(false);
+    if (res?._id) router.push(`/projects/${res._id}`);
+  };
+
   // Sorting change: reset cursor so first page is fetched with new sort
   const handleSortingChange = useCallback((updater) => {
     setSorting((prev) => {
@@ -317,25 +337,57 @@ export function ProjectsTable() {
           {exportCsv.isPending ? (language === 'de' ? 'Exportiert...' : 'Exporting...') : 'CSV'}
         </Button>
         <PermissionGate permission="projects:write">
-          <Button
-            onClick={() => {
-              setEditProject(null);
-              setFormOpen(true);
-            }}
-            size="sm"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            {t('pm.newProject', 'New Project')}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-1.5" />
+                {t('pm.newProject', 'New Project')}
+                <ChevronDown className="h-3.5 w-3.5 ml-1.5 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="gap-2"
+                onSelect={() => {
+                  setEditProject(null);
+                  setFormOpen(true);
+                }}
+              >
+                <FileText className="h-4 w-4" />
+                {t('pm.blankProject', 'Blank Project')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2"
+                onSelect={() => setTemplateOpen(true)}
+              >
+                <LayoutTemplate className="h-4 w-4" />
+                {t('pm.createFromTemplate', 'Create from Template')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </PermissionGate>
       </PageHeader>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
+      <Tabs defaultValue="projects" className="w-full">
+        <TabsList className="bg-transparent border-b rounded-none w-full justify-start h-auto p-0 gap-1">
+          <TabsTrigger
+            value="projects"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 gap-1.5"
+          >
+            <FolderKanban className="h-3.5 w-3.5" />
+            {t('pm.projects', 'Projects')}
+          </TabsTrigger>
+          <TabsTrigger
+            value="milestones"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 gap-1.5"
+          >
+            <Milestone className="h-3.5 w-3.5" />
+            {t('pm.upcomingMilestones', 'Upcoming Milestones')}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="projects" className="mt-5 space-y-6">
           <ProjectStatsRow />
-        </div>
-        <MilestonesWidget />
-      </div>
 
       <ProjectFilterBar
         search={search}
@@ -403,12 +455,32 @@ export function ProjectsTable() {
               onSelect: () => duplicate.mutate(row.original._id),
               hidden: !hasPermission('projects:write') || row.original.isDeleted,
             },
+            {
+              label: t('pm.restore', 'Restore'),
+              icon: ArchiveRestore,
+              onSelect: () => restore.mutate(row.original._id),
+              hidden: !hasPermission('projects:write') || !row.original.isDeleted,
+            },
             { type: 'separator' },
             {
               label: t('pm.archive', 'Archive'),
               icon: Archive,
+              onSelect: () => {
+                setConfirmMode('archive');
+                setArchiveTarget(row.original);
+                setConfirmArchiveOpen(true);
+              },
+              hidden: !hasPermission('projects:write')
+                || row.original.isDeleted
+                || row.original.status === 'DRAFT'
+                || row.original.status === 'ARCHIVED',
+            },
+            {
+              label: t('common.delete', 'Delete'),
+              icon: Trash2,
               destructive: true,
               onSelect: () => {
+                setConfirmMode('delete');
                 setArchiveTarget(row.original);
                 setConfirmArchiveOpen(true);
               },
@@ -417,6 +489,12 @@ export function ProjectsTable() {
           ]} />
         )}
       />
+        </TabsContent>
+
+        <TabsContent value="milestones" className="mt-5">
+          <MilestonesWidget variant="page" />
+        </TabsContent>
+      </Tabs>
 
       <BulkActionsBar count={selectedIds.length} onClear={() => setRowSelection({})}>
         <Button
@@ -438,13 +516,28 @@ export function ProjectsTable() {
         isLoading={create.isPending || update.isPending}
       />
 
+      <CreateFromTemplateDialog
+        open={templateOpen}
+        onOpenChange={setTemplateOpen}
+        onSubmit={handleTemplateSubmit}
+        isLoading={createFromTemplate.isPending}
+      />
+
       <ConfirmDialog
         open={confirmArchiveOpen}
         onOpenChange={setConfirmArchiveOpen}
-        title={t('pm.archive', 'Archive Project')}
-        description={t('pm.confirmArchive', 'Are you sure you want to archive this project?')}
-        onConfirm={() => remove.mutate(archiveTarget?._id)}
-        isLoading={remove.isPending}
+        title={confirmMode === 'delete'
+          ? t('pm.deleteProject', 'Delete Project')
+          : t('pm.archive', 'Archive Project')}
+        description={confirmMode === 'delete'
+          ? (language === 'de'
+            ? 'Dieses Entwurfsprojekt wird gelöscht. Es kann über den Filter „Gelöschte anzeigen" wiederhergestellt werden.'
+            : 'This draft project will be deleted. You can restore it from the "Include Deleted" filter.')
+          : t('pm.confirmArchive', 'Are you sure you want to archive this project?')}
+        onConfirm={() => (confirmMode === 'delete'
+          ? remove.mutate(archiveTarget?._id)
+          : archive.mutate(archiveTarget?._id))}
+        isLoading={remove.isPending || archive.isPending}
         variant="destructive"
       />
 

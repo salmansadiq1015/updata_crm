@@ -80,6 +80,20 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'projects', action: 'delete', description: 'Delete projects' },
   { module: 'projects', action: 'admin', description: 'Full project administration' },
 
+  // Projects — fine-grained (Phase C0)
+  { module: 'project', action: 'create',              description: 'Create new projects' },
+  { module: 'project', action: 'edit',                description: 'Edit project details' },
+  { module: 'project', action: 'read',                description: 'View project details' },
+  { module: 'project', action: 'delete',              description: 'Delete / soft-delete projects' },
+  { module: 'project', action: 'status:update',       description: 'Transition project status through allowed flow' },
+  { module: 'project', action: 'status:override',     description: 'Override project status transition rules' },
+  { module: 'project', action: 'prep-actions:manage', description: 'Create, update, and delete preparatory actions' },
+  { module: 'project', action: 'schedule:manage',     description: 'Create, update, and delete schedule entries' },
+  { module: 'project', action: 'documents:read',      description: 'View project documents' },
+  { module: 'project', action: 'documents:write',     description: 'Upload and update project documents' },
+  { module: 'project', action: 'documents:create',    description: 'Generate project documents from templates' },
+  { module: 'project', action: 'documents:delete',    description: 'Delete project documents' },
+
   // Field Service
   { module: 'field-service', action: 'read', description: 'View field service data' },
   { module: 'field-service', action: 'write', description: 'Create and update field service data' },
@@ -155,6 +169,11 @@ export const ROLE_DEFINITIONS = [
     permissionKeys: [
       'crm:read', 'crm:write', 'crm:delete', 'crm:admin',
       'projects:read', 'projects:write', 'projects:delete', 'projects:admin',
+      'project:create', 'project:edit', 'project:read', 'project:delete',
+      'project:status:update', 'project:status:override',
+      'project:prep-actions:manage', 'project:schedule:manage',
+      'project:documents:read', 'project:documents:write',
+      'project:documents:create', 'project:documents:delete',
       'quotations:read', 'quotations:write', 'quotations:delete', 'quotations:admin',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'field-service:read',
@@ -171,6 +190,7 @@ export const ROLE_DEFINITIONS = [
     description: 'Field operations, time tracking',
     permissionKeys: [
       'crm:read',
+      'project:read', 'project:documents:read',
       'field-service:read', 'field-service:write', 'field-service:admin',
       'tasks:read', 'tasks:write',
       'notifications:read',
@@ -184,6 +204,7 @@ export const ROLE_DEFINITIONS = [
     description: 'Financial operations',
     permissionKeys: [
       'crm:read',
+      'project:read', 'project:documents:read',
       'invoicing:read', 'invoicing:write', 'invoicing:delete', 'invoicing:admin',
       ...ACCOUNTING_PERMISSION_KEYS,
       'reports:read', 'reports:write',
@@ -199,6 +220,7 @@ export const ROLE_DEFINITIONS = [
     description: 'Scheduling and resource planning',
     permissionKeys: [
       'crm:read',
+      'project:read', 'project:schedule:manage', 'project:documents:read',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'field-service:read',
       'tasks:read', 'tasks:write',
@@ -212,6 +234,7 @@ export const ROLE_DEFINITIONS = [
     name: 'Lehrling',
     description: 'Limited field access, supervised',
     permissionKeys: [
+      'project:read',
       'field-service:read',
       'tasks:read',
       'notifications:read',
@@ -228,6 +251,7 @@ export const ROLE_DEFINITIONS = [
       'roles:read',
       'crm:read',
       'projects:read',
+      'project:read',
       'tasks:read', 'tasks:write',
       'notifications:read',
       'ai:sessions',

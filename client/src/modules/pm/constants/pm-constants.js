@@ -4,6 +4,18 @@ import {
   ArrowRight, Milestone, Building2, Users,
 } from 'lucide-react';
 
+// ── Document upload limit (PROJ-006 AC-8) ───────────────────────
+// Single source of truth on the client for the per-file upload cap. Mirrors the
+// server default (PROJECT_DOCUMENT_MAX_UPLOAD_MB) so the hint and the pre-upload
+// size check never drift apart.
+export const PROJECT_DOCUMENT_MAX_UPLOAD_MB = 50;
+export const PROJECT_DOCUMENT_MAX_UPLOAD_BYTES = PROJECT_DOCUMENT_MAX_UPLOAD_MB * 1024 * 1024;
+
+/** True when a file's size exceeds the upload limit. */
+export function exceedsUploadLimit(sizeBytes) {
+  return typeof sizeBytes === 'number' && sizeBytes > PROJECT_DOCUMENT_MAX_UPLOAD_BYTES;
+}
+
 // ── Project statuses ────────────────────────────────────────────
 export const PROJECT_STATUSES = [
   'DRAFT', 'PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'ARCHIVED',

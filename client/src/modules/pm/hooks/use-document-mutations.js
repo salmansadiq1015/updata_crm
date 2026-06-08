@@ -7,7 +7,7 @@ import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 export function useDocumentMutations(projectId, {
-  onUpload, onDelete, onGenerate, onDraft, onEmail,
+  onUpload, onDelete, onRestore, onGenerate, onDraft, onEmail,
 } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
@@ -36,6 +36,12 @@ export function useDocumentMutations(projectId, {
 
   // Accepts either a bare templateType string (back-compat) or
   // { templateType, overrides, draftId }.
+  const restore = useMutation({
+    mutationFn: (docId) => documentService.restoreDocument(projectId, docId),
+    onSuccess: (res) => { invalidate(); showSuccess(t('pm.documentRestored', 'Document restored')); onRestore?.(res); },
+    onError: (err) => showError(err.message),
+  });
+
   const generate = useMutation({
     mutationFn: (input) => documentService.generateDocument(
       projectId,
@@ -57,5 +63,5 @@ export function useDocumentMutations(projectId, {
     onError: (err) => showError(err.message),
   });
 
-  return { upload, updateMetadata, remove, generate, saveDraft, emailDocument };
+  return { upload, updateMetadata, remove, restore, generate, saveDraft, emailDocument };
 }

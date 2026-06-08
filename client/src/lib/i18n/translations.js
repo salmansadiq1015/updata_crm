@@ -905,6 +905,15 @@ export const translations = {
 
     // PM — Project Management
     'pm.title': 'Projektmanagement',
+    'pm.createFromTemplate': 'Aus Vorlage erstellen',
+    'pm.templateProject': 'Vorlagenprojekt',
+    'pm.blankProject': 'Leeres Projekt',
+    'pm.deleteProject': 'Projekt löschen',
+    'pm.restore': 'Wiederherstellen',
+    'pm.activity': 'Aktivität',
+    'pm.projectArchived': 'Projekt archiviert',
+    'pm.projectRestored': 'Projekt wiederhergestellt',
+    'pm.documentRestored': 'Dokument wiederhergestellt',
     'pm.projects': 'Projekte',
     'pm.projectsDesc': 'Projekte erstellen, verwalten und den Fortschritt verfolgen.',
     'pm.newProject': 'Neues Projekt',
@@ -2628,6 +2637,15 @@ export const translations = {
 
     // PM — Project Management
     'pm.title': 'Project Management',
+    'pm.createFromTemplate': 'Create from Template',
+    'pm.templateProject': 'Template Project',
+    'pm.blankProject': 'Blank Project',
+    'pm.deleteProject': 'Delete Project',
+    'pm.restore': 'Restore',
+    'pm.activity': 'Activity',
+    'pm.projectArchived': 'Project archived',
+    'pm.projectRestored': 'Project restored',
+    'pm.documentRestored': 'Document restored',
     'pm.projects': 'Projects',
     'pm.projectsDesc': 'Create, manage and track project progress.',
     'pm.newProject': 'New Project',

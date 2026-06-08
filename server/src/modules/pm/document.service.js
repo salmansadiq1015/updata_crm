@@ -156,7 +156,8 @@ class DocumentService {
     const startPart = filters.startDate ? new Date(filters.startDate).getTime() : '';
     const endPart = filters.endDate ? new Date(filters.endDate).getTime() : '';
     const searchPart = filters.search || '';
-    const cacheKey = `pm:documents:project:${projectId}:${categoryPart}:${startPart}:${endPart}:${searchPart}`;
+    const deletedPart = filters.includeDeleted ? 'withDeleted' : '';
+    const cacheKey = `pm:documents:project:${projectId}:${categoryPart}:${startPart}:${endPart}:${searchPart}:${deletedPart}`;
     return cacheManager.getOrSet(
       cacheKey,
       async () => this._enrichDocuments(await documentRepository.findByProjectId(projectId, filters)),
@@ -315,6 +316,21 @@ class DocumentService {
       plannedStartDate: project.plannedStartDate?.toISOString().split('T')[0],
       plannedEndDate: project.plannedEndDate?.toISOString().split('T')[0],
     };
+  }
+
+  /**
+   * Compose the merged document body for live preview (PROJ-005 AC-4) WITHOUT
+   * generating a PDF or persisting anything. Returns the template data merged with
+   * the user's overrides plus the renderer-consumed body fields (introduction), so
+   * the client can show exactly what will be rendered before finalizing.
+   */
+  async previewDocument(projectId, templateType, overrides = {}) {
+    const baseData = await this.buildTemplateData(projectId);
+    const safeOverrides = overrides && typeof overrides === 'object' ? overrides : {};
+    const templateData = { ...baseData, ...safeOverrides, templateType };
+    const { buildPmDocumentBody } = await import('./pmDocumentBody.js');
+    const bodyFields = buildPmDocumentBody(templateType, templateData);
+    return { ...templateData, ...bodyFields };
   }
 
   /**

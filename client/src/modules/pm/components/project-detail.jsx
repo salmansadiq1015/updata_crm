@@ -18,6 +18,7 @@ import { StatusHistoryTimeline } from './status-history-timeline';
 import { PrepActionsTab } from './prep-actions-tab';
 import { ScheduleTab } from './schedule-tab';
 import { DocumentsTab } from './documents-tab';
+import { ProjectActivityTab } from './project-activity-tab';
 import { RichTextContent } from '@/components/ui/rich-text-content';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
@@ -29,9 +30,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { formatDate, formatCurrency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import {
-  Pencil, Copy, Archive, ArrowRight, ChevronRight,
+  Pencil, Copy, Archive, ArrowRight, ChevronRight, Trash2,
   FolderKanban, Building2, User, Calendar, Wallet, FileText,
-  ClipboardList, Clock, ListChecks, CalendarClock,
+  ClipboardList, Clock, ListChecks, CalendarClock, Activity,
 } from 'lucide-react';
 
 function DetailSkeleton() {
@@ -71,7 +72,8 @@ export function ProjectDetail() {
   const { hasPermission } = usePermissions();
 
   const [formOpen, setFormOpen] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false); // soft-delete a DRAFT
+  const [archiveActionOpen, setArchiveActionOpen] = useState(false); // status → ARCHIVED
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
 
   const canWrite = hasPermission('projects:write');
@@ -84,9 +86,10 @@ export function ProjectDetail() {
     enabled: !!id,
   });
 
-  const { update, remove, duplicate } = useProjectMutations({
+  const { update, remove, archive, duplicate } = useProjectMutations({
     onUpdate: () => setFormOpen(false),
     onDelete: () => router.push('/projects'),
+    onArchive: () => setArchiveActionOpen(false),
     onDuplicate: (res) => {
       if (res?._id) router.push(`/projects/${res._id}`);
     },
@@ -184,15 +187,27 @@ export function ProjectDetail() {
                     </TooltipProvider>
                   </>
                 )}
+                {canWrite && !isArchived && project.status !== 'DRAFT' && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8 text-amber-600 hover:bg-amber-500/10" onClick={() => setArchiveActionOpen(true)}>
+                          <Archive className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t('pm.archive', 'Archive')}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 {canDelete && project.status === 'DRAFT' && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button variant="outline" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => setArchiveOpen(true)}>
-                          <Archive className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{t('pm.archive', 'Archive')}</TooltipContent>
+                      <TooltipContent>{t('common.delete', 'Delete')}</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 )}
@@ -262,6 +277,10 @@ export function ProjectDetail() {
                 <FileText className="h-3.5 w-3.5 mr-1.5" />
                 {t('pm.documents', 'Documents')}
               </TabsTrigger>
+              <TabsTrigger value="activity" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
+                <Activity className="h-3.5 w-3.5 mr-1.5" />
+                {t('pm.activity', 'Activity')}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="mt-6">
@@ -317,6 +336,10 @@ export function ProjectDetail() {
             <TabsContent value="documents" className="mt-6">
               <DocumentsTab projectId={id} />
             </TabsContent>
+
+            <TabsContent value="activity" className="mt-6">
+              <ProjectActivityTab projectId={id} />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
@@ -343,10 +366,22 @@ export function ProjectDetail() {
       <ConfirmDialog
         open={archiveOpen}
         onOpenChange={setArchiveOpen}
-        title={t('pm.archive', 'Archive Project')}
-        description={t('pm.confirmArchive', 'Are you sure you want to archive this project?')}
+        title={t('pm.deleteProject', 'Delete Project')}
+        description={language === 'de'
+          ? 'Dieses Entwurfsprojekt wird gelöscht. Es kann über den Filter „Gelöschte anzeigen" wiederhergestellt werden.'
+          : 'This draft project will be deleted. You can restore it from the "Include Deleted" filter.'}
         onConfirm={() => remove.mutate(id)}
         isLoading={remove.isPending}
+        variant="destructive"
+      />
+
+      <ConfirmDialog
+        open={archiveActionOpen}
+        onOpenChange={setArchiveActionOpen}
+        title={t('pm.archive', 'Archive Project')}
+        description={t('pm.confirmArchive', 'Are you sure you want to archive this project?')}
+        onConfirm={() => archive.mutate(id)}
+        isLoading={archive.isPending}
         variant="destructive"
       />
     </div>

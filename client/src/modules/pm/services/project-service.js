@@ -33,6 +33,21 @@ export const projectService = {
     return res.data;
   },
 
+  async createFromTemplate(data) {
+    const res = await apiClient.post(ENDPOINTS.PM.PROJECT_FROM_TEMPLATE, data);
+    return res.data;
+  },
+
+  async archiveProject(id) {
+    const res = await apiClient.post(ENDPOINTS.PM.PROJECT_ARCHIVE(id));
+    return res.data;
+  },
+
+  async restoreProject(id) {
+    const res = await apiClient.post(ENDPOINTS.PM.PROJECT_RESTORE(id));
+    return res.data;
+  },
+
   async searchProjects(q, limit = 25) {
     const res = await apiClient.get(ENDPOINTS.PM.PROJECTS_SEARCH, {
       params: { q, limit },
@@ -47,6 +62,11 @@ export const projectService = {
 
   async bulkDelete(ids) {
     const res = await apiClient.post(ENDPOINTS.PM.PROJECTS_BULK_DELETE, { ids });
+    return res.data;
+  },
+
+  async getActivity(id) {
+    const res = await apiClient.get(ENDPOINTS.PM.PROJECT_ACTIVITY(id));
     return res.data;
   },
 

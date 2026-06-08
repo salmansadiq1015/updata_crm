@@ -14,6 +14,52 @@ import logger from '../logger/index.js';
  *   authGuard           — Combined [authenticate, requirePermission] array
  */
 
+/**
+ * Permission implications — a coarse permission grants a set of finer-grained
+ * permissions. Purely additive: it can only widen access, never restrict it, so
+ * existing roles keep working unchanged. This lets routes express the granular
+ * permission vocabulary from the requirements (e.g. `project:create`) while roles
+ * seeded with the coarse `projects:write` continue to satisfy them.
+ */
+export const PERMISSION_IMPLICATIONS = Object.freeze({
+  'projects:read': [
+    'project:read',
+    'project:documents:read',
+    'project:prep-actions:read',
+    'project:schedule:read',
+    'project:status:read',
+  ],
+  'projects:write': [
+    'project:create',
+    'project:edit',
+    'project:status:update',
+    'project:prep-actions:manage',
+    'project:schedule:manage',
+    'project:documents:create',
+    'project:documents:write',
+  ],
+  'projects:admin': [
+    'project:status:override',
+  ],
+  'projects:delete': [
+    'project:delete',
+    'project:documents:delete',
+  ],
+});
+
+/**
+ * True when the user's permission set satisfies `required`, either directly or
+ * through an implication (coarse → granular).
+ */
+export const satisfiesPermission = (userPermissions, required) => {
+  if (userPermissions.includes(required)) return true;
+  for (const held of userPermissions) {
+    const implied = PERMISSION_IMPLICATIONS[held];
+    if (implied && implied.includes(required)) return true;
+  }
+  return false;
+};
+
 // --- Authenticate: Verify JWT + Session and attach user to req ---
 
 export const authenticate = async (req, res, next) => {
@@ -140,7 +186,7 @@ export const requirePermission = (permission) => {
         return next();
       }
 
-      if (!permissions.includes(permission)) {
+      if (!satisfiesPermission(permissions, permission)) {
         // Log permission denied
         auditService.logEvent({
           eventType: 'permission.denied',

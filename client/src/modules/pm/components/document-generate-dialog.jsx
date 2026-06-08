@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useDocumentMutations } from '@/modules/pm/hooks/use-document-mutations';
+import { documentService } from '@/modules/pm/services/document-service';
+import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useLanguage } from '@/lib/i18n/language-context';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -12,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField, FormBody } from '@/components/ui/form-field';
 import { cn } from '@/lib/utils';
 import {
-  FileText, CalendarCheck, ClipboardList, BadgeCheck, Loader2, ArrowLeft, Save, Sparkles,
+  FileText, CalendarCheck, ClipboardList, BadgeCheck, Loader2, ArrowLeft, Save, Sparkles, Eye,
 } from 'lucide-react';
 
 // Friendly labels for the 3 PM template types (PROJ-005 AC-1).
@@ -91,6 +94,17 @@ export function DocumentGenerateDialog({ open, onOpenChange, projectId, draft = 
   }, [open, draft]);
 
   const setField = (key, value) => setOverrides((prev) => ({ ...prev, [key]: value }));
+
+  // Live merged-document preview (PROJ-005 AC-4). Debounced so typing in the
+  // override fields doesn't spam the server; only runs on the edit step.
+  const debouncedOverrides = useDebounce(overrides, 400);
+  const { data: preview, isFetching: previewLoading } = useQuery({
+    queryKey: ['pm', 'documents', 'preview', projectId, templateType, debouncedOverrides],
+    queryFn: () => documentService.previewDocument(projectId, { templateType, overrides: debouncedOverrides }),
+    enabled: open && step === 'edit' && !!templateType,
+    staleTime: 10_000,
+  });
+  const previewBody = preview?.introduction || '';
 
   const pickTemplate = (value) => {
     setTemplateType(value);
@@ -178,6 +192,28 @@ export function DocumentGenerateDialog({ open, onOpenChange, projectId, draft = 
                 )}
               </FormField>
             ))}
+
+            {/* Live preview of the composed document body (PROJ-005 AC-4) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Eye className="h-3.5 w-3.5" />
+                {language === 'de' ? 'Vorschau' : 'Preview'}
+                {previewLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3.5 max-h-56 overflow-y-auto">
+                {previewBody ? (
+                  <pre className="whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-foreground/90">
+                    {previewBody}
+                  </pre>
+                ) : (
+                  <p className="text-xs text-muted-foreground/70">
+                    {language === 'de'
+                      ? 'Die Vorschau wird hier angezeigt.'
+                      : 'The composed document preview appears here.'}
+                  </p>
+                )}
+              </div>
+            </div>
           </FormBody>
         )}
 

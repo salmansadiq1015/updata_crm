@@ -14,13 +14,24 @@ const DASHBOARD_TTL = { l1Ttl: 30, l2Ttl: 60 };
 const PROJECT_STATUSES = ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'ARCHIVED'];
 
 class ProjectService {
+  // Resolve a customer's display name for the denormalized `customerName` field
+  // (PROJ-007 AC-3 — enables alphabetical sort within cursor pagination).
+  async _resolveCustomerName(customerId) {
+    if (!customerId) return null;
+    const Customer = (await import('../crm/customer.model.js')).default;
+    const customer = await Customer.findById(customerId).select('name').lean();
+    return customer?.name || null;
+  }
+
   async create(data, createdBy, meta = {}) {
     await this._checkNameUniqueness(data.name, data.customerId);
 
     const projectNumber = await counterService.getNextProjectNumber();
 
+    const customerName = await this._resolveCustomerName(data.customerId);
     const project = await projectRepository.create({
       ...data,
+      customerName,
       projectNumber,
       createdBy,
     });
@@ -96,7 +107,9 @@ class ProjectService {
       );
     }
 
-    const updated = await projectRepository.updateById(id, { ...data, updatedBy });
+    const patch = { ...data, updatedBy };
+    if (customerChanged) patch.customerName = await this._resolveCustomerName(data.customerId);
+    const updated = await projectRepository.updateById(id, patch);
     await this._invalidateProjectCache(id);
     await this._invalidateListCache();
 
@@ -148,6 +161,76 @@ class ProjectService {
     });
   }
 
+  /**
+   * Archive a project (PROJ-001 AC-7). A status-only change to ARCHIVED — the
+   * dedicated path for non-Draft projects, which cannot be soft-deleted. Idempotent
+   * guard: already-archived projects are rejected.
+   */
+  async archive(id, archivedBy, meta = {}) {
+    const project = await projectRepository.findById(id);
+    if (!project) throw new NotFoundError('Project', id);
+    if (project.status === 'ARCHIVED') {
+      throw new ConflictError('Project is already archived');
+    }
+
+    await projectRepository.archive(id);
+    await this._invalidateProjectCache(id);
+    await this._invalidateListCache();
+    await this._invalidateDashboardCache();
+
+    eventBus.publish(EVENT_TYPES.PROJECT_ARCHIVED, {
+      projectId: id,
+      previousStatus: project.status,
+      archivedBy,
+    }, { source: 'pm:projects' });
+
+    auditService.logEvent({
+      eventType: 'project.archived',
+      userId: archivedBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { projectId: id, projectNumber: project.projectNumber, previousStatus: project.status },
+      module: 'pm',
+    });
+
+    return projectRepository.findById(id);
+  }
+
+  /**
+   * Restore a soft-deleted project (PROJ-001 AC-6). Clears the isDeleted flag,
+   * returning the project to its prior status (delete no longer forces ARCHIVED).
+   */
+  async restore(id, restoredBy, meta = {}) {
+    const project = await projectRepository.findByIdWithDeleted(id);
+    if (!project) throw new NotFoundError('Project', id);
+    if (!project.isDeleted) {
+      throw new ConflictError('Project is not deleted');
+    }
+
+    await projectRepository.restore(id);
+    await this._invalidateProjectCache(id);
+    await this._invalidateListCache();
+    await this._invalidateDashboardCache();
+
+    eventBus.publish(EVENT_TYPES.PROJECT_RESTORED, {
+      projectId: id,
+      restoredBy,
+    }, { source: 'pm:projects' });
+
+    auditService.logEvent({
+      eventType: 'project.restored',
+      userId: restoredBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { projectId: id, projectNumber: project.projectNumber },
+      module: 'pm',
+    });
+
+    return projectRepository.findById(id);
+  }
+
   async duplicate(id, createdBy, meta = {}) {
     const original = await projectRepository.findById(id);
     if (!original) throw new NotFoundError('Project', id);
@@ -171,6 +254,7 @@ class ProjectService {
       estimatedBudget: original.estimatedBudget,
       currency: original.currency,
       notes: original.notes,
+      customerName: original.customerName || original.customerId?.name || null,
       templateId: original.templateId || null,
       createdBy,
     });
@@ -318,6 +402,45 @@ class ProjectService {
     return { deactivatedCount };
   }
 
+  /**
+   * Per-project activity log (PROJ-005 AC-6 / PROJ-001). Surfaces the existing
+   * audit trail scoped to one project — every PM event (project lifecycle, prep
+   * actions, schedule, documents, status) records details.projectId, so a single
+   * queryByEntity returns a chronological, author-stamped timeline.
+   */
+  async getActivity(id, { limit = 100 } = {}) {
+    const project = await projectRepository.findById(id);
+    if (!project) throw new NotFoundError('Project', id);
+
+    const mongoose = (await import('mongoose')).default;
+    const candidates = [String(id)];
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      candidates.push(new mongoose.Types.ObjectId(id));
+    }
+
+    const entries = await auditService.queryByEntity({
+      module: 'pm',
+      detailsKey: 'projectId',
+      entityId: candidates,
+      limit,
+    });
+
+    // Resolve actor names so the timeline reads "Anna Meier" rather than a raw id.
+    const userIds = [...new Set(entries.map((e) => e.userId).filter(Boolean).map(String))];
+    if (userIds.length === 0) return entries;
+
+    const User = (await import('../auth/user.model.js')).default;
+    const users = await User.find({ _id: { $in: userIds } }).select('firstName lastName').lean();
+    const nameById = new Map(
+      users.map((u) => [String(u._id), `${u.firstName || ''} ${u.lastName || ''}`.trim() || null]),
+    );
+
+    return entries.map((e) => ({
+      ...e,
+      userName: e.userId ? (nameById.get(String(e.userId)) || null) : null,
+    }));
+  }
+
   async _invalidateProjectCache(id) {
     await cacheManager.del(`pm:project:${id}`);
   }
@@ -337,13 +460,15 @@ class ProjectService {
 
     const projectNumber = await counterService.getNextProjectNumber();
 
+    const resolvedCustomerId = overrides.customerId || template.customerId?._id || template.customerId;
     const newProject = await projectRepository.create({
       projectNumber,
       name: overrides.name || `${template.name} (Copy)`,
       description: template.description,
       projectType: overrides.projectType || template.projectType,
       status: 'DRAFT',
-      customerId: overrides.customerId || template.customerId?._id || template.customerId,
+      customerId: resolvedCustomerId,
+      customerName: await this._resolveCustomerName(resolvedCustomerId),
       siteId: overrides.siteId || template.siteId?._id || template.siteId || null,
       projectManagerId: overrides.projectManagerId || template.projectManagerId?._id || template.projectManagerId,
       teamId: overrides.teamId || template.teamId || null,
@@ -398,15 +523,54 @@ class ProjectService {
 
     const templateActions = await prepActionRepository.findByProjectId(templateId);
     for (const action of templateActions) {
-      await prepActionRepository.create({
+      const cloned = {
         projectId: newProject._id,
         actionType: action.actionType,
         title: action.title,
         description: action.description,
         isMandatory: action.isMandatory,
+        assignedToId: action.assignedToId || null,
+        externalReference: action.externalReference || null,
+        // Fresh instance: status and due date reset; attachments are not copied.
+        status: 'CREATED',
         dueDate: null,
         createdBy,
-      });
+      };
+
+      // Carry the structured funding template values, but reset the
+      // instance-specific decision fields (status/approved amount/submission).
+      if (action.fundingDetails) {
+        cloned.fundingDetails = {
+          fundingBody: action.fundingDetails.fundingBody ?? null,
+          applicationAmount: action.fundingDetails.applicationAmount ?? null,
+          expectedDecisionDate: action.fundingDetails.expectedDecisionDate ?? null,
+          approvedAmount: null,
+          submissionDate: null,
+          fundingStatus: 'DRAFT',
+        };
+      }
+
+      // Carry the material order template values (supplier + item list), but reset
+      // the order/delivery state.
+      if (action.materialOrderDetails) {
+        cloned.materialOrderDetails = {
+          supplier: action.materialOrderDetails.supplier ?? null,
+          expectedDeliveryDate: action.materialOrderDetails.expectedDeliveryDate ?? null,
+          items: Array.isArray(action.materialOrderDetails.items)
+            ? action.materialOrderDetails.items.map((it) => ({
+              description: it.description,
+              quantity: it.quantity,
+              unit: it.unit,
+              catalogItemId: it.catalogItemId ?? null,
+            }))
+            : [],
+          orderReference: null,
+          orderDate: null,
+          deliveryStatus: 'PENDING',
+        };
+      }
+
+      await prepActionRepository.create(cloned);
     }
 
     await this._invalidateListCache();

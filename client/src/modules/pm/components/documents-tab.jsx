@@ -11,7 +11,10 @@ import { useDocumentMutations } from '@/modules/pm/hooks/use-document-mutations'
 import { updateDocumentSchema } from '@/modules/pm/validations/document';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { DOCUMENT_CATEGORY_CONFIG } from '@/modules/pm/constants/pm-constants';
+import {
+  DOCUMENT_CATEGORY_CONFIG, PROJECT_DOCUMENT_MAX_UPLOAD_MB, exceedsUploadLimit,
+} from '@/modules/pm/constants/pm-constants';
+import { showError } from '@/lib/toast';
 import { EmptyState } from '@/shared/components/empty-state';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { DocumentViewer, getFileIcon, formatFileSize, isPreviewable } from '@/shared/components/document-viewer';
@@ -31,19 +34,20 @@ import {
   Pencil, Trash2, Loader2, Download, Upload,
   FileText, Search, X, FolderOpen, Eye,
   CloudUpload, FileUp, Grid3X3, List, LayoutGrid,
-  Sparkles, Mail, RefreshCw, FilePen,
+  Sparkles, Mail, RefreshCw, FilePen, ArchiveRestore,
 } from 'lucide-react';
 
 // ── Document card (premium) ──────────────────────────────────
 
 function DocumentCard({
   doc, language, canWrite, onEdit, onDelete, onDownload, onPreview,
-  onEmail, onRegenerate, onResumeDraft,
+  onEmail, onRegenerate, onResumeDraft, onRestore,
 }) {
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
   const CategoryIcon = categoryCfg?.icon || FileText;
   const isDraft = doc.status === 'DRAFT';
+  const isDeleted = !!doc.isDeleted;
 
   return (
     <div
@@ -51,8 +55,9 @@ function DocumentCard({
         'group relative rounded-xl border border-border/60 bg-card p-4 transition-all duration-200 cursor-pointer',
         'hover:border-border hover:shadow-md hover:shadow-primary/[0.03]',
         isDraft && 'border-dashed border-amber-400/50 bg-amber-500/[0.02]',
+        isDeleted && 'opacity-60 border-destructive/30 bg-destructive/[0.02]',
       )}
-      onClick={() => (isDraft ? onResumeDraft?.(doc) : onPreview(doc))}
+      onClick={() => (isDeleted ? undefined : isDraft ? onResumeDraft?.(doc) : onPreview(doc))}
     >
       <div className="flex items-start gap-3.5">
         <div className={cn(
@@ -73,6 +78,11 @@ function DocumentCard({
             <span className="font-medium text-[13px] truncate leading-tight">
               {isDraft ? templateLabel(doc.templateType, language) : (doc.originalName || doc.fileName)}
             </span>
+            {isDeleted && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium border-destructive/60 text-destructive">
+                {language === 'de' ? 'Gelöscht' : 'Deleted'}
+              </Badge>
+            )}
             {isDraft ? (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium border-amber-400/60 text-amber-600 dark:text-amber-400">
                 {language === 'de' ? 'Entwurf' : 'Draft'}
@@ -108,7 +118,19 @@ function DocumentCard({
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-200">
-          {isDraft ? (
+          {isDeleted ? (
+            canWrite && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-lg text-primary hover:bg-primary/10"
+                onClick={(e) => { e.stopPropagation(); onRestore?.(doc); }}
+                title={language === 'de' ? 'Wiederherstellen' : 'Restore'}
+              >
+                <ArchiveRestore className="h-3.5 w-3.5" />
+              </Button>
+            )
+          ) : isDraft ? (
             <>
               {canWrite && (
                 <Button
@@ -204,10 +226,11 @@ function DocumentCard({
 
 // ── Document grid card ───────────────────────────────────────
 
-function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview, onResumeDraft }) {
+function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview, onResumeDraft, onRestore }) {
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
   const isDraft = doc.status === 'DRAFT';
+  const isDeleted = !!doc.isDeleted;
 
   return (
     <div
@@ -215,8 +238,9 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
         'group relative rounded-xl border border-border/60 bg-card overflow-hidden transition-all duration-200 cursor-pointer',
         'hover:border-border hover:shadow-md hover:shadow-primary/[0.03]',
         isDraft && 'border-dashed border-amber-400/50 bg-amber-500/[0.02]',
+        isDeleted && 'opacity-60 border-destructive/30 bg-destructive/[0.02]',
       )}
-      onClick={() => (isDraft ? onResumeDraft?.(doc) : onPreview(doc))}
+      onClick={() => (isDeleted ? undefined : isDraft ? onResumeDraft?.(doc) : onPreview(doc))}
     >
       <div className={cn(
         'h-28 flex items-center justify-center relative',
@@ -240,7 +264,19 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
         )} />
 
         <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all duration-200">
-          {isDraft ? (
+          {isDeleted ? (
+            canWrite && (
+              <Button
+                variant="secondary"
+                size="icon"
+                className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm text-primary"
+                onClick={(e) => { e.stopPropagation(); onRestore?.(doc); }}
+                title={language === 'de' ? 'Wiederherstellen' : 'Restore'}
+              >
+                <ArchiveRestore className="h-3 w-3" />
+              </Button>
+            )
+          ) : isDraft ? (
             canWrite && (
               <>
                 <Button
@@ -283,6 +319,11 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
       <div className="p-3.5">
         <p className="text-[13px] font-medium truncate leading-tight">{doc.originalName || doc.fileName}</p>
         <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground">
+          {isDeleted && (
+            <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 border border-destructive/60 text-destructive">
+              {language === 'de' ? 'Gelöscht' : 'Deleted'}
+            </span>
+          )}
           <span className="inline-flex items-center gap-1 bg-muted/60 rounded-md px-1.5 py-0.5">
             {language === 'de' ? categoryCfg?.label : categoryCfg?.labelEn}
           </span>
@@ -295,7 +336,7 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
 
 // ── Premium upload zone ──────────────────────────────────────
 
-function UploadZone({ language, onUpload, isUploading }) {
+function UploadZone({ language, onUpload, isUploading, maxUploadMb = PROJECT_DOCUMENT_MAX_UPLOAD_MB }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const dragCounter = useRef(0);
@@ -390,7 +431,9 @@ function UploadZone({ language, onUpload, isUploading }) {
               }
             </p>
             <p className="text-xs text-muted-foreground/70 mt-1">
-              {language === 'de' ? 'PDF, Bilder, Dokumente – max. 50 MB pro Datei' : 'PDF, images, documents – max 50MB per file'}
+              {language === 'de'
+                ? `PDF, Bilder, Dokumente – max. ${maxUploadMb} MB pro Datei`
+                : `PDF, images, documents – max ${maxUploadMb}MB per file`}
             </p>
           </div>
         </div>
@@ -410,6 +453,7 @@ export function DocumentsTab({ projectId }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [includeDeleted, setIncludeDeleted] = useState(false);
   const [editDoc, setEditDoc] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploadCategory, setUploadCategory] = useState('OTHER');
@@ -432,11 +476,12 @@ export function DocumentsTab({ projectId }) {
       end.setHours(23, 59, 59, 999);
       p.endDate = end.toISOString();
     }
+    if (includeDeleted) p.includeDeleted = true;
     return p;
-  }, [categoryFilter, dateFrom, dateTo]);
+  }, [categoryFilter, dateFrom, dateTo, includeDeleted]);
 
   const { data: docData, isLoading } = useQuery({
-    queryKey: queryKeys.pm.documents.byProject(projectId, categoryFilter, { dateFrom, dateTo }),
+    queryKey: queryKeys.pm.documents.byProject(projectId, categoryFilter, { dateFrom, dateTo, includeDeleted }),
     queryFn: () => documentService.getDocuments(projectId, params),
     enabled: !!projectId,
   });
@@ -455,14 +500,26 @@ export function DocumentsTab({ projectId }) {
     );
   }, [documents, searchTerm]);
 
-  const { upload, updateMetadata, remove, generate, emailDocument } = useDocumentMutations(projectId, {
+  const { upload, updateMetadata, remove, restore, generate, emailDocument } = useDocumentMutations(projectId, {
     onDelete: () => setDeleteTarget(null),
     onEmail: () => { setEmailDoc(null); setEmailTo(''); setEmailMessage(''); },
   });
 
+  const handleRestore = useCallback((doc) => {
+    restore.mutate(doc._id);
+  }, [restore]);
+
   const handleUpload = useCallback((file) => {
+    // Pre-upload size guard (PROJ-006 AC-8) — reject oversized files client-side
+    // before the request so the user gets immediate feedback.
+    if (exceedsUploadLimit(file?.size)) {
+      showError(language === 'de'
+        ? `"${file.name}" überschreitet das Limit von ${PROJECT_DOCUMENT_MAX_UPLOAD_MB} MB.`
+        : `"${file.name}" exceeds the ${PROJECT_DOCUMENT_MAX_UPLOAD_MB} MB limit.`);
+      return;
+    }
     upload.mutate({ file, options: { category: uploadCategory } });
-  }, [upload, uploadCategory]);
+  }, [upload, uploadCategory, language]);
 
   const handleRegenerate = useCallback((doc) => {
     generate.mutate({ templateType: doc.templateType, overrides: doc.overrides || {} });
@@ -638,6 +695,17 @@ export function DocumentsTab({ projectId }) {
           )}
         </div>
 
+        <Button
+          variant={includeDeleted ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-9 gap-1.5 text-xs"
+          onClick={() => setIncludeDeleted((v) => !v)}
+          title={language === 'de' ? 'Gelöschte Dokumente anzeigen' : 'Show deleted documents'}
+        >
+          <ArchiveRestore className="h-3.5 w-3.5" />
+          {language === 'de' ? 'Gelöschte' : 'Deleted'}
+        </Button>
+
         <div className="flex items-center gap-0.5 ml-auto bg-muted/50 rounded-lg p-0.5 border border-border/40">
           <Button
             variant={viewMode === 'list' ? 'secondary' : 'ghost'}
@@ -687,6 +755,7 @@ export function DocumentsTab({ projectId }) {
               onEmail={openEmail}
               onRegenerate={handleRegenerate}
               onResumeDraft={openResumeDraft}
+              onRestore={handleRestore}
             />
           ))}
         </div>
@@ -703,6 +772,7 @@ export function DocumentsTab({ projectId }) {
               onDownload={handleDownload}
               onPreview={handlePreview}
               onResumeDraft={openResumeDraft}
+              onRestore={handleRestore}
             />
           ))}
         </div>

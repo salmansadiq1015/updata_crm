@@ -61,30 +61,87 @@ async function sendStatusNotificationJob(data) {
     .select('name projectNumber projectManagerId')
     .lean();
   if (!project) return { skipped: true, reason: 'project_not_found' };
-  if (!project.projectManagerId || String(project.projectManagerId) === String(data.changedBy)) {
-    return { skipped: true, reason: 'no_distinct_recipient' };
-  }
+
   const User = (await import('../modules/auth/user.model.js')).default;
-  const pm = await User.findById(project.projectManagerId).select('email firstName lastName').lean();
-  if (!pm?.email) return { skipped: true, reason: 'no_recipient_email' };
+
+  // Fan out to the project manager (when distinct from the actor) plus any
+  // configured CC recipients (PROJ-002 AC-6 — "configured recipients"). Deduped
+  // by email so a CC that repeats the PM is only mailed once.
+  const recipients = []; // { email, name }
+  const seen = new Set();
+  const addRecipient = (email, name) => {
+    if (!email) return;
+    const key = email.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    recipients.push({ email, name: name || email });
+  };
+
+  let pmExcludedReason = null;
+  const pmIsActor = project.projectManagerId && String(project.projectManagerId) === String(data.changedBy);
+  if (!project.projectManagerId || pmIsActor) {
+    pmExcludedReason = 'no_distinct_recipient';
+  } else {
+    const pm = await User.findById(project.projectManagerId).select('email firstName lastName').lean();
+    if (pm?.email) {
+      addRecipient(pm.email, [pm.firstName, pm.lastName].filter(Boolean).join(' '));
+    } else {
+      pmExcludedReason = 'no_recipient_email';
+    }
+  }
+
+  for (const cc of (Array.isArray(data.ccRecipients) ? data.ccRecipients : [])) {
+    addRecipient(typeof cc === 'string' ? cc.trim() : null);
+  }
+
+  if (recipients.length === 0) {
+    return { skipped: true, reason: pmExcludedReason || 'no_recipients' };
+  }
+
   const actor = data.changedBy
     ? await User.findById(data.changedBy).select('firstName lastName').lean()
     : null;
-  await sendProjectStatusNotification(pm.email, {
-    recipientName: [pm.firstName, pm.lastName].filter(Boolean).join(' ') || pm.email,
-    projectName: project.name,
-    projectNumber: project.projectNumber,
-    fromStatus: data.fromStatus,
-    toStatus: data.toStatus,
-    changedBy: actor ? [actor.firstName, actor.lastName].filter(Boolean).join(' ') : '',
-    comment: data.comment || '',
-    projectUrl: '',
-  });
-  return { sent: true, jobType: 'send-status-notification', email: pm.email };
+  const changedByName = actor ? [actor.firstName, actor.lastName].filter(Boolean).join(' ') : '';
+
+  for (const r of recipients) {
+    await sendProjectStatusNotification(r.email, {
+      recipientName: r.name,
+      projectName: project.name,
+      projectNumber: project.projectNumber,
+      fromStatus: data.fromStatus,
+      toStatus: data.toStatus,
+      changedBy: changedByName,
+      comment: data.comment || '',
+      projectUrl: '',
+    });
+  }
+
+  return { sent: true, jobType: 'send-status-notification', recipients: recipients.map((r) => r.email) };
 }
 
 async function sendPartnerConfirmationJob(data) {
   if (!data.email) return { skipped: true, reason: 'no_recipient_email' };
+
+  // Load the generated appointment-confirmation PDF (PROJ-004 AC-3) and attach it.
+  // The buffer is fetched here in the worker (not passed through the queue) so the
+  // job payload stays small.
+  let pdfAttachment = null;
+  if (data.documentFileId) {
+    try {
+      const fileService = (await import('../modules/files/file.service.js')).default;
+      const fileMeta = await fileService.getById(data.documentFileId);
+      if (fileMeta?.key) {
+        pdfAttachment = await fileService.downloadBuffer(fileMeta.key);
+      }
+    } catch (err) {
+      // Never fail the email because the attachment could not be loaded — the
+      // confirmation email still goes out without the PDF.
+      logger.warn('Partner confirmation PDF could not be attached', {
+        module: 'jobs', action: 'send-partner-confirmation', fileId: data.documentFileId, error: err.message,
+      });
+    }
+  }
+
   await sendPartnerConfirmationEmail(data.email, {
     partnerName: data.partnerName,
     projectName: data.projectName,
@@ -96,7 +153,7 @@ async function sendPartnerConfirmationJob(data) {
     contactPerson: data.contactPerson,
     notes: data.notes,
     confirmationUrl: '',
-  });
+  }, pdfAttachment);
   return { sent: true, jobType: 'send-partner-confirmation', email: data.email };
 }
 

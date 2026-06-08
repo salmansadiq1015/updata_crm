@@ -74,7 +74,7 @@ export function ContactForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
+      <DialogContent className="sm:max-w-2xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
         {/* Fixed Header */}
         <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
           <div className="flex items-center gap-3">

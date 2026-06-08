@@ -32,7 +32,7 @@ export function StatusHistoryTimeline({ projectId }) {
   }
 
   if (!history.length) {
-    return <EmptyState title={t('pm.statusHistory', 'Status History')} description={language === 'de' ? 'Noch keine Statusaenderungen.' : 'No status changes yet.'} />;
+    return <EmptyState icon={Clock} title={t('pm.statusHistory', 'Status History')} description={language === 'de' ? 'Noch keine Statusaenderungen.' : 'No status changes yet.'} />;
   }
 
   return (

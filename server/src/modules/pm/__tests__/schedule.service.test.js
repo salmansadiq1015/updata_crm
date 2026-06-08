@@ -72,6 +72,13 @@ jest.unstable_mockModule('../../../shared/queue/QueueManager.js', () => ({
   default: { addJob: mockAddJob },
 }));
 
+// Mock documentGeneration.service (dynamically imported by sendConfirmation to
+// produce the appointment-confirmation PDF — PROJ-004 AC-3)
+const mockGenerateDoc = jest.fn(async () => ({ _id: 'gendoc-1', fileId: 'file-1', fileName: 'conf.pdf' }));
+jest.unstable_mockModule('../../doctpl/documentGeneration.service.js', () => ({
+  default: { generate: mockGenerateDoc },
+}));
+
 // Mock project.model.js (dynamically imported inside sendConfirmation)
 jest.unstable_mockModule('../project.model.js', () => ({
   default: {

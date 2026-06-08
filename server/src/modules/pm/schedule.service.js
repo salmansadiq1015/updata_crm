@@ -342,18 +342,27 @@ class ScheduleService {
       }
     }
 
+    // Generate the appointment-confirmation PDF document (PROJ-004 AC-3). Uses the
+    // seeded `project_appointment_confirmation` letter template; the composed body
+    // (project ref, scheduled dates, scope, contact person) is built the same way
+    // PROJ-005 documents are. The generated document is linked to the confirmation
+    // and attached to the partner email.
+    const generatedDoc = await this._generateConfirmationDocument(entry, project, data, userId, meta);
+
     const confirmation = await scheduleRepository.createConfirmation({
       scheduleEntryId: entryId,
       partnerCompanyId: data.partnerCompanyId,
       partnerContactEmail: data.partnerContactEmail,
       confirmationStatus: 'SENT',
       sentAt: new Date(),
+      documentId: generatedDoc?._id || null,
       createdBy: userId,
     });
 
     await this._invalidateCache(entry.projectId);
 
-    // Enqueue email job
+    // Enqueue email job. Pass the generated PDF's fileId so the worker loads the
+    // buffer and attaches it (keeps the queue payload small).
     await queueManager.addJob('auth-email', 'send-partner-confirmation', {
       email: data.partnerContactEmail,
       partnerName: data.partnerName,
@@ -365,6 +374,7 @@ class ScheduleService {
       siteAddress: data.siteAddress || null,
       contactPerson: data.contactPerson || null,
       notes: entry.notes,
+      documentFileId: generatedDoc?.fileId || null,
     });
 
     eventBus.publish(EVENT_TYPES.PARTNER_CONFIRMATION_SENT, {
@@ -394,6 +404,49 @@ class ScheduleService {
     });
 
     return confirmation;
+  }
+
+  /**
+   * Build + generate the appointment-confirmation PDF for a partner (PROJ-004 AC-3).
+   * Mirrors the PROJ-005 document path: compose the renderer body from the entry +
+   * project, then hand off to the shared documentGeneration service. Returns the
+   * generated document ({ _id, fileId, fileName }).
+   */
+  async _generateConfirmationDocument(entry, project, data, userId, meta = {}) {
+    const fmt = (d) => (d ? new Date(d).toISOString().split('T')[0] : null);
+    const targetStart = entry.entryType === 'PHASE' ? entry.startDate : entry.milestoneDate;
+    const targetEnd = entry.entryType === 'PHASE' ? entry.endDate : entry.milestoneDate;
+    const scheduled = `${fmt(targetStart) || ''}${targetEnd && targetEnd !== targetStart ? ` – ${fmt(targetEnd)}` : ''}`.trim();
+
+    const templateData = {
+      documentNumber: project?.projectNumber || null,
+      documentDate: new Date().toISOString().split('T')[0],
+      projectName: project?.name || null,
+      projectNumber: project?.projectNumber || null,
+      recipientName: data.partnerName || null,
+      site: data.siteAddress ? { address: data.siteAddress } : null,
+      description: [
+        scheduled ? `Termin: ${scheduled}` : null,
+        `Arbeiten: ${entry.name}`,
+        data.contactPerson ? `Kontaktperson: ${data.contactPerson}` : null,
+      ].filter(Boolean).join('\n'),
+      notes: entry.notes || null,
+    };
+
+    const { buildPmDocumentBody } = await import('./pmDocumentBody.js');
+    Object.assign(templateData, buildPmDocumentBody('project_appointment_confirmation', templateData));
+    templateData.templateType = 'project_appointment_confirmation';
+
+    const documentGenerationService = (await import('../doctpl/documentGeneration.service.js')).default;
+    return documentGenerationService.generate({
+      templateType: 'project_appointment_confirmation',
+      sourceModule: 'pm',
+      sourceRecordId: entry.projectId,
+      data: templateData,
+      language: 'de',
+      generatedBy: userId,
+      meta,
+    });
   }
 
   /**

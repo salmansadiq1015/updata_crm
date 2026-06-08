@@ -5,7 +5,7 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
 import logger from '../../shared/logger/index.js';
-import { NotFoundError, ConflictError, AuthorizationError } from '../../shared/errors/AppError.js';
+import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 
 const VALID_TRANSITIONS = {
@@ -124,13 +124,15 @@ class StatusService {
       changedBy: userId,
     }, { source: 'pm:status' });
 
-    // Enqueue status notification email
+    // Enqueue status notification email. Fan out to the project manager plus any
+    // configured CC recipients (PROJ-002 AC-6).
     await queueManager.addJob('auth-email', 'send-status-notification', {
       projectId,
       fromStatus: currentStatus,
       toStatus: targetStatus,
       comment,
       changedBy: userId,
+      ccRecipients: config.pm?.statusNotificationCc || [],
     });
 
     // Audit log

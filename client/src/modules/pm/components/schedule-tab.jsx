@@ -16,6 +16,7 @@ import {
 } from '@/modules/pm/constants/pm-constants';
 import { EmptyState } from '@/shared/components/empty-state';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
+import { showError } from '@/lib/toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,7 +40,7 @@ import {
   Plus, Pencil, Trash2, Loader2, ArrowRight, Milestone,
   Send, MessageSquare, Calendar, Users, Building2,
   List, BarChart3, ChevronDown, ChevronRight, Clock, Download,
-  User, Check, AlertTriangle, CheckSquare, Square, X,
+  User, Check, AlertTriangle, CheckSquare, Square, X, FileText,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
@@ -472,6 +473,18 @@ function ScheduleTimeline({ entries, language, canWrite, serverConflicts, onResc
 
 // ── Entry card (list view) ──────────────────────────────────────
 
+// Open the generated appointment-confirmation PDF (PROJ-004 AC-3). The
+// confirmation links a doctpl GeneratedDocument via documentId.
+async function openGeneratedPdf(documentId) {
+  try {
+    const res = await apiClient.get(ENDPOINTS.DOCTPL.DOCUMENT_DOWNLOAD(documentId));
+    const url = res?.data?.downloadUrl || res?.downloadUrl;
+    if (url) window.open(url, '_blank', 'noopener');
+  } catch {
+    // download errors surface via the api client interceptor
+  }
+}
+
 function EntryCard({ entry, language, canWrite, onEdit, onDelete, onSendConfirmation, onUpdateConfirmation, conflictReasons, selectMode, selected, onToggleSelect }) {
   const [expanded, setExpanded] = useState(false);
   const typeCfg = SCHEDULE_ENTRY_TYPE_CONFIG[entry.entryType];
@@ -577,12 +590,26 @@ function EntryCard({ entry, language, canWrite, onEdit, onDelete, onSendConfirma
                     {language === 'de' ? confCfg?.label : confCfg?.labelEn}
                   </span>
                 </div>
-                {canWrite && conf.confirmationStatus === 'SENT' && (
-                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => onUpdateConfirmation(entry, conf)}>
-                    <MessageSquare className="h-3 w-3 mr-1" />
-                    {language === 'de' ? 'Antwort' : 'Respond'}
-                  </Button>
-                )}
+                <div className="flex items-center gap-1 shrink-0">
+                  {conf.documentId && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-[10px] px-2"
+                      onClick={() => openGeneratedPdf(conf.documentId)}
+                      title={language === 'de' ? 'Bestätigungs-PDF ansehen' : 'View confirmation PDF'}
+                    >
+                      <FileText className="h-3 w-3 mr-1" />
+                      PDF
+                    </Button>
+                  )}
+                  {canWrite && conf.confirmationStatus === 'SENT' && (
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => onUpdateConfirmation(entry, conf)}>
+                      <MessageSquare className="h-3 w-3 mr-1" />
+                      {language === 'de' ? 'Antwort' : 'Respond'}
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -775,6 +802,15 @@ export function ScheduleTab({ projectId }) {
     } else {
       addEntry.mutate(cleaned);
     }
+  };
+
+  // Surface validation failures: the required fields (name, dates) sit above the
+  // fold, so without this the Create button looks dead when they're empty. Toast
+  // the first error and scroll the body up to it.
+  const onEntryInvalid = (errors) => {
+    const first = Object.values(errors)[0];
+    showError(first?.message || (language === 'de' ? 'Bitte Pflichtfelder ausfüllen.' : 'Please fill in the required fields.'));
+    entryBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // ── Send confirmation form ─────────────────────────────────
@@ -996,19 +1032,23 @@ export function ScheduleTab({ projectId }) {
 
       {/* ── Entry form dialog ──────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={(v) => { if (!v) { setFormOpen(false); setEditEntry(null); } else setFormOpen(v); }}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Calendar className="h-4.5 w-4.5 text-primary" />
-              {isEdit ? t('pm.editEntry', 'Edit Entry') : t('pm.addPhase', 'Add Entry')}
+        <DialogContent className="sm:max-w-3xl max-h-[88vh] p-0 gap-0 flex flex-col overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60 shrink-0">
+            <DialogTitle className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 ring-1 ring-primary/15 shrink-0">
+                <Calendar className="h-5 w-5 text-primary" />
+              </span>
+              <span className="text-base font-semibold">
+                {isEdit ? t('pm.editEntry', 'Edit Entry') : t('pm.addPhase', 'Add Entry')}
+              </span>
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="pl-[52px] -mt-1">
               {language === 'de' ? 'Phase oder Meilenstein für den Bauzeitenplan.' : 'Add a phase or milestone to the construction schedule.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={entryForm.handleSubmit(onEntrySubmit)} className="flex flex-1 flex-col overflow-hidden">
-            <FormBody>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <form onSubmit={entryForm.handleSubmit(onEntrySubmit, onEntryInvalid)} className="flex flex-1 flex-col min-h-0 overflow-hidden">
+            <div ref={entryBodyRef} className="px-6 py-5 flex-1 min-h-0 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4">
                 <FormField label={language === 'de' ? 'Typ' : 'Type'}>
                   <Select value={watchEntryType} onValueChange={(v) => entryForm.setValue('entryType', v)} disabled={isEdit}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1037,95 +1077,103 @@ export function ScheduleTab({ projectId }) {
                     </SelectContent>
                   </Select>
                 </FormField>
-              </div>
 
-              {/* Responsible-party picker (internal team member or partner company) */}
-              <Controller
-                name={entryForm.watch('responsibleType') === 'PARTNER_COMPANY' ? 'partnerCompanyId' : 'responsibleTeamId'}
-                control={entryForm.control}
-                render={({ field }) => (
-                  <FormField label={entryForm.watch('responsibleType') === 'PARTNER_COMPANY'
-                    ? (language === 'de' ? 'Partnerfirma' : 'Partner Company')
-                    : (language === 'de' ? 'Teammitglied' : 'Team Member')}>
-                    {entryForm.watch('responsibleType') === 'PARTNER_COMPANY' ? (
-                      <PartnerCompanyPicker value={field.value || null} onChange={field.onChange} language={language} />
-                    ) : (
-                      <InternalUserPicker value={field.value || null} onChange={field.onChange} language={language} />
+                {/* Responsible-party picker (internal team member or partner company) — full width */}
+                <div className="sm:col-span-2">
+                  <Controller
+                    name={entryForm.watch('responsibleType') === 'PARTNER_COMPANY' ? 'partnerCompanyId' : 'responsibleTeamId'}
+                    control={entryForm.control}
+                    render={({ field }) => (
+                      <FormField label={entryForm.watch('responsibleType') === 'PARTNER_COMPANY'
+                        ? (language === 'de' ? 'Partnerfirma' : 'Partner Company')
+                        : (language === 'de' ? 'Teammitglied' : 'Team Member')}>
+                        {entryForm.watch('responsibleType') === 'PARTNER_COMPANY' ? (
+                          <PartnerCompanyPicker value={field.value || null} onChange={field.onChange} language={language} />
+                        ) : (
+                          <InternalUserPicker value={field.value || null} onChange={field.onChange} language={language} />
+                        )}
+                      </FormField>
                     )}
-                  </FormField>
-                )}
-              />
+                  />
+                </div>
 
-              <FormField label={language === 'de' ? 'Name' : 'Name'} required error={entryForm.formState.errors.name?.message}>
-                <Input {...entryForm.register('name')} placeholder={language === 'de' ? 'z.B. Rohbauphase' : 'e.g. Foundation Phase'} />
-              </FormField>
-
-              {watchEntryType === 'PHASE' ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField label={t('pm.startDate', 'Start Date')} required error={entryForm.formState.errors.startDate?.message}>
-                    <Input type="date" {...entryForm.register('startDate')} />
-                  </FormField>
-                  <FormField label={t('pm.endDate', 'End Date')} required error={entryForm.formState.errors.endDate?.message}>
-                    <Input type="date" {...entryForm.register('endDate')} />
+                <div className="sm:col-span-2">
+                  <FormField label={language === 'de' ? 'Name' : 'Name'} required error={entryForm.formState.errors.name?.message}>
+                    <Input {...entryForm.register('name')} placeholder={language === 'de' ? 'z.B. Rohbauphase' : 'e.g. Foundation Phase'} />
                   </FormField>
                 </div>
-              ) : (
-                <FormField label={t('pm.milestoneDate', 'Milestone Date')} required error={entryForm.formState.errors.milestoneDate?.message}>
-                  <Input type="date" {...entryForm.register('milestoneDate')} />
-                </FormField>
-              )}
 
-              {/* Predecessor: other entries in this project (cascades on date move) */}
-              <FormField label={language === 'de' ? 'Vorgänger' : 'Predecessor'}>
-                <Select
-                  value={entryForm.watch('predecessorId') || 'none'}
-                  onValueChange={(v) => entryForm.setValue('predecessorId', v === 'none' ? null : v)}
-                >
-                  <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Kein Vorgänger' : 'No predecessor'} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{language === 'de' ? 'Kein Vorgänger' : 'No predecessor'}</SelectItem>
-                    {predecessorOptions.map((e) => (
-                      <SelectItem key={e._id} value={e._id}>{e.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
+                {watchEntryType === 'PHASE' ? (
+                  <>
+                    <FormField label={t('pm.startDate', 'Start Date')} required error={entryForm.formState.errors.startDate?.message}>
+                      <Input type="date" {...entryForm.register('startDate')} />
+                    </FormField>
+                    <FormField label={t('pm.endDate', 'End Date')} required error={entryForm.formState.errors.endDate?.message}>
+                      <Input type="date" {...entryForm.register('endDate')} />
+                    </FormField>
+                  </>
+                ) : (
+                  <FormField label={t('pm.milestoneDate', 'Milestone Date')} required error={entryForm.formState.errors.milestoneDate?.message}>
+                    <Input type="date" {...entryForm.register('milestoneDate')} />
+                  </FormField>
+                )}
 
-              {isEdit && (
-                <FormField label={t('pm.status', 'Status')}>
-                  <Select value={entryForm.watch('status')} onValueChange={(v) => entryForm.setValue('status', v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                {/* Predecessor: other entries in this project (cascades on date move) */}
+                <FormField label={language === 'de' ? 'Vorgänger' : 'Predecessor'}>
+                  <Select
+                    value={entryForm.watch('predecessorId') || 'none'}
+                    onValueChange={(v) => entryForm.setValue('predecessorId', v === 'none' ? null : v)}
+                  >
+                    <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Kein Vorgänger' : 'No predecessor'} /></SelectTrigger>
                     <SelectContent>
-                      {Object.entries(SCHEDULE_STATUS_CONFIG).map(([key, cfg]) => (
-                        <SelectItem key={key} value={key}>{language === 'de' ? cfg.label : cfg.labelEn}</SelectItem>
+                      <SelectItem value="none">{language === 'de' ? 'Kein Vorgänger' : 'No predecessor'}</SelectItem>
+                      {predecessorOptions.map((e) => (
+                        <SelectItem key={e._id} value={e._id}>{e.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </FormField>
-              )}
 
-              <FormField label={t('pm.notes', 'Notes')}>
-                <Controller
-                  name="notes"
-                  control={entryForm.control}
-                  render={({ field }) => (
-                    <RichTextEditor
-                      value={field.value}
-                      onChange={field.onChange}
-                      placeholder={language === 'de' ? 'Notizen...' : 'Notes...'}
-                      maxLength={5000}
-                      minHeight={80}
+                <FormField label={language === 'de' ? 'Sortierung' : 'Sort Order'}>
+                  <Input type="number" min={0} {...entryForm.register('sortOrder')} />
+                </FormField>
+
+                {isEdit && (
+                  <div className="sm:col-span-2">
+                    <FormField label={t('pm.status', 'Status')}>
+                      <Select value={entryForm.watch('status')} onValueChange={(v) => entryForm.setValue('status', v)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(SCHEDULE_STATUS_CONFIG).map(([key, cfg]) => (
+                            <SelectItem key={key} value={key}>{language === 'de' ? cfg.label : cfg.labelEn}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormField>
+                  </div>
+                )}
+
+                <div className="sm:col-span-2">
+                  <FormField label={t('pm.notes', 'Notes')}>
+                    <Controller
+                      name="notes"
+                      control={entryForm.control}
+                      render={({ field }) => (
+                        <RichTextEditor
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder={language === 'de' ? 'Notizen...' : 'Notes...'}
+                          maxLength={5000}
+                          minHeight={80}
+                        />
+                      )}
                     />
-                  )}
-                />
-              </FormField>
+                  </FormField>
+                </div>
+              </div>
+            </div>
 
-              <FormField label={language === 'de' ? 'Sortierung' : 'Sort Order'}>
-                <Input type="number" min={0} {...entryForm.register('sortOrder')} />
-              </FormField>
-            </FormBody>
-
-            <DialogFooter>
+            <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20 shrink-0">
               <Button type="button" variant="outline" onClick={() => { setFormOpen(false); setEditEntry(null); }}>
                 {t('common.cancel', 'Cancel')}
               </Button>
@@ -1177,6 +1225,15 @@ export function ScheduleTab({ projectId }) {
                   </FormField>
                 )}
               />
+
+              <div className="flex items-start gap-2 rounded-lg border border-border/50 bg-muted/40 p-2.5 text-xs text-muted-foreground">
+                <FileText className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+                <span>
+                  {language === 'de'
+                    ? 'Eine PDF-Terminbestätigung wird automatisch erstellt und der E-Mail angehängt.'
+                    : 'A PDF appointment confirmation is generated automatically and attached to the email.'}
+                </span>
+              </div>
 
               {shortNotice && (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-sm">

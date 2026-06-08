@@ -30,6 +30,8 @@ async function loadWorker({
     sendWelcomeEmail: jest.fn(),
     sendActivationEmail: jest.fn(),
     sendPasswordChangedEmail: jest.fn(),
+    sendProjectStatusNotification: jest.fn(),
+    sendPartnerConfirmationEmail: jest.fn(),
   }));
   jest.unstable_mockModule('../../src/modules/qop/invoice.model.js', () => ({
     default: Invoice,

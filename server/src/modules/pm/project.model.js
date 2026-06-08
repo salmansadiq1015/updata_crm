@@ -34,6 +34,10 @@ const projectSchema = new mongoose.Schema(
       ref: 'Customer',
       required: true,
     },
+    // Denormalized customer name, kept in sync on write + customer rename, so the
+    // project list can sort alphabetically by customer (PROJ-007 AC-3) within the
+    // field-based cursor pagination.
+    customerName: { type: String, default: null },
     siteId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Site',
@@ -86,6 +90,7 @@ projectSchema.index({ plannedStartDate: 1 });
 projectSchema.index({ isDeleted: 1, status: 1 });
 projectSchema.index({ createdAt: -1 });
 projectSchema.index({ projectType: 1 });
+projectSchema.index({ customerName: 1 });
 projectSchema.index(
   { name: 'text', projectNumber: 'text' },
   { weights: { name: 10, projectNumber: 5 } },

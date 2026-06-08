@@ -45,6 +45,17 @@ jest.unstable_mockModule('../../modules/auth/user.model.js', () => ({
   },
 }));
 
+// ── File service (lazily imported to load the PDF buffer) ─────────────────────
+const mockFileGetById = jest.fn();
+const mockFileDownloadBuffer = jest.fn();
+
+jest.unstable_mockModule('../../modules/files/file.service.js', () => ({
+  default: {
+    getById: mockFileGetById,
+    downloadBuffer: mockFileDownloadBuffer,
+  },
+}));
+
 // ── Module under test (imported AFTER all unstable_mockModule calls) ──────────
 let AuthEmailWorker;
 
@@ -110,6 +121,7 @@ describe('AuthEmailWorker — PM job types', () => {
           entryName: 'Montage Woche 1',
           confirmationUrl: '',
         }),
+        null,
       );
       expect(result).toEqual({ sent: true, jobType: 'send-partner-confirmation', email: 'partner@example.com' });
     });
@@ -119,6 +131,26 @@ describe('AuthEmailWorker — PM job types', () => {
 
       expect(mockSendPartnerConfirmationEmail).not.toHaveBeenCalled();
       expect(result).toEqual({ skipped: true, reason: 'no_recipient_email' });
+    });
+
+    it('loads the generated PDF and attaches it when documentFileId is present', async () => {
+      mockSendPartnerConfirmationEmail.mockResolvedValue({});
+      mockFileGetById.mockResolvedValue({ key: 'pm/conf-1.pdf', mimeType: 'application/pdf' });
+      const pdfBuffer = Buffer.from('%PDF-1.4 fake');
+      mockFileDownloadBuffer.mockResolvedValue(pdfBuffer);
+
+      await worker.process(makeJob('send-partner-confirmation', {
+        email: 'partner@example.com',
+        partnerName: 'ACME GmbH',
+        projectNumber: 'P-2024-001',
+        entryName: 'Montage',
+        documentFileId: 'file-1',
+      }));
+
+      expect(mockFileGetById).toHaveBeenCalledWith('file-1');
+      expect(mockFileDownloadBuffer).toHaveBeenCalledWith('pm/conf-1.pdf');
+      // third positional arg is the PDF attachment buffer
+      expect(mockSendPartnerConfirmationEmail.mock.calls[0][2]).toBe(pdfBuffer);
     });
   });
 
@@ -170,7 +202,56 @@ describe('AuthEmailWorker — PM job types', () => {
           projectUrl: '',
         }),
       );
-      expect(result).toEqual({ sent: true, jobType: 'send-status-notification', email: 'pm@example.com' });
+      expect(result).toEqual({ sent: true, jobType: 'send-status-notification', recipients: ['pm@example.com'] });
+    });
+
+    it('fans out to the project manager and every configured CC recipient (PROJ-002 AC-6)', async () => {
+      mockSendProjectStatusNotification.mockResolvedValue({});
+
+      mockProjectFindById.mockReturnValue(
+        queryStub({
+          _id: 'proj-1',
+          name: 'Neuinstallation Bern',
+          projectNumber: 'P-2024-042',
+          projectManagerId: PM_ID,
+        }),
+      );
+      mockUserFindById
+        .mockReturnValueOnce(queryStub({ email: 'pm@example.com', firstName: 'Anna', lastName: 'Meier' }))
+        .mockReturnValueOnce(queryStub({ firstName: 'Beat', lastName: 'Schmid' }));
+
+      const result = await worker.process(makeJob('send-status-notification', {
+        projectId: 'proj-1',
+        fromStatus: 'PLANNING',
+        toStatus: 'IN_PROGRESS',
+        changedBy: ACTOR_ID,
+        ccRecipients: ['ops@example.com', 'lead@example.com', 'pm@example.com'],
+      }));
+
+      // PM + 2 distinct CCs (the duplicate pm@ is deduped) → 3 sends
+      expect(mockSendProjectStatusNotification).toHaveBeenCalledTimes(3);
+      const sentTo = mockSendProjectStatusNotification.mock.calls.map((c) => c[0]).sort();
+      expect(sentTo).toEqual(['lead@example.com', 'ops@example.com', 'pm@example.com']);
+      expect(result.sent).toBe(true);
+      expect(result.recipients.sort()).toEqual(['lead@example.com', 'ops@example.com', 'pm@example.com']);
+    });
+
+    it('still notifies configured CCs even when the actor is the project manager', async () => {
+      mockSendProjectStatusNotification.mockResolvedValue({});
+      mockProjectFindById.mockReturnValue(
+        queryStub({ _id: 'proj-2', name: 'X', projectNumber: 'P-2', projectManagerId: ACTOR_ID }),
+      );
+      // actor lookup (for the "changed by" name) — PM is the actor here
+      mockUserFindById.mockReturnValue(queryStub({ firstName: 'Self', lastName: 'PM' }));
+
+      const result = await worker.process(makeJob('send-status-notification', {
+        projectId: 'proj-2', fromStatus: 'DRAFT', toStatus: 'PLANNING', changedBy: ACTOR_ID,
+        ccRecipients: ['ops@example.com'],
+      }));
+
+      expect(mockSendProjectStatusNotification).toHaveBeenCalledTimes(1);
+      expect(mockSendProjectStatusNotification.mock.calls[0][0]).toBe('ops@example.com');
+      expect(result.recipients).toEqual(['ops@example.com']);
     });
 
     it('returns skipped when projectManagerId equals changedBy (actor IS the PM)', async () => {

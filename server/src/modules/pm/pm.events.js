@@ -15,14 +15,29 @@ export function registerPmEvents() {
   // --- CUSTOMER_UPDATED ---
   eventBus.on(EVENT_TYPES.CUSTOMER_UPDATED, async (event) => {
     try {
-      // Customer data is denormalised via populate in project queries,
+      // Keep the denormalized customerName (used for alphabetical sort, PROJ-007
+      // AC-3) in sync when a customer is renamed.
+      const customerId = event.payload?.customerId;
+      if (customerId) {
+        const Customer = (await import('../crm/customer.model.js')).default;
+        const customer = await Customer.findById(customerId).select('name').lean();
+        if (customer?.name) {
+          const Project = (await import('./project.model.js')).default;
+          await Project.updateMany(
+            { customerId, customerName: { $ne: customer.name } },
+            { $set: { customerName: customer.name } },
+          );
+        }
+      }
+
+      // Customer data is also denormalised via populate in project queries,
       // so invalidate project list caches when a customer changes.
       await cacheManager.invalidatePattern(`${config.redis.keyPrefix}pm:projects:list:*`);
 
-      logger.info('PM project list caches invalidated after customer update', {
+      logger.info('PM project caches/customerName synced after customer update', {
         module: 'pm',
         action: 'event.customer_updated',
-        customerId: event.payload?.customerId,
+        customerId,
       });
     } catch (err) {
       logger.error('Failed to handle CUSTOMER_UPDATED event in PM', {

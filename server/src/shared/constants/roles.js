@@ -41,6 +41,20 @@ const PERMISSIONS = Object.freeze({
   PROJECTS_DELETE: 'projects:delete',
   PROJECTS_ADMIN: 'projects:admin',
 
+  // Projects — fine-grained (Phase C0)
+  PROJECT_CREATE: 'project:create',
+  PROJECT_EDIT: 'project:edit',
+  PROJECT_READ: 'project:read',
+  PROJECT_DELETE: 'project:delete',
+  PROJECT_STATUS_UPDATE: 'project:status:update',
+  PROJECT_STATUS_OVERRIDE: 'project:status:override',
+  PROJECT_PREP_ACTIONS_MANAGE: 'project:prep-actions:manage',
+  PROJECT_SCHEDULE_MANAGE: 'project:schedule:manage',
+  PROJECT_DOCUMENTS_READ: 'project:documents:read',
+  PROJECT_DOCUMENTS_WRITE: 'project:documents:write',
+  PROJECT_DOCUMENTS_CREATE: 'project:documents:create',
+  PROJECT_DOCUMENTS_DELETE: 'project:documents:delete',
+
   // Field Service
   FIELD_SERVICE_READ: 'field-service:read',
   FIELD_SERVICE_WRITE: 'field-service:write',

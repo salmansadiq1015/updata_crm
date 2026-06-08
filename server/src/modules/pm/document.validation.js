@@ -10,6 +10,7 @@ export const listDocumentsSchema = {
     search: Joi.string().trim().max(100),
     startDate: Joi.date().iso(),
     endDate: Joi.date().iso(),
+    includeDeleted: Joi.boolean().default(false),
   }),
 };
 
@@ -42,6 +43,14 @@ export const generateDocumentSchema = {
     templateType: Joi.string().required().trim().max(100),
     overrides: overridesSchema,
     draftId: objectId.allow(null),
+  }),
+};
+
+export const previewDocumentSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    templateType: Joi.string().required().trim().max(100),
+    overrides: overridesSchema,
   }),
 };
 

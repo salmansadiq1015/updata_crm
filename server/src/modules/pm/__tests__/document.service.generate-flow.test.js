@@ -144,6 +144,26 @@ describe('documentService.generate — overrides merge (PROJ-005 AC-4)', () => {
     expect(createArg).toMatchObject({ status: 'FINAL', templateType: 'project_status_report', overrides });
   });
 
+  it('previewDocument composes the body without generating a PDF (PROJ-005 AC-4)', async () => {
+    mockProjectFindById.mockReturnValue(makePopulatedProject(baseProject));
+    mockScheduleFind.mockReturnValue({ sort: () => ({ lean: async () => [] }) });
+
+    const result = await documentService.previewDocument('proj-1', 'project_status_report', {
+      description: 'Custom preview body',
+      notes: 'Closing remark.',
+    });
+
+    // Composed letter body reflects the override…
+    expect(result.introduction).toContain('Custom preview body');
+    expect(result.introduction).toContain('Closing remark.');
+    // …and the computed project data is present.
+    expect(result.projectNumber).toBe('P-2026-001');
+    expect(result.templateType).toBe('project_status_report');
+    // No PDF generated, nothing persisted.
+    expect(mockDoctplGenerate).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
   it('defaults overrides to {} when not provided (backward compatible)', async () => {
     mockProjectFindById.mockReturnValue(makePopulatedProject(baseProject));
     mockScheduleFind.mockReturnValue({ sort: () => ({ lean: async () => [] }) });

@@ -13,6 +13,11 @@ const mockProjectRepo = {
 };
 jest.unstable_mockModule('../project.repository.js', () => ({ default: mockProjectRepo }));
 
+// mock crm/customer.model (lazily imported by _resolveCustomerName)
+jest.unstable_mockModule('../../crm/customer.model.js', () => ({
+  default: { findById: jest.fn(() => ({ select: () => ({ lean: async () => ({ name: 'Acme AG' }) }) })) },
+}));
+
 // mock counterService
 jest.unstable_mockModule('../counter.service.js', () => ({
   default: { getNextProjectNumber: jest.fn().mockResolvedValue('P-999') },
@@ -70,9 +75,10 @@ const mockPrepActionRepo = {
 };
 jest.unstable_mockModule('../prepAction.repository.js', () => ({ default: mockPrepActionRepo }));
 
-// mock project.model (used inside getDashboardSummary)
+// mock project.model (used inside getDashboardSummary + _checkNameUniqueness)
 const mockProjectModel = {
   countDocuments: jest.fn(),
+  findOne: jest.fn(() => ({ lean: async () => null })),
 };
 jest.unstable_mockModule('../project.model.js', () => ({ default: mockProjectModel }));
 
@@ -228,5 +234,22 @@ describe('B5 — getDashboardSummary: upcomingMilestones top-level field', () =>
     const summary = await projectService.getDashboardSummary();
     expect(summary.risk.overdue).toBe(4);
     expect(summary.upcomingMilestones).toBe(7);
+  });
+});
+
+// ─── PROJ-007 AC-3 — denormalized customerName on create ──────────────────────
+describe('create — denormalized customerName (PROJ-007 AC-3)', () => {
+  it('resolves and stores the customer name for alphabetical sort', async () => {
+    mockProjectRepo.findById.mockResolvedValue(null); // name-uniqueness check passes
+    mockProjectRepo.create.mockResolvedValue({ _id: 'p-new' });
+
+    await projectService.create(
+      { name: 'New Build', customerId: 'cust-9', projectType: 'HVAC_BOILER', projectManagerId: 'pm-9' },
+      'user-1',
+      {},
+    );
+
+    const createArg = mockProjectRepo.create.mock.calls[0][0];
+    expect(createArg.customerName).toBe('Acme AG');
   });
 });

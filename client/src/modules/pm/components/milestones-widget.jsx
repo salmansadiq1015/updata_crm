@@ -8,6 +8,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { SCHEDULE_STATUS_CONFIG } from '@/modules/pm/constants/pm-constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/shared/components/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/formatters';
@@ -20,9 +21,10 @@ const PERIOD_OPTIONS = [
   { value: 30, label: '30 Tage', labelEn: '30 Days' },
 ];
 
-export function MilestonesWidget() {
+export function MilestonesWidget({ variant = 'widget' }) {
   const { language } = useLanguage();
   const [days, setDays] = useState(14);
+  const isPage = variant === 'page';
 
   const { data: milestones = [], isLoading } = useQuery({
     queryKey: queryKeys.pm.dashboard.milestones(days),
@@ -64,14 +66,17 @@ export function MilestonesWidget() {
             ))}
           </div>
         ) : milestones.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-4">
-            {language === 'de'
-              ? `Keine Meilensteine in den nächsten ${days} Tagen`
-              : `No milestones in the next ${days} days`}
-          </p>
+          <EmptyState
+            icon={CalendarClock}
+            title={language === 'de' ? 'Keine Meilensteine' : 'No milestones'}
+            description={language === 'de'
+              ? `In den nächsten ${days} Tagen sind keine Meilensteine fällig.`
+              : `No milestones are due in the next ${days} days.`}
+            className={isPage ? 'py-12' : 'py-6'}
+          />
         ) : (
           <div className="space-y-1.5">
-            {milestones.slice(0, 8).map((m) => {
+            {milestones.slice(0, isPage ? milestones.length : 8).map((m) => {
               const statusCfg = SCHEDULE_STATUS_CONFIG[m.status] || SCHEDULE_STATUS_CONFIG.PLANNED;
               const date = m.milestoneDate || m.endDate;
               return (

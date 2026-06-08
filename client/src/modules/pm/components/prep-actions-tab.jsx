@@ -446,7 +446,24 @@ export function PrepActionsTab({ projectId }) {
     if (!cleaned.externalReference) cleaned.externalReference = null;
     if (!cleaned.assignedToId) cleaned.assignedToId = null;
     if (isEdit) {
-      update.mutate({ actionId: editAction._id, data: cleaned });
+      // AF-2: detect when this completion clears the last outstanding mandatory
+      // action so we can tell the user the project may now proceed.
+      const isThisMandatory = cleaned.isMandatory ?? editAction.isMandatory;
+      const otherMandatory = mandatory.filter((a) => a._id !== editAction._id);
+      const willProceed = isThisMandatory
+        && cleaned.status === 'COMPLETED'
+        && editAction.status !== 'COMPLETED'
+        && otherMandatory.every((a) => a.status === 'COMPLETED');
+
+      update.mutate({ actionId: editAction._id, data: cleaned }, {
+        onSuccess: () => {
+          if (willProceed) {
+            showSuccess(language === 'de'
+              ? 'Alle Pflichtaktionen abgeschlossen — das Projekt kann nun zu „In Arbeit" wechseln.'
+              : 'All mandatory actions complete — the project can now proceed to "In Progress".');
+          }
+        },
+      });
     } else {
       create.mutate(cleaned);
     }
@@ -603,6 +620,17 @@ export function PrepActionsTab({ projectId }) {
                     ))}
                   </SelectContent>
                 </Select>
+                {/* AF-3: warn that rejecting/cancelling a mandatory action blocks progression */}
+                {watch('isMandatory') && ['REJECTED', 'CANCELLED'].includes(watch('status')) && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-2.5 text-xs">
+                    <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-500" />
+                    <span className="text-amber-800 dark:text-amber-300">
+                      {language === 'de'
+                        ? 'Diese Pflichtaktion blockiert den Projektfortschritt nach „In Arbeit", solange sie nicht ersetzt oder als optional markiert wird.'
+                        : 'This mandatory action will block the project from moving to "In Progress" unless it is replaced or marked optional.'}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

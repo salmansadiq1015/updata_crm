@@ -58,13 +58,7 @@ const navSectionDefs = [
           { type: 'leaf', labelKey: 'sidebar.newsletters', href: '/crm/newsletters', icon: MessageSquare, permission: 'crm:read' },
         ],
       },
-      {
-        type: 'group', key: 'projects', labelKey: 'sidebar.projects', icon: FolderKanban,
-        basePath: '/projects', permission: 'projects:read',
-        children: [
-          { type: 'leaf', labelKey: 'sidebar.projects', href: '/projects', icon: FolderKanban, permission: 'projects:read' },
-        ],
-      },
+      { type: 'leaf', labelKey: 'sidebar.projects', href: '/projects', icon: FolderKanban, permission: 'projects:read' },
       { type: 'leaf', labelKey: 'sidebar.scheduling', href: '/scheduling', icon: CalendarClock, permission: 'scheduling:read' },
       {
         type: 'group', key: 'sales', labelKey: 'sidebar.sales', icon: FileText,

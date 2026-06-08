@@ -37,7 +37,7 @@ import {
   ChevronRight, Copy, Hash, Calendar, BellRing, FileText,
   UsersIcon, ClipboardList, Activity, GitMerge,
   Upload, Download, Trash2, Loader2, X,
-  File, Image as ImageIcon,
+  File, Image as ImageIcon, Paperclip,
 } from 'lucide-react';
 import { pickCustomerAccent, CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 
@@ -140,9 +140,14 @@ function CustomerBusinessDocsSection({ docs, de }) {
 
   if (!docs.length) {
     return (
-      <p className="text-[12px] text-white/25 py-2 px-1">
-        {de ? 'Keine Geschäftsdokumente vorhanden.' : 'No business documents yet.'}
-      </p>
+      <EmptyState
+        icon={FileText}
+        title={de ? 'Keine Geschäftsdokumente' : 'No business documents'}
+        description={de
+          ? 'Erstellte Offerten und Rechnungen erscheinen hier.'
+          : 'Generated quotations and invoices will appear here.'}
+        className="py-8"
+      />
     );
   }
 
@@ -269,17 +274,25 @@ function CustomerAttachmentsSection({ customerId, attachments, canWrite, de }) {
       </div>
 
       {attachments.length === 0 ? (
-        <p className="text-[12px] text-white/25 py-2 px-1">
-          {de ? 'Keine Anhänge vorhanden.' : 'No attachments yet.'}
-          {canWrite && (
-            <button
-              className="ml-2 text-white/40 hover:text-white/70 underline underline-offset-2 transition-colors"
+        <EmptyState
+          icon={Paperclip}
+          title={de ? 'Keine Anhänge' : 'No attachments'}
+          description={de
+            ? 'Lade Dokumente, Pläne oder Fotos zu diesem Kunden hoch.'
+            : 'Upload documents, plans or photos for this customer.'}
+          className="py-8"
+          action={canWrite ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-[12px] gap-1.5"
               onClick={() => fileInputRef.current?.click()}
             >
-              {de ? 'Hochladen' : 'Upload'}
-            </button>
-          )}
-        </p>
+              <Upload className="h-3 w-3" />
+              {de ? 'Datei hochladen' : 'Upload File'}
+            </Button>
+          ) : undefined}
+        />
       ) : (
         <>
           <div className="rounded-xl border border-white/6 overflow-hidden bg-[#0B0F18]">

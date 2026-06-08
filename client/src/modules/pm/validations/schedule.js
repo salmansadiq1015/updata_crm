@@ -2,12 +2,20 @@ import { z } from 'zod';
 
 const objectId = z.string().regex(/^[0-9a-f]{24}$/i, 'Invalid ID');
 
+// Date inputs default to '' when empty; coercing '' yields an Invalid Date which
+// fails validation. Treat empty/blank as "not provided" so unused date fields
+// (e.g. milestoneDate on a phase) never block submission.
+const optionalDate = z.preprocess(
+  (v) => (v === '' || v === null || v === undefined ? undefined : v),
+  z.coerce.date().optional(),
+);
+
 export const createEntrySchema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(255),
   entryType: z.enum(['PHASE', 'MILESTONE']),
-  startDate: z.coerce.date().nullable().optional(),
-  endDate: z.coerce.date().nullable().optional(),
-  milestoneDate: z.coerce.date().nullable().optional(),
+  startDate: optionalDate,
+  endDate: optionalDate,
+  milestoneDate: optionalDate,
   responsibleType: z.enum(['INTERNAL_TEAM', 'PARTNER_COMPANY']).nullable().optional(),
   responsibleTeamId: objectId.nullable().optional(),
   partnerCompanyId: objectId.nullable().optional(),
@@ -27,9 +35,9 @@ export const createEntrySchema = z.object({
 export const updateEntrySchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   entryType: z.enum(['PHASE', 'MILESTONE']).optional(),
-  startDate: z.coerce.date().nullable().optional(),
-  endDate: z.coerce.date().nullable().optional(),
-  milestoneDate: z.coerce.date().nullable().optional(),
+  startDate: optionalDate,
+  endDate: optionalDate,
+  milestoneDate: optionalDate,
   responsibleType: z.enum(['INTERNAL_TEAM', 'PARTNER_COMPANY']).nullable().optional(),
   responsibleTeamId: objectId.nullable().optional(),
   partnerCompanyId: objectId.nullable().optional(),

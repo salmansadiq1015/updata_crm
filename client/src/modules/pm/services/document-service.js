@@ -39,11 +39,24 @@ export const documentService = {
     return res.data;
   },
 
+  async restoreDocument(projectId, docId) {
+    const res = await apiClient.post(ENDPOINTS.PM.DOCUMENT_RESTORE(projectId, docId));
+    return res.data;
+  },
+
   async generateDocument(projectId, { templateType, overrides = {}, draftId = null } = {}) {
     const res = await apiClient.post(ENDPOINTS.PM.DOCUMENTS_GENERATE(projectId), {
       templateType,
       overrides,
       ...(draftId ? { draftId } : {}),
+    });
+    return res.data;
+  },
+
+  async previewDocument(projectId, { templateType, overrides = {} } = {}) {
+    const res = await apiClient.post(ENDPOINTS.PM.DOCUMENTS_PREVIEW(projectId), {
+      templateType,
+      overrides,
     });
     return res.data;
   },

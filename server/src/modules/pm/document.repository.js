@@ -17,7 +17,9 @@ class DocumentRepository {
       .lean();
   }
 
-  async findByProjectId(projectId, { category, search, startDate, endDate } = {}) {
+  async findByProjectId(projectId, {
+    category, search, startDate, endDate, includeDeleted = false,
+  } = {}) {
     const filter = { projectId };
     if (category) filter.category = category;
     if (search) filter.fileName = { $regex: search, $options: 'i' };
@@ -26,10 +28,13 @@ class DocumentRepository {
       if (startDate) filter.createdAt.$gte = new Date(startDate);
       if (endDate) filter.createdAt.$lte = new Date(endDate);
     }
-    return ProjectDocument.find(filter)
+    const query = ProjectDocument.find(filter)
       .populate(POPULATE_FIELDS)
-      .sort({ createdAt: -1 })
-      .lean();
+      .sort({ createdAt: -1 });
+    // When includeDeleted is set, bypass the soft-delete pre-hook so the
+    // "Include Deleted" view can surface restorable documents (PROJ-006 AC-6).
+    if (includeDeleted) query.setOptions({ includeDeleted: true });
+    return query.lean();
   }
 
   async findLatestByFileName(projectId, fileName) {

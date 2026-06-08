@@ -9,6 +9,7 @@ class DocumentController {
         search: query.search,
         startDate: query.startDate,
         endDate: query.endDate,
+        includeDeleted: query.includeDeleted,
       });
       return res.success({ data: docs });
     } catch (err) { next(err); }
@@ -81,6 +82,17 @@ class DocumentController {
         req.body.draftId || null,
       );
       return res.success({ data: doc, message: 'Document generated successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  async preview(req, res, next) {
+    try {
+      const data = await documentService.previewDocument(
+        req.params.id,
+        req.body.templateType,
+        req.body.overrides || {},
+      );
+      return res.success({ data });
     } catch (err) { next(err); }
   }
 

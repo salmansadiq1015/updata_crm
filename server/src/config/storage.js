@@ -13,17 +13,29 @@ let s3Client = null;
 export function getS3Client() {
   if (s3Client) return s3Client;
 
+  const { accessKeyId, secretAccessKey, bucket, region, endpoint } = config.storage.aws;
+
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error(
+      'S3 credentials are not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.',
+    );
+  }
+
+  if (!bucket) {
+    throw new Error('S3 bucket is not configured. Set AWS_S3_BUCKET_NAME.');
+  }
+
   const clientConfig = {
-    region: config.storage.aws.region,
+    region,
     credentials: {
-      accessKeyId: config.storage.aws.accessKeyId,
-      secretAccessKey: config.storage.aws.secretAccessKey,
+      accessKeyId,
+      secretAccessKey,
     },
   };
 
-  // MinIO / local S3-compatible endpoint
-  if (config.storage.aws.endpoint) {
-    clientConfig.endpoint = config.storage.aws.endpoint;
+  // MinIO / local S3-compatible endpoint (already normalized in config loader)
+  if (endpoint) {
+    clientConfig.endpoint = endpoint;
     clientConfig.forcePathStyle = true;
   }
 

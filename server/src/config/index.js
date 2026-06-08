@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import configSchema from './schema.js';
+import { normalizeS3Endpoint } from './normalizeS3Endpoint.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -47,6 +48,14 @@ function parseMaintenanceTemplates(raw) {
 }
 
 const maintenanceTemplates = parseMaintenanceTemplates(envVars.MAINTENANCE_TEMPLATES_JSON);
+
+let s3Endpoint;
+try {
+  s3Endpoint = normalizeS3Endpoint(envVars.AWS_S3_ENDPOINT);
+} catch (err) {
+  console.error(`\n❌ Configuration validation failed:\n  - ${err.message}\n`);
+  process.exit(1);
+}
 
 const config = Object.freeze({
   env: envVars.NODE_ENV,
@@ -117,7 +126,7 @@ const config = Object.freeze({
       secretAccessKey: envVars.AWS_SECRET_ACCESS_KEY,
       bucket: envVars.AWS_S3_BUCKET_NAME,
       region: envVars.AWS_REGION,
-      endpoint: envVars.AWS_S3_ENDPOINT || undefined,
+      endpoint: s3Endpoint,
     },
   },
 

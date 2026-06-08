@@ -114,13 +114,16 @@ class StorageService {
         checksumSha256,
       };
     } catch (err) {
+      const hint = err.message === 'Invalid URL'
+        ? ' Check AWS_S3_ENDPOINT — leave empty for AWS S3 or use a full URL like http://localhost:9000 for MinIO.'
+        : '';
       logger.error('S3 upload failed', {
         module: 'storage',
         action: 'upload',
         key,
         error: { message: err.message },
       });
-      throw new ExternalServiceError('S3', `Upload failed: ${err.message}`, ERROR_CODES.S3_UPLOAD_FAILED);
+      throw new ExternalServiceError('S3', `Upload failed: ${err.message}${hint}`, ERROR_CODES.S3_UPLOAD_FAILED);
     }
   }
 

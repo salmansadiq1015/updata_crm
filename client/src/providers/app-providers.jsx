@@ -9,14 +9,18 @@ import { LanguageProvider } from '@/lib/i18n/language-context';
 import { useAuthStore } from '@/stores/auth-store';
 import { authService } from '@/modules/auth/services/auth-service';
 import { initSentry } from '@/lib/sentry';
-import Cookies from 'js-cookie';
+import { getStoredRefreshToken } from '@/modules/auth/services/session-refresh-service';
 
 function AuthInitializer({ children }) {
-  const { isLoading, setLoading, isAuthenticated } = useAuthStore();
+  const { setLoading } = useAuthStore();
+  const initStarted = useRef(false);
 
   useEffect(() => {
+    if (initStarted.current) return;
+    initStarted.current = true;
+
     const initAuth = async () => {
-      const refreshToken = Cookies.get('mb_refresh_token');
+      const refreshToken = getStoredRefreshToken();
       if (!refreshToken) {
         setLoading(false);
         return;
@@ -24,7 +28,7 @@ function AuthInitializer({ children }) {
       try {
         await authService.refreshToken();
       } catch {
-        // Token invalid — stay unauthenticated
+        // Token invalid; stay unauthenticated.
       } finally {
         setLoading(false);
       }

@@ -77,6 +77,45 @@ function uploaderInitials(uploadedBy) {
   return `${uploadedBy.firstName?.[0] ?? ''}${uploadedBy.lastName?.[0] ?? ''}`.toUpperCase() || '?';
 }
 
+function AttachmentUploadButton({ onClick, isPending, de, compact = false }) {
+  const label = de
+    ? (compact ? 'Hochladen' : 'Datei hochladen')
+    : 'Upload File';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={isPending}
+      className={cn(
+        'group relative inline-flex items-center gap-2 rounded-lg font-medium transition-all duration-200',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F18]',
+        'disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none',
+        compact ? 'h-8 px-2.5 text-[12px]' : 'h-9 px-4 text-[12px]',
+        'bg-gradient-to-r from-violet-600/25 via-violet-500/15 to-teal-500/10',
+        'border border-violet-500/30 hover:border-violet-400/45',
+        'text-violet-200 hover:text-white',
+        'shadow-[0_0_14px_-4px_rgba(139,92,246,0.35)]',
+        'hover:shadow-[0_0_22px_-4px_rgba(139,92,246,0.55)]',
+        'hover:from-violet-600/35 hover:to-teal-500/15',
+        'active:scale-[0.98]',
+      )}
+    >
+      <span
+        className={cn(
+          'flex items-center justify-center rounded-md bg-violet-500/20 transition-colors group-hover:bg-violet-500/30',
+          compact ? 'h-5 w-5' : 'h-6 w-6',
+        )}
+      >
+        {isPending
+          ? <Loader2 className="h-3 w-3 animate-spin text-violet-300" />
+          : <Upload className="h-3 w-3 text-violet-300 transition-colors group-hover:text-violet-100" />}
+      </span>
+      {label}
+    </button>
+  );
+}
+
 // ─── Animated empty state ─────────────────────────────────────────────────────
 function DocumentsAnimatedEmpty({ customerId, de, canWrite }) {
   const fileInputRef = useRef(null);
@@ -112,18 +151,11 @@ function DocumentsAnimatedEmpty({ customerId, de, canWrite }) {
       </div>
       {canWrite && (
         <>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-1 h-8 text-[12px] gap-1.5 border-white/10 text-white/50 hover:text-white/80 hover:border-white/20"
+          <AttachmentUploadButton
             onClick={() => fileInputRef.current?.click()}
-            disabled={upload.isPending}
-          >
-            {upload.isPending
-              ? <Loader2 className="h-3 w-3 animate-spin" />
-              : <Upload className="h-3 w-3" />}
-            {de ? 'Datei hochladen' : 'Upload File'}
-          </Button>
+            isPending={upload.isPending}
+            de={de}
+          />
           <input ref={fileInputRef} type="file" multiple className="hidden" accept={ATTACHMENT_ACCEPT} onChange={handleFileInput} />
         </>
       )}
@@ -256,18 +288,12 @@ function CustomerAttachmentsSection({ customerId, attachments, canWrite, de }) {
         </p>
         {canWrite && (
           <>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-[12px] text-white/40 hover:text-white/80 gap-1.5"
+            <AttachmentUploadButton
+              compact
               onClick={() => fileInputRef.current?.click()}
-              disabled={upload.isPending}
-            >
-              {upload.isPending
-                ? <Loader2 className="h-3 w-3 animate-spin" />
-                : <Upload className="h-3 w-3" />}
-              {de ? 'Hochladen' : 'Upload File'}
-            </Button>
+              isPending={upload.isPending}
+              de={de}
+            />
             <input ref={fileInputRef} type="file" multiple className="hidden" accept={ATTACHMENT_ACCEPT} onChange={handleFileInput} />
           </>
         )}
@@ -282,15 +308,11 @@ function CustomerAttachmentsSection({ customerId, attachments, canWrite, de }) {
             : 'Upload documents, plans or photos for this customer.'}
           className="py-8"
           action={canWrite ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-[12px] gap-1.5"
+            <AttachmentUploadButton
               onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="h-3 w-3" />
-              {de ? 'Datei hochladen' : 'Upload File'}
-            </Button>
+              isPending={upload.isPending}
+              de={de}
+            />
           ) : undefined}
         />
       ) : (

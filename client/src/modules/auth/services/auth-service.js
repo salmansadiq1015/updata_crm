@@ -1,9 +1,11 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import { useAuthStore } from '@/stores/auth-store';
-import Cookies from 'js-cookie';
-
-const REFRESH_COOKIE = 'mb_refresh_token';
+import {
+  clearStoredRefreshToken,
+  refreshSession,
+  storeRefreshToken,
+} from './session-refresh-service';
 
 export const authService = {
   async login(email, password) {
@@ -11,49 +13,23 @@ export const authService = {
     const { accessToken, refreshToken, user } = res.data;
 
     useAuthStore.getState().setAuth(user, accessToken);
-    Cookies.set(REFRESH_COOKIE, refreshToken, { path: '/', sameSite: 'strict' });
+    storeRefreshToken(refreshToken);
 
     return res.data;
   },
 
   async refreshToken() {
-    const refreshToken = Cookies.get(REFRESH_COOKIE);
-    if (!refreshToken) {
-      useAuthStore.getState().clearAuth();
-      throw new Error('No refresh token available');
-    }
-
-    try {
-      const res = await apiClient.post(ENDPOINTS.AUTH.REFRESH, { refreshToken });
-      const { accessToken, refreshToken: newRefreshToken } = res.data;
-
-      // Store tokens first
-      useAuthStore.getState().setTokens(accessToken);
-      if (newRefreshToken) {
-        Cookies.set(REFRESH_COOKIE, newRefreshToken, { path: '/', sameSite: 'strict' });
-      }
-
-      // Fetch full user profile (refresh endpoint doesn't return user data)
-      const userRes = await apiClient.get(ENDPOINTS.AUTH.ME);
-      const user = userRes.data;
-      useAuthStore.getState().setAuth(user, accessToken);
-
-      return { ...res.data, user };
-    } catch (err) {
-      useAuthStore.getState().clearAuth();
-      Cookies.remove(REFRESH_COOKIE);
-      throw err;
-    }
+    return refreshSession();
   },
 
   async logout() {
     try {
       await apiClient.post(ENDPOINTS.AUTH.LOGOUT);
     } catch {
-      // Ignore logout API errors — clear local state regardless
+      // Ignore logout API errors; clear local state regardless.
     } finally {
       useAuthStore.getState().clearAuth();
-      Cookies.remove(REFRESH_COOKIE);
+      clearStoredRefreshToken();
     }
   },
 
@@ -68,13 +44,11 @@ export const authService = {
     return res.data;
   },
 
-  // Account activation
   async activate(token, password) {
     const res = await apiClient.post(ENDPOINTS.AUTH.ACTIVATE, { token, password });
     return res.data;
   },
 
-  // Password reset
   async requestPasswordReset(email) {
     const res = await apiClient.post(ENDPOINTS.AUTH.RESET_REQUEST, { email });
     return res.data;
@@ -85,7 +59,6 @@ export const authService = {
     return res.data;
   },
 
-  // Session management
   async listSessions() {
     const res = await apiClient.get(ENDPOINTS.AUTH.SESSIONS);
     return res.data;
@@ -101,7 +74,6 @@ export const authService = {
     return res.data;
   },
 
-  // Audit log
   async getAuditLog(params = {}) {
     const res = await apiClient.get(ENDPOINTS.AUTH.AUDIT, { params });
     return res;

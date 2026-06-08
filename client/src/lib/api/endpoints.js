@@ -115,6 +115,15 @@ export const ENDPOINTS = Object.freeze({
     DOWNLOAD: (fileId) => `/files/${fileId}/download`,
   },
   INTEGRATIONS: {
+    LIST: '/admin/integrations',
+    DASHBOARD: '/admin/integrations/dashboard',
+    BY_KEY: (key) => `/admin/integrations/${key}`,
+    CONFIG: (key) => `/admin/integrations/${key}/config`,
+    ENABLE: (key) => `/admin/integrations/${key}/enable`,
+    DISABLE: (key) => `/admin/integrations/${key}/disable`,
+    HEALTH_CHECK: (key) => `/admin/integrations/${key}/health-check`,
+    HEALTH_HISTORY: (key) => `/admin/integrations/${key}/health-history`,
+    SYNC_HISTORY: (key) => `/admin/integrations/${key}/sync`,
     // Widget submissions (from company website)
     WIDGET_SUBMISSIONS: '/admin/integrations/widget/submissions',
     WIDGET_SUBMISSION_BY_ID: (id) => `/admin/integrations/widget/submissions/${id}`,
@@ -123,6 +132,21 @@ export const ENDPOINTS = Object.freeze({
     // Public widget endpoints (no auth required)
     WIDGET_PUBLIC_CONFIG: (widgetId) => `/public/widget/config?widgetId=${widgetId}`,
     WIDGET_PUBLIC_SUBMIT: '/public/widget/submissions',
+  },
+  MIGRATION: {
+    RUNS: '/admin/migration/runs',
+    RUN_BY_ID: (id) => `/admin/migration/runs/${id}`,
+    RUN_SOURCE_RECORDS: (id) => `/admin/migration/runs/${id}/source-records`,
+    RUN_START: (id) => `/admin/migration/runs/${id}/start`,
+    RUN_PAUSE: (id) => `/admin/migration/runs/${id}/pause`,
+    RUN_RESUME: (id) => `/admin/migration/runs/${id}/resume`,
+    RUN_CANCEL: (id) => `/admin/migration/runs/${id}/cancel`,
+    RUN_ROLLBACK: (id) => `/admin/migration/runs/${id}/rollback`,
+    RUN_PROGRESS: (id) => `/admin/migration/runs/${id}/progress`,
+    RUN_ERRORS: (id) => `/admin/migration/runs/${id}/errors`,
+    RUN_ERRORS_EXPORT: (id) => `/admin/migration/runs/${id}/errors/export`,
+    RUN_VALIDATION_REPORT: (id) => `/admin/migration/runs/${id}/validation-report`,
+    RUN_SPOT_CHECK: (id) => `/admin/migration/runs/${id}/spot-check/generate`,
   },
   PM: {
     PROJECTS: '/pm/projects',

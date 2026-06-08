@@ -126,6 +126,11 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'notifications', action: 'read', description: 'View notifications' },
   { module: 'notifications', action: 'write', description: 'Send and manage notifications' },
 
+  // Integrations
+  { module: 'integrations', action: 'admin', description: 'Manage integration providers and health checks' },
+  { module: 'integrations', action: 'widget:manage', description: 'Manage public website widget submissions and config' },
+  { module: 'integrations', action: 'calendar', description: 'Connect and manage calendar sync integrations' },
+
   // AI Assistant
   { module: 'ai', action: 'sessions', description: 'Use AI voice sessions' },
   { module: 'ai', action: 'commands:manage', description: 'Manage AI voice commands' },
@@ -160,6 +165,7 @@ export const ROLE_DEFINITIONS = [
       'field-service:read',
       'tasks:read', 'tasks:write', 'tasks:delete', 'tasks:admin',
       'notifications:read', 'notifications:write',
+      'integrations:widget:manage',
       'ai:sessions',
       'reports:read', 'reports:write',
       'time-tracking:read',
@@ -203,6 +209,7 @@ export const ROLE_DEFINITIONS = [
       'field-service:read',
       'tasks:read', 'tasks:write',
       'notifications:read', 'notifications:write',
+      'integrations:calendar',
       'ai:sessions',
       'time-tracking:read',
       'users:read', 'roles:read',

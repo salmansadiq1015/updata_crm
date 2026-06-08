@@ -9,6 +9,20 @@ import logger from '../../shared/logger/index.js';
 const CI_CACHE_TTL = { l1Ttl: 600, l2Ttl: 1800 };
 const CI_CACHE_KEY = 'doctpl:ci:active';
 
+function isPlainObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date);
+}
+
+function mergeNested(base, patch) {
+  if (!isPlainObject(patch)) return patch;
+
+  const result = { ...(isPlainObject(base) ? base : {}) };
+  for (const [key, value] of Object.entries(patch)) {
+    result[key] = isPlainObject(value) ? mergeNested(result[key], value) : value;
+  }
+  return result;
+}
+
 class CIService {
   async getActiveConfig() {
     return cacheManager.getOrSet(
@@ -22,7 +36,9 @@ class CIService {
     let config = await CIConfiguration.findOne({ isActive: true });
 
     if (config) {
-      Object.assign(config, data, { updatedBy: userId });
+      const current = config.toObject();
+      const mergedData = mergeNested(current, data);
+      Object.assign(config, mergedData, { updatedBy: userId });
       config.$inc('version', 1);
       await config.save();
     } else {

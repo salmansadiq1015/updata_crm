@@ -17,6 +17,7 @@ class OrderController {
         orderType, assignmentType,
         title, description, scopeOfWork, specialInstructions,
         priority, scheduledStart, scheduledEnd,
+        employeeId,
         customerName, customerPhone, customerEmail,
         siteAddress, accessInstructions, parkingInfo,
       } = req.body;
@@ -43,7 +44,7 @@ class OrderController {
         priority: priority || 'NORMAL',
         startDatetime,
         endDatetime,
-        employeeId: null,
+        employeeId: employeeId || null,
         status: 'PLANNED',
         createdBy: req.user._id,
         // Store free-text customer/site info as appointment notes since there are no FK lookups here
@@ -118,6 +119,7 @@ class OrderController {
       const {
         orderType, assignmentType, title, description, scopeOfWork, specialInstructions,
         priority, scheduledStart, scheduledEnd,
+        employeeId,
         customerName, customerPhone, customerEmail,
         siteAddress, accessInstructions, parkingInfo,
         status,
@@ -128,6 +130,7 @@ class OrderController {
       if (title !== undefined) updates.title = title || null;
       if (priority) updates.priority = priority;
       if (status) updates.status = status;
+      if (employeeId !== undefined) updates.employeeId = employeeId || null;
       if (scheduledStart) updates.startDatetime = new Date(scheduledStart);
       if (scheduledEnd) updates.endDatetime = new Date(scheduledEnd);
 

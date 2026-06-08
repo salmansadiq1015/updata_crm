@@ -20,21 +20,23 @@ const ciConfigurationSchema = new mongoose.Schema(
       weights: {
         light: {
           fileId: { type: mongoose.Schema.Types.ObjectId, default: null },
-          name: { type: String, default: null },
+          name: { type: String, default: 'Museo Sans 300' },
         },
         medium: {
           fileId: { type: mongoose.Schema.Types.ObjectId, default: null },
-          name: { type: String, default: null },
+          name: { type: String, default: 'Museo Sans 500' },
         },
         bold: {
           fileId: { type: mongoose.Schema.Types.ObjectId, default: null },
-          name: { type: String, default: null },
+          name: { type: String, default: 'Museo Sans 700' },
         },
       },
     },
     colors: {
       primary: { type: String, default: '#1B3F8B' },
       secondary: { type: String, default: '#D4002A' },
+      primaryCmyk: { type: String, default: 'C100 / M85 / Y2 / K0' },
+      secondaryCmyk: { type: String, default: 'C10 / M100 / Y95 / K2' },
       text: { type: String, default: '#1A1A1A' },
       muted: { type: String, default: '#6B7280' },
       border: { type: String, default: '#E5E7EB' },

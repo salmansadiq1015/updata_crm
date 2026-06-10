@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { ASSIGNMENT_TYPE_META, PRIORITY_META, PM_SCHEDULE_META } from '../../constants/deploy-constants';
+import { ASSIGNMENT_TYPE_META, PRIORITY_META, PM_SCHEDULE_META, translateMetaLabel } from '../../constants/deploy-constants';
 import { AssignmentTypeBadge } from '../shared/assignment-type-badge';
 import { AssignmentStatusBadge } from '../shared/assignment-status-badge';
 import { DeployEmptyState } from '../shared/deploy-empty-state';
@@ -45,6 +45,7 @@ export function CalendarMobileList({ employees, onAssignmentClick }) {
         // Read-only PM schedule entry (project work) — links to the project.
         if (a.source === 'pm_schedule') {
           const pmMeta = PM_SCHEDULE_META[a.entryType] || PM_SCHEDULE_META.PHASE;
+          const pmLabel = translateMetaLabel(t, pmMeta);
           const PmIcon = a.entryType === 'MILESTONE' ? Flag : Building2;
           const href = a.projectId ? `/projects/${a.projectId}` : '#';
           return (
@@ -70,7 +71,7 @@ export function CalendarMobileList({ employees, onAssignmentClick }) {
                   </div>
                   <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
                     <PmIcon className="h-3 w-3" />
-                    {pmMeta.label}
+                    {pmLabel}
                     <span className="mx-1">·</span>
                     <span>{a.employeeName}</span>
                   </div>
@@ -89,6 +90,7 @@ export function CalendarMobileList({ employees, onAssignmentClick }) {
         }
 
         const typeMeta = ASSIGNMENT_TYPE_META[a.assignmentType] || ASSIGNMENT_TYPE_META.OTHER;
+        const typeLabel = translateMetaLabel(t, typeMeta);
         const priorityMeta = PRIORITY_META[a.priority];
         const isUrgent = a.priority === 'URGENT';
 
@@ -114,7 +116,7 @@ export function CalendarMobileList({ employees, onAssignmentClick }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium truncate">
-                    {a.title || typeMeta.label}
+                    {a.title || typeLabel}
                   </span>
                   {priorityMeta?.icon && (
                     <priorityMeta.icon className={cn('h-3.5 w-3.5 shrink-0', priorityMeta.color)} />

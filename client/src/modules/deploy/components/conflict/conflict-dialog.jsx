@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
-import { CONFLICT_TYPE_META, CONFLICT_SEVERITY_META } from '../../constants/deploy-constants';
+import { CONFLICT_TYPE_META, CONFLICT_SEVERITY_META, translateMetaLabel } from '../../constants/deploy-constants';
 import { AlertTriangle, ShieldAlert, ShieldCheck } from 'lucide-react';
 
 export function ConflictDialog({ open, conflicts, onOverride, onCancel }) {
@@ -58,6 +58,8 @@ export function ConflictDialog({ open, conflicts, onOverride, onCancel }) {
             const typeMeta = CONFLICT_TYPE_META[conflict.conflictType];
             const severityMeta = CONFLICT_SEVERITY_META[conflict.severity];
             const Icon = typeMeta?.icon || AlertTriangle;
+            const typeLabel = translateMetaLabel(t, typeMeta);
+            const severityLabel = translateMetaLabel(t, severityMeta);
 
             return (
               <div
@@ -77,10 +79,10 @@ export function ConflictDialog({ open, conflicts, onOverride, onCancel }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className={cn('text-xs font-semibold', severityMeta?.color)}>
-                      {severityMeta?.label}
+                      {severityLabel}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {typeMeta?.label}
+                      {typeLabel}
                     </span>
                   </div>
                   <p className="text-xs text-foreground">{conflict.description}</p>

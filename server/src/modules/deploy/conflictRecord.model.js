@@ -1,6 +1,14 @@
 import mongoose from 'mongoose';
 
-export const CONFLICT_TYPES = ['DOUBLE_BOOKING', 'ABSENCE', 'WORKING_HOURS', 'TRAVEL_TIME'];
+export const CONFLICT_TYPES = [
+  'DOUBLE_BOOKING',
+  'ABSENCE',
+  'WORKING_HOURS',
+  'TRAVEL_TIME',
+  'INACTIVE_EMPLOYEE',
+  'SKILL_MISMATCH',
+  'CERTIFICATION_MISSING',
+];
 export const SEVERITIES = ['HARD', 'SOFT'];
 
 const conflictRecordSchema = new mongoose.Schema(

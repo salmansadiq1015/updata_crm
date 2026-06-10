@@ -52,5 +52,15 @@ export function useAppointmentMutations(assignmentId, { onConfirm, onCancel, onR
     onError: (err) => showError(err),
   });
 
-  return { update, confirm, cancel, reschedule };
+  const updateStatus = useMutation({
+    mutationFn: (data) => appointmentService.updateAppointmentStatus(assignmentId, data),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('deploy.appointments.statusUpdated', 'Terminstatus aktualisiert'));
+      onUpdate?.(res);
+    },
+    onError: (err) => showError(err),
+  });
+
+  return { update, confirm, cancel, reschedule, updateStatus };
 }

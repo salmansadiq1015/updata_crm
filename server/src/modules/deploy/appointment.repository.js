@@ -39,6 +39,29 @@ class AppointmentRepository {
     ).lean();
   }
 
+  async updateStatusByAssignmentId(assignmentId, status, { changedBy, note, extra = {} } = {}) {
+    const now = new Date();
+    return AppointmentDetails.findOneAndUpdate(
+      { assignmentId },
+      {
+        $set: {
+          confirmationStatus: status,
+          statusUpdatedAt: now,
+          ...extra,
+        },
+        $push: {
+          statusHistory: {
+            status,
+            changedAt: now,
+            changedBy: changedBy || null,
+            note: note || null,
+          },
+        },
+      },
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+  }
+
   async findPendingReminders(targetDate) {
     const startOfDay = new Date(targetDate);
     startOfDay.setHours(0, 0, 0, 0);

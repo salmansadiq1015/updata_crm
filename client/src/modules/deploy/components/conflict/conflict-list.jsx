@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useConflictList, useConflictMutations } from '../../hooks/use-conflict-mutations';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
-import { CONFLICT_TYPE_META, CONFLICT_SEVERITY_META } from '../../constants/deploy-constants';
+import { CONFLICT_TYPE_META, CONFLICT_SEVERITY_META, translateMetaLabel } from '../../constants/deploy-constants';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { FormField } from '@/components/ui/form-field';
@@ -18,6 +18,8 @@ function ConflictCard({ conflict, onResolve, t }) {
   const [showResolve, setShowResolve] = useState(false);
   const typeMeta = CONFLICT_TYPE_META[conflict.conflictType];
   const severityMeta = CONFLICT_SEVERITY_META[conflict.severity];
+  const typeLabel = translateMetaLabel(t, typeMeta);
+  const severityLabel = translateMetaLabel(t, severityMeta);
 
   return (
     <div className={cn('rounded-lg border p-4 space-y-2', severityMeta?.bg)}>
@@ -26,8 +28,8 @@ function ConflictCard({ conflict, onResolve, t }) {
           <AlertTriangle className={cn('h-4 w-4 mt-0.5 shrink-0', severityMeta?.color)} />
           <div>
             <div className="flex items-center gap-2 text-sm font-medium">
-              <span className={severityMeta?.color}>{severityMeta?.label}</span>
-              <span className="text-muted-foreground">{typeMeta?.label}</span>
+              <span className={severityMeta?.color}>{severityLabel}</span>
+              <span className="text-muted-foreground">{typeLabel}</span>
             </div>
             <p className="text-xs text-foreground mt-0.5">{conflict.description}</p>
             <p className="text-[10px] text-muted-foreground mt-1">

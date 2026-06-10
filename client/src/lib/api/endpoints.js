@@ -337,6 +337,7 @@ export const ENDPOINTS = Object.freeze({
     APPOINTMENT_CONFIRM: (id) => `/scheduling/assignments/${id}/appointment/confirm`,
     APPOINTMENT_CANCEL: (id) => `/scheduling/assignments/${id}/appointment/cancel`,
     APPOINTMENT_RESCHEDULE: (id) => `/scheduling/assignments/${id}/appointment/reschedule`,
+    APPOINTMENT_STATUS: (id) => `/scheduling/assignments/${id}/appointment/status`,
     CONFLICTS_CHECK: '/scheduling/conflicts/check',
     CONFLICTS: '/scheduling/conflicts',
     CONFLICT_RESOLVE: (id) => `/scheduling/conflicts/${id}/resolve`,

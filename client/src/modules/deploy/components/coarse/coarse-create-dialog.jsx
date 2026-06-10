@@ -18,13 +18,14 @@ const PERCENT_OPTIONS = [25, 50, 75, 100];
 function CoarseCreateForm({
   onOpenChange,
   defaultEmployeeId,
+  defaultProjectId,
   defaultWeek,
   year,
 }) {
   const { t } = useLanguage();
   const { data: employees = [] } = useDeployEmployees();
   const [employeeId, setEmployeeId] = useState(defaultEmployeeId || '');
-  const [projectId, setProjectId] = useState('');
+  const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [calendarWeek, setCalendarWeek] = useState(defaultWeek);
   const [allocationPercent, setAllocationPercent] = useState(25);
   const [notes, setNotes] = useState('');
@@ -74,7 +75,7 @@ function CoarseCreateForm({
             className="h-9 text-xs"
             value={projectId}
             onChange={(event) => setProjectId(event.target.value)}
-            placeholder="MongoDB project id"
+            placeholder={t('deploy.coarse.projectIdPlaceholder', 'Projekt-ID eingeben')}
           />
         </FormField>
 
@@ -138,10 +139,11 @@ export function CoarseCreateDialog({
   open,
   onOpenChange,
   defaultEmployeeId,
+  defaultProjectId,
   defaultWeek,
   year,
 }) {
-  const formKey = `${defaultEmployeeId || 'none'}-${defaultWeek}-${year}-${open ? 'open' : 'closed'}`;
+  const formKey = `${defaultEmployeeId || 'none'}-${defaultProjectId || 'none'}-${defaultWeek}-${year}-${open ? 'open' : 'closed'}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -150,6 +152,7 @@ export function CoarseCreateDialog({
           key={formKey}
           onOpenChange={onOpenChange}
           defaultEmployeeId={defaultEmployeeId}
+          defaultProjectId={defaultProjectId}
           defaultWeek={defaultWeek}
           year={year}
         />

@@ -9,7 +9,6 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import { AssignmentTypeBadge } from '../shared/assignment-type-badge';
 import { AssignmentStatusBadge } from '../shared/assignment-status-badge';
 import { PriorityIndicator } from '../shared/priority-indicator';
-import { ASSIGNMENT_STATUS_META } from '../../constants/deploy-constants';
 import { AppointmentPanel } from '../appointment/appointment-panel';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
@@ -21,7 +20,7 @@ import { de } from 'date-fns/locale';
 import { DeployEmptyState } from '../shared/deploy-empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Clock, MapPin, FileText, User, Hash, Pencil, Trash2, Loader2,
+  Clock, FileText, User, Hash, Pencil, Trash2, Loader2,
   CalendarCheck, SearchX,
 } from 'lucide-react';
 
@@ -134,6 +133,30 @@ export function AssignmentDetailDrawer({ assignmentId, open, onOpenChange, onEdi
                 {assignment.instructions && (
                   <DetailRow icon={FileText} label={t('deploy.detail.instructions', 'Anweisungen')}>
                     <p className="whitespace-pre-wrap text-sm">{assignment.instructions}</p>
+                  </DetailRow>
+                )}
+
+                {assignment.requiredSkills?.length > 0 && (
+                  <DetailRow icon={FileText} label={t('deploy.detail.requiredSkills', 'Erforderliche Skills')}>
+                    {assignment.requiredSkills.join(', ')}
+                  </DetailRow>
+                )}
+
+                {assignment.recommendedSkills?.length > 0 && (
+                  <DetailRow icon={FileText} label={t('deploy.detail.recommendedSkills', 'Empfohlene Skills')}>
+                    {assignment.recommendedSkills.join(', ')}
+                  </DetailRow>
+                )}
+
+                {assignment.requiredCertifications?.length > 0 && (
+                  <DetailRow icon={FileText} label={t('deploy.detail.requiredCertifications', 'Erforderliche Zertifikate')}>
+                    {assignment.requiredCertifications.join(', ')}
+                  </DetailRow>
+                )}
+
+                {assignment.recommendedCertifications?.length > 0 && (
+                  <DetailRow icon={FileText} label={t('deploy.detail.recommendedCertifications', 'Empfohlene Zertifikate')}>
+                    {assignment.recommendedCertifications.join(', ')}
                   </DetailRow>
                 )}
 

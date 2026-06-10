@@ -14,10 +14,10 @@ const ALLOWED_FILTERS = {
   priority: 'exact',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'startDatetime', 'assignmentNumber', '_id'];
-
 const POPULATE_FIELDS = [
   { path: 'employeeId', select: 'firstName lastName email' },
+  { path: 'customerId', select: 'name phone email street postalCode city' },
+  { path: 'siteId', select: 'name street postalCode city' },
   {
     path: 'projectId',
     select: 'name projectNumber customerName status siteId plannedStartDate plannedEndDate',

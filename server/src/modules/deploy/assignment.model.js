@@ -65,17 +65,44 @@ const assignmentSchema = new mongoose.Schema(
       maxlength: 5000,
       default: null,
     },
+    requiredSkills: {
+      type: [String],
+      default: [],
+      set: (values) => Array.isArray(values) ? values.map((v) => String(v).trim()).filter(Boolean) : [],
+    },
+    recommendedSkills: {
+      type: [String],
+      default: [],
+      set: (values) => Array.isArray(values) ? values.map((v) => String(v).trim()).filter(Boolean) : [],
+    },
+    requiredCertifications: {
+      type: [String],
+      default: [],
+      set: (values) => Array.isArray(values) ? values.map((v) => String(v).trim()).filter(Boolean) : [],
+    },
+    recommendedCertifications: {
+      type: [String],
+      default: [],
+      set: (values) => Array.isArray(values) ? values.map((v) => String(v).trim()).filter(Boolean) : [],
+    },
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
+      ref: 'Customer',
       default: null,
     },
     siteId: {
       type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site',
       default: null,
     },
     recurrenceGroupId: {
       type: mongoose.Schema.Types.ObjectId,
       default: null,
+    },
+    recurrenceIndex: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     colorCode: {
       type: String,

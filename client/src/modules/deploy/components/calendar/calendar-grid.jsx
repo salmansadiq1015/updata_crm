@@ -18,6 +18,8 @@ export function CalendarGrid({
   isLoading,
   canWrite,
   onAssignmentClick,
+  onResizeStart,
+  onSlotClick,
   onNewAssignment,
 }) {
   const { t } = useLanguage();
@@ -100,6 +102,8 @@ export function CalendarGrid({
                 view={view}
                 canWrite={canWrite}
                 onAssignmentClick={onAssignmentClick}
+                onResizeStart={onResizeStart}
+                onSlotClick={onSlotClick}
                 style={{
                   position: 'absolute',
                   top: 0,

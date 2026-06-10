@@ -8,6 +8,7 @@ import {
   confirmAppointmentSchema,
   cancelAppointmentSchema,
   rescheduleAppointmentSchema,
+  updateAppointmentStatusSchema,
 } from './appointment.validation.js';
 
 const router = Router({ mergeParams: true });
@@ -17,5 +18,6 @@ router.patch('/', authenticate, requirePermission('scheduling:write'), validate(
 router.post('/confirm', authenticate, requirePermission('scheduling:write'), validate(confirmAppointmentSchema), (req, res, next) => appointmentController.confirm(req, res, next));
 router.post('/cancel', authenticate, requirePermission('scheduling:write'), validate(cancelAppointmentSchema), (req, res, next) => appointmentController.cancel(req, res, next));
 router.post('/reschedule', authenticate, requirePermission('scheduling:write'), validate(rescheduleAppointmentSchema), (req, res, next) => appointmentController.reschedule(req, res, next));
+router.patch('/status', authenticate, requirePermission('scheduling:write'), validate(updateAppointmentStatusSchema), (req, res, next) => appointmentController.updateStatus(req, res, next));
 
 export default router;

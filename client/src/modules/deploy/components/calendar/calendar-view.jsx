@@ -42,9 +42,10 @@ export function CalendarView() {
   // DnD
   const {
     handleDragStart, handleDragOver, handleDragEnd, handleDragCancel,
+    handleResizeStart,
     showConflictDialog, conflictPreview,
     handleConflictOverride, handleConflictCancel,
-  } = useDragAssignment();
+  } = useDragAssignment({ view, days });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -67,6 +68,16 @@ export function CalendarView() {
   const handleNewAssignment = useCallback(() => {
     setFormDefaults(null);
     setFormPrefill(null);
+    setFormOpen(true);
+  }, []);
+
+  const handleSlotClick = useCallback((slot) => {
+    setFormDefaults(null);
+    setFormPrefill({
+      employeeIds: [slot.employeeId],
+      startDatetime: slot.startDatetime,
+      endDatetime: slot.endDatetime,
+    });
     setFormOpen(true);
   }, []);
 
@@ -117,6 +128,8 @@ export function CalendarView() {
             isLoading={isLoading}
             canWrite={canWrite}
             onAssignmentClick={handleAssignmentClick}
+            onResizeStart={handleResizeStart}
+            onSlotClick={canWrite ? handleSlotClick : undefined}
             onNewAssignment={canWrite ? handleNewAssignment : undefined}
           />
         )}

@@ -157,6 +157,16 @@ const userSchema = new mongoose.Schema(
     preferences: {
       preferredDepartmentId: { type: mongoose.Schema.Types.ObjectId, default: null },
     },
+    schedulingSkills: {
+      type: [String],
+      default: [],
+      set: (values) => Array.isArray(values) ? values.map((v) => String(v).trim()).filter(Boolean) : [],
+    },
+    schedulingCertifications: {
+      type: [String],
+      default: [],
+      set: (values) => Array.isArray(values) ? values.map((v) => String(v).trim()).filter(Boolean) : [],
+    },
   },
   {
     timestamps: true,

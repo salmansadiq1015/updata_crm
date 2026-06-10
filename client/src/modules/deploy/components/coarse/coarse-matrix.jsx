@@ -27,7 +27,7 @@ export function CoarseMatrix() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkEmployeeId, setBulkEmployeeId] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createDefaults, setCreateDefaults] = useState({ employeeId: '', week: getISOWeek(now) });
+  const [createDefaults, setCreateDefaults] = useState({ employeeId: '', projectId: '', week: getISOWeek(now) });
 
   const params = useMemo(() => ({
     year, weekFrom, weekTo, view: viewMode,
@@ -55,7 +55,8 @@ export function CoarseMatrix() {
         const projName = a.projectId?.name || projId;
         if (!map.has(projId)) map.set(projId, { id: projId, name: projName, weekMap: {} });
         const entry = map.get(projId);
-        if (!entry.weekMap[a.calendarWeek]) entry.weekMap[a.calendarWeek] = a;
+        if (!entry.weekMap[a.calendarWeek]) entry.weekMap[a.calendarWeek] = [];
+        entry.weekMap[a.calendarWeek].push(a);
       });
     } else {
       allocations.forEach((a) => {
@@ -65,7 +66,8 @@ export function CoarseMatrix() {
           : empId;
         if (!map.has(empId)) map.set(empId, { id: empId, name: empName, weekMap: {} });
         const entry = map.get(empId);
-        entry.weekMap[a.calendarWeek] = a;
+        if (!entry.weekMap[a.calendarWeek]) entry.weekMap[a.calendarWeek] = [];
+        entry.weekMap[a.calendarWeek].push(a);
       });
     }
     return Array.from(map.values());
@@ -95,24 +97,30 @@ export function CoarseMatrix() {
     }
   }, [setWeekFrom, setWeekTo, setYear, weekTo]);
 
-  const handleCellClick = useCallback((employeeId, week, existing) => {
-    if (existing) {
+  const handleCellClick = useCallback((rowId, week, existing) => {
+    const existingAllocations = Array.isArray(existing) ? existing : [existing].filter(Boolean);
+    if (existingAllocations.length === 1) {
+      const current = existingAllocations[0];
       const nextMap = { 25: 50, 50: 75, 75: 100 };
-      const nextPercent = nextMap[existing.allocationPercent];
+      const nextPercent = nextMap[current.allocationPercent];
       if (nextPercent) {
         update.mutate({
-          id: existing._id,
+          id: current._id,
           data: { allocationPercent: nextPercent },
         });
       } else {
-        remove.mutate(existing._id);
+        remove.mutate(current._id);
       }
       return;
     }
 
-    setCreateDefaults({ employeeId, week });
+    if (existingAllocations.length > 1) return;
+
+    setCreateDefaults(viewMode === 'PROJECT_CENTRIC'
+      ? { employeeId: '', projectId: rowId, week }
+      : { employeeId: rowId, projectId: '', week });
     setCreateOpen(true);
-  }, [remove, setCreateDefaults, setCreateOpen, update]);
+  }, [remove, setCreateDefaults, setCreateOpen, update, viewMode]);
 
   return (
     <div className="p-4 space-y-3">
@@ -153,39 +161,39 @@ export function CoarseMatrix() {
               description={t('deploy.empty.coarseDesc', 'Weisen Sie Mitarbeitern Projekte zu, um die Grobplanung zu starten.')}
               actionLabel={t('deploy.coarse.createAllocation', 'Zuteilung erstellen')}
               onAction={() => {
-                setCreateDefaults({ employeeId: '', week: weekFrom });
+                setCreateDefaults({ employeeId: '', projectId: '', week: weekFrom });
                 setCreateOpen(true);
               }}
               compact
             />
           ) : (
-            groupedRows.map((employee) => (
-              <div key={employee.id} className="flex border-b last:border-b-0 hover:bg-muted/10 group">
+            groupedRows.map((row) => (
+              <div key={row.id} className="flex border-b last:border-b-0 hover:bg-muted/10 group">
                 <div className="w-[200px] shrink-0 px-3 py-2 border-r flex items-center justify-between sticky left-0 bg-background">
                   <div className="min-w-0">
                     {viewMode === 'PROJECT_CENTRIC'
-                      ? <span className="text-xs font-medium truncate">{employee.name}</span>
-                      : <EmployeeAvatarRow name={employee.name} />}
+                      ? <span className="text-xs font-medium truncate">{row.name}</span>
+                      : <EmployeeAvatarRow name={row.name} />}
                   </div>
                   {viewMode === 'EMPLOYEE_CENTRIC' && (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
-                      onClick={() => { setBulkEmployeeId(employee.id); setBulkOpen(true); }}
+                      onClick={() => { setBulkEmployeeId(row.id); setBulkOpen(true); }}
                     >
                       <Layers className="h-3 w-3" />
                     </Button>
                   )}
                 </div>
                 {weeks.map((w) => {
-                  const alloc = employee.weekMap[w];
+                  const alloc = row.weekMap[w] || [];
                   return (
                     <div key={w} className="min-w-[60px] flex-1">
                       <CoarseCell
                         allocation={alloc}
-                        projectName={alloc?.projectId?.name}
-                        onClick={() => handleCellClick(employee.id, w, alloc)}
+                        projectName={viewMode === 'PROJECT_CENTRIC' ? row.name : undefined}
+                        onClick={() => handleCellClick(row.id, w, alloc)}
                       />
                     </div>
                   );
@@ -208,6 +216,7 @@ export function CoarseMatrix() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         defaultEmployeeId={createDefaults.employeeId}
+        defaultProjectId={createDefaults.projectId}
         defaultWeek={createDefaults.week}
         year={year}
       />

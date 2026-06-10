@@ -7,6 +7,7 @@ const PRIORITIES = ['NORMAL', 'HIGH', 'URGENT'];
 const RECURRENCE_FREQUENCIES = ['DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'CUSTOM'];
 const RECURRENCE_END_TYPES = ['NEVER', 'AFTER_COUNT', 'UNTIL_DATE'];
 const CONFIRMATION_METHODS = ['EMAIL', 'SMS', 'PHONE'];
+const capabilityList = Joi.array().items(Joi.string().trim().max(80)).max(50).default([]);
 
 const appointmentSchema = Joi.object({
   customerContactName: Joi.string().trim().max(255),
@@ -29,6 +30,10 @@ export const createAssignmentSchema = {
     isFullDay: Joi.boolean(),
     priority: Joi.string().valid(...PRIORITIES),
     instructions: Joi.string().max(5000),
+    requiredSkills: capabilityList,
+    recommendedSkills: capabilityList,
+    requiredCertifications: capabilityList,
+    recommendedCertifications: capabilityList,
     customerId: objectId.allow(null),
     siteId: objectId.allow(null),
     colorCode: Joi.string().max(7),
@@ -43,7 +48,7 @@ export const createAssignmentSchema = {
       interval: Joi.number().integer().min(1),
       daysOfWeek: Joi.string().max(30),
       endType: Joi.string().valid(...RECURRENCE_END_TYPES),
-      endCount: Joi.number().integer(),
+      endCount: Joi.number().integer().min(1).max(365),
       endDate: Joi.date().iso(),
     }),
     overrideConflicts: Joi.boolean().default(false),
@@ -70,6 +75,10 @@ export const updateAssignmentSchema = {
     status: Joi.string().valid(...ASSIGNMENT_STATUSES),
     priority: Joi.string().valid(...PRIORITIES),
     instructions: Joi.string().max(5000).allow('', null),
+    requiredSkills: capabilityList,
+    recommendedSkills: capabilityList,
+    requiredCertifications: capabilityList,
+    recommendedCertifications: capabilityList,
     customerId: objectId.allow(null),
     siteId: objectId.allow(null),
     colorCode: Joi.string().max(7).allow('', null),

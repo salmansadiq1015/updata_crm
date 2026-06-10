@@ -10,6 +10,16 @@ const ACTIVE_CONFLICTS_TTL = { l1Ttl: 15, l2Ttl: 30 };
 const ACTIVE_CONFLICTS_KEY = 'deploy:conflicts:active';
 const MIN_TRAVEL_GAP_MINUTES = 60;
 
+function normalizeList(values) {
+  if (!Array.isArray(values)) return [];
+  return values.map((value) => String(value).trim()).filter(Boolean);
+}
+
+function missingCapabilities(required, actual) {
+  const actualSet = new Set(normalizeList(actual).map((value) => value.toLowerCase()));
+  return normalizeList(required).filter((value) => !actualSet.has(value.toLowerCase()));
+}
+
 /**
  * Format a Date to HH:MM string.
  */
@@ -48,8 +58,58 @@ class ConflictService {
    * Detect all conflicts for a given employee and time window.
    * Returns array of { conflictType, severity, description, conflictingWithId }.
    */
-  async detectConflicts(employeeId, start, end, excludeAssignmentId = null) {
+  async detectConflicts(employeeId, start, end, excludeAssignmentId = null, requirements = {}) {
     const conflicts = [];
+
+    const { default: User } = await import('../auth/user.model.js');
+    const employee = await User.findById(employeeId)
+      .select('status firstName lastName schedulingSkills schedulingCertifications')
+      .lean();
+
+    if (!employee || employee.status !== 'active') {
+      conflicts.push({
+        conflictType: 'INACTIVE_EMPLOYEE',
+        severity: 'HARD',
+        description: 'Employee is inactive or unavailable for scheduling.',
+      });
+    }
+
+    const missingRequiredSkills = missingCapabilities(
+      requirements.requiredSkills,
+      employee?.schedulingSkills,
+    );
+    const missingRecommendedSkills = missingCapabilities(
+      requirements.recommendedSkills,
+      employee?.schedulingSkills,
+    );
+    const missingSkills = [...new Set([...missingRequiredSkills, ...missingRecommendedSkills])];
+    if (missingSkills.length > 0) {
+      conflicts.push({
+        conflictType: 'SKILL_MISMATCH',
+        severity: 'SOFT',
+        description: `Missing skill match: ${missingSkills.join(', ')}`,
+      });
+    }
+
+    const missingRequiredCertifications = missingCapabilities(
+      requirements.requiredCertifications,
+      employee?.schedulingCertifications,
+    );
+    const missingRecommendedCertifications = missingCapabilities(
+      requirements.recommendedCertifications,
+      employee?.schedulingCertifications,
+    );
+    const missingCertifications = [...new Set([
+      ...missingRequiredCertifications,
+      ...missingRecommendedCertifications,
+    ])];
+    if (missingCertifications.length > 0) {
+      conflicts.push({
+        conflictType: 'CERTIFICATION_MISSING',
+        severity: 'SOFT',
+        description: `Missing certification match: ${missingCertifications.join(', ')}`,
+      });
+    }
 
     // 1. DOUBLE_BOOKING (SOFT)
     const { default: assignmentRepository } = await import('./assignment.repository.js');
@@ -142,8 +202,8 @@ class ConflictService {
     return conflicts;
   }
 
-  async checkConflicts(employeeId, start, end, excludeId = null) {
-    const conflicts = await this.detectConflicts(employeeId, start, end, excludeId);
+  async checkConflicts(employeeId, start, end, excludeId = null, requirements = {}) {
+    const conflicts = await this.detectConflicts(employeeId, start, end, excludeId, requirements);
     return { hasConflicts: conflicts.length > 0, conflicts };
   }
 

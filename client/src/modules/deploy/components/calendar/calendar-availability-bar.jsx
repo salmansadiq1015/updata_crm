@@ -2,10 +2,12 @@
 
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
-import { AVAILABILITY_TYPE_META } from '../../constants/deploy-constants';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { AVAILABILITY_TYPE_META, translateMetaLabel } from '../../constants/deploy-constants';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export const CalendarAvailabilityBar = memo(function CalendarAvailabilityBar({ availability }) {
+  const { t } = useLanguage();
   if (!availability || availability.availabilityType === 'WORKING') return null;
 
   const meta = AVAILABILITY_TYPE_META[availability.availabilityType];
@@ -23,7 +25,7 @@ export const CalendarAvailabilityBar = memo(function CalendarAvailabilityBar({ a
         />
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
-        <p className="font-medium">{meta.label}</p>
+        <p className="font-medium">{translateMetaLabel(t, meta)}</p>
         {availability.notes && <p className="text-muted-foreground">{availability.notes}</p>}
       </TooltipContent>
     </Tooltip>

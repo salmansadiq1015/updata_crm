@@ -3,12 +3,27 @@ import conflictService from './conflict.service.js';
 class ConflictController {
   async check(req, res, next) {
     try {
-      const { employeeId, startDatetime, endDatetime, excludeAssignmentId } = req.body;
+      const {
+        employeeId,
+        startDatetime,
+        endDatetime,
+        excludeAssignmentId,
+        requiredSkills,
+        recommendedSkills,
+        requiredCertifications,
+        recommendedCertifications,
+      } = req.body;
       const result = await conflictService.checkConflicts(
         employeeId,
         new Date(startDatetime),
         new Date(endDatetime),
         excludeAssignmentId || null,
+        {
+          requiredSkills,
+          recommendedSkills,
+          requiredCertifications,
+          recommendedCertifications,
+        },
       );
       return res.success({ data: result });
     } catch (err) { next(err); }

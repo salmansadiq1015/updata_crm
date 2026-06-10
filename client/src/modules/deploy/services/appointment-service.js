@@ -26,4 +26,9 @@ export const appointmentService = {
     const res = await apiClient.post(ENDPOINTS.DEPLOY.APPOINTMENT_RESCHEDULE(assignmentId), data);
     return res.data;
   },
+
+  async updateAppointmentStatus(assignmentId, data) {
+    const res = await apiClient.patch(ENDPOINTS.DEPLOY.APPOINTMENT_STATUS(assignmentId), data);
+    return res.data;
+  },
 };

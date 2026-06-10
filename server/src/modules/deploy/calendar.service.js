@@ -1,5 +1,4 @@
 import cacheManager from '../../shared/cache/CacheManager.js';
-import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
 const CALENDAR_TTL = { l1Ttl: 15, l2Ttl: 60 };
@@ -29,6 +28,7 @@ class CalendarService {
         const assignmentRepository = (await import('./assignment.repository.js')).default;
         const availabilityRepository = (await import('./availability.repository.js')).default;
         const coarseRepository = (await import('./coarse.repository.js')).default;
+        const User = (await import('../auth/user.model.js')).default;
 
         const start = new Date(startDate);
         const end = new Date(endDate);
@@ -88,6 +88,18 @@ class CalendarService {
           // coarse data is optional
         }
 
+        const employeeFilter = { status: 'active' };
+        if (employeeIds?.length) employeeFilter._id = { $in: employeeIds };
+        if (teamId) employeeFilter.$or = [
+          { department: teamId },
+          { 'preferences.preferredDepartmentId': teamId },
+        ];
+        const employees = await User.find(employeeFilter)
+          .select('firstName lastName email department')
+          .sort({ firstName: 1, lastName: 1 })
+          .limit(500)
+          .lean();
+
         // Group by employee
         const employeeMap = new Map();
 
@@ -106,6 +118,13 @@ class CalendarService {
           }
           return employeeMap.get(empId);
         };
+
+        for (const employee of employees) {
+          ensureEmployee(
+            employee._id.toString(),
+            `${employee.firstName} ${employee.lastName}`,
+          );
+        }
 
         for (const assignment of assignments) {
           const empId = (assignment.employeeId?._id || assignment.employeeId).toString();

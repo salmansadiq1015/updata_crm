@@ -22,11 +22,18 @@ class AppointmentService {
   }
 
   async syncForAssignment(assignmentId, data, userId, meta = {}) {
-    const appointment = await appointmentRepository.upsertByAssignmentId(assignmentId, {
+    let appointment = await appointmentRepository.upsertByAssignmentId(assignmentId, {
       ...data,
       reminderSent: false,
       reminderSentAt: null,
     });
+
+    if (!appointment.statusHistory?.length) {
+      appointment = await appointmentRepository.updateStatusByAssignmentId(assignmentId, 'PENDING', {
+        changedBy: userId,
+        note: 'Appointment details created',
+      });
+    }
 
     auditService.logEvent({
       eventType: 'appointment.synced',
@@ -76,9 +83,12 @@ class AppointmentService {
       assignmentId,
     });
 
-    const updated = await appointmentRepository.updateByAssignmentId(assignmentId, {
-      confirmationStatus: 'SENT',
-      confirmationSentAt: new Date(),
+    const updated = await appointmentRepository.updateStatusByAssignmentId(assignmentId, 'SENT', {
+      changedBy: userId,
+      note: 'Confirmation sent to customer',
+      extra: {
+        confirmationSentAt: new Date(),
+      },
     });
 
     eventBus.publish(EVENT_TYPES.SCHEDULE_APPOINTMENT_CONFIRMED, {
@@ -104,8 +114,12 @@ class AppointmentService {
   async cancel(assignmentId, reason, userId, meta = {}) {
     const appointment = await this.getByAssignmentId(assignmentId);
 
-    const updated = await appointmentRepository.updateByAssignmentId(assignmentId, {
-      confirmationStatus: 'CANCELLED',
+    const updated = await appointmentRepository.updateStatusByAssignmentId(assignmentId, 'CANCELLED', {
+      changedBy: userId,
+      note: reason,
+      extra: {
+        cancellationReason: reason,
+      },
     });
 
     if (appointment.customerContactEmail) {
@@ -140,11 +154,14 @@ class AppointmentService {
   async reschedule(assignmentId, newData, userId, meta = {}) {
     const appointment = await this.getByAssignmentId(assignmentId);
 
-    const updated = await appointmentRepository.updateByAssignmentId(assignmentId, {
-      ...newData,
-      confirmationStatus: 'RESCHEDULED',
-      reminderSent: false,
-      reminderSentAt: null,
+    const updated = await appointmentRepository.updateStatusByAssignmentId(assignmentId, 'RESCHEDULED', {
+      changedBy: userId,
+      note: 'Appointment rescheduled',
+      extra: {
+        ...newData,
+        reminderSent: false,
+        reminderSentAt: null,
+      },
     });
 
     if (appointment.customerContactEmail) {
@@ -180,10 +197,13 @@ class AppointmentService {
     const appointment = await appointmentRepository.findByAssignmentId(assignmentId);
     if (!appointment) return null;
 
-    const updated = await appointmentRepository.updateByAssignmentId(assignmentId, {
-      confirmationStatus: 'RESCHEDULED',
-      reminderSent: false,
-      reminderSentAt: null,
+    const updated = await appointmentRepository.updateStatusByAssignmentId(assignmentId, 'RESCHEDULED', {
+      changedBy: userId,
+      note: 'Assignment time changed',
+      extra: {
+        reminderSent: false,
+        reminderSentAt: null,
+      },
     });
 
     if (appointment.customerContactEmail) {
@@ -209,6 +229,38 @@ class AppointmentService {
       result: 'success',
       details: { assignmentId, scheduleData },
       module: 'deploy',
+    });
+
+    return updated;
+  }
+
+  async updateStatus(assignmentId, status, userId, meta = {}) {
+    const appointment = await this.getByAssignmentId(assignmentId);
+
+    if (appointment.confirmationStatus === 'CANCELLED') {
+      throw new ConflictError('Cancelled appointments cannot be moved to another status');
+    }
+
+    const updated = await appointmentRepository.updateStatusByAssignmentId(assignmentId, status, {
+      changedBy: userId,
+      note: meta.note,
+    });
+
+    auditService.logEvent({
+      eventType: 'appointment.status_updated',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { assignmentId, status, note: meta.note },
+      module: 'deploy',
+    });
+
+    logger.info('Appointment status updated', {
+      module: 'deploy',
+      action: 'updateStatus',
+      assignmentId,
+      status,
     });
 
     return updated;

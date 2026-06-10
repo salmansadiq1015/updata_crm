@@ -7,8 +7,7 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
-import { NotFoundError, ConflictError, AuthorizationError } from '../../shared/errors/AppError.js';
-import ERROR_CODES from '../../shared/errors/errorCodes.js';
+import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import {
   hashPassword,
   generateTempPassword,
@@ -61,6 +60,8 @@ class UserService {
       zip: data.zip || null,
       country: data.country || 'Schweiz',
       language: data.language || 'de',
+      schedulingSkills: data.schedulingSkills || [],
+      schedulingCertifications: data.schedulingCertifications || [],
       role: data.roleId,
       status: 'pending_activation',
       activationTokenHash: hashedToken,

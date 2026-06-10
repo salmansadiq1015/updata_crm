@@ -22,7 +22,7 @@ import {
   Contact, MapPinned, Flame, PanelLeftClose, PanelLeftOpen,
   BookOpen, ClipboardList, MessageSquare, Bell, Smartphone,
   FileCheck, Clock4, Files, LayoutTemplate,
-  Type, TrendingUp, Ruler, RefreshCw,
+  Type, TrendingUp, Ruler, RefreshCw, CalendarDays, Grid3X3, AlertTriangle,
   ShoppingCart,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/shared/constants/permissions';
@@ -59,7 +59,16 @@ const navSectionDefs = [
         ],
       },
       { type: 'leaf', labelKey: 'sidebar.projects', href: '/projects', icon: FolderKanban, permission: 'projects:read' },
-      { type: 'leaf', labelKey: 'sidebar.scheduling', href: '/scheduling', icon: CalendarClock, permission: 'scheduling:read' },
+      {
+        type: 'group', key: 'scheduling', labelKey: 'sidebar.scheduling', icon: CalendarClock,
+        basePath: '/scheduling', permission: 'scheduling:read',
+        children: [
+          { type: 'leaf', labelKey: 'deploy.tabs.calendar', href: '/scheduling/calendar', icon: CalendarDays, permission: 'scheduling:read' },
+          { type: 'leaf', labelKey: 'deploy.tabs.dashboard', href: '/scheduling/dashboard', icon: LayoutDashboard, permission: 'scheduling:read' },
+          { type: 'leaf', labelKey: 'deploy.tabs.coarse', href: '/scheduling/coarse', icon: Grid3X3, permission: 'scheduling:read' },
+          { type: 'leaf', labelKey: 'deploy.tabs.conflicts', href: '/scheduling/conflicts', icon: AlertTriangle, permission: 'scheduling:read' },
+        ],
+      },
       {
         type: 'group', key: 'sales', labelKey: 'sidebar.sales', icon: FileText,
         basePath: '/quotes', permission: 'quotations:read',

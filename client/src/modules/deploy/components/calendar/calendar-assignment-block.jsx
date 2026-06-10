@@ -3,13 +3,30 @@
 import { memo } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
-import { ASSIGNMENT_TYPE_META, PRIORITY_META } from '../../constants/deploy-constants';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { ASSIGNMENT_TYPE_META, PRIORITY_META, translateMetaLabel } from '../../constants/deploy-constants';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { AssignmentTypeBadge } from '../shared/assignment-type-badge';
 import { AssignmentStatusBadge } from '../shared/assignment-status-badge';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Clock } from 'lucide-react';
+import { Clock, Hash, MapPin, User } from 'lucide-react';
+
+function formatAddress(site) {
+  if (!site) return '';
+  const cityLine = [site.postalCode, site.city].filter(Boolean).join(' ');
+  return [site.name, site.street, cityLine].filter(Boolean).join(', ');
+}
+
+function DetailLine({ icon: Icon, children }) {
+  if (!children) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      <Icon className="h-3 w-3 shrink-0" />
+      <span className="truncate">{children}</span>
+    </div>
+  );
+}
 
 export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
   assignment,
@@ -19,10 +36,15 @@ export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
   onResizeStart,
   className,
 }) {
+  const { t } = useLanguage();
   const typeMeta = ASSIGNMENT_TYPE_META[assignment.assignmentType] || ASSIGNMENT_TYPE_META.OTHER;
   const priorityMeta = PRIORITY_META[assignment.priority];
+  const typeLabel = translateMetaLabel(t, typeMeta);
   const isUrgent = assignment.priority === 'URGENT';
   const isHigh = assignment.priority === 'HIGH';
+  const customerName = assignment.customerId?.name || assignment.projectId?.customerName || '';
+  const siteAddress = formatAddress(assignment.siteId || assignment.projectId?.siteId);
+  const timeLabel = `${format(new Date(assignment.startDatetime), 'HH:mm')} - ${format(new Date(assignment.endDatetime), 'HH:mm')}`;
 
   const bgColor = assignment.colorCode || typeMeta.calendarColor;
   const {
@@ -69,11 +91,11 @@ export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
           }}
         >
           <div className="truncate">
-            {assignment.title || typeMeta.label}
+            {assignment.title || typeLabel}
           </div>
           {style?.height > 28 && (
             <div className="truncate text-white/80 text-[9px]">
-              {format(new Date(assignment.startDatetime), 'HH:mm')} – {format(new Date(assignment.endDatetime), 'HH:mm')}
+              {assignment.assignmentNumber || customerName || timeLabel}
             </div>
           )}
           {onResizeStart && (
@@ -91,7 +113,7 @@ export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="font-semibold text-sm truncate">
-              {assignment.title || typeMeta.label}
+              {assignment.title || typeLabel}
             </span>
             {priorityMeta?.icon && (
               <priorityMeta.icon className={cn('h-4 w-4 shrink-0', priorityMeta.color)} />
@@ -104,15 +126,18 @@ export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
           </div>
 
           <div className="text-xs text-muted-foreground space-y-1">
-            <div className="flex items-center gap-1.5">
-              <Clock className="h-3 w-3" />
-              {format(new Date(assignment.startDatetime), 'EEE d. MMM, HH:mm', { locale: de })} – {format(new Date(assignment.endDatetime), 'HH:mm')}
-            </div>
-            {assignment.assignmentNumber && (
-              <div className="text-muted-foreground/70">
-                #{assignment.assignmentNumber}
-              </div>
-            )}
+            <DetailLine icon={Clock}>
+              {format(new Date(assignment.startDatetime), 'EEE d. MMM, HH:mm', { locale: de })} - {format(new Date(assignment.endDatetime), 'HH:mm')}
+            </DetailLine>
+            <DetailLine icon={Hash}>
+              {assignment.assignmentNumber ? `#${assignment.assignmentNumber}` : ''}
+            </DetailLine>
+            <DetailLine icon={User}>
+              {customerName}
+            </DetailLine>
+            <DetailLine icon={MapPin}>
+              {siteAddress}
+            </DetailLine>
           </div>
 
           {assignment.instructions && (

@@ -10,7 +10,19 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, Send, XCircle, CalendarClock, Phone, Mail, Clock, User } from 'lucide-react';
+import {
+  Loader2,
+  Send,
+  XCircle,
+  Phone,
+  Mail,
+  Clock,
+  User,
+  CheckCircle2,
+  PlayCircle,
+  CircleCheckBig,
+  UserX,
+} from 'lucide-react';
 import { format } from 'date-fns';
 
 function InfoRow({ icon: Icon, label, value }) {
@@ -38,7 +50,7 @@ export function AppointmentPanel({ assignmentId }) {
     staleTime: 30_000,
   });
 
-  const { confirm, cancel } = useAppointmentMutations(assignmentId);
+  const { confirm, cancel, updateStatus } = useAppointmentMutations(assignmentId);
 
   if (isLoading) {
     return (
@@ -70,6 +82,32 @@ export function AppointmentPanel({ assignmentId }) {
 
   const canConfirm = ['PENDING'].includes(appointment.confirmationStatus);
   const canCancel = ['PENDING', 'SENT', 'CONFIRMED'].includes(appointment.confirmationStatus);
+  const statusActions = [
+    {
+      status: 'CONFIRMED',
+      label: t('deploy.appointments.markConfirmed', 'Bestaetigt'),
+      icon: CheckCircle2,
+      visible: ['SENT', 'RESCHEDULED'].includes(appointment.confirmationStatus),
+    },
+    {
+      status: 'IN_PROGRESS',
+      label: t('deploy.appointments.markInProgress', 'Starten'),
+      icon: PlayCircle,
+      visible: ['CONFIRMED', 'SENT', 'RESCHEDULED'].includes(appointment.confirmationStatus),
+    },
+    {
+      status: 'COMPLETED',
+      label: t('deploy.appointments.markCompleted', 'Erledigt'),
+      icon: CircleCheckBig,
+      visible: ['IN_PROGRESS', 'CONFIRMED'].includes(appointment.confirmationStatus),
+    },
+    {
+      status: 'NO_SHOW',
+      label: t('deploy.appointments.markNoShow', 'No-Show'),
+      icon: UserX,
+      visible: ['SENT', 'CONFIRMED', 'IN_PROGRESS', 'RESCHEDULED'].includes(appointment.confirmationStatus),
+    },
+  ].filter((action) => action.visible);
 
   return (
     <div className="space-y-3">
@@ -96,10 +134,26 @@ export function AppointmentPanel({ assignmentId }) {
         </p>
       )}
 
-      {canWrite && (canConfirm || canCancel) && (
+      {appointment.statusHistory?.length > 0 && (
+        <div className="space-y-1.5 rounded-md border bg-muted/20 p-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('deploy.appointments.history', 'Statusverlauf')}
+          </p>
+          {appointment.statusHistory.slice(-4).reverse().map((entry, index) => (
+            <div key={`${entry.status}-${entry.changedAt || index}`} className="flex items-center justify-between gap-2 text-[10px]">
+              <span className="font-medium">{entry.status}</span>
+              <span className="text-muted-foreground">
+                {entry.changedAt ? format(new Date(entry.changedAt), 'dd.MM. HH:mm') : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canWrite && (canConfirm || canCancel || statusActions.length > 0) && (
         <>
           <Separator />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {canConfirm && (
               <Button
                 variant="outline"
@@ -112,6 +166,22 @@ export function AppointmentPanel({ assignmentId }) {
                 {t('deploy.appointments.confirm', 'Bestätigen')}
               </Button>
             )}
+            {statusActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <Button
+                  key={action.status}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => updateStatus.mutate({ status: action.status })}
+                  disabled={updateStatus.isPending}
+                >
+                  {updateStatus.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Icon className="h-3 w-3 mr-1" />}
+                  {action.label}
+                </Button>
+              );
+            })}
             {canCancel && (
               <Button
                 variant="destructive"

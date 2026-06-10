@@ -1,6 +1,8 @@
 import Joi from 'joi';
 import { objectId, cursorPagination, idParam } from '../../shared/validation/commonSchemas.js';
 
+const schedulingCapabilitySchema = Joi.array().items(Joi.string().trim().max(80)).max(50);
+
 export const createUserSchema = {
   body: Joi.object({
     email: Joi.string().email().required().lowercase().trim().max(255),
@@ -11,6 +13,8 @@ export const createUserSchema = {
     phone: Joi.string().trim().max(30).allow('', null),
     department: Joi.string().trim().max(100).allow('', null),
     position: Joi.string().trim().max(100).allow('', null),
+    schedulingSkills: schedulingCapabilitySchema,
+    schedulingCertifications: schedulingCapabilitySchema,
   }),
 };
 
@@ -28,6 +32,8 @@ export const updateUserSchema = {
     department: Joi.string().trim().max(100).allow('', null),
     position: Joi.string().trim().max(100).allow('', null),
     status: Joi.string().valid('active', 'deactivated', 'locked'),
+    schedulingSkills: schedulingCapabilitySchema,
+    schedulingCertifications: schedulingCapabilitySchema,
   }),
 };
 

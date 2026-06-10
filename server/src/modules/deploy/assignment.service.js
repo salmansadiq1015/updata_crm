@@ -7,9 +7,11 @@ import auditService from '../auth/audit.service.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import recurrenceService from './recurrence.service.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const OVERRIDE_REASON_MIN_LENGTH = 10;
+const MAX_ASSIGNMENTS_PER_CREATE = 500;
 
 function normalizeId(value) {
   if (!value) return null;
@@ -22,6 +24,10 @@ function uniqueIds(values) {
 
 function sameInstant(left, right) {
   return new Date(left).getTime() === new Date(right).getTime();
+}
+
+function normalizeCapabilityList(values) {
+  return Array.isArray(values) ? values.map((value) => String(value).trim()).filter(Boolean) : [];
 }
 
 class AssignmentService {
@@ -38,17 +44,29 @@ class AssignmentService {
     const startDatetime = new Date(assignmentData.startDatetime);
     const endDatetime = new Date(assignmentData.endDatetime);
     this._assertValidDateRange(startDatetime, endDatetime);
+    const occurrences = recurrenceService.generateOccurrences(startDatetime, endDatetime, recurrence);
+    const assignmentCount = occurrences.length * employeeIds.length;
+    if (assignmentCount > MAX_ASSIGNMENTS_PER_CREATE) {
+      throw new ValidationError(`Cannot create more than ${MAX_ASSIGNMENTS_PER_CREATE} assignments at once.`);
+    }
+    const requirements = this._buildRequirements(assignmentData);
 
     const conflictMap = new Map();
     for (const employeeId of employeeIds) {
-      const conflicts = await this._enforceConflicts({
-        employeeId,
-        startDatetime,
-        endDatetime,
-        overrideConflicts,
-        overrideReason,
-      });
-      conflictMap.set(normalizeId(employeeId), conflicts);
+      for (const occurrence of occurrences) {
+        const conflicts = await this._enforceConflicts({
+          employeeId,
+          startDatetime: occurrence.startDatetime,
+          endDatetime: occurrence.endDatetime,
+          overrideConflicts,
+          overrideReason,
+          requirements,
+        });
+        conflictMap.set(
+          `${normalizeId(employeeId)}:${occurrence.recurrenceIndex}`,
+          conflicts,
+        );
+      }
     }
 
     let recurrenceGroupId = null;
@@ -61,38 +79,44 @@ class AssignmentService {
 
     const results = [];
     for (const employeeId of employeeIds) {
-      const assignmentNumber = await counterService.getNextAssignmentNumber();
-      const assignment = await assignmentRepository.create({
-        ...assignmentData,
-        employeeId,
-        assignmentNumber,
-        recurrenceGroupId,
-        startDatetime,
-        endDatetime,
-        createdBy,
-      });
+      for (const occurrence of occurrences) {
+        const assignmentNumber = await counterService.getNextAssignmentNumber();
+        const assignment = await assignmentRepository.create({
+          ...assignmentData,
+          employeeId,
+          assignmentNumber,
+          recurrenceGroupId,
+          recurrenceIndex: occurrence.recurrenceIndex,
+          startDatetime: occurrence.startDatetime,
+          endDatetime: occurrence.endDatetime,
+          createdBy,
+        });
 
-      const conflicts = conflictMap.get(normalizeId(employeeId)) || [];
-      if (conflicts.length > 0) {
-        await this._recordOverriddenConflicts(assignment._id, conflicts, createdBy, overrideReason);
+        const conflicts = conflictMap.get(`${normalizeId(employeeId)}:${occurrence.recurrenceIndex}`) || [];
+        if (conflicts.length > 0) {
+          await this._recordOverriddenConflicts(assignment._id, conflicts, createdBy, overrideReason);
+        }
+
+        if (assignment.isCustomerAppointment && appointment) {
+          await this._syncAppointment(assignment._id, appointment, createdBy, meta);
+        }
+
+        results.push({
+          id: assignment._id,
+          employeeId,
+          recurrenceIndex: occurrence.recurrenceIndex,
+          status: assignment.status,
+          conflicts,
+        });
+
+        this._publishAssignmentEvent(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CREATED, assignment, {
+          createdBy,
+          employeeIds: [normalizeId(employeeId)],
+          hasAppointment: Boolean(appointment),
+          recurrenceGroupId,
+          recurrenceIndex: occurrence.recurrenceIndex,
+        });
       }
-
-      if (assignment.isCustomerAppointment && appointment) {
-        await this._syncAppointment(assignment._id, appointment, createdBy, meta);
-      }
-
-      results.push({
-        id: assignment._id,
-        employeeId,
-        status: assignment.status,
-        conflicts,
-      });
-
-      this._publishAssignmentEvent(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CREATED, assignment, {
-        createdBy,
-        employeeIds: [normalizeId(employeeId)],
-        hasAppointment: Boolean(appointment),
-      });
     }
 
     await this._invalidateCalendarCache();
@@ -107,6 +131,7 @@ class AssignmentService {
       details: {
         employeeIds,
         count: results.length,
+        recurrenceCount: occurrences.length,
         overriddenConflicts: results.reduce((count, item) => count + item.conflicts.length, 0),
       },
       module: 'deploy',
@@ -167,11 +192,13 @@ class AssignmentService {
       ? new Date(assignmentData.endDatetime)
       : new Date(existing.endDatetime);
     this._assertValidDateRange(targetStart, targetEnd);
+    const requirements = this._buildRequirements({ ...existing, ...assignmentData });
 
     const scheduleChanged =
       targetEmployeeId !== previousEmployeeId ||
       !sameInstant(targetStart, existing.startDatetime) ||
-      !sameInstant(targetEnd, existing.endDatetime);
+      !sameInstant(targetEnd, existing.endDatetime) ||
+      this._requirementsChanged(existing, assignmentData);
 
     let conflicts = [];
     if (scheduleChanged) {
@@ -182,6 +209,7 @@ class AssignmentService {
         excludeAssignmentId: id,
         overrideConflicts,
         overrideReason,
+        requirements,
       });
     }
 
@@ -263,6 +291,7 @@ class AssignmentService {
     const targetStart = new Date(newStartDatetime);
     const targetEnd = new Date(newEndDatetime);
     this._assertValidDateRange(targetStart, targetEnd);
+    const requirements = this._buildRequirements(existing);
 
     const conflicts = await this._enforceConflicts({
       employeeId: targetEmployeeId,
@@ -271,6 +300,7 @@ class AssignmentService {
       excludeAssignmentId: id,
       overrideConflicts,
       overrideReason,
+      requirements,
     });
 
     const updated = await assignmentRepository.updateById(id, {
@@ -332,6 +362,7 @@ class AssignmentService {
     const targetStart = new Date(existing.startDatetime);
     const targetEnd = new Date(newEndDatetime);
     this._assertValidDateRange(targetStart, targetEnd);
+    const requirements = this._buildRequirements(existing);
 
     const conflicts = await this._enforceConflicts({
       employeeId,
@@ -340,6 +371,7 @@ class AssignmentService {
       excludeAssignmentId: id,
       overrideConflicts,
       overrideReason,
+      requirements,
     });
 
     const updated = await assignmentRepository.updateById(id, {
@@ -394,7 +426,9 @@ class AssignmentService {
     return Assignment.find({
       employeeId,
       updatedAt: { $gt: new Date(since) },
-    }).lean();
+    })
+      .setOptions({ includeDeleted: true })
+      .lean();
   }
 
   _assertValidDateRange(startDatetime, endDatetime) {
@@ -416,6 +450,7 @@ class AssignmentService {
     excludeAssignmentId = null,
     overrideConflicts = false,
     overrideReason = null,
+    requirements = {},
   }) {
     const conflictService = (await import('./conflict.service.js')).default;
     if (!employeeId) return [];
@@ -425,6 +460,7 @@ class AssignmentService {
       startDatetime,
       endDatetime,
       excludeAssignmentId,
+      requirements,
     );
 
     if (conflicts.length === 0) return [];
@@ -470,6 +506,27 @@ class AssignmentService {
   async _markAppointmentRescheduled(assignmentId, scheduleData, userId, meta) {
     const appointmentService = (await import('./appointment.service.js')).default;
     return appointmentService.markAssignmentRescheduled(assignmentId, scheduleData, userId, meta);
+  }
+
+  _buildRequirements(source = {}) {
+    return {
+      requiredSkills: normalizeCapabilityList(source.requiredSkills),
+      recommendedSkills: normalizeCapabilityList(source.recommendedSkills),
+      requiredCertifications: normalizeCapabilityList(source.requiredCertifications),
+      recommendedCertifications: normalizeCapabilityList(source.recommendedCertifications),
+    };
+  }
+
+  _requirementsChanged(existing, updates = {}) {
+    return [
+      'requiredSkills',
+      'recommendedSkills',
+      'requiredCertifications',
+      'recommendedCertifications',
+    ].some((field) => {
+      if (!Object.prototype.hasOwnProperty.call(updates, field)) return false;
+      return normalizeCapabilityList(existing[field]).join('|') !== normalizeCapabilityList(updates[field]).join('|');
+    });
   }
 
   _publishAssignmentEvent(eventType, assignment, extra = {}) {

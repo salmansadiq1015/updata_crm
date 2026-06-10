@@ -11,6 +11,7 @@ import { EmployeeAvatarRow } from '../shared/employee-avatar-row';
 import { CalendarAssignmentBlock } from './calendar-assignment-block';
 import { CalendarPmScheduleBlock } from './calendar-pm-schedule-block';
 import { CalendarAvailabilityBar } from './calendar-availability-bar';
+import { useSchedulingStore } from '../../stores/scheduling-store';
 import {
   differenceInMinutes, startOfDay, isSameDay, isWithinInterval,
 } from 'date-fns';
@@ -104,8 +105,13 @@ function buildSlotStart(day, hour) {
   return start;
 }
 
-function CalendarDropSlot({ employeeId, day, hour, className }) {
+function CalendarDropSlot({ employeeId, day, hour, className, onClick }) {
   const start = buildSlotStart(day, hour);
+  const end = new Date(start);
+  end.setHours(end.getHours() + 1);
+  const conflictPreview = useSchedulingStore((state) => state.conflictPreview);
+  const hasHardConflict = conflictPreview?.conflicts?.some((conflict) => conflict.severity === 'HARD');
+  const hasSoftConflict = conflictPreview?.conflicts?.some((conflict) => conflict.severity === 'SOFT');
   const { setNodeRef, isOver } = useDroppable({
     id: `calendar-drop-${employeeId}-${start.toISOString()}`,
     data: {
@@ -117,9 +123,28 @@ function CalendarDropSlot({ employeeId, day, hour, className }) {
   return (
     <div
       ref={setNodeRef}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={() => onClick?.({
+        employeeId,
+        startDatetime: start.toISOString(),
+        endDatetime: end.toISOString(),
+      })}
+      onKeyDown={(event) => {
+        if (!onClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        onClick({
+          employeeId,
+          startDatetime: start.toISOString(),
+          endDatetime: end.toISOString(),
+        });
+      }}
       className={cn(
         'h-full min-w-0 transition-colors',
-        isOver && 'bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/60',
+        onClick && 'cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60',
+        isOver && !hasHardConflict && !hasSoftConflict && 'bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/60',
+        isOver && hasSoftConflict && !hasHardConflict && 'bg-amber-500/15 ring-1 ring-inset ring-amber-500/70',
+        isOver && hasHardConflict && 'bg-red-500/15 ring-1 ring-inset ring-red-500/70',
         className
       )}
     />
@@ -132,6 +157,8 @@ export const CalendarRow = memo(function CalendarRow({
   view,
   canWrite,
   onAssignmentClick,
+  onResizeStart,
+  onSlotClick,
   style,
 }) {
   const assignments = employee.assignments || [];
@@ -158,7 +185,7 @@ export const CalendarRow = memo(function CalendarRow({
       </div>
 
       {/* Calendar cells - one per day */}
-      <div className="flex-1 flex relative">
+      <div className="flex-1 flex relative" data-calendar-row-grid="true">
         {days.map((day) => {
           const dayKey = day.toDateString();
           const avail = availabilityMap[dayKey];
@@ -189,6 +216,7 @@ export const CalendarRow = memo(function CalendarRow({
                   day={day}
                   hour={DAY_START_HOUR}
                   className="absolute inset-0 z-0"
+                  onClick={onSlotClick}
                 />
               )}
               {canWrite && view !== CALENDAR_VIEWS.MONTH && (
@@ -200,6 +228,7 @@ export const CalendarRow = memo(function CalendarRow({
                       day={day}
                       hour={DAY_START_HOUR + i}
                       className="flex-1 border-r border-transparent last:border-r-0"
+                      onClick={onSlotClick}
                     />
                   ))}
                 </div>
@@ -219,6 +248,7 @@ export const CalendarRow = memo(function CalendarRow({
               style={blockStyle}
               canDrag={canWrite}
               onClick={onAssignmentClick}
+              onResizeStart={canWrite ? onResizeStart : undefined}
             />
           );
         })}

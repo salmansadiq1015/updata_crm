@@ -1,6 +1,6 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
-import { CONFIRMATION_METHODS } from './appointmentDetails.model.js';
+import { CONFIRMATION_METHODS, CONFIRMATION_STATUSES } from './appointmentDetails.model.js';
 
 export const getAppointmentSchema = {
   params: Joi.object({ id: objectId.required() }),
@@ -36,5 +36,15 @@ export const rescheduleAppointmentSchema = {
     newEndDatetime: Joi.date().iso(),
     appointmentWindow: Joi.string().trim().max(100),
     customerNotes: Joi.string().max(2000),
+  }),
+};
+
+export const updateAppointmentStatusSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    status: Joi.string()
+      .valid(...CONFIRMATION_STATUSES.filter((status) => !['PENDING', 'SENT', 'RESCHEDULED'].includes(status)))
+      .required(),
+    note: Joi.string().trim().max(2000).allow('', null),
   }),
 };

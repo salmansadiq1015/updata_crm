@@ -8,6 +8,7 @@ import { useSchedulingStore } from '../../stores/scheduling-store';
 import {
   ASSIGNMENT_TYPE_META,
   ASSIGNMENT_STATUS_META,
+  translateMetaLabel,
 } from '../../constants/deploy-constants';
 import { useDeployEmployees } from '../../hooks/use-deploy-employees';
 
@@ -47,7 +48,7 @@ export function FilterBar() {
         <SelectContent>
           {Object.entries(ASSIGNMENT_TYPE_META).map(([key, meta]) => (
             <SelectItem key={key} value={key} className="text-xs">
-              {meta.label}
+              {translateMetaLabel(t, meta)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -63,7 +64,7 @@ export function FilterBar() {
         <SelectContent>
           {Object.entries(ASSIGNMENT_STATUS_META).map(([key, meta]) => (
             <SelectItem key={key} value={key} className="text-xs">
-              {meta.label}
+              {translateMetaLabel(t, meta)}
             </SelectItem>
           ))}
         </SelectContent>

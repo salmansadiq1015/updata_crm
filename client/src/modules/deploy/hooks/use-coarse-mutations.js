@@ -27,7 +27,7 @@ export function useCoarseMutations({ onCreate, onUpdate, onDelete, onBulk } = {}
     mutationFn: (data) => coarseService.createAllocation(data),
     onSuccess: (res) => {
       invalidate();
-      showSuccess(t('deploy.coarse.allocation', 'Zuteilung') + ' erstellt');
+      showSuccess(t('deploy.coarse.created', 'Zuteilung erstellt'));
       onCreate?.(res);
     },
     onError: (err) => showError(err),
@@ -55,7 +55,7 @@ export function useCoarseMutations({ onCreate, onUpdate, onDelete, onBulk } = {}
     mutationFn: (data) => coarseService.bulkUpsert(data),
     onSuccess: (res) => {
       invalidate();
-      showSuccess('Zuteilungen aktualisiert');
+      showSuccess(t('deploy.coarse.updated', 'Zuteilungen aktualisiert'));
       onBulk?.(res);
     },
     onError: (err) => showError(err),

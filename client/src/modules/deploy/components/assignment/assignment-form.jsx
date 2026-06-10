@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { createAssignmentSchema } from '../../validations/assignment';
+import { getCreateAssignmentSchema } from '../../validations/assignment';
 import { useAssignmentMutations } from '../../hooks/use-assignment-mutations';
 import { useDeployEmployees } from '../../hooks/use-deploy-employees';
 import { AssignmentRecurrenceForm } from './assignment-recurrence-form';
@@ -20,8 +20,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FormField, FormSection, FormBody } from '@/components/ui/form-field';
-import { Loader2, CalendarClock, Repeat, UserPlus, Check, ChevronsUpDown, X } from 'lucide-react';
-import { ASSIGNMENT_TYPE_META, PRIORITY_META } from '../../constants/deploy-constants';
+import { Loader2, CalendarClock, Repeat, Check, ChevronsUpDown, X } from 'lucide-react';
+import { ASSIGNMENT_TYPE_META, PRIORITY_META, translateMetaLabel } from '../../constants/deploy-constants';
 
 const BLANK = {
   employeeIds: [],
@@ -34,6 +34,10 @@ const BLANK = {
   isFullDay: false,
   priority: 'NORMAL',
   instructions: '',
+  requiredSkills: '',
+  recommendedSkills: '',
+  requiredCertifications: '',
+  recommendedCertifications: '',
   customerId: '',
   siteId: '',
   colorCode: '',
@@ -48,9 +52,30 @@ const DEFAULT_RECURRENCE = {
   endType: 'NEVER',
 };
 
+function joinList(values) {
+  return Array.isArray(values) ? values.join(', ') : values || '';
+}
+
+function splitList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeDateTime(value, { isFullDay, isEnd } = {}) {
+  if (!value) return value;
+  if (isFullDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return `${value}T${isEnd ? '23:59:59' : '00:00:00'}`;
+  }
+  return value;
+}
+
 export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
+  const assignmentSchema = useMemo(() => getCreateAssignmentSchema(t), [t]);
 
   const { data: employees = [] } = useDeployEmployees({ enabled: open });
 
@@ -63,7 +88,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
     register, handleSubmit, reset, setValue, control,
     formState: { errors },
   } = useForm({
-    resolver: zodResolver(createAssignmentSchema),
+    resolver: zodResolver(assignmentSchema),
     defaultValues: BLANK,
   });
 
@@ -76,6 +101,10 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
         employeeIds: defaultValues.employeeId ? [defaultValues.employeeId._id || defaultValues.employeeId] : [],
         startDatetime: defaultValues.startDatetime?.slice(0, 16) || '',
         endDatetime: defaultValues.endDatetime?.slice(0, 16) || '',
+        requiredSkills: joinList(defaultValues.requiredSkills),
+        recommendedSkills: joinList(defaultValues.recommendedSkills),
+        requiredCertifications: joinList(defaultValues.requiredCertifications),
+        recommendedCertifications: joinList(defaultValues.recommendedCertifications),
         recurrence: defaultValues.recurrence || (defaultValues.recurrenceGroupId ? DEFAULT_RECURRENCE : null),
       };
       reset(values);
@@ -104,7 +133,13 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
       customerId: data.customerId || null,
       siteId: data.siteId || null,
       title: data.title || null,
+      startDatetime: normalizeDateTime(data.startDatetime, { isFullDay: data.isFullDay }),
+      endDatetime: normalizeDateTime(data.endDatetime, { isFullDay: data.isFullDay, isEnd: true }),
       instructions: data.instructions || null,
+      requiredSkills: splitList(data.requiredSkills),
+      recommendedSkills: splitList(data.recommendedSkills),
+      requiredCertifications: splitList(data.requiredCertifications),
+      recommendedCertifications: splitList(data.recommendedCertifications),
       colorCode: data.colorCode || null,
       recurrence: showRecurrence ? data.recurrence : null,
       appointment: isCustomerAppointment ? data.appointment : null,
@@ -156,7 +191,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                           <SelectItem key={key} value={key} className="text-xs">
                             <span className="flex items-center gap-1.5">
                               <Icon className={`h-3.5 w-3.5 ${meta.color}`} />
-                              {meta.label}
+                              {translateMetaLabel(t, meta)}
                             </span>
                           </SelectItem>
                         );
@@ -176,7 +211,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                     <SelectContent>
                       {Object.entries(PRIORITY_META).map(([key, meta]) => (
                         <SelectItem key={key} value={key} className="text-xs">
-                          <span className={meta.color}>{meta.label}</span>
+                          <span className={meta.color}>{translateMetaLabel(t, meta)}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -289,6 +324,39 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                 {...register('instructions')}
               />
             </FormField>
+
+            <FormSection title={t('deploy.form.capabilities', 'Qualifikationen')}>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label={t('deploy.form.requiredSkills', 'Erforderliche Skills')} error={errors.requiredSkills?.message}>
+                  <Input
+                    className="h-9 text-xs"
+                    placeholder={t('deploy.form.commaSeparated', 'Kommagetrennt')}
+                    {...register('requiredSkills')}
+                  />
+                </FormField>
+                <FormField label={t('deploy.form.recommendedSkills', 'Empfohlene Skills')} error={errors.recommendedSkills?.message}>
+                  <Input
+                    className="h-9 text-xs"
+                    placeholder={t('deploy.form.commaSeparated', 'Kommagetrennt')}
+                    {...register('recommendedSkills')}
+                  />
+                </FormField>
+                <FormField label={t('deploy.form.requiredCertifications', 'Erforderliche Zertifikate')} error={errors.requiredCertifications?.message}>
+                  <Input
+                    className="h-9 text-xs"
+                    placeholder={t('deploy.form.commaSeparated', 'Kommagetrennt')}
+                    {...register('requiredCertifications')}
+                  />
+                </FormField>
+                <FormField label={t('deploy.form.recommendedCertifications', 'Empfohlene Zertifikate')} error={errors.recommendedCertifications?.message}>
+                  <Input
+                    className="h-9 text-xs"
+                    placeholder={t('deploy.form.commaSeparated', 'Kommagetrennt')}
+                    {...register('recommendedCertifications')}
+                  />
+                </FormField>
+              </div>
+            </FormSection>
 
             {/* Toggles */}
             <div className="flex items-center gap-4">

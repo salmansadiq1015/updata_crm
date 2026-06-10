@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { PM_SCHEDULE_META } from '../../constants/deploy-constants';
+import { PM_SCHEDULE_META, translateMetaLabel } from '../../constants/deploy-constants';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { format } from 'date-fns';
@@ -24,6 +24,7 @@ export const CalendarPmScheduleBlock = memo(function CalendarPmScheduleBlock({
 }) {
   const { t } = useLanguage();
   const meta = PM_SCHEDULE_META[entry.entryType] || PM_SCHEDULE_META.PHASE;
+  const metaLabel = translateMetaLabel(t, meta);
   const isMilestone = entry.entryType === 'MILESTONE';
   const Icon = isMilestone ? Flag : Building2;
   const color = meta.calendarColor;
@@ -74,7 +75,7 @@ export const CalendarPmScheduleBlock = memo(function CalendarPmScheduleBlock({
           <div className="text-xs text-muted-foreground space-y-1">
             <div className="flex items-center gap-1.5">
               <Icon className="h-3 w-3" />
-              {meta.label}
+              {metaLabel}
             </div>
             {entry.startDatetime && (
               <div>

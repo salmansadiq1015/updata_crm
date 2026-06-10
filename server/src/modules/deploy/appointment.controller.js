@@ -39,6 +39,19 @@ class AppointmentController {
       return res.success({ data, message: 'Appointment rescheduled successfully' });
     } catch (err) { next(err); }
   }
+
+  async updateStatus(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const data = await appointmentService.updateStatus(
+        req.params.id,
+        req.body.status,
+        req.user._id,
+        { ...meta, note: req.body.note },
+      );
+      return res.success({ data, message: 'Appointment status updated successfully' });
+    } catch (err) { next(err); }
+  }
 }
 
 const appointmentController = new AppointmentController();

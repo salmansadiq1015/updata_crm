@@ -4,7 +4,6 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   checkConflictSchema,
-  conflictIdParamSchema,
   resolveConflictSchema,
 } from './conflict.validation.js';
 

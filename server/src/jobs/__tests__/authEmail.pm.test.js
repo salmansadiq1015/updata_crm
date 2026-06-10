@@ -3,6 +3,10 @@ import { jest, describe, it, beforeAll, afterEach, expect } from '@jest/globals'
 // ── Mail helpers ──────────────────────────────────────────────────────────────
 const mockSendProjectStatusNotification = jest.fn();
 const mockSendPartnerConfirmationEmail = jest.fn();
+const mockSendAppointmentConfirmationEmail = jest.fn();
+const mockSendAppointmentReminderEmail = jest.fn();
+const mockSendAppointmentCancellationEmail = jest.fn();
+const mockSendAppointmentRescheduledEmail = jest.fn();
 
 jest.unstable_mockModule('../../shared/mail/mail.js', () => ({
   sendInvoiceSentEmail: jest.fn(),
@@ -12,6 +16,10 @@ jest.unstable_mockModule('../../shared/mail/mail.js', () => ({
   sendPasswordChangedEmail: jest.fn(),
   sendProjectStatusNotification: mockSendProjectStatusNotification,
   sendPartnerConfirmationEmail: mockSendPartnerConfirmationEmail,
+  sendAppointmentConfirmationEmail: mockSendAppointmentConfirmationEmail,
+  sendAppointmentReminderEmail: mockSendAppointmentReminderEmail,
+  sendAppointmentCancellationEmail: mockSendAppointmentCancellationEmail,
+  sendAppointmentRescheduledEmail: mockSendAppointmentRescheduledEmail,
 }));
 
 // ── Logger (suppress output in tests) ────────────────────────────────────────

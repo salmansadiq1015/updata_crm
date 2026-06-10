@@ -76,6 +76,7 @@ export const OFFLINE_QUEUE_MAX = 5; // max queued recordings
 export const WORKFLOW_LABELS = {
   TASK_AUTOMATION:     'Creating task',
   NOTIFICATION:        'Sending notification',
+  FIELD_SERVICE_AGENT: 'Running field-service action',
   LEAD_CREATION:       'Creating lead',
   INVOICE_GENERATION:  'Generating invoice',
   GENERAL:             'Thinking…',

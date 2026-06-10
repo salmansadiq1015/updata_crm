@@ -7,10 +7,12 @@
 import { taskWorkflow } from './task.workflow.js';
 import { notificationWorkflow } from './notification.workflow.js';
 import { generalWorkflow } from './general.workflow.js';
+import { fieldServiceAgentWorkflow } from './fieldServiceAgent.workflow.js';
 
 const WORKFLOW_REGISTRY = {
   TASK_AUTOMATION: taskWorkflow,
   NOTIFICATION: notificationWorkflow,
+  FIELD_SERVICE_AGENT: fieldServiceAgentWorkflow,
   GENERAL: generalWorkflow,
 };
 

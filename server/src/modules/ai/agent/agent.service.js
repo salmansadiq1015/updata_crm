@@ -13,9 +13,21 @@ import logger from '../../../shared/logger/index.js';
 import { randomUUID } from 'crypto';
 
 const INTENT_TO_WORKFLOW = {
-  create_task: 'TASK_AUTOMATION',
-  update_task: 'TASK_AUTOMATION',
+  create_task: 'FIELD_SERVICE_AGENT',
+  update_task: 'FIELD_SERVICE_AGENT',
   send_notification: 'NOTIFICATION',
+  create_order: 'FIELD_SERVICE_AGENT',
+  update_order: 'FIELD_SERVICE_AGENT',
+  create_assignment: 'FIELD_SERVICE_AGENT',
+  reschedule_assignment: 'FIELD_SERVICE_AGENT',
+  create_report: 'FIELD_SERVICE_AGENT',
+  update_project: 'FIELD_SERVICE_AGENT',
+  create_note: 'FIELD_SERVICE_AGENT',
+  send_chat_message: 'FIELD_SERVICE_AGENT',
+  record_time: 'FIELD_SERVICE_AGENT',
+  search_customer: 'FIELD_SERVICE_AGENT',
+  create_quotation: 'FIELD_SERVICE_AGENT',
+  create_invoice: 'FIELD_SERVICE_AGENT',
 };
 
 class AgentService {
@@ -35,12 +47,15 @@ class AgentService {
   }
 
   async _classifyIntent(input) {
+    const deterministic = this._classifyIntentHeuristic(input);
+    if (deterministic) return deterministic;
+
     try {
       const llm = this._getLlm();
       const response = await llm.invoke([
         {
           role: 'system',
-          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_task, update_task, send_notification, general>", "confidence": 0.0-1.0}',
+          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_task, update_task, send_notification, create_order, update_order, create_assignment, reschedule_assignment, create_report, update_project, create_note, send_chat_message, record_time, search_customer, create_quotation, create_invoice, general>", "confidence": 0.0-1.0}',
         },
         { role: 'user', content: input },
       ]);
@@ -49,6 +64,24 @@ class AgentService {
     } catch {
       return 'general';
     }
+  }
+
+  _classifyIntentHeuristic(input) {
+    const text = String(input || '').toLowerCase();
+    const has = (...terms) => terms.some((term) => text.includes(term));
+    if (has('quotation', 'quote', 'offerte', 'angebot')) return 'create_quotation';
+    if (has('invoice', 'rechnung')) return 'create_invoice';
+    if (has('service report', 'work report', 'rapport', 'bericht')) return 'create_report';
+    if (has('chat', 'message', 'nachricht', 'send to', 'schreib')) return 'send_chat_message';
+    if (has('working hour', 'hours', 'time entry', 'zeit', 'stunden')) return 'record_time';
+    if (has('reschedule', 'move appointment', 'verschieb')) return 'reschedule_assignment';
+    if (has('schedule', 'appointment', 'assign', 'plan', 'termin', 'zuweisen')) return 'create_assignment';
+    if (has('project', 'projekt') && has('status', 'update', 'set', 'change', 'aktualisier')) return 'update_project';
+    if (has('order', 'job', 'auftrag')) return has('update', 'status', 'change', 'set') ? 'update_order' : 'create_order';
+    if (has('note', 'notiz', 'documentation', 'dokumentation')) return 'create_note';
+    if (has('customer', 'kunde', 'client', 'show me', 'find', 'search', 'suche')) return 'search_customer';
+    if (has('task', 'aufgabe', 'todo')) return has('complete', 'done', 'erledigt', 'in progress', 'bearbeitung') ? 'update_task' : 'create_task';
+    return null;
   }
 
   async run(input, userId, permissions, meta = {}) {
@@ -60,21 +93,25 @@ class AgentService {
       const existing = await agentRunRepository.findByCorrelationId(meta.correlationId);
       if (existing) {
         if (existing.status === 'COMPLETED') {
-          return { agentRunId: existing._id.toString(), status: 'completed', workflowType: existing.workflowType };
+          return { agentRunId: existing._id.toString(), status: 'completed', workflowType: existing.workflowType, threadId: existing.threadId };
         }
         if (['RUNNING', 'PENDING'].includes(existing.status)) {
-          return { agentRunId: existing._id.toString(), status: 'pending', workflowType: existing.workflowType };
+          return { agentRunId: existing._id.toString(), status: 'pending', workflowType: existing.workflowType, threadId: existing.threadId };
         }
         // FAILED or CANCELLED — fall through and create a new run
       }
     }
 
-    const intent = await this._classifyIntent(sanitized);
-    const workflowType = INTENT_TO_WORKFLOW[intent] || 'GENERAL';
+    const previousFollowUp = await this._loadPreviousFollowUp(userId, meta.threadId);
+    const intent = previousFollowUp ? previousFollowUp.action : await this._classifyIntent(sanitized);
+    const workflowType = previousFollowUp
+      ? 'FIELD_SERVICE_AGENT'
+      : INTENT_TO_WORKFLOW[intent] || (intent === 'general' ? 'GENERAL' : 'FIELD_SERVICE_AGENT');
+    const threadId = meta.threadId || randomUUID();
 
     const agentRun = await agentRunRepository.create({
       userId,
-      threadId: meta.threadId || randomUUID(),
+      threadId,
       workflowType,
       status: 'PENDING',
       input: sanitized,
@@ -89,7 +126,10 @@ class AgentService {
         userId: userId.toString(),
         permissions,
         workflowType,
-        entities: {},
+        entities: {
+          requestContext: meta.context || {},
+          previousFollowUp,
+        },
         input: sanitized,
       });
     } catch (queueErr) {
@@ -125,7 +165,20 @@ class AgentService {
       workflowType,
     });
 
-    return { agentRunId: agentRun._id.toString(), status: 'pending', workflowType };
+    return { agentRunId: agentRun._id.toString(), status: 'pending', workflowType, threadId };
+  }
+
+  async _loadPreviousFollowUp(userId, threadId) {
+    if (!threadId) return null;
+    const latest = await agentRunRepository.findLatestByThreadId(userId, threadId);
+    if (!latest?.output || latest.output.status !== 'needs_follow_up') return null;
+    return {
+      action: latest.output.action,
+      originalInput: latest.output.originalInput || latest.input,
+      missingFields: latest.output.missingFields || [],
+      resolvedContext: latest.output.resolvedContext || {},
+      candidates: latest.output.candidates || {},
+    };
   }
 
   async runFromSession(voiceSessionId, userId, permissions, entities, intentName, meta = {}) {

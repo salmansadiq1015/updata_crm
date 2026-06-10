@@ -117,6 +117,24 @@ const accountingDocumentSchema = new mongoose.Schema(
     },
     notes: { type: String, maxlength: 2000, default: '' },
     projectReference: { type: String, trim: true, maxlength: 100, default: '' },
+    supplierName: { type: String, trim: true, maxlength: 200, default: '' },
+    receiptDate: { type: Date, default: null },
+    amount: { type: Number, default: null },
+    vat: { type: Number, default: null },
+    receiptType: {
+      type: String,
+      enum: ['MATERIAL', 'TRAVEL', 'MEAL', 'SERVICE', 'TOOLS', 'OTHER', null],
+      default: null,
+    },
+    accountingCategory: { type: String, trim: true, maxlength: 120, default: '' },
+    projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', default: null },
+    customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
+    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    autoAssignmentStatus: {
+      type: String,
+      enum: ['PENDING_REVIEW', 'CONFIRMED', 'AUTO_ASSIGNED'],
+      default: 'PENDING_REVIEW',
+    },
     fullText: { type: String, maxlength: 200000, default: '' },
     linkedRecords: [linkedRecordSchema],
     assignmentHistory: [assignmentHistorySchema],
@@ -148,13 +166,17 @@ const accountingDocumentSchema = new mongoose.Schema(
 accountingDocumentSchema.index({ documentType: 1 });
 accountingDocumentSchema.index({ ocrStatus: 1 });
 accountingDocumentSchema.index({ assignedTo: 1 });
+accountingDocumentSchema.index({ projectId: 1 });
+accountingDocumentSchema.index({ customerId: 1 });
+accountingDocumentSchema.index({ employeeId: 1 });
+accountingDocumentSchema.index({ accountingCategory: 1 });
 accountingDocumentSchema.index({ processingStatus: 1 });
 accountingDocumentSchema.index({ createdAt: -1 });
 accountingDocumentSchema.index({ isDeleted: 1, createdAt: -1 });
 accountingDocumentSchema.index({ 'linkedRecords.recordType': 1, 'linkedRecords.recordId': 1 });
 accountingDocumentSchema.index(
   { fileName: 'text', notes: 'text', projectReference: 'text', fullText: 'text' },
-  { weights: { fileName: 10, projectReference: 5, notes: 3, fullText: 1 } },
+  { weights: { fileName: 10, supplierName: 8, projectReference: 5, accountingCategory: 4, notes: 3, fullText: 1 } },
 );
 
 accountingDocumentSchema.pre(/^find/, function () {

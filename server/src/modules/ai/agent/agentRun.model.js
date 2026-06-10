@@ -18,7 +18,7 @@ const AgentRunSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   workflowType: {
     type: String,
-    enum: ['LEAD_CREATION', 'INVOICE_GENERATION', 'TASK_AUTOMATION', 'NOTIFICATION', 'GENERAL'],
+    enum: ['LEAD_CREATION', 'INVOICE_GENERATION', 'TASK_AUTOMATION', 'NOTIFICATION', 'FIELD_SERVICE_AGENT', 'GENERAL'],
     required: true,
   },
   status: {

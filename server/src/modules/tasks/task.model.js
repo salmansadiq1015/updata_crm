@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-export const TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+export const TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED'];
 export const TASK_PRIORITIES = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 export const MAX_SUBTASK_DEPTH = 3;
 

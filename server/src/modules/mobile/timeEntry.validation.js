@@ -2,6 +2,7 @@ import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 
 const ACTIVITY_TYPES = ['TRAVEL', 'ONSITE_WORK', 'ADMINISTRATIVE', 'OTHER'];
+const RELEASE_STATUSES = ['PENDING', 'RELEASED', 'LOCKED'];
 
 export const createTimeEntrySchema = {
   params: Joi.object({ id: objectId.required() }),
@@ -35,6 +36,12 @@ export const listTimeEntriesSchema = {
   query: Joi.object({
     dateFrom: Joi.date().iso(),
     dateTo: Joi.date().iso(),
+    all: Joi.boolean(),
+    technicianId: objectId,
+    orderId: objectId,
+    activityType: Joi.string().valid(...ACTIVITY_TYPES),
+    releaseStatus: Joi.string().valid(...RELEASE_STATUSES),
+    limit: Joi.number().integer().min(1).max(500),
   }),
 };
 

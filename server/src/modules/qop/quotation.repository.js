@@ -14,7 +14,7 @@ const ALLOWED_FILTERS = {
   currency: 'exact',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'quotationNumber', 'grandTotalRounded', 'validUntil', '_id'];
+const ALLOWED_SORT_FIELDS = ['createdAt', 'quotationNumber', 'customerName', 'grandTotalRounded', 'validUntil', '_id'];
 
 const POPULATE_FIELDS = [
   { path: 'customerId', select: 'customerNumber name' },

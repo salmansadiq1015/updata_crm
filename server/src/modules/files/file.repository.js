@@ -20,9 +20,9 @@ const ALLOWED_FILTERS = {
   bucket: 'exact',
   mimeType: 'exact',
   uploadedBy: 'objectId',
+  folderPath: 'exact',
+  category: 'exact',
 };
-
-const ALLOWED_SORT_FIELDS = ['createdAt', 'originalName', 'sizeBytes', '_id'];
 
 class FileRepository {
   async create(data) {
@@ -43,10 +43,24 @@ class FileRepository {
    * Uses lean() for performance (no Mongoose document overhead).
    */
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {} }) {
+    const { search, ...restFilters } = filters;
     const filter = {
-      ...buildFilter(filters, ALLOWED_FILTERS),
+      ...buildFilter(restFilters, ALLOWED_FILTERS),
       ...buildCursorQuery(cursor, sortBy, sortOrder),
     };
+    const queryText = `${search || ''}`.trim();
+    if (queryText) {
+      const regex = new RegExp(escapeRegex(queryText), 'i');
+      filter.$or = [
+        { originalName: regex },
+        { key: regex },
+        { module: regex },
+        { entityType: regex },
+        { folderPath: regex },
+        { category: regex },
+        { mimeType: regex },
+      ];
+    }
 
     const sort = buildCursorSort(sortBy, sortOrder);
 
@@ -85,6 +99,14 @@ class FileRepository {
     );
   }
 
+  async updateOrganization(id, data) {
+    return FileMetadata.findByIdAndUpdate(
+      id,
+      data,
+      { new: true, runValidators: true },
+    ).lean();
+  }
+
   /**
    * Hard delete: remove from database (after S3 cleanup).
    */
@@ -111,6 +133,10 @@ class FileRepository {
   async countByModule(module) {
     return FileMetadata.countDocuments({ module });
   }
+}
+
+function escapeRegex(value) {
+  return `${value}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 const fileRepository = new FileRepository();

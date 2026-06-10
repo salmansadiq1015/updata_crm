@@ -65,7 +65,25 @@ class WorkReportRepository {
     const query = {};
     if (filters.status) query.status = filters.status;
     if (filters.orderId) query.orderId = filters.orderId;
+    if (filters.projectId) query.projectId = filters.projectId;
     if (filters.technicianId) query.technicianId = filters.technicianId;
+    if (filters.dateFrom || filters.dateTo) {
+      query.reportDate = {};
+      if (filters.dateFrom) query.reportDate.$gte = filters.dateFrom;
+      if (filters.dateTo) query.reportDate.$lte = filters.dateTo;
+    }
+    const search = `${filters.search || ''}`.trim();
+    if (search) {
+      const regex = new RegExp(escapeRegex(search), 'i');
+      query.$or = [
+        { reportNumber: regex },
+        { workPerformed: regex },
+        { findings: regex },
+        { nextSteps: regex },
+        { technicianNotes: regex },
+        { customerSignerName: regex },
+      ];
+    }
     if (!filters.includeArchived) query.isArchived = false;
     return WorkReport.find(query)
       .populate(POPULATE_FIELDS)
@@ -104,6 +122,10 @@ class WorkReportRepository {
       { $set: data, $inc: { version: 1 } },
     );
   }
+}
+
+function escapeRegex(value) {
+  return `${value}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 const workReportRepository = new WorkReportRepository();

@@ -36,6 +36,7 @@ export const listDocumentsSchema = {
     sourceModule: Joi.string().trim(),
     sourceRecordId: objectId,
     documentType: Joi.string().trim(),
+    search: Joi.string().trim().max(120).allow(''),
   }),
 };
 

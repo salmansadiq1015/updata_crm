@@ -43,6 +43,8 @@ class CustomerRepository {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
         { customerNumber: { $regex: search, $options: 'i' } },
+        { uidNumber: { $regex: search, $options: 'i' } },
+        { vatNumber: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } },
         { city: { $regex: search, $options: 'i' } },
       ];
@@ -65,13 +67,14 @@ class CustomerRepository {
     if (!customers.length) return customers;
 
     const customerIds = customers.map((customer) => customer._id);
-    const [Site, Installation, MaintenanceInterval] = await Promise.all([
+    const [Site, Installation, MaintenanceInterval, Contact] = await Promise.all([
       import('./site.model.js').then((module) => module.default),
       import('./installation.model.js').then((module) => module.default),
       import('./maintenanceInterval.model.js').then((module) => module.default),
+      import('./contact.model.js').then((module) => module.default),
     ]);
 
-    const [siteCounts, installationCounts, lastServiceRows] = await Promise.all([
+    const [siteCounts, installationCounts, lastServiceRows, primaryContacts] = await Promise.all([
       Site.aggregate([
         { $match: { customerId: { $in: customerIds }, isDeleted: false } },
         { $group: { _id: '$customerId', total: { $sum: 1 } } },
@@ -100,19 +103,34 @@ class CustomerRepository {
         { $match: { 'maintenanceIntervals.lastServiceDate': { $ne: null } } },
         { $group: { _id: '$customerId', lastServiceDate: { $max: '$maintenanceIntervals.lastServiceDate' } } },
       ]),
+      Contact.find({ customerId: { $in: customerIds }, isPrimary: true })
+        .select('customerId firstName lastName functionTitle email phone mobile')
+        .lean(),
     ]);
 
     const siteCountByCustomer = new Map(siteCounts.map((row) => [String(row._id), row.total]));
     const installationCountByCustomer = new Map(installationCounts.map((row) => [String(row._id), row.total]));
     const lastServiceByCustomer = new Map(lastServiceRows.map((row) => [String(row._id), row.lastServiceDate]));
+    const primaryContactByCustomer = new Map(primaryContacts.map((contact) => [
+      String(contact.customerId),
+      {
+        ...contact,
+        fullName: `${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+      },
+    ]));
 
     return customers.map((customer) => {
       const key = String(customer._id);
+      const primaryContact = primaryContactByCustomer.get(key) || null;
       return {
         ...customer,
         totalSitesCount: siteCountByCustomer.get(key) || 0,
         totalInstallationsCount: installationCountByCustomer.get(key) || 0,
         lastServiceDate: lastServiceByCustomer.get(key) || null,
+        primaryContact,
+        primaryContactName: primaryContact?.fullName || null,
+        primaryContactEmail: primaryContact?.email || null,
+        primaryContactPhone: primaryContact?.phone || primaryContact?.mobile || null,
       };
     });
   }

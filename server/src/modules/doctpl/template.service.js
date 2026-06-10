@@ -54,6 +54,45 @@ class TemplateService {
     return created;
   }
 
+  async duplicate(id, userId, meta = {}) {
+    const existing = await documentTemplateRepository.findById(id);
+    if (!existing) throw new NotFoundError('DocumentTemplate', id);
+
+    const {
+      _id,
+      __v,
+      createdAt,
+      updatedAt,
+      deletedAt,
+      currentVersion,
+      createdBy,
+      updatedBy,
+      ...copyData
+    } = existing;
+
+    const copy = await documentTemplateRepository.create({
+      ...copyData,
+      name: `${existing.name} (Copy)`,
+      currentVersion: 1,
+      isDeleted: false,
+      createdBy: userId,
+    });
+
+    await this._invalidateListCache();
+
+    auditService.logEvent({
+      eventType: 'doctpl.template.duplicated',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { sourceTemplateId: id, templateId: copy._id },
+      module: 'doctpl',
+    });
+
+    return copy;
+  }
+
   async getById(id) {
     const cacheKey = `doctpl:template:${id}`;
     const template = await cacheManager.getOrSet(
@@ -206,6 +245,28 @@ class TemplateService {
     });
 
     return { downloadUrl, sizeBytes: buffer.length };
+  }
+
+  async remove(id, userId, meta = {}) {
+    const existing = await documentTemplateRepository.findById(id);
+    if (!existing) throw new NotFoundError('DocumentTemplate', id);
+
+    const removed = await documentTemplateRepository.softDelete(id);
+
+    await this._invalidateTemplateCache(id);
+    await this._invalidateListCache();
+
+    auditService.logEvent({
+      eventType: 'doctpl.template.deleted',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { templateId: id },
+      module: 'doctpl',
+    });
+
+    return removed;
   }
 
   async _pruneVersions(templateId) {

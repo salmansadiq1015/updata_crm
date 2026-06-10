@@ -27,6 +27,8 @@ class FileController {
         entityId: req.body.entityId || null,
         uploadedBy: req.user?._id || null,
         bucket: req.body.bucket || 'general',
+        folderPath: req.body.folderPath || '',
+        category: req.body.category || 'general',
       });
 
       // Generate a presigned URL so callers can immediately access the file
@@ -86,6 +88,54 @@ class FileController {
     try {
       await fileService.delete(req.params.id);
       return res.success({ message: 'File deleted successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async organize(req, res, next) {
+    try {
+      const result = await fileService.organize(req.params.id, req.body);
+      return res.success({ data: result, message: 'File organized successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listFolders(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const { cursor, limit, sortBy, sortOrder, ...filters } = query;
+      const result = await fileService.listFolders({ cursor, limit, sortBy, sortOrder, ...filters });
+      return res.success({
+        data: result.data,
+        pagination: result.pagination,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async createFolder(req, res, next) {
+    try {
+      const result = await fileService.createFolder({
+        ...req.body,
+        createdBy: req.user?._id || null,
+      });
+      return res.success({
+        data: result,
+        message: 'Folder created successfully',
+        statusCode: 201,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async deleteFolder(req, res, next) {
+    try {
+      await fileService.deleteFolder(req.params.id);
+      return res.success({ message: 'Folder deleted successfully' });
     } catch (err) {
       next(err);
     }

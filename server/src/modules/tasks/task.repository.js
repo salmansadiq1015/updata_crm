@@ -21,6 +21,13 @@ const ALLOWED_FILTERS = {
 
 const ALLOWED_SORT_FIELDS = ['createdAt', 'dueDate', 'priority', 'title', 'sortOrder', '_id'];
 
+const POPULATE_FIELDS = [
+  { path: 'assigneeId', select: 'firstName lastName email role' },
+  { path: 'createdBy', select: 'firstName lastName email' },
+  { path: 'projectId', select: 'name projectNumber customerName status' },
+  { path: 'orderId', select: 'assignmentNumber title status priority' },
+];
+
 function combineFilters(...filters) {
   const active = filters.filter((filter) => filter && Object.keys(filter).length > 0);
   if (active.length === 0) return {};
@@ -35,7 +42,9 @@ class TaskRepository {
   }
 
   async findById(id) {
-    return Task.findById(id).lean();
+    return Task.findById(id)
+      .populate(POPULATE_FIELDS)
+      .lean();
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {} }) {
@@ -83,7 +92,7 @@ class TaskRepository {
     // Handle overdue filter
     if (overdue === true || overdue === 'true') {
       baseFilter.dueDate = { $lt: new Date() };
-      baseFilter.status = { $in: ['OPEN', 'IN_PROGRESS'] };
+      baseFilter.status = { $in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] };
     }
 
     // Handle dueToday filter
@@ -125,6 +134,7 @@ class TaskRepository {
     const docs = await Task.find(filter)
       .sort(sort)
       .limit(limit + 1)
+      .populate(POPULATE_FIELDS)
       .select('-__v')
       .lean();
 

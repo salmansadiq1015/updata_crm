@@ -9,6 +9,8 @@ export const createUserSchema = {
     roleId: objectId.required(),
     language: Joi.string().valid('de', 'en', 'fr', 'it').default('de'),
     phone: Joi.string().trim().max(30).allow('', null),
+    department: Joi.string().trim().max(100).allow('', null),
+    position: Joi.string().trim().max(100).allow('', null),
   }),
 };
 
@@ -23,6 +25,8 @@ export const updateUserSchema = {
     roleId: objectId,
     language: Joi.string().valid('de', 'en', 'fr', 'it'),
     phone: Joi.string().trim().max(30).allow('', null),
+    department: Joi.string().trim().max(100).allow('', null),
+    position: Joi.string().trim().max(100).allow('', null),
     status: Joi.string().valid('active', 'deactivated', 'locked'),
   }),
 };

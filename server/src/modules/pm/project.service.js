@@ -11,7 +11,19 @@ import logger from '../../shared/logger/index.js';
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 const DASHBOARD_TTL = { l1Ttl: 30, l2Ttl: 60 };
-const PROJECT_STATUSES = ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'ARCHIVED'];
+const PROJECT_STATUSES = [
+  'DRAFT',
+  'PLANNING',
+  'SCHEDULED',
+  'WAITING_FOR_MATERIAL',
+  'IN_PROGRESS',
+  'AWAITING_CUSTOMER_APPROVAL',
+  'AWAITING_QUOTATION_APPROVAL',
+  'ON_HOLD',
+  'COMPLETED',
+  'INVOICED',
+  'ARCHIVED',
+];
 
 class ProjectService {
   // Resolve a customer's display name for the denormalized `customerName` field

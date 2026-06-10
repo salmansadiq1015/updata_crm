@@ -18,6 +18,7 @@ class OrderController {
         title, description, scopeOfWork, specialInstructions,
         priority, scheduledStart, scheduledEnd,
         employeeId,
+        projectId,
         customerName, customerPhone, customerEmail,
         siteAddress, accessInstructions, parkingInfo,
       } = req.body;
@@ -45,6 +46,7 @@ class OrderController {
         startDatetime,
         endDatetime,
         employeeId: employeeId || null,
+        projectId: projectId || null,
         status: 'PLANNED',
         createdBy: req.user._id,
         // Store free-text customer/site info as appointment notes since there are no FK lookups here
@@ -81,6 +83,10 @@ class OrderController {
         if (query.status) filters.status = query.status;
         if (query.orderType || query.type) filters.assignmentType = query.orderType || query.type;
         if (query.employeeId) filters.employeeId = query.employeeId;
+        if (query.projectId) filters.projectId = query.projectId;
+        if (query.priority) filters.priority = query.priority;
+        if (query.dateFrom) filters.dateFrom = query.dateFrom;
+        if (query.dateTo) filters.dateTo = query.dateTo;
         const result = await assignmentRepository.findWithCursor({
           limit: query.limit ? parseInt(query.limit, 10) : 100,
           cursor: query.cursor,

@@ -60,6 +60,20 @@ const fileMetadataSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    folderPath: {
+      type: String,
+      trim: true,
+      default: '',
+      index: true,
+      maxlength: 500,
+    },
+    category: {
+      type: String,
+      trim: true,
+      default: 'general',
+      index: true,
+      maxlength: 80,
+    },
     storageBackend: {
       type: String,
       enum: ['local', 'minio', 's3'],
@@ -93,6 +107,8 @@ fileMetadataSchema.index({ bucket: 1, key: 1 }, { unique: true });
 
 // Primary lookup: "all files for entity X"
 fileMetadataSchema.index({ module: 1, entityType: 1, entityId: 1 });
+fileMetadataSchema.index({ folderPath: 1, createdAt: -1 });
+fileMetadataSchema.index({ category: 1, createdAt: -1 });
 
 // User's upload history
 fileMetadataSchema.index({ uploadedBy: 1, createdAt: -1 });

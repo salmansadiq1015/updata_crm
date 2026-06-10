@@ -34,7 +34,7 @@ const installationSchema = new mongoose.Schema(
     technicalNotes: { type: String, maxlength: 5000, default: null },
     status: {
       type: String,
-      enum: ['active', 'decommissioned'],
+      enum: ['active', 'maintenance', 'out_of_service', 'defective', 'decommissioned'],
       default: 'active',
       index: true,
     },

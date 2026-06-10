@@ -117,6 +117,13 @@ const sendMail = async (options) => {
 
 export default sendMail;
 
+const escapeHtml = (value = "") => String(value)
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;")
+  .replace(/'/g, "&#39;");
+
 // ─── Convenience Functions ───────────────────────────────────
 
 /**
@@ -354,6 +361,51 @@ export const sendAppointmentReminderEmail = async (email, data) => {
       technicianName: data.technicianName || "",
       serviceAddress: data.serviceAddress || "",
       contactPhone: data.contactPhone || "",
+    },
+  });
+};
+
+/**
+ * Send customer appointment cancellation.
+ */
+export const sendAppointmentCancellationEmail = async (email, data) => {
+  return sendMail({
+    email,
+    subject: `Termin storniert: ${data.appointmentDate || "MB Boiler"}`,
+    template: "notificationGeneric.ejs",
+    data: {
+      recipientName: data.customerName,
+      title: "Termin storniert",
+      body: [
+        "<p>Ihr Termin wurde storniert.</p>",
+        data.reason ? `<p><strong>Grund:</strong> ${escapeHtml(data.reason)}</p>` : "",
+        data.appointmentDate ? `<p><strong>Datum:</strong> ${escapeHtml(data.appointmentDate)}</p>` : "",
+        data.appointmentWindow ? `<p><strong>Zeitfenster:</strong> ${escapeHtml(data.appointmentWindow)}</p>` : "",
+      ].filter(Boolean).join(""),
+      deepLink: "",
+    },
+  });
+};
+
+/**
+ * Send customer appointment reschedule notification.
+ */
+export const sendAppointmentRescheduledEmail = async (email, data) => {
+  return sendMail({
+    email,
+    subject: `Termin neu geplant: ${data.appointmentDate || "MB Boiler"}`,
+    template: "notificationGeneric.ejs",
+    data: {
+      recipientName: data.customerName,
+      title: "Termin neu geplant",
+      body: [
+        "<p>Ihr Termin wurde neu geplant.</p>",
+        data.appointmentDate ? `<p><strong>Neues Datum:</strong> ${escapeHtml(data.appointmentDate)}</p>` : "",
+        data.appointmentWindow ? `<p><strong>Zeitfenster:</strong> ${escapeHtml(data.appointmentWindow)}</p>` : "",
+        data.technicianName ? `<p><strong>Techniker:</strong> ${escapeHtml(data.technicianName)}</p>` : "",
+        data.serviceAddress ? `<p><strong>Adresse:</strong> ${escapeHtml(data.serviceAddress)}</p>` : "",
+      ].filter(Boolean).join(""),
+      deepLink: "",
     },
   });
 };

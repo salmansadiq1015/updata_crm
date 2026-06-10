@@ -6,6 +6,7 @@ import { CoarseHeader } from './coarse-header';
 import { CoarseCell } from './coarse-cell';
 import { CoarseLegend } from './coarse-legend';
 import { CoarseBulkDialog } from './coarse-bulk-dialog';
+import { CoarseCreateDialog } from './coarse-create-dialog';
 import { EmployeeAvatarRow } from '../shared/employee-avatar-row';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -25,13 +26,15 @@ export function CoarseMatrix() {
   const [viewMode, setViewMode] = useState('EMPLOYEE_CENTRIC');
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkEmployeeId, setBulkEmployeeId] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createDefaults, setCreateDefaults] = useState({ employeeId: '', week: getISOWeek(now) });
 
   const params = useMemo(() => ({
     year, weekFrom, weekTo, view: viewMode,
   }), [year, weekFrom, weekTo, viewMode]);
 
   const { data: matrixData, isLoading } = useCoarseMatrix(params);
-  const { create } = useCoarseMutations();
+  const { update, remove } = useCoarseMutations();
 
   const allocations = useMemo(() => {
     const raw = Array.isArray(matrixData) ? matrixData : matrixData?.data || [];
@@ -78,7 +81,7 @@ export function CoarseMatrix() {
       setWeekFrom(newFrom);
       setWeekTo(weekFrom - 1);
     }
-  }, [weekFrom]);
+  }, [setWeekFrom, setWeekTo, setYear, weekFrom]);
 
   const handleNextRange = useCallback(() => {
     const newTo = weekTo + VISIBLE_WEEKS;
@@ -90,25 +93,26 @@ export function CoarseMatrix() {
       setWeekFrom(weekTo + 1);
       setWeekTo(newTo);
     }
-  }, [weekTo]);
+  }, [setWeekFrom, setWeekTo, setYear, weekTo]);
 
   const handleCellClick = useCallback((employeeId, week, existing) => {
     if (existing) {
-      // Cycle through percentages: 25 → 50 → 75 → 100 → remove
       const nextMap = { 25: 50, 50: 75, 75: 100 };
       const nextPercent = nextMap[existing.allocationPercent];
       if (nextPercent) {
-        create.mutate({
-          employeeId,
-          projectId: existing.projectId?._id || existing.projectId,
-          calendarYear: year,
-          calendarWeek: week,
-          allocationPercent: nextPercent,
+        update.mutate({
+          id: existing._id,
+          data: { allocationPercent: nextPercent },
         });
+      } else {
+        remove.mutate(existing._id);
       }
+      return;
     }
-    // Empty cell click — would open a creation dialog in full implementation
-  }, [create, year]);
+
+    setCreateDefaults({ employeeId, week });
+    setCreateOpen(true);
+  }, [remove, setCreateDefaults, setCreateOpen, update]);
 
   return (
     <div className="p-4 space-y-3">
@@ -147,6 +151,11 @@ export function CoarseMatrix() {
               icon={Grid3X3}
               title={t('deploy.empty.coarseTitle', 'Keine Zuteilungen')}
               description={t('deploy.empty.coarseDesc', 'Weisen Sie Mitarbeitern Projekte zu, um die Grobplanung zu starten.')}
+              actionLabel={t('deploy.coarse.createAllocation', 'Zuteilung erstellen')}
+              onAction={() => {
+                setCreateDefaults({ employeeId: '', week: weekFrom });
+                setCreateOpen(true);
+              }}
               compact
             />
           ) : (
@@ -194,6 +203,13 @@ export function CoarseMatrix() {
         year={year}
         weekFrom={weekFrom}
         weekTo={weekTo}
+      />
+      <CoarseCreateDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        defaultEmployeeId={createDefaults.employeeId}
+        defaultWeek={createDefaults.week}
+        year={year}
       />
     </div>
   );

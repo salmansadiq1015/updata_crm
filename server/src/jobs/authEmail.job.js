@@ -7,6 +7,10 @@ import {
   sendPasswordChangedEmail,
   sendProjectStatusNotification,
   sendPartnerConfirmationEmail,
+  sendAppointmentConfirmationEmail,
+  sendAppointmentReminderEmail,
+  sendAppointmentCancellationEmail,
+  sendAppointmentRescheduledEmail,
 } from '../shared/mail/mail.js';
 import logger from '../shared/logger/index.js';
 
@@ -181,6 +185,92 @@ async function sendInvoiceJob(data) {
   return { sent: true, jobType: 'send-invoice', email: recipient.email, messageId: info?.messageId || null };
 }
 
+function formatDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
+function formatName(user) {
+  if (!user) return '';
+  return [user.firstName, user.lastName].filter(Boolean).join(' ');
+}
+
+function formatSiteAddress(site) {
+  if (!site) return '';
+  const cityLine = [site.postalCode, site.city].filter(Boolean).join(' ');
+  return [site.street, cityLine].filter(Boolean).join(', ');
+}
+
+async function loadAppointmentEmailContext(data = {}) {
+  let appointment = null;
+  let assignment = null;
+  let site = null;
+
+  if (data.assignmentId) {
+    const AppointmentDetails = (await import('../modules/deploy/appointmentDetails.model.js')).default;
+    const Assignment = (await import('../modules/deploy/assignment.model.js')).default;
+
+    [appointment, assignment] = await Promise.all([
+      AppointmentDetails.findOne({ assignmentId: data.assignmentId }).lean(),
+      Assignment.findById(data.assignmentId)
+        .populate({ path: 'employeeId', select: 'firstName lastName email' })
+        .lean(),
+    ]);
+
+    if (assignment?.siteId) {
+      const Site = (await import('../modules/crm/site.model.js')).default;
+      site = await Site.findById(assignment.siteId)
+        .select('street postalCode city')
+        .lean();
+    }
+  }
+
+  const scheduleStart = data.newStartDatetime || data.startDatetime || assignment?.startDatetime || data.appointmentDate;
+
+  return {
+    email: data.email || appointment?.customerContactEmail || null,
+    customerName: data.customerName || appointment?.customerContactName || 'Kunde',
+    appointmentDate: data.appointmentDate || formatDate(scheduleStart),
+    appointmentWindow: data.appointmentWindow || appointment?.appointmentWindow || '',
+    technicianName: data.technicianName || formatName(assignment?.employeeId),
+    serviceAddress: data.serviceAddress || formatSiteAddress(site),
+    assignmentType: data.assignmentType || assignment?.assignmentType || '',
+    instructions: data.instructions || assignment?.instructions || appointment?.customerNotes || '',
+    contactPhone: data.contactPhone || appointment?.customerContactPhone || '',
+    reason: data.reason || '',
+  };
+}
+
+async function sendAppointmentConfirmationJob(data) {
+  const context = await loadAppointmentEmailContext(data);
+  if (!context.email) return { skipped: true, reason: 'no_recipient_email' };
+  await sendAppointmentConfirmationEmail(context.email, context);
+  return { sent: true, jobType: 'send-appointment-confirmation', email: context.email };
+}
+
+async function sendAppointmentReminderJob(data) {
+  const context = await loadAppointmentEmailContext(data);
+  if (!context.email) return { skipped: true, reason: 'no_recipient_email' };
+  await sendAppointmentReminderEmail(context.email, context);
+  return { sent: true, jobType: 'send-appointment-reminder', email: context.email };
+}
+
+async function sendAppointmentCancellationJob(data) {
+  const context = await loadAppointmentEmailContext(data);
+  if (!context.email) return { skipped: true, reason: 'no_recipient_email' };
+  await sendAppointmentCancellationEmail(context.email, context);
+  return { sent: true, jobType: 'send-appointment-cancellation', email: context.email };
+}
+
+async function sendAppointmentRescheduledJob(data) {
+  const context = await loadAppointmentEmailContext(data);
+  if (!context.email) return { skipped: true, reason: 'no_recipient_email' };
+  await sendAppointmentRescheduledEmail(context.email, context);
+  return { sent: true, jobType: 'send-appointment-rescheduled', email: context.email };
+}
+
 /**
  * Auth email worker.
  *
@@ -224,6 +314,18 @@ export class AuthEmailWorker extends BaseWorker {
 
       case 'send-partner-confirmation':
         return sendPartnerConfirmationJob(data);
+
+      case 'send-appointment-confirmation':
+        return sendAppointmentConfirmationJob(data);
+
+      case 'send-appointment-reminder':
+        return sendAppointmentReminderJob(data);
+
+      case 'send-appointment-cancellation':
+        return sendAppointmentCancellationJob(data);
+
+      case 'send-appointment-rescheduled':
+        return sendAppointmentRescheduledJob(data);
 
       default:
         logger.warn('Unknown auth email job type', {

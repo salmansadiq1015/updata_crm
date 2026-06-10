@@ -33,14 +33,14 @@ export function CalendarMobileList({ employees, onAssignmentClick }) {
     );
   }
 
-  let lastDate = '';
-
   return (
     <div className="space-y-1 px-2">
-      {sorted.map((a) => {
+      {sorted.map((a, index) => {
         const dateStr = format(new Date(a.startDatetime), 'EEEE, d. MMMM', { locale: de });
-        const showDate = dateStr !== lastDate;
-        lastDate = dateStr;
+        const previousDateStr = index > 0
+          ? format(new Date(sorted[index - 1].startDatetime), 'EEEE, d. MMMM', { locale: de })
+          : null;
+        const showDate = dateStr !== previousDateStr;
 
         // Read-only PM schedule entry (project work) — links to the project.
         if (a.source === 'pm_schedule') {

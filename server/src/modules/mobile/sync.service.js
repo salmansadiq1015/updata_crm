@@ -145,7 +145,11 @@ class SyncService {
     let orders = [];
     try {
       const { default: assignmentService } = await import('../deploy/assignment.service.js');
-      orders = await assignmentService.listByEmployee(userId, syncData.lastSyncTimestamp);
+      const { serializeMobileAssignments } = await import('../deploy/mobileAssignment.serializer.js');
+      const assignments = syncData.lastSyncTimestamp
+        ? await assignmentService.syncSince(userId, syncData.lastSyncTimestamp)
+        : await assignmentService.listByEmployee(userId);
+      orders = await serializeMobileAssignments(assignments);
     } catch (err) {
       logger.warn('Failed to pull inbound orders during sync', { module: 'mobile', error: err.message });
     }

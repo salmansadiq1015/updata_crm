@@ -29,3 +29,12 @@ export function useDashboardAlerts() {
     refetchInterval: 60_000,
   });
 }
+
+export function useDashboardUnassignedOrders(params = { limit: 10 }) {
+  return useQuery({
+    queryKey: queryKeys.deploy.dashboard.unassigned(params),
+    queryFn: () => deployDashboardService.getUnassignedOrders(params),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}

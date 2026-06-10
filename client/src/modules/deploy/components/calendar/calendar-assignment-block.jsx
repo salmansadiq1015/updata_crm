@@ -1,6 +1,7 @@
 'use client';
 
-import { memo, useState, useCallback } from 'react';
+import { memo } from 'react';
+import { useDraggable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
 import { ASSIGNMENT_TYPE_META, PRIORITY_META } from '../../constants/deploy-constants';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
@@ -8,11 +9,12 @@ import { AssignmentTypeBadge } from '../shared/assignment-type-badge';
 import { AssignmentStatusBadge } from '../shared/assignment-status-badge';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { MapPin, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
 export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
   assignment,
   style,
+  canDrag,
   onClick,
   onResizeStart,
   className,
@@ -23,17 +25,37 @@ export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
   const isHigh = assignment.priority === 'HIGH';
 
   const bgColor = assignment.colorCode || typeMeta.calendarColor;
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: `assignment-${assignment._id}`,
+    data: { assignment },
+    disabled: !canDrag,
+  });
+
+  const transformStyle = transform
+    ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+    : undefined;
 
   return (
     <HoverCard openDelay={300} closeDelay={100}>
       <HoverCardTrigger asChild>
         <button
+          ref={setNodeRef}
+          type="button"
+          {...attributes}
+          {...listeners}
           onClick={() => onClick?.(assignment)}
           className={cn(
             'absolute rounded-md px-1.5 py-0.5 text-[10px] leading-tight font-medium cursor-pointer',
             'text-white overflow-hidden whitespace-nowrap text-ellipsis text-left',
             'hover:brightness-110 hover:shadow-md transition-all duration-150',
-            'border-l-[3px]',
+            'border-l-[3px] z-20',
+            canDrag && 'cursor-grab active:cursor-grabbing',
             isUrgent && 'ring-1 ring-red-400 animate-pulse',
             isHigh && 'ring-1 ring-amber-400',
             className
@@ -42,6 +64,8 @@ export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
             ...style,
             backgroundColor: `${bgColor}cc`,
             borderLeftColor: bgColor,
+            transform: transformStyle,
+            opacity: isDragging ? 0.65 : 1,
           }}
         >
           <div className="truncate">

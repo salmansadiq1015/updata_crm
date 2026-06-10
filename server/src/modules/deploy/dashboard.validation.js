@@ -17,3 +17,9 @@ export const dashboardUtilizationSchema = {
 export const dashboardAlertsSchema = {
   query: Joi.object({}),
 };
+
+export const dashboardUnassignedSchema = {
+  query: Joi.object({
+    limit: Joi.number().integer().min(1).max(100).default(25),
+  }),
+};

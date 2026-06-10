@@ -1,13 +1,15 @@
 'use client';
 
+import { useWatch } from 'react-hook-form';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-export function AssignmentRecurrenceForm({ register, errors, watch, setValue }) {
+export function AssignmentRecurrenceForm({ register, errors, control, setValue }) {
   const { t } = useLanguage();
-  const endType = watch('recurrence.endType');
+  const frequency = useWatch({ control, name: 'recurrence.frequency' });
+  const endType = useWatch({ control, name: 'recurrence.endType' });
 
   const frequencyOptions = [
     { value: 'DAILY', label: t('deploy.recurrence.daily', 'Täglich') },
@@ -32,7 +34,7 @@ export function AssignmentRecurrenceForm({ register, errors, watch, setValue }) 
       <div className="grid grid-cols-2 gap-3">
         <FormField label={t('deploy.recurrence.frequency', 'Häufigkeit')} required error={errors?.recurrence?.frequency?.message}>
           <Select
-            value={watch('recurrence.frequency') || ''}
+            value={frequency || ''}
             onValueChange={(v) => setValue('recurrence.frequency', v, { shouldValidate: true })}
           >
             <SelectTrigger className="h-9 text-xs">

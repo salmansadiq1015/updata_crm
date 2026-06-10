@@ -39,6 +39,25 @@ class CoarseRepository {
       .lean();
   }
 
+  async findByEmployeeWeek(employeeId, year, week) {
+    return CoarseAllocation.find({
+      employeeId,
+      calendarYear: year,
+      calendarWeek: week,
+    })
+      .populate(POPULATE_FIELDS)
+      .lean();
+  }
+
+  async findByEmployeeProjectWeek(employeeId, projectId, year, week) {
+    return CoarseAllocation.findOne({
+      employeeId,
+      projectId,
+      calendarYear: year,
+      calendarWeek: week,
+    }).lean();
+  }
+
   async findByWeekRange(year, weekFrom, weekTo, { employeeIds, projectId } = {}) {
     const filter = {
       calendarYear: year,

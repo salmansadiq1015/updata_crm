@@ -24,6 +24,13 @@ class DashboardController {
       return res.success({ data });
     } catch (err) { next(err); }
   }
+
+  async unassigned(req, res, next) {
+    try {
+      const data = await dashboardService.getUnassignedOrders(req.query.limit);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
 }
 
 const dashboardController = new DashboardController();

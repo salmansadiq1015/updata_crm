@@ -4,7 +4,6 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
-import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
@@ -28,6 +27,16 @@ class CoarseService {
   }
 
   async create(data, createdBy, meta = {}) {
+    const existing = await coarseRepository.findByEmployeeProjectWeek(
+      data.employeeId,
+      data.projectId,
+      data.calendarYear,
+      data.calendarWeek,
+    );
+    if (existing) {
+      throw new ConflictError('Coarse allocation already exists for this employee, project, and week.');
+    }
+
     const currentSum = await coarseRepository.sumAllocationsForEmployeeWeek(
       data.employeeId,
       data.calendarYear,
@@ -139,14 +148,35 @@ class CoarseService {
   }
 
   async bulkUpsert(records, userId, meta = {}) {
-    // Validate each record's allocation won't exceed 100%
+    const grouped = new Map();
     for (const record of records) {
-      const currentSum = await coarseRepository.sumAllocationsForEmployeeWeek(
-        record.employeeId,
-        record.calendarYear,
-        record.calendarWeek,
+      const key = `${record.employeeId}:${record.calendarYear}:${record.calendarWeek}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(record);
+    }
+
+    for (const [key, group] of grouped.entries()) {
+      const [employeeId, calendarYear, calendarWeek] = key.split(':');
+      const existing = await coarseRepository.findByEmployeeWeek(
+        employeeId,
+        Number(calendarYear),
+        Number(calendarWeek),
       );
-      // For upsert, we allow replacing existing value so skip strict check
+      const finalByProject = new Map(existing.map((allocation) => [
+        String(allocation.projectId?._id || allocation.projectId),
+        allocation.allocationPercent,
+      ]));
+
+      for (const record of group) {
+        finalByProject.set(String(record.projectId), record.allocationPercent);
+      }
+
+      const finalTotal = [...finalByProject.values()].reduce((sum, value) => sum + value, 0);
+      if (finalTotal > 100) {
+        throw new ConflictError(
+          `Total allocation for employee ${employeeId} in week ${calendarWeek}/${calendarYear} would be ${finalTotal}% (max 100%)`,
+        );
+      }
     }
 
     const result = await coarseRepository.bulkUpsert(

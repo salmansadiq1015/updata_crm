@@ -269,6 +269,7 @@ export const queryKeys = {
       summary: (date) => ['deploy', 'dashboard', 'summary', date],
       utilization: (params) => ['deploy', 'dashboard', 'utilization', params],
       alerts: () => ['deploy', 'dashboard', 'alerts'],
+      unassigned: (params) => ['deploy', 'dashboard', 'unassigned', params],
     },
     coarse: {
       all: () => ['deploy', 'coarse'],

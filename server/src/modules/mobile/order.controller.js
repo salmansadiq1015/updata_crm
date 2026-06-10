@@ -1,6 +1,10 @@
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { ConflictError, ValidationError } from '../../shared/errors/AppError.js';
+import {
+  serializeMobileAssignment,
+  serializeMobileAssignments,
+} from '../deploy/mobileAssignment.serializer.js';
 
 const VALID_TRANSITIONS = {
   PLANNED: 'IN_PROGRESS',
@@ -12,6 +16,8 @@ class OrderController {
     try {
       const { default: counterService } = await import('../deploy/counter.service.js');
       const { default: assignmentRepository } = await import('../deploy/assignment.repository.js');
+      const { default: assignmentService } = await import('../deploy/assignment.service.js');
+      const { default: appointmentService } = await import('../deploy/appointment.service.js');
 
       const {
         orderType, assignmentType,
@@ -33,40 +39,66 @@ class OrderController {
 
       const instructionsParts = [description, scopeOfWork, specialInstructions].filter(Boolean);
       const instructions = instructionsParts.join('\n\n') || null;
+      const appointment = customerName || customerPhone || customerEmail || siteAddress || accessInstructions || parkingInfo
+        ? {
+          customerContactName: customerName || undefined,
+          customerContactPhone: customerPhone || undefined,
+          customerContactEmail: customerEmail || undefined,
+          customerNotes: [siteAddress, accessInstructions, parkingInfo].filter(Boolean).join(' | ') || undefined,
+        }
+        : null;
 
-      const assignmentNumber = await counterService.getNextAssignmentNumber();
+      let assignment;
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
 
-      const assignment = await assignmentRepository.create({
-        assignmentNumber,
-        assignmentType: resolvedType,
-        title: title || null,
-        instructions,
-        priority: priority || 'NORMAL',
-        startDatetime,
-        endDatetime,
-        employeeId: employeeId || null,
-        status: 'PLANNED',
-        createdBy: req.user._id,
-        // Store free-text customer/site info as appointment notes since there are no FK lookups here
-        ...(customerName || customerPhone || customerEmail || siteAddress ? {
-          isCustomerAppointment: true,
-          appointment: {
-            customerContactName: customerName || undefined,
-            customerContactPhone: customerPhone || undefined,
-            customerContactEmail: customerEmail || undefined,
-            customerNotes: [siteAddress, accessInstructions, parkingInfo].filter(Boolean).join(' | ') || undefined,
-          },
-        } : {}),
-      });
+      if (employeeId) {
+        const [created] = await assignmentService.create({
+          employeeIds: [employeeId],
+          assignmentType: resolvedType,
+          title: title || null,
+          instructions,
+          priority: priority || 'NORMAL',
+          startDatetime,
+          endDatetime,
+          status: 'PLANNED',
+          isCustomerAppointment: Boolean(appointment),
+          appointment,
+          overrideConflicts: req.body.overrideConflicts,
+          overrideReason: req.body.overrideReason,
+        }, req.user._id, meta);
+        assignment = await assignmentService.getById(created.id);
+      } else {
+        const assignmentNumber = await counterService.getNextAssignmentNumber();
+        assignment = await assignmentRepository.create({
+          assignmentNumber,
+          assignmentType: resolvedType,
+          title: title || null,
+          instructions,
+          priority: priority || 'NORMAL',
+          startDatetime,
+          endDatetime,
+          employeeId: null,
+          status: 'PLANNED',
+          isCustomerAppointment: Boolean(appointment),
+          createdBy: req.user._id,
+        });
 
-      eventBus.publish(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CREATED, {
-        assignmentId: assignment._id,
-        assignmentNumber,
-        assignmentType: resolvedType,
-        createdBy: req.user._id,
-      }, { source: 'mobile:orders' });
+        if (appointment) {
+          await appointmentService.syncForAssignment(assignment._id, appointment, req.user._id, meta);
+        }
 
-      return res.success({ data: assignment, message: 'Order created successfully', statusCode: 201 });
+        eventBus.publish(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CREATED, {
+          assignmentId: assignment._id,
+          assignmentNumber,
+          assignmentType: resolvedType,
+          title: assignment.title,
+          employeeIds: [],
+          createdBy: req.user._id,
+        }, { source: 'mobile:orders' });
+      }
+
+      const data = await serializeMobileAssignment(assignment);
+      return res.success({ data, message: 'Order created successfully', statusCode: 201 });
     } catch (err) { next(err); }
   }
 
@@ -89,17 +121,21 @@ class OrderController {
           filters,
           search: query.search,
         });
-        return res.success({ data: result.data, pagination: result.pagination, syncTimestamp: new Date().toISOString() });
+        const syncTimestamp = new Date().toISOString();
+        const data = await serializeMobileAssignments(result.data, { syncTimestamp });
+        return res.success({ data, pagination: result.pagination, syncTimestamp });
       }
 
       // Mobile technician view: return only assignments for the logged-in employee
       const { default: assignmentService } = await import('../deploy/assignment.service.js');
-      const data = await assignmentService.listByEmployee(
+      const assignments = await assignmentService.listByEmployee(
         req.user._id,
         query.dateFrom,
         query.dateTo,
       );
-      return res.success({ data, syncTimestamp: new Date().toISOString() });
+      const syncTimestamp = new Date().toISOString();
+      const data = await serializeMobileAssignments(assignments, { syncTimestamp });
+      return res.success({ data, syncTimestamp });
     } catch (err) { next(err); }
   }
 
@@ -108,21 +144,21 @@ class OrderController {
       const { default: assignmentService } = await import('../deploy/assignment.service.js');
       const assignment = await assignmentService.getById(req.params.id);
       // Field-ops can view any order; mobile technicians only their own
-      return res.success({ data: assignment });
+      const data = await serializeMobileAssignment(assignment);
+      return res.success({ data });
     } catch (err) { next(err); }
   }
 
   async updateOrder(req, res, next) {
     try {
       const { default: assignmentService } = await import('../deploy/assignment.service.js');
-      const assignment = await assignmentService.getById(req.params.id);
       const {
         orderType, assignmentType, title, description, scopeOfWork, specialInstructions,
         priority, scheduledStart, scheduledEnd,
         employeeId,
         customerName, customerPhone, customerEmail,
         siteAddress, accessInstructions, parkingInfo,
-        status,
+        status, overrideConflicts, overrideReason,
       } = req.body;
 
       const updates = {};
@@ -137,21 +173,23 @@ class OrderController {
       const instructionsParts = [description, scopeOfWork, specialInstructions].filter(Boolean);
       if (instructionsParts.length) updates.instructions = instructionsParts.join('\n\n');
 
-      if (customerName || customerPhone || customerEmail || siteAddress) {
+      if (customerName || customerPhone || customerEmail || siteAddress || accessInstructions || parkingInfo) {
         updates.isCustomerAppointment = true;
         updates.appointment = {
-          ...assignment.appointment,
-          customerContactName: customerName ?? assignment.appointment?.customerContactName,
-          customerContactPhone: customerPhone ?? assignment.appointment?.customerContactPhone,
-          customerContactEmail: customerEmail ?? assignment.appointment?.customerContactEmail,
-          customerNotes: [siteAddress, accessInstructions, parkingInfo].filter(Boolean).join(' | ') || assignment.appointment?.customerNotes,
+          customerContactName: customerName || undefined,
+          customerContactPhone: customerPhone || undefined,
+          customerContactEmail: customerEmail || undefined,
+          customerNotes: [siteAddress, accessInstructions, parkingInfo].filter(Boolean).join(' | ') || undefined,
         };
       }
 
-      updates.updatedBy = req.user._id;
+      if (overrideConflicts !== undefined) updates.overrideConflicts = overrideConflicts;
+      if (overrideReason !== undefined) updates.overrideReason = overrideReason;
 
-      const updated = await assignmentService.update(req.params.id, updates, req.user._id);
-      return res.success({ data: updated, message: 'Order updated successfully' });
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const updated = await assignmentService.update(req.params.id, updates, req.user._id, meta);
+      const data = await serializeMobileAssignment(updated);
+      return res.success({ data, message: 'Order updated successfully' });
     } catch (err) { next(err); }
   }
 
@@ -187,17 +225,19 @@ class OrderController {
         );
       }
 
-      const updated = await assignmentService.update(req.params.id, { status: newStatus });
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const updated = await assignmentService.update(req.params.id, { status: newStatus }, req.user._id, meta);
       eventBus.publish(EVENT_TYPES.MOBILE_ORDER_STATUS_UPDATED, {
         orderId: req.params.id,
         previousStatus: currentStatus,
         newStatus,
         orderTitle: assignment.title || '',
-        assignedTo: assignment.employeeId || null,
+        assignedTo: assignment.employeeId?._id || assignment.employeeId || null,
         updatedBy: req.user._id,
         managerIds: assignment.createdBy ? [assignment.createdBy] : [],
       }, { source: 'mobile:orders' });
-      return res.success({ data: updated, message: 'Order status updated successfully' });
+      const data = await serializeMobileAssignment(updated);
+      return res.success({ data, message: 'Order status updated successfully' });
     } catch (err) { next(err); }
   }
 

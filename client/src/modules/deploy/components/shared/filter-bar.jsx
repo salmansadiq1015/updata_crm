@@ -1,6 +1,5 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X } from 'lucide-react';
@@ -10,24 +9,13 @@ import {
   ASSIGNMENT_TYPE_META,
   ASSIGNMENT_STATUS_META,
 } from '../../constants/deploy-constants';
-import apiClient from '@/lib/api/client';
-import { ENDPOINTS } from '@/lib/api/endpoints';
+import { useDeployEmployees } from '../../hooks/use-deploy-employees';
 
 export function FilterBar() {
   const { t } = useLanguage();
   const { filters, setFilters, resetFilters } = useSchedulingStore();
 
-  const { data: usersData } = useQuery({
-    queryKey: ['users', 'list-for-filter'],
-    queryFn: () => apiClient.get(ENDPOINTS.USERS.LIST, { params: { limit: 200 } }),
-    staleTime: 300_000,
-    select: (res) => {
-      const items = res?.data?.data || res?.data || [];
-      return Array.isArray(items) ? items : [];
-    },
-  });
-
-  const employees = usersData || [];
+  const { data: employees = [] } = useDeployEmployees();
 
   const hasFilters = filters.assignmentType || filters.status || filters.employeeIds?.length;
 

@@ -53,6 +53,10 @@ const coarseAllocationSchema = new mongoose.Schema(
 // --- Indexes ---
 coarseAllocationSchema.index({ employeeId: 1, calendarYear: 1, calendarWeek: 1 });
 coarseAllocationSchema.index({ projectId: 1, calendarYear: 1, calendarWeek: 1 });
+coarseAllocationSchema.index(
+  { employeeId: 1, projectId: 1, calendarYear: 1, calendarWeek: 1 },
+  { unique: true },
+);
 
 const CoarseAllocation = mongoose.model('CoarseAllocation', coarseAllocationSchema);
 export default CoarseAllocation;

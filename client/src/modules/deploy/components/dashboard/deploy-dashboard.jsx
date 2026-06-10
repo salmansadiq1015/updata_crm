@@ -1,11 +1,17 @@
 'use client';
 
 import { Skeleton as BoneSkeleton } from 'boneyard-js/react';
-import { useDashboardSummary, useDashboardUtilization, useDashboardAlerts } from '../../hooks/use-dashboard-queries';
+import {
+  useDashboardSummary,
+  useDashboardUtilization,
+  useDashboardAlerts,
+  useDashboardUnassignedOrders,
+} from '../../hooks/use-dashboard-queries';
 import { DashboardSummaryCards } from './dashboard-summary-cards';
 import { DashboardUpcomingChart } from './dashboard-upcoming-chart';
 import { DashboardUtilization } from './dashboard-utilization';
 import { DashboardAlertsList } from './dashboard-alerts-list';
+import { DashboardUnassignedOrders } from './dashboard-unassigned-orders';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 export function DeployDashboard() {
@@ -13,8 +19,9 @@ export function DeployDashboard() {
   const { data: summary, isLoading: loadingSummary } = useDashboardSummary();
   const { data: utilization, isLoading: loadingUtil } = useDashboardUtilization();
   const { data: alerts, isLoading: loadingAlerts } = useDashboardAlerts();
+  const { data: unassignedOrders, isLoading: loadingUnassigned } = useDashboardUnassignedOrders();
 
-  const isLoading = loadingSummary && loadingUtil && loadingAlerts;
+  const isLoading = loadingSummary && loadingUtil && loadingAlerts && loadingUnassigned;
 
   return (
     <BoneSkeleton name="deploy-dashboard" loading={isLoading}>
@@ -30,7 +37,10 @@ export function DeployDashboard() {
           <DashboardUtilization data={utilization} />
         </div>
 
-        <DashboardAlertsList data={alerts} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <DashboardUnassignedOrders data={unassignedOrders} isLoading={loadingUnassigned} />
+          <DashboardAlertsList data={alerts} />
+        </div>
       </div>
     </BoneSkeleton>
   );

@@ -4,18 +4,52 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
-import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
-import ERROR_CODES from '../../shared/errors/errorCodes.js';
+import { NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
-const CALENDAR_TTL = { l1Ttl: 15, l2Ttl: 60 };
+const OVERRIDE_REASON_MIN_LENGTH = 10;
+
+function normalizeId(value) {
+  if (!value) return null;
+  return String(value._id || value);
+}
+
+function uniqueIds(values) {
+  return [...new Set(values.map(normalizeId).filter(Boolean))];
+}
+
+function sameInstant(left, right) {
+  return new Date(left).getTime() === new Date(right).getTime();
+}
 
 class AssignmentService {
   async create(data, createdBy, meta = {}) {
-    const { employeeIds, recurrence, ...assignmentData } = data;
-    const results = [];
+    const {
+      employeeIds,
+      recurrence,
+      appointment,
+      overrideConflicts = false,
+      overrideReason = null,
+      ...assignmentData
+    } = data;
+
+    const startDatetime = new Date(assignmentData.startDatetime);
+    const endDatetime = new Date(assignmentData.endDatetime);
+    this._assertValidDateRange(startDatetime, endDatetime);
+
+    const conflictMap = new Map();
+    for (const employeeId of employeeIds) {
+      const conflicts = await this._enforceConflicts({
+        employeeId,
+        startDatetime,
+        endDatetime,
+        overrideConflicts,
+        overrideReason,
+      });
+      conflictMap.set(normalizeId(employeeId), conflicts);
+    }
 
     let recurrenceGroupId = null;
     if (recurrence) {
@@ -25,29 +59,26 @@ class AssignmentService {
       recurrenceGroupId = saved._id;
     }
 
+    const results = [];
     for (const employeeId of employeeIds) {
       const assignmentNumber = await counterService.getNextAssignmentNumber();
-
       const assignment = await assignmentRepository.create({
         ...assignmentData,
         employeeId,
         assignmentNumber,
         recurrenceGroupId,
+        startDatetime,
+        endDatetime,
         createdBy,
       });
 
-      // Detect conflicts (lazy import to avoid circular dependencies)
-      let conflicts = [];
-      try {
-        const conflictService = (await import('./conflict.service.js')).default;
-        conflicts = await conflictService.detectConflicts(
-          employeeId,
-          assignment.startDatetime,
-          assignment.endDatetime,
-          assignment._id,
-        );
-      } catch {
-        // conflict.service.js may not exist yet — skip detection
+      const conflicts = conflictMap.get(normalizeId(employeeId)) || [];
+      if (conflicts.length > 0) {
+        await this._recordOverriddenConflicts(assignment._id, conflicts, createdBy, overrideReason);
+      }
+
+      if (assignment.isCustomerAppointment && appointment) {
+        await this._syncAppointment(assignment._id, appointment, createdBy, meta);
       }
 
       results.push({
@@ -57,13 +88,11 @@ class AssignmentService {
         conflicts,
       });
 
-      eventBus.publish(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CREATED, {
-        assignmentId: assignment._id,
-        assignmentNumber,
-        employeeId,
-        assignmentType: assignment.assignmentType,
+      this._publishAssignmentEvent(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CREATED, assignment, {
         createdBy,
-      }, { source: 'deploy:assignments' });
+        employeeIds: [normalizeId(employeeId)],
+        hasAppointment: Boolean(appointment),
+      });
     }
 
     await this._invalidateCalendarCache();
@@ -75,7 +104,11 @@ class AssignmentService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { employeeIds, count: results.length },
+      details: {
+        employeeIds,
+        count: results.length,
+        overriddenConflicts: results.reduce((count, item) => count + item.conflicts.length, 0),
+      },
       module: 'deploy',
     });
 
@@ -105,15 +138,79 @@ class AssignmentService {
       );
     }
 
-    const updated = await assignmentRepository.updateById(id, { ...data, updatedBy });
+    const {
+      employeeIds,
+      appointment,
+      overrideConflicts = false,
+      overrideReason = null,
+      ...assignmentData
+    } = data;
+
+    delete assignmentData.version;
+
+    if (employeeIds?.length) {
+      assignmentData.employeeId = employeeIds[0];
+    }
+
+    const changedFields = Object.keys(assignmentData);
+    if (changedFields.length === 0) {
+      throw new ValidationError('No assignment changes supplied');
+    }
+
+    const previousEmployeeId = normalizeId(existing.employeeId);
+    const hasEmployeeUpdate = Object.prototype.hasOwnProperty.call(assignmentData, 'employeeId');
+    const targetEmployeeId = normalizeId(hasEmployeeUpdate ? assignmentData.employeeId : existing.employeeId);
+    const targetStart = assignmentData.startDatetime
+      ? new Date(assignmentData.startDatetime)
+      : new Date(existing.startDatetime);
+    const targetEnd = assignmentData.endDatetime
+      ? new Date(assignmentData.endDatetime)
+      : new Date(existing.endDatetime);
+    this._assertValidDateRange(targetStart, targetEnd);
+
+    const scheduleChanged =
+      targetEmployeeId !== previousEmployeeId ||
+      !sameInstant(targetStart, existing.startDatetime) ||
+      !sameInstant(targetEnd, existing.endDatetime);
+
+    let conflicts = [];
+    if (scheduleChanged) {
+      conflicts = await this._enforceConflicts({
+        employeeId: targetEmployeeId,
+        startDatetime: targetStart,
+        endDatetime: targetEnd,
+        excludeAssignmentId: id,
+        overrideConflicts,
+        overrideReason,
+      });
+    }
+
+    const updated = await assignmentRepository.updateById(id, {
+      ...assignmentData,
+      startDatetime: targetStart,
+      endDatetime: targetEnd,
+      updatedBy,
+    });
+
+    if (conflicts.length > 0) {
+      await this._recordOverriddenConflicts(id, conflicts, updatedBy, overrideReason);
+    }
+
+    if (updated.isCustomerAppointment && appointment) {
+      await this._syncAppointment(id, appointment, updatedBy, meta);
+    }
+
     await this._invalidateAssignmentCache(id);
     await this._invalidateCalendarCache();
+    await this._invalidateDashboardCache();
 
-    eventBus.publish(EVENT_TYPES.SCHEDULE_ASSIGNMENT_UPDATED, {
-      assignmentId: id,
-      changedFields: Object.keys(data),
+    this._publishAssignmentEvent(EVENT_TYPES.SCHEDULE_ASSIGNMENT_UPDATED, updated, {
+      changedFields,
       updatedBy,
-    }, { source: 'deploy:assignments' });
+      previousEmployeeId,
+      employeeIds: uniqueIds([previousEmployeeId, targetEmployeeId]),
+      conflictsOverridden: conflicts.length,
+    });
 
     auditService.logEvent({
       eventType: 'assignment.updated',
@@ -121,7 +218,11 @@ class AssignmentService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { assignmentId: id, changedFields: Object.keys(data) },
+      details: {
+        assignmentId: id,
+        changedFields,
+        conflictsOverridden: conflicts.length,
+      },
       module: 'deploy',
     });
 
@@ -137,10 +238,10 @@ class AssignmentService {
     await this._invalidateCalendarCache();
     await this._invalidateDashboardCache();
 
-    eventBus.publish(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CANCELLED, {
-      assignmentId: id,
+    this._publishAssignmentEvent(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CANCELLED, assignment, {
       deletedBy,
-    }, { source: 'deploy:assignments' });
+      employeeIds: uniqueIds([assignment.employeeId]),
+    });
 
     auditService.logEvent({
       eventType: 'assignment.deleted',
@@ -157,58 +258,53 @@ class AssignmentService {
     const existing = await assignmentRepository.findById(id);
     if (!existing) throw new NotFoundError('Assignment', id);
 
-    // Detect conflicts for new position
-    const conflicts = await assignmentRepository.findConflicting(
-      newEmployeeId,
-      new Date(newStartDatetime),
-      new Date(newEndDatetime),
-      id,
-    );
+    const previousEmployeeId = normalizeId(existing.employeeId);
+    const targetEmployeeId = normalizeId(newEmployeeId || existing.employeeId);
+    const targetStart = new Date(newStartDatetime);
+    const targetEnd = new Date(newEndDatetime);
+    this._assertValidDateRange(targetStart, targetEnd);
 
-    if (conflicts.length > 0 && !overrideConflicts) {
-      throw new ConflictError(
-        `Assignment conflicts with ${conflicts.length} existing assignment(s). Use overrideConflicts to proceed.`,
-      );
+    const conflicts = await this._enforceConflicts({
+      employeeId: targetEmployeeId,
+      startDatetime: targetStart,
+      endDatetime: targetEnd,
+      excludeAssignmentId: id,
+      overrideConflicts,
+      overrideReason,
+    });
+
+    const updated = await assignmentRepository.updateById(id, {
+      employeeId: targetEmployeeId,
+      startDatetime: targetStart,
+      endDatetime: targetEnd,
+      updatedBy: userId,
+    });
+
+    if (conflicts.length > 0) {
+      await this._recordOverriddenConflicts(id, conflicts, userId, overrideReason);
     }
 
-    const updateData = {
-      employeeId: newEmployeeId,
-      startDatetime: new Date(newStartDatetime),
-      endDatetime: new Date(newEndDatetime),
-      updatedBy: userId,
-    };
-
-    const updated = await assignmentRepository.updateById(id, updateData);
-
-    // If conflicts exist and override was used, create ConflictRecords
-    if (conflicts.length > 0) {
-      try {
-        const conflictService = (await import('./conflict.service.js')).default;
-        for (const conflict of conflicts) {
-          await conflictService.createConflictRecord({
-            assignmentId: id,
-            conflictingAssignmentId: conflict._id,
-            employeeId: newEmployeeId,
-            overrideReason,
-            overriddenBy: userId,
-          });
-        }
-      } catch {
-        // conflict.service.js may not exist yet
-      }
+    if (updated.isCustomerAppointment && (!sameInstant(targetStart, existing.startDatetime) || !sameInstant(targetEnd, existing.endDatetime))) {
+      await this._markAppointmentRescheduled(id, {
+        startDatetime: targetStart,
+        endDatetime: targetEnd,
+      }, userId, meta);
     }
 
     await this._invalidateAssignmentCache(id);
     await this._invalidateCalendarCache();
+    await this._invalidateDashboardCache();
 
-    eventBus.publish(EVENT_TYPES.SCHEDULE_ASSIGNMENT_MOVED, {
-      assignmentId: id,
-      newEmployeeId,
-      newStartDatetime,
-      newEndDatetime,
+    const affectedEmployeeIds = uniqueIds([previousEmployeeId, targetEmployeeId]);
+    this._publishAssignmentEvent(EVENT_TYPES.SCHEDULE_ASSIGNMENT_MOVED, updated, {
+      previousEmployeeId,
+      newEmployeeId: targetEmployeeId,
+      newStartDatetime: targetStart,
+      newEndDatetime: targetEnd,
+      employeeIds: affectedEmployeeIds,
       conflictsOverridden: conflicts.length,
       movedBy: userId,
-    }, { source: 'deploy:assignments' });
+    });
 
     auditService.logEvent({
       eventType: 'assignment.moved',
@@ -216,7 +312,12 @@ class AssignmentService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { assignmentId: id, newEmployeeId, conflictsOverridden: conflicts.length },
+      details: {
+        assignmentId: id,
+        previousEmployeeId,
+        newEmployeeId: targetEmployeeId,
+        conflictsOverridden: conflicts.length,
+      },
       module: 'deploy',
     });
 
@@ -227,47 +328,46 @@ class AssignmentService {
     const existing = await assignmentRepository.findById(id);
     if (!existing) throw new NotFoundError('Assignment', id);
 
-    // Detect conflicts for resized range
-    const conflicts = await assignmentRepository.findConflicting(
-      existing.employeeId._id || existing.employeeId,
-      existing.startDatetime,
-      new Date(newEndDatetime),
-      id,
-    );
+    const employeeId = normalizeId(existing.employeeId);
+    const targetStart = new Date(existing.startDatetime);
+    const targetEnd = new Date(newEndDatetime);
+    this._assertValidDateRange(targetStart, targetEnd);
 
-    if (conflicts.length > 0 && !overrideConflicts) {
-      throw new ConflictError(
-        `Resize conflicts with ${conflicts.length} existing assignment(s). Use overrideConflicts to proceed.`,
-      );
+    const conflicts = await this._enforceConflicts({
+      employeeId,
+      startDatetime: targetStart,
+      endDatetime: targetEnd,
+      excludeAssignmentId: id,
+      overrideConflicts,
+      overrideReason,
+    });
+
+    const updated = await assignmentRepository.updateById(id, {
+      endDatetime: targetEnd,
+      updatedBy: userId,
+    });
+
+    if (conflicts.length > 0) {
+      await this._recordOverriddenConflicts(id, conflicts, userId, overrideReason);
     }
 
-    const updateData = {
-      endDatetime: new Date(newEndDatetime),
-      updatedBy: userId,
-    };
-
-    const updated = await assignmentRepository.updateById(id, updateData);
-
-    // If conflicts exist and override was used, create ConflictRecords
-    if (conflicts.length > 0) {
-      try {
-        const conflictService = (await import('./conflict.service.js')).default;
-        for (const conflict of conflicts) {
-          await conflictService.createConflictRecord({
-            assignmentId: id,
-            conflictingAssignmentId: conflict._id,
-            employeeId: existing.employeeId._id || existing.employeeId,
-            overrideReason,
-            overriddenBy: userId,
-          });
-        }
-      } catch {
-        // conflict.service.js may not exist yet
-      }
+    if (updated.isCustomerAppointment && !sameInstant(targetEnd, existing.endDatetime)) {
+      await this._markAppointmentRescheduled(id, {
+        startDatetime: targetStart,
+        endDatetime: targetEnd,
+      }, userId, meta);
     }
 
     await this._invalidateAssignmentCache(id);
     await this._invalidateCalendarCache();
+    await this._invalidateDashboardCache();
+
+    this._publishAssignmentEvent(EVENT_TYPES.SCHEDULE_ASSIGNMENT_UPDATED, updated, {
+      changedFields: ['endDatetime'],
+      updatedBy: userId,
+      employeeIds: [employeeId],
+      conflictsOverridden: conflicts.length,
+    });
 
     auditService.logEvent({
       eventType: 'assignment.resized',
@@ -275,7 +375,7 @@ class AssignmentService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { assignmentId: id, newEndDatetime, conflictsOverridden: conflicts.length },
+      details: { assignmentId: id, newEndDatetime: targetEnd, conflictsOverridden: conflicts.length },
       module: 'deploy',
     });
 
@@ -295,6 +395,100 @@ class AssignmentService {
       employeeId,
       updatedAt: { $gt: new Date(since) },
     }).lean();
+  }
+
+  _assertValidDateRange(startDatetime, endDatetime) {
+    if (!(startDatetime instanceof Date) || Number.isNaN(startDatetime.getTime())) {
+      throw new ValidationError('Assignment start date is invalid');
+    }
+    if (!(endDatetime instanceof Date) || Number.isNaN(endDatetime.getTime())) {
+      throw new ValidationError('Assignment end date is invalid');
+    }
+    if (endDatetime <= startDatetime) {
+      throw new ValidationError('Assignment end date must be after start date');
+    }
+  }
+
+  async _enforceConflicts({
+    employeeId,
+    startDatetime,
+    endDatetime,
+    excludeAssignmentId = null,
+    overrideConflicts = false,
+    overrideReason = null,
+  }) {
+    const conflictService = (await import('./conflict.service.js')).default;
+    if (!employeeId) return [];
+
+    const conflicts = await conflictService.detectConflicts(
+      employeeId,
+      startDatetime,
+      endDatetime,
+      excludeAssignmentId,
+    );
+
+    if (conflicts.length === 0) return [];
+
+    const hardConflicts = conflicts.filter((conflict) => conflict.severity === 'HARD');
+    if (hardConflicts.length > 0) {
+      throw new ConflictError(
+        'Assignment has hard scheduling conflicts and cannot be scheduled.',
+        { conflicts, hardConflicts },
+      );
+    }
+
+    if (!overrideConflicts) {
+      throw new ConflictError(
+        'Assignment has soft scheduling conflicts. Submit overrideConflicts with an overrideReason to proceed.',
+        { conflicts },
+      );
+    }
+
+    if (!overrideReason || overrideReason.trim().length < OVERRIDE_REASON_MIN_LENGTH) {
+      throw new ValidationError(
+        `Override reason must be at least ${OVERRIDE_REASON_MIN_LENGTH} characters.`,
+      );
+    }
+
+    return conflicts;
+  }
+
+  async _recordOverriddenConflicts(assignmentId, conflicts, userId, overrideReason) {
+    const conflictService = (await import('./conflict.service.js')).default;
+    return conflictService.recordConflicts(assignmentId, conflicts, {
+      resolved: true,
+      resolvedBy: userId,
+      overrideReason,
+    });
+  }
+
+  async _syncAppointment(assignmentId, appointment, userId, meta) {
+    const appointmentService = (await import('./appointment.service.js')).default;
+    return appointmentService.syncForAssignment(assignmentId, appointment, userId, meta);
+  }
+
+  async _markAppointmentRescheduled(assignmentId, scheduleData, userId, meta) {
+    const appointmentService = (await import('./appointment.service.js')).default;
+    return appointmentService.markAssignmentRescheduled(assignmentId, scheduleData, userId, meta);
+  }
+
+  _publishAssignmentEvent(eventType, assignment, extra = {}) {
+    const { employeeIds, ...eventExtras } = extra;
+    const employeeId = normalizeId(assignment.employeeId);
+    const payload = {
+      assignmentId: assignment._id,
+      assignmentNumber: assignment.assignmentNumber,
+      employeeId,
+      employeeIds: uniqueIds(employeeIds || [employeeId]),
+      assignmentType: assignment.assignmentType,
+      title: assignment.title,
+      status: assignment.status,
+      startDatetime: assignment.startDatetime,
+      endDatetime: assignment.endDatetime,
+      ...eventExtras,
+    };
+
+    eventBus.publish(eventType, payload, { source: 'deploy:assignments' });
   }
 
   async _invalidateAssignmentCache(id) {

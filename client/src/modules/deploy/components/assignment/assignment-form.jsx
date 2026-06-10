@@ -1,15 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { createAssignmentSchema } from '../../validations/assignment';
 import { useAssignmentMutations } from '../../hooks/use-assignment-mutations';
+import { useDeployEmployees } from '../../hooks/use-deploy-employees';
 import { AssignmentRecurrenceForm } from './assignment-recurrence-form';
-import apiClient from '@/lib/api/client';
-import { ENDPOINTS } from '@/lib/api/endpoints';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
@@ -44,22 +42,17 @@ const BLANK = {
   appointment: null,
 };
 
+const DEFAULT_RECURRENCE = {
+  frequency: 'WEEKLY',
+  interval: 1,
+  endType: 'NEVER',
+};
+
 export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
-  const [showRecurrence, setShowRecurrence] = useState(false);
-  const [showAppointment, setShowAppointment] = useState(false);
 
-  const { data: employees = [] } = useQuery({
-    queryKey: ['users', 'list-for-assignment'],
-    queryFn: () => apiClient.get(ENDPOINTS.USERS.LIST, { params: { limit: 200 } }),
-    staleTime: 300_000,
-    enabled: open,
-    select: (res) => {
-      const items = res?.data?.data || res?.data || [];
-      return Array.isArray(items) ? items : [];
-    },
-  });
+  const { data: employees = [] } = useDeployEmployees({ enabled: open });
 
   const { create, update } = useAssignmentMutations({
     onCreate: () => onOpenChange(false),
@@ -67,7 +60,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   });
 
   const {
-    register, handleSubmit, reset, setValue, watch,
+    register, handleSubmit, reset, setValue, control,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(createAssignmentSchema),
@@ -80,25 +73,28 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
       const values = {
         ...BLANK,
         ...defaultValues,
-        employeeIds: defaultValues.employeeId ? [defaultValues.employeeId] : [],
+        employeeIds: defaultValues.employeeId ? [defaultValues.employeeId._id || defaultValues.employeeId] : [],
         startDatetime: defaultValues.startDatetime?.slice(0, 16) || '',
         endDatetime: defaultValues.endDatetime?.slice(0, 16) || '',
+        recurrence: defaultValues.recurrence || (defaultValues.recurrenceGroupId ? DEFAULT_RECURRENCE : null),
       };
       reset(values);
-      setShowRecurrence(!!defaultValues.recurrenceGroupId);
-      setShowAppointment(!!defaultValues.isCustomerAppointment);
     } else {
       const values = { ...BLANK, ...(prefill || {}) };
       if (prefill?.startDatetime) values.startDatetime = prefill.startDatetime.slice(0, 16);
       if (prefill?.endDatetime) values.endDatetime = prefill.endDatetime.slice(0, 16);
       reset(values);
-      setShowRecurrence(false);
-      setShowAppointment(false);
     }
   }, [defaultValues, prefill, open, reset]);
 
-  const isCustomerAppointment = watch('isCustomerAppointment');
-  const selectedEmployees = watch('employeeIds') || [];
+  const assignmentType = useWatch({ control, name: 'assignmentType' });
+  const priority = useWatch({ control, name: 'priority' });
+  const isFullDay = useWatch({ control, name: 'isFullDay' });
+  const isCustomerAppointment = useWatch({ control, name: 'isCustomerAppointment' });
+  const recurrenceValue = useWatch({ control, name: 'recurrence' });
+  const selectedEmployees = useWatch({ control, name: 'employeeIds' }) || [];
+  const confirmationMethod = useWatch({ control, name: 'appointment.confirmationMethod' });
+  const showRecurrence = Boolean(recurrenceValue);
 
   const submit = async (data) => {
     const cleaned = {
@@ -147,7 +143,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
               <div className="grid grid-cols-2 gap-3">
                 <FormField label={t('deploy.form.assignmentType', 'Einsatztyp')} required error={errors.assignmentType?.message}>
                   <Select
-                    value={watch('assignmentType')}
+                    value={assignmentType}
                     onValueChange={(v) => setValue('assignmentType', v, { shouldValidate: true })}
                   >
                     <SelectTrigger className="h-9 text-xs">
@@ -171,7 +167,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
 
                 <FormField label={t('deploy.form.priority', 'Priorität')} error={errors.priority?.message}>
                   <Select
-                    value={watch('priority')}
+                    value={priority}
                     onValueChange={(v) => setValue('priority', v, { shouldValidate: true })}
                   >
                     <SelectTrigger className="h-9 text-xs">
@@ -211,10 +207,11 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                             key={emp._id}
                             type="button"
                             onClick={() => {
-                              const current = watch('employeeIds') || [];
                               const next = isSelected
-                                ? current.filter((id) => id !== emp._id)
-                                : [...current, emp._id];
+                                ? selectedEmployees
+                                : isEdit
+                                  ? [emp._id]
+                                  : [...selectedEmployees, emp._id];
                               setValue('employeeIds', next, { shouldValidate: true });
                             }}
                             className="flex items-center gap-2 w-full rounded-md px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors"
@@ -261,7 +258,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
             <FormSection title={t('deploy.form.scheduling', 'Zeitplanung')}>
               <div className="flex items-center gap-2 mb-2">
                 <Switch
-                  checked={watch('isFullDay')}
+                  checked={isFullDay}
                   onCheckedChange={(v) => setValue('isFullDay', v)}
                 />
                 <Label className="text-xs">{t('deploy.form.fullDay', 'Ganztägig')}</Label>
@@ -269,14 +266,14 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
               <div className="grid grid-cols-2 gap-3">
                 <FormField label={t('deploy.form.start', 'Start')} required error={errors.startDatetime?.message}>
                   <Input
-                    type={watch('isFullDay') ? 'date' : 'datetime-local'}
+                    type={isFullDay ? 'date' : 'datetime-local'}
                     className="h-9 text-xs"
                     {...register('startDatetime')}
                   />
                 </FormField>
                 <FormField label={t('deploy.form.end', 'Ende')} required error={errors.endDatetime?.message}>
                   <Input
-                    type={watch('isFullDay') ? 'date' : 'datetime-local'}
+                    type={isFullDay ? 'date' : 'datetime-local'}
                     className="h-9 text-xs"
                     {...register('endDatetime')}
                   />
@@ -297,7 +294,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
             <div className="flex items-center gap-4">
               <button
                 type="button"
-                onClick={() => setShowRecurrence(!showRecurrence)}
+                onClick={() => setValue('recurrence', showRecurrence ? null : DEFAULT_RECURRENCE, { shouldValidate: true })}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Repeat className="h-3.5 w-3.5" />
@@ -318,7 +315,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
               <AssignmentRecurrenceForm
                 register={register}
                 errors={errors}
-                watch={watch}
+                control={control}
                 setValue={setValue}
               />
             )}
@@ -342,7 +339,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                 </div>
                 <FormField label={t('deploy.form.confirmationMethod', 'Bestätigungsmethode')} error={errors?.appointment?.confirmationMethod?.message}>
                   <Select
-                    value={watch('appointment.confirmationMethod') || ''}
+                    value={confirmationMethod || ''}
                     onValueChange={(v) => setValue('appointment.confirmationMethod', v, { shouldValidate: true })}
                   >
                     <SelectTrigger className="h-9 text-xs">

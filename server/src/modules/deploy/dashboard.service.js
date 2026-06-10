@@ -1,12 +1,12 @@
 import cacheManager from '../../shared/cache/CacheManager.js';
-import config from '../../config/index.js';
-import logger from '../../shared/logger/index.js';
 
 const DASHBOARD_TTL = { l1Ttl: 15, l2Ttl: 30 };
 
 class DashboardService {
   async getSummary(date) {
-    const cacheKey = 'deploy:dashboard:summary';
+    const targetDate = date ? new Date(date) : new Date();
+    const dateKey = targetDate.toISOString().split('T')[0];
+    const cacheKey = `deploy:dashboard:summary:${dateKey}`;
 
     return cacheManager.getOrSet(
       cacheKey,
@@ -15,19 +15,18 @@ class DashboardService {
         const assignmentRepository = (await import('./assignment.repository.js')).default;
         const conflictRepository = (await import('./conflict.repository.js')).default;
 
-        const targetDate = date ? new Date(date) : new Date();
-
         // Count assignments by status for the target date
-        const statusCounts = await assignmentRepository.countByStatus(targetDate);
+        const [statusCounts, activeConflicts, unassignedOrders] = await Promise.all([
+          assignmentRepository.countByStatus(targetDate),
+          conflictRepository.findActive(),
+          assignmentRepository.countUnassigned(),
+        ]);
         const statusMap = {};
         let total = 0;
         for (const item of statusCounts) {
           statusMap[item.status] = item.count;
           total += item.count;
         }
-
-        // Count active conflicts
-        const activeConflicts = await conflictRepository.findActive();
 
         // 7-day forecast: count assignments per day for next 7 days
         const upcoming7Days = [];
@@ -52,7 +51,7 @@ class DashboardService {
             completed: statusMap.COMPLETED || 0,
             cancelled: statusMap.CANCELLED || 0,
           },
-          unassignedOrders: 0, // placeholder
+          unassignedOrders,
           activeConflicts: activeConflicts.length,
           upcoming7Days,
         };
@@ -62,7 +61,7 @@ class DashboardService {
   }
 
   async getUtilization(startDate, endDate, employeeIds) {
-    const cacheKey = 'deploy:dashboard:utilization';
+    const cacheKey = `deploy:dashboard:utilization:${startDate || ''}:${endDate || ''}:${(employeeIds || []).join(',')}`;
 
     return cacheManager.getOrSet(
       cacheKey,
@@ -164,6 +163,19 @@ class DashboardService {
         }
 
         return alerts;
+      },
+      DASHBOARD_TTL,
+    );
+  }
+
+  async getUnassignedOrders(limit = 25) {
+    const cacheKey = `deploy:dashboard:unassigned:${limit}`;
+
+    return cacheManager.getOrSet(
+      cacheKey,
+      async () => {
+        const assignmentRepository = (await import('./assignment.repository.js')).default;
+        return assignmentRepository.findUnassigned(limit);
       },
       DASHBOARD_TTL,
     );

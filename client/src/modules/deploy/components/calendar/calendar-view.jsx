@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { DndContext, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
+import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { CalendarHeader } from './calendar-header';
 import { CalendarGrid } from './calendar-grid';
 import { CalendarPrintView } from './calendar-print-view';
@@ -16,7 +16,6 @@ import { usePrefetchAdjacentRanges } from '../../hooks/use-prefetch-adjacent';
 import { useCalendarKeyboard } from '../../hooks/use-calendar-keyboard';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useMediaQuery } from '@/shared/hooks/use-media-query';
-import { ASSIGNMENT_TYPE_META } from '../../constants/deploy-constants';
 
 export function CalendarView() {
   const { hasPermission } = usePermissions();
@@ -42,7 +41,7 @@ export function CalendarView() {
 
   // DnD
   const {
-    handleDragStart, handleDragOver, handleDragEnd,
+    handleDragStart, handleDragOver, handleDragEnd, handleDragCancel,
     showConflictDialog, conflictPreview,
     handleConflictOverride, handleConflictCancel,
   } = useDragAssignment();
@@ -88,6 +87,7 @@ export function CalendarView() {
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <div className="flex flex-col h-full p-4 print:p-0">
         <div className="print:hidden">
@@ -115,6 +115,7 @@ export function CalendarView() {
             timeSlots={timeSlots}
             view={view}
             isLoading={isLoading}
+            canWrite={canWrite}
             onAssignmentClick={handleAssignmentClick}
             onNewAssignment={canWrite ? handleNewAssignment : undefined}
           />

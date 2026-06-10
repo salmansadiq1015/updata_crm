@@ -14,6 +14,24 @@ export function useDragAssignment() {
   const pendingMoveRef = useRef(null);
   const debounceRef = useRef(null);
 
+  const buildMoveTarget = useCallback((assignment, dropData) => {
+    if (!assignment || !dropData?.employeeId || !dropData?.startDatetime) return null;
+
+    const start = new Date(dropData.startDatetime);
+    const originalStart = new Date(assignment.startDatetime);
+    const originalEnd = new Date(assignment.endDatetime);
+    const durationMs = Math.max(15 * 60 * 1000, originalEnd.getTime() - originalStart.getTime());
+    const end = dropData.endDatetime
+      ? new Date(dropData.endDatetime)
+      : new Date(start.getTime() + durationMs);
+
+    return {
+      employeeId: dropData.employeeId,
+      startDatetime: start.toISOString(),
+      endDatetime: end.toISOString(),
+    };
+  }, []);
+
   const handleDragStart = useCallback((event) => {
     const { active } = event;
     const assignment = active.data.current?.assignment;
@@ -28,29 +46,30 @@ export function useDragAssignment() {
   }, [setDragState]);
 
   const handleDragOver = useCallback((event) => {
-    const { over } = event;
+    const { active, over } = event;
     if (!over?.data?.current) return;
 
-    const { employeeId, startDatetime, endDatetime } = over.data.current;
-    if (!employeeId || !startDatetime || !endDatetime) return;
+    const assignment = active.data.current?.assignment;
+    const target = buildMoveTarget(assignment, over.data.current);
+    if (!target) return;
 
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
         const result = await conflictService.checkConflicts({
-          employeeId,
-          startDatetime,
-          endDatetime,
-          excludeAssignmentId: event.active?.data?.current?.assignment?._id,
+          employeeId: target.employeeId,
+          startDatetime: target.startDatetime,
+          endDatetime: target.endDatetime,
+          excludeAssignmentId: assignment?._id,
         });
         setConflictPreview(result);
       } catch {
         setConflictPreview(null);
       }
     }, 200);
-  }, [setConflictPreview]);
+  }, [buildMoveTarget, setConflictPreview]);
 
-  const handleDragEnd = useCallback((event) => {
+  const handleDragEnd = useCallback(async (event) => {
     clearTimeout(debounceRef.current);
     const { active, over } = event;
 
@@ -60,21 +79,34 @@ export function useDragAssignment() {
     }
 
     const assignment = active.data.current?.assignment;
-    const { employeeId, startDatetime, endDatetime } = over.data.current;
+    const target = buildMoveTarget(assignment, over.data.current);
 
-    if (!assignment || !employeeId || !startDatetime || !endDatetime) {
+    if (!assignment || !target) {
       clearDragState();
       return;
     }
 
-    const hasHardConflict = conflictPreview?.conflicts?.some((c) => c.severity === 'HARD');
+    let conflicts = [];
+    try {
+      const result = await conflictService.checkConflicts({
+        employeeId: target.employeeId,
+        startDatetime: target.startDatetime,
+        endDatetime: target.endDatetime,
+        excludeAssignmentId: assignment._id,
+      });
+      conflicts = result?.conflicts || [];
+      setConflictPreview(result);
+    } catch {
+      conflicts = [];
+      setConflictPreview(null);
+    }
 
-    if (hasHardConflict) {
+    if (conflicts.length > 0) {
       pendingMoveRef.current = {
         assignmentId: assignment._id,
-        newEmployeeId: employeeId,
-        newStartDatetime: startDatetime,
-        newEndDatetime: endDatetime,
+        newEmployeeId: target.employeeId,
+        newStartDatetime: target.startDatetime,
+        newEndDatetime: target.endDatetime,
         previousState: {
           assignmentId: assignment._id,
           employeeId: assignment.employeeId?._id || assignment.employeeId,
@@ -100,19 +132,22 @@ export function useDragAssignment() {
     move.mutate({
       id: assignment._id,
       data: {
-        newEmployeeId: employeeId,
-        newStartDatetime: startDatetime,
-        newEndDatetime: endDatetime,
-        overrideConflicts: !hasHardConflict,
+        newEmployeeId: target.employeeId,
+        newStartDatetime: target.startDatetime,
+        newEndDatetime: target.endDatetime,
+        overrideConflicts: false,
       },
     });
 
     clearDragState();
-  }, [conflictPreview, clearDragState, move, registerUndo]);
+  }, [buildMoveTarget, clearDragState, move, registerUndo, setConflictPreview]);
 
   const handleConflictOverride = useCallback((overrideReason) => {
     const pending = pendingMoveRef.current;
     if (!pending) return;
+
+    const hasHardConflict = conflictPreview?.conflicts?.some((conflict) => conflict.severity === 'HARD');
+    if (hasHardConflict) return;
 
     registerUndo({
       action: 'move',
@@ -132,17 +167,29 @@ export function useDragAssignment() {
 
     pendingMoveRef.current = null;
     setShowConflictDialog(false);
-  }, [move, registerUndo]);
+    setConflictPreview(null);
+  }, [conflictPreview, move, registerUndo, setConflictPreview]);
 
   const handleConflictCancel = useCallback(() => {
     pendingMoveRef.current = null;
     setShowConflictDialog(false);
-  }, []);
+    setConflictPreview(null);
+    clearDragState();
+  }, [clearDragState, setConflictPreview]);
+
+  const handleDragCancel = useCallback(() => {
+    clearTimeout(debounceRef.current);
+    pendingMoveRef.current = null;
+    setShowConflictDialog(false);
+    setConflictPreview(null);
+    clearDragState();
+  }, [clearDragState, setConflictPreview]);
 
   return {
     handleDragStart,
     handleDragOver,
     handleDragEnd,
+    handleDragCancel,
     showConflictDialog,
     conflictPreview,
     handleConflictOverride,

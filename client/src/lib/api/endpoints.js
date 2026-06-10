@@ -343,6 +343,7 @@ export const ENDPOINTS = Object.freeze({
     DASHBOARD_SUMMARY: '/scheduling/dashboard/summary',
     DASHBOARD_UTILIZATION: '/scheduling/dashboard/utilization',
     DASHBOARD_ALERTS: '/scheduling/dashboard/alerts',
+    DASHBOARD_UNASSIGNED: '/scheduling/dashboard/unassigned-orders',
     COARSE: '/scheduling/coarse',
     COARSE_ALLOCATIONS: '/scheduling/coarse/allocations',
     COARSE_ALLOCATION_BY_ID: (id) => `/scheduling/coarse/allocations/${id}`,

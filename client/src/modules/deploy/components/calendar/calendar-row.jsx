@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useMemo } from 'react';
+import { useDroppable } from '@dnd-kit/core';
 import { cn } from '@/lib/utils';
 import {
   CALENDAR_VIEWS, DAY_START_HOUR, DAY_END_HOUR,
@@ -97,15 +98,44 @@ function computePmBlockStyle(entry, days) {
   };
 }
 
+function buildSlotStart(day, hour) {
+  const start = new Date(day);
+  start.setHours(hour, 0, 0, 0);
+  return start;
+}
+
+function CalendarDropSlot({ employeeId, day, hour, className }) {
+  const start = buildSlotStart(day, hour);
+  const { setNodeRef, isOver } = useDroppable({
+    id: `calendar-drop-${employeeId}-${start.toISOString()}`,
+    data: {
+      employeeId,
+      startDatetime: start.toISOString(),
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'h-full min-w-0 transition-colors',
+        isOver && 'bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/60',
+        className
+      )}
+    />
+  );
+}
+
 export const CalendarRow = memo(function CalendarRow({
   employee,
   days,
   view,
+  canWrite,
   onAssignmentClick,
   style,
 }) {
   const assignments = employee.assignments || [];
-  const availability = employee.availability || [];
+  const availability = useMemo(() => employee.availability || [], [employee.availability]);
   const pmScheduleEntries = employee.pmScheduleEntries || [];
 
   const availabilityMap = useMemo(() => {
@@ -153,6 +183,27 @@ export const CalendarRow = memo(function CalendarRow({
                   ))}
                 </div>
               )}
+              {canWrite && view === CALENDAR_VIEWS.MONTH && (
+                <CalendarDropSlot
+                  employeeId={employee.employeeId}
+                  day={day}
+                  hour={DAY_START_HOUR}
+                  className="absolute inset-0 z-0"
+                />
+              )}
+              {canWrite && view !== CALENDAR_VIEWS.MONTH && (
+                <div className="absolute inset-0 z-0 flex">
+                  {Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }, (_, i) => (
+                    <CalendarDropSlot
+                      key={`${dayKey}-${i}`}
+                      employeeId={employee.employeeId}
+                      day={day}
+                      hour={DAY_START_HOUR + i}
+                      className="flex-1 border-r border-transparent last:border-r-0"
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -166,6 +217,7 @@ export const CalendarRow = memo(function CalendarRow({
               key={assignment._id}
               assignment={assignment}
               style={blockStyle}
+              canDrag={canWrite}
               onClick={onAssignmentClick}
             />
           );

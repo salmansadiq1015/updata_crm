@@ -16,7 +16,7 @@ export class AppointmentReminderWorker extends BaseWorker {
     super('appointment-reminder');
   }
 
-  async process(job) {
+  async process(_job) {
     const now = new Date();
 
     // Configurable reminder windows: hours before appointment to trigger reminder
@@ -52,18 +52,20 @@ export class AppointmentReminderWorker extends BaseWorker {
 
       const assignmentStart = new Date(assignment.startDatetime);
       if (assignmentStart < windowStart || assignmentStart > windowEnd) continue;
+      if (!appointment.customerContactEmail) continue;
 
       // Enqueue reminder email
       try {
         await queueManager.addJob('auth-email', 'send-appointment-reminder', {
-          email: appointment.customerEmail,
-          customerName: appointment.customerName,
+          email: appointment.customerContactEmail,
+          customerName: appointment.customerContactName,
+          contactPhone: appointment.customerContactPhone,
+          assignmentId: assignment._id,
           appointmentDate: assignmentStart.toISOString().split('T')[0],
           appointmentWindow: appointment.appointmentWindow || null,
           technicianName: assignment.employeeId
             ? `${assignment.employeeId.firstName} ${assignment.employeeId.lastName}`
             : 'Technician',
-          serviceAddress: appointment.serviceAddress || null,
         });
 
         // Mark reminder as sent

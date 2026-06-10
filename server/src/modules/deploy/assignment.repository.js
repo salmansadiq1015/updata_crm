@@ -84,6 +84,23 @@ class AssignmentRepository {
       .lean();
   }
 
+  async countUnassigned() {
+    return Assignment.countDocuments({
+      employeeId: null,
+      status: { $ne: 'CANCELLED' },
+    });
+  }
+
+  async findUnassigned(limit = 25) {
+    return Assignment.find({
+      employeeId: null,
+      status: { $ne: 'CANCELLED' },
+    })
+      .sort({ startDatetime: 1, createdAt: 1 })
+      .limit(limit)
+      .lean();
+  }
+
   async findConflicting(employeeId, start, end, excludeId) {
     const filter = {
       employeeId,

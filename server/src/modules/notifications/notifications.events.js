@@ -177,6 +177,28 @@ export function registerNotificationsEvents() {
     }
   });
 
+  eventBus.subscribe(EVENT_TYPES.SCHEDULE_ASSIGNMENT_MOVED, async (data) => {
+    const payload = data.payload || data;
+    if (payload.employeeIds?.length > 0) {
+      await dispatch(payload, {
+        type: 'assignment_moved',
+        category: 'SCHEDULING',
+        channels: ['IN_APP', 'PUSH'],
+        recipientIds: payload.employeeIds,
+        payload: {
+          title: payload.title,
+          assignmentId: payload.assignmentId,
+          startDatetime: payload.newStartDatetime || payload.startDatetime,
+          endDatetime: payload.newEndDatetime || payload.endDatetime,
+        },
+        sourceModule: 'deploy',
+        sourceEvent: 'SCHEDULE_ASSIGNMENT_MOVED',
+        sourceEntityType: 'Assignment',
+        sourceEntityId: payload.assignmentId,
+      });
+    }
+  });
+
   eventBus.subscribe(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CANCELLED, async (data) => {
     const payload = data.payload || data;
     if (payload.employeeIds?.length > 0) {
@@ -424,7 +446,7 @@ export function registerNotificationsEvents() {
     subscribedEvents: [
       'TASK_ASSIGNED', 'TASK_COMPLETED', 'TASK_OVERDUE', 'TASK_NOTE_ADDED', 'TASK_REMINDER_FIRED',
       'TASK_LIST_MEMBER_ADDED', 'SCHEDULE_ASSIGNMENT_CREATED', 'SCHEDULE_ASSIGNMENT_UPDATED',
-      'SCHEDULE_ASSIGNMENT_CANCELLED', 'MOBILE_CHAT_MESSAGE_SENT', 'QUOTATION_EXPIRED',
+      'SCHEDULE_ASSIGNMENT_MOVED', 'SCHEDULE_ASSIGNMENT_CANCELLED', 'MOBILE_CHAT_MESSAGE_SENT', 'QUOTATION_EXPIRED',
       'INVOICE_OVERDUE', 'DOCUMENT_TPL_GENERATED', 'MAINTENANCE_OVERDUE', 'MAINTENANCE_DUE', 'MAINTENANCE_ESCALATED', 'ACCOUNTING_AP_INVOICE_RECORDED',
       'MOBILE_REPORT_SUBMITTED', 'MOBILE_ORDER_STATUS_UPDATED',
     ],

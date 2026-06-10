@@ -6,6 +6,7 @@ import {
   dashboardSummarySchema,
   dashboardUtilizationSchema,
   dashboardAlertsSchema,
+  dashboardUnassignedSchema,
 } from './dashboard.validation.js';
 
 const router = Router();
@@ -32,6 +33,14 @@ router.get(
   requirePermission('scheduling:read'),
   validate(dashboardAlertsSchema),
   (req, res, next) => dashboardController.alerts(req, res, next),
+);
+
+router.get(
+  '/unassigned-orders',
+  authenticate,
+  requirePermission('scheduling:read'),
+  validate(dashboardUnassignedSchema),
+  (req, res, next) => dashboardController.unassigned(req, res, next),
 );
 
 export default router;

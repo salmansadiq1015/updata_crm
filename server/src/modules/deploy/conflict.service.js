@@ -5,7 +5,6 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
 import conflictRepository from './conflict.repository.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
-import ERROR_CODES from '../../shared/errors/errorCodes.js';
 
 const ACTIVE_CONFLICTS_TTL = { l1Ttl: 15, l2Ttl: 30 };
 const ACTIVE_CONFLICTS_KEY = 'deploy:conflicts:active';
@@ -95,7 +94,16 @@ class ConflictService {
     }
 
     // 4. TRAVEL_TIME (SOFT)
-    const allAssignments = await assignmentRepository.findConflicting(employeeId, new Date(0), new Date('2099-12-31'), excludeAssignmentId);
+    const travelWindowStart = new Date(new Date(start).getTime() - MIN_TRAVEL_GAP_MINUTES * 60 * 1000);
+    const travelWindowEnd = new Date(new Date(end).getTime() + MIN_TRAVEL_GAP_MINUTES * 60 * 1000);
+    const nearbyAssignments = await assignmentRepository.findByEmployeeAndDateRange(
+      employeeId,
+      travelWindowStart,
+      travelWindowEnd,
+    );
+    const allAssignments = nearbyAssignments.filter(
+      (assignment) => !excludeAssignmentId || String(assignment._id) !== String(excludeAssignmentId),
+    );
 
     // Find assignment ending just before start
     const before = allAssignments
@@ -139,16 +147,22 @@ class ConflictService {
     return { hasConflicts: conflicts.length > 0, conflicts };
   }
 
-  async recordConflicts(assignmentId, conflicts) {
+  async recordConflicts(assignmentId, conflicts, resolution = {}) {
+    if (!conflicts.length) return [];
+
     const records = conflicts.map((c) => ({
       assignmentId,
       conflictType: c.conflictType,
       severity: c.severity,
       description: c.description,
       conflictingWithId: c.conflictingWithId || null,
+      resolved: resolution.resolved || false,
+      resolvedBy: resolution.resolvedBy || null,
+      overrideReason: resolution.overrideReason || null,
     }));
 
     const created = await conflictRepository.bulkCreate(records);
+    await cacheManager.del(ACTIVE_CONFLICTS_KEY);
 
     for (const record of created) {
       eventBus.publish(EVENT_TYPES.SCHEDULE_CONFLICT_DETECTED, {

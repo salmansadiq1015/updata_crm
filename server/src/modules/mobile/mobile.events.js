@@ -74,6 +74,37 @@ export function registerMobileEvents() {
     }
   });
 
+  // --- SCHEDULE_ASSIGNMENT_MOVED ---
+  eventBus.on(EVENT_TYPES.SCHEDULE_ASSIGNMENT_MOVED, async (event) => {
+    try {
+      const { default: notificationService } = await import('./notification.service.js');
+      const payload = event.payload || {};
+
+      if (payload.employeeIds?.length) {
+        for (const employeeId of payload.employeeIds) {
+          await notificationService.sendNotification(employeeId, {
+            notificationType: 'ORDER_CHANGED',
+            title: 'Auftrag neu geplant',
+            body: `Ein Auftrag wurde neu geplant: ${payload.title || 'Unbenannt'}`,
+            deepLink: `/orders/${payload.assignmentId}`,
+          });
+        }
+      }
+
+      logger.info('Mobile notification sent for assignment move', {
+        module: 'mobile',
+        action: 'event.assignment_moved',
+        assignmentId: payload.assignmentId,
+      });
+    } catch (err) {
+      logger.error('Failed to handle SCHEDULE_ASSIGNMENT_MOVED event in mobile', {
+        module: 'mobile',
+        action: 'event.assignment_moved',
+        error: { message: err.message, stack: err.stack },
+      });
+    }
+  });
+
   // --- SCHEDULE_ASSIGNMENT_CANCELLED ---
   eventBus.on(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CANCELLED, async (event) => {
     try {

@@ -2,8 +2,10 @@ class MobileController {
   async getMyAssignments(req, res, next) {
     try {
       const assignmentService = (await import('./assignment.service.js')).default;
+      const { serializeMobileAssignments } = await import('./mobileAssignment.serializer.js');
       const { dateFrom, dateTo } = req.query;
-      const data = await assignmentService.listByEmployee(req.user._id, dateFrom, dateTo);
+      const assignments = await assignmentService.listByEmployee(req.user._id, dateFrom, dateTo);
+      const data = await serializeMobileAssignments(assignments);
       return res.success({ data });
     } catch (err) { next(err); }
   }
@@ -11,6 +13,7 @@ class MobileController {
   async getAssignmentDetail(req, res, next) {
     try {
       const assignmentService = (await import('./assignment.service.js')).default;
+      const { serializeMobileAssignment } = await import('./mobileAssignment.serializer.js');
       const assignment = await assignmentService.getById(req.params.id);
 
       const assignmentEmployeeId = (assignment.employeeId?._id || assignment.employeeId).toString();
@@ -23,15 +26,18 @@ class MobileController {
         });
       }
 
-      return res.success({ data: assignment });
+      const data = await serializeMobileAssignment(assignment);
+      return res.success({ data });
     } catch (err) { next(err); }
   }
 
   async syncAssignments(req, res, next) {
     try {
       const assignmentService = (await import('./assignment.service.js')).default;
+      const { serializeMobileAssignments } = await import('./mobileAssignment.serializer.js');
       const { since } = req.query;
-      const data = await assignmentService.syncSince(req.user._id, since);
+      const assignments = await assignmentService.syncSince(req.user._id, since);
+      const data = await serializeMobileAssignments(assignments);
       return res.success({ data });
     } catch (err) { next(err); }
   }

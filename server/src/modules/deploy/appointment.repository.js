@@ -6,8 +6,29 @@ class AppointmentRepository {
     return appointment.save();
   }
 
+  async upsertByAssignmentId(assignmentId, data) {
+    return AppointmentDetails.findOneAndUpdate(
+      { assignmentId },
+      {
+        $set: data,
+        $setOnInsert: { assignmentId },
+      },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true,
+      },
+    ).lean();
+  }
+
   async findByAssignmentId(assignmentId) {
     return AppointmentDetails.findOne({ assignmentId }).lean();
+  }
+
+  async findByAssignmentIds(assignmentIds) {
+    if (!assignmentIds.length) return [];
+    return AppointmentDetails.find({ assignmentId: { $in: assignmentIds } }).lean();
   }
 
   async updateByAssignmentId(assignmentId, data) {

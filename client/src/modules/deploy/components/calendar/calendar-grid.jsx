@@ -16,6 +16,7 @@ export function CalendarGrid({
   timeSlots,
   view,
   isLoading,
+  canWrite,
   onAssignmentClick,
   onNewAssignment,
 }) {
@@ -97,6 +98,7 @@ export function CalendarGrid({
                 employee={employee}
                 days={days}
                 view={view}
+                canWrite={canWrite}
                 onAssignmentClick={onAssignmentClick}
                 style={{
                   position: 'absolute',

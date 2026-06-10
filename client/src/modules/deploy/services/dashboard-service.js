@@ -16,4 +16,9 @@ export const deployDashboardService = {
     const res = await apiClient.get(ENDPOINTS.DEPLOY.DASHBOARD_ALERTS);
     return res;
   },
+
+  async getUnassignedOrders(params = {}) {
+    const res = await apiClient.get(ENDPOINTS.DEPLOY.DASHBOARD_UNASSIGNED, { params });
+    return res;
+  },
 };

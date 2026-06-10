@@ -24,6 +24,7 @@ class OrderController {
         title, description, scopeOfWork, specialInstructions,
         priority, scheduledStart, scheduledEnd,
         employeeId,
+        projectId,
         customerName, customerPhone, customerEmail,
         siteAddress, accessInstructions, parkingInfo,
       } = req.body;
@@ -54,6 +55,7 @@ class OrderController {
       if (employeeId) {
         const [created] = await assignmentService.create({
           employeeIds: [employeeId],
+          projectId: projectId || null,
           assignmentType: resolvedType,
           title: title || null,
           instructions,
@@ -78,6 +80,7 @@ class OrderController {
           startDatetime,
           endDatetime,
           employeeId: null,
+          projectId: projectId || null,
           status: 'PLANNED',
           isCustomerAppointment: Boolean(appointment),
           createdBy: req.user._id,
@@ -113,6 +116,10 @@ class OrderController {
         if (query.status) filters.status = query.status;
         if (query.orderType || query.type) filters.assignmentType = query.orderType || query.type;
         if (query.employeeId) filters.employeeId = query.employeeId;
+        if (query.projectId) filters.projectId = query.projectId;
+        if (query.priority) filters.priority = query.priority;
+        if (query.dateFrom) filters.dateFrom = query.dateFrom;
+        if (query.dateTo) filters.dateTo = query.dateTo;
         const result = await assignmentRepository.findWithCursor({
           limit: query.limit ? parseInt(query.limit, 10) : 100,
           cursor: query.cursor,

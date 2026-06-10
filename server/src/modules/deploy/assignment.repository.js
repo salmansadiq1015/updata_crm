@@ -18,7 +18,11 @@ const ALLOWED_SORT_FIELDS = ['createdAt', 'startDatetime', 'assignmentNumber', '
 
 const POPULATE_FIELDS = [
   { path: 'employeeId', select: 'firstName lastName email' },
-  { path: 'projectId', select: 'name projectNumber' },
+  {
+    path: 'projectId',
+    select: 'name projectNumber customerName status siteId plannedStartDate plannedEndDate',
+    populate: { path: 'siteId', select: 'name street postalCode city' },
+  },
 ];
 
 class AssignmentRepository {
@@ -34,10 +38,16 @@ class AssignmentRepository {
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+    const { dateFrom, dateTo, ...exactFilters } = filters;
     const filter = {
-      ...buildFilter(filters, ALLOWED_FILTERS),
+      ...buildFilter(exactFilters, ALLOWED_FILTERS),
       ...buildCursorQuery(cursor, sortBy, sortOrder),
     };
+    if (dateFrom || dateTo) {
+      filter.startDatetime = {};
+      if (dateFrom) filter.startDatetime.$gte = new Date(dateFrom);
+      if (dateTo) filter.startDatetime.$lte = new Date(dateTo);
+    }
 
     if (search) {
       filter.$or = [
@@ -81,6 +91,7 @@ class AssignmentRepository {
 
     return Assignment.find(filter)
       .sort({ startDatetime: 1 })
+      .populate(POPULATE_FIELDS)
       .lean();
   }
 

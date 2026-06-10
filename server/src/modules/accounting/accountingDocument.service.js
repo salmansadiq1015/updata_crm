@@ -64,7 +64,8 @@ class AccountingDocumentService {
     const retentionUntil = new Date();
     retentionUntil.setFullYear(retentionUntil.getFullYear() + 10);
 
-    const ocrStatus = metadata.documentType === 'SUPPLIER_INVOICE' ? 'PENDING' : 'NOT_APPLICABLE';
+    const ocrEnabled = ['SUPPLIER_INVOICE', 'RECEIPT'].includes(metadata.documentType);
+    const ocrStatus = ocrEnabled ? 'PENDING' : 'NOT_APPLICABLE';
 
     const doc = await accountingDocumentRepository.create({
       filePath: uploadResult.key,
@@ -74,9 +75,19 @@ class AccountingDocumentService {
       fileHash: hash,
       documentType: metadata.documentType,
       ocrStatus,
-      processingStatus: metadata.documentType === 'SUPPLIER_INVOICE' ? 'UNPROCESSED' : 'PROCESSED',
+      processingStatus: ocrEnabled ? 'IN_REVIEW' : 'PROCESSED',
       notes: metadata.notes || '',
       projectReference: metadata.projectReference || '',
+      supplierName: metadata.supplierName || '',
+      receiptDate: metadata.receiptDate || null,
+      amount: metadata.amount ?? null,
+      vat: metadata.vat ?? null,
+      receiptType: metadata.receiptType || null,
+      accountingCategory: metadata.accountingCategory || '',
+      projectId: metadata.projectId || null,
+      customerId: metadata.customerId || null,
+      employeeId: metadata.employeeId || null,
+      autoAssignmentStatus: metadata.autoAssignmentStatus || 'PENDING_REVIEW',
       fullText: metadata.fullText || (fileData.mimetype === 'text/plain' ? fileData.buffer.toString('utf8') : ''),
       linkedRecords: normalizeLinkedRecords(metadata.linkedRecords),
       retentionUntil,
@@ -108,7 +119,7 @@ class AccountingDocumentService {
       documentId: assignedDoc._id,
     });
 
-    if (metadata.documentType === 'SUPPLIER_INVOICE') {
+    if (ocrEnabled) {
       await this._enqueueOcr(assignedDoc._id, userId, { strict: false });
     }
 
@@ -148,8 +159,8 @@ class AccountingDocumentService {
     if (doc.ocrStatus === 'PROCESSING') {
       throw new ConflictError('OCR processing is already running for this document');
     }
-    if (doc.documentType !== 'SUPPLIER_INVOICE') {
-      throw new ConflictError('OCR can only be triggered for supplier invoice documents');
+    if (!['SUPPLIER_INVOICE', 'RECEIPT'].includes(doc.documentType)) {
+      throw new ConflictError('OCR can only be triggered for supplier invoice and receipt documents');
     }
 
     await this._enqueueOcr(documentId, userId, { strict: true });

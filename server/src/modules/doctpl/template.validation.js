@@ -4,6 +4,8 @@ import { objectId, cursorPagination } from '../../shared/validation/commonSchema
 const TEMPLATE_TYPES = [
   'quotation', 'order_confirmation', 'invoice_standard', 'invoice_advance',
   'invoice_final', 'cover_letter', 'service_report', 'inspection_certificate',
+  'project_appointment_confirmation', 'project_status_report',
+  'project_completion_certificate',
 ];
 
 export const listTemplatesSchema = {

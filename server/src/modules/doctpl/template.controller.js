@@ -9,6 +9,14 @@ class TemplateController {
     } catch (err) { next(err); }
   }
 
+  async duplicate(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const template = await templateService.duplicate(req.params.id, req.user._id, meta);
+      return res.success({ data: template, message: 'Template duplicated successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
@@ -29,6 +37,14 @@ class TemplateController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const template = await templateService.update(req.params.id, req.body, req.user._id, meta);
       return res.success({ data: template, message: 'Template updated successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async remove(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await templateService.remove(req.params.id, req.user._id, meta);
+      return res.success({ data: result, message: 'Template deleted successfully' });
     } catch (err) { next(err); }
   }
 

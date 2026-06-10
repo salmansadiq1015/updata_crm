@@ -29,6 +29,8 @@ const customerSchema = new mongoose.Schema(
     mobile: { type: String, trim: true, maxlength: 30, default: null },
     email: { type: String, trim: true, lowercase: true, maxlength: 255, default: null },
     website: { type: String, trim: true, maxlength: 255, default: null },
+    uidNumber: { type: String, trim: true, uppercase: true, maxlength: 50, default: null },
+    vatNumber: { type: String, trim: true, uppercase: true, maxlength: 50, default: null },
     newsletterOptIn: { type: Boolean, default: false },
     newsletterChannel: {
       type: String,
@@ -68,6 +70,8 @@ customerSchema.index({ postalCode: 1 });
 customerSchema.index({ isDeleted: 1, status: 1 });
 customerSchema.index({ createdAt: -1 });
 customerSchema.index({ type: 1 });
+customerSchema.index({ uidNumber: 1 });
+customerSchema.index({ vatNumber: 1 });
 customerSchema.index({ name: 1, postalCode: 1 }); // duplicate detection
 customerSchema.index({ 'migration.sourceSystem': 1, 'migration.sourceId': 1 });
 customerSchema.index(

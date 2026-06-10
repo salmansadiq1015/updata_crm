@@ -70,6 +70,8 @@ export const createCustomerSchema = z.object({
   mobile: optionalPhone,
   email: optionalEmail,
   website: optionalUrl,
+  uidNumber: optionalStr(50),
+  vatNumber: optionalStr(50),
   // Newsletter
   newsletterOptIn: z.boolean().optional(),
   newsletterChannel: z.enum(['email', 'whatsapp', 'both']).optional(),

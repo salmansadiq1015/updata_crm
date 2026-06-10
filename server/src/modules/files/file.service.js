@@ -1,10 +1,11 @@
 import fileRepository from './file.repository.js';
+import fileFolderRepository from './fileFolder.repository.js';
 import storageService from '../../shared/storage/StorageService.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import config from '../../config/index.js';
-import { NotFoundError } from '../../shared/errors/AppError.js';
+import { ConflictError, NotFoundError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 
 /**
@@ -37,6 +38,7 @@ class FileService {
   async upload({
     buffer, originalName, mimeType, sizeBytes,
     module, entityType, entityId, uploadedBy, bucket = 'general',
+    folderPath = '', category = 'general',
   }) {
     // 1. Validate file constraints
     storageService.validateFile(mimeType, sizeBytes, bucket);
@@ -63,6 +65,8 @@ class FileService {
       module,
       entityType,
       entityId,
+      folderPath,
+      category: category || 'general',
       storageBackend: config.storage.backend,
       checksumSha256: uploadResult.checksumSha256,
     });
@@ -80,6 +84,8 @@ class FileService {
       module,
       entityType,
       entityId,
+      folderPath,
+      category,
     }, { source: 'core:files' });
 
     logger.info('File uploaded', {
@@ -160,6 +166,63 @@ class FileService {
     return { deleted: true };
   }
 
+  async organize(id, changes) {
+    const file = await fileRepository.findById(id);
+    if (!file) throw new NotFoundError('File', id);
+
+    const update = {};
+    for (const key of ['module', 'entityType', 'entityId', 'bucket', 'folderPath', 'category']) {
+      if (Object.prototype.hasOwnProperty.call(changes, key)) {
+        update[key] = changes[key] === '' ? null : changes[key];
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(changes, 'folderPath')) {
+      update.folderPath = changes.folderPath || '';
+    }
+    if (Object.prototype.hasOwnProperty.call(changes, 'category')) {
+      update.category = changes.category || 'general';
+    }
+
+    const updated = await fileRepository.updateOrganization(id, update);
+    await cacheManager.del(`core:file:${id}`);
+    await this._invalidateEntityCache(file.module, file.entityType, file.entityId);
+    await this._invalidateEntityCache(updated.module, updated.entityType, updated.entityId);
+
+    return updated;
+  }
+
+  async listFolders({ cursor, limit, sortBy, sortOrder, ...filters }) {
+    return fileFolderRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters });
+  }
+
+  async createFolder({ name, parentPath = '', classification = 'general', entityType, entityId, createdBy }) {
+    const safeName = this._cleanPathSegment(name);
+    const cleanParent = this._cleanPath(parentPath);
+    const path = [cleanParent, safeName].filter(Boolean).join('/');
+    const existing = await fileFolderRepository.findByPath(path);
+    if (existing) throw new ConflictError(`Folder '${path}' already exists`);
+
+    const folder = await fileFolderRepository.create({
+      name: safeName,
+      path,
+      parentPath: cleanParent,
+      classification: classification || 'general',
+      entityType: entityType || null,
+      entityId: entityId || null,
+      createdBy,
+    });
+    await this._invalidateFolderCache();
+    return folder;
+  }
+
+  async deleteFolder(id) {
+    const folder = await fileFolderRepository.findById(id);
+    if (!folder) throw new NotFoundError('Folder', id);
+    await fileFolderRepository.softDelete(id);
+    await this._invalidateFolderCache();
+    return { deleted: true };
+  }
+
   /**
    * Get files for a specific entity (used by other modules).
    */
@@ -199,6 +262,22 @@ class FileService {
     }
     // Invalidate list caches (they depend on data changing)
     await cacheManager.invalidatePattern(`${config.redis.keyPrefix}core:files:list:*`);
+  }
+
+  async _invalidateFolderCache() {
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}core:files:folders:*`);
+  }
+
+  _cleanPath(path = '') {
+    return `${path}`
+      .split('/')
+      .map((part) => this._cleanPathSegment(part))
+      .filter(Boolean)
+      .join('/');
+  }
+
+  _cleanPathSegment(value = '') {
+    return `${value}`.trim().replace(/[\\/]+/g, '-').replace(/\s+/g, ' ');
   }
 }
 

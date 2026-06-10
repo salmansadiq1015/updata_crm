@@ -34,6 +34,8 @@ class DocumentGenerationService {
       entityId: sourceRecordId,
       uploadedBy: generatedBy,
       bucket: 'documents',
+      folderPath: this._buildFolderPath({ sourceModule, templateType, data }),
+      category: templateType,
     });
 
     // 6. Create GeneratedDocument record
@@ -113,6 +115,21 @@ class DocumentGenerationService {
     const custName = (data.customer?.name || '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
     const dateStr = new Date().toISOString().split('T')[0];
     return `${typeName}_${docNum}_${custName}_${dateStr}.pdf`;
+  }
+
+  _buildFolderPath({ sourceModule, templateType, data }) {
+    const customerName = data.customer?.name || data.customerName || data.customer?.companyName || '';
+    const projectName = data.project?.name || data.projectName || data.title || '';
+    const base = projectName
+      ? `Projects/${this._cleanPathSegment(projectName)}`
+      : customerName
+        ? `Customers/${this._cleanPathSegment(customerName)}`
+        : this._cleanPathSegment(sourceModule || 'Documents');
+    return `${base}/${this._cleanPathSegment(templateType || 'documents')}`;
+  }
+
+  _cleanPathSegment(value = '') {
+    return `${value}`.trim().replace(/[\\/]+/g, '-').replace(/\s+/g, '_').substring(0, 80);
   }
 }
 

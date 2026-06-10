@@ -8,14 +8,27 @@ import logger from '../../shared/logger/index.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 
-const VALID_TRANSITIONS = {
-  DRAFT: ['PLANNING'],
-  PLANNING: ['IN_PROGRESS', 'ON_HOLD'],
-  IN_PROGRESS: ['COMPLETED', 'ON_HOLD'],
-  ON_HOLD: ['PLANNING', 'IN_PROGRESS'],
-  COMPLETED: ['IN_PROGRESS', 'ARCHIVED'],
-  ARCHIVED: [],
-};
+const ACTIVE_PROJECT_STATUSES = [
+  'DRAFT',
+  'PLANNING',
+  'SCHEDULED',
+  'WAITING_FOR_MATERIAL',
+  'IN_PROGRESS',
+  'AWAITING_CUSTOMER_APPROVAL',
+  'AWAITING_QUOTATION_APPROVAL',
+  'ON_HOLD',
+  'COMPLETED',
+  'INVOICED',
+];
+
+const VALID_TRANSITIONS = Object.fromEntries(
+  ACTIVE_PROJECT_STATUSES.map((status) => [
+    status,
+    ACTIVE_PROJECT_STATUSES.filter((target) => target !== status),
+  ]),
+);
+VALID_TRANSITIONS.COMPLETED = ['IN_PROGRESS', 'INVOICED', 'ARCHIVED'];
+VALID_TRANSITIONS.ARCHIVED = [];
 
 class StatusService {
   async transitionStatus(projectId, targetStatus, { comment = null, override = false, overrideReason = null } = {}, userId, meta = {}) {
@@ -107,6 +120,7 @@ class StatusService {
 
     // Invalidate caches
     await cacheManager.del(`pm:project:${projectId}`);
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}pm:projects:list:*`);
     await cacheManager.invalidatePattern(`${config.redis.keyPrefix}pm:dashboard:*`);
 
     // Publish event

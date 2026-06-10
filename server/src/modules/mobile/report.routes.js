@@ -16,7 +16,11 @@ const listReportsQuerySchema = {
   query: Joi.object({
     status: Joi.string().valid('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'),
     orderId: objectId,
+    projectId: objectId,
     technicianId: objectId,
+    dateFrom: Joi.date().iso(),
+    dateTo: Joi.date().iso(),
+    search: Joi.string().trim().max(200).allow(''),
     includeArchived: Joi.boolean(),
   }),
 };

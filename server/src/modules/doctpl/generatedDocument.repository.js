@@ -31,10 +31,22 @@ class GeneratedDocumentRepository {
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'generatedAt', sortOrder = 'desc', filters = {} }) {
+    const { search, ...restFilters } = filters;
     const filter = {
-      ...buildFilter(filters, ALLOWED_FILTERS),
+      ...buildFilter(restFilters, ALLOWED_FILTERS),
       ...buildCursorQuery(cursor, sortBy, sortOrder),
     };
+    const queryText = `${search || ''}`.trim();
+    if (queryText) {
+      const regex = new RegExp(escapeRegex(queryText), 'i');
+      filter.$or = [
+        { documentType: regex },
+        { sourceModule: regex },
+        { fileName: regex },
+        { 'metadata.customerName': regex },
+        { 'metadata.projectName': regex },
+      ];
+    }
 
     const sort = buildCursorSort(sortBy, sortOrder);
 
@@ -50,6 +62,10 @@ class GeneratedDocumentRepository {
   async deleteById(id) {
     return GeneratedDocument.findByIdAndDelete(id);
   }
+}
+
+function escapeRegex(value) {
+  return `${value}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 const generatedDocumentRepository = new GeneratedDocumentRepository();

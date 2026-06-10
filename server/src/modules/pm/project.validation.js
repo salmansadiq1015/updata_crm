@@ -1,7 +1,19 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
-const PROJECT_STATUSES = ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'ARCHIVED'];
+const PROJECT_STATUSES = [
+  'DRAFT',
+  'PLANNING',
+  'SCHEDULED',
+  'WAITING_FOR_MATERIAL',
+  'IN_PROGRESS',
+  'AWAITING_CUSTOMER_APPROVAL',
+  'AWAITING_QUOTATION_APPROVAL',
+  'ON_HOLD',
+  'COMPLETED',
+  'INVOICED',
+  'ARCHIVED',
+];
 const PROJECT_TYPES = ['NEW_INSTALLATION', 'RENOVATION', 'MAINTENANCE', 'SERVICE_CONTRACT', 'OTHER'];
 
 export const createProjectSchema = {
@@ -46,6 +58,7 @@ export const updateProjectSchema = {
     estimatedBudget: Joi.number().min(0).allow(null),
     currency: Joi.string().trim().max(3),
     notes: Joi.string().max(5000).allow('', null),
+    status: Joi.string().valid(...PROJECT_STATUSES),
   }).min(1),
 };
 

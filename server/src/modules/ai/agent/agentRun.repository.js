@@ -62,6 +62,10 @@ class AgentRunRepository {
     return AgentRun.find({ userId, threadId }).sort({ createdAt: 1 }).lean();
   }
 
+  async findLatestByThreadId(userId, threadId) {
+    return AgentRun.findOne({ userId, threadId }).sort({ createdAt: -1 }).lean();
+  }
+
   async archiveByThreadId(userId, threadId) {
     return AgentRun.updateMany({ userId, threadId }, { $set: { archived: true } });
   }

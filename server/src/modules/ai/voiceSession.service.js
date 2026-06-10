@@ -504,19 +504,38 @@ class VoiceSessionService {
         break;
     }
 
-    // Dispatch autonomous agent execution for actionable intents
-    const AGENT_INTENTS = ['create_order', 'create_report'];
-    if (AGENT_INTENTS.includes(session.intentName)) {
+    // Dispatch autonomous agent execution so confirmed recordings can perform
+    // the same actions as typed agent commands.
+    if (transcript && transcript.trim().length >= 3) {
       try {
         const { default: agentService } = await import('./agent/agent.service.js');
-        await agentService.runFromSession(
-          sessionId,
+        const agentResult = await agentService.run(
+          transcript,
           userId,
           meta.permissions || [],
-          entityData,
-          session.intentName,
-          { ipAddress: meta.ipAddress, userAgent: meta.userAgent, correlationId: meta.correlationId },
+          {
+            ipAddress: meta.ipAddress,
+            userAgent: meta.userAgent,
+            correlationId: meta.correlationId,
+            context: {
+              source: 'voice_session',
+              voiceSessionId: sessionId,
+              sessionType: session.sessionType,
+              intentName: session.intentName,
+              entities: entityData,
+            },
+          },
         );
+        result = {
+          ...result,
+          action: result?.action || 'agent_run',
+          agentRunId: agentResult.agentRunId,
+          threadId: agentResult.threadId,
+          workflowType: agentResult.workflowType,
+          message: agentResult.workflowType === 'FIELD_SERVICE_AGENT'
+            ? 'Agent run dispatched'
+            : result?.message,
+        };
       } catch (err) {
         logger.warn('Failed to dispatch agent run from voice session', {
           module: 'ai',

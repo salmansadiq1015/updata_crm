@@ -7,6 +7,17 @@ export const emailTemplateIdParamSchema = {
   params: Joi.object({ id: objectId.required() }),
 };
 
+export const createEmailTemplateSchema = {
+  body: Joi.object({
+    templateType: Joi.string().trim().max(100).required(),
+    language: Joi.string().valid('de', 'fr', 'it', 'en').required(),
+    subjectTemplate: Joi.string().max(500).required(),
+    bodyHtml: Joi.string().max(50000).required(),
+    bodyText: Joi.string().max(20000).allow('', null),
+    isActive: Joi.boolean(),
+  }),
+};
+
 export const updateEmailTemplateSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({

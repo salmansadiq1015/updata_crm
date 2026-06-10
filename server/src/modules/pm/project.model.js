@@ -1,6 +1,18 @@
 import mongoose from 'mongoose';
 
-export const PROJECT_STATUSES = ['DRAFT', 'PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'ARCHIVED'];
+export const PROJECT_STATUSES = [
+  'DRAFT',
+  'PLANNING',
+  'SCHEDULED',
+  'WAITING_FOR_MATERIAL',
+  'IN_PROGRESS',
+  'AWAITING_CUSTOMER_APPROVAL',
+  'AWAITING_QUOTATION_APPROVAL',
+  'ON_HOLD',
+  'COMPLETED',
+  'INVOICED',
+  'ARCHIVED',
+];
 export const PROJECT_TYPES = ['NEW_INSTALLATION', 'RENOVATION', 'MAINTENANCE', 'SERVICE_CONTRACT', 'OTHER'];
 
 const projectSchema = new mongoose.Schema(

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createTool } from './tool.runner.js';
 
-// Statuses from task.model.js: ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']
+// Statuses from task.model.js: ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED']
 // Priorities from task.model.js: ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']
 // create(data, userId, meta) — assignee field is 'assigneeId', returns full task document
 // update(id, data, userId, meta) — returns updated task document
@@ -47,7 +47,7 @@ export const updateTaskTool = createTool({
   description: 'Updates an existing task — status, assignee, due date, or priority.',
   schema: z.object({
     taskId: z.string().describe('MongoDB ObjectId of the task'),
-    status: z.enum(['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).optional(),
+    status: z.enum(['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED']).optional(),
     assignedTo: z.string().optional().describe('MongoDB ObjectId of the user to assign the task to'),
     dueDate: z.string().datetime({ offset: true }).optional().describe('ISO 8601 date string for new due date'),
     priority: z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),

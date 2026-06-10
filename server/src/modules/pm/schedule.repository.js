@@ -84,7 +84,11 @@ class ScheduleRepository {
     }
 
     return ScheduleEntry.find(filter)
-      .populate({ path: 'projectId', select: 'name projectNumber' })
+      .populate({
+        path: 'projectId',
+        select: 'name projectNumber siteId',
+        populate: { path: 'siteId', select: 'name street postalCode city' },
+      })
       .populate({ path: 'responsibleTeamId', select: 'firstName lastName' })
       .sort({ startDate: 1, milestoneDate: 1 })
       .lean();

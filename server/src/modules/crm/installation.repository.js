@@ -21,7 +21,13 @@ class InstallationRepository {
   }
 
   async findById(id) {
-    return Installation.findById(id).lean();
+    return Installation.findById(id)
+      .populate({
+        path: 'siteId',
+        select: 'siteNumber name customerId street postalCode city canton',
+        populate: { path: 'customerId', select: 'customerNumber name companyName email phone' },
+      })
+      .lean();
   }
 
   async findBySiteId(siteId) {

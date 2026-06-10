@@ -14,7 +14,11 @@ class ReportController {
       const reports = await reportService.list({
         status: filters.status,
         orderId: filters.orderId,
+        projectId: filters.projectId,
         technicianId: filters.technicianId,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        search: filters.search,
         includeArchived: filters.includeArchived === 'true' || filters.includeArchived === true,
       });
       return res.success({ data: reports });

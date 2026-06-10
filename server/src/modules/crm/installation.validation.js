@@ -29,6 +29,7 @@ export const updateInstallationSchema = {
     fuelType: Joi.string().valid('gas', 'oil', 'electric', 'pellet', 'other').allow(null),
     yearOfManufacture: Joi.number().integer().min(1900).max(2100).allow(null),
     technicalNotes: Joi.string().max(5000).allow('', null),
+    status: Joi.string().valid('active', 'maintenance', 'out_of_service', 'defective', 'decommissioned'),
   }).min(1),
 };
 
@@ -49,7 +50,7 @@ export const siteIdParamSchema = {
 
 export const listInstallationsSchema = {
   query: cursorPagination.keys({
-    status: Joi.string().valid('active', 'decommissioned'),
+    status: Joi.string().valid('active', 'maintenance', 'out_of_service', 'defective', 'decommissioned'),
     type: Joi.string().valid('boiler', 'heat_pump', 'solar_thermal', 'radiator_system', 'ventilation', 'hot_water', 'other'),
     fuelType: Joi.string().valid('gas', 'oil', 'electric', 'pellet', 'other'),
     siteId: objectId,

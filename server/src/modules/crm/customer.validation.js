@@ -14,6 +14,8 @@ const phone = Joi.string().trim().max(30)
   .pattern(PHONE_PATTERN)
   .messages({ 'string.pattern.base': 'Please enter a valid phone number (e.g., +41 44 123 45 67)' });
 
+const taxIdentifier = Joi.string().trim().uppercase().max(50);
+
 export const createCustomerSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(255),
@@ -27,6 +29,8 @@ export const createCustomerSchema = {
     mobile: phone.allow('', null),
     email: Joi.string().email().trim().max(255).allow('', null),
     website: Joi.string().uri({ scheme: ['http', 'https'] }).trim().max(255).allow('', null),
+    uidNumber: taxIdentifier.allow('', null),
+    vatNumber: taxIdentifier.allow('', null),
     newsletterOptIn: Joi.boolean().default(false),
     newsletterChannel: Joi.string().valid('email', 'whatsapp', 'both').default('email'),
     notes: Joi.string().max(5000).allow('', null),
@@ -47,6 +51,8 @@ export const updateCustomerSchema = {
     mobile: phone.allow('', null),
     email: Joi.string().email().trim().max(255).allow('', null),
     website: Joi.string().uri({ scheme: ['http', 'https'] }).trim().max(255).allow('', null),
+    uidNumber: taxIdentifier.allow('', null),
+    vatNumber: taxIdentifier.allow('', null),
     newsletterOptIn: Joi.boolean(),
     newsletterChannel: Joi.string().valid('email', 'whatsapp', 'both'),
     notes: Joi.string().max(5000).allow('', null),

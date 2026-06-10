@@ -13,7 +13,7 @@ class AgentController {
         req.body.input,
         req.user._id.toString(),
         permissions,
-        { ipAddress: req.ip, userAgent: req.get('user-agent'), correlationId: req.id, threadId: req.body.threadId },
+        { ipAddress: req.ip, userAgent: req.get('user-agent'), correlationId: req.body.correlationId || req.id, threadId: req.body.threadId, context: req.body.context },
       );
       res.success({ data: result, message: 'Agent run dispatched', statusCode: 202 });
     } catch (err) {

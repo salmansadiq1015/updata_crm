@@ -24,6 +24,10 @@ class EmailBodyTemplateRepository {
       runValidators: true,
     }).lean();
   }
+
+  async deleteById(id) {
+    return EmailBodyTemplate.findByIdAndDelete(id).lean();
+  }
 }
 
 const emailBodyTemplateRepository = new EmailBodyTemplateRepository();

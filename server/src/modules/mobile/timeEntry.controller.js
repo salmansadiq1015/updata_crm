@@ -35,6 +35,18 @@ class TimeEntryController {
   async listByDateRange(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
+      if (query.all === true || query.all === 'true') {
+        const data = await timeEntryService.list({
+          technicianId: query.technicianId,
+          orderId: query.orderId,
+          releaseStatus: query.releaseStatus,
+          activityType: query.activityType,
+          dateFrom: query.dateFrom,
+          dateTo: query.dateTo,
+          limit: query.limit ? Number(query.limit) : undefined,
+        });
+        return res.success({ data });
+      }
       const data = await timeEntryService.listByDateRange(req.user._id, query.dateFrom, query.dateTo);
       return res.success({ data });
     } catch (err) { next(err); }

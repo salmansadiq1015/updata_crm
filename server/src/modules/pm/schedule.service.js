@@ -77,6 +77,7 @@ class ScheduleService {
       const projectId = project?._id || entry.projectId || null;
       const projectNumber = project?.projectNumber || null;
       const projectName = project?.name || null;
+      const site = project?.siteId && typeof project.siteId === 'object' ? project.siteId : null;
 
       const employee = entry.responsibleTeamId && typeof entry.responsibleTeamId === 'object'
         ? entry.responsibleTeamId
@@ -102,6 +103,10 @@ class ScheduleService {
         projectId: projectId ? String(projectId) : null,
         projectNumber,
         projectName,
+        projectSiteName: site?.name || null,
+        projectSiteStreet: site?.street || null,
+        projectSitePostalCode: site?.postalCode || null,
+        projectSiteCity: site?.city || null,
       };
     });
   }

@@ -112,6 +112,10 @@ class TimeEntryService {
     return timeEntryRepository.findByTechnicianAndDateRange(technicianId, dateFrom, dateTo);
   }
 
+  async list(filters = {}) {
+    return timeEntryRepository.list(filters);
+  }
+
   async release(id, userId, meta = {}) {
     const existing = await timeEntryRepository.findById(id);
     if (!existing) throw new NotFoundError('TimeEntry', id);

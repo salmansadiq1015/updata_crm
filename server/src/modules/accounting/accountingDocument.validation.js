@@ -5,6 +5,7 @@ const DOCUMENT_TYPES = ['SUPPLIER_INVOICE', 'RECEIPT', 'BANK_STATEMENT', 'AR_INV
 const OCR_STATUSES = ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'NOT_APPLICABLE'];
 const PROCESSING_STATUSES = ['UNPROCESSED', 'IN_REVIEW', 'PROCESSED'];
 const LINKED_RECORD_TYPES = ['AR_INVOICE', 'AP_INVOICE', 'AR_PAYMENT', 'PAYMENT_BATCH', 'BANK_STATEMENT', 'BANK_TRANSACTION', 'JOURNAL_ENTRY', 'OTHER'];
+const RECEIPT_TYPES = ['MATERIAL', 'TRAVEL', 'MEAL', 'SERVICE', 'TOOLS', 'OTHER'];
 const linkedRecordSchema = Joi.object({
   recordType: Joi.string().valid(...LINKED_RECORD_TYPES).required(),
   recordId: objectId.required(),
@@ -15,6 +16,16 @@ export const uploadDocumentSchema = {
     documentType: Joi.string().valid(...DOCUMENT_TYPES).required(),
     notes: Joi.string().max(2000).allow('', null),
     projectReference: Joi.string().trim().max(100).allow('', null),
+    supplierName: Joi.string().trim().max(200).allow('', null),
+    receiptDate: Joi.date().iso().allow(null),
+    amount: Joi.number().min(0).allow(null),
+    vat: Joi.number().min(0).allow(null),
+    receiptType: Joi.string().valid(...RECEIPT_TYPES).allow(null),
+    accountingCategory: Joi.string().trim().max(120).allow('', null),
+    projectId: objectId.allow(null),
+    customerId: objectId.allow(null),
+    employeeId: objectId.allow(null),
+    autoAssignmentStatus: Joi.string().valid('PENDING_REVIEW', 'CONFIRMED', 'AUTO_ASSIGNED'),
     fullText: Joi.string().max(200000).allow('', null),
     linkedRecords: Joi.array().items(linkedRecordSchema).max(20),
   }),
@@ -29,6 +40,10 @@ export const listDocumentsSchema = {
     documentType: Joi.string().valid(...DOCUMENT_TYPES),
     ocrStatus: Joi.string().valid(...OCR_STATUSES),
     assignedTo: objectId,
+    projectId: objectId,
+    customerId: objectId,
+    employeeId: objectId,
+    accountingCategory: Joi.string().trim().max(120),
     processingStatus: Joi.string().valid(...PROCESSING_STATUSES),
     linkedRecordType: Joi.string().valid(...LINKED_RECORD_TYPES),
     linkedRecordId: objectId,

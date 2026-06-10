@@ -1,4 +1,5 @@
 import voiceSessionService from './voiceSession.service.js';
+import { loadUserPermissions } from '../../shared/middleware/authenticate.js';
 
 class VoiceSessionController {
   async create(req, res, next) {
@@ -42,7 +43,14 @@ class VoiceSessionController {
 
   async confirm(req, res, next) {
     try {
-      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const isAdmin = req.user?.role?.name === 'Admin';
+      const permissions = isAdmin ? ['*'] : await loadUserPermissions(req.user);
+      const meta = {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        correlationId: req.id,
+        permissions,
+      };
       const session = await voiceSessionService.confirm(req.params.sessionId, req.user._id, meta);
       return res.success({ data: session, message: 'Session confirmed successfully' });
     } catch (err) { next(err); }

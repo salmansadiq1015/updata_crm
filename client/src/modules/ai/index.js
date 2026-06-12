@@ -22,3 +22,8 @@ export { AiChatInput }            from './components/chat/ai-chat-input';
 export { AiChatConfirmation }     from './components/chat/ai-chat-confirmation';
 export { AiChatTypingIndicator }  from './components/chat/ai-chat-typing-indicator';
 export { useAiChat }              from './hooks/use-ai-chat';
+export { useContextVoiceSession } from './hooks/use-context-voice-session';
+export { useVoiceCommandRouter }  from './hooks/use-voice-command-router';
+export { useAiLanguage }          from './hooks/use-ai-language';
+export { AiVoiceCapture }         from './components/voice/ai-voice-capture';
+export { aiAdminService }         from './services/ai-admin-service';

@@ -70,6 +70,10 @@ export const listQuotationsSchema = {
     departmentId: Joi.alternatives().try(objectId, Joi.array().items(objectId)),
     assignedUserId: objectId,
     currency: Joi.string().valid('CHF', 'EUR'),
+    dateFrom: Joi.date().iso(),
+    dateTo: Joi.date().iso(),
+    amountMin: Joi.number(),
+    amountMax: Joi.number(),
     search: Joi.string().trim().max(100),
   }),
 };

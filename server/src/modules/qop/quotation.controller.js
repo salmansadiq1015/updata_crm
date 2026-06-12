@@ -1,5 +1,4 @@
 import quotationService from './quotation.service.js';
-import queueManager from '../../shared/queue/QueueManager.js';
 
 class QuotationController {
   async create(req, res, next) {
@@ -87,19 +86,17 @@ class QuotationController {
 
   async getDocuments(req, res, next) {
     try {
-      // Placeholder — document management to be implemented
-      return res.success({ data: [], message: 'Documents endpoint placeholder' });
+      const { default: generatedDocumentRepository } = await import('../doctpl/generatedDocument.repository.js');
+      const documents = await generatedDocumentRepository.findBySource('qop', req.params.id);
+      return res.success({ data: documents });
     } catch (err) { next(err); }
   }
 
   async generateDocument(req, res, next) {
     try {
-      await queueManager.addJob('document-generation', {
-        documentType: 'quotation',
-        documentId: req.params.id,
-        requestedBy: req.user._id,
-      });
-      return res.success({ data: { jobQueued: true }, message: 'Document generation queued' });
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await quotationService.generateDocument(req.params.id, req.user._id, meta);
+      return res.success({ data: result, message: 'Quotation document generated successfully' });
     } catch (err) { next(err); }
   }
 
@@ -123,7 +120,11 @@ class QuotationController {
   async snoozeReminder(req, res, next) {
     try {
       const { default: quotationReminderService } = await import('./quotationReminder.service.js');
-      const reminder = await quotationReminderService.snooze(req.params.remId, req.body.snoozeDays || 7);
+      const reminder = await quotationReminderService.snooze(
+        req.params.remId,
+        req.body.snoozedUntil,
+        req.user._id,
+      );
       return res.success({ data: reminder, message: 'Reminder snoozed successfully' });
     } catch (err) { next(err); }
   }

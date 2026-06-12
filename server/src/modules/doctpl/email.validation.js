@@ -12,6 +12,7 @@ export const sendEmailSchema = {
     bodyHtml: Joi.string().required(),
     bodyText: Joi.string().allow('', null),
     documentId: objectId,
+    documentIds: Joi.array().items(objectId).max(10).default([]),
     sourceModule: Joi.string().trim().required(),
     sourceRecordId: objectId.required(),
     senderAddress: Joi.string().email(),

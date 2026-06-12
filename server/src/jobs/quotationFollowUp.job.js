@@ -6,22 +6,21 @@ import logger from '../shared/logger/index.js';
 /**
  * Quotation follow-up job.
  *
- * Creates follow-up reminders for quotations sent more than 7 days ago
- * without a response, and expiration warnings for quotations expiring
- * within 3 days.
+ * Creates follow-up reminders for quotations sent without a response,
+ * and expiration warnings for quotations approaching their validUntil date.
  */
 export class QuotationFollowUpWorker extends BaseWorker {
   constructor() {
     super('quotation-follow-up');
   }
 
-  async process(job) {
+  async process(_job) {
     const now = new Date();
 
-    // Configurable via env — defaults: "7,14,21" days and 3 days expiry warning
-    const intervalDays = (process.env.QUOTATION_FOLLOWUP_INTERVALS || '7,14,21')
-      .split(',').map(Number).filter(Boolean);
-    const expiryWarnDays = Number(process.env.QUOTATION_EXPIRY_WARN_DAYS || 3);
+    const { default: reminderSettingsService } = await import('../modules/qop/reminderSettings.service.js');
+    const settings = await reminderSettingsService.getEffectiveSettings();
+    const intervalDays = settings.quotationFollowupDays;
+    const expiryWarnDays = settings.quotationExpiryWarnDays;
 
     const Quotation = (await import('../modules/qop/quotation.model.js')).default;
     const QuotationReminder = (await import('../modules/qop/quotationReminder.model.js')).default;
@@ -29,7 +28,6 @@ export class QuotationFollowUpWorker extends BaseWorker {
     let followUpCount = 0;
     let expirationWarningCount = 0;
 
-    // Multi-interval follow-up reminders
     for (const days of intervalDays) {
       const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       const upperCutoff = new Date(cutoff.getTime() + 24 * 60 * 60 * 1000);
@@ -63,7 +61,6 @@ export class QuotationFollowUpWorker extends BaseWorker {
       }
     }
 
-    // Expiration warnings
     const expiryStart = new Date(now.getTime() + expiryWarnDays * 24 * 60 * 60 * 1000);
     const expiryEnd = new Date(expiryStart.getTime() + 24 * 60 * 60 * 1000);
 
@@ -87,7 +84,10 @@ export class QuotationFollowUpWorker extends BaseWorker {
     }
 
     logger.info('Quotation follow-up check completed', {
-      module: 'jobs', action: 'quotation-follow-up', followUpCount, expirationWarningCount,
+      module: 'jobs',
+      action: 'quotation-follow-up',
+      followUpCount,
+      expirationWarningCount,
     });
 
     return { followUpCount, expirationWarningCount };

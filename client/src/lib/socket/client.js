@@ -13,6 +13,21 @@ let socket = null;
 
 // Subscribers notified on every socket connect (initial + reconnects)
 const connectHandlers = new Set();
+const SOCKET_TRANSPORTS = ['polling', 'websocket'];
+const SOCKET_RECONNECTION_ATTEMPTS = 10;
+
+function getConnectionErrorDetails(err) {
+  return {
+    message: err?.message,
+    description: err?.description,
+    type: err?.type,
+    transport: err?.transport,
+  };
+}
+
+function isTransientTransportError(err) {
+  return err?.message === 'websocket error' || err?.transport === 'websocket';
+}
 
 export function getSocket() {
   return socket;
@@ -37,12 +52,13 @@ export function connectSocket(accessToken) {
 
   socket = io(getSocketUrl(), {
     auth: { token: accessToken },
-    transports: ['websocket', 'polling'],
+    transports: SOCKET_TRANSPORTS,
+    tryAllTransports: true,
     autoConnect: true,
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    reconnectionAttempts: 10,
+    reconnectionAttempts: SOCKET_RECONNECTION_ATTEMPTS,
   });
 
   socket.on('connect', () => {
@@ -56,7 +72,11 @@ export function connectSocket(accessToken) {
       socket.disconnect();
       return;
     }
-    console.error('[Socket] Connection error:', err.message);
+    if (isTransientTransportError(err)) {
+      console.debug('[Socket] Transport fallback:', getConnectionErrorDetails(err));
+      return;
+    }
+    console.warn('[Socket] Connection issue:', getConnectionErrorDetails(err));
   });
 
   socket.on('disconnect', (reason) => {

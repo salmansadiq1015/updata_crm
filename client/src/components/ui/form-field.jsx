@@ -8,7 +8,7 @@ function FormField({ label, required, error, description, className, children })
   return (
     <div className={cn('space-y-1.5', className)}>
       {label && (
-        <Label className="text-[13px] font-medium text-foreground/80">
+        <Label className="text-sm font-medium text-foreground/85">
           {label}
           {required && (
             <span className="ml-0.5 text-destructive/70">*</span>
@@ -32,9 +32,9 @@ function FormSection({ title, description, children, className }) {
   return (
     <div className={cn('space-y-4', className)}>
       {(title || description) && (
-        <div className="space-y-0.5">
+        <div className="space-y-1">
           {title && (
-            <h3 className="text-[13px] font-semibold text-foreground/70 uppercase tracking-wider">
+            <h3 className="text-sm font-semibold text-foreground">
               {title}
             </h3>
           )}
@@ -50,7 +50,7 @@ function FormSection({ title, description, children, className }) {
 
 function FormBody({ className, children }) {
   return (
-    <div className={cn('flex-1 overflow-y-auto px-6 py-4 space-y-5', className)}>
+    <div className={cn('min-h-0 flex-1 overflow-y-auto px-5 py-5 space-y-6 sm:px-6', className)}>
       {children}
     </div>
   );

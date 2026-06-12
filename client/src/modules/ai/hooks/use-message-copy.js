@@ -21,7 +21,7 @@ export function useMessageCopy() {
         RESET_DELAY_MS
       );
     } catch {
-      // clipboard denied — ignore silently
+      // Clipboard denied; ignore silently.
     }
   }, []);
 

@@ -180,10 +180,15 @@ Respond with JSON only:
         case 'CUSTOMER_NAME': {
           try {
             const { default: customerService } = await import('../crm/customer.service.js');
-            const results = await customerService.search(entity.value, 1);
-            if (results && results.length > 0) {
+            const results = await customerService.search(entity.value, 3);
+            if (results?.length > 0) {
               enriched.resolvedId = results[0]._id;
               enriched.normalizedValue = results[0].name;
+              enriched.candidates = results.map((c, i) => ({
+                resolvedId: c._id,
+                label: c.name,
+                score: Math.max(0.5, 1 - i * 0.15),
+              }));
             }
           } catch {
             // CRM module may not be available; skip resolution
@@ -192,15 +197,25 @@ Respond with JSON only:
         }
 
         case 'ADDRESS': {
-          // Validate Swiss PLZ-city combination
-          const plzMatch = entity.value.match(/\b(\d{4})\b/);
-          if (plzMatch) {
-            const plz = plzMatch[1];
-            const plzNum = parseInt(plz, 10);
-            // Swiss PLZ range: 1000-9999
-            if (plzNum >= 1000 && plzNum <= 9999) {
-              enriched.normalizedValue = enriched.normalizedValue || entity.value;
+          try {
+            const { default: swissPlzService } = await import('../../shared/ai/swissPlz.service.js');
+            const parsed = swissPlzService.parseAddress(entity.value);
+            if (parsed.postalCode) {
+              enriched.normalizedValue = [
+                parsed.street,
+                parsed.houseNumber,
+                parsed.postalCode,
+                parsed.city,
+              ].filter(Boolean).join(', ');
+              if (parsed.canton) {
+                enriched.normalizedValue += ` (${parsed.canton})`;
+              }
+              if (parsed.validationErrors?.length) {
+                enriched.validationWarnings = parsed.validationErrors;
+              }
             }
+          } catch {
+            enriched.normalizedValue = enriched.normalizedValue || entity.value;
           }
           break;
         }

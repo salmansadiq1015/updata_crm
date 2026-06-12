@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -14,9 +13,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
-import apiClient from '@/lib/api/client';
-import { ENDPOINTS } from '@/lib/api/endpoints';
 import { useInvoiceMutations } from '../hooks/use-qop-mutations';
+import { useBillingPlan, useOrders } from '../hooks/use-qop-queries';
 import { LineItemsEditor } from './line-items-editor';
 import { CURRENCIES } from '../constants/qop-constants';
 
@@ -32,8 +30,9 @@ const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, ma
 
 const EMPTY_FORM = () => ({
   currency: 'CHF',
-  paymentTermDays: 30,
+  paymentTermsDays: 30,
   dueDate: addDays(30),
+  sourceOrderId: '',
   lineItems: [],
   notes: '',
   milestonePercent: 30,
@@ -43,22 +42,45 @@ const EMPTY_FORM = () => ({
 });
 
 // type: 'STANDARD' | 'ADVANCE' | 'FINAL'
-export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrderId, sourceQuotationId, sourceOrder = null }) {
+export function InvoiceFormDialog({
+  open,
+  onClose,
+  type = 'STANDARD',
+  sourceOrderId,
+  sourceQuotationId,
+  sourceOrder = null,
+  sourceQuotation = null,
+}) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
-  const { createInvoice, createAdvanceInvoice, createFinalInvoice } = useInvoiceMutations();
+  const {
+    createInvoiceFromOrder, createInvoiceFromQuotation,
+    createAdvanceInvoice, createFinalInvoice,
+  } = useInvoiceMutations();
 
-  const isPending = createInvoice.isPending || createAdvanceInvoice.isPending || createFinalInvoice.isPending;
+  const isPending = createInvoiceFromOrder.isPending
+    || createInvoiceFromQuotation.isPending
+    || createAdvanceInvoice.isPending
+    || createFinalInvoice.isPending;
 
   const [form, setForm] = useState(EMPTY_FORM);
+  const { data: orderData, isLoading: ordersLoading } = useOrders({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' });
+  const orders = useMemo(() => orderData?.items ?? [], [orderData?.items]);
+  const selectedOrder = useMemo(
+    () => sourceOrder || orders.find((order) => String(order._id ?? order.id) === String(form.sourceOrderId)),
+    [form.sourceOrderId, orders, sourceOrder],
+  );
+  const effectiveSourceOrderId = sourceOrderId || form.sourceOrderId || '';
+  const effectiveSourceOrder = sourceOrder || selectedOrder || null;
 
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({
         currency: sourceOrder?.currency || 'CHF',
-        paymentTermDays: 30,
+        paymentTermsDays: 30,
         dueDate: addDays(30),
+        sourceOrderId: sourceOrderId || '',
         lineItems: type === 'STANDARD'
           ? (sourceOrder?.lineItems ?? []).map((li, i) => ({ ...li, _uid: i }))
           : [],
@@ -69,20 +91,25 @@ export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrde
         milestoneDescription: '',
       });
     }
-  }, [open, sourceOrder, type]);
+  }, [open, sourceOrder, sourceOrderId, type]);
+
+  useEffect(() => {
+    if (!open || type !== 'STANDARD' || !effectiveSourceOrder) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm((current) => ({
+      ...current,
+      currency: effectiveSourceOrder.currency || current.currency,
+      lineItems: (effectiveSourceOrder.lineItems ?? []).map((li, i) => ({ ...li, _uid: i })),
+    }));
+  }, [effectiveSourceOrder, open, type]);
 
   // Billing plan for FINAL invoices
-  const { data: billingPlan } = useQuery({
-    queryKey: ['qop', 'billing-plan', sourceOrderId],
-    queryFn: () => apiClient.get(ENDPOINTS.QOP.ORDER_BILLING_PLAN(sourceOrderId)),
-    enabled: type === 'FINAL' && !!sourceOrderId,
-    select: (r) => r.data,
-  });
+  const { data: billingPlan } = useBillingPlan(type === 'FINAL' ? effectiveSourceOrderId : null);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
   const handleTermChange = (days) => {
-    set('paymentTermDays', days);
+    set('paymentTermsDays', days);
     set('dueDate', addDays(Number(days)));
   };
 
@@ -90,15 +117,16 @@ export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrde
     e.preventDefault();
 
     const base = {
-      sourceOrderId: sourceOrderId || undefined,
+      sourceOrderId: effectiveSourceOrderId || undefined,
       sourceQuotationId: sourceQuotationId || undefined,
       currency: form.currency,
-      paymentTermDays: Number(form.paymentTermDays),
+      paymentTermsDays: Number(form.paymentTermsDays),
       dueDate: form.dueDate,
       notes: form.notes || undefined,
     };
 
     if (type === 'ADVANCE') {
+      if (!effectiveSourceOrderId) return;
       const advancePayload = {
         ...base,
         milestoneDescription: form.milestoneDescription || undefined,
@@ -110,19 +138,27 @@ export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrde
       }
       await createAdvanceInvoice.mutateAsync(advancePayload);
     } else if (type === 'FINAL') {
+      if (!effectiveSourceOrderId) return;
       await createFinalInvoice.mutateAsync({ ...base });
-    } else {
-      await createInvoice.mutateAsync({
-        ...base,
-        invoiceType: 'STANDARD',
-        lineItems: form.lineItems.map(({ _uid, ...li }) => ({
-          ...li,
+    } else if (effectiveSourceOrderId) {
+      const lineSelections = form.lineItems
+        .map((li) => ({
+          sourceOrderLinePosition: Number(li.sourceOrderLinePosition ?? li.position),
           quantity: Number(li.quantity),
-          unitPrice: Number(li.unitPrice),
-          discountPercent: Number(li.discountPercent),
-          vatRate: Number(li.vatRate),
-        })),
+        }))
+        .filter((li) => Number.isInteger(li.sourceOrderLinePosition) && li.sourceOrderLinePosition > 0 && li.quantity > 0);
+      await createInvoiceFromOrder.mutateAsync({
+        ...base,
+        lineSelections: lineSelections.length ? lineSelections : undefined,
       });
+    } else if (sourceQuotationId) {
+      await createInvoiceFromQuotation.mutateAsync({
+        sourceQuotationId,
+        dueDate: form.dueDate,
+        paymentTermsDays: Number(form.paymentTermsDays),
+      });
+    } else {
+      return;
     }
     onClose();
   };
@@ -131,6 +167,9 @@ export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrde
     de: { STANDARD: 'Neue Rechnung', ADVANCE: 'Akontorechnung', FINAL: 'Schlussrechnung' },
     en: { STANDARD: 'New Invoice', ADVANCE: 'Advance Invoice', FINAL: 'Final Invoice' },
   };
+  const canSubmit = type === 'STANDARD'
+    ? Boolean(effectiveSourceOrderId || sourceQuotationId)
+    : Boolean(effectiveSourceOrderId);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -142,6 +181,36 @@ export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrde
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5 mt-2">
+          {!sourceOrderId && !sourceQuotationId && (
+            <div className="rounded-lg border border-border bg-muted/20 p-4">
+              <div className="flex flex-col gap-1.5">
+                <Label>{de ? 'Auftrag' : 'Order'}</Label>
+                <Select value={form.sourceOrderId || undefined} onValueChange={(v) => set('sourceOrderId', v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={ordersLoading ? (de ? 'Laden...' : 'Loading...') : (de ? 'Auftrag wählen' : 'Select order')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {orders.map((order) => {
+                      const id = String(order._id ?? order.id);
+                      return (
+                        <SelectItem key={id} value={id}>
+                          {order.orderNumber} · {order.customerName ?? order.customerId?.name ?? '—'}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {sourceQuotationId && sourceQuotation && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm">
+              <span className="font-medium text-emerald-900">{sourceQuotation.quotationNumber}</span>
+              <span className="text-emerald-800"> · {sourceQuotation.customerName}</span>
+            </div>
+          )}
+
           {/* Header fields */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
@@ -155,7 +224,7 @@ export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrde
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>{de ? 'Zahlungsfrist' : 'Payment Terms'}</Label>
-              <Select value={String(form.paymentTermDays)} onValueChange={handleTermChange}>
+              <Select value={String(form.paymentTermsDays)} onValueChange={handleTermChange}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PAYMENT_TERMS.map((d) => (
@@ -268,7 +337,7 @@ export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrde
           )}
 
           {/* Line items for Standard invoices */}
-          {type === 'STANDARD' && (
+          {type === 'STANDARD' && effectiveSourceOrderId && (
             <>
               <Separator />
               <div className="flex flex-col gap-2">
@@ -296,7 +365,7 @@ export function InvoiceFormDialog({ open, onClose, type = 'STANDARD', sourceOrde
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
               {de ? 'Abbrechen' : 'Cancel'}
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || !canSubmit}>
               {isPending
                 ? (de ? 'Erstellen...' : 'Creating...')
                 : (de ? 'Rechnung erstellen' : 'Create Invoice')}

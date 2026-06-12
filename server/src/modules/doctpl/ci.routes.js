@@ -17,6 +17,9 @@ const upload = multer({
 router.get('/', authenticate, requirePermission('templates:read'), (req, res, next) => ciController.getActiveConfig(req, res, next));
 router.put('/', authenticate, requirePermission('templates:admin'), validate(updateCIConfigSchema), (req, res, next) => ciController.updateConfig(req, res, next));
 
+// CI Audit
+router.get('/audit', authenticate, requirePermission('templates:admin'), (req, res, next) => ciController.getAuditReport(req, res, next));
+
 // CI Assets
 router.post('/assets', authenticate, requirePermission('templates:admin'), upload.single('file'), validate(uploadAssetSchema), (req, res, next) => ciController.uploadAsset(req, res, next));
 router.get('/assets', authenticate, requirePermission('templates:read'), (req, res, next) => ciController.listAssets(req, res, next));

@@ -3,6 +3,31 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import logger from '../../shared/logger/index.js';
 
+async function createAppointmentReminders({
+  appointmentId,
+  customerId,
+  scheduledDate,
+  channel,
+  language,
+}) {
+  const { default: appointmentReminderService } = await import('./appointmentReminder.service.js');
+  const { default: reminderSettingsService } = await import('./reminderSettings.service.js');
+  const settings = await reminderSettingsService.getEffectiveSettings();
+  const appointmentDate = new Date(scheduledDate);
+
+  return Promise.all(settings.appointmentReminderHours.map((hoursBefore) => {
+    const scheduledAt = new Date(appointmentDate.getTime() - hoursBefore * 60 * 60 * 1000);
+    return appointmentReminderService.create({
+      appointmentId,
+      customerId,
+      channel: channel || settings.defaultAppointmentChannel,
+      language: language || settings.defaultLanguage,
+      scheduledAt,
+      status: 'PENDING',
+    });
+  }));
+}
+
 /**
  * QOP domain event handlers.
  *
@@ -63,21 +88,19 @@ export function registerQopEvents() {
   // Create reminders for confirmed appointments.
   eventBus.on(EVENT_TYPES.SCHEDULE_APPOINTMENT_CONFIRMED, async (event) => {
     try {
-      const { appointmentId, customerId, scheduledDate, channel, language } = event.payload;
-
-      const { default: appointmentReminderService } = await import('./appointmentReminder.service.js');
-
-      // Create a reminder 24 hours before the appointment
-      const reminderDate = new Date(scheduledDate);
-      reminderDate.setDate(reminderDate.getDate() - 1);
-
-      await appointmentReminderService.create({
+      const {
         appointmentId,
         customerId,
-        channel: channel || 'email',
-        language: language || 'de',
-        scheduledAt: reminderDate,
-        status: 'PENDING',
+        scheduledDate,
+        channel,
+        language,
+      } = event.payload;
+      const reminders = await createAppointmentReminders({
+        appointmentId,
+        customerId,
+        scheduledDate,
+        channel,
+        language,
       });
 
       logger.info('Appointment reminder created for confirmed appointment', {
@@ -85,6 +108,7 @@ export function registerQopEvents() {
         action: 'event.appointment_confirmed',
         appointmentId,
         customerId,
+        reminderCount: reminders.length,
       });
     } catch (err) {
       logger.error('Failed to handle SCHEDULE_APPOINTMENT_CONFIRMED event in QOP', {
@@ -99,10 +123,15 @@ export function registerQopEvents() {
   // Cancel existing reminders and create new ones for the rescheduled date.
   eventBus.on(EVENT_TYPES.SCHEDULE_APPOINTMENT_RESCHEDULED, async (event) => {
     try {
-      const { appointmentId, customerId, newScheduledDate, channel, language } = event.payload;
+      const {
+        appointmentId,
+        customerId,
+        newScheduledDate,
+        channel,
+        language,
+      } = event.payload;
 
       const { default: AppointmentReminder } = await import('./appointmentReminder.model.js');
-      const { default: appointmentReminderService } = await import('./appointmentReminder.service.js');
 
       // Cancel all pending reminders for this appointment
       await AppointmentReminder.updateMany(
@@ -110,17 +139,12 @@ export function registerQopEvents() {
         { $set: { status: 'CANCELLED' } },
       );
 
-      // Create new reminder 24 hours before the rescheduled date
-      const reminderDate = new Date(newScheduledDate);
-      reminderDate.setDate(reminderDate.getDate() - 1);
-
-      await appointmentReminderService.create({
+      const reminders = await createAppointmentReminders({
         appointmentId,
         customerId,
-        channel: channel || 'email',
-        language: language || 'de',
-        scheduledAt: reminderDate,
-        status: 'PENDING',
+        scheduledDate: newScheduledDate,
+        channel,
+        language,
       });
 
       logger.info('Appointment reminders rescheduled', {
@@ -128,6 +152,7 @@ export function registerQopEvents() {
         action: 'event.appointment_rescheduled',
         appointmentId,
         customerId,
+        reminderCount: reminders.length,
       });
     } catch (err) {
       logger.error('Failed to handle SCHEDULE_APPOINTMENT_RESCHEDULED event in QOP', {

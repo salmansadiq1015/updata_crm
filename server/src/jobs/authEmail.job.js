@@ -11,6 +11,8 @@ import {
   sendAppointmentReminderEmail,
   sendAppointmentCancellationEmail,
   sendAppointmentRescheduledEmail,
+  sendQuotationEmail,
+  sendQopAppointmentReminderEmail,
 } from '../shared/mail/mail.js';
 import logger from '../shared/logger/index.js';
 
@@ -57,6 +59,50 @@ async function loadInvoicePdfAttachment(invoice) {
     content,
     contentType: document.mimeType || 'application/pdf',
   };
+}
+
+async function loadGeneratedDocumentAttachment(sourceRecordId, documentType, fallbackFileName) {
+  const generatedDocumentRepository = (await import('../modules/doctpl/generatedDocument.repository.js')).default;
+  const docs = await generatedDocumentRepository.findBySource('qop', sourceRecordId);
+  const doc = docs.find((d) => d.documentType === documentType) || docs[0];
+  if (!doc?.fileId) return null;
+
+  const fileService = (await import('../modules/files/file.service.js')).default;
+  const fileMeta = await fileService.getById(doc.fileId);
+  if (!fileMeta?.key) return null;
+
+  return {
+    filename: doc.fileName || fallbackFileName,
+    content: await fileService.downloadBuffer(fileMeta.key),
+    contentType: fileMeta.mimeType || 'application/pdf',
+  };
+}
+
+async function findQuotationRecipient(quotation, fallbackEmail = null) {
+  if (fallbackEmail) return { email: fallbackEmail, name: quotation.customerName };
+
+  if (quotation.contactId) {
+    const Contact = (await import('../modules/crm/contact.model.js')).default;
+    const contact = await Contact.findById(quotation.contactId)
+      .select('email firstName lastName')
+      .lean();
+    if (contact?.email) {
+      return {
+        email: contact.email,
+        name: [contact.firstName, contact.lastName].filter(Boolean).join(' ') || quotation.customerName,
+      };
+    }
+  }
+
+  const Customer = (await import('../modules/crm/customer.model.js')).default;
+  const customer = await Customer.findById(quotation.customerId)
+    .select('email name')
+    .lean();
+  if (customer?.email) {
+    return { email: customer.email, name: customer.name || quotation.customerName };
+  }
+
+  throw new Error(`No quotation recipient email found for quotation ${quotation.quotationNumber}`);
 }
 
 async function sendStatusNotificationJob(data) {
@@ -185,6 +231,34 @@ async function sendInvoiceJob(data) {
   return { sent: true, jobType: 'send-invoice', email: recipient.email, messageId: info?.messageId || null };
 }
 
+async function sendQuotationJob(data) {
+  const Quotation = (await import('../modules/qop/quotation.model.js')).default;
+  const quotation = await Quotation.findById(data.quotationId)
+    .select('quotationNumber customerName customerId contactId title createdAt validUntil currency grandTotalRounded')
+    .lean();
+  if (!quotation) {
+    throw new Error(`Quotation not found for email job: ${data.quotationId}`);
+  }
+
+  const recipient = await findQuotationRecipient(quotation, data.email || null);
+  const pdfAttachment = await loadGeneratedDocumentAttachment(
+    quotation._id,
+    'quotation',
+    `Offerte_${quotation.quotationNumber}.pdf`,
+  );
+  const info = await sendQuotationEmail(recipient.email, {
+    quotationNumber: quotation.quotationNumber,
+    customerName: recipient.name || quotation.customerName,
+    title: quotation.title,
+    quotationDate: formatDate(quotation.createdAt),
+    validUntil: formatDate(quotation.validUntil),
+    currency: quotation.currency,
+    grandTotal: quotation.grandTotalRounded,
+  }, pdfAttachment);
+
+  return { sent: true, jobType: 'send-quotation', email: recipient.email, messageId: info?.messageId || null };
+}
+
 function formatDate(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -271,6 +345,53 @@ async function sendAppointmentRescheduledJob(data) {
   return { sent: true, jobType: 'send-appointment-rescheduled', email: context.email };
 }
 
+async function loadQopAppointmentReminderContext(data = {}) {
+  const payload = data.data ? { ...data.data, email: data.email } : data;
+  const Customer = (await import('../modules/crm/customer.model.js')).default;
+  const customer = payload.customerId
+    ? await Customer.findById(payload.customerId)
+      .select('name email phone mobile street postalCode city')
+      .lean()
+    : null;
+
+  let appointment = null;
+  let assignment = null;
+  if (payload.appointmentId) {
+    const AppointmentDetails = (await import('../modules/deploy/appointmentDetails.model.js')).default;
+    const Assignment = (await import('../modules/deploy/assignment.model.js')).default;
+    appointment = await AppointmentDetails.findOne({
+      $or: [
+        { _id: payload.appointmentId },
+        { assignmentId: payload.appointmentId },
+      ],
+    }).lean();
+    const assignmentId = appointment?.assignmentId || payload.assignmentId || payload.appointmentId;
+    assignment = await Assignment.findById(assignmentId).lean();
+  }
+
+  const scheduleStart = assignment?.startDatetime || payload.scheduledAt || payload.appointmentDate;
+  const cityLine = [customer?.postalCode, customer?.city].filter(Boolean).join(' ');
+  const siteAddress = payload.siteAddress || [customer?.street, cityLine].filter(Boolean).join(', ');
+
+  return {
+    email: payload.email || appointment?.customerContactEmail || customer?.email || null,
+    customerName: payload.customerName || appointment?.customerContactName || customer?.name || 'Kunde',
+    appointmentDate: payload.appointmentDate || formatDate(scheduleStart),
+    appointmentTime: payload.appointmentTime || appointment?.appointmentWindow || '',
+    technicianName: payload.technicianName || '',
+    serviceDescription: payload.serviceDescription || assignment?.assignmentType || '',
+    siteAddress,
+    contactPhone: payload.contactPhone || appointment?.customerContactPhone || customer?.mobile || customer?.phone || '',
+  };
+}
+
+async function sendQopAppointmentReminderJob(data) {
+  const context = await loadQopAppointmentReminderContext(data);
+  if (!context.email) return { skipped: true, reason: 'no_recipient_email' };
+  await sendQopAppointmentReminderEmail(context.email, context);
+  return { sent: true, jobType: 'send-qop-appointment-reminder', email: context.email };
+}
+
 /**
  * Auth email worker.
  *
@@ -309,6 +430,9 @@ export class AuthEmailWorker extends BaseWorker {
       case 'send-invoice':
         return sendInvoiceJob(data);
 
+      case 'send-quotation':
+        return sendQuotationJob(data);
+
       case 'send-status-notification':
         return sendStatusNotificationJob(data);
 
@@ -326,6 +450,9 @@ export class AuthEmailWorker extends BaseWorker {
 
       case 'send-appointment-rescheduled':
         return sendAppointmentRescheduledJob(data);
+
+      case 'send-qop-appointment-reminder':
+        return sendQopAppointmentReminderJob(data);
 
       default:
         logger.warn('Unknown auth email job type', {

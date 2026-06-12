@@ -1,7 +1,7 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 
-const REMINDER_STATUSES = ['PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'RESPONDED'];
+const REMINDER_STATUSES = ['PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'RESPONDED', 'CANCELLED'];
 const CHANNELS = ['whatsapp', 'email', 'both'];
 const LANGUAGES = ['de', 'fr', 'it', 'en'];
 const CUSTOMER_RESPONSES = ['confirmed', 'reschedule'];
@@ -11,6 +11,7 @@ export const listSchema = {
     appointmentId: objectId,
     customerId: objectId,
     status: Joi.string().valid(...REMINDER_STATUSES),
+    limit: Joi.number().integer().min(1).max(100).default(50),
   }),
 };
 
@@ -21,6 +22,8 @@ export const createSchema = {
     channel: Joi.string().valid(...CHANNELS).default('email'),
     language: Joi.string().valid(...LANGUAGES).default('de'),
     scheduledAt: Joi.date().iso().required(),
+    messageContent: Joi.string().max(2000).allow('').default(''),
+    status: Joi.string().valid('PENDING').default('PENDING'),
   }),
 };
 

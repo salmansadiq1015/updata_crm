@@ -82,7 +82,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
         {steps.length > 0 && (
           <AiProgressSteps
             steps={steps}
-            workflowLabel={WORKFLOW_LABELS[workflowType] ?? t('ai.chat.working', 'Working on it')}
+            workflowLabel={t(`ai.workflow.${workflowType}`, WORKFLOW_LABELS[workflowType] ?? t('ai.chat.working'))}
             isRunning
           />
         )}
@@ -217,15 +217,26 @@ function RunPair({ run, onConfirm, isConfirming, onRetry, copyProps, ttsProps })
   );
 }
 
+function mergePendingRuns(runs, pendingRuns) {
+  if (!pendingRuns.length) return runs;
+  const missingRuns = pendingRuns.filter((pendingRun) => {
+    return !runs.some((run) =>
+      (pendingRun._id && run._id === pendingRun._id) ||
+      (pendingRun.correlationId && run.correlationId === pendingRun.correlationId)
+    );
+  });
+  return missingRuns.length ? [...runs, ...missingRuns] : runs;
+}
+
 /**
  * Renders all runs as a continuous chat history thread.
- * History runs are shown oldest→newest; the active (live) run is always last.
+ * History runs are shown oldest to newest; the active (live) run is always last.
  */
 export function AiChatThread({
   runs = [],
   latestRunId,
   isLoading,
-  pendingInput,
+  pendingRuns = [],
   onConfirm,
   isConfirming,
   onRetry,
@@ -236,21 +247,12 @@ export function AiChatThread({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [runs.length, pendingInput, latestRunId]);
+  }, [runs.length, pendingRuns.length, latestRunId]);
 
-  const sorted = [...runs].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-  if (!sorted.length && pendingInput) {
-    return (
-      <div className="flex flex-col gap-6 w-full">
-        <AiChatMessage variant="user">{pendingInput}</AiChatMessage>
-        <AiChatMessage variant="assistant">
-          <AiChatTypingIndicator />
-        </AiChatMessage>
-        <div ref={bottomRef} />
-      </div>
-    );
-  }
+  const sorted = mergePendingRuns(
+    [...runs].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
+    pendingRuns,
+  );
 
   if (isLoading && !sorted.length) {
     return (
@@ -275,26 +277,20 @@ export function AiChatThread({
 
   return (
     <div className="flex flex-col gap-8 w-full">
-      {sorted.map((run) => (
-        <RunPair
-          key={run._id}
-          run={run}
-          onConfirm={run._id === latestRunId ? onConfirm : undefined}
-          isConfirming={run._id === latestRunId ? isConfirming : false}
-          onRetry={onRetry}
-          copyProps={copyProps}
-          ttsProps={ttsProps}
-        />
-      ))}
-
-      {pendingInput && (
-        <div className="flex flex-col gap-6">
-          <AiChatMessage variant="user">{pendingInput}</AiChatMessage>
-          <AiChatMessage variant="assistant">
-            <AiChatTypingIndicator />
-          </AiChatMessage>
-        </div>
-      )}
+      {sorted.map((run) => {
+        const canConfirm = !run.__optimistic && run._id === latestRunId;
+        return (
+          <RunPair
+            key={run._id}
+            run={run}
+            onConfirm={canConfirm ? onConfirm : undefined}
+            isConfirming={canConfirm ? isConfirming : false}
+            onRetry={onRetry}
+            copyProps={copyProps}
+            ttsProps={ttsProps}
+          />
+        );
+      })}
 
       <div ref={bottomRef} />
     </div>

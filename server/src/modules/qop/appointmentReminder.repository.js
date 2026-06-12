@@ -3,11 +3,14 @@ import AppointmentReminder from './appointmentReminder.model.js';
 class AppointmentReminderRepository {
   async create(data) {
     const reminder = new AppointmentReminder(data);
-    return reminder.save();
+    const saved = await reminder.save();
+    return this.findById(saved._id);
   }
 
   async findById(id) {
-    return AppointmentReminder.findById(id).lean();
+    return AppointmentReminder.findById(id)
+      .populate({ path: 'customerId', select: 'customerNumber name email phone mobile' })
+      .lean();
   }
 
   async findPendingForDispatch() {
@@ -24,7 +27,9 @@ class AppointmentReminderRepository {
       id,
       { $set: data },
       { returnDocument: 'after' },
-    ).lean();
+    )
+      .populate({ path: 'customerId', select: 'customerNumber name email phone mobile' })
+      .lean();
   }
 
   async findByAppointmentId(appointmentId) {

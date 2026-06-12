@@ -16,6 +16,10 @@ export const searchDocumentsSchema = {
     assignedUserId: objectId,
     limit: Joi.number().integer().min(1).max(100).default(25),
     cursor: Joi.string().allow(''),
+    sortBy: Joi.string().valid(
+      'createdAt', 'documentNumber', 'customerName', 'status', 'grandTotalRounded', 'validUntil', 'dueDate',
+    ).default('createdAt'),
+    sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
   }),
 };
 

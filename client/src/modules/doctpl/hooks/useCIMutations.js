@@ -6,7 +6,10 @@ export const useUpdateCIConfig = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ciService.updateConfig,
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.config() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.config() });
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.audit() });
+    },
   });
 };
 
@@ -14,7 +17,11 @@ export const useUploadCIAsset = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ciService.uploadAsset,
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.assets() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.assets() });
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.config() });
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.audit() });
+    },
   });
 };
 
@@ -22,6 +29,10 @@ export const useDeleteCIAsset = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ciService.deleteAsset,
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.assets() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.assets() });
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.config() });
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.ci.audit() });
+    },
   });
 };

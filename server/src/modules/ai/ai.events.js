@@ -2,19 +2,43 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
 
+function emitSessionEvent(eventName, payload = {}) {
+  if (!global.io || !payload.userId) return;
+  global.io.to(`user:${payload.userId}`).emit(eventName, {
+    sessionId: payload.sessionId || null,
+    userId: payload.userId,
+    sessionType: payload.sessionType || null,
+    language: payload.language || null,
+    intentName: payload.intentName || null,
+    status: payload.status || null,
+    result: payload.result || null,
+    textLength: payload.textLength ?? null,
+    confidence: payload.confidence ?? null,
+    provider: payload.provider || null,
+    entityCount: payload.entityCount ?? null,
+    hasCorrectedTranscript: payload.hasCorrectedTranscript ?? null,
+    correctedEntityCount: payload.correctedEntityCount ?? null,
+    error: payload.error || null,
+  });
+}
+
 export function registerAiEvents() {
-  // When an order is created from voice → update session result
+  eventBus.subscribe(EVENT_TYPES.AI_SESSION_STARTED, async (data) => {
+    const payload = data.payload || data;
+    emitSessionEvent('ai:session:started', payload);
+  });
+
+  // When an order is created from voice -> update session result
   eventBus.subscribe(EVENT_TYPES.AI_ORDER_CREATE_REQUESTED, async (data) => {
     try {
       const payload = data.payload || data;
-      logger.info('AI order creation requested', {
+      logger.info('AI order created from voice', {
         module: 'ai',
         action: 'event.order_create_requested',
         sessionId: payload.sessionId,
-        intentName: payload.intentName,
+        orderId: payload.result?.recordId,
+        orderNumber: payload.result?.record?.orderNumber,
       });
-      // The actual order creation would be handled by the orders module
-      // consuming this event. The AI module just publishes the intent.
     } catch (err) {
       logger.error('Failed to handle AI order create request', {
         module: 'ai',
@@ -24,10 +48,11 @@ export function registerAiEvents() {
     }
   });
 
-  // When transcription completes → log for analytics
+  // When transcription completes -> log for analytics
   eventBus.subscribe(EVENT_TYPES.AI_SESSION_TRANSCRIBED, async (data) => {
     try {
       const payload = data.payload || data;
+      emitSessionEvent('ai:session:transcribed', payload);
       logger.info('AI session transcribed', {
         module: 'ai',
         action: 'event.session_transcribed',
@@ -42,10 +67,11 @@ export function registerAiEvents() {
     }
   });
 
-  // When session is corrected → track for accuracy improvement
+  // When session is corrected -> track for accuracy improvement
   eventBus.subscribe(EVENT_TYPES.AI_SESSION_CORRECTED, async (data) => {
     try {
       const payload = data.payload || data;
+      emitSessionEvent('ai:session:corrected', payload);
       logger.info('AI session corrections submitted', {
         module: 'ai',
         action: 'event.session_corrected',
@@ -61,7 +87,27 @@ export function registerAiEvents() {
     }
   });
 
-  // When vocabulary is updated → invalidate STT pipeline cache
+  eventBus.subscribe(EVENT_TYPES.AI_SESSION_ENTITIES_EXTRACTED, async (data) => {
+    const payload = data.payload || data;
+    emitSessionEvent('ai:session:entities_extracted', payload);
+  });
+
+  eventBus.subscribe(EVENT_TYPES.AI_SESSION_CONFIRMED, async (data) => {
+    const payload = data.payload || data;
+    emitSessionEvent('ai:session:confirmed', payload);
+  });
+
+  eventBus.subscribe(EVENT_TYPES.AI_SESSION_COMPLETED, async (data) => {
+    const payload = data.payload || data;
+    emitSessionEvent('ai:session:completed', payload);
+  });
+
+  eventBus.subscribe(EVENT_TYPES.AI_SESSION_FAILED, async (data) => {
+    const payload = data.payload || data;
+    emitSessionEvent('ai:session:failed', payload);
+  });
+
+  // When vocabulary is updated -> invalidate STT pipeline cache
   eventBus.subscribe(EVENT_TYPES.AI_VOCABULARY_UPDATED, async (data) => {
     try {
       const payload = data.payload || data;
@@ -69,7 +115,7 @@ export function registerAiEvents() {
       if (payload.language) {
         await cacheManager.del(`ai:vocab:active:${payload.language}`);
       }
-      logger.info('Vocabulary updated — cache invalidated', {
+      logger.info('Vocabulary updated - cache invalidated', {
         module: 'ai',
         action: 'event.vocabulary_updated',
         term: payload.term,
@@ -82,7 +128,7 @@ export function registerAiEvents() {
     }
   });
 
-  // Agent lifecycle → WebSocket
+  // Agent lifecycle -> WebSocket
   eventBus.subscribe(EVENT_TYPES.AI_AGENT_RUN_STARTED, (data) => {
     const { agentRunId, userId, workflowType } = data.payload || data;
     if (global.io) {
@@ -108,8 +154,9 @@ export function registerAiEvents() {
     module: 'ai',
     action: 'events.register',
     subscribedEvents: [
-      'AI_ORDER_CREATE_REQUESTED', 'AI_SESSION_TRANSCRIBED',
-      'AI_SESSION_CORRECTED', 'AI_VOCABULARY_UPDATED',
+      'AI_SESSION_STARTED', 'AI_ORDER_CREATE_REQUESTED', 'AI_SESSION_TRANSCRIBED',
+      'AI_SESSION_ENTITIES_EXTRACTED', 'AI_SESSION_CONFIRMED', 'AI_SESSION_COMPLETED',
+      'AI_SESSION_FAILED', 'AI_SESSION_CORRECTED', 'AI_VOCABULARY_UPDATED',
       'AI_AGENT_RUN_STARTED', 'AI_AGENT_AWAITING_CONFIRMATION', 'AI_AGENT_RUN_CANCELLED',
     ],
   });

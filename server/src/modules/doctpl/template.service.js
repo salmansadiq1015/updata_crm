@@ -11,6 +11,15 @@ import logger from '../../shared/logger/index.js';
 const ENTITY_TTL = { l1Ttl: 300, l2Ttl: 900 };
 const LIST_TTL = { l1Ttl: 300, l2Ttl: 900 };
 const MAX_VERSIONS_KEPT = 20;
+const COMPARABLE_TEMPLATE_FIELDS = [
+  'name',
+  'description',
+  'layout',
+  'sections',
+  'textBlocks',
+  'tableColumns',
+  'isActive',
+];
 
 class TemplateService {
   async list(queryParams) {
@@ -59,14 +68,14 @@ class TemplateService {
     if (!existing) throw new NotFoundError('DocumentTemplate', id);
 
     const {
-      _id,
-      __v,
-      createdAt,
-      updatedAt,
-      deletedAt,
-      currentVersion,
-      createdBy,
-      updatedBy,
+      _id: _templateId,
+      __v: _versionKey,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      deletedAt: _deletedAt,
+      currentVersion: _currentVersion,
+      createdBy: _createdBy,
+      updatedBy: _updatedBy,
       ...copyData
     } = existing;
 
@@ -118,7 +127,7 @@ class TemplateService {
     });
 
     // Remove changeDescription from update data (not a template field)
-    const { changeDescription, ...updateData } = data;
+    const { changeDescription: _changeDescription, ...updateData } = data;
 
     const updated = await documentTemplateRepository.updateById(id, { ...updateData, updatedBy: userId });
 
@@ -149,15 +158,78 @@ class TemplateService {
 
   async listVersions(templateId, params = {}) {
     const { limit = 25, offset = 0 } = params;
+    const currentTemplate = await documentTemplateRepository.findById(templateId);
+    if (!currentTemplate) throw new NotFoundError('DocumentTemplate', templateId);
+
     const versions = await templateVersionRepository.findByTemplateId(templateId, { limit, offset });
     const total = await templateVersionRepository.countByTemplateId(templateId);
-    return { data: versions, total };
+    const currentVersion = {
+      _id: `${currentTemplate._id}:current`,
+      templateId: currentTemplate._id,
+      version: currentTemplate.currentVersion,
+      changeDescription: 'Current active version',
+      templateSnapshot: currentTemplate,
+      createdBy: currentTemplate.updatedBy || currentTemplate.createdBy,
+      createdAt: currentTemplate.updatedAt || currentTemplate.createdAt,
+      isCurrent: true,
+    };
+
+    if (offset === 0) {
+      return { data: [currentVersion, ...versions], total: total + 1 };
+    }
+    return { data: versions, total: total + 1 };
   }
 
   async getVersion(templateId, version) {
+    const currentTemplate = await documentTemplateRepository.findById(templateId);
+    if (!currentTemplate) throw new NotFoundError('DocumentTemplate', templateId);
+    if (Number(version) === Number(currentTemplate.currentVersion)) {
+      return {
+        _id: `${currentTemplate._id}:current`,
+        templateId: currentTemplate._id,
+        version: currentTemplate.currentVersion,
+        changeDescription: 'Current active version',
+        templateSnapshot: currentTemplate,
+        createdBy: currentTemplate.updatedBy || currentTemplate.createdBy,
+        createdAt: currentTemplate.updatedAt || currentTemplate.createdAt,
+        isCurrent: true,
+      };
+    }
+
     const versionDoc = await templateVersionRepository.findByTemplateIdAndVersion(templateId, version);
     if (!versionDoc) throw new NotFoundError('TemplateVersion', `${templateId}/v${version}`);
     return versionDoc;
+  }
+
+  async compareVersions(templateId, fromVersion, toVersion) {
+    if (Number(fromVersion) === Number(toVersion)) {
+      return {
+        fromVersion: Number(fromVersion),
+        toVersion: Number(toVersion),
+        changes: [],
+        summary: { added: 0, removed: 0, changed: 0 },
+      };
+    }
+
+    const [fromSnapshot, toSnapshot] = await Promise.all([
+      this._resolveVersionSnapshot(templateId, Number(fromVersion)),
+      this._resolveVersionSnapshot(templateId, Number(toVersion)),
+    ]);
+    const changes = [];
+
+    for (const field of COMPARABLE_TEMPLATE_FIELDS) {
+      this._collectDiffs(fromSnapshot[field], toSnapshot[field], field, changes);
+    }
+
+    return {
+      fromVersion: Number(fromVersion),
+      toVersion: Number(toVersion),
+      changes,
+      summary: changes.reduce((summary, change) => {
+        summary[change.type] += 1;
+        return summary;
+      }, { added: 0, removed: 0, changed: 0 }),
+    };
   }
 
   async revertToVersion(templateId, version, userId, meta = {}) {
@@ -177,7 +249,16 @@ class TemplateService {
     });
 
     // Apply old snapshot fields to template
-    const { _id, __v, createdAt, updatedAt, isDeleted, deletedAt, currentVersion, ...snapshotFields } = oldVersion.templateSnapshot;
+    const {
+      _id: _snapshotId,
+      __v: _snapshotVersionKey,
+      createdAt: _snapshotCreatedAt,
+      updatedAt: _snapshotUpdatedAt,
+      isDeleted: _snapshotIsDeleted,
+      deletedAt: _snapshotDeletedAt,
+      currentVersion: _snapshotCurrentVersion,
+      ...snapshotFields
+    } = oldVersion.templateSnapshot;
 
     const updated = await documentTemplateRepository.updateById(templateId, {
       ...snapshotFields,
@@ -216,10 +297,12 @@ class TemplateService {
 
     const CIConfiguration = (await import('./ciConfiguration.model.js')).default;
     const ciConfig = await CIConfiguration.findOne({ isActive: true }).lean();
+    const { default: ciRenderAssetsService } = await import('./ciRenderAssets.service.js');
+    const renderCiConfig = await ciRenderAssetsService.prepare(ciConfig);
 
     const { DocumentRenderer } = await import('./renderer/index.js');
     const renderer = new DocumentRenderer();
-    const buffer = await renderer.render(template, ciConfig, sampleData, language);
+    const buffer = await renderer.render(template, renderCiConfig, sampleData, language);
 
     const { default: fileService } = await import('../files/file.service.js');
     const fileMeta = await fileService.upload({
@@ -267,6 +350,47 @@ class TemplateService {
     });
 
     return removed;
+  }
+
+  async _resolveVersionSnapshot(templateId, version) {
+    const versionDoc = await this.getVersion(templateId, version);
+    return versionDoc.templateSnapshot || versionDoc;
+  }
+
+  _collectDiffs(before, after, path, changes) {
+    if (this._stableStringify(before) === this._stableStringify(after)) return;
+
+    if (before === undefined) {
+      changes.push({ path, type: 'added', before: null, after });
+      return;
+    }
+    if (after === undefined) {
+      changes.push({ path, type: 'removed', before, after: null });
+      return;
+    }
+    if (!this._isPlainObject(before) || !this._isPlainObject(after)) {
+      changes.push({ path, type: 'changed', before, after });
+      return;
+    }
+
+    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    for (const key of [...keys].sort()) {
+      this._collectDiffs(before[key], after[key], `${path}.${key}`, changes);
+    }
+  }
+
+  _isPlainObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date);
+  }
+
+  _stableStringify(value) {
+    if (value === undefined) return '__undefined__';
+    if (!this._isPlainObject(value)) return JSON.stringify(value);
+    const sorted = {};
+    for (const key of Object.keys(value).sort()) {
+      sorted[key] = value[key];
+    }
+    return JSON.stringify(sorted);
   }
 
   async _pruneVersions(templateId) {

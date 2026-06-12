@@ -19,7 +19,7 @@ class QuotationReminderRepository {
   async findPending() {
     const now = new Date();
     return QuotationReminder.find({
-      status: 'PENDING',
+      status: { $in: ['PENDING', 'SNOOZED'] },
       scheduledAt: { $lte: now },
       $or: [
         { snoozedUntil: null },

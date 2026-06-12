@@ -6,7 +6,7 @@ import { translations } from './translations';
 const LanguageContext = createContext(null);
 
 const STORAGE_KEY = 'mb-locale';
-const SUPPORTED_LOCALES = ['de', 'en'];
+const SUPPORTED_LOCALES = ['de', 'fr', 'it', 'en'];
 const DEFAULT_LOCALE = 'de';
 
 /**
@@ -67,10 +67,11 @@ export function LanguageProvider({ children }) {
 
   const setLocale = useCallback((next) => localeStore.set(next), []);
 
-  const toggleLanguage = useCallback(
-    () => localeStore.set(locale === 'de' ? 'en' : 'de'),
-    [locale],
-  );
+  const toggleLanguage = useCallback(() => {
+    const currentIndex = SUPPORTED_LOCALES.indexOf(locale);
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % SUPPORTED_LOCALES.length : 0;
+    localeStore.set(SUPPORTED_LOCALES[nextIndex]);
+  }, [locale]);
 
   /**
    * Translation helper.

@@ -41,6 +41,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { AiVoiceCapture } from '@/modules/ai/components/voice/ai-voice-capture';
+import { SESSION_TYPES } from '@/modules/ai/constants/ai-constants';
 
 function toDatetimeLocal(date) {
   if (!date) return '';
@@ -314,7 +316,15 @@ export default function ReportPage() {
                           <TimeSection control={control} errors={errors} lang={lang} disabled={isSubmitting} />
                         )}
                         {section.key === 'work' && (
-                          <WorkSection control={control} errors={errors} lang={lang} disabled={isSubmitting} />
+                          <WorkSection
+                            control={control}
+                            errors={errors}
+                            lang={lang}
+                            disabled={isSubmitting}
+                            orderId={orderId}
+                            setValue={setValue}
+                            watch={watch}
+                          />
                         )}
                         {section.key === 'findings' && (
                           <FindingsSection control={control} register={register} errors={errors} lang={lang} disabled={isSubmitting} />
@@ -457,9 +467,25 @@ function TimeSection({ control, errors, lang, disabled }) {
   );
 }
 
-function WorkSection({ control, errors, lang, disabled }) {
+function WorkSection({ control, errors, lang, disabled, orderId, setValue, watch }) {
   return (
     <FormField label={lang === 'de' ? 'Ausgeführte Arbeiten' : 'Work Performed'} required error={errors.workPerformed?.message}>
+      <AiVoiceCapture
+        compact
+        sessionType={SESSION_TYPES.REPORT_DICTATION}
+        contextModule="mobile"
+        contextRecordType="order"
+        contextRecordId={orderId}
+        className="mb-3"
+        onComplete={(session) => {
+          const text = session?.correctedTranscript || session?.rawTranscript;
+          if (!text) return;
+          const current = watch('workPerformed') || '';
+          const appended = current ? `${current}<p>${text}</p>` : `<p>${text}</p>`;
+          setValue('workPerformed', appended, { shouldDirty: true });
+          toast.success(lang === 'de' ? 'Diktat eingefügt' : 'Dictation inserted');
+        }}
+      />
       <Controller
         name="workPerformed"
         control={control}

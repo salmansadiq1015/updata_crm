@@ -9,7 +9,7 @@
  */
 import { StateGraph, END } from '@langchain/langgraph';
 
-import { MAX_STEPS } from '../agent/agent.guardrails.js';
+import { MAX_STEPS, MIN_AGENT_INPUT_LENGTH } from '../agent/agent.guardrails.js';
 import agentRunRepository from '../agent/agentRun.repository.js';
 import { createTaskTool } from '../tools/task.tools.js';
 import { WorkflowState } from './workflow.state.js';
@@ -30,11 +30,11 @@ async function validateEntities(state) {
   }
 
   const input = state.input || '';
-  if (input.length < 3) {
+  if (input.length < MIN_AGENT_INPUT_LENGTH) {
     return {
       stepCount,
       status: 'failed',
-      error: { code: 'INVALID_INPUT', message: 'Input must be at least 3 characters', node: 'validate_entities' },
+      error: { code: 'INVALID_INPUT', message: `Input must be at least ${MIN_AGENT_INPUT_LENGTH} characters`, node: 'validate_entities' },
     };
   }
 

@@ -16,7 +16,7 @@ const fileMetadataSchema = new mongoose.Schema(
       type: String,
       required: true,
       index: true,
-      enum: ['images', 'documents', 'photos', 'general'],
+      enum: ['images', 'documents', 'photos', 'general', 'ci-assets'],
       default: 'general',
     },
     key: {

@@ -2,18 +2,24 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { AiEntityList, useEntitiesReady } from '../entity/ai-entity-list';
 
 export function AiPanelEntities({ session, onConfirm, onCancel, isConfirming }) {
-  const [corrections, setCorrections] = useState({});
+  const { t } = useLanguage();
+  const [corrections, setCorrections] = useState([]);
   const entities   = session?.entities ?? [];
   const isReady    = useEntitiesReady(entities, corrections);
-  const transcript = session?.transcript?.corrected ?? session?.transcript?.raw ?? '';
+  const transcript = session?.correctedTranscript
+    ?? session?.rawTranscript
+    ?? session?.transcript?.corrected
+    ?? session?.transcript?.raw
+    ?? '';
 
   return (
     <div className="flex flex-col gap-4 px-2 py-4">
       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-        Extracted from your recording
+        {t('ai.chat.extracted')}
       </p>
 
       {transcript && (
@@ -35,7 +41,7 @@ export function AiPanelEntities({ session, onConfirm, onCancel, isConfirming }) 
           onClick={onCancel}
           disabled={isConfirming}
         >
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button
           size="sm"
@@ -43,7 +49,7 @@ export function AiPanelEntities({ session, onConfirm, onCancel, isConfirming }) 
           onClick={() => onConfirm(corrections)}
           disabled={!isReady || isConfirming}
         >
-          {isConfirming ? 'Submitting…' : 'Confirm →'}
+          {isConfirming ? t('ai.confirm.submitting') : t('ai.confirm.confirmArrow')}
         </Button>
       </div>
     </div>

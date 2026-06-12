@@ -13,20 +13,27 @@ class AppointmentReminderService {
       action: 'createAppointmentReminder',
       reminderId: reminder._id,
       appointmentId: data.appointmentId,
+      createdBy,
     });
 
     return reminder;
   }
 
   async list(queryParams) {
-    const { appointmentId, customerId, status } = queryParams;
+    const {
+      appointmentId, customerId, status, limit = 50,
+    } = queryParams;
     const filter = {};
     if (appointmentId) filter.appointmentId = appointmentId;
     if (customerId) filter.customerId = customerId;
     if (status) filter.status = status;
 
     const AppointmentReminder = (await import('./appointmentReminder.model.js')).default;
-    return AppointmentReminder.find(filter).sort({ scheduledAt: -1 }).lean();
+    return AppointmentReminder.find(filter)
+      .populate({ path: 'customerId', select: 'customerNumber name email phone mobile' })
+      .sort({ scheduledAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
   }
 
   async getById(id) {

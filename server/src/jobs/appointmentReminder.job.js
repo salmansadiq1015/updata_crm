@@ -19,10 +19,9 @@ export class AppointmentReminderWorker extends BaseWorker {
   async process(_job) {
     const now = new Date();
 
-    // Configurable reminder windows: hours before appointment to trigger reminder
-    // First value is used as the check window; defaults to 24h (tomorrow logic)
-    const reminderHours = (process.env.APPOINTMENT_REMINDER_HOURS || '48,24,2')
-      .split(',').map(Number).filter(Boolean);
+    const { default: reminderSettingsService } = await import('../modules/qop/reminderSettings.service.js');
+    const settings = await reminderSettingsService.getEffectiveSettings();
+    const reminderHours = settings.appointmentReminderHours;
     const primaryHours = reminderHours[0] ?? 24;
 
     const windowStart = new Date(now.getTime() + primaryHours * 60 * 60 * 1000);

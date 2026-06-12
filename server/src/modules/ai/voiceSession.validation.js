@@ -2,7 +2,7 @@ import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
 const SESSION_TYPES = ['ORDER_CREATION', 'REPORT_DICTATION', 'ADDRESS_CAPTURE', 'COMMAND', 'GENERAL'];
-const SESSION_STATUSES = ['RECORDING', 'TRANSCRIBING', 'REVIEW', 'CONFIRMED', 'CANCELLED', 'FAILED'];
+const SESSION_STATUSES = ['ACTIVE', 'PROCESSING', 'AWAITING_CONFIRMATION', 'COMPLETED', 'CANCELLED', 'FAILED'];
 const DEVICE_TYPES = ['MOBILE', 'WEB'];
 
 export const createSessionSchema = {
@@ -40,6 +40,12 @@ export const submitCorrectionsSchema = {
   body: Joi.object({
     correctedTranscript: Joi.string().max(10000),
     entityCorrections: Joi.array().items(
+      Joi.object({
+        entityId: objectId.required(),
+        correctedValue: Joi.string().required(),
+      }),
+    ),
+    entities: Joi.array().items(
       Joi.object({
         entityId: objectId.required(),
         correctedValue: Joi.string().required(),

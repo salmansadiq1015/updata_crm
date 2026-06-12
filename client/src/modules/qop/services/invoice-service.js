@@ -5,6 +5,8 @@ export const invoiceService = {
   list:             (params = {}) => apiClient.get(E.INVOICES, { params }),
   getById:          (id)          => apiClient.get(E.INVOICE_BY_ID(id)),
   create:           (data)        => apiClient.post(E.INVOICES, data),
+  createFromOrder:   (data)        => apiClient.post(E.INVOICE_FROM_ORDER, data),
+  createFromQuotation: (data)      => apiClient.post(E.INVOICE_FROM_QUOTATION, data),
   createAdvance:    (data)        => apiClient.post(E.INVOICE_ADVANCE, data),
   createFinal:      (data)        => apiClient.post(E.INVOICE_FINAL, data),
   update:           (id, data)    => apiClient.put(E.INVOICE_BY_ID(id), data),

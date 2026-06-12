@@ -26,45 +26,45 @@ export function AssignmentRecurrenceForm({ register, errors, control, setValue }
   ];
 
   return (
-    <div className="space-y-3 p-3 rounded-lg border bg-muted/30">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+    <div className="space-y-4 rounded-xl border border-border/70 bg-background/50 p-4">
+      <p className="text-sm font-semibold text-foreground">
         {t('deploy.recurrence.title', 'Wiederholung')}
       </p>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label={t('deploy.recurrence.frequency', 'Häufigkeit')} required error={errors?.recurrence?.frequency?.message}>
           <Select
             value={frequency || ''}
             onValueChange={(v) => setValue('recurrence.frequency', v, { shouldValidate: true })}
           >
-            <SelectTrigger className="h-9 text-xs">
+            <SelectTrigger className="h-11 rounded-xl text-sm">
               <SelectValue placeholder={t('deploy.form.selectPlaceholder', 'Auswählen')} />
             </SelectTrigger>
             <SelectContent>
               {frequencyOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </FormField>
 
         <FormField label={t('deploy.recurrence.interval', 'Intervall')} error={errors?.recurrence?.interval?.message}>
-          <Input type="number" min={1} max={52} className="h-9 text-xs" {...register('recurrence.interval', { valueAsNumber: true })} />
+          <Input type="number" min={1} max={52} className="h-11 rounded-xl text-sm" {...register('recurrence.interval', { valueAsNumber: true })} />
         </FormField>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label={t('deploy.recurrence.ends', 'Endet')} error={errors?.recurrence?.endType?.message}>
           <Select
             value={endType || 'NEVER'}
             onValueChange={(v) => setValue('recurrence.endType', v, { shouldValidate: true })}
           >
-            <SelectTrigger className="h-9 text-xs">
+            <SelectTrigger className="h-11 rounded-xl text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {endTypeOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -72,12 +72,12 @@ export function AssignmentRecurrenceForm({ register, errors, control, setValue }
 
         {endType === 'AFTER_COUNT' && (
           <FormField label={t('deploy.recurrence.count', 'Anzahl')} error={errors?.recurrence?.endCount?.message}>
-            <Input type="number" min={1} max={365} className="h-9 text-xs" {...register('recurrence.endCount', { valueAsNumber: true })} />
+            <Input type="number" min={1} max={365} className="h-11 rounded-xl text-sm" {...register('recurrence.endCount', { valueAsNumber: true })} />
           </FormField>
         )}
         {endType === 'UNTIL_DATE' && (
           <FormField label={t('deploy.recurrence.endDate', 'Enddatum')} error={errors?.recurrence?.endDate?.message}>
-            <Input type="date" className="h-9 text-xs" {...register('recurrence.endDate')} />
+            <Input type="date" className="h-11 rounded-xl text-sm" {...register('recurrence.endDate')} />
           </FormField>
         )}
       </div>

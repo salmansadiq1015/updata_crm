@@ -162,6 +162,28 @@ describe('QOP invoice lifecycle hardening', () => {
       .rejects.toMatchObject({ statusCode: 409 });
   });
 
+  test('writes off overdue invoices with a required reason', async () => {
+    const invoiceDoc = {
+      _id: 'invoice-1',
+      invoiceNumber: 'RE-2026-00001',
+      status: 'OVERDUE',
+      amountDue: 250,
+      save: jest.fn(async () => undefined),
+    };
+    const { service, documentStatusLogService } = await loadInvoiceService({
+      modelInvoice: invoiceDoc,
+    });
+
+    await service.transitionStatus('invoice-1', 'WRITTEN_OFF', { reason: 'Uncollectable' }, 'user-1');
+
+    expect(invoiceDoc.status).toBe('WRITTEN_OFF');
+    expect(invoiceDoc.amountDue).toBe(0);
+    expect(invoiceDoc.writtenOffAt).toBeInstanceOf(Date);
+    expect(invoiceDoc.writeOffReason).toBe('Uncollectable');
+    expect(documentStatusLogService.logTransition)
+      .toHaveBeenCalledWith('invoice', 'invoice-1', 'OVERDUE', 'WRITTEN_OFF', 'user-1', 'Uncollectable');
+  });
+
   test('creates credit note with negative totals and cancels original invoice', async () => {
     const originalInvoice = {
       _id: 'invoice-original',

@@ -6,6 +6,7 @@ import BodyRenderer from './renderers/BodyRenderer.js';
 import TableRenderer from './renderers/TableRenderer.js';
 import TotalsRenderer from './renderers/TotalsRenderer.js';
 import QrBillRenderer from './renderers/QrBillRenderer.js';
+import { registerCiFonts } from './renderers/fonts.js';
 
 const MM_TO_PT = 2.83465;
 
@@ -19,6 +20,11 @@ const DEFAULT_SECTIONS = [
 
 export default class DocumentRenderer {
   async render(template, ciConfig, data, language = 'de') {
+    const result = await this.renderWithMetadata(template, ciConfig, data, language);
+    return result.buffer;
+  }
+
+  async renderWithMetadata(template, ciConfig, data, language = 'de') {
     const margins = template.layout?.margins || { top:25, bottom:20, left:20, right:15 };
 
     const doc = new PDFDocument({
@@ -37,6 +43,7 @@ export default class DocumentRenderer {
     doc.info.Author = ciConfig?.companyName || 'MB Boiler & Heizung AG';
     doc.info.Creator = 'MB Boiler ERP';
     doc.info.CreationDate = new Date();
+    registerCiFonts(doc, ciConfig);
 
     const pm = new PageManager(doc, margins);
     const footer = new FooterRenderer(doc, pm, ciConfig, language);
@@ -80,11 +87,15 @@ export default class DocumentRenderer {
       const chunks = [];
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => {
-        footer.stampPageNumbers(pm.pageCount);
-        resolve(Buffer.concat(chunks));
+        resolve({ buffer: Buffer.concat(chunks), pageCount: pm.pageCount });
       });
       doc.on('error', reject);
-      doc.end();
+      try {
+        footer.stampPageNumbers(pm.pageCount);
+        doc.end();
+      } catch (err) {
+        reject(err);
+      }
     });
   }
 }

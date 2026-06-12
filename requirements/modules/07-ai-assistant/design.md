@@ -4,6 +4,8 @@
 
 ## 1. Architecture Overview
 
+The AI Assistant module follows a pipeline architecture inside the web application. Responsive field-service pages and desktop pages share the same backend and session pipeline; "mobile" in this design refers to browser-based responsive layouts, not a separate native app or standalone client.
+
 The AI Assistant module follows a pipeline architecture with three core stages:
 
 ```
@@ -16,7 +18,7 @@ The AI Assistant module follows a pipeline architecture with three core stages:
 
 | Component          | Responsibility                                                        |
 |--------------------|-----------------------------------------------------------------------|
-| Audio Capture      | Records audio from device microphone, handles streaming/batch modes   |
+| Audio Capture      | Records audio from the browser microphone, handles streaming/batch modes |
 | STT Gateway        | Abstracts STT provider; routes audio; returns transcripts             |
 | NLP Pipeline       | Intent recognition, entity extraction, entity resolution              |
 | Action Dispatcher  | Routes recognized intents to target modules (orders, CRM, navigation) |
@@ -70,12 +72,14 @@ Represents a single voice interaction session.
     "recordId": "uuid | null"
   },
   "metadata": {
-    "deviceType": "mobile | web",
+    "deviceType": "responsive-mobile | desktop",
     "sttProvider": "whisper | google | azure",
     "processingTimeMs": "integer"
   }
 }
 ```
+
+In this module, `deviceType` describes the browser viewport class used inside the web application, such as a responsive field-service page on a tablet-sized screen or a desktop browser page. It does not indicate a separate native mobile application.
 
 ### 2.2 CustomVocabulary
 
@@ -403,7 +407,7 @@ GET /api/v1/ai/analytics/corrections/top?limit=20&language=de-CH
 | Event                      | Target Module | Description                                         |
 |----------------------------|---------------|-----------------------------------------------------|
 | `order.create_requested`   | MOD-08        | Voice-created order data ready for order processing  |
-| `report.content_captured`  | MOD-06        | Voice-dictated report content for work order         |
+| `report.content_captured`  | Work-order web surface | Voice-dictated report content ready for the work-order record in the web app |
 | `customer.address_captured`| MOD-03        | Voice-captured and validated address for CRM         |
 | `document.generate_requested` | MOD-09     | Voice-triggered document generation request          |
 

@@ -5,13 +5,10 @@ import { useAiStore } from '../store/ai-store';
 import { useMessageCopy } from './use-message-copy';
 import { useVoiceInteraction } from './use-voice-interaction';
 import { showError } from '@/lib/toast';
-
-const VOICE_ERROR_MESSAGES = {
-  'not-allowed': 'Microphone access denied — check browser permissions.',
-  'network': 'Voice unavailable — type instead.',
-};
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function useInteractionLayer({ onDispatch }) {
+  const { t } = useLanguage();
   const { voiceMode, autoPlay, setVoiceMode, setAutoPlay } = useAiStore();
   const handsFreeModeEnabled = voiceMode === 'hands-free';
 
@@ -21,13 +18,15 @@ export function useInteractionLayer({ onDispatch }) {
     handsFreeModeEnabled,
     onTranscriptFinal: (text) => onDispatch(text),
     onError: (code) => {
-      if (code === 'exit-command') { setVoiceMode('manual'); return; }
-      const msg = VOICE_ERROR_MESSAGES[code];
-      if (msg) showError(msg);
+      if (code === 'exit-command') {
+        setVoiceMode('manual');
+        return;
+      }
+      if (code === 'not-allowed') showError(t('ai.error.micDeniedSettings'));
+      if (code === 'network') showError(t('ai.error.voiceUnavailable'));
     },
   });
 
-  // Cross-feature: stop TTS before starting STT
   const startListening = useCallback(() => {
     voice.stopSpeaking();
     voice.startListening();

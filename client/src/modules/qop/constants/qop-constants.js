@@ -23,6 +23,7 @@ export const INVOICE_STATUSES = {
   PAID: 'PAID',
   OVERDUE: 'OVERDUE',
   CANCELLED: 'CANCELLED',
+  WRITTEN_OFF: 'WRITTEN_OFF',
 };
 
 export const INVOICE_TYPES = {
@@ -75,6 +76,7 @@ export const INVOICE_STATUS_COLORS = {
   PAID:           'bg-emerald-50 text-emerald-700 border-emerald-200',
   OVERDUE:        'bg-red-50 text-red-700 border-red-200',
   CANCELLED:      'bg-slate-50 text-slate-500 border-slate-200',
+  WRITTEN_OFF:    'bg-zinc-100 text-zinc-700 border-zinc-200',
 };
 
 export const QUOTATION_STATUS_LABELS = {
@@ -109,6 +111,9 @@ export const INVOICE_STATUS_LABELS = {
     PAID: 'Paid', OVERDUE: 'Overdue', CANCELLED: 'Cancelled',
   },
 };
+
+INVOICE_STATUS_LABELS.de.WRITTEN_OFF = 'Abgeschrieben';
+INVOICE_STATUS_LABELS.en.WRITTEN_OFF = 'Written Off';
 
 export const INVOICE_TYPE_LABELS = {
   de: { STANDARD: 'Rechnung', ADVANCE: 'Akontorechnung', FINAL: 'Schlussrechnung', CREDIT_NOTE: 'Gutschrift' },

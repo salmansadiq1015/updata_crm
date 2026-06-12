@@ -9,6 +9,11 @@ const DEFAULT_PREFIXES = {
   invoice: 'RE',
 };
 
+function buildCounterId(documentType, departmentId, resetsAnnually, year) {
+  const scope = resetsAnnually ? year : 'all';
+  return `qop:${documentType}:${departmentId || 'global'}:${scope}`;
+}
+
 /**
  * QOP counter service.
  * Uses DocumentNumberSequence for configurable formatting and the CRM Counter
@@ -64,12 +69,18 @@ class QOPCounterService {
       }
 
       // 4. Atomic counter increment
-      const counterId = `qop:${documentType}:${departmentId || 'global'}:${year}`;
+      const counterId = buildCounterId(documentType, departmentId, resetsAnnually, year);
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
         { $inc: { seq: 1 } },
         { returnDocument: 'after', upsert: true },
       );
+
+      if (sequence) {
+        await DocumentNumberSequence.findByIdAndUpdate(sequence._id, {
+          $set: { currentValue: counter.seq, currentYear: year },
+        });
+      }
 
       // 5. Format the number
       let yearStr = '';
@@ -104,13 +115,22 @@ class QOPCounterService {
     const separator = sequence.separator ?? '-';
     const yearFormat = sequence.yearFormat || 'YYYY';
     const paddingLength = sequence.paddingLength || 4;
+    const resetsAnnually = sequence.resetsAnnually ?? true;
 
     const year = new Date().getFullYear();
     let yearStr = '';
     if (yearFormat === 'YYYY') yearStr = String(year);
     else if (yearFormat === 'YY') yearStr = String(year).slice(-2);
 
-    const nextSeq = String((sequence.currentValue || 0) + 1).padStart(paddingLength, '0');
+    const counterId = buildCounterId(
+      sequence.documentType,
+      sequence.departmentId || null,
+      resetsAnnually,
+      year,
+    );
+    const counter = await Counter.findById(counterId).lean();
+    const currentValue = counter?.seq ?? sequence.currentValue ?? 0;
+    const nextSeq = String(currentValue + 1).padStart(paddingLength, '0');
 
     const parts = [prefix];
     if (yearStr) parts.push(yearStr);

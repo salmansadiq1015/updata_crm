@@ -117,7 +117,7 @@ function LineItemsTab({ order, de }) {
         </div>
         {(order?.vatBreakdown ?? []).map((v) => (
           <div key={v.rate} className="flex justify-between px-4 py-1.5 text-xs text-muted-foreground border-t border-border">
-            <span>MwSt {v.rate}%</span><span className="tabular-nums">{fmt(v.vat)}</span>
+            <span>MwSt {v.rate}%</span><span className="tabular-nums">{fmt(v.amount)}</span>
           </div>
         ))}
         <div className="flex justify-between px-4 py-2.5 bg-muted/30 font-semibold border-t border-border">
@@ -253,7 +253,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
     setPdfLoading(true);
     try {
       const res = await orderService.generateDocument(orderId);
-      const url = res?.data?.url ?? res?.url;
+      const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
       if (url) window.open(url, '_blank');
     } finally {
       setPdfLoading(false);

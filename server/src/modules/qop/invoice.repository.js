@@ -12,7 +12,12 @@ const ALLOWED_FILTERS = {
   customerId: 'objectId',
   sourceOrderId: 'objectId',
   projectId: 'objectId',
+  departmentId: 'objectId',
 };
+
+const ALLOWED_SORT_FIELDS = [
+  'createdAt', 'invoiceNumber', 'customerName', 'grandTotalRounded', 'dueDate', '_id',
+];
 
 const POPULATE_FIELDS = [
   { path: 'customerId', select: 'customerNumber name' },
@@ -62,10 +67,25 @@ class InvoiceRepository {
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+    const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
+    const {
+      dateFrom, dateTo, amountMin, amountMax, ...baseFilters
+    } = filters;
     const filter = {
-      ...buildFilter(filters, ALLOWED_FILTERS),
-      ...coerceCursorFieldTypes(buildCursorQuery(cursor, sortBy, sortOrder), sortBy),
+      ...buildFilter(baseFilters, ALLOWED_FILTERS),
+      ...coerceCursorFieldTypes(buildCursorQuery(cursor, safeSortBy, sortOrder), safeSortBy),
     };
+
+    if (dateFrom || dateTo) {
+      filter.createdAt = {};
+      if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) filter.createdAt.$lte = new Date(dateTo);
+    }
+    if (amountMin !== undefined || amountMax !== undefined) {
+      filter.grandTotalRounded = {};
+      if (amountMin !== undefined) filter.grandTotalRounded.$gte = Number(amountMin);
+      if (amountMax !== undefined) filter.grandTotalRounded.$lte = Number(amountMax);
+    }
 
     if (search) {
       filter.$or = [
@@ -75,7 +95,7 @@ class InvoiceRepository {
       ];
     }
 
-    const sort = buildCursorSort(sortBy, sortOrder);
+    const sort = buildCursorSort(safeSortBy, sortOrder);
 
     const docs = await Invoice.find(filter)
       .sort(sort)
@@ -84,7 +104,7 @@ class InvoiceRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    return buildCursorResponse(docs, limit, safeSortBy);
   }
 
   async findByOrderId(orderId) {

@@ -21,7 +21,7 @@ class QuotationReminderService {
     return quotationReminderRepository.markSent(id);
   }
 
-  async snooze(id, snoozedUntil, userId) {
+  async snooze(id, snoozedUntil) {
     return quotationReminderRepository.snooze(id, snoozedUntil);
   }
 

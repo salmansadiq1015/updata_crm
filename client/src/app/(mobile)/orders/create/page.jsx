@@ -17,6 +17,8 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
+import { AiVoiceCapture } from '@/modules/ai/components/voice/ai-voice-capture';
+import { SESSION_TYPES } from '@/modules/ai/constants/ai-constants';
 
 const PRIORITY_OPTIONS = [
   { value: 'NORMAL', de: 'Normal', en: 'Normal' },
@@ -37,6 +39,7 @@ export default function CreateSmallOrderPage() {
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(createSmallOrderSchema),
@@ -88,6 +91,23 @@ export default function CreateSmallOrderPage() {
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <AiVoiceCapture
+            sessionType={SESSION_TYPES.ORDER_CREATION}
+            contextModule="mobile"
+            contextRecordType="project"
+            contextRecordId={projectId}
+            onComplete={(session) => {
+              const text = session?.correctedTranscript || session?.rawTranscript;
+              if (text) {
+                setValue('title', text.slice(0, 120), { shouldDirty: true });
+                setValue('description', text, { shouldDirty: true });
+              }
+              if (session?.result?.recordId) {
+                toast.success(lang === 'de' ? 'Auftrag per Sprache erstellt' : 'Order created via voice');
+                router.back();
+              }
+            }}
+          />
           <FormField
             label={lang === 'de' ? 'Titel' : 'Title'}
             required

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import voiceMetadataSchema from '../../shared/schemas/voiceMetadata.schema.js';
 
 export const ORDER_STATUSES = ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 
@@ -93,6 +94,7 @@ const orderSchema = new mongoose.Schema(
     grandTotalRounded: { type: Number, default: 0 },
     paymentTerms: { type: String, maxlength: 1000, default: null },
     notes: { type: String, maxlength: 5000, default: null },
+    voiceAttachments: { type: [voiceMetadataSchema], default: [] },
     termsAndConditions: { type: String, maxlength: 10000, default: null },
     status: {
       type: String,

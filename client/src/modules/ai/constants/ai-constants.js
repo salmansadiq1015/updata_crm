@@ -70,6 +70,7 @@ export const RECORDING_WARNING_SECONDS = 14 * 60; // warn at 14 min
 export const AGENT_POLL_INTERVAL_MS = 1000;
 export const SESSION_POLL_INTERVAL_MS = 2000;
 export const SESSION_PROCESSING_TIMEOUT_MS = 90000;
+export const MIN_AGENT_INPUT_LENGTH = 2;
 
 export const OFFLINE_QUEUE_MAX = 5; // max queued recordings
 
@@ -79,7 +80,7 @@ export const WORKFLOW_LABELS = {
   FIELD_SERVICE_AGENT: 'Running field-service action',
   LEAD_CREATION:       'Creating lead',
   INVOICE_GENERATION:  'Generating invoice',
-  GENERAL:             'Thinking…',
+  GENERAL:             'Thinking...',
 };
 
 export const ENTITY_LABELS = {

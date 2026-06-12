@@ -7,14 +7,47 @@ import { NotFoundError } from '../../shared/errors/AppError.js';
 
 const LIST_CACHE_KEY = 'qop:sequences:list';
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
+const DEFAULT_SEQUENCES = [
+  { documentType: 'quotation', prefix: 'OFF' },
+  { documentType: 'order', prefix: 'AUF' },
+  { documentType: 'invoice', prefix: 'RE' },
+];
 
 class DocumentNumberSequenceService {
   async list() {
     return cacheManager.getOrSet(
       LIST_CACHE_KEY,
-      () => documentNumberSequenceRepository.findAll(),
+      () => this._listWithDefaults(),
       LIST_TTL,
     );
+  }
+
+  async _listWithDefaults() {
+    const existing = await documentNumberSequenceRepository.findAll();
+    const globalTypes = new Set(
+      existing
+        .filter((seq) => !seq.departmentId)
+        .map((seq) => seq.documentType),
+    );
+
+    const missing = DEFAULT_SEQUENCES.filter((seq) => !globalTypes.has(seq.documentType));
+    for (const seq of missing) {
+      try {
+        await documentNumberSequenceRepository.create({
+          ...seq,
+          departmentId: null,
+          yearFormat: 'YYYY',
+          separator: '-',
+          paddingLength: 4,
+          resetsAnnually: true,
+          isActive: true,
+        });
+      } catch (err) {
+        if (err.code !== 11000) throw err;
+      }
+    }
+
+    return documentNumberSequenceRepository.findAll();
   }
 
   async create(data, userId, meta = {}) {

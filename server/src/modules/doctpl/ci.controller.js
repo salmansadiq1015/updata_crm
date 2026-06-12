@@ -38,6 +38,13 @@ class CIController {
     } catch (err) { next(err); }
   }
 
+  async getAuditReport(req, res, next) {
+    try {
+      const report = await ciService.getAuditReport();
+      return res.success({ data: report });
+    } catch (err) { next(err); }
+  }
+
   async deleteAsset(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

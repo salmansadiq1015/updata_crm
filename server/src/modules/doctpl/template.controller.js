@@ -63,6 +63,18 @@ class TemplateController {
     } catch (err) { next(err); }
   }
 
+  async compareVersions(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await templateService.compareVersions(
+        req.params.id,
+        Number(query.fromVersion),
+        Number(query.toVersion),
+      );
+      return res.success({ data: result });
+    } catch (err) { next(err); }
+  }
+
   async revertToVersion(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

@@ -28,7 +28,7 @@ function fmtDate(d, lang) {
   }).format(new Date(d));
 }
 
-export function OrdersTable() {
+export function OrdersTable({ advancedFilters = {} }) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
 
@@ -36,7 +36,7 @@ export function OrdersTable() {
   const [statusFilter, setStatus] = useState('');
   const [detailId, setDetailId]   = useState(null);
 
-  const filters = {};
+  const filters = { ...advancedFilters };
   if (search.trim())  filters.search = search.trim();
   if (statusFilter)   filters.status = statusFilter;
 

@@ -3,6 +3,7 @@ import { AppError } from '../../../shared/errors/AppError.js';
 import ERROR_CODES from '../../../shared/errors/errorCodes.js';
 
 export const MAX_STEPS = 10;
+export const MIN_AGENT_INPUT_LENGTH = 2;
 const RATE_LIMIT = 20;
 const RATE_WINDOW_SECONDS = 3600;
 

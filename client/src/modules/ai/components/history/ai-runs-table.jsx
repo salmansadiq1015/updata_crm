@@ -4,17 +4,19 @@ import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { AiStatusBadge } from '../status/ai-status-badge';
 import { WORKFLOW_LABELS } from '../../constants/ai-constants';
 
 export function AiRunsTable({ runs, isLoading, hasMore, hasPrev, onNext, onPrev }) {
+  const { t } = useLanguage();
   const router = useRouter();
 
   if (isLoading) {
     return (
       <div className="flex flex-col gap-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-14 w-full rounded-lg" />
+        {Array.from({ length: 5 }).map((_, index) => (
+          <Skeleton key={index} className="h-14 w-full rounded-lg" />
         ))}
       </div>
     );
@@ -23,10 +25,8 @@ export function AiRunsTable({ runs, isLoading, hasMore, hasPrev, onNext, onPrev 
   if (!runs.length) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-        <p className="text-sm text-muted-foreground">No AI runs yet.</p>
-        <p className="text-xs text-muted-foreground">
-          Use the AI assistant button to get started.
-        </p>
+        <p className="text-sm text-muted-foreground">{t('ai.history.empty')}</p>
+        <p className="text-xs text-muted-foreground">{t('ai.history.emptyHint')}</p>
       </div>
     );
   }
@@ -42,7 +42,7 @@ export function AiRunsTable({ runs, isLoading, hasMore, hasPrev, onNext, onPrev 
         >
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              {WORKFLOW_LABELS[run.workflowType] ?? run.workflowType}
+              {t(`ai.workflow.${run.workflowType}`, WORKFLOW_LABELS[run.workflowType] ?? run.workflowType)}
             </p>
             {run.input && (
               <p className="text-xs text-muted-foreground truncate mt-0.5">
@@ -63,12 +63,12 @@ export function AiRunsTable({ runs, isLoading, hasMore, hasPrev, onNext, onPrev 
         <div className="flex gap-2 pt-2">
           {hasPrev && (
             <Button variant="outline" size="sm" onClick={onPrev} className="flex-1">
-              ← Previous
+              {t('common.previous')}
             </Button>
           )}
           {hasMore && (
             <Button variant="outline" size="sm" onClick={onNext} className="flex-1">
-              Next →
+              {t('common.next')}
             </Button>
           )}
         </div>

@@ -56,11 +56,11 @@ function SortableSection({ section, onToggle }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{section.name}</p>
         {section.isConditional && (
-          <p className="text-xs text-muted-foreground">conditional: {section.conditionField}</p>
+          <p className="text-xs text-muted-foreground">{t('doctpl.editor.conditional')}: {section.conditionField}</p>
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
-        <Label className="text-xs text-muted-foreground">{t('common.visible')}</Label>
+        <Label className="text-xs text-muted-foreground">{t('doctpl.visible')}</Label>
         <Switch
           checked={section.isVisible !== false}
           onCheckedChange={(v) => onToggle(section.id, v)}

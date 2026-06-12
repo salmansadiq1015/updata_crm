@@ -1,10 +1,14 @@
 import { t } from '../i18n.js';
+import { pdfColors } from './colors.js';
+import { pdfFonts } from './fonts.js';
 
 export default class FooterRenderer {
   constructor(doc, pageManager, ciConfig, language) {
     this.doc = doc;
     this.pm = pageManager;
     this.ci = ciConfig;
+    this.colors = pdfColors(ciConfig);
+    this.fonts = pdfFonts(ciConfig);
     this.lang = language;
     this.footerYPositions = [];
     doc.on('pageAdded', () => this._drawFooterLayout());
@@ -18,11 +22,11 @@ export default class FooterRenderer {
     const left = this.pm.margins.left;
     const width = this.pm.contentWidth;
     doc.save();
-    doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.5).strokeColor('#CCCCCC').stroke();
-    doc.fontSize(7).fillColor('#888888');
+    doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.5).strokeColor(this.colors.border).stroke();
+    doc.font(this.fonts.body).fontSize(7).fillColor(this.colors.muted);
     const company = this.ci?.companyName || 'MB Boiler & Heizung AG';
     const vat = this.ci?.companyDetails?.vatNumber || '';
-    const bank = this.ci?.companyDetails?.bankName || '';
+    const bank = this.ci?.companyDetails?.bankDetails?.bankName || '';
     doc.text(`${company} | ${vat} | ${bank}`, left, y + 6, { width, align: 'center' });
     doc.restore();
   }
@@ -35,7 +39,7 @@ export default class FooterRenderer {
       const left = this.pm.margins.left;
       const width = this.pm.contentWidth;
       this.doc.save();
-      this.doc.fontSize(7).fillColor('#888888');
+      this.doc.font(this.fonts.body).fontSize(7).fillColor(this.colors.muted);
       this.doc.text(
         `${t(this.lang, 'page')} ${i + 1} ${t(this.lang, 'of')} ${totalPages}`,
         left + width - 60, y, { width: 60, align: 'right' },

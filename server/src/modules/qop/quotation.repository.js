@@ -35,10 +35,25 @@ class QuotationRepository {
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+    const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
+    const {
+      dateFrom, dateTo, amountMin, amountMax, ...baseFilters
+    } = filters;
     const filter = {
-      ...buildFilter(filters, ALLOWED_FILTERS),
-      ...buildCursorQuery(cursor, sortBy, sortOrder),
+      ...buildFilter(baseFilters, ALLOWED_FILTERS),
+      ...buildCursorQuery(cursor, safeSortBy, sortOrder),
     };
+
+    if (dateFrom || dateTo) {
+      filter.createdAt = {};
+      if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) filter.createdAt.$lte = new Date(dateTo);
+    }
+    if (amountMin !== undefined || amountMax !== undefined) {
+      filter.grandTotalRounded = {};
+      if (amountMin !== undefined) filter.grandTotalRounded.$gte = Number(amountMin);
+      if (amountMax !== undefined) filter.grandTotalRounded.$lte = Number(amountMax);
+    }
 
     if (search) {
       filter.$or = [
@@ -48,7 +63,7 @@ class QuotationRepository {
       ];
     }
 
-    const sort = buildCursorSort(sortBy, sortOrder);
+    const sort = buildCursorSort(safeSortBy, sortOrder);
 
     const docs = await Quotation.find(filter)
       .sort(sort)
@@ -57,7 +72,7 @@ class QuotationRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    return buildCursorResponse(docs, limit, safeSortBy);
   }
 
   async textSearch(searchTerm, limit = 25) {

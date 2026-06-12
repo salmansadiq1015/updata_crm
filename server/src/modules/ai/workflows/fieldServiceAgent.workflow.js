@@ -9,7 +9,7 @@
 import { StateGraph, END } from '@langchain/langgraph';
 import mongoose from 'mongoose';
 
-import { MAX_STEPS } from '../agent/agent.guardrails.js';
+import { MAX_STEPS, MIN_AGENT_INPUT_LENGTH } from '../agent/agent.guardrails.js';
 import agentRunRepository from '../agent/agentRun.repository.js';
 import { WorkflowState } from './workflow.state.js';
 import logger from '../../../shared/logger/index.js';
@@ -80,7 +80,7 @@ async function executeAction(state) {
   }
 
   const input = String(state.input || '').trim();
-  if (input.length < 3) {
+  if (input.length < MIN_AGENT_INPUT_LENGTH) {
     return {
       stepCount,
       status: 'failed',

@@ -357,7 +357,14 @@ class AiAnalyticsService {
     return Array.from(correctionMap.entries())
       .map(([key, count]) => {
         const [original, correctedTo] = key.split('|');
-        return { original, correctedTo, count };
+        const maskedOriginal = this._maskAnalyticsToken(original);
+        const maskedCorrected = this._maskAnalyticsToken(correctedTo);
+        return {
+          original: maskedOriginal,
+          correctedTo: maskedCorrected,
+          count,
+          safeToPromote: maskedCorrected !== '<redacted>' && maskedCorrected.length > 1,
+        };
       })
       .sort((a, b) => b.count - a.count)
       .slice(0, 50);
@@ -386,10 +393,27 @@ class AiAnalyticsService {
     return Array.from(correctionMap.entries())
       .map(([key, count]) => {
         const [original, correctedTo] = key.split('|');
-        return { original, correctedTo, count };
+        const maskedOriginal = this._maskAnalyticsToken(original);
+        const maskedCorrected = this._maskAnalyticsToken(correctedTo);
+        return {
+          original: maskedOriginal,
+          correctedTo: maskedCorrected,
+          count,
+          safeToPromote: maskedCorrected !== '<redacted>' && maskedCorrected.length > 1,
+        };
       })
       .sort((a, b) => b.count - a.count)
       .slice(0, 50);
+  }
+
+  _maskAnalyticsToken(value) {
+    const text = String(value || '').trim();
+    if (!text) return text;
+    if (/@/.test(text) || /\d/.test(text) || /^\+?\d[\d\s()./-]+$/.test(text)) {
+      return '<redacted>';
+    }
+    if (text.length <= 2) return text;
+    return text;
   }
 }
 

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { AiMicButton } from '../recorder/ai-mic-button';
 import { AiHelpOverlay } from '../ai-help-overlay';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { MIN_AGENT_INPUT_LENGTH } from '../../constants/ai-constants';
 
 export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCreating }) {
   const { t } = useLanguage();
@@ -15,7 +16,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (text.trim().length < 3) return;
+    if (text.trim().length < MIN_AGENT_INPUT_LENGTH) return;
     onTextSubmit(text.trim());
     setText('');
   };
@@ -53,7 +54,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
           className="flex-1 text-sm"
           maxLength={2000}
         />
-        <Button type="submit" size="icon" disabled={text.trim().length < 3}>
+        <Button type="submit" size="icon" disabled={text.trim().length < MIN_AGENT_INPUT_LENGTH || isCreating}>
           <Send className="h-4 w-4" />
         </Button>
       </form>

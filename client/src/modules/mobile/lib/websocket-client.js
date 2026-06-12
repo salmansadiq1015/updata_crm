@@ -4,6 +4,7 @@ import { io } from 'socket.io-client';
 import { resolveApiOrigin } from '@/lib/api/config';
 
 let socket = null;
+const SOCKET_TRANSPORTS = ['polling', 'websocket'];
 
 function getSocketUrl() {
   const configured = process.env.NEXT_PUBLIC_SOCKET_URL?.trim();
@@ -23,7 +24,8 @@ export function getSocket(token) {
 
   socket = io(getSocketUrl(), {
     auth: { token },
-    transports: ['websocket', 'polling'],
+    transports: SOCKET_TRANSPORTS,
+    tryAllTransports: true,
     reconnectionDelayMax: 5000,
     reconnectionAttempts: Infinity,
     timeout: 10000,

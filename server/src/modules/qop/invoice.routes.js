@@ -5,6 +5,7 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import {
   createInvoiceSchema,
   createFromOrderSchema,
+  createFromQuotationSchema,
   createAdvanceSchema,
   createFinalSchema,
   updateInvoiceSchema,
@@ -21,6 +22,7 @@ const router = Router();
 
 // Named routes BEFORE /:id
 router.post('/from-order', authenticate, requirePermission('invoicing:write'), validate(createFromOrderSchema), (req, res, next) => invoiceController.createFromOrder(req, res, next));
+router.post('/from-quotation', authenticate, requirePermission('invoicing:write'), validate(createFromQuotationSchema), (req, res, next) => invoiceController.createFromQuotation(req, res, next));
 router.post('/advance', authenticate, requirePermission('invoicing:write'), validate(createAdvanceSchema), (req, res, next) => invoiceController.createAdvance(req, res, next));
 router.post('/final', authenticate, requirePermission('invoicing:write'), validate(createFinalSchema), (req, res, next) => invoiceController.createFinal(req, res, next));
 

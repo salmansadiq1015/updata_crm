@@ -1,6 +1,8 @@
 import { jest, describe, test, expect } from '@jest/globals';
 import { t, LABELS } from '../../src/modules/doctpl/renderer/i18n.js';
 import PageManager from '../../src/modules/doctpl/renderer/PageManager.js';
+import { pdfColors } from '../../src/modules/doctpl/renderer/renderers/colors.js';
+import { pdfFonts, registerCiFonts } from '../../src/modules/doctpl/renderer/renderers/fonts.js';
 
 // --- i18n tests ---
 describe('i18n t()', () => {
@@ -63,5 +65,29 @@ describe('PageManager', () => {
     const startY = pm.currentY;
     pm.moveDown(50);
     expect(pm.currentY).toBe(startY + 50);
+  });
+});
+
+describe('CI renderer helpers', () => {
+  test('resolves configured colors with stable fallbacks', () => {
+    const colors = pdfColors({ colors: { primary: '#0055AA', text: '' } });
+    expect(colors.primary).toBe('#0055AA');
+    expect(colors.text).toBe('#1A1A1A');
+    expect(colors.border).toBe('#E5E7EB');
+  });
+
+  test('uses registered CI font names only when buffers are available', () => {
+    const doc = { registerFont: jest.fn() };
+    const ciConfig = { fontBuffers: { light: Buffer.from('light'), bold: Buffer.from('bold') } };
+
+    registerCiFonts(doc, ciConfig);
+    expect(doc.registerFont).toHaveBeenCalledWith('MBB-CI-Light', ciConfig.fontBuffers.light);
+    expect(doc.registerFont).toHaveBeenCalledWith('MBB-CI-Bold', ciConfig.fontBuffers.bold);
+    expect(pdfFonts(ciConfig)).toEqual({
+      body: 'MBB-CI-Light',
+      medium: 'Helvetica-Bold',
+      bold: 'MBB-CI-Bold',
+      italic: 'Helvetica-Oblique',
+    });
   });
 });

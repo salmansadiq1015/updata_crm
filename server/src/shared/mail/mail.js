@@ -44,65 +44,88 @@ const createTransporter = () => {
  * Send an email with EJS template rendering.
  *
  * @param {Object} options
- * @param {string} options.email     - Recipient email address
+ * @param {string|string[]} options.email - Recipient email address(es)
+ * @param {string|string[]} [options.cc]  - CC recipient address(es)
+ * @param {string|string[]} [options.bcc] - BCC recipient address(es)
  * @param {string} options.subject   - Email subject line
- * @param {string} options.template  - Template filename (e.g., "resetPassword.ejs")
+ * @param {string} [options.template] - Template filename (e.g., "resetPassword.ejs")
  * @param {Object} options.data      - Data passed to the EJS template
  * @param {string} [options.fromName="MB Boiler"] - Sender display name
+ * @param {string} [options.fromAddress] - Sender address override
  * @param {Array}  [options.attachments] - Nodemailer attachments array
+ * @param {string} [options._rawHtml] - Pre-rendered HTML body for DocTpl emails
+ * @param {string} [options.text] - Plain-text email body
  * @returns {Promise<Object>} Nodemailer info object
  */
 const sendMail = async (options) => {
   try {
     const {
       email,
+      cc,
+      bcc,
       subject,
       template,
       data = {},
       fromName = "MB Boiler",
+      fromAddress,
       attachments,
+      _rawHtml,
+      text,
     } = options;
 
-    if (!email || !subject || !template) {
+    const recipients = (Array.isArray(email) ? email : [email]).filter(Boolean);
+    const ccRecipients = (Array.isArray(cc) ? cc : [cc]).filter(Boolean);
+    const bccRecipients = (Array.isArray(bcc) ? bcc : [bcc]).filter(Boolean);
+
+    if (!recipients.length || !subject || (!template && !_rawHtml)) {
       throw new Error(
-        `Missing required email parameters: email=${!!email}, subject=${!!subject}, template=${!!template}`
+        `Missing required email parameters: email=${recipients.length > 0}, subject=${!!subject}, body=${!!template || !!_rawHtml}`
       );
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      throw new Error(`Invalid email address: ${email}`);
+    for (const address of [...recipients, ...ccRecipients, ...bccRecipients]) {
+      if (!emailRegex.test(address)) {
+        throw new Error(`Invalid email address: ${address}`);
+      }
     }
 
-    const templatePath = join(__dirname, "../mails", template);
+    let html = _rawHtml;
 
-    if (!fs.existsSync(templatePath)) {
-      throw new Error(`Email template not found: ${templatePath}`);
+    if (!html) {
+      const templatePath = join(__dirname, "../mails", template);
+
+      if (!fs.existsSync(templatePath)) {
+        throw new Error(`Email template not found: ${templatePath}`);
+      }
+
+      // Render template with common variables
+      html = await ejs.renderFile(templatePath, {
+        ...data,
+        appName: "MB Boiler",
+        supportEmail: process.env.SUPPORT_EMAIL || "installation@bolliger-heizungen.ch",
+        clientUrl: process.env.CLIENT_URI || "http://localhost:3000",
+        year: new Date().getFullYear(),
+      });
     }
-
-    // Render template with common variables
-    const html = await ejs.renderFile(templatePath, {
-      ...data,
-      appName: "MB Boiler",
-      supportEmail: process.env.SUPPORT_EMAIL || "installation@bolliger-heizungen.ch",
-      clientUrl: process.env.CLIENT_URI || "http://localhost:3000",
-      year: new Date().getFullYear(),
-    });
 
     const transporter = createTransporter();
 
     const message = {
-      from: `${fromName} <${process.env.SMTP_MAIL}>`,
-      to: email,
+      from: `${fromName} <${fromAddress || process.env.SMTP_MAIL}>`,
+      to: recipients.join(", "),
       subject,
       html,
     };
 
+    if (text) message.text = text;
+    if (ccRecipients.length) message.cc = ccRecipients.join(", ");
+    if (bccRecipients.length) message.bcc = bccRecipients.join(", ");
     if (attachments) message.attachments = attachments;
 
     const info = await transporter.sendMail(message);
-    console.log(`Email sent to ${email}: ${info.messageId}`);
+    console.log(`Email sent to ${recipients.join(", ")}: ${info.messageId}`);
     return info;
   } catch (error) {
     console.error("Error sending email:", error.message);

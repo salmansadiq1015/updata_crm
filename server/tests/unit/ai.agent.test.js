@@ -84,11 +84,10 @@ jest.unstable_mockModule('../../src/modules/ai/agent/toolExecution.model.js', ()
 // ---------------------------------------------------------------------------
 
 describe('AI Agent — agent.guardrails', () => {
-  let checkRateLimit, sanitizeUserInput, enforceMaxSteps;
+  let sanitizeUserInput, enforceMaxSteps;
 
   beforeAll(async () => {
     const mod = await import('../../src/modules/ai/agent/agent.guardrails.js');
-    checkRateLimit = mod.checkRateLimit;
     sanitizeUserInput = mod.sanitizeUserInput;
     enforceMaxSteps = mod.enforceMaxSteps;
   });
@@ -147,8 +146,8 @@ describe('AI Agent — task.workflow', () => {
     expect(result.output?.taskId).toBe('task-1');
   });
 
-  test('fails when input is too short (< 3 chars)', async () => {
-    const result = await taskWorkflow.invoke(baseState({ input: 'Hi' }));
+  test('fails when input is too short (< 2 chars)', async () => {
+    const result = await taskWorkflow.invoke(baseState({ input: 'H' }));
     expect(result.status).toBe('failed');
     expect(result.error?.code).toBe('INVALID_INPUT');
   });

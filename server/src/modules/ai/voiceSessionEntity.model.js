@@ -16,6 +16,11 @@ const voiceSessionEntitySchema = new mongoose.Schema(
     startOffset: { type: Number, default: null },
     endOffset: { type: Number, default: null },
     correctedValue: { type: String, default: null },
+    candidates: [{
+      resolvedId: { type: mongoose.Schema.Types.ObjectId, default: null },
+      label: { type: String, default: null },
+      score: { type: Number, min: 0, max: 1, default: null },
+    }],
   },
   { timestamps: true },
 );

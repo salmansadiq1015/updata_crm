@@ -129,7 +129,7 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
     recognition.onend = () => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
-      // Manual cancel — do not submit
+      // Manual cancel - do not submit
       if (abortedRef.current) {
         abortedRef.current = false;
         return;
@@ -158,7 +158,7 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
 
       const dispatchTranscript = () => {
         onTranscriptRef.current?.(text, confidence);
-        // In normal mode, go back to idle — in hands-free, TTS will drive state to 'responding'
+        // In normal mode, go back to idle; in hands-free, TTS will drive state to 'responding'
         if (!handsFreeRef.current) setVoiceState('idle');
       };
 
@@ -172,7 +172,7 @@ export function useVoiceInteraction({ onTranscriptFinal, onError, handsFreeModeE
 
     recognition.start();
     setVoiceState('listening');
-    // Do NOT start silence timer here — only after first speech result arrives
+    // Do NOT start silence timer here; only after first speech result arrives
   }, [isSTTSupported]);
 
   useEffect(() => { startListeningRef.current = startListening; }, [startListening]);

@@ -6,7 +6,7 @@ function hardWrap(text) {
   let remaining = text;
   while (remaining.length > MAX_CHARS) {
     let cut = remaining.lastIndexOf(' ', MAX_CHARS);
-    if (cut <= 0) cut = MAX_CHARS; // no space found — hard cut at limit
+    if (cut <= 0) cut = MAX_CHARS; // No space found; hard cut at limit.
     result.push(remaining.slice(0, cut).trim());
     remaining = remaining.slice(cut).trim();
   }

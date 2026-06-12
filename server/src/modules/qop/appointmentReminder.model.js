@@ -39,7 +39,7 @@ const appointmentReminderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'RESPONDED'],
+      enum: ['PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'RESPONDED', 'CANCELLED'],
       default: 'PENDING',
     },
     customerResponse: {

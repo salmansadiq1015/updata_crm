@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   Search, Plus, MoreHorizontal, FileText, CheckCircle,
-  Send, DollarSign, History, Download,
+  Send, DollarSign, History, Download, XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,8 +15,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useInvoices, useInvoiceHistory } from '../hooks/use-qop-queries';
@@ -29,7 +31,7 @@ import { InvoiceFormDialog } from './invoice-form-dialog';
 import { RecordPaymentDialog } from './record-payment-dialog';
 import { InvoiceDetailDialog } from './invoice-detail-dialog';
 
-const INV_STATUSES = ['', 'DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'];
+const INV_STATUSES = ['', 'DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
 
 function fmtDate(d, lang) {
   if (!d) return '—';
@@ -52,7 +54,7 @@ function HistoryDrawer({ open, onClose, invoiceId }) {
   );
 }
 
-export function InvoicesTable() {
+export function InvoicesTable({ advancedFilters = {} }) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
 
@@ -63,20 +65,22 @@ export function InvoicesTable() {
   const [payingInvoice, setPaying]    = useState(null);
   const [historyFor, setHistoryFor]   = useState(null);
   const [detailInvoiceId, setDetail]  = useState(null);
+  const [writeOffInvoice, setWriteOffInvoice] = useState(null);
+  const [writeOffReason, setWriteOffReason] = useState('');
 
-  const filters = {};
+  const filters = { ...advancedFilters };
   if (search.trim())  filters.search = search.trim();
   if (statusFilter)   filters.status = statusFilter;
 
   const { data, isLoading } = useInvoices(filters);
   const items = data?.items ?? [];
 
-  const { finalizeInvoice, sendInvoice } = useInvoiceMutations();
+  const { finalizeInvoice, sendInvoice, transitionInvoiceStatus } = useInvoiceMutations();
 
   const handleGeneratePdf = async (id) => {
     try {
       const res = await invoiceService.generateDocument(id);
-      const url = res?.data?.url ?? res?.url;
+      const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
       if (url) window.open(url, '_blank');
     } catch { /* silently fail */ }
   };
@@ -87,6 +91,17 @@ export function InvoicesTable() {
     }
   };
   const handleSend = (id) => sendInvoice.mutate(id);
+  const handleWriteOff = async () => {
+    const id = writeOffInvoice?._id ?? writeOffInvoice?.id;
+    if (!id || !writeOffReason.trim()) return;
+    await transitionInvoiceStatus.mutateAsync({
+      id,
+      targetStatus: 'WRITTEN_OFF',
+      reason: writeOffReason.trim(),
+    });
+    setWriteOffInvoice(null);
+    setWriteOffReason('');
+  };
 
   const openNewForm = (type) => { setFormType(type); setFormOpen(true); };
 
@@ -174,6 +189,7 @@ export function InvoicesTable() {
           const canFinalize = inv.status === 'DRAFT';
           const canSend     = inv.status === 'DRAFT'; // after finalize, also 'FINALIZED' if you have that
           const canPay      = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status);
+          const canWriteOff = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status);
 
           return (
             <div
@@ -221,6 +237,11 @@ export function InvoicesTable() {
                         <DollarSign className="h-4 w-4 mr-2" />{de ? 'Zahlung erfassen' : 'Record Payment'}
                       </DropdownMenuItem>
                     )}
+                    {canWriteOff && (
+                      <DropdownMenuItem onClick={() => setWriteOffInvoice(inv)}>
+                        <XCircle className="h-4 w-4 mr-2" />{de ? 'Abschreiben' : 'Write Off'}
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => handleGeneratePdf(id)}>
                       <Download className="h-4 w-4 mr-2" />{de ? 'PDF herunterladen' : 'Download PDF'}
                     </DropdownMenuItem>
@@ -259,6 +280,34 @@ export function InvoicesTable() {
         onClose={() => setDetail(null)}
         invoiceId={detailInvoiceId}
       />
+      <Dialog open={!!writeOffInvoice} onOpenChange={() => setWriteOffInvoice(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{de ? 'Rechnung abschreiben' : 'Write off invoice'}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label>{de ? 'Grund' : 'Reason'}</Label>
+            <Textarea
+              value={writeOffReason}
+              onChange={(event) => setWriteOffReason(event.target.value)}
+              rows={4}
+              className="resize-none"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWriteOffInvoice(null)}>
+              {de ? 'Abbrechen' : 'Cancel'}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleWriteOff}
+              disabled={!writeOffReason.trim() || transitionInvoiceStatus.isPending}
+            >
+              {de ? 'Abschreiben' : 'Write Off'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -71,6 +71,12 @@ const PERMISSIONS = Object.freeze({
   QUOTATIONS_DELETE: 'quotations:delete',
   QUOTATIONS_ADMIN: 'quotations:admin',
 
+  // Document Templates
+  TEMPLATES_READ: 'templates:read',
+  TEMPLATES_WRITE: 'templates:write',
+  TEMPLATES_DELETE: 'templates:delete',
+  TEMPLATES_ADMIN: 'templates:admin',
+
   // Invoicing
   INVOICING_READ: 'invoicing:read',
   INVOICING_WRITE: 'invoicing:write',

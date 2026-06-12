@@ -21,3 +21,10 @@ export const useTemplateVersions = (id) => useQuery({
   enabled: !!id,
   select: (r) => ({ items: r?.data ?? [], total: r?.total ?? 0 }),
 });
+
+export const useTemplateVersionComparison = (id, params, enabled = true) => useQuery({
+  queryKey: queryKeys.doctpl.templates.compare(id, params),
+  queryFn: () => templateService.compareVersions(id, params),
+  enabled: !!id && !!params?.fromVersion && !!params?.toVersion && enabled,
+  select: (r) => r?.data,
+});

@@ -27,11 +27,18 @@ export function AiAssistantPanel() {
     isCreating,
   } = useAiAssistant();
 
-  const handleConfirmEntities = (corrections) => {
-    if (Object.keys(corrections).length > 0) {
-      submitCorrections({ corrections: Object.entries(corrections).map(([type, value]) => ({ type, correctedValue: value })) });
+  const handleConfirmEntities = async (corrections = []) => {
+    const entityCorrections = corrections
+      .filter((correction) => correction.entityId && correction.correctedValue)
+      .map((correction) => ({
+        entityId: correction.entityId,
+        correctedValue: correction.correctedValue,
+      }));
+
+    if (entityCorrections.length > 0) {
+      await submitCorrections({ entityCorrections });
     }
-    confirmSession();
+    await confirmSession();
   };
 
   return (

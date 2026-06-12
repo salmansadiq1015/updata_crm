@@ -1,6 +1,5 @@
 import orderService from './order.service.js';
 import invoiceService from './invoice.service.js';
-import queueManager from '../../shared/queue/QueueManager.js';
 
 class OrderController {
   async create(req, res, next) {
@@ -59,12 +58,9 @@ class OrderController {
 
   async generateDocument(req, res, next) {
     try {
-      await queueManager.addJob('document-generation', {
-        documentType: 'order',
-        documentId: req.params.id,
-        requestedBy: req.user._id,
-      });
-      return res.success({ data: { jobQueued: true }, message: 'Document generation queued' });
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await orderService.generateDocument(req.params.id, req.user._id, meta);
+      return res.success({ data: result, message: 'Order confirmation generated successfully' });
     } catch (err) { next(err); }
   }
 

@@ -5,7 +5,7 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
 import queueManager from '../../shared/queue/QueueManager.js';
-import { AppError, NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
+import { AppError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
@@ -65,7 +65,7 @@ class VoiceSessionService {
    * @param {object} meta
    * @returns {{ sessionId, status }}
    */
-  async uploadAudio(sessionId, audioBuffer, mimeType, userId, meta = {}) {
+  async uploadAudio(sessionId, audioBuffer, mimeType, userId, _meta = {}) {
     const session = await voiceSessionRepository.findById(sessionId);
     if (!session) {
       throw new AppError('Voice session not found', 404, ERROR_CODES.AI_SESSION_NOT_FOUND);
@@ -176,6 +176,7 @@ class VoiceSessionService {
       });
       eventBus.publish(EVENT_TYPES.AI_SESSION_FAILED, {
         sessionId,
+        userId: session.userId,
         error: err.message,
       }, { source: 'ai:sessions' });
       throw new AppError('Failed to load audio', 500, ERROR_CODES.AI_TRANSCRIPTION_FAILED);
@@ -195,6 +196,7 @@ class VoiceSessionService {
       });
       eventBus.publish(EVENT_TYPES.AI_SESSION_FAILED, {
         sessionId,
+        userId: session.userId,
         error: err.message,
       }, { source: 'ai:sessions' });
       throw new AppError('Transcription failed', 500, ERROR_CODES.AI_TRANSCRIPTION_FAILED);
@@ -210,6 +212,7 @@ class VoiceSessionService {
 
     eventBus.publish(EVENT_TYPES.AI_SESSION_TRANSCRIBED, {
       sessionId,
+      userId: session.userId,
       textLength: transcription.text.length,
       confidence: transcription.confidence,
       provider: transcription.provider,
@@ -231,6 +234,7 @@ class VoiceSessionService {
       });
       eventBus.publish(EVENT_TYPES.AI_SESSION_FAILED, {
         sessionId,
+        userId: session.userId,
         error: err.message,
       }, { source: 'ai:sessions' });
       throw new AppError('NLP processing failed', 500, ERROR_CODES.AI_NLP_FAILED);
@@ -251,6 +255,7 @@ class VoiceSessionService {
         normalizedValue: e.normalizedValue,
         confidence: e.confidence,
         resolvedId: e.resolvedId || null,
+        candidates: e.candidates || [],
         startOffset: e.startOffset,
         endOffset: e.endOffset,
       }));
@@ -260,6 +265,7 @@ class VoiceSessionService {
 
     eventBus.publish(EVENT_TYPES.AI_SESSION_ENTITIES_EXTRACTED, {
       sessionId,
+      userId: session.userId,
       intentName: nlpResult.intent.name,
       entityCount: nlpResult.entities.length,
     }, { source: 'ai:sessions' });
@@ -363,15 +369,15 @@ class VoiceSessionService {
       });
     }
 
+    const entityCorrections = this._normalizeEntityCorrections(corrections);
+
     // Update entity corrected values
-    if (Array.isArray(corrections.entities)) {
-      for (const entityCorrection of corrections.entities) {
-        if (entityCorrection.entityId && entityCorrection.correctedValue !== undefined) {
-          await voiceSessionEntityRepository.updateCorrectedValue(
-            entityCorrection.entityId,
-            entityCorrection.correctedValue,
-          );
-        }
+    for (const entityCorrection of entityCorrections) {
+      if (entityCorrection.entityId && entityCorrection.correctedValue !== undefined) {
+        await voiceSessionEntityRepository.updateCorrectedValue(
+          entityCorrection.entityId,
+          entityCorrection.correctedValue,
+        );
       }
     }
 
@@ -379,7 +385,8 @@ class VoiceSessionService {
       sessionId,
       userId,
       hasCorrectedTranscript: !!corrections.correctedTranscript,
-      correctedEntityCount: corrections.entities?.length || 0,
+      correctedEntityCount: entityCorrections.length,
+      correctionCount: entityCorrections.length,
     }, { source: 'ai:sessions' });
 
     auditService.logEvent({
@@ -391,7 +398,7 @@ class VoiceSessionService {
       details: {
         sessionId,
         hasCorrectedTranscript: !!corrections.correctedTranscript,
-        correctedEntityCount: corrections.entities?.length || 0,
+        correctedEntityCount: entityCorrections.length,
       },
       module: 'ai',
     });
@@ -399,6 +406,22 @@ class VoiceSessionService {
     await this._invalidateSessionCache(sessionId);
 
     return voiceSessionRepository.findByIdWithEntities(sessionId);
+  }
+
+  /**
+   * Normalize correction payloads from client variants.
+   *
+   * @param {object} corrections
+   * @returns {{ entityId: string, correctedValue: string }[]}
+   */
+  _normalizeEntityCorrections(corrections = {}) {
+    if (Array.isArray(corrections.entityCorrections)) {
+      return corrections.entityCorrections;
+    }
+    if (Array.isArray(corrections.entities)) {
+      return corrections.entities;
+    }
+    return [];
   }
 
   /**
@@ -441,42 +464,57 @@ class VoiceSessionService {
     const transcript = session.correctedTranscript || session.rawTranscript;
     let result = null;
 
-    // Dispatch action based on intentName
-    switch (session.intentName) {
+    const effectiveIntent = this._resolveEffectiveIntent(session);
+
+    // Dispatch domain actions for structured voice flows
+    if (['create_order', 'create_report', 'capture_address', 'update_status'].includes(effectiveIntent)) {
+      try {
+        const { default: actionDispatcher } = await import('./ai.actionDispatcher.service.js');
+        const dispatchSession = { ...session, intentName: effectiveIntent };
+        const dispatchResult = await actionDispatcher.dispatch(dispatchSession, userId, meta);
+        result = {
+          ...dispatchResult,
+          recordId: dispatchResult.recordId,
+          recordType: dispatchResult.recordType,
+        };
+
+        const eventTypeMap = {
+          create_order: EVENT_TYPES.AI_ORDER_CREATE_REQUESTED,
+          create_report: EVENT_TYPES.AI_REPORT_CONTENT_CAPTURED,
+          capture_address: EVENT_TYPES.AI_ADDRESS_CAPTURED,
+        };
+        if (eventTypeMap[effectiveIntent]) {
+          eventBus.publish(eventTypeMap[effectiveIntent], {
+            sessionId,
+            userId,
+            transcript,
+            entities: entityData,
+            result: dispatchResult,
+          }, { source: 'ai:sessions' });
+        }
+      } catch (err) {
+        logger.error('Voice session domain dispatch failed', {
+          module: 'ai',
+          action: 'session.confirm.dispatch',
+          sessionId,
+          intent: effectiveIntent,
+          error: err.message,
+        });
+        throw err;
+      }
+    }
+
+    // Dispatch action based on intentName (commands / navigation)
+    switch (effectiveIntent) {
       case 'create_order':
-        eventBus.publish(EVENT_TYPES.AI_ORDER_CREATE_REQUESTED, {
-          sessionId,
-          userId,
-          transcript,
-          entities: entityData,
-        }, { source: 'ai:sessions' });
-        result = { action: 'create_order', message: 'Order creation requested' };
-        break;
-
       case 'create_report':
-        eventBus.publish(EVENT_TYPES.AI_REPORT_CONTENT_CAPTURED, {
-          sessionId,
-          userId,
-          transcript,
-          entities: entityData,
-        }, { source: 'ai:sessions' });
-        result = { action: 'create_report', message: 'Report content captured' };
-        break;
-
       case 'capture_address':
-        eventBus.publish(EVENT_TYPES.AI_ADDRESS_CAPTURED, {
-          sessionId,
-          userId,
-          transcript,
-          entities: entityData,
-        }, { source: 'ai:sessions' });
-        result = { action: 'capture_address', message: 'Address captured' };
+      case 'update_status':
         break;
 
       case 'command':
       case 'navigate':
-      case 'search_customer':
-      case 'update_status': {
+      case 'search_customer': {
         // Try to match a registered voice command
         try {
           const { default: voiceCommandService } = await import('./voiceCommand.service.js');
@@ -485,11 +523,24 @@ class VoiceSessionService {
             session.language?.split('-')[0] || 'de',
           );
           if (command) {
-            result = {
-              action: command.actionType,
-              recordType: command.actionTarget,
-              message: `Command matched: ${command.intent}`,
-            };
+            if (command.actionType === 'UPDATE' && String(command.actionTarget || '').startsWith('status:')) {
+              const { default: actionDispatcher } = await import('./ai.actionDispatcher.service.js');
+              const dispatchResult = await actionDispatcher.dispatch({
+                ...session,
+                intentName: 'update_status',
+                commandActionTarget: command.actionTarget,
+              }, userId, meta);
+              result = {
+                ...dispatchResult,
+                message: dispatchResult.message || `Command matched: ${command.intent}`,
+              };
+            } else {
+              result = {
+                action: command.actionType,
+                recordType: command.actionTarget,
+                message: `Command matched: ${command.intent}`,
+              };
+            }
           } else {
             result = { action: session.intentName, message: 'No matching command found' };
           }
@@ -504,9 +555,9 @@ class VoiceSessionService {
         break;
     }
 
-    // Dispatch autonomous agent execution so confirmed recordings can perform
-    // the same actions as typed agent commands.
-    if (transcript && transcript.trim().length >= 3) {
+    // Dispatch autonomous agent for commands/general — skip when domain action already ran.
+    const domainHandled = ['create_order', 'create_report', 'capture_address', 'append_report', 'update_status'].includes(result?.action);
+    if (!domainHandled && transcript && transcript.trim().length >= 3) {
       try {
         const { default: agentService } = await import('./agent/agent.service.js');
         const agentResult = await agentService.run(
@@ -549,11 +600,20 @@ class VoiceSessionService {
     // Update session to COMPLETED
     await voiceSessionRepository.updateStatus(sessionId, 'COMPLETED', { result });
 
+    eventBus.publish(EVENT_TYPES.AI_SESSION_CONFIRMED, {
+      sessionId,
+      userId,
+      intentName: session.intentName,
+      result,
+      status: 'COMPLETED',
+    }, { source: 'ai:sessions' });
+
     eventBus.publish(EVENT_TYPES.AI_SESSION_COMPLETED, {
       sessionId,
       userId,
       intentName: session.intentName,
       result,
+      status: 'COMPLETED',
     }, { source: 'ai:sessions' });
 
     auditService.logEvent({
@@ -624,6 +684,23 @@ class VoiceSessionService {
     if (session.userId.toString() !== userId.toString()) {
       throw new AppError('Voice session not found', 404, ERROR_CODES.AI_SESSION_NOT_FOUND);
     }
+  }
+
+  /**
+   * Map session type to domain intent when NLP intent is generic.
+   */
+  _resolveEffectiveIntent(session) {
+    const sessionTypeIntent = {
+      ORDER_CREATION: 'create_order',
+      REPORT_DICTATION: 'create_report',
+      ADDRESS_CAPTURE: 'capture_address',
+    };
+    if (session.sessionType && sessionTypeIntent[session.sessionType]) {
+      const mapped = sessionTypeIntent[session.sessionType];
+      if (!session.intentName || session.intentName === 'general') return mapped;
+      return session.intentName;
+    }
+    return session.intentName || 'general';
   }
 
   async _invalidateSessionCache(sessionId) {

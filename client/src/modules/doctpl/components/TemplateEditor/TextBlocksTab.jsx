@@ -1,51 +1,83 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
 
-const LANGS = [['de', 'Deutsch'], ['fr', 'Français'], ['it', 'Italiano'], ['en', 'English']];
+import { useEffect, useState } from 'react';
+import { EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useLanguage } from '@/lib/i18n/language-context';
+
+const LANGS = [['de', 'Deutsch'], ['en', 'English']];
 const FIELDS = [
-  ['introduction', 'Introduction Text', 4],
-  ['terms',        'Terms & Conditions', 6],
-  ['footer',       'Footer Text',        3],
-  ['emailSubject', 'Email Subject',      1],
-  ['emailBody',    'Email Body',         5],
+  ['introduction', 'doctpl.editor.introduction', 4],
+  ['terms', 'doctpl.editor.terms', 6],
+  ['footer', 'doctpl.editor.footer', 3],
+  ['emailSubject', 'doctpl.editor.emailSubject', 1],
+  ['emailBody', 'doctpl.editor.emailBody', 5],
 ];
 
-function RichTextEditor({ value, onChange }) {
+function RichTextEditor({ value, onChange, labelList }) {
   const editor = useEditor({
     extensions: [StarterKit],
     content: value || '',
-    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    onUpdate: ({ editor: activeEditor }) => onChange(activeEditor.getHTML()),
   });
 
-  // Sync external value changes (language switch)
   useEffect(() => {
     if (editor && editor.getHTML() !== value) {
       editor.commands.setContent(value || '', false);
     }
-  }, [value]); // eslint-disable-line
+  }, [editor, value]);
 
   return (
-    <div className="border border-input rounded-md overflow-hidden">
-      <div className="flex gap-1 px-2 py-1 border-b border-input bg-muted/40">
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBold().run(); }}
-          className={`px-1.5 py-0.5 text-xs rounded hover:bg-muted font-bold ${editor?.isActive('bold') ? 'bg-muted' : ''}`}>B</button>
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleItalic().run(); }}
-          className={`px-1.5 py-0.5 text-xs rounded hover:bg-muted italic ${editor?.isActive('italic') ? 'bg-muted' : ''}`}>I</button>
-        <button type="button" onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }}
-          className={`px-1.5 py-0.5 text-xs rounded hover:bg-muted ${editor?.isActive('bulletList') ? 'bg-muted' : ''}`}>• List</button>
+    <div className="overflow-hidden rounded-md border border-input">
+      <div className="flex gap-1 border-b border-input bg-muted/40 px-2 py-1">
+        <button
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            editor?.chain().focus().toggleBold().run();
+          }}
+          className={`rounded px-1.5 py-0.5 text-xs font-bold hover:bg-muted ${editor?.isActive('bold') ? 'bg-muted' : ''}`}
+        >
+          B
+        </button>
+        <button
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            editor?.chain().focus().toggleItalic().run();
+          }}
+          className={`rounded px-1.5 py-0.5 text-xs italic hover:bg-muted ${editor?.isActive('italic') ? 'bg-muted' : ''}`}
+        >
+          I
+        </button>
+        <button
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            editor?.chain().focus().toggleBulletList().run();
+          }}
+          className={`rounded px-1.5 py-0.5 text-xs hover:bg-muted ${editor?.isActive('bulletList') ? 'bg-muted' : ''}`}
+        >
+          {labelList}
+        </button>
       </div>
-      <EditorContent editor={editor} className="prose prose-sm max-w-none p-2 min-h-20 focus-within:outline-none text-sm [&_.ProseMirror]:outline-none" />
+      <EditorContent
+        editor={editor}
+        className="prose prose-sm max-w-none p-2 text-sm focus-within:outline-none [&_.ProseMirror]:min-h-20 [&_.ProseMirror]:outline-none"
+      />
     </div>
   );
 }
 
 export function TextBlocksTab({ textBlocks = {}, onChange }) {
+  const { t } = useLanguage();
   const [lang, setLang] = useState('de');
-  const set = (field, val) => onChange({ ...textBlocks, [lang]: { ...(textBlocks[lang] || {}), [field]: val } });
+  const set = (field, value) => onChange({
+    ...textBlocks,
+    [lang]: { ...(textBlocks[lang] || {}), [field]: value },
+  });
   const blocks = textBlocks[lang] || {};
 
   return (
@@ -53,19 +85,30 @@ export function TextBlocksTab({ textBlocks = {}, onChange }) {
       <div className="flex gap-1 border-b pb-3">
         {LANGS.map(([code, label]) => (
           <button
-            key={code} onClick={() => setLang(code)}
-            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${lang === code ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-          >{label}</button>
+            key={code}
+            type="button"
+            onClick={() => setLang(code)}
+            className={`rounded-md px-3 py-1.5 text-sm transition-colors ${lang === code ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+          >
+            {label}
+          </button>
         ))}
       </div>
       <div className="space-y-4">
-        {FIELDS.map(([field, label, rows]) => (
+        {FIELDS.map(([field, labelKey, rows]) => (
           <div key={field}>
-            <Label className="text-sm">{label}</Label>
-            {rows === 1
-              ? <Input value={blocks[field] || ''} onChange={(e) => set(field, e.target.value)} className="mt-1" />
-              : <div className="mt-1"><RichTextEditor value={blocks[field] || ''} onChange={(v) => set(field, v)} /></div>
-            }
+            <Label className="text-sm">{t(labelKey)}</Label>
+            {rows === 1 ? (
+              <Input value={blocks[field] || ''} onChange={(event) => set(field, event.target.value)} className="mt-1" />
+            ) : (
+              <div className="mt-1">
+                <RichTextEditor
+                  value={blocks[field] || ''}
+                  onChange={(value) => set(field, value)}
+                  labelList={t('doctpl.editor.list')}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>

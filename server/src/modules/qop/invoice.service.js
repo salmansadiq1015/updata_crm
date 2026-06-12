@@ -17,11 +17,12 @@ const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 const INVOICE_TRANSITIONS = {
   DRAFT: ['SENT', 'CANCELLED'],
-  SENT: ['PARTIALLY_PAID', 'PAID', 'OVERDUE'],
-  PARTIALLY_PAID: ['PAID', 'OVERDUE'],
+  SENT: ['PARTIALLY_PAID', 'PAID', 'OVERDUE', 'WRITTEN_OFF'],
+  PARTIALLY_PAID: ['PAID', 'OVERDUE', 'WRITTEN_OFF'],
   PAID: [],
-  OVERDUE: ['PARTIALLY_PAID', 'PAID'],
+  OVERDUE: ['PARTIALLY_PAID', 'PAID', 'WRITTEN_OFF'],
   CANCELLED: [],
+  WRITTEN_OFF: [],
 };
 
 function isFinalizedInvoice(invoice) {
@@ -299,6 +300,94 @@ class InvoiceService {
       invoiceId: invoice._id,
       invoiceNumber,
       sourceOrderId: order._id,
+    });
+
+    return invoiceRepository.findById(invoice._id);
+  }
+
+  async createFromQuotation(data, createdBy, meta = {}) {
+    const { default: quotationRepository } = await import('./quotation.repository.js');
+
+    const quotation = await quotationRepository.findById(data.sourceQuotationId);
+    if (!quotation) throw new NotFoundError('Quotation', data.sourceQuotationId);
+    if (!['ACCEPTED', 'CONVERTED'].includes(quotation.status)) {
+      throw new ConflictError(
+        `Cannot create an invoice from quotation in ${quotation.status} status`,
+      );
+    }
+
+    const lineItems = (quotation.lineItems || []).map((item, index) => ({
+      position: item.position || index + 1,
+      articleNumber: item.articleNumber || '',
+      description: item.description,
+      unit: item.unit || 'pcs',
+      quantity: item.quantity || 0,
+      unitPrice: item.unitPrice || 0,
+      discountPercent: item.discountPercent || 0,
+      vatRate: item.vatRate || 0,
+    }));
+    if (!lineItems.length) {
+      throw new ConflictError('Quotation has no invoiceable line items');
+    }
+
+    const totals = calculateTotals(
+      lineItems,
+      data.globalDiscountPercent ?? quotation.globalDiscountPercent ?? 0,
+      quotation.currency || 'CHF',
+    );
+    const invoiceNumber = await counterService.getNextInvoiceNumber(quotation.departmentId);
+
+    const invoice = await invoiceRepository.create({
+      invoiceNumber,
+      invoiceType: 'STANDARD',
+      sourceQuotationId: quotation._id,
+      customerId: quotation.customerId?._id || quotation.customerId,
+      customerName: quotation.customerName,
+      contactId: quotation.contactId?._id || quotation.contactId || null,
+      projectId: quotation.projectId?._id || quotation.projectId || null,
+      departmentId: quotation.departmentId || null,
+      language: quotation.language,
+      title: data.title || `Invoice for quotation ${quotation.quotationNumber}`,
+      ...totals,
+      currency: quotation.currency,
+      globalDiscountPercent: data.globalDiscountPercent ?? quotation.globalDiscountPercent ?? 0,
+      dueDate: data.dueDate,
+      paymentTermsDays: data.paymentTermsDays || 30,
+      paymentTermsText: data.paymentTermsText ?? quotation.paymentTerms ?? '',
+      amountDue: totals.grandTotalRounded,
+      createdBy,
+    });
+
+    await this._invalidateListCache();
+
+    eventBus.publish(EVENT_TYPES.INVOICE_CREATED, {
+      invoiceId: invoice._id,
+      invoiceNumber,
+      invoiceType: 'STANDARD',
+      sourceQuotationId: quotation._id,
+      createdBy,
+    }, { source: 'qop:invoices' });
+
+    auditService.logEvent({
+      eventType: 'invoice.created_from_quotation',
+      userId: createdBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: {
+        invoiceId: invoice._id,
+        invoiceNumber,
+        sourceQuotationId: quotation._id,
+      },
+      module: 'qop',
+    });
+
+    logger.info('Invoice created from quotation', {
+      module: 'qop',
+      action: 'createFromQuotation',
+      invoiceId: invoice._id,
+      invoiceNumber,
+      sourceQuotationId: quotation._id,
     });
 
     return invoiceRepository.findById(invoice._id);
@@ -700,6 +789,9 @@ class InvoiceService {
     if (targetStatus === 'CANCELLED' && currentStatus !== 'DRAFT') {
       throw new ConflictError('Finalized invoices can only be cancelled by issuing a credit note');
     }
+    if (targetStatus === 'WRITTEN_OFF' && !reason) {
+      throw new ConflictError('Write-off reason is required');
+    }
 
     // DRAFT -> SENT requires finalization
     if (currentStatus === 'DRAFT' && targetStatus === 'SENT' && !isFinalizedInvoice(invoice)) {
@@ -714,6 +806,11 @@ class InvoiceService {
     if (targetStatus === 'CANCELLED') {
       invoice.cancelledAt = new Date();
       invoice.cancellationReason = reason || null;
+    }
+    if (targetStatus === 'WRITTEN_OFF') {
+      invoice.writtenOffAt = new Date();
+      invoice.writeOffReason = reason;
+      invoice.amountDue = 0;
     }
     await invoice.save();
 
@@ -798,7 +895,23 @@ class InvoiceService {
     const result = await invoicePdfService.generateAndStore(id, userId, meta);
     await this._invalidateInvoiceCache(id);
     await this._invalidateListCache();
-    return result;
+    let downloadUrl = null;
+    try {
+      const { default: accountingDocumentService } = await import('../accounting/accountingDocument.service.js');
+      downloadUrl = await accountingDocumentService.getDownloadUrl(result.document._id);
+    } catch (err) {
+      logger.warn('Invoice PDF download URL unavailable', {
+        module: 'qop',
+        action: 'invoice.pdf.download_url',
+        invoiceId: id,
+        error: err.message,
+      });
+    }
+    return {
+      ...result,
+      documentId: result.document._id,
+      downloadUrl,
+    };
   }
 
   async send(id, userId, meta = {}) {

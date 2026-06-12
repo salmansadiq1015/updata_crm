@@ -1,81 +1,97 @@
 'use client';
+
 import Link from 'next/link';
-import { Settings2, FileText, ToggleLeft, ToggleRight } from 'lucide-react';
-import { PageHeader } from '@/shared/components/page-header';
-import { Button } from '@/components/ui/button';
+import { FileText, Settings2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { PageHeader } from '@/shared/components/page-header';
 import { useTemplates } from '@/modules/doctpl/hooks/useTemplateQueries';
 import { useUpdateTemplate } from '@/modules/doctpl/hooks/useTemplateMutations';
 
-const TYPE_LABELS = {
-  quotation: 'Quotation', order_confirmation: 'Order Confirmation',
-  invoice_standard: 'Invoice', invoice_advance: 'Advance Invoice',
-  invoice_final: 'Final Invoice', cover_letter: 'Cover Letter',
-  service_report: 'Service Report', inspection_certificate: 'Inspection Certificate',
-};
-
 export default function AdminTemplatesPage() {
+  const { t, locale } = useLanguage();
   const { data, isLoading } = useTemplates();
   const update = useUpdateTemplate();
   const templates = data?.items ?? [];
+  const dateLocale = locale === 'de' ? 'de-CH' : 'en-CH';
 
-  const toggleActive = (t) => update.mutate({
-    id: t._id,
-    isActive: !t.isActive,
-    changeDescription: `${t.isActive ? 'Deactivated' : 'Activated'} template`,
+  const toggleActive = (template) => update.mutate({
+    id: template._id,
+    isActive: !template.isActive,
+    changeDescription: template.isActive
+      ? t('doctpl.templates.deactivated')
+      : t('doctpl.templates.activated'),
   });
 
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between gap-4">
         <PageHeader
-          title="Document Templates"
-          description="Manage PDF templates for all document types"
+          title={t('doctpl.templates.title')}
+          description={t('doctpl.templates.description')}
         />
         <Link href="/admin/templates/ci">
           <Button variant="outline" className="gap-2">
-            <Settings2 className="h-4 w-4" />CI Configuration
+            <Settings2 className="h-4 w-4" />
+            {t('doctpl.templates.ciConfiguration')}
           </Button>
         </Link>
       </div>
 
       {isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-xl" />)}
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-40 rounded-lg" />
+          ))}
         </div>
       ) : templates.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-12 text-center">
-          <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
-          <p className="text-sm text-muted-foreground">No templates found. Run the seed script to initialise defaults.</p>
+        <div className="rounded-lg border border-dashed p-12 text-center">
+          <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">{t('doctpl.templates.empty')}</p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {templates.map((t) => (
-            <div key={t._id} className="rounded-xl border bg-card p-5 flex flex-col gap-3 hover:shadow-sm transition-shadow">
+          {templates.map((template) => (
+            <div
+              key={template._id}
+              className="flex flex-col gap-3 rounded-lg border bg-card p-5 shadow-sm transition-shadow hover:shadow-md"
+            >
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="font-medium text-sm truncate">{t.name}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-sm font-medium">{template.name}</span>
                 </div>
-                <Badge variant={t.isActive ? 'default' : 'secondary'} className="shrink-0">
-                  {t.isActive ? 'Active' : 'Inactive'}
+                <Badge variant={template.isActive ? 'default' : 'secondary'} className="shrink-0">
+                  {template.isActive ? t('doctpl.templates.active') : t('doctpl.templates.inactive')}
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground">{TYPE_LABELS[t.templateType] || t.templateType}</p>
-              <p className="text-xs text-muted-foreground">
-                v{t.currentVersion} · {t.updatedAt ? new Date(t.updatedAt).toLocaleDateString('de-CH') : '—'}
-              </p>
-              <div className="flex gap-2 mt-auto pt-3 border-t">
-                <Link href={`/admin/templates/${t._id}`} className="flex-1">
-                  <Button size="sm" variant="outline" className="w-full">Edit</Button>
+
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  {t(`doctpl.type.${template.templateType}`, template.templateType)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  v{template.currentVersion} - {template.updatedAt ? new Date(template.updatedAt).toLocaleDateString(dateLocale) : '-'}
+                </p>
+              </div>
+
+              <div className="mt-auto flex gap-2 border-t pt-3">
+                <Link href={`/admin/templates/${template._id}`} className="flex-1">
+                  <Button size="sm" variant="outline" className="w-full">
+                    {t('doctpl.templates.edit')}
+                  </Button>
                 </Link>
                 <Button
-                  size="icon" variant="ghost" className="h-8 w-8"
-                  title={t.isActive ? 'Deactivate' : 'Activate'}
-                  onClick={() => toggleActive(t)}
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                  title={template.isActive ? t('doctpl.templates.deactivate') : t('doctpl.templates.activate')}
+                  onClick={() => toggleActive(template)}
+                  disabled={update.isPending}
                 >
-                  {t.isActive
+                  {template.isActive
                     ? <ToggleRight className="h-4 w-4 text-green-500" />
                     : <ToggleLeft className="h-4 w-4 text-muted-foreground" />}
                 </Button>

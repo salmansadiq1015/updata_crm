@@ -11,7 +11,7 @@
 | Status             | Draft                                      |
 | Owner              | TBD                                        |
 | Last Updated       | 2026-03-29                                 |
-| Platform           | Web App, Mobile App                        |
+| Platform           | Web App                                    |
 
 ---
 
@@ -19,7 +19,7 @@
 
 The AI Assistant module provides a voice-based assistant that supports field technicians and back-office staff with data entry, document creation, and general application interaction. It leverages speech-to-text (STT), natural language processing (NLP), and intent recognition to convert spoken input into structured data and actionable system commands.
 
-The assistant is designed for hands-free operation in the field, enabling technicians to create orders, dictate service reports, capture customer addresses, and trigger application functions using natural language -- all while working on-site.
+The assistant is designed for hands-free operation in the field, enabling technicians to create orders, dictate service reports, capture customer addresses, and trigger application functions using natural language -- all while working on-site in the web application.
 
 ---
 
@@ -27,13 +27,13 @@ The assistant is designed for hands-free operation in the field, enabling techni
 
 ### 2.1 In Scope
 
-- **Voice-Supported Order Creation** -- Technicians can create new service orders by speaking order details (customer, location, issue description, urgency).
-- **Spoken Report Recording** -- Field technicians dictate service/inspection reports that are recorded, transcribed, and stored against the relevant work order.
+- **Voice-Supported Order Creation** -- Technicians can create new service orders by speaking order details in responsive web pages (customer, location, issue description, urgency).
+- **Spoken Report Recording** -- Field technicians dictate service/inspection reports in responsive web pages; the recording is transcribed and stored against the relevant work order.
 - **Speech-to-Text Conversion** -- Real-time and batch conversion of spoken input to text using integrated STT services (e.g., OpenAI Whisper, Google Cloud Speech-to-Text).
 - **Structured Data Extraction** -- NLP pipeline extracts entities (customer names, addresses, part numbers, dates, quantities) and intents from transcribed text.
 - **Template-Based Document Creation from Voice** -- Voice-dictated content is merged with document templates (quotations, reports, cover letters) to produce formatted documents.
-- **Voice-Based Customer Address Capture** -- Spoken addresses are parsed, validated against postal databases, and stored in the CRM.
-- **Voice-Supported Application Functions** -- Users can navigate the app, search records, update statuses, and trigger workflows using voice commands.
+- **Voice-Based Customer Address Capture** -- Spoken addresses are parsed, validated against postal databases, and stored in the CRM from web pages.
+- **Voice-Supported Application Functions** -- Users can navigate the web app, search records, update statuses, and trigger workflows using voice commands.
 - **Multi-Language Support** -- The assistant supports multiple languages as defined in the annex "Language Scope" (minimum: German, French, Italian, English).
 
 ### 2.2 Out of Scope
@@ -43,6 +43,7 @@ The assistant is designed for hands-free operation in the field, enabling techni
 - Training custom ML models is out of scope; the system integrates with third-party STT/NLP services.
 - Real-time voice calls or telephony integration are not part of this module.
 - The AI Assistant does not perform optical character recognition (OCR) on physical documents -- that belongs to a separate digitization workflow if applicable.
+- The AI Assistant does not introduce a separate native or embedded mobile application; mobile usage is represented by responsive web pages inside the same web app.
 
 ---
 
@@ -50,9 +51,9 @@ The assistant is designed for hands-free operation in the field, enabling techni
 
 | Actor               | Role                                                        |
 |----------------------|-------------------------------------------------------------|
-| Field Technician     | Primary user; uses voice assistant on mobile app on-site    |
-| Back-Office Staff    | Uses voice assistant on web app for order/document creation  |
-| Dispatcher           | Uses voice commands for quick order creation and lookup      |
+| Field Technician     | Primary user; uses voice assistant on responsive web pages   |
+| Back-Office Staff    | Uses voice assistant on the web app for order/document work  |
+| Dispatcher           | Uses voice commands for quick order creation and lookup     |
 | System Administrator | Configures language settings, STT provider, NLP parameters   |
 
 ---
@@ -81,7 +82,7 @@ The assistant is designed for hands-free operation in the field, enabling techni
 | MOD-08: Quotations & Orders       | Outbound  | Voice-created orders are submitted to the order processing module     |
 | MOD-09: Document Templates        | Outbound  | Voice-dictated content is merged with templates for document output   |
 | MOD-05: Field Deployment Planning | Outbound  | Voice commands can trigger scheduling lookups and updates             |
-| MOD-06: Mobile Technician App     | Inbound   | Mobile app provides the primary voice input interface                 |
+| Responsive Field-Service Web Pages | Inbound   | Responsive field-service pages provide the primary voice input interface |
 
 ---
 

@@ -15,7 +15,7 @@ export class QuotationExpiryWorker extends BaseWorker {
     super('quotation-expiry');
   }
 
-  async process(job) {
+  async process(_job) {
     const now = new Date();
 
     // Lazy import to avoid circular dependencies

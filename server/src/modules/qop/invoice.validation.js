@@ -1,7 +1,7 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
-const INVOICE_STATUSES = ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'];
+const INVOICE_STATUSES = ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
 const INVOICE_TYPES = ['STANDARD', 'ADVANCE', 'FINAL', 'CREDIT_NOTE'];
 const PAYMENT_METHODS = ['bank_transfer', 'cash', 'card', 'other'];
 
@@ -107,7 +107,23 @@ export const listInvoicesSchema = {
     customerId: objectId,
     sourceOrderId: objectId,
     projectId: objectId,
+    departmentId: objectId,
+    dateFrom: Joi.date().iso(),
+    dateTo: Joi.date().iso(),
+    amountMin: Joi.number(),
+    amountMax: Joi.number(),
     search: Joi.string().trim().max(100),
+  }),
+};
+
+export const createFromQuotationSchema = {
+  body: Joi.object({
+    sourceQuotationId: objectId.required(),
+    title: Joi.string().trim().max(500).allow('', null),
+    dueDate: Joi.date().iso().required(),
+    paymentTermsDays: Joi.number().integer().min(0).default(30),
+    paymentTermsText: Joi.string().max(1000).allow('', null),
+    globalDiscountPercent: Joi.number().min(0).max(100),
   }),
 };
 

@@ -17,6 +17,14 @@ class InvoiceController {
     } catch (err) { next(err); }
   }
 
+  async createFromQuotation(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const invoice = await invoiceService.createFromQuotation(req.body, req.user._id, meta);
+      return res.success({ data: invoice, message: 'Quotation invoice created successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
   async createAdvance(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

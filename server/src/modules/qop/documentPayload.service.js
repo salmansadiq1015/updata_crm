@@ -1,0 +1,319 @@
+import mongoose from 'mongoose';
+
+function toId(value) {
+  if (!value) return null;
+  return value._id || value.id || value;
+}
+
+function isObjectId(value) {
+  return value && mongoose.Types.ObjectId.isValid(String(value));
+}
+
+function formatDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeVatBreakdown(items = []) {
+  return items.map((vat) => ({
+    rate: Number(vat.rate || 0),
+    base: Number(vat.base || 0),
+    amount: Number(vat.amount || 0),
+  }));
+}
+
+function normalizeLineItems(items = []) {
+  return items.map((item, index) => ({
+    position: item.position || index + 1,
+    type: item.type || 'service',
+    articleNumber: item.articleNumber || '',
+    description: item.description || '',
+    unit: item.unit || 'pcs',
+    quantity: Number(item.quantity || 0),
+    unitPrice: Number(item.unitPrice || 0),
+    discountPercent: Number(item.discountPercent || 0),
+    vatRate: Number(item.vatRate || 0),
+    lineTotal: Number(item.lineTotal || 0),
+  }));
+}
+
+function invoiceTemplateType(invoiceType) {
+  if (invoiceType === 'ADVANCE') return 'invoice_advance';
+  if (invoiceType === 'FINAL') return 'invoice_final';
+  return 'invoice_standard';
+}
+
+async function loadCustomer(customerId) {
+  const id = toId(customerId);
+  if (!isObjectId(id)) return null;
+  const Customer = (await import('../crm/customer.model.js')).default;
+  return Customer.findById(id)
+    .select('customerNumber name street postalCode city canton country phone mobile email')
+    .lean();
+}
+
+async function loadContact(contactId) {
+  const id = toId(contactId);
+  if (!isObjectId(id)) return null;
+  const Contact = (await import('../crm/contact.model.js')).default;
+  return Contact.findById(id)
+    .select('firstName lastName email phone mobile')
+    .lean();
+}
+
+async function loadProject(projectId) {
+  const id = toId(projectId);
+  if (!isObjectId(id)) return null;
+  const Project = (await import('../pm/project.model.js')).default;
+  return Project.findById(id)
+    .select('projectNumber name')
+    .lean();
+}
+
+function buildCustomerBlock(document, customer, contact) {
+  const contactName = contact
+    ? [contact.firstName, contact.lastName].filter(Boolean).join(' ')
+    : '';
+  const email = contact?.email || customer?.email || null;
+  const phone = contact?.mobile || contact?.phone || customer?.mobile || customer?.phone || null;
+
+  return {
+    customer: {
+      number: customer?.customerNumber || '',
+      name: document.customerName || customer?.name || '',
+      contactName,
+      addressLine1: customer?.street || '',
+      plz: customer?.postalCode || '',
+      city: customer?.city || '',
+      country: customer?.country || 'CH',
+      email,
+      phone,
+    },
+    customerEmail: email,
+    customerPhone: phone,
+    contactName,
+  };
+}
+
+function buildBaseData({ document, customer, contact, project, templateType, documentNumber, documentDate }) {
+  const customerBlock = buildCustomerBlock(document, customer, contact);
+  const projectName = project?.name || document.projectName || '';
+
+  return {
+    templateType,
+    documentNumber,
+    documentDate,
+    customerName: document.customerName || customer?.name || '',
+    ...customerBlock,
+    project: project ? {
+      _id: project._id,
+      projectNumber: project.projectNumber,
+      name: project.name,
+    } : null,
+    projectName,
+    reference: project?.projectNumber || document.sourceQuotationNumber || '',
+    title: document.title || '',
+    language: document.language || 'de',
+    currency: document.currency || 'CHF',
+    lineItems: normalizeLineItems(document.lineItems || []),
+    subtotal: Number(document.subtotal || 0),
+    vatBreakdown: normalizeVatBreakdown(document.vatBreakdown || []),
+    grandTotal: Number(document.grandTotal || 0),
+    grandTotalRounded: Number(document.grandTotalRounded ?? document.amountDue ?? document.grandTotal ?? 0),
+    paymentTerms: document.paymentTerms || document.paymentTermsText || '',
+    notes: document.notes || '',
+    termsAndConditions: document.termsAndConditions || '',
+    metadata: {
+      customerName: document.customerName || customer?.name || '',
+      projectName,
+      documentNumber,
+      templateType,
+    },
+  };
+}
+
+class QopDocumentPayloadService {
+  async buildQuotationPayload(quotationOrId) {
+    const quotation = await this._resolveDocument('quotation', quotationOrId);
+    if (!quotation) throw new Error(`Quotation not found: ${quotationOrId}`);
+    const [customer, contact, project] = await Promise.all([
+      loadCustomer(quotation.customerId),
+      loadContact(quotation.contactId),
+      loadProject(quotation.projectId),
+    ]);
+
+    const data = {
+      ...buildBaseData({
+        document: quotation,
+        customer,
+        contact,
+        project,
+        templateType: 'quotation',
+        documentNumber: quotation.quotationNumber,
+        documentDate: formatDate(quotation.createdAt || quotation.validFrom),
+      }),
+      introduction: quotation.introduction || '',
+      validUntil: formatDate(quotation.validUntil),
+    };
+
+    return {
+      templateType: 'quotation',
+      sourceModule: 'qop',
+      sourceRecordId: toId(quotation),
+      language: quotation.language || 'de',
+      data,
+      recipient: {
+        email: data.customerEmail,
+        phone: data.customerPhone,
+        name: data.contactName || data.customerName,
+      },
+    };
+  }
+
+  async buildOrderPayload(orderOrId) {
+    const order = await this._resolveDocument('order', orderOrId);
+    if (!order) throw new Error(`Order not found: ${orderOrId}`);
+    const [customer, contact, project] = await Promise.all([
+      loadCustomer(order.customerId),
+      loadContact(order.contactId),
+      loadProject(order.projectId),
+    ]);
+
+    const data = {
+      ...buildBaseData({
+        document: order,
+        customer,
+        contact,
+        project,
+        templateType: 'order_confirmation',
+        documentNumber: order.orderNumber,
+        documentDate: formatDate(order.createdAt),
+      }),
+      sourceQuotationNumber: order.sourceQuotationNumber || '',
+      requestedDate: formatDate(order.requestedDate),
+      specialInstructions: order.specialInstructions || '',
+    };
+
+    return {
+      templateType: 'order_confirmation',
+      sourceModule: 'qop',
+      sourceRecordId: toId(order),
+      language: order.language || 'de',
+      data,
+      recipient: {
+        email: data.customerEmail,
+        phone: data.customerPhone,
+        name: data.contactName || data.customerName,
+      },
+    };
+  }
+
+  async buildInvoicePayload(invoiceOrId) {
+    const invoice = await this._resolveDocument('invoice', invoiceOrId);
+    if (!invoice) throw new Error(`Invoice not found: ${invoiceOrId}`);
+    const [customer, contact, project] = await Promise.all([
+      loadCustomer(invoice.customerId),
+      loadContact(invoice.contactId),
+      loadProject(invoice.projectId),
+    ]);
+    const templateType = invoiceTemplateType(invoice.invoiceType);
+    const advanceDeductions = (invoice.advanceDeductions || []).map((deduction) => ({
+      invoiceNumber: deduction.advanceInvoiceNumber,
+      date: formatDate(deduction.advanceInvoiceDate),
+      amount: Number(deduction.totalAmount || 0),
+    }));
+
+    const data = {
+      ...buildBaseData({
+        document: invoice,
+        customer,
+        contact,
+        project,
+        templateType,
+        documentNumber: invoice.invoiceNumber,
+        documentDate: formatDate(invoice.invoiceDate || invoice.createdAt),
+      }),
+      invoiceType: templateType,
+      dueDate: formatDate(invoice.dueDate),
+      paymentTermsDays: invoice.paymentTermsDays || 0,
+      amountDue: Number(invoice.amountDue || 0),
+      amountPaid: Number(invoice.amountPaid || 0),
+      advanceDeductions,
+      netBalance: invoice.invoiceType === 'FINAL'
+        ? Number(invoice.netSubtotal || invoice.amountDue || 0)
+        : null,
+    };
+
+    return {
+      templateType,
+      sourceModule: 'qop',
+      sourceRecordId: toId(invoice),
+      language: invoice.language || 'de',
+      data,
+      recipient: {
+        email: data.customerEmail,
+        phone: data.customerPhone,
+        name: data.contactName || data.customerName,
+      },
+    };
+  }
+
+  async buildPayload(documentType, documentOrId) {
+    if (documentType === 'quotation') return this.buildQuotationPayload(documentOrId);
+    if (documentType === 'order') return this.buildOrderPayload(documentOrId);
+    if (documentType === 'invoice') return this.buildInvoicePayload(documentOrId);
+    throw new Error(`Unsupported QOP document type: ${documentType}`);
+  }
+
+  async generateDocument({ documentType, documentOrId, generatedBy, meta = {} }) {
+    const payload = await this.buildPayload(documentType, documentOrId);
+    const { default: documentGenerationService } = await import('../doctpl/documentGeneration.service.js');
+    const generatedDocument = await documentGenerationService.generate({
+      templateType: payload.templateType,
+      sourceModule: payload.sourceModule,
+      sourceRecordId: payload.sourceRecordId,
+      data: payload.data,
+      language: payload.language,
+      generatedBy,
+      meta,
+    });
+
+    const { default: fileService } = await import('../files/file.service.js');
+    let downloadUrl = null;
+    try {
+      downloadUrl = await fileService.getDownloadUrl(generatedDocument.fileId);
+    } catch {
+      downloadUrl = null;
+    }
+
+    return {
+      document: generatedDocument,
+      documentId: generatedDocument._id,
+      fileId: generatedDocument.fileId,
+      fileName: generatedDocument.fileName,
+      downloadUrl,
+    };
+  }
+
+  async _resolveDocument(documentType, documentOrId) {
+    if (documentOrId && typeof documentOrId === 'object') return documentOrId;
+    if (documentType === 'quotation') {
+      const { default: quotationRepository } = await import('./quotation.repository.js');
+      return quotationRepository.findById(documentOrId);
+    }
+    if (documentType === 'order') {
+      const { default: orderRepository } = await import('./order.repository.js');
+      return orderRepository.findById(documentOrId);
+    }
+    if (documentType === 'invoice') {
+      const { default: invoiceRepository } = await import('./invoice.repository.js');
+      return invoiceRepository.findById(documentOrId);
+    }
+    return null;
+  }
+}
+
+const qopDocumentPayloadService = new QopDocumentPayloadService();
+export default qopDocumentPayloadService;

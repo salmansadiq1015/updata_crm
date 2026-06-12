@@ -8,6 +8,7 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import qopDocumentPayloadService from './documentPayload.service.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
@@ -44,6 +45,18 @@ class OrderService {
       createdBy,
     }, { source: 'qop:orders' });
 
+    const createdOrder = await orderRepository.findById(order._id);
+    const payload = await qopDocumentPayloadService.buildOrderPayload(createdOrder);
+    eventBus.publish(EVENT_TYPES.ORDER_CONFIRMED, {
+      orderId: order._id,
+      orderNumber,
+      customerId: order.customerId,
+      customerEmail: payload.recipient.email,
+      language: payload.language,
+      data: payload.data,
+      createdBy,
+    }, { source: 'qop:orders' });
+
     auditService.logEvent({
       eventType: 'order.created',
       userId: createdBy,
@@ -56,7 +69,7 @@ class OrderService {
 
     logger.info('Order created', { module: 'qop', action: 'create', orderId: order._id, orderNumber });
 
-    return orderRepository.findById(order._id);
+    return createdOrder;
   }
 
   async createFromQuotation(quotationId, additionalData, createdBy, meta = {}) {
@@ -110,16 +123,23 @@ class OrderService {
 
     await this._invalidateListCache();
 
+    const createdOrder = await orderRepository.findById(order._id);
+    const payload = await qopDocumentPayloadService.buildOrderPayload(createdOrder);
+
     eventBus.publish(EVENT_TYPES.ORDER_CREATED, {
       orderId: order._id,
       orderNumber,
-      sourceQuotationId: quotationId,
+      sourceQuotationId: quotation._id,
       createdBy,
     }, { source: 'qop:orders' });
 
     eventBus.publish(EVENT_TYPES.ORDER_CONFIRMED, {
       orderId: order._id,
       orderNumber,
+      customerId: order.customerId,
+      customerEmail: payload.recipient.email,
+      language: payload.language,
+      data: payload.data,
       createdBy,
     }, { source: 'qop:orders' });
 
@@ -129,7 +149,7 @@ class OrderService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { orderId: order._id, orderNumber, sourceQuotationId: quotationId },
+      details: { orderId: order._id, orderNumber, sourceQuotationId: quotation._id },
       module: 'qop',
     });
 
@@ -138,10 +158,40 @@ class OrderService {
       action: 'createFromQuotation',
       orderId: order._id,
       orderNumber,
-      sourceQuotationId: quotationId,
+      sourceQuotationId: quotation._id,
     });
 
-    return orderRepository.findById(order._id);
+    return createdOrder;
+  }
+
+  async generateDocument(id, userId, meta = {}) {
+    const order = await orderRepository.findById(id);
+    if (!order) throw new NotFoundError('Order', id);
+
+    const result = await qopDocumentPayloadService.generateDocument({
+      documentType: 'order',
+      documentOrId: order,
+      generatedBy: userId,
+      meta,
+    });
+
+    const Order = (await import('./order.model.js')).default;
+    await Order.updateOne(
+      { _id: id, isDeleted: { $ne: true } },
+      { $set: { orderConfirmationDocId: result.documentId, updatedBy: userId } },
+    );
+
+    auditService.logEvent({
+      eventType: 'order.document_generated',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { orderId: id, documentId: result.documentId },
+      module: 'qop',
+    });
+
+    return result;
   }
 
   async getById(id) {
@@ -192,7 +242,8 @@ class OrderService {
       );
     }
 
-    const { version, ...updateData } = data;
+    const updateData = { ...data };
+    delete updateData.version;
     const updated = await orderRepository.updateById(id, { ...updateData, ...totals, updatedBy });
 
     await this._invalidateOrderCache(id);

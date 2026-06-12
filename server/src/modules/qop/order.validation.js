@@ -65,6 +65,11 @@ export const listOrdersSchema = {
     customerId: objectId,
     projectId: objectId,
     sourceQuotationId: objectId,
+    departmentId: objectId,
+    dateFrom: Joi.date().iso(),
+    dateTo: Joi.date().iso(),
+    amountMin: Joi.number(),
+    amountMax: Joi.number(),
     search: Joi.string().trim().max(100),
   }),
 };

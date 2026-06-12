@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { quotationService } from '../services/quotation-service';
 import { orderService } from '../services/order-service';
 import { invoiceService } from '../services/invoice-service';
+import { reminderService } from '../services/reminder-service';
 
 export function useQuotationMutations() {
   const qc = useQueryClient();
@@ -71,9 +72,35 @@ export function useInvoiceMutations() {
   const qc = useQueryClient();
   const invalidateList = () => qc.invalidateQueries({ queryKey: ['qop', 'invoices'] });
 
-  const createInvoice = useMutation({ mutationFn: invoiceService.create, onSuccess: invalidateList });
-  const createAdvanceInvoice = useMutation({ mutationFn: invoiceService.createAdvance, onSuccess: invalidateList });
-  const createFinalInvoice = useMutation({ mutationFn: invoiceService.createFinal, onSuccess: invalidateList });
+  const invalidateInvoiceCreation = (_, variables = {}) => {
+    invalidateList();
+    qc.invalidateQueries({ queryKey: ['qop', 'orders'] });
+    if (variables.sourceOrderId) {
+      qc.invalidateQueries({ queryKey: ['qop', 'orders', 'invoices', variables.sourceOrderId] });
+      qc.invalidateQueries({ queryKey: ['qop', 'billing-plan', variables.sourceOrderId] });
+    }
+    if (variables.sourceQuotationId) {
+      qc.invalidateQueries({ queryKey: ['qop', 'quotations'] });
+    }
+  };
+
+  const createInvoice = useMutation({ mutationFn: invoiceService.create, onSuccess: invalidateInvoiceCreation });
+  const createInvoiceFromOrder = useMutation({
+    mutationFn: invoiceService.createFromOrder,
+    onSuccess: invalidateInvoiceCreation,
+  });
+  const createInvoiceFromQuotation = useMutation({
+    mutationFn: invoiceService.createFromQuotation,
+    onSuccess: invalidateInvoiceCreation,
+  });
+  const createAdvanceInvoice = useMutation({
+    mutationFn: invoiceService.createAdvance,
+    onSuccess: invalidateInvoiceCreation,
+  });
+  const createFinalInvoice = useMutation({
+    mutationFn: invoiceService.createFinal,
+    onSuccess: invalidateInvoiceCreation,
+  });
   const finalizeInvoice = useMutation({
     mutationFn: invoiceService.finalize,
     onSuccess: (_, id) => {
@@ -105,7 +132,32 @@ export function useInvoiceMutations() {
   });
 
   return {
-    createInvoice, createAdvanceInvoice, createFinalInvoice,
+    createInvoice, createInvoiceFromOrder, createInvoiceFromQuotation,
+    createAdvanceInvoice, createFinalInvoice,
     finalizeInvoice, sendInvoice, recordPayment, transitionInvoiceStatus,
+  };
+}
+
+export function useReminderMutations() {
+  const qc = useQueryClient();
+  const invalidateReminders = () => qc.invalidateQueries({ queryKey: ['qop', 'appointment-reminders'] });
+
+  const createAppointmentReminder = useMutation({
+    mutationFn: reminderService.createAppointmentReminder,
+    onSuccess: invalidateReminders,
+  });
+  const updateAppointmentReminderStatus = useMutation({
+    mutationFn: ({ id, data }) => reminderService.updateAppointmentReminderStatus(id, data),
+    onSuccess: invalidateReminders,
+  });
+  const updateReminderSettings = useMutation({
+    mutationFn: reminderService.updateSettings,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['qop', 'reminder-settings'] }),
+  });
+
+  return {
+    createAppointmentReminder,
+    updateAppointmentReminderStatus,
+    updateReminderSettings,
   };
 }

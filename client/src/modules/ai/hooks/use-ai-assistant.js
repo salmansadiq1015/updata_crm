@@ -6,21 +6,19 @@ import { useAgentRun } from './use-agent-run';
 import { useAudioRecorder } from './use-audio-recorder';
 import { PANEL_VIEWS, SESSION_TYPES, isTerminalAgentStatus } from '../constants/ai-constants';
 import { showError } from '@/lib/toast';
+import { useLanguage } from '@/lib/i18n/language-context';
 
-/**
- * Top-level orchestrator combining voice session + agent run + recorder.
- * Single hook consumed by AiAssistantPanel.
- */
 export function useAiAssistant() {
-  const isPanelOpen  = useAiStore((s) => s.isPanelOpen);
-  const panelView    = useAiStore((s) => s.panelView);
-  const activeRunId  = useAiStore((s) => s.activeRunId);
-  const openPanel    = useAiStore((s) => s.openPanel);
-  const closePanel   = useAiStore((s) => s.closePanel);
+  const { t } = useLanguage();
+  const isPanelOpen = useAiStore((s) => s.isPanelOpen);
+  const panelView = useAiStore((s) => s.panelView);
+  const activeRunId = useAiStore((s) => s.activeRunId);
+  const openPanel = useAiStore((s) => s.openPanel);
+  const closePanel = useAiStore((s) => s.closePanel);
   const setPanelView = useAiStore((s) => s.setPanelView);
 
   const voiceSession = useVoiceSession();
-  const agentRun     = useAgentRun();
+  const agentRun = useAgentRun();
 
   const recorder = useAudioRecorder({
     onUploadComplete: () => {
@@ -28,13 +26,13 @@ export function useAiAssistant() {
     },
     onError: (code) => {
       if (code === 'UPLOAD_FAILED') {
-        showError('Upload failed — your recording was saved and will retry when connected.');
+        showError(t('ai.error.uploadSavedLong'));
       } else if (code === 'MIC_DENIED') {
-        showError('Microphone access denied. Please enable it in your browser settings.');
+        showError(t('ai.error.micDeniedSettings'));
       } else if (code === 'MIC_NOT_SUPPORTED') {
-        showError('Voice input is not supported in this browser. Please use text input.');
+        showError(t('ai.error.micNotSupported'));
       } else if (code === 'EMPTY_AUDIO') {
-        showError('No audio was captured. Please try again.');
+        showError(t('ai.error.emptyAudio'));
       }
     },
   });
@@ -45,7 +43,7 @@ export function useAiAssistant() {
       const session = await voiceSession.createSessionAsync(SESSION_TYPES.COMMAND);
       sessionId = session?._id || session?.id;
       if (!sessionId) {
-        throw new Error('Voice session could not be started.');
+        throw new Error(t('ai.error.sessionStartFailed'));
       }
       await recorder.startRecording(sessionId);
     } catch (err) {
@@ -88,7 +86,6 @@ export function useAiAssistant() {
     !isTerminalAgentStatus(agentRun.agentRun.status);
 
   return {
-    // Panel state
     isPanelOpen,
     panelView,
     openPanel,
@@ -96,26 +93,23 @@ export function useAiAssistant() {
     resetToIdle,
     hasActiveRun,
 
-    // Voice session
-    session:          voiceSession.session,
-    createSession:    startVoiceSession,
-    isCreating:       voiceSession.isCreating,
-    stopRecording:    stopVoiceRecording,
+    session: voiceSession.session,
+    createSession: startVoiceSession,
+    isCreating: voiceSession.isCreating,
+    stopRecording: stopVoiceRecording,
     submitCorrections: voiceSession.submitCorrections,
-    confirmSession:   voiceSession.confirmSession,
-    cancelSession:    voiceSession.cancelSession,
+    confirmSession: voiceSession.confirmSession,
+    cancelSession: voiceSession.cancelSession,
     isConfirmingSession: voiceSession.isConfirming,
     isCancellingSession: voiceSession.isCancelling,
 
-    // Recorder
     recorder,
 
-    // Agent run
-    agentRun:       agentRun.agentRun,
-    workflowLabel:  agentRun.workflowLabel,
-    dispatch:       handleTextSubmit,
-    isDispatching:  agentRun.isDispatching,
-    confirmRun:     agentRun.confirmRun,
+    agentRun: agentRun.agentRun,
+    workflowLabel: agentRun.workflowLabel,
+    dispatch: handleTextSubmit,
+    isDispatching: agentRun.isDispatching,
+    confirmRun: agentRun.confirmRun,
     isConfirmingRun: agentRun.isConfirming,
   };
 }

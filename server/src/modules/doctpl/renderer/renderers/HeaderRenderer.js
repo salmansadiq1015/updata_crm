@@ -1,4 +1,6 @@
 import { t } from '../i18n.js';
+import { pdfColors } from './colors.js';
+import { pdfFonts } from './fonts.js';
 
 const MM_TO_PT = 2.83465;
 
@@ -21,15 +23,22 @@ export default class HeaderRenderer {
     const left = pm.margins.left;
     const width = pm.contentWidth;
     let y = pm.margins.top;
+    const colors = pdfColors(ciConfig);
+    const fonts = pdfFonts(ciConfig);
 
     // Logo (top-left) — skip gracefully if path missing/invalid
-    if (ciConfig?.logoPath) {
-      try { doc.image(ciConfig.logoPath, left, y, { height: 30 }); } catch {}
+    const logoSource = ciConfig?.logoBuffer;
+    if (logoSource) {
+      doc.image(logoSource, left, y, {
+        width: Math.min(Number(ciConfig?.logo?.width || 120), width * 0.4),
+        height: 30,
+        fit: [width * 0.4, 30],
+      });
     }
 
     // Company block (top-right)
     const ci = ciConfig?.companyDetails || {};
-    doc.save().fontSize(8).fillColor('#1B3F8B');
+    doc.save().font(fonts.body).fontSize(8).fillColor(colors.primary);
     const companyLines = [
       ciConfig?.companyName || 'MB Boiler & Heizung AG',
       ci.address?.street || '',
@@ -47,7 +56,7 @@ export default class HeaderRenderer {
     // Customer address window: DIN 5008 position (27mm from top, 20mm from left)
     const addrY = 27 * MM_TO_PT;
     if (data.customer) {
-      doc.save().fontSize(9).fillColor('#1A1A1A');
+      doc.save().font(fonts.body).fontSize(9).fillColor(colors.text);
       const cust = data.customer;
       const addrLines = [
         cust.name,
@@ -67,11 +76,11 @@ export default class HeaderRenderer {
     // Document title + meta (right column)
     const templateType = data.templateType || config.templateType || 'quotation';
     const title = DOC_TITLES[templateType]?.[language] || DOC_TITLES[templateType]?.de || templateType;
-    doc.save().fontSize(14).fillColor('#1B3F8B').font('Helvetica-Bold');
+    doc.save().font(fonts.bold).fontSize(14).fillColor(colors.primary);
     doc.text(title, left + width * 0.55, addrY, { width: width * 0.45, align: 'right' });
     doc.restore();
 
-    doc.save().fontSize(9).fillColor('#1A1A1A');
+    doc.save().font(fonts.body).fontSize(9).fillColor(colors.text);
     let metaY = addrY + 22;
     if (data.documentNumber) { doc.text(`Nr: ${data.documentNumber}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     if (data.documentDate)   { doc.text(`Datum: ${data.documentDate}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }

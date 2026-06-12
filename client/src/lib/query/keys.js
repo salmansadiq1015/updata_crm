@@ -281,6 +281,7 @@ export const queryKeys = {
       list:   (f)  => ['doctpl', 'templates', 'list', f],
       detail: (id) => ['doctpl', 'templates', 'detail', id],
       versions:(id)=> ['doctpl', 'templates', 'versions', id],
+      compare: (id, params) => ['doctpl', 'templates', 'compare', id, params],
     },
     documents: {
       list:     (f)      => ['doctpl', 'documents', 'list', f],
@@ -290,6 +291,7 @@ export const queryKeys = {
     ci: {
       config: () => ['doctpl', 'ci', 'config'],
       assets: () => ['doctpl', 'ci', 'assets'],
+      audit: () => ['doctpl', 'ci', 'audit'],
     },
     emails: {
       list: (f) => ['doctpl', 'emails', 'list', f],

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { Controller } from 'react-hook-form';
+import { AiVoiceCapture } from '@/modules/ai';
+import { SESSION_TYPES } from '@/modules/ai';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
@@ -93,8 +94,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
     }
   }, [defaultValues, reset, open]);
 
-  const watchedName = watch('name');
-  const watchedPlz = watch('postalCode');
+  const watchedName = useWatch({ control, name: 'name' });
+  const watchedPlz = useWatch({ control, name: 'postalCode' });
   const debouncedName = useDebounce(watchedName, 400);
   const debouncedPlz = useDebounce(watchedPlz, 400);
 
@@ -127,6 +128,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   const isLastStep = currentStep === STEPS.length - 1;
   const typeVal = watch('type');
   const newsletterOptIn = watch('newsletterOptIn');
+  const voiceCustomerId = defaultValues?._id || null;
 
   const inputCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20';
   const selectTriggerCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 focus:border-violet-500/50 focus:ring-violet-500/20';
@@ -371,6 +373,25 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     </Select>
                   </DarkField>
                 </div>
+
+                {voiceCustomerId && (
+                  <AiVoiceCapture
+                    compact
+                    sessionType={SESSION_TYPES.ADDRESS_CAPTURE}
+                    contextModule="crm"
+                    contextRecordType="customer"
+                    contextRecordId={voiceCustomerId}
+                    onComplete={(session) => {
+                      const parsed = session?.result?.parsed;
+                      if (!parsed) return;
+                      setValue('street', parsed.street || '', { shouldDirty: true, shouldValidate: true });
+                      setValue('postalCode', parsed.postalCode || '', { shouldDirty: true, shouldValidate: true });
+                      setValue('city', parsed.city || '', { shouldDirty: true, shouldValidate: true });
+                      setValue('canton', parsed.canton || '', { shouldDirty: true, shouldValidate: true });
+                      setValue('country', parsed.country || 'CH', { shouldDirty: true, shouldValidate: true });
+                    }}
+                  />
+                )}
 
                 <DarkField
                   label={`${t('crm.country', 'Land')} (ISO-2, z.B. CH, DE, AT)`}

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const attachmentSchema = new mongoose.Schema(
   {
     documentId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    fileId: { type: mongoose.Schema.Types.ObjectId, ref: 'FileMetadata', default: null },
     fileName: { type: String },
     fileUrl: { type: String },
   },

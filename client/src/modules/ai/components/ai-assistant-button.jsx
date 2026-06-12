@@ -5,8 +5,10 @@ import { cn } from '@/lib/utils';
 import { useAiStore } from '../store/ai-store';
 import { AGENT_STATUSES } from '../constants/ai-constants';
 import { useAiHistory } from '../hooks/use-ai-history';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function AiAssistantButton() {
+  const { t } = useLanguage();
   const openPanel  = useAiStore((s) => s.openPanel);
   const isPanelOpen = useAiStore((s) => s.isPanelOpen);
   const activeRunId = useAiStore((s) => s.activeRunId);
@@ -22,7 +24,7 @@ export function AiAssistantButton() {
     <button
       type="button"
       onClick={openPanel}
-      aria-label="Open AI Assistant"
+      aria-label={t('ai.panel.open', 'Open AI Assistant')}
       className={cn(
         'fixed bottom-6 right-6 z-40',
         'flex h-12 w-12 items-center justify-center rounded-full',

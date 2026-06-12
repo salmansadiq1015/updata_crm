@@ -10,6 +10,11 @@ function newThreadId() {
   return generateId();
 }
 
+function replacePath(path) {
+  if (typeof window === 'undefined' || window.location.pathname === path) return;
+  window.history.replaceState(null, '', path);
+}
+
 export function AiChatLayout({ initialThreadId } = {}) {
   // selectedThreadId = thread currently shown in main area
   const [selectedThreadId, setSelectedThreadId] = useState(initialThreadId ?? null);
@@ -18,23 +23,23 @@ export function AiChatLayout({ initialThreadId } = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleThreadSelected = useCallback((id) => {
-    setSelectedThreadId(id);
-    setCurrentThreadId(id);
-    window.history.replaceState(null, '', `/ai/${id}`);
+    setSelectedThreadId((current) => (current === id ? current : id));
+    setCurrentThreadId((current) => (current === id ? current : id));
+    replacePath(`/ai/${id}`);
   }, []);
 
   const handleNewChat = useCallback(() => {
     const id = newThreadId();
     setSelectedThreadId(null);
     setCurrentThreadId(id);
-    window.history.replaceState(null, '', '/ai');
+    replacePath('/ai');
   }, []);
 
   const handleThreadDeleted = useCallback(() => {
     const id = newThreadId();
     setSelectedThreadId(null);
     setCurrentThreadId(id);
-    window.history.replaceState(null, '', '/ai');
+    replacePath('/ai');
   }, []);
 
   const chat = useAiChat({
@@ -71,7 +76,7 @@ export function AiChatLayout({ initialThreadId } = {}) {
         isLoadingThread={chat.isLoadingThread}
         dispatch={chat.dispatch}
         isDispatching={chat.isDispatching}
-        pendingInput={chat.pendingInput}
+        pendingRuns={chat.pendingRuns}
         confirm={chat.confirm}
         isConfirming={chat.isConfirming}
         recorder={chat.recorder}

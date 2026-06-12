@@ -42,6 +42,7 @@ const order = {
 
 async function loadInvoiceService({
   orderDoc = order,
+  quotationDoc = null,
   existingInvoices = [],
   advances = [],
 } = {}) {
@@ -57,6 +58,9 @@ async function loadInvoiceService({
   const orderRepository = {
     findById: jest.fn(async () => orderDoc),
     addInvoiceId: jest.fn(async () => ({ ...orderDoc, invoiceIds: ['invoice-new'] })),
+  };
+  const quotationRepository = {
+    findById: jest.fn(async () => quotationDoc),
   };
   const counterService = {
     getNextInvoiceNumber: jest.fn(async () => 'RE-2026-00100'),
@@ -74,6 +78,9 @@ async function loadInvoiceService({
   }));
   jest.unstable_mockModule('../../src/modules/qop/order.repository.js', () => ({
     default: orderRepository,
+  }));
+  jest.unstable_mockModule('../../src/modules/qop/quotation.repository.js', () => ({
+    default: quotationRepository,
   }));
   jest.unstable_mockModule('../../src/modules/qop/invoicePdf.service.js', () => ({
     default: { generateAndStore: jest.fn() },
@@ -110,7 +117,15 @@ async function loadInvoiceService({
   }));
 
   const service = (await import('../../src/modules/qop/invoice.service.js')).default;
-  return { service, invoiceRepository, orderRepository, counterService, eventBus, auditService };
+  return {
+    service,
+    invoiceRepository,
+    orderRepository,
+    quotationRepository,
+    counterService,
+    eventBus,
+    auditService,
+  };
 }
 
 describe('QOP invoice order prefill and partial invoicing', () => {
@@ -177,6 +192,48 @@ describe('QOP invoice order prefill and partial invoicing', () => {
       lineSelections: [{ sourceOrderLinePosition: 1, quantity: 2 }],
     }, 'user-1')).rejects.toMatchObject({ statusCode: 409 });
     expect(invoiceRepository.create).not.toHaveBeenCalled();
+  });
+
+  test('creates a draft invoice directly from an accepted quotation', async () => {
+    const quotationDoc = {
+      _id: '64f000000000000000000201',
+      quotationNumber: 'OFF-2026-00001',
+      status: 'ACCEPTED',
+      customerId: '64f000000000000000000301',
+      customerName: 'Customer AG',
+      contactId: null,
+      projectId: '64f000000000000000000401',
+      departmentId: '64f000000000000000000501',
+      language: 'de',
+      title: 'Accepted quotation',
+      currency: 'CHF',
+      globalDiscountPercent: 0,
+      paymentTerms: '14 days net',
+      lineItems: order.lineItems,
+    };
+    const { service, invoiceRepository, quotationRepository } = await loadInvoiceService({ quotationDoc });
+
+    await service.createFromQuotation({
+      sourceQuotationId: quotationDoc._id,
+      dueDate: new Date('2026-07-15T00:00:00.000Z'),
+      paymentTermsDays: 14,
+    }, 'user-1');
+
+    expect(quotationRepository.findById).toHaveBeenCalledWith(quotationDoc._id);
+    expect(invoiceRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      invoiceNumber: 'RE-2026-00100',
+      invoiceType: 'STANDARD',
+      sourceQuotationId: quotationDoc._id,
+      customerId: quotationDoc.customerId,
+      customerName: quotationDoc.customerName,
+      amountDue: 1351.25,
+      paymentTermsDays: 14,
+      paymentTermsText: '14 days net',
+      lineItems: [
+        expect.objectContaining({ position: 1, lineTotal: 1000 }),
+        expect.objectContaining({ position: 2, lineTotal: 250 }),
+      ],
+    }));
   });
 
   test('billing plan reports remaining quantities per order line', async () => {

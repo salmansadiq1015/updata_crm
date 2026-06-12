@@ -28,6 +28,7 @@ import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
 import { QuotationFormDialog } from './quotation-form-dialog';
 import { ConvertToOrderDialog } from './convert-to-order-dialog';
+import { InvoiceFormDialog } from './invoice-form-dialog';
 import { VALID_QUOTATION_TRANSITIONS } from '../constants/qop-constants';
 
 const STATUSES = ['', 'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED'];
@@ -116,7 +117,7 @@ function HistoryDrawer({ open, onClose, quotationId }) {
   );
 }
 
-export function QuotationsTable() {
+export function QuotationsTable({ advancedFilters = {} }) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
 
@@ -127,8 +128,9 @@ export function QuotationsTable() {
   const [transitioning, setTrans]       = useState(null);
   const [historyFor, setHistoryFor]     = useState(null);
   const [convertTarget, setConvertTarget] = useState(null);
+  const [invoiceTarget, setInvoiceTarget] = useState(null);
 
-  const filters = {};
+  const filters = { ...advancedFilters };
   if (search.trim())    filters.search = search.trim();
   if (statusFilter)     filters.status = statusFilter;
 
@@ -268,6 +270,11 @@ export function QuotationsTable() {
                         <ArrowRight className="h-4 w-4 mr-2" />{de ? 'In Auftrag konvertieren' : 'Convert to Order'}
                       </DropdownMenuItem>
                     )}
+                    {['ACCEPTED', 'CONVERTED'].includes(q.status) && (
+                      <DropdownMenuItem onClick={() => setInvoiceTarget(q)}>
+                        <FileText className="h-4 w-4 mr-2" />{de ? 'Rechnung erstellen' : 'Create Invoice'}
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => setTrans(q)}>
                       <RefreshCw className="h-4 w-4 mr-2" />{de ? 'Status ändern' : 'Change Status'}
                     </DropdownMenuItem>
@@ -312,6 +319,13 @@ export function QuotationsTable() {
         open={!!convertTarget}
         onClose={() => setConvertTarget(null)}
         quotation={convertTarget}
+      />
+      <InvoiceFormDialog
+        open={!!invoiceTarget}
+        onClose={() => setInvoiceTarget(null)}
+        type="STANDARD"
+        sourceQuotationId={invoiceTarget?._id ?? invoiceTarget?.id}
+        sourceQuotation={invoiceTarget}
       />
     </div>
   );

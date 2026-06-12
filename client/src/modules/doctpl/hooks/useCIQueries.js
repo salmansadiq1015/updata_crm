@@ -13,3 +13,9 @@ export const useCIAssets = () => useQuery({
   queryFn: ciService.listAssets,
   select: (r) => r?.data ?? [],
 });
+
+export const useCIAudit = () => useQuery({
+  queryKey: queryKeys.doctpl.ci.audit(),
+  queryFn: ciService.getAudit,
+  select: (r) => r?.data,
+});

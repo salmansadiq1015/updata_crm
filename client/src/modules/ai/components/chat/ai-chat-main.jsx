@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Menu, PenSquare, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { SESSION_TYPES } from '../../constants/ai-constants';
 import { useInteractionLayer } from '../../hooks/use-interaction-layer';
 import { AiChatWelcome } from './ai-chat-welcome';
@@ -21,13 +22,14 @@ export function AiChatMain({
   isLoadingThread,
   dispatch,
   isDispatching,
-  pendingInput,
+  pendingRuns = [],
   confirm,
   isConfirming,
   recorder,
   voiceSession,
 }) {
   const router = useRouter();
+  const { t } = useLanguage();
 
   const { copy, voice } = useInteractionLayer({ onDispatch: dispatch });
 
@@ -78,12 +80,12 @@ export function AiChatMain({
   };
 
   const hasHistory = threads.length > 0;
-  const showThread = !!selectedThreadId || !!pendingInput;
+  const showThread = !!selectedThreadId || pendingRuns.length > 0 || threadRuns.length > 0;
 
   return (
     <div className="flex flex-1 flex-col h-full overflow-hidden min-w-0">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0 bg-background/80 backdrop-blur-sm">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onToggleSidebar} title="Toggle history">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onToggleSidebar} title={t('ai.chat.toggleHistory')}>
           <Menu className="h-4 w-4" />
         </Button>
         {hasHistory && (
@@ -94,7 +96,7 @@ export function AiChatMain({
             onClick={onNewChat}
           >
             <PenSquare className="h-3.5 w-3.5" />
-            New Chat
+            {t('ai.chat.newChat')}
           </Button>
         )}
         <div className="ml-auto flex items-center gap-2">
@@ -114,19 +116,19 @@ export function AiChatMain({
             onClick={() => router.push('/dashboard')}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Dashboard
+            {t('ai.chat.dashboard')}
           </Button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {showThread ? (
-          <div className="w-full max-w-7xl mx-auto px-4 md:px-8 py-6 flex flex-col gap-6">
+          <div className="mx-auto flex w-full max-w-[980px] flex-col gap-6 px-4 py-6 md:px-6 lg:px-8">
             <AiChatThread
               runs={threadRuns}
               latestRunId={latestRun?._id}
-              isLoading={isLoadingThread && !pendingInput && !threadRuns.length}
-              pendingInput={pendingInput}
+              isLoading={isLoadingThread && !pendingRuns.length && !threadRuns.length}
+              pendingRuns={pendingRuns}
               onConfirm={confirm}
               isConfirming={isConfirming}
               onRetry={handleRetry}

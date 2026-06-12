@@ -1,27 +1,37 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { showError, showSuccess } from '@/lib/toast';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { aiAgentService } from '../services/ai-agent-service';
 import { useAiHistory } from './use-ai-history';
 import { useVoiceSession } from './use-voice-session';
 import { useAudioRecorder } from './use-audio-recorder';
 import {
   AGENT_POLL_INTERVAL_MS,
+  AGENT_STATUSES,
+  MIN_AGENT_INPUT_LENGTH,
   isTerminalAgentStatus,
 } from '../constants/ai-constants';
 import { generateCorrelationId } from '../utils/uid';
 
-export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected, onThreadDeleted }) {
-  const queryClient = useQueryClient();
-  const [pendingInput, setPendingInput] = useState(null);
+function hasMatchingRun(runs, pendingRun) {
+  if (!pendingRun) return false;
+  return runs.some((run) =>
+    (pendingRun._id && run._id === pendingRun._id) ||
+    (pendingRun.correlationId && run.correlationId === pendingRun.correlationId)
+  );
+}
 
-  // ── Sidebar thread list ────────────────────────────────────────────
+export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected, onThreadDeleted }) {
+  const { t } = useLanguage();
+  const queryClient = useQueryClient();
+  const [pendingRuns, setPendingRuns] = useState([]);
+
   const history = useAiHistory();
 
-  // ── Thread runs (all messages in the selected thread) ─────────────
   const threadQuery = useQuery({
     queryKey: queryKeys.ai.agentThread(selectedThreadId),
     queryFn: () => aiAgentService.getThread(selectedThreadId),
@@ -38,31 +48,40 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
   const threadRuns = Array.isArray(threadQuery.data) ? threadQuery.data : [];
   const latestRun = threadRuns[threadRuns.length - 1] ?? null;
 
-  // Clear pending once thread data arrives with a new run
-  useEffect(() => {
-    if (threadRuns.length > 0) setPendingInput(null);
-  }, [threadRuns.length]);
-
-  // ── Dispatch message into current thread ───────────────────────────
   const dispatchMutation = useMutation({
     mutationFn: ({ input, threadId, correlationId }) => aiAgentService.dispatch(input, threadId, correlationId),
-    onSuccess: (result, { threadId }) => {
-      setPendingInput(null);
-      onThreadSelected(threadId);
+    onSuccess: (result, { threadId, correlationId }) => {
+      const resolvedThreadId = result?.threadId || threadId;
+      const resolvedRunId = result?.agentRunId || result?._id;
+
+      setPendingRuns((runs) =>
+        runs.map((run) => {
+          if (run.correlationId !== correlationId) return run;
+          return {
+            ...run,
+            _id: resolvedRunId || run._id,
+            threadId: resolvedThreadId,
+            status: result?.status?.toUpperCase?.() || AGENT_STATUSES.PENDING,
+          };
+        })
+      );
+
+      if (selectedThreadId !== resolvedThreadId) {
+        onThreadSelected(resolvedThreadId);
+      }
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentRuns({}) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentThread(threadId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentThread(resolvedThreadId) });
     },
-    onError: (err) => {
-      setPendingInput(null);
+    onError: (err, { correlationId } = {}) => {
+      setPendingRuns((runs) => runs.filter((run) => run.correlationId !== correlationId));
       if (err?.code === 'AI_AGENT_RATE_LIMITED') {
-        showError('Too many requests — please wait a moment before trying again.');
+        showError(t('ai.chat.tooManyRequests'));
       } else {
         showError(err);
       }
     },
   });
 
-  // ── Confirm / deny AWAITING_CONFIRMATION ──────────────────────────
   const confirmMutation = useMutation({
     mutationFn: ({ decision }) => aiAgentService.confirm(latestRun?._id, decision),
     onSuccess: () => {
@@ -70,7 +89,7 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
     },
     onError: (err) => {
       if (err?.code === 'AI_AGENT_INVALID_STATUS') {
-        showError("Can't confirm — this run has already been settled.");
+        showError(t('ai.chat.alreadySettled'));
       } else {
         showError(err);
       }
@@ -78,22 +97,20 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
     },
   });
 
-  // ── Archive thread ─────────────────────────────────────────────────
   const archiveMutation = useMutation({
     mutationFn: (threadId) => aiAgentService.archiveThread(threadId),
     onSuccess: (_, threadId) => {
-      showSuccess('Chat archived');
+      showSuccess(t('ai.chat.archived'));
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentRuns({}) });
       if (threadId === selectedThreadId && onThreadDeleted) onThreadDeleted();
     },
     onError: (err) => showError(err),
   });
 
-  // ── Delete thread ──────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: (threadId) => aiAgentService.deleteThread(threadId),
     onSuccess: (_, threadId) => {
-      showSuccess('Chat deleted');
+      showSuccess(t('ai.chat.deleted'));
       queryClient.removeQueries({ queryKey: queryKeys.ai.agentThread(threadId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentRuns({}) });
       if (threadId === selectedThreadId && onThreadDeleted) onThreadDeleted();
@@ -101,7 +118,6 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
     onError: (err) => showError(err),
   });
 
-  // ── Voice ─────────────────────────────────────────────────────────
   const voiceSession = useVoiceSession();
   const recorder = useAudioRecorder({
     onUploadComplete: voiceSession.onAudioUploaded,
@@ -110,26 +126,40 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
   const dispatch = useCallback(
     (input, correlationId) => {
       const trimmed = input?.trim();
-      if (!trimmed || trimmed.length < 3) return;
-      setPendingInput(trimmed);
+      if (!trimmed || trimmed.length < MIN_AGENT_INPUT_LENGTH) return;
+      const nextCorrelationId = correlationId ?? generateCorrelationId();
+      const optimisticRun = {
+        _id: `pending-${nextCorrelationId}`,
+        threadId: currentThreadId,
+        correlationId: nextCorrelationId,
+        input: trimmed,
+        output: null,
+        steps: [],
+        status: AGENT_STATUSES.PENDING,
+        createdAt: new Date().toISOString(),
+        __optimistic: true,
+      };
+      setPendingRuns((runs) => [
+        ...runs.filter((run) => run.correlationId !== nextCorrelationId),
+        optimisticRun,
+      ]);
       dispatchMutation.mutate({
         input: trimmed,
         threadId: currentThreadId,
-        correlationId: correlationId ?? generateCorrelationId(),
+        correlationId: nextCorrelationId,
       });
     },
-    [dispatchMutation, currentThreadId]
+    [dispatchMutation, currentThreadId],
   );
 
   const confirm = useCallback(
     (decision) => confirmMutation.mutate({ decision }),
-    [confirmMutation]
+    [confirmMutation],
   );
 
-  const isLoading = threadQuery.isLoading;
-  // Only show the optimistic bubble while the POST request is in flight —
-  // once onSuccess fires (which clears pendingInput), the real run takes over
-  const activePendingInput = pendingInput && dispatchMutation.isPending ? pendingInput : null;
+  const activePendingRuns = pendingRuns.filter((run) =>
+    run.threadId === currentThreadId && !hasMatchingRun(threadRuns, run)
+  );
 
   return {
     threads: history.threads,
@@ -142,11 +172,11 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
 
     threadRuns,
     latestRun,
-    isLoadingThread: isLoading,
+    isLoadingThread: threadQuery.isLoading,
 
     dispatch,
     isDispatching: dispatchMutation.isPending,
-    pendingInput: activePendingInput,
+    pendingRuns: activePendingRuns,
 
     confirm,
     isConfirming: confirmMutation.isPending,

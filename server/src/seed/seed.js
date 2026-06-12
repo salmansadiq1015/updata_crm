@@ -1,4 +1,6 @@
 import { seedCatalog } from './catalog-seed.js';
+import { seedAiVocabulary } from './ai-vocabulary-seed.js';
+import { seedAiCommands } from './ai-commands-seed.js';
 import Permission from '../modules/auth/permission.model.js';
 import Role from '../modules/auth/role.model.js';
 import User from '../modules/auth/user.model.js';
@@ -109,6 +111,12 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'quotations', action: 'write', description: 'Create and update quotations' },
   { module: 'quotations', action: 'delete', description: 'Delete quotations' },
   { module: 'quotations', action: 'admin', description: 'Full quotation administration' },
+
+  // Document Templates
+  { module: 'templates', action: 'read', description: 'View document templates and generated documents' },
+  { module: 'templates', action: 'write', description: 'Create, update, preview, and generate document templates' },
+  { module: 'templates', action: 'delete', description: 'Delete document templates and generated documents' },
+  { module: 'templates', action: 'admin', description: 'Manage CI assets, template rollback, and document template administration' },
 
   // Invoicing
   { module: 'invoicing', action: 'read', description: 'View invoices' },
@@ -359,6 +367,10 @@ export async function seedDatabase() {
 
     // 5. Seed catalog data (units of measure, etc.)
     await seedCatalog();
+
+    // 6. Seed AI assistant vocabulary and voice commands
+    await seedAiVocabulary();
+    await seedAiCommands();
 
     logger.info('Database seeding complete', { module: 'seed' });
   } catch (err) {

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import voiceMetadataSchema from '../../shared/schemas/voiceMetadata.schema.js';
 
 export const REPORT_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'];
 
@@ -71,6 +72,7 @@ const workReportSchema = new mongoose.Schema(
       default: null,
     },
     materialItems: { type: [materialItemSchema], default: [] },
+    voiceAttachments: { type: [voiceMetadataSchema], default: [] },
     rejectionNote: { type: String, maxlength: 2000, default: null },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },

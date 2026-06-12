@@ -10,11 +10,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
+import apiClient from '@/lib/api/client';
 import { searchService } from '../services/search-service';
 
 const EMPTY_FILTERS = {
   type: 'all', status: '', dateFrom: '', dateTo: '',
-  amountMin: '', amountMax: '',
+  amountMin: '', amountMax: '', departmentId: '',
 };
 
 export function QopAdvancedFilters({ onFiltersChange }) {
@@ -29,6 +30,12 @@ export function QopAdvancedFilters({ onFiltersChange }) {
   const { data: presets = [] } = useQuery({
     queryKey: ['qop', 'search-presets'],
     queryFn: () => searchService.listPresets(),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => apiClient.get('/admin/departments'),
     select: (r) => Array.isArray(r.data) ? r.data : [],
   });
 
@@ -127,6 +134,20 @@ export function QopAdvancedFilters({ onFiltersChange }) {
                 value={filters.status}
                 onChange={(e) => set('status', e.target.value)}
               />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Abteilung' : 'Department'}</Label>
+              <Select value={filters.departmentId || 'ALL'} onValueChange={(v) => set('departmentId', v === 'ALL' ? '' : v)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">{de ? 'Alle' : 'All'}</SelectItem>
+                  {departments.map((department) => (
+                    <SelectItem key={department._id} value={department._id}>
+                      {department.code ? `${department.code} · ${department.name}` : department.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">{de ? 'Von (Datum)' : 'Date From'}</Label>

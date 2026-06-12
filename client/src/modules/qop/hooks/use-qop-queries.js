@@ -6,6 +6,7 @@ import { quotationService } from '../services/quotation-service';
 import { orderService } from '../services/order-service';
 import { invoiceService } from '../services/invoice-service';
 import { searchService } from '../services/search-service';
+import { reminderService } from '../services/reminder-service';
 
 export function useQuotations(filters = {}) {
   return useQuery({
@@ -146,11 +147,53 @@ export function useQopReminders(filters = {}) {
   });
 }
 
+export function useAppointmentReminders(filters = {}) {
+  return useQuery({
+    queryKey: ['qop', 'appointment-reminders', filters],
+    queryFn: () => reminderService.listAppointmentReminders(filters),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    refetchInterval: 60 * 1000,
+  });
+}
+
+export function useReminderSettings() {
+  return useQuery({
+    queryKey: ['qop', 'reminder-settings'],
+    queryFn: reminderService.getSettings,
+    select: (r) => r.data,
+  });
+}
+
 export function useCustomerDocuments(customerId, filters = {}) {
   return useQuery({
     queryKey: ['qop', 'customer-docs', customerId, filters],
     queryFn: () => searchService.customerDocs(customerId, filters),
     enabled: !!customerId,
-    select: (r) => Array.isArray(r.data) ? r.data : [],
+    select: (r) => {
+      if (Array.isArray(r.data)) return r.data;
+      if (Array.isArray(r.data?.documents)) return r.data.documents;
+      return [
+        ...(r.data?.quotations ?? []).map((doc) => ({ ...doc, documentType: 'quotation', documentNumber: doc.quotationNumber })),
+        ...(r.data?.orders ?? []).map((doc) => ({ ...doc, documentType: 'order', documentNumber: doc.orderNumber })),
+        ...(r.data?.invoices ?? []).map((doc) => ({ ...doc, documentType: 'invoice', documentNumber: doc.invoiceNumber })),
+      ];
+    },
+  });
+}
+
+export function useProjectDocuments(projectId, filters = {}) {
+  return useQuery({
+    queryKey: ['qop', 'project-docs', projectId, filters],
+    queryFn: () => searchService.projectDocs(projectId, filters),
+    enabled: !!projectId,
+    select: (r) => {
+      if (Array.isArray(r.data)) return r.data;
+      if (Array.isArray(r.data?.documents)) return r.data.documents;
+      return [
+        ...(r.data?.quotations ?? []).map((doc) => ({ ...doc, documentType: 'quotation', documentNumber: doc.quotationNumber })),
+        ...(r.data?.orders ?? []).map((doc) => ({ ...doc, documentType: 'order', documentNumber: doc.orderNumber })),
+        ...(r.data?.invoices ?? []).map((doc) => ({ ...doc, documentType: 'invoice', documentNumber: doc.invoiceNumber })),
+      ];
+    },
   });
 }

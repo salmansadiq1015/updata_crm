@@ -15,7 +15,7 @@ export class InvoiceOverdueWorker extends BaseWorker {
     super('invoice-overdue');
   }
 
-  async process(job) {
+  async process(_job) {
     const now = new Date();
 
     // Lazy imports

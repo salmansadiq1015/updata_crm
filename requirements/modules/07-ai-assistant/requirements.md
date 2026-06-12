@@ -1,5 +1,9 @@
 # Module 07: AI Assistant -- Detailed Requirements
 
+## Scope Clarification
+
+This module is implemented inside the web application only. Any reference to "mobile" in this document means mobile-optimized web pages and responsive field-service workflows rendered in the browser. It does not mean a separate native mobile app or a second client-side mobile codebase.
+
 ---
 
 ## AI-001: Voice-Supported Order Creation
@@ -10,7 +14,7 @@
 | **Title**         | Voice-Supported Order Creation                                                                 |
 | **Priority**      | High                                                                                           |
 | **Complexity**    | High                                                                                           |
-| **Tags**          | `voice`, `order`, `field-service`, `mobile`, `stt`, `nlp`                                      |
+| **Tags**          | `voice`, `order`, `field-service`, `web`, `responsive`, `stt`, `nlp`                          |
 
 ### Description
 
@@ -26,7 +30,7 @@ The system shall allow users to create new service orders by dictating order det
 
 1. User is authenticated and has permission to create orders.
 2. Microphone access is granted on the device.
-3. Internet connection is available for STT processing (or audio is queued for later processing).
+3. Internet connection is available for STT processing, or audio is queued for later processing.
 4. CRM module is accessible for customer lookup.
 
 ### Flow
@@ -40,10 +44,10 @@ The system shall allow users to create new service orders by dictating order det
    - Issue description --> Free text
    - Urgency --> Enum (Normal, Urgent, Emergency)
    - Requested date --> Date parsing
-5. System presents a structured confirmation screen showing all extracted fields with confidence indicators.
+5. System presents a structured confirmation screen in the web UI showing all extracted fields with confidence indicators.
 6. User reviews, corrects if necessary (voice or manual), and confirms.
 7. System creates the order in Module 08 (Quotations & Order Processing).
-8. System provides audio and visual confirmation of successful order creation.
+8. System provides audio and visual confirmation of successful order creation in the web UI.
 
 ### Postconditions
 
@@ -54,7 +58,7 @@ The system shall allow users to create new service orders by dictating order det
 
 ### Acceptance Criteria
 
-- [ ] User can initiate order creation via voice command on mobile and web.
+- [ ] User can initiate order creation via voice command on responsive web pages and desktop web pages.
 - [ ] STT transcription accuracy is >= 90% for standard High German in quiet environments.
 - [ ] Entity extraction correctly identifies customer name, address, and urgency in >= 85% of test cases.
 - [ ] CRM customer lookup returns matching candidates with fuzzy matching.
@@ -80,11 +84,11 @@ The system shall allow users to create new service orders by dictating order det
 | **Title**         | Spoken Report Recording & Transcription                                                        |
 | **Priority**      | High                                                                                           |
 | **Complexity**    | High                                                                                           |
-| **Tags**          | `voice`, `report`, `transcription`, `field-service`, `mobile`                                  |
+| **Tags**          | `voice`, `report`, `transcription`, `field-service`, `web`, `responsive`                      |
 
 ### Description
 
-The system shall allow field technicians to dictate service reports, inspection findings, and work completion notes by voice. The spoken content is recorded, transcribed to text, and stored against the relevant work order or service record. The technician can review and edit the transcription before finalizing.
+The system shall allow field technicians to dictate service reports, inspection findings, and work completion notes by voice inside the web application. The spoken content is recorded, transcribed to text, and stored against the relevant work order or service record. The technician can review and edit the transcription before finalizing.
 
 ### Actors
 
@@ -99,16 +103,16 @@ The system shall allow field technicians to dictate service reports, inspection 
 
 ### Flow
 
-1. Technician opens the assigned work order on the mobile app.
+1. Technician opens the assigned work order in the web application on a responsive field-service page.
 2. Technician taps "Dictate Report" or issues a voice command.
-3. System begins recording audio.
+3. System begins recording audio in the browser.
 4. Technician speaks the report content (e.g., "Heizkessel Viessmann Vitodens 200, Baujahr 2018. Stoerung E5 ausgelesen. Brenner gereinigt, Zuendelektrode ersetzt. Anlage laeuft wieder. Empfehlung: Wartungsvertrag abschliessen.").
 5. Technician signals completion (button press or voice command "Fertig" / "Done").
-6. System sends audio to STT service for transcription.
-7. Transcribed text is displayed to the technician for review.
+6. System sends audio to the STT service for transcription.
+7. Transcribed text is displayed to the technician for review in the web UI.
 8. Technician edits if needed (voice or manual) and confirms.
 9. Report text and audio recording are saved to the work order.
-10. If template-based document creation is enabled (AI-005), the system offers to generate a formatted report document.
+10. If template-based document creation is enabled (AI-005), the system offers to generate a formatted report document in the web application.
 
 ### Postconditions
 
@@ -119,17 +123,17 @@ The system shall allow field technicians to dictate service reports, inspection 
 
 ### Acceptance Criteria
 
-- [ ] Technician can record reports of up to 15 minutes duration per session.
+- [ ] Technician can record reports of up to 15 minutes duration per session in the web application.
 - [ ] Transcription is available within 30 seconds of recording completion for recordings up to 5 minutes.
 - [ ] Technical HVAC terminology is transcribed with >= 85% accuracy (custom vocabulary support).
 - [ ] Report text is editable before and after saving.
-- [ ] Audio recording is playable from the work order detail screen.
+- [ ] Audio recording is playable from the work order detail screen in the web application.
 - [ ] Multiple report segments can be appended to the same work order.
 - [ ] Offline recording is supported with transcription occurring upon reconnection.
 
 ### Dependencies
 
-- MOD-06: Mobile Technician App (work order context)
+- Web App Responsive Field-Service Pages (work order context)
 - AI-003: Speech-to-Text Conversion
 - AI-005: Template-Based Document Creation (optional)
 

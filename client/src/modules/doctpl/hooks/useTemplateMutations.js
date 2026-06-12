@@ -16,6 +16,8 @@ export const useUpdateTemplate = () => {
     mutationFn: ({ id, ...d }) => templateService.update(id, d),
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.detail(v.id) });
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.versions(v.id) });
+      qc.invalidateQueries({ queryKey: ['doctpl', 'templates', 'compare', v.id] });
       qc.invalidateQueries({ queryKey: ['doctpl', 'templates', 'list'] });
     },
   });
@@ -25,7 +27,12 @@ export const useRevertTemplate = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, version }) => templateService.revert(id, version),
-    onSuccess: (_, v) => qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.detail(v.id) }),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.detail(v.id) });
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.versions(v.id) });
+      qc.invalidateQueries({ queryKey: ['doctpl', 'templates', 'compare', v.id] });
+      qc.invalidateQueries({ queryKey: ['doctpl', 'templates', 'list'] });
+    },
   });
 };
 

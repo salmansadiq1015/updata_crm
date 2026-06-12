@@ -124,17 +124,21 @@ function SelectItem({
   className,
   children,
   textValue,
+  value,
   ...props
 }) {
   const isSimple = typeof children === 'string' || typeof children === 'number';
-  const resolvedTextValue = textValue || extractTextContent(children) || undefined;
+  const extractedTextValue = extractTextContent(children).trim();
+  const resolvedTextValue = textValue || extractedTextValue || (typeof value === 'string' ? value : undefined);
 
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      value={value}
       textValue={resolvedTextValue}
       className={cn(
         "relative flex w-full cursor-pointer items-center gap-1.5 rounded-lg py-2 pr-8 pl-2.5 text-sm outline-hidden select-none transition-colors focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        !isSimple && "[&_[data-slot=select-item-text]]:absolute [&_[data-slot=select-item-text]]:-m-px [&_[data-slot=select-item-text]]:h-px [&_[data-slot=select-item-text]]:w-px [&_[data-slot=select-item-text]]:overflow-hidden [&_[data-slot=select-item-text]]:whitespace-nowrap [&_[data-slot=select-item-text]]:border-0 [&_[data-slot=select-item-text]]:p-0",
         className
       )}
       {...props}>
@@ -145,16 +149,16 @@ function SelectItem({
         </SelectPrimitive.ItemIndicator>
       </span>
       {isSimple ? (
-        <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+        <SelectPrimitive.ItemText data-slot="select-item-text">{children}</SelectPrimitive.ItemText>
       ) : (
-        // For complex children, render ItemText as an absolutely-hidden element
-        // so Radix can port the text to the trigger's <SelectValue />, then
-        // render the styled children for the visual dropdown row.
+        // Keep Radix ItemText as the owned text node and render rich visuals separately.
         <>
-          <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
-            <SelectPrimitive.ItemText>{resolvedTextValue}</SelectPrimitive.ItemText>
+          <SelectPrimitive.ItemText data-slot="select-item-text">
+            {resolvedTextValue}
+          </SelectPrimitive.ItemText>
+          <span data-slot="select-item-visual" aria-hidden="true">
+            {children}
           </span>
-          {children}
         </>
       )}
     </SelectPrimitive.Item>

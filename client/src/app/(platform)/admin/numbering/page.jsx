@@ -26,8 +26,8 @@ function SequenceCard({ seq, de, onSave }) {
 
   const handlePreview = async () => {
     try {
-      const res = await numberingService.preview({ ...form, docType: seq.docType });
-      setPreview(res?.data?.example || '');
+      const res = await numberingService.preview(seq._id);
+      setPreview(res?.data?.preview || '');
     } catch {
       setPreview('Error');
     }
@@ -42,7 +42,7 @@ function SequenceCard({ seq, de, onSave }) {
   return (
     <div className="rounded-lg border border-border p-5 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold">{TYPE_LABELS[seq.docType] ?? seq.docType}</h3>
+        <h3 className="font-semibold">{TYPE_LABELS[seq.documentType] ?? seq.documentType}</h3>
         <span className="text-xs text-muted-foreground font-mono">
           {(seq.currentValue ?? 0).toLocaleString()} {de ? 'bisher' : 'issued'}
         </span>

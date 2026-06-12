@@ -1,3 +1,63 @@
+const DOC_TYPE_ORDER = { quotation: 0, order: 1, invoice: 2 };
+const DATE_SORT_FIELDS = new Set(['createdAt', 'validUntil', 'dueDate']);
+
+function encodeSearchCursor(doc, sortBy, sortOrder) {
+  const value = sortBy === 'documentNumber' ? doc.documentNumber : doc[sortBy];
+  return Buffer.from(JSON.stringify({
+    _id: doc._id?.toString(),
+    documentType: doc._docType,
+    documentNumber: doc.documentNumber,
+    sortBy,
+    sortOrder,
+    value: value instanceof Date ? value.toISOString() : value,
+  })).toString('base64url');
+}
+
+function decodeSearchCursor(cursor, sortBy, sortOrder) {
+  if (!cursor) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+    if (decoded.sortBy !== sortBy || decoded.sortOrder !== sortOrder) return null;
+    if (!decoded._id || !decoded.documentType) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSortValue(value, sortBy) {
+  if (value === undefined || value === null || value === '') return null;
+  if (DATE_SORT_FIELDS.has(sortBy)) {
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
+  }
+  if (sortBy === 'grandTotalRounded') {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+  return String(value);
+}
+
+function compareValues(a, b, sortBy, sortDirection) {
+  const av = normalizeSortValue(a, sortBy);
+  const bv = normalizeSortValue(b, sortBy);
+  if (av === null && bv === null) return 0;
+  if (av === null) return 1;
+  if (bv === null) return -1;
+  if (av < bv) return -1 * sortDirection;
+  if (av > bv) return 1 * sortDirection;
+  return 0;
+}
+
+function cursorValueForQuery(value, sortBy) {
+  if (value === undefined || value === null || value === '') return null;
+  if (DATE_SORT_FIELDS.has(sortBy)) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return value;
+}
+
 /**
  * Search & reports controller for QOP module.
  *
@@ -11,23 +71,69 @@ class SearchController {
       const {
         q, type = 'all', status, customerId, projectId, departmentId,
         dateFrom, dateTo, amountMin, amountMax, assignedUserId,
-        limit = 25, cursor,
+        limit = 25, cursor, sortBy = 'createdAt', sortOrder = 'desc',
       } = query;
-
-      // Lazy imports to avoid circular dependencies
-      const { default: quotationRepo } = await import('./quotation.repository.js');
-      const { default: orderRepo } = await import('./order.repository.js');
-      const { default: invoiceRepo } = await import('./invoice.repository.js');
 
       const searchTypes = type === 'all'
         ? ['quotation', 'order', 'invoice']
         : [type];
 
+      const sortDirection = sortOrder === 'asc' ? 1 : -1;
+      const decodedCursor = decodeSearchCursor(cursor, sortBy, sortOrder);
+      const cursorDoc = decodedCursor
+        ? {
+          _id: decodedCursor._id,
+          _docType: decodedCursor.documentType,
+          documentType: decodedCursor.documentType,
+          documentNumber: decodedCursor.documentNumber,
+          [sortBy]: decodedCursor.value,
+        }
+        : null;
+
+      const numberFieldFor = (docType) => (docType === 'quotation'
+        ? 'quotationNumber'
+        : docType === 'order' ? 'orderNumber' : 'invoiceNumber');
+      const sortFieldFor = (docType) => (sortBy === 'documentNumber' ? numberFieldFor(docType) : sortBy);
+
+      const buildCursorCondition = (docType) => {
+        if (!decodedCursor) return null;
+        const sortField = sortFieldFor(docType);
+        const cursorValue = cursorValueForQuery(decodedCursor.value, sortBy);
+        const cursorTypeOrder = DOC_TYPE_ORDER[decodedCursor.documentType] ?? 0;
+        const currentTypeOrder = DOC_TYPE_ORDER[docType] ?? 0;
+        const branches = [];
+
+        if (cursorValue === null) {
+          if (currentTypeOrder > cursorTypeOrder) {
+            branches.push({ $or: [{ [sortField]: { $exists: false } }, { [sortField]: null }] });
+          } else if (currentTypeOrder === cursorTypeOrder) {
+            branches.push({
+              $and: [
+                { $or: [{ [sortField]: { $exists: false } }, { [sortField]: null }] },
+                { _id: { $gt: decodedCursor._id } },
+              ],
+            });
+          }
+          return branches.length ? { $or: branches } : { _id: { $exists: false } };
+        }
+
+        branches.push({ [sortField]: { [sortOrder === 'desc' ? '$lt' : '$gt']: cursorValue } });
+        branches.push({ [sortField]: { $exists: false } });
+        branches.push({ [sortField]: null });
+
+        if (currentTypeOrder > cursorTypeOrder) {
+          branches.push({ [sortField]: cursorValue });
+        } else if (currentTypeOrder === cursorTypeOrder) {
+          branches.push({ [sortField]: cursorValue, _id: { $gt: decodedCursor._id } });
+        }
+
+        return { $or: branches };
+      };
+
       const buildSearchFilter = (docType) => {
         const filter = { isDeleted: { $ne: true } };
         if (q) {
-          const numberField = docType === 'quotation' ? 'quotationNumber'
-            : docType === 'order' ? 'orderNumber' : 'invoiceNumber';
+          const numberField = numberFieldFor(docType);
           filter.$or = [
             { [numberField]: { $regex: q, $options: 'i' } },
             { title: { $regex: q, $options: 'i' } },
@@ -51,21 +157,53 @@ class SearchController {
           if (amountMin !== undefined) filter.grandTotalRounded.$gte = amountMin;
           if (amountMax !== undefined) filter.grandTotalRounded.$lte = amountMax;
         }
-        return filter;
+        const cursorCondition = buildCursorCondition(docType);
+        return cursorCondition ? { $and: [filter, cursorCondition] } : filter;
+      };
+
+      const collectionSort = (docType) => {
+        const field = sortFieldFor(docType);
+        return { [field]: sortDirection, _id: 1 };
+      };
+
+      const normalize = (doc, docType) => {
+        const documentNumber = docType === 'quotation'
+          ? doc.quotationNumber
+          : docType === 'order'
+            ? doc.orderNumber
+            : doc.invoiceNumber;
+        return {
+          ...doc,
+          _docType: docType,
+          documentType: docType,
+          documentNumber,
+        };
+      };
+      const sortValue = (doc) => {
+        if (sortBy === 'documentNumber') return doc.documentNumber || '';
+        return doc[sortBy] ?? '';
+      };
+      const sortMerged = (a, b) => {
+        const primary = compareValues(sortValue(a), sortValue(b), sortBy, sortDirection);
+        if (primary !== 0) return primary;
+        const typeDiff = (DOC_TYPE_ORDER[a._docType] ?? 0) - (DOC_TYPE_ORDER[b._docType] ?? 0);
+        if (typeDiff !== 0) return typeDiff;
+        return String(a._id || '').localeCompare(String(b._id || ''));
       };
 
       const promises = [];
+      const perTypeLimit = limit + 1;
 
       if (searchTypes.includes('quotation')) {
         const { default: Quotation } = await import('./quotation.model.js');
         const filter = buildSearchFilter('quotation');
         promises.push(
           Quotation.find(filter)
-            .sort({ createdAt: -1 })
-            .limit(limit)
+            .sort(collectionSort('quotation'))
+            .limit(perTypeLimit)
             .select('-__v')
             .lean()
-            .then((docs) => docs.map((d) => ({ ...d, _docType: 'quotation' }))),
+            .then((docs) => docs.map((d) => normalize(d, 'quotation'))),
         );
       }
 
@@ -74,11 +212,11 @@ class SearchController {
         const filter = buildSearchFilter('order');
         promises.push(
           Order.find(filter)
-            .sort({ createdAt: -1 })
-            .limit(limit)
+            .sort(collectionSort('order'))
+            .limit(perTypeLimit)
             .select('-__v')
             .lean()
-            .then((docs) => docs.map((d) => ({ ...d, _docType: 'order' }))),
+            .then((docs) => docs.map((d) => normalize(d, 'order'))),
         );
       }
 
@@ -87,21 +225,31 @@ class SearchController {
         const filter = buildSearchFilter('invoice');
         promises.push(
           Invoice.find(filter)
-            .sort({ createdAt: -1 })
-            .limit(limit)
+            .sort(collectionSort('invoice'))
+            .limit(perTypeLimit)
             .select('-__v')
             .lean()
-            .then((docs) => docs.map((d) => ({ ...d, _docType: 'invoice' }))),
+            .then((docs) => docs.map((d) => normalize(d, 'invoice'))),
         );
       }
 
       const resultArrays = await Promise.all(promises);
-      const merged = resultArrays
+      const sorted = resultArrays
         .flat()
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, limit);
+        .filter((doc) => !cursorDoc || sortMerged(doc, cursorDoc) > 0)
+        .sort(sortMerged)
+        .slice(0, limit + 1);
+      const data = sorted.slice(0, limit);
+      const hasNext = sorted.length > limit;
 
-      return res.success({ data: merged });
+      return res.success({
+        data,
+        pagination: {
+          hasNext,
+          nextCursor: hasNext && data.length > 0 ? encodeSearchCursor(data[data.length - 1], sortBy, sortOrder) : null,
+          limit,
+        },
+      });
     } catch (err) { next(err); }
   }
 
@@ -122,7 +270,25 @@ class SearchController {
           .sort({ createdAt: -1 }).select('-__v').lean(),
       ]);
 
-      return res.success({ data: { quotations, orders, invoices } });
+      const documents = [
+        ...quotations.map((doc) => ({
+          ...doc,
+          documentType: 'quotation',
+          documentNumber: doc.quotationNumber,
+        })),
+        ...orders.map((doc) => ({
+          ...doc,
+          documentType: 'order',
+          documentNumber: doc.orderNumber,
+        })),
+        ...invoices.map((doc) => ({
+          ...doc,
+          documentType: 'invoice',
+          documentNumber: doc.invoiceNumber,
+        })),
+      ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      return res.success({ data: { documents, quotations, orders, invoices } });
     } catch (err) { next(err); }
   }
 
@@ -143,7 +309,25 @@ class SearchController {
           .sort({ createdAt: -1 }).select('-__v').lean(),
       ]);
 
-      return res.success({ data: { quotations, orders, invoices } });
+      const documents = [
+        ...quotations.map((doc) => ({
+          ...doc,
+          documentType: 'quotation',
+          documentNumber: doc.quotationNumber,
+        })),
+        ...orders.map((doc) => ({
+          ...doc,
+          documentType: 'order',
+          documentNumber: doc.orderNumber,
+        })),
+        ...invoices.map((doc) => ({
+          ...doc,
+          documentType: 'invoice',
+          documentNumber: doc.invoiceNumber,
+        })),
+      ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      return res.success({ data: { documents, quotations, orders, invoices } });
     } catch (err) { next(err); }
   }
 
@@ -158,6 +342,8 @@ class SearchController {
         sixtyDays: 0,
         ninetyPlus: 0,
         total: 0,
+        buckets: [],
+        overdue: { count: 0, totalValue: 0 },
       };
 
       for (const b of buckets) {
@@ -166,7 +352,44 @@ class SearchController {
         else if (b.bucket === '31-60' || b.bucket === '61-90') result.sixtyDays += b.totalAmount;
         else if (b.bucket === '90+') result.ninetyPlus = b.totalAmount;
         result.total += b.totalAmount;
+        result.buckets.push({
+          label: b.bucket,
+          bucket: b.bucket,
+          count: b.count,
+          totalValue: b.totalAmount,
+        });
+        if (b.bucket !== 'current') {
+          result.overdue.count += b.count;
+          result.overdue.totalValue += b.totalAmount;
+        }
       }
+
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const { default: Invoice } = await import('./invoice.model.js');
+      const paidThisMonth = await Invoice.aggregate([
+        {
+          $match: {
+            isDeleted: false,
+            status: 'PAID',
+            paidAt: { $gte: monthStart },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            count: { $sum: 1 },
+            totalValue: { $sum: '$amountPaid' },
+          },
+        },
+      ]);
+      result.buckets.push({
+        label: 'paid_this_month',
+        bucket: 'paid_this_month',
+        count: paidThisMonth[0]?.count || 0,
+        totalValue: paidThisMonth[0]?.totalValue || 0,
+      });
 
       return res.success({ data: result });
     } catch (err) { next(err); }
@@ -177,11 +400,11 @@ class SearchController {
       const { default: quotationRepo } = await import('./quotation.repository.js');
       const statusCounts = await quotationRepo.countByStatus();
 
-      const byStatus = {};
+      const statusCountsByKey = {};
       let total = 0;
 
       for (const entry of statusCounts) {
-        byStatus[entry.status] = entry.count;
+        statusCountsByKey[entry.status] = entry.count;
         total += entry.count;
       }
 
@@ -203,7 +426,32 @@ class SearchController {
         totalValue[entry.status] = entry.totalValue;
       }
 
-      return res.success({ data: { total, byStatus, totalValue } });
+      const byStatus = Object.keys(statusCountsByKey).map((status) => ({
+        status,
+        count: statusCountsByKey[status] || 0,
+        totalValue: totalValue[status] || 0,
+      }));
+
+      const { default: Order } = await import('./order.model.js');
+      const orderStatusRows = await Order.aggregate([
+        { $match: { isDeleted: false } },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+        { $project: { _id: 0, status: '$_id', count: 1 } },
+      ]);
+      const orderStatusCounts = {};
+      for (const entry of orderStatusRows) {
+        orderStatusCounts[entry.status] = entry.count;
+      }
+
+      return res.success({
+        data: {
+          total,
+          byStatus,
+          statusCounts: statusCountsByKey,
+          totalValue,
+          orderStatusCounts,
+        },
+      });
     } catch (err) { next(err); }
   }
 

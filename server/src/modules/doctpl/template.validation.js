@@ -112,6 +112,14 @@ export const versionParamSchema = {
   }),
 };
 
+export const compareVersionsSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  query: Joi.object({
+    fromVersion: Joi.number().integer().min(1).required(),
+    toVersion: Joi.number().integer().min(1).required(),
+  }),
+};
+
 export const previewSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({

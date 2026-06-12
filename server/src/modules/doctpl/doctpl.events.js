@@ -2,6 +2,27 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
 
+async function buildQopPayload(documentType, documentId, fallbackData, fallbackLanguage) {
+  if (fallbackData) {
+    const templateType = fallbackData.templateType
+      || (documentType === 'order' ? 'order_confirmation' : documentType);
+    return {
+      templateType,
+      sourceModule: 'qop',
+      sourceRecordId: documentId,
+      data: fallbackData,
+      language: fallbackLanguage || fallbackData.language || 'de',
+      recipient: {
+        email: fallbackData.customerEmail || fallbackData.customer?.email || null,
+        name: fallbackData.customerName || fallbackData.customer?.name || '',
+      },
+    };
+  }
+
+  const { default: qopDocumentPayloadService } = await import('../qop/documentPayload.service.js');
+  return qopDocumentPayloadService.buildPayload(documentType, documentId);
+}
+
 /**
  * DocTpl domain event handlers.
  *
@@ -15,39 +36,41 @@ export function registerDoctplEvents() {
   eventBus.on(EVENT_TYPES.QUOTATION_SENT, async (event) => {
     try {
       const { quotationId, customerId, customerEmail, data, language } = event.payload;
+      const payload = await buildQopPayload('quotation', quotationId, data, language);
 
       const { default: documentGenerationService } = await import('./documentGeneration.service.js');
       const { default: emailService } = await import('./email.service.js');
 
       // Generate quotation PDF
       const doc = await documentGenerationService.generate({
-        templateType: 'quotation',
-        sourceModule: 'qop',
-        sourceRecordId: quotationId,
-        data,
-        language: language || 'de',
-        generatedBy: event.payload.sentBy || event.payload.createdBy,
+        templateType: payload.templateType,
+        sourceModule: payload.sourceModule,
+        sourceRecordId: payload.sourceRecordId,
+        data: payload.data,
+        language: payload.language,
+        generatedBy: event.payload.sentBy || event.payload.createdBy || event.payload.userId,
         meta: { ipAddress: 'internal' },
       });
 
       // Compose and send email if customer email is available
-      if (customerEmail) {
+      const recipientEmail = customerEmail || payload.recipient.email;
+      if (recipientEmail) {
         const composed = await emailService.compose({
           templateType: 'quotation',
-          language: language || 'de',
-          data: { ...data, customerEmail },
+          language: payload.language,
+          data: { ...payload.data, customerEmail: recipientEmail },
           documentId: doc._id,
         });
 
         await emailService.send({
-          to: composed.to?.length ? composed.to : [customerEmail],
+          to: composed.to?.length ? composed.to : [recipientEmail],
           subject: composed.subject,
           bodyHtml: composed.bodyHtml,
           bodyText: composed.bodyText,
           documentId: doc._id,
           sourceModule: 'qop',
           sourceRecordId: quotationId,
-          createdBy: event.payload.sentBy || event.payload.createdBy,
+          createdBy: event.payload.sentBy || event.payload.createdBy || event.payload.userId,
         });
       }
 
@@ -55,6 +78,7 @@ export function registerDoctplEvents() {
         module: 'doctpl',
         action: 'event.quotation_sent',
         quotationId,
+        customerId,
         documentId: doc._id,
       });
     } catch (err) {
@@ -71,18 +95,25 @@ export function registerDoctplEvents() {
   eventBus.on(EVENT_TYPES.ORDER_CONFIRMED, async (event) => {
     try {
       const { orderId, data, language } = event.payload;
+      const payload = await buildQopPayload('order', orderId, data, language);
 
       const { default: documentGenerationService } = await import('./documentGeneration.service.js');
 
       const doc = await documentGenerationService.generate({
-        templateType: 'order_confirmation',
-        sourceModule: 'qop',
-        sourceRecordId: orderId,
-        data,
-        language: language || 'de',
-        generatedBy: event.payload.confirmedBy || event.payload.createdBy,
+        templateType: payload.templateType,
+        sourceModule: payload.sourceModule,
+        sourceRecordId: payload.sourceRecordId,
+        data: payload.data,
+        language: payload.language,
+        generatedBy: event.payload.confirmedBy || event.payload.createdBy || event.payload.userId,
         meta: { ipAddress: 'internal' },
       });
+
+      const Order = (await import('../qop/order.model.js')).default;
+      await Order.updateOne(
+        { _id: orderId, isDeleted: { $ne: true } },
+        { $set: { orderConfirmationDocId: doc._id } },
+      );
 
       logger.info('Order confirmation PDF generated via ORDER_CONFIRMED', {
         module: 'doctpl',
@@ -104,19 +135,20 @@ export function registerDoctplEvents() {
   eventBus.on(EVENT_TYPES.INVOICE_FINALIZED, async (event) => {
     try {
       const { invoiceId, invoiceType, data, language } = event.payload;
+      const payload = await buildQopPayload('invoice', invoiceId, data, language);
 
       const { default: documentGenerationService } = await import('./documentGeneration.service.js');
 
       // Map invoice type to template type
-      const templateType = invoiceType || 'invoice_standard';
+      const templateType = invoiceType || payload.templateType || 'invoice_standard';
 
       const doc = await documentGenerationService.generate({
         templateType,
-        sourceModule: 'qop',
-        sourceRecordId: invoiceId,
-        data,
-        language: language || 'de',
-        generatedBy: event.payload.finalizedBy || event.payload.createdBy,
+        sourceModule: payload.sourceModule,
+        sourceRecordId: payload.sourceRecordId,
+        data: payload.data,
+        language: payload.language,
+        generatedBy: event.payload.finalizedBy || event.payload.createdBy || event.payload.userId,
         meta: { ipAddress: 'internal' },
       });
 

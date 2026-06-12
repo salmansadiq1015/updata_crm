@@ -32,6 +32,15 @@ export interface BackgroundJob {
   duration?: number;
 }
 
+export interface QueueStats {
+  name: string;
+  waiting: number;
+  active: number;
+  completed: number;
+  failed: number;
+  delayed: number;
+}
+
 export interface SystemFile {
   key: string;
   name: string;

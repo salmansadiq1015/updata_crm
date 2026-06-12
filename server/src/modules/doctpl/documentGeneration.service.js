@@ -1,9 +1,21 @@
 import auditService from '../auth/audit.service.js';
-import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
-import { NotFoundError } from '../../shared/errors/AppError.js';
+import { NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
+
+const LINE_ITEM_TEMPLATE_TYPES = new Set([
+  'quotation',
+  'order_confirmation',
+  'invoice_standard',
+  'invoice_final',
+]);
+
+const INVOICE_TEMPLATE_TYPES = new Set([
+  'invoice_standard',
+  'invoice_advance',
+  'invoice_final',
+]);
 
 class DocumentGenerationService {
   async generate({ templateType, sourceModule, sourceRecordId, data, language = 'de', generatedBy, meta = {} }) {
@@ -15,12 +27,17 @@ class DocumentGenerationService {
     // 2. Find active CI configuration
     const CIConfiguration = (await import('./ciConfiguration.model.js')).default;
     const ciConfig = await CIConfiguration.findOne({ isActive: true }).lean();
+    const { default: ciRenderAssetsService } = await import('./ciRenderAssets.service.js');
+    const renderCiConfig = await ciRenderAssetsService.prepare(ciConfig);
+
+    const renderData = this._prepareRenderData(templateType, data, renderCiConfig);
+    this._validateRenderData(templateType, renderData, renderCiConfig);
 
     // 3. Build filename
-    const fileName = this._buildFilename(templateType, data, language);
+    const fileName = this._buildFilename(templateType, renderData, language);
 
     // 4. Generate PDF buffer
-    const pdfBuffer = await this._generatePdf(template, ciConfig, data, language);
+    const { buffer: pdfBuffer, pageCount } = await this._generatePdf(template, renderCiConfig, renderData, language);
 
     // 5. Upload PDF via file service
     const { default: fileService } = await import('../files/file.service.js');
@@ -50,8 +67,8 @@ class DocumentGenerationService {
       fileId: fileMeta._id,
       fileName,
       fileSizeBytes: pdfBuffer.length,
-      pageCount: 1,
-      metadata: data.metadata || {},
+      pageCount,
+      metadata: renderData.metadata || {},
       generatedBy,
     });
 
@@ -96,10 +113,70 @@ class DocumentGenerationService {
   async _generatePdf(template, ciConfig, data, language) {
     const { DocumentRenderer } = await import('./renderer/index.js');
     const renderer = new DocumentRenderer();
-    return renderer.render(template, ciConfig, data, language);
+    if (typeof renderer.renderWithMetadata === 'function') {
+      return renderer.renderWithMetadata(template, ciConfig, data, language);
+    }
+    const buffer = await renderer.render(template, ciConfig, data, language);
+    return { buffer, pageCount: 1 };
   }
 
-  _buildFilename(templateType, data, language) {
+  _prepareRenderData(templateType, data, ciConfig) {
+    const renderData = { ...(data || {}) };
+    if (!INVOICE_TEMPLATE_TYPES.has(templateType) || renderData.qrBill) return renderData;
+
+    const bankDetails = ciConfig?.companyDetails?.bankDetails || {};
+    const customer = renderData.customer || {};
+    const amount = Number(renderData.amountDue ?? renderData.grandTotalRounded ?? renderData.grandTotal ?? 0);
+    const iban = bankDetails.qrIban || bankDetails.iban || renderData.qrIban || renderData.iban;
+
+    renderData.qrBill = {
+      iban,
+      amount,
+      currency: renderData.currency || 'CHF',
+      reference: renderData.qrReference || renderData.documentNumber,
+      debtor: customer?.name ? {
+        name: customer.name,
+        address: customer.addressLine1 || '',
+        zip: String(customer.plz || customer.zip || ''),
+        city: customer.city || '',
+        country: customer.country || 'CH',
+      } : undefined,
+      message: renderData.documentNumber || '',
+    };
+
+    return renderData;
+  }
+
+  _validateRenderData(templateType, data, ciConfig) {
+    const details = [];
+    const required = (field, value, message = 'Required field is missing') => {
+      if (value === undefined || value === null || value === '') details.push({ field, message });
+    };
+
+    required('documentNumber', data.documentNumber);
+
+    if (templateType !== 'cover_letter') {
+      required('customer.name', data.customer?.name || data.customerName);
+    }
+
+    if (LINE_ITEM_TEMPLATE_TYPES.has(templateType) && (!Array.isArray(data.lineItems) || data.lineItems.length === 0)) {
+      details.push({ field: 'lineItems', message: 'At least one line item is required' });
+    }
+
+    if (INVOICE_TEMPLATE_TYPES.has(templateType)) {
+      required('dueDate', data.dueDate);
+      required('companyDetails.bankDetails.qrIban', ciConfig?.companyDetails?.bankDetails?.qrIban || ciConfig?.companyDetails?.bankDetails?.iban);
+      required('qrBill.iban', data.qrBill?.iban);
+      required('qrBill.reference', data.qrBill?.reference);
+      if (!Number.isFinite(Number(data.qrBill?.amount)) || Number(data.qrBill?.amount) <= 0) {
+        details.push({ field: 'qrBill.amount', message: 'QR-bill amount must be greater than zero' });
+      }
+    }
+
+    if (details.length) throw new ValidationError('Document payload validation failed', details);
+  }
+
+  _buildFilename(templateType, data, _language) {
     const typeMap = {
       quotation: 'Offerte',
       order_confirmation: 'Auftragsbestaetigung',

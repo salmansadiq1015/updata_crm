@@ -3,7 +3,8 @@
 import { useCallback, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
-import { showError, showSuccess } from '@/lib/toast';
+import { showError } from '@/lib/toast';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { aiAgentService } from '../services/ai-agent-service';
 import { useAiStore } from '../store/ai-store';
 import {
@@ -11,21 +12,22 @@ import {
   AGENT_STATUSES,
   AGENT_POLL_INTERVAL_MS,
   WORKFLOW_LABELS,
+  MIN_AGENT_INPUT_LENGTH,
   isTerminalAgentStatus,
 } from '../constants/ai-constants';
 
 export function useAgentRun() {
-  const queryClient  = useQueryClient();
-  const isPanelOpen  = useAiStore((s) => s.isPanelOpen);
-  const activeRunId  = useAiStore((s) => s.activeRunId);
+  const { t } = useLanguage();
+  const queryClient = useQueryClient();
+  const isPanelOpen = useAiStore((s) => s.isPanelOpen);
+  const activeRunId = useAiStore((s) => s.activeRunId);
   const setActiveRunId = useAiStore((s) => s.setActiveRunId);
   const setPanelView = useAiStore((s) => s.setPanelView);
 
-  // Poll agent run while in non-terminal state and panel is open
   const runQuery = useQuery({
     queryKey: queryKeys.ai.agentRun(activeRunId),
-    queryFn:  () => aiAgentService.getStatus(activeRunId),
-    enabled:  !!activeRunId,
+    queryFn: () => aiAgentService.getStatus(activeRunId),
+    enabled: !!activeRunId,
     staleTime: 0,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
@@ -37,7 +39,6 @@ export function useAgentRun() {
 
   const runStatus = runQuery.data?.status;
 
-  // Auto-advance panel based on agent run status
   useEffect(() => {
     if (!runStatus) return;
     const currentView = useAiStore.getState().panelView;
@@ -51,7 +52,6 @@ export function useAgentRun() {
     }
   }, [runStatus, setPanelView]);
 
-  // Dispatch new agent run from text input
   const dispatchMutation = useMutation({
     mutationFn: (input) => aiAgentService.dispatch(input),
     onSuccess: (result) => {
@@ -60,30 +60,23 @@ export function useAgentRun() {
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentRuns({}) });
     },
     onError: (err) => {
-      const code = err?.code;
-      if (code === 'AI_AGENT_RATE_LIMITED') {
-        showError('Too many requests — please wait a minute before trying again.');
+      if (err?.code === 'AI_AGENT_RATE_LIMITED') {
+        showError(t('ai.chat.tooManyRequests'));
       } else {
         showError(err);
       }
     },
   });
 
-  // Confirm or cancel an awaiting agent run
   const confirmMutation = useMutation({
     mutationFn: ({ runId, decision }) => aiAgentService.confirm(runId, decision),
-    onSuccess: (result, { decision }) => {
-      if (decision) {
-        setPanelView(PANEL_VIEWS.AGENT);
-      } else {
-        setPanelView(PANEL_VIEWS.RESULT);
-      }
+    onSuccess: (_, { decision }) => {
+      setPanelView(decision ? PANEL_VIEWS.AGENT : PANEL_VIEWS.RESULT);
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentRun(activeRunId) });
     },
     onError: (err) => {
-      const code = err?.code;
-      if (code === 'AI_AGENT_INVALID_STATUS') {
-        showError("Can't confirm this run — it may have already been cancelled or completed.");
+      if (err?.code === 'AI_AGENT_INVALID_STATUS') {
+        showError(t('ai.agent.alreadySettled', 'Cannot confirm this run because it has already been cancelled or completed.'));
         queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentRun(activeRunId) });
       } else {
         showError(err);
@@ -93,7 +86,7 @@ export function useAgentRun() {
 
   const dispatch = useCallback((input) => {
     const trimmed = input?.trim();
-    if (!trimmed || trimmed.length < 3) return;
+    if (!trimmed || trimmed.length < MIN_AGENT_INPUT_LENGTH) return;
     dispatchMutation.mutate(trimmed);
   }, [dispatchMutation]);
 
@@ -107,16 +100,17 @@ export function useAgentRun() {
     setPanelView(PANEL_VIEWS.AGENT);
   }, [setActiveRunId, setPanelView]);
 
-  const workflowLabel = WORKFLOW_LABELS[runQuery.data?.workflowType] || 'Working on it';
+  const workflowType = runQuery.data?.workflowType;
+  const workflowLabel = t(`ai.workflow.${workflowType}`, WORKFLOW_LABELS[workflowType] || t('ai.chat.working'));
 
   return {
-    agentRun:       runQuery.data,
-    isLoadingRun:   runQuery.isLoading,
+    agentRun: runQuery.data,
+    isLoadingRun: runQuery.isLoading,
     workflowLabel,
     dispatch,
-    isDispatching:  dispatchMutation.isPending,
+    isDispatching: dispatchMutation.isPending,
     confirmRun,
-    isConfirming:   confirmMutation.isPending,
+    isConfirming: confirmMutation.isPending,
     onAgentRunStarted,
   };
 }

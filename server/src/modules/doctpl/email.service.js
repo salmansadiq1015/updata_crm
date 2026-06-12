@@ -1,7 +1,6 @@
 import emailRecordRepository from './emailRecord.repository.js';
 import auditService from '../auth/audit.service.js';
 import queueManager from '../../shared/queue/QueueManager.js';
-import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
@@ -10,22 +9,14 @@ import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 class EmailService {
   async send({
     to, cc, bcc, subject, bodyHtml, bodyText,
-    documentId, sourceModule, sourceRecordId,
-    senderAddress, senderName, createdBy, meta = {},
+    documentId, documentIds, sourceModule, sourceRecordId,
+    senderAddress, senderName, createdBy, meta: _meta = {},
   }) {
-    // If documentId provided, resolve file info for attachment
-    let attachments = [];
-    if (documentId) {
-      const { default: generatedDocumentRepository } = await import('./generatedDocument.repository.js');
-      const doc = await generatedDocumentRepository.findById(documentId);
-      if (doc) {
-        attachments = [{
-          documentId: doc._id,
-          fileName: doc.fileName,
-          fileUrl: '', // resolved at dispatch time
-        }];
-      }
-    }
+    const requestedDocumentIds = [...new Set([
+      ...(documentId ? [documentId] : []),
+      ...(Array.isArray(documentIds) ? documentIds : []),
+    ].map((id) => id.toString()))];
+    const attachments = await this._resolveAttachments(requestedDocumentIds);
 
     // Create EmailRecord with status QUEUED
     const emailRecord = await emailRecordRepository.create({
@@ -69,6 +60,26 @@ class EmailService {
     });
 
     return emailRecord;
+  }
+
+  async _resolveAttachments(documentIds = []) {
+    if (!documentIds.length) return [];
+
+    const { default: generatedDocumentRepository } = await import('./generatedDocument.repository.js');
+    const attachments = [];
+
+    for (const id of documentIds) {
+      const doc = await generatedDocumentRepository.findById(id);
+      if (!doc) throw new NotFoundError('GeneratedDocument', id);
+      attachments.push({
+        documentId: doc._id,
+        fileId: doc.fileId,
+        fileName: doc.fileName,
+        fileUrl: '',
+      });
+    }
+
+    return attachments;
   }
 
   async compose({ templateType, language = 'de', data, documentId }) {

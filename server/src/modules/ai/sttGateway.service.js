@@ -24,7 +24,7 @@ class SttGatewayService {
    */
   async transcribe(audioBuffer, { language, mimeType, customVocabulary = [] } = {}) {
     const startTime = Date.now();
-    const provider = config.ai?.sttProvider || process.env.STT_PROVIDER || 'whisper';
+    const provider = String(config.ai?.sttProvider || process.env.STT_PROVIDER || 'whisper').toLowerCase();
 
     logger.debug('STT transcription started', {
       module: 'ai',
@@ -40,9 +40,16 @@ class SttGatewayService {
 
     switch (provider) {
       case 'whisper':
-      default:
-        result = await this._transcribeWhisper(audioBuffer, { language, customVocabulary });
+        result = await this._transcribeWhisper(audioBuffer, { language, mimeType, customVocabulary });
         break;
+      case 'google':
+        result = await this._transcribeGoogle(audioBuffer, { language, mimeType, customVocabulary });
+        break;
+      case 'azure':
+        result = await this._transcribeAzure(audioBuffer, { language, mimeType, customVocabulary });
+        break;
+      default:
+        throw new Error(`Unsupported STT provider: ${provider}`);
     }
 
     // Apply custom vocabulary post-processing
@@ -80,7 +87,7 @@ class SttGatewayService {
    * @param {object} options
    * @returns {{ text, confidence, words }}
    */
-  async _transcribeWhisper(audioBuffer, { language, customVocabulary = [] } = {}) {
+  async _transcribeWhisper(audioBuffer, { language, mimeType, customVocabulary = [] } = {}) {
     const openai = await this._getClient();
 
     const localePrompt = this._buildLocalePrompt(language);
@@ -89,7 +96,8 @@ class SttGatewayService {
       : '';
     const prompt = [localePrompt, vocabPrompt].filter(Boolean).join('\n');
 
-    const file = new File([audioBuffer], 'audio.wav', { type: 'audio/wav' });
+    const { fileName, fileType } = this._resolveAudioFileInfo(mimeType);
+    const file = new File([audioBuffer], fileName, { type: fileType });
 
     const response = await openai.audio.transcriptions.create({
       model: 'whisper-1',
@@ -128,6 +136,14 @@ class SttGatewayService {
     return { text, confidence, words };
   }
 
+  async _transcribeGoogle() {
+    throw new Error('Google STT provider is not configured in this checkout');
+  }
+
+  async _transcribeAzure() {
+    throw new Error('Azure STT provider is not configured in this checkout');
+  }
+
   /**
    * Lazy-load OpenAI client (same pattern as aiService.js).
    */
@@ -151,6 +167,19 @@ class SttGatewayService {
       return 'Transkribiere Schweizer Service- und Heizungsfachsprache mit korrekten Namen, Adressen und technischen Begriffen.';
     }
     return '';
+  }
+
+  _resolveAudioFileInfo(mimeType = 'audio/wav') {
+    const normalized = String(mimeType || '').toLowerCase();
+    const info = {
+      'audio/wav': { fileName: 'audio.wav', fileType: 'audio/wav' },
+      'audio/x-wav': { fileName: 'audio.wav', fileType: 'audio/wav' },
+      'audio/mpeg': { fileName: 'audio.mp3', fileType: 'audio/mpeg' },
+      'audio/mp3': { fileName: 'audio.mp3', fileType: 'audio/mpeg' },
+      'audio/ogg': { fileName: 'audio.ogg', fileType: 'audio/ogg' },
+      'audio/webm': { fileName: 'audio.webm', fileType: 'audio/webm' },
+    };
+    return info[normalized] || { fileName: 'audio.bin', fileType: normalized || 'application/octet-stream' };
   }
 
   /**

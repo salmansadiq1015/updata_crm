@@ -40,7 +40,7 @@ export function AiPanelProcessing({ uploadProgress, onCancel, isCancelling }) {
           onClick={onCancel}
           disabled={isCancelling}
         >
-          {isCancelling ? t('common.canceling', 'Wird abgebrochen...') : t('common.cancel', 'Abbrechen')}
+          {isCancelling ? t('common.canceling') : t('common.cancel')}
         </Button>
       )}
     </div>

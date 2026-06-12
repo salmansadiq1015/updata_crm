@@ -1,4 +1,9 @@
 import apiClient from '@/lib/api/client';
+import type { QueueStats } from '../types/platform.types';
+
+type ApiEnvelope<T> = {
+  data: T;
+};
 
 export const platformService = {
   async getSystemHealth() {
@@ -7,7 +12,7 @@ export const platformService = {
   },
 
   async getJobs(params?: { queue?: string; status?: string; page?: number; limit?: number }) {
-    const res = await apiClient.get('/system/jobs', { params });
+    const res = await apiClient.get('/system/jobs', { params }) as ApiEnvelope<QueueStats[]>;
     return res;
   },
 

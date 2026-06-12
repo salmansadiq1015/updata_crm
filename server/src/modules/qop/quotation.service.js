@@ -5,10 +5,10 @@ import auditService from '../auth/audit.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
-import queueManager from '../../shared/queue/QueueManager.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import qopDocumentPayloadService from './documentPayload.service.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
@@ -286,7 +286,7 @@ class QuotationService {
         reason,
         changedBy: userId,
       });
-    } catch (_err) {
+    } catch {
       // DocumentStatusLog may not exist yet — non-critical
       logger.debug('DocumentStatusLog not available, skipping', { module: 'qop' });
     }
@@ -297,6 +297,26 @@ class QuotationService {
       toStatus: targetStatus,
       userId,
     }, { source: 'qop:quotations' });
+
+    if (targetStatus === 'ACCEPTED') {
+      eventBus.publish(EVENT_TYPES.QUOTATION_ACCEPTED, {
+        quotationId: id,
+        quotationNumber: quotation.quotationNumber,
+        acceptedBy: userId,
+      }, { source: 'qop:quotations' });
+    }
+
+    if (targetStatus === 'EXPIRED') {
+      eventBus.publish(EVENT_TYPES.QUOTATION_EXPIRED, {
+        quotationId: id,
+        quotationNumber: quotation.quotationNumber,
+      }, { source: 'qop:quotations' });
+    }
+
+    if (['ACCEPTED', 'DECLINED', 'CANCELLED', 'CONVERTED'].includes(targetStatus)) {
+      const { default: quotationReminderService } = await import('./quotationReminder.service.js');
+      await quotationReminderService.cancelForQuotation(id);
+    }
 
     auditService.logEvent({
       eventType: 'quotation.statusChanged',
@@ -313,27 +333,43 @@ class QuotationService {
 
   async send(id, userId, meta = {}) {
     const updated = await this.transitionStatus(id, 'SENT', {}, userId, meta);
-
-    // Enqueue email
-    try {
-      await queueManager.addJob('auth-email', 'send-quotation', {
-        quotationId: id,
-        userId,
-      });
-    } catch (err) {
-      logger.warn('Failed to enqueue quotation email', {
-        module: 'qop',
-        quotationId: id,
-        error: err.message,
-      });
-    }
+    const payload = await qopDocumentPayloadService.buildQuotationPayload(updated);
 
     eventBus.publish(EVENT_TYPES.QUOTATION_SENT, {
       quotationId: id,
-      userId,
+      quotationNumber: updated.quotationNumber,
+      customerId: updated.customerId?._id || updated.customerId,
+      customerEmail: payload.recipient.email,
+      language: payload.language,
+      data: payload.data,
+      sentBy: userId,
     }, { source: 'qop:quotations' });
 
     return updated;
+  }
+
+  async generateDocument(id, userId, meta = {}) {
+    const quotation = await quotationRepository.findById(id);
+    if (!quotation) throw new NotFoundError('Quotation', id);
+
+    const result = await qopDocumentPayloadService.generateDocument({
+      documentType: 'quotation',
+      documentOrId: quotation,
+      generatedBy: userId,
+      meta,
+    });
+
+    auditService.logEvent({
+      eventType: 'quotation.document_generated',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { quotationId: id, documentId: result.documentId },
+      module: 'qop',
+    });
+
+    return result;
   }
 
   async convertToOrder(id, additionalData, userId, meta = {}) {
@@ -359,6 +395,8 @@ class QuotationService {
       convertedOrderId: order._id,
       updatedBy: userId,
     });
+    const { default: quotationReminderService } = await import('./quotationReminder.service.js');
+    await quotationReminderService.cancelForQuotation(id);
     await this._invalidateQuotationCache(id);
     await this._invalidateListCache();
 

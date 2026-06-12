@@ -5,6 +5,7 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import {
   listTemplatesSchema, templateIdParamSchema, updateTemplateSchema,
   versionParamSchema, previewSchema, createTemplateSchema,
+  compareVersionsSchema,
 } from './template.validation.js';
 
 const router = Router();
@@ -21,6 +22,7 @@ router.delete('/:id', authenticate, requirePermission('templates:delete'), valid
 
 // Versions
 router.get('/:id/versions', authenticate, requirePermission('templates:read'), validate(templateIdParamSchema), (req, res, next) => templateController.listVersions(req, res, next));
+router.get('/:id/versions/compare', authenticate, requirePermission('templates:read'), validate(compareVersionsSchema), (req, res, next) => templateController.compareVersions(req, res, next));
 router.get('/:id/versions/:version', authenticate, requirePermission('templates:read'), validate(versionParamSchema), (req, res, next) => templateController.getVersion(req, res, next));
 router.post('/:id/versions/:version/revert', authenticate, requirePermission('templates:admin'), validate(versionParamSchema), (req, res, next) => templateController.revertToVersion(req, res, next));
 

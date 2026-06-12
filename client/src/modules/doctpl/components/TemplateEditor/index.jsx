@@ -4,15 +4,17 @@ import { LayoutTab }     from './LayoutTab';
 import { TextBlocksTab } from './TextBlocksTab';
 import { ColumnsTab }    from './ColumnsTab';
 import { SectionsTab }   from './SectionsTab';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 const TABS = [
-  ['layout',     'Layout'],
-  ['textBlocks', 'Text Blocks'],
-  ['columns',    'Columns'],
-  ['sections',   'Sections'],
+  ['layout', 'doctpl.editor.layout'],
+  ['textBlocks', 'doctpl.editor.textBlocks'],
+  ['columns', 'doctpl.editor.columns'],
+  ['sections', 'doctpl.editor.sections'],
 ];
 
 export function TemplateEditor({ template, onChange }) {
+  const { t } = useLanguage();
   const [tab, setTab] = useState('layout');
   if (!template) return null;
 
@@ -23,7 +25,7 @@ export function TemplateEditor({ template, onChange }) {
           <button
             key={key} onClick={() => setTab(key)}
             className={`px-3 py-1.5 text-sm rounded-md transition-colors ${tab === key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-          >{label}</button>
+          >{t(label)}</button>
         ))}
       </div>
       {tab === 'layout'     && <LayoutTab     layout={template.layout}           onChange={(v) => onChange({ ...template, layout: v })} />}

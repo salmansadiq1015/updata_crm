@@ -4,6 +4,7 @@ import { useCallback, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { showError } from '@/lib/toast';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { aiSessionService } from '../services/ai-session-service';
 import { useAiStore } from '../store/ai-store';
 import {
@@ -14,8 +15,13 @@ import {
   isTerminalSessionStatus,
   normalizeSessionStatus,
 } from '../constants/ai-constants';
+import { useAiLanguage } from './use-ai-language';
+import { useVoiceCommandRouter } from './use-voice-command-router';
 
 export function useVoiceSession() {
+  const { t } = useLanguage();
+  const defaultLanguage = useAiLanguage();
+  const { executeCommand } = useVoiceCommandRouter();
   const queryClient    = useQueryClient();
   const activeSessionId = useAiStore((s) => s.activeSessionId);
   const panelView = useAiStore((s) => s.panelView);
@@ -54,24 +60,24 @@ export function useVoiceSession() {
     if (![PANEL_VIEWS.RECORDING, PANEL_VIEWS.UPLOADING, PANEL_VIEWS.PROCESSING, PANEL_VIEWS.ENTITIES].includes(panelView)) return;
 
     if (sessionStatus === SESSION_STATUSES.FAILED) {
-      showError(sessionQuery.data?.result?.message || 'Sprachverarbeitung fehlgeschlagen. Bitte erneut versuchen.');
+      showError(sessionQuery.data?.result?.message || t('ai.error.processingFailed'));
     }
 
     setActiveSessionId(null);
     setPanelView(PANEL_VIEWS.IDLE);
-  }, [panelView, sessionQuery.data?.result?.message, sessionStatus, setActiveSessionId, setPanelView]);
+  }, [panelView, sessionQuery.data?.result?.message, sessionStatus, setActiveSessionId, setPanelView, t]);
 
   useEffect(() => {
     if (!activeSessionId || panelView !== PANEL_VIEWS.PROCESSING) return undefined;
 
     const timeoutId = window.setTimeout(() => {
-      showError('Sprachverarbeitung dauert zu lange. Bitte erneut versuchen.');
+      showError(t('ai.error.processingTimeout'));
       setActiveSessionId(null);
       setPanelView(PANEL_VIEWS.IDLE);
     }, SESSION_PROCESSING_TIMEOUT_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [activeSessionId, panelView, setActiveSessionId, setPanelView]);
+  }, [activeSessionId, panelView, setActiveSessionId, setPanelView, t]);
 
   // Create session
   const createMutation = useMutation({
@@ -99,8 +105,13 @@ export function useVoiceSession() {
   // Confirm session
   const confirmMutation = useMutation({
     mutationFn: (id) => aiSessionService.confirm(id),
-    onSuccess: () => {
-      setPanelView(PANEL_VIEWS.AGENT);
+    onSuccess: (session) => {
+      const result = session?.result || session?.data?.result;
+      if (result && executeCommand(result)) {
+        setPanelView(PANEL_VIEWS.RESULT);
+      } else {
+        setPanelView(PANEL_VIEWS.AGENT);
+      }
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.session(activeSessionId) });
     },
     onError: (err) => {
@@ -121,24 +132,30 @@ export function useVoiceSession() {
     onError: (err) => showError(err),
   });
 
-  const createSession = useCallback((type, language = 'de-CH') => {
+  const createSession = useCallback((typeOrPayload, language) => {
     setPanelView(PANEL_VIEWS.RECORDING);
-    createMutation.mutate({ sessionType: type, language });
-  }, [createMutation, setPanelView]);
+    const payload = typeof typeOrPayload === 'object'
+      ? { language: defaultLanguage, ...typeOrPayload }
+      : { sessionType: typeOrPayload, language: language || defaultLanguage };
+    createMutation.mutate(payload);
+  }, [createMutation, setPanelView, defaultLanguage]);
 
-  const createSessionAsync = useCallback(async (type, language = 'de-CH') => {
+  const createSessionAsync = useCallback(async (typeOrPayload, language) => {
     setPanelView(PANEL_VIEWS.RECORDING);
-    return createMutation.mutateAsync({ sessionType: type, language });
-  }, [createMutation, setPanelView]);
+    const payload = typeof typeOrPayload === 'object'
+      ? { language: defaultLanguage, ...typeOrPayload }
+      : { sessionType: typeOrPayload, language: language || defaultLanguage };
+    return createMutation.mutateAsync(payload);
+  }, [createMutation, setPanelView, defaultLanguage]);
 
-  const submitCorrections = useCallback((corrections) => {
+  const submitCorrections = useCallback(async (corrections) => {
     if (!activeSessionId) return;
-    correctMutation.mutate({ id: activeSessionId, corrections });
+    return correctMutation.mutateAsync({ id: activeSessionId, corrections });
   }, [activeSessionId, correctMutation]);
 
-  const confirmSession = useCallback(() => {
+  const confirmSession = useCallback(async () => {
     if (!activeSessionId) return;
-    confirmMutation.mutate(activeSessionId);
+    return confirmMutation.mutateAsync(activeSessionId);
   }, [activeSessionId, confirmMutation]);
 
   const cancelSession = useCallback(() => {

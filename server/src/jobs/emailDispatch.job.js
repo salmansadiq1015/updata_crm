@@ -31,62 +31,55 @@ export class EmailDispatchWorker extends BaseWorker {
     }
 
     try {
-      // Build nodemailer message
-      const message = {
-        to: record.to.join(', '),
-        subject: record.subject,
-        html: record.bodyHtml,
-        text: record.bodyText || undefined,
-      };
-
-      if (record.cc?.length) message.cc = record.cc.join(', ');
-      if (record.bcc?.length) message.bcc = record.bcc.join(', ');
-
-      if (record.senderAddress) {
-        message.from = `${record.senderName || 'MB Boiler'} <${record.senderAddress}>`;
-      }
-
       // Fetch attachment buffers from S3 if any
+      let attachments = [];
       if (record.attachments?.length) {
         const { default: fileService } = await import('../modules/files/file.service.js');
-        const attachments = [];
+        const { default: generatedDocumentRepository } = await import('../modules/doctpl/generatedDocument.repository.js');
 
         for (const att of record.attachments) {
-          if (att.documentId) {
-            try {
-              const downloadUrl = await fileService.getDownloadUrl(att.documentId);
-              attachments.push({
-                filename: att.fileName || 'attachment.pdf',
-                path: downloadUrl,
-              });
-            } catch (err) {
-              logger.warn('Failed to fetch attachment for email', {
-                module: 'jobs',
-                action: 'email-dispatch',
-                emailRecordId,
-                documentId: att.documentId,
-                error: { message: err.message },
-              });
+          try {
+            let fileId = att.fileId;
+            if (!fileId && att.documentId) {
+              const generatedDocument = await generatedDocumentRepository.findById(att.documentId);
+              fileId = generatedDocument?.fileId;
             }
-          }
-        }
 
-        if (attachments.length) {
-          message.attachments = attachments;
+            if (!fileId) {
+              throw new Error(`No fileId for attachment ${att.documentId || att.fileName || 'unknown'}`);
+            }
+
+            const downloadUrl = await fileService.getDownloadUrl(fileId);
+            attachments.push({
+              filename: att.fileName || 'attachment.pdf',
+              path: downloadUrl,
+            });
+          } catch (err) {
+            logger.warn('Failed to fetch attachment for email', {
+              module: 'jobs',
+              action: 'email-dispatch',
+              emailRecordId,
+              documentId: att.documentId,
+              fileId: att.fileId,
+              error: { message: err.message },
+            });
+            throw err;
+          }
         }
       }
 
       // Send via nodemailer transporter
       const sendMail = (await import('../shared/mail/mail.js')).default;
       const info = await sendMail({
-        email: record.to[0],
+        email: record.to,
+        cc: record.cc || [],
+        bcc: record.bcc || [],
         subject: record.subject,
-        template: null,
-        data: {},
         fromName: record.senderName || 'MB Boiler',
-        attachments: message.attachments,
-        // Override: send raw HTML directly
+        fromAddress: record.senderAddress || undefined,
+        attachments,
         _rawHtml: record.bodyHtml,
+        text: record.bodyText || undefined,
       });
 
       // Update record to SENT

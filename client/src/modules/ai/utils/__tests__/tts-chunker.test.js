@@ -20,7 +20,7 @@ describe('splitIntoChunks', () => {
     expect(result).toHaveLength(1);
   });
   it('chunks do not exceed 200 characters', () => {
-    // Single sentence of 250 chars — forces the hard-wrap path
+    // Single sentence of 250 chars; forces the hard-wrap path.
     const long = 'Word '.repeat(50).trim(); // 250 chars, one run-on without sentence punctuation
     splitIntoChunks(long).forEach((chunk) => {
       expect(chunk.length).toBeLessThanOrEqual(200);

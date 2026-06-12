@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Circle, XCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 function StepIcon({ type, isActive }) {
   if (type === 'ERROR')     return <XCircle className="h-4 w-4 text-destructive shrink-0" />;
@@ -10,19 +11,13 @@ function StepIcon({ type, isActive }) {
   return                           <Circle className="h-4 w-4 text-muted-foreground shrink-0" />;
 }
 
-const NODE_LABELS = {
-  validate_entities: 'Input validated',
-  gather_context:    'Context loaded',
-  execute_tools:     'Executing action',
-  handle_failure:    'Handling error',
-};
-
 export function AiProgressSteps({ steps = [], workflowLabel, isRunning }) {
+  const { t } = useLanguage();
   if (!steps.length && isRunning) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin text-primary" />
-        <span>{workflowLabel ?? 'Working on it'}...</span>
+        <span>{workflowLabel ?? t('ai.chat.working')}...</span>
       </div>
     );
   }
@@ -32,7 +27,7 @@ export function AiProgressSteps({ steps = [], workflowLabel, isRunning }) {
       {steps.map((step, i) => {
         const isLast   = i === steps.length - 1;
         const isActive = isLast && isRunning;
-        const label    = NODE_LABELS[step.node] ?? step.node;
+        const label    = t(`ai.progress.${step.node}`, step.node);
         const detail   = step.toolName ? `(${step.toolName})` : '';
 
         return (

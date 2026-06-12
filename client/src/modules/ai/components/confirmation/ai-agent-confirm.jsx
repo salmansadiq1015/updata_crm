@@ -3,20 +3,22 @@ import { Button } from '@/components/ui/button';
 import { WORKFLOW_LABELS } from '../../constants/ai-constants';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-function buildConfirmSummary(agentRun) {
+function buildConfirmSummary(agentRun, t) {
   const steps = agentRun?.steps ?? [];
   const last = steps[steps.length - 1];
   if (last?.toolInput) {
     const input = last.toolInput;
-    if (input.title) return `Create task: "${input.title}"`;
-    if (input.description) return `Action: "${String(input.description).slice(0, 80)}"`;
+    if (input.title) return t('ai.confirm.createTaskSummary', null, { title: input.title });
+    if (input.description) {
+      return t('ai.confirm.actionSummary', null, { description: String(input.description).slice(0, 80) });
+    }
   }
-  return WORKFLOW_LABELS[agentRun?.workflowType] ?? 'Proceed with this action';
+  return t(`ai.workflow.${agentRun?.workflowType}`, WORKFLOW_LABELS[agentRun?.workflowType] ?? t('ai.confirm.proceed'));
 }
 
 export function AiAgentConfirm({ agentRun, onConfirm, onCancel, isConfirming }) {
   const { t } = useLanguage();
-  const summary = buildConfirmSummary(agentRun);
+  const summary = buildConfirmSummary(agentRun, t);
 
   return (
     <div className="flex flex-col gap-4 px-2 py-4">

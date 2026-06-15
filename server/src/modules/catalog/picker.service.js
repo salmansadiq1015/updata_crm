@@ -1,9 +1,9 @@
 import cacheManager from '../../shared/cache/CacheManager.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
-import logger from '../../shared/logger/index.js';
 import crypto from 'crypto';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
+import { buildSearchTokens } from './catalogNormalization.js';
 
 const PICKER_TTL = { l1Ttl: 15, l2Ttl: 60 };
 
@@ -13,7 +13,6 @@ class PickerService {
   }
 
   async searchArticles(query, { categoryId, type, source, limit = 25 } = {}) {
-    const { default: articleRepository } = await import('./article.repository.js');
     const Article = (await import('./article.model.js')).default;
 
     const params = { query, categoryId, type, source, limit };
@@ -28,16 +27,35 @@ class PickerService {
         if (type) filter.type = type;
         if (source) filter.source = source;
 
+        const searchTokens = buildSearchTokens(query);
         filter.$or = [
           { name: { $regex: query, $options: 'i' } },
           { articleNumber: { $regex: query, $options: 'i' } },
           { description: { $regex: query, $options: 'i' } },
+          { supplierReference: { $regex: query, $options: 'i' } },
+          { ighArticleNumber: { $regex: query, $options: 'i' } },
+          ...(searchTokens.length ? [{ searchTokens: { $in: searchTokens } }] : []),
         ];
 
-        return Article.find(filter)
-          .select('_id articleNumber name unitOfMeasure basePrice type categoryId')
+        const articles = await Article.find(filter)
+          .select('_id articleNumber name description unitOfMeasure basePrice currency type source categoryId supplierReference ighArticleNumber')
           .limit(limit)
           .lean();
+        return articles.map((article) => ({
+          ...article,
+          catalogArticleId: article._id,
+          snapshot: {
+            catalogArticleId: article._id,
+            articleNumber: article.articleNumber,
+            articleName: article.name,
+            articleDescription: article.description,
+            unitOfMeasure: article.unitOfMeasure,
+            snapshotBasePrice: article.basePrice,
+            snapshotCurrency: article.currency || 'CHF',
+            catalogSource: article.source || 'INTERNAL',
+            snapshotTakenAt: new Date().toISOString(),
+          },
+        }));
       },
       PICKER_TTL,
     );
@@ -80,10 +98,13 @@ class PickerService {
 
   async lookupBarcode(code) {
     const Article = (await import('./article.model.js')).default;
+    const CatalogBarcodeReference = (await import('./catalogBarcodeReference.model.js')).default;
+    const barcodeRef = await CatalogBarcodeReference.findOne({ code, isActive: true }).lean();
 
     const article = await Article.findOne({
       isDeleted: false,
       $or: [
+        ...(barcodeRef?.articleId ? [{ _id: barcodeRef.articleId }] : []),
         { articleNumber: code },
         { ighArticleNumber: code },
       ],

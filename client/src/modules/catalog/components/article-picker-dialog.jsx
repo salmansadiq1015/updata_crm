@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, Package } from 'lucide-react';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -11,13 +11,14 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
-import apiClient from '@/lib/api/client';
-import { ENDPOINTS } from '@/lib/api/endpoints';
+import { articleService } from '../services/article-service';
+import { buildCatalogSnapshot } from '../services/catalog-normalizers';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 
 function toSnapshot(article) {
+  const catalogSnapshot = buildCatalogSnapshot(article);
   return {
-    catalogArticleId: article._id,
+    catalogArticleId: article._id || article.id || article.catalogArticleId,
     articleNumber: article.articleNumber,
     name: article.name,
     description: article.description ?? '',
@@ -25,6 +26,7 @@ function toSnapshot(article) {
     snapshotPrice: article.basePrice,
     type: article.type,
     source: article.source,
+    catalogSnapshot,
   };
 }
 
@@ -32,26 +34,28 @@ export function ArticlePickerDialog({ open, onClose, onSelect }) {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 250);
 
-  useEffect(() => {
-    if (!open) setQuery('');
-  }, [open]);
+  const closeDialog = () => {
+    setQuery('');
+    onClose();
+  };
 
   const { data: articles = [], isLoading } = useQuery({
     queryKey: queryKeys.catalog.pickerArticles({ q: debouncedQuery }),
     queryFn: () =>
-      apiClient
-        .get(ENDPOINTS.CATALOG.PICKER_ARTICLES, { params: { q: debouncedQuery } })
+      articleService
+        .picker(debouncedQuery)
         .then((r) => (Array.isArray(r) ? r : (r?.data ?? []))),
-    enabled: open,
+    enabled: open && debouncedQuery.trim().length > 0,
     staleTime: 15_000,
   });
 
   const handleSelect = (article) => {
     onSelect(toSnapshot(article));
-    onClose();
+    closeDialog();
     // Fire-and-forget: update lastUsedAt (don't block UI)
-    if (article._id) {
-      apiClient.post(ENDPOINTS.CATALOG.PICKER_ARTICLE_USE(article._id)).catch(() => {});
+    const articleId = article._id || article.id || article.catalogArticleId;
+    if (articleId) {
+      articleService.recordUse(articleId).catch(() => {});
     }
   };
 
@@ -65,15 +69,19 @@ export function ArticlePickerDialog({ open, onClose, onSelect }) {
       snapshotPrice: 0,
       type: null,
       source: null,
+      catalogSnapshot: null,
     });
-    onClose();
+    closeDialog();
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => !v && closeDialog()}>
       <DialogContent className="max-w-lg p-0 overflow-hidden">
         <DialogHeader className="px-4 pt-4 pb-0">
           <DialogTitle>Select Article</DialogTitle>
+          <DialogDescription className="sr-only">
+            Search catalog articles and insert a snapshot into the current document.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="px-4 pt-3 pb-2 border-b">

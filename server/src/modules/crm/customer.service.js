@@ -12,13 +12,33 @@ import logger from '../../shared/logger/index.js';
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
+function blankToNull(value) {
+  if (value === undefined) return undefined;
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
+}
+
+function normalizeCustomerPayload(data = {}) {
+  const normalized = { ...data };
+  for (const key of ['name', 'ownerName', 'street', 'postalCode', 'city', 'canton', 'country', 'phone', 'mobile', 'email', 'website', 'uidNumber', 'vatNumber']) {
+    if (normalized[key] !== undefined) normalized[key] = blankToNull(normalized[key]);
+  }
+  if (normalized.type && normalized.type !== 'business') {
+    normalized.ownerName = null;
+    normalized.uidNumber = null;
+    normalized.vatNumber = null;
+  }
+  return normalized;
+}
+
 class CustomerService {
   async create(data, createdBy, meta = {}) {
-    const duplicates = await customerRepository.findDuplicates(data.name, data.postalCode);
+    const payload = normalizeCustomerPayload(data);
+    const duplicates = await customerRepository.findDuplicates(payload.name, payload.postalCode);
     const customerNumber = await counterService.getNextCustomerNumber();
 
     const customer = await customerRepository.create({
-      ...data,
+      ...payload,
       customerNumber,
       createdBy,
     });
@@ -93,7 +113,7 @@ class CustomerService {
     const existing = await customerRepository.findById(id);
     if (!existing) throw new NotFoundError('Customer', id);
 
-    const updated = await customerRepository.updateById(id, data);
+    const updated = await customerRepository.updateById(id, normalizeCustomerPayload(data));
     await this._invalidateCustomerCache(id);
     await this._invalidateListCache();
 
@@ -274,12 +294,14 @@ class CustomerService {
     };
     const header = [
       'CustomerNumber', 'Name', 'Type', 'Status',
+      'OwnerName', 'UidNumber', 'VatNumber',
       'Street', 'PostalCode', 'City', 'Canton', 'Country',
       'Phone', 'Mobile', 'Email', 'Website',
       'NewsletterOptIn', 'NewsletterChannel', 'CreatedAt',
     ].join(';');
     const body = rows.map((c) => [
       c.customerNumber, c.name, c.type, c.status,
+      c.ownerName, c.uidNumber, c.vatNumber,
       c.street, c.postalCode, c.city, c.canton, c.country,
       c.phone, c.mobile, c.email, c.website,
       c.newsletterOptIn ? 'true' : 'false', c.newsletterChannel,

@@ -72,7 +72,7 @@ export default function RoleDetailPage() {
     mutationFn: () => roleService.deleteRole(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.roles.all() });
-      showSuccess('Rolle geloescht');
+      showSuccess('Rolle gelöscht');
       router.push('/settings/roles');
     },
     onError: (err) => showError(err.message),
@@ -393,9 +393,9 @@ export default function RoleDetailPage() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Rolle loeschen?"
-        description={`Moechten Sie die Rolle "${role.name}" wirklich loeschen?${
-          assignedUsers.length > 0 ? ` ${assignedUsers.length} Benutzer sind dieser Rolle zugewiesen und muessen zuerst umgewiesen werden.` : ''
+        title="Rolle löschen?"
+        description={`Möchten Sie die Rolle "${role.name}" wirklich löschen?${
+          assignedUsers.length > 0 ? ` ${assignedUsers.length} Benutzer sind dieser Rolle zugewiesen und müssen zuerst umgewiesen werden.` : ''
         }`}
         onConfirm={() => deleteMutation.mutate()}
         loading={deleteMutation.isPending}

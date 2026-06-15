@@ -9,6 +9,7 @@ import {
   updateUserSchema,
   updateMeSchema,
   listUsersSchema,
+  directoryUsersSchema,
   userIdParamSchema,
   bulkUpdateSchema,
   bulkDeleteSchema,
@@ -80,6 +81,7 @@ router.patch(
 router.get(
   '/directory',
   authenticate,
+  validate(directoryUsersSchema),
   (req, res, next) => userController.directory(req, res, next),
 );
 

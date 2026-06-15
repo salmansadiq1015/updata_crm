@@ -2,6 +2,21 @@ import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 
 export const contactService = {
+  async getOverview(params = {}) {
+    const res = await apiClient.get(ENDPOINTS.CRM.CONTACTS_OVERVIEW, { params });
+    return {
+      data: Array.isArray(res.data?.contacts) ? res.data.contacts : [],
+      summary: res.data?.summary || { total: 0, private: 0, business: 0 },
+      pagination: res.pagination || {
+        page: params.page || 1,
+        limit: params.limit || 25,
+        total: 0,
+        pageCount: 1,
+        hasNext: false,
+        hasPrev: false,
+      },
+    };
+  },
   async listAll(limit = 500) {
     const res = await apiClient.get(ENDPOINTS.CRM.CONTACTS, { params: { limit } });
     return res.data;
@@ -23,6 +38,10 @@ export const contactService = {
     return res.data;
   },
   async delete(id) {
+    const res = await apiClient.delete(ENDPOINTS.CRM.CONTACT_BY_ID(id));
+    return res.data;
+  },
+  async archive(id) {
     const res = await apiClient.delete(ENDPOINTS.CRM.CONTACT_BY_ID(id));
     return res.data;
   },

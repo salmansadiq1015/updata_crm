@@ -574,6 +574,7 @@ class ProjectService {
               quantity: it.quantity,
               unit: it.unit,
               catalogItemId: it.catalogItemId ?? null,
+              catalogSnapshot: it.catalogSnapshot ?? null,
             }))
             : [],
           orderReference: null,

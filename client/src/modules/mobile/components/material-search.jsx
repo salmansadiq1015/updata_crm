@@ -70,9 +70,11 @@ export function MaterialSearch({ items = [], onChange, disabled }) {
   };
 
   const addFromCatalog = (catalogItem) => {
+    const source = catalogItem.catalogSource || catalogItem.catalog_source || CATALOG_SOURCE.INTERNAL;
     const newItem = {
-      catalogSource: catalogItem.catalog_source || CATALOG_SOURCE.INTERNAL,
-      catalogItemId: catalogItem.id || '',
+      catalogSource: source,
+      catalogItemId: catalogItem.catalogItemId || catalogItem.id || '',
+      catalogSnapshot: catalogItem.catalogSnapshot || null,
       description: catalogItem.description || catalogItem.name || '',
       quantity: 1,
       unit: catalogItem.unit || 'Stk',
@@ -89,6 +91,7 @@ export function MaterialSearch({ items = [], onChange, disabled }) {
       {
         catalogSource: CATALOG_SOURCE.CUSTOM,
         catalogItemId: '',
+        catalogSnapshot: null,
         description: '',
         quantity: 1,
         unit: 'Stk',
@@ -236,8 +239,8 @@ export function MaterialSearch({ items = [], onChange, disabled }) {
                   <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm truncate">{r.description || r.name}</p>
-                    {r.catalog_source && (
-                      <p className="text-xs text-muted-foreground">{r.catalog_source}</p>
+                    {(r.catalogSource || r.catalog_source) && (
+                      <p className="text-xs text-muted-foreground">{r.catalogSource || r.catalog_source}</p>
                     )}
                   </div>
                 </button>

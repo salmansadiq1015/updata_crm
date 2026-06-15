@@ -105,7 +105,7 @@ export function IghConfigForm() {
                 <Input {...field} type="password" placeholder="Leave blank to keep current key" />
               </FormControl>
               <p className="text-xs text-muted-foreground">
-                Stored encrypted. Leave blank to keep the current value.
+                Stored server-side and never returned in full. Leave blank to keep the current value.
               </p>
               <FormMessage />
             </FormItem>

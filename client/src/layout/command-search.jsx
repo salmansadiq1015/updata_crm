@@ -16,14 +16,14 @@ import { useLanguage } from '@/lib/i18n/language-context';
 export function CommandSearch() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [users, setUsers] = useState([]);
+  const [userResults, setUserResults] = useState({ query: '', items: [] });
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { t } = useLanguage();
   const debounceRef = useRef(null);
   const navItems = [
     { label: t('sidebar.dashboard', 'Dashboard'), href: '/dashboard', icon: LayoutDashboard },
-    { label: t('sidebar.users', 'Benutzer'), href: '/settings/users', icon: Users },
+    { label: t('sidebar.employmentManagement', 'Mitarbeiterverwaltung'), href: '/settings/users', icon: Users },
     { label: t('sidebar.roles', 'Rollen'), href: '/settings/roles', icon: Shield },
     { label: t('sidebar.sessions', 'Sitzungen'), href: '/settings/sessions', icon: Monitor },
     { label: t('sidebar.audit', 'Audit Log'), href: '/settings/audit', icon: ScrollText },
@@ -42,32 +42,38 @@ export function CommandSearch() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  useEffect(() => {
-    if (!open) {
-      setQuery('');
-      setUsers([]);
-    }
-  }, [open]);
+  const trimmedQuery = query.trim();
+  const users = userResults.query === trimmedQuery ? userResults.items : [];
 
   useEffect(() => {
-    if (!query.trim()) {
-      setUsers([]);
-      return;
-    }
+    if (!trimmedQuery) return undefined;
+    let cancelled = false;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await userService.getUsers({ search: query, pageSize: 5 });
-        setUsers(res?.data || []);
+        const res = await userService.getUsers({ search: trimmedQuery, limit: 5 });
+        if (!cancelled) setUserResults({ query: trimmedQuery, items: res?.data || [] });
       } catch {
-        setUsers([]);
+        if (!cancelled) setUserResults({ query: trimmedQuery, items: [] });
       }
     }, 250);
-    return () => clearTimeout(debounceRef.current);
-  }, [query]);
+    return () => {
+      cancelled = true;
+      clearTimeout(debounceRef.current);
+    };
+  }, [trimmedQuery]);
+
+  const handleOpenChange = (nextOpen) => {
+    setOpen(nextOpen);
+    if (!nextOpen) {
+      setQuery('');
+      setUserResults({ query: '', items: [] });
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    }
+  };
 
   const navigate = (href) => {
-    setOpen(false);
+    handleOpenChange(false);
     router.push(href);
   };
 
@@ -84,7 +90,7 @@ export function CommandSearch() {
         </kbd>
       </button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="p-0 gap-0 max-w-lg overflow-hidden rounded-2xl shadow-theme-lg" hideClose>
           <DialogTitle className="sr-only">{t('common.searchTitle', 'Suche')}</DialogTitle>
           <Command className="[&_[cmdk-group-heading]]:px-4 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[0.65rem] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground">
@@ -93,14 +99,14 @@ export function CommandSearch() {
               <Command.Input
                 value={query}
                 onValueChange={setQuery}
-                placeholder={t('command.placeholder', 'Suchen oder Aktion ausfuehren...')}
+                placeholder={t('command.placeholder', 'Suchen oder Aktion ausführen...')}
                 className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
             </div>
 
             <Command.List className="max-h-[300px] overflow-y-auto py-2 scrollbar-thin">
               <Command.Empty className="px-4 py-8 text-center text-sm text-muted-foreground">
-                {t('command.noResults', 'Keine Ergebnisse fuer "{query}"', { query })}
+                {t('command.noResults', 'Keine Ergebnisse für "{query}"', { query })}
               </Command.Empty>
 
               <Command.Group heading={t('command.pages', 'Seiten')}>

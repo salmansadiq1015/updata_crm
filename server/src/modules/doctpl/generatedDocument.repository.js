@@ -10,6 +10,8 @@ const ALLOWED_FILTERS = {
   sourceModule: 'exact',
   sourceRecordId: 'exact',
   documentType: 'exact',
+  sourceCustomerId: 'objectId',
+  sourceProjectId: 'objectId',
 };
 
 const ALLOWED_SORT_FIELDS = ['generatedAt', '_id'];

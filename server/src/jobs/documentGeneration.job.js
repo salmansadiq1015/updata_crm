@@ -13,15 +13,23 @@ export class DocumentGenerationWorker extends BaseWorker {
   }
 
   async process(job) {
-    const { items, generatedBy, meta } = job.data;
+    const { batchId, items, generatedBy, meta } = job.data;
     const results = [];
     let succeeded = 0;
     let failed = 0;
 
     const { default: documentGenerationService } = await import('../modules/doctpl/documentGeneration.service.js');
+    const { default: documentGenerationBatchRepository } = await import('../modules/doctpl/documentGenerationBatch.repository.js');
 
-    for (const item of items) {
+    if (batchId) {
+      await documentGenerationBatchRepository.markProcessing(batchId);
+    }
+
+    for (const [index, item] of items.entries()) {
       try {
+        if (batchId) {
+          await documentGenerationBatchRepository.markItemProcessing(batchId, index);
+        }
         const doc = await documentGenerationService.generate({
           templateType: item.templateType,
           sourceModule: item.sourceModule,
@@ -32,9 +40,15 @@ export class DocumentGenerationWorker extends BaseWorker {
           meta,
         });
         results.push({ sourceRecordId: item.sourceRecordId, status: 'SUCCESS', documentId: doc._id });
+        if (batchId) {
+          await documentGenerationBatchRepository.markItemSuccess(batchId, index, doc._id);
+        }
         succeeded++;
       } catch (err) {
         results.push({ sourceRecordId: item.sourceRecordId, status: 'FAILED', error: err.message });
+        if (batchId) {
+          await documentGenerationBatchRepository.markItemFailed(batchId, index, err.message);
+        }
         failed++;
         logger.error('Document generation failed for item', {
           module: 'jobs',
@@ -52,6 +66,10 @@ export class DocumentGenerationWorker extends BaseWorker {
       succeeded,
       failed,
     });
+
+    if (batchId) {
+      await documentGenerationBatchRepository.complete(batchId, { succeeded, failed });
+    }
 
     return { total: items.length, succeeded, failed, results };
   }

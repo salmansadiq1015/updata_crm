@@ -8,6 +8,7 @@ import { buildFilter } from '../../shared/utils/queryBuilder.js';
 
 const ALLOWED_FILTERS = {
   maintenanceType: 'exact',
+  maintenanceStatus: 'exact',
 };
 
 class MaintenanceIntervalRepository {
@@ -100,8 +101,21 @@ class MaintenanceIntervalRepository {
     return totals;
   }
 
-  async findWithCursor({ cursor, limit = 25, sortBy = 'nextDueDate', sortOrder = 'asc', filters = {} }) {
+  async findWithCursor({
+    cursor,
+    limit = 25,
+    sortBy = 'nextDueDate',
+    sortOrder = 'asc',
+    filters = {},
+    activeOnly = true,
+  }) {
+    const activeFilter = {};
+    if (activeOnly) {
+      activeFilter.installationId = { $in: await this._getActiveInstallationIds() };
+    }
+
     const filter = {
+      ...activeFilter,
       ...buildFilter(filters, ALLOWED_FILTERS),
       ...buildCursorQuery(cursor, sortBy, sortOrder),
     };

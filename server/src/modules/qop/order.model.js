@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import voiceMetadataSchema from '../../shared/schemas/voiceMetadata.schema.js';
+import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
 
 export const ORDER_STATUSES = ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 
@@ -7,6 +8,8 @@ const lineItemSchema = new mongoose.Schema(
   {
     position: { type: Number, required: true },
     articleNumber: { type: String, trim: true, maxlength: 50, default: '' },
+    catalogItemId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    catalogSnapshot: { type: catalogSnapshotSchema, default: null },
     description: { type: String, required: true, trim: true, maxlength: 1000 },
     unit: { type: String, trim: true, maxlength: 20, default: 'pcs' },
     quantity: { type: Number, required: true, min: 0 },

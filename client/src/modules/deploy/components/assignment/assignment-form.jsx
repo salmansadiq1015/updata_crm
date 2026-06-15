@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { useDebounce } from '@/shared/hooks/use-debounce';
 import { getCreateAssignmentSchema } from '../../validations/assignment';
 import { useAssignmentMutations } from '../../hooks/use-assignment-mutations';
 import { useDeployEmployees } from '../../hooks/use-deploy-employees';
@@ -90,8 +91,13 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const isEdit = !!defaultValues?._id;
   const assignmentSchema = useMemo(() => getCreateAssignmentSchema(t), [t]);
   const [employeeSearch, setEmployeeSearch] = useState('');
+  const debouncedEmployeeSearch = useDebounce(employeeSearch, 250);
 
-  const { data: employees = [] } = useDeployEmployees({ enabled: open });
+  const { data: employees = [], isFetching: employeesFetching } = useDeployEmployees({
+    enabled: open,
+    search: debouncedEmployeeSearch,
+    limit: EMPLOYEE_PICKER_LIMIT,
+  });
 
   const { create, update } = useAssignmentMutations({
     onCreate: () => onOpenChange(false),
@@ -143,22 +149,8 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const priorityMeta = PRIORITY_META[priority];
   const PriorityIcon = priorityMeta?.icon;
 
-  const matchingEmployees = useMemo(() => {
-    const query = employeeSearch.trim().toLowerCase();
-    if (!query) return employees;
-    return employees.filter((employee) => {
-      const label = employeeLabel(employee).toLowerCase();
-      const email = String(employee.email || '').toLowerCase();
-      return label.includes(query) || email.includes(query);
-    });
-  }, [employeeSearch, employees]);
-
-  const filteredEmployees = useMemo(
-    () => matchingEmployees.slice(0, EMPLOYEE_PICKER_LIMIT),
-    [matchingEmployees],
-  );
-
-  const hiddenEmployeeCount = Math.max(0, matchingEmployees.length - filteredEmployees.length);
+  const filteredEmployees = employees;
+  const hiddenEmployeeCount = 0;
 
   const submit = async (data) => {
     const cleaned = {
@@ -302,8 +294,8 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                         <UsersRound className="h-4 w-4 shrink-0 text-muted-foreground" />
                         <span className="truncate">
                           {selectedEmployees.length > 0
-                            ? t('deploy.form.employeesSelected', '{count} ausgewaehlt').replace('{count}', selectedEmployees.length)
-                            : t('deploy.form.selectEmployees', 'Mitarbeiter auswaehlen')}
+                            ? t('deploy.form.employeesSelected', '{count} ausgewählt').replace('{count}', selectedEmployees.length)
+                            : t('deploy.form.selectEmployees', 'Mitarbeiter auswählen')}
                         </span>
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -351,7 +343,12 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                           </button>
                         );
                       })}
-                      {filteredEmployees.length === 0 && (
+                      {employeesFetching && filteredEmployees.length === 0 && (
+                        <p className="py-6 text-center text-sm text-muted-foreground">
+                          {t('common.loadingUsers', 'Benutzer werden geladen...')}
+                        </p>
+                      )}
+                      {!employeesFetching && filteredEmployees.length === 0 && (
                         <p className="py-6 text-center text-sm text-muted-foreground">
                           {t('deploy.form.noEmployees', 'Keine Mitarbeiter gefunden')}
                         </p>

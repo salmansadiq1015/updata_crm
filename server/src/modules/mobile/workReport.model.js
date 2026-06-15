@@ -1,11 +1,13 @@
 import mongoose from 'mongoose';
 import voiceMetadataSchema from '../../shared/schemas/voiceMetadata.schema.js';
+import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
 
 export const REPORT_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'];
 
 const materialItemSchema = new mongoose.Schema({
   catalogSource: { type: String, enum: ['IGH', 'INTERNAL', 'CUSTOM'], required: true },
   catalogItemId: { type: String, maxlength: 50, default: null },
+  catalogSnapshot: { type: catalogSnapshotSchema, default: null },
   description: { type: String, maxlength: 300, required: true },
   quantity: { type: Number, min: 0, required: true },
   unit: { type: String, maxlength: 20, required: true },

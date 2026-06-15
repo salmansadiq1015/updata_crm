@@ -20,11 +20,12 @@ class DocumentTemplateRepository {
   }
 
   async findById(id) {
-    return DocumentTemplate.findById(id).lean();
+    return DocumentTemplate.findOne({ _id: id, isDeleted: { $ne: true } }).lean();
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
     const filter = {
+      isDeleted: { $ne: true },
       ...buildFilter(filters, ALLOWED_FILTERS),
       ...buildCursorQuery(cursor, sortBy, sortOrder),
     };
@@ -46,17 +47,20 @@ class DocumentTemplateRepository {
     return buildCursorResponse(docs, limit, sortBy);
   }
 
-  async updateById(id, data) {
-    return DocumentTemplate.findByIdAndUpdate(
-      id,
+  async updateById(id, data, expectedVersion = null) {
+    const filter = expectedVersion
+      ? { _id: id, currentVersion: expectedVersion, isDeleted: { $ne: true } }
+      : { _id: id, isDeleted: { $ne: true } };
+    return DocumentTemplate.findOneAndUpdate(
+      filter,
       { ...data, $inc: { currentVersion: 1 } },
       { returnDocument: 'after', runValidators: true },
     ).lean();
   }
 
   async softDelete(id) {
-    return DocumentTemplate.findByIdAndUpdate(
-      id,
+    return DocumentTemplate.findOneAndUpdate(
+      { _id: id, isDeleted: { $ne: true } },
       { isDeleted: true, deletedAt: new Date() },
       { returnDocument: 'after' },
     );

@@ -3,8 +3,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/lib/i18n/language-context';
-
-const LANGS = ['de', 'en'];
+import { TEMPLATE_LANGUAGES } from './TextBlocksTab';
 
 export function ColumnsTab({ tableColumns = [], onChange }) {
   const { t } = useLanguage();
@@ -49,9 +48,9 @@ export function ColumnsTab({ tableColumns = [], onChange }) {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {LANGS.map((lang) => (
+            {TEMPLATE_LANGUAGES.map(([lang, label]) => (
               <div key={lang}>
-                <Label className="text-xs uppercase text-muted-foreground">{lang}</Label>
+                <Label className="text-xs text-muted-foreground">{label}</Label>
                 <Input
                   value={column.label?.[lang] || ''}
                   onChange={(event) => setLabel(index, lang, event.target.value)}

@@ -7,7 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-const LANGS = [['de', 'Deutsch'], ['en', 'English']];
+export const TEMPLATE_LANGUAGES = [
+  ['de', 'Deutsch'],
+  ['fr', 'Francais'],
+  ['it', 'Italiano'],
+  ['en', 'English'],
+];
 const FIELDS = [
   ['introduction', 'doctpl.editor.introduction', 4],
   ['terms', 'doctpl.editor.terms', 6],
@@ -83,7 +88,7 @@ export function TextBlocksTab({ textBlocks = {}, onChange }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-1 border-b pb-3">
-        {LANGS.map(([code, label]) => (
+        {TEMPLATE_LANGUAGES.map(([code, label]) => (
           <button
             key={code}
             type="button"

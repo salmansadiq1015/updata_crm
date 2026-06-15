@@ -1,31 +1,39 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, FolderOpen, Folder, Plus, MoreHorizontal } from 'lucide-react';
+import { ChevronRight, ChevronDown, FolderOpen, Folder, Plus, MoreHorizontal, Pencil, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useCatalogCategories } from '../hooks/use-catalog-queries';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { useCatalogCategoryOptions, useCatalogCategoryTree } from '../hooks/use-catalog-queries';
 import { useCategoryMutations } from '../hooks/use-catalog-mutations';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-function buildTree(categories) {
-  const map = {};
-  const roots = [];
-  for (const c of categories) map[c._id || c.id] = { ...c, children: [] };
-  for (const c of categories) {
-    if (c.parentId && map[c.parentId]) {
-      map[c.parentId].children.push(map[c._id || c.id]);
-    } else {
-      roots.push(map[c._id || c.id]);
+const ROOT_VALUE = '__root__';
+
+function buildCategoryForm(category) {
+  return category
+    ? {
+      code: category.code || '',
+      name: category.name || '',
+      description: category.description || '',
+      parentId: category.parentId || ROOT_VALUE,
+      sortOrder: category.sortOrder || 0,
     }
-  }
-  return roots;
+    : { code: '', name: '', description: '', parentId: ROOT_VALUE, sortOrder: 0 };
 }
 
-function CategoryNode({ node, selectedId, onSelect, onEdit, depth = 0 }) {
+function CategoryNode({ node, selectedId, onSelect, onEdit, onDeactivate, depth = 0 }) {
   const [open, setOpen] = useState(depth === 0);
   const id = node._id || node.id;
   const hasChildren = node.children?.length > 0;
@@ -35,97 +43,208 @@ function CategoryNode({ node, selectedId, onSelect, onEdit, depth = 0 }) {
     <div>
       <div
         className={cn(
-          'group flex items-center gap-1 px-2 py-1.5 rounded-lg cursor-pointer text-sm transition-colors',
-          isSelected ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/60 text-foreground/80',
+          'group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors',
+          isSelected ? 'bg-primary/10 font-medium text-primary' : 'text-foreground/80 hover:bg-muted/60',
         )}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
-        onClick={() => onSelect(id)}
       >
         <button
-          className="shrink-0 h-4 w-4 flex items-center justify-center text-muted-foreground"
-          onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+          type="button"
+          className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
+          onClick={() => setOpen((value) => !value)}
+          aria-label={open ? 'Collapse category' : 'Expand category'}
         >
           {hasChildren ? (open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />) : null}
         </button>
-        {isSelected || open
-          ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-          : <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-        <span className="flex-1 truncate">{node.name}</span>
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => onSelect(id)}>
+          {isSelected || open
+            ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            : <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          <span className="truncate">{node.name}</span>
+          <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+            {node.articleCount ?? 0}
+          </span>
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="opacity-0 group-hover:opacity-100 h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground"
-              onClick={(e) => e.stopPropagation()}
+              type="button"
+              className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
             >
               <MoreHorizontal className="h-3 w-3" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-36">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(node); }}>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem onClick={() => onEdit(node)}>
+              <Pencil className="mr-2 h-3.5 w-3.5" />
               Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onDeactivate(node)} disabled={node.status === 'INACTIVE'}>
+              <Ban className="mr-2 h-3.5 w-3.5" />
+              Deactivate
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {open && hasChildren && (
-        <div>
-          {node.children.map((child) => (
-            <CategoryNode
-              key={child._id || child.id}
-              node={child}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              onEdit={onEdit}
-              depth={depth + 1}
-            />
-          ))}
-        </div>
-      )}
+      {open && hasChildren && node.children.map((child) => (
+        <CategoryNode
+          key={child._id || child.id}
+          node={child}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          onEdit={onEdit}
+          onDeactivate={onDeactivate}
+          depth={depth + 1}
+        />
+      ))}
     </div>
+  );
+}
+
+function CategoryDialog({ open, onOpenChange, category, categories }) {
+  const { createCategory, updateCategory, moveCategory } = useCategoryMutations();
+  const [form, setForm] = useState(() => buildCategoryForm(category));
+  const isEdit = Boolean(category);
+
+  const save = async () => {
+    const parentId = form.parentId === ROOT_VALUE ? null : form.parentId;
+    if (isEdit) {
+      await updateCategory.mutateAsync({
+        id: category._id || category.id,
+        data: {
+          code: form.code,
+          name: form.name,
+          description: form.description,
+          sortOrder: Number(form.sortOrder) || 0,
+        },
+      });
+      if (String(parentId || '') !== String(category.parentId || '')) {
+        await moveCategory.mutateAsync({ id: category._id || category.id, newParentId: parentId });
+      }
+    } else {
+      await createCategory.mutateAsync({
+        code: form.code,
+        name: form.name,
+        description: form.description,
+        parentId,
+        sortOrder: Number(form.sortOrder) || 0,
+      });
+    }
+    onOpenChange(false);
+  };
+
+  const blockedParentIds = new Set([category?._id || category?.id].filter(Boolean).map(String));
+  const parentOptions = categories.filter((item) => !blockedParentIds.has(String(item._id || item.id)));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Edit Category' : 'New Category'}</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="category-code">Code</Label>
+              <Input id="category-code" value={form.code} onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value.toUpperCase() }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="category-sort">Sort</Label>
+              <Input id="category-sort" type="number" value={form.sortOrder} onChange={(event) => setForm((prev) => ({ ...prev, sortOrder: event.target.value }))} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="category-name">Name</Label>
+            <Input id="category-name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="category-description">Description</Label>
+            <Input id="category-description" value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Parent</Label>
+            <Select value={form.parentId || ROOT_VALUE} onValueChange={(value) => setForm((prev) => ({ ...prev, parentId: value }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ROOT_VALUE}>Root</SelectItem>
+                {parentOptions.map((item) => (
+                  <SelectItem key={item._id || item.id} value={item._id || item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button size="sm" onClick={save} disabled={!form.code || !form.name || createCategory.isPending || updateCategory.isPending || moveCategory.isPending}>
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function CatalogCategoryTree({ selectedId, onSelect }) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
-  const { data: categories = [], isLoading } = useCatalogCategories();
-  const tree = buildTree(categories);
+  const { data: tree = [], isLoading, isError } = useCatalogCategoryTree();
+  const { data: categoryOptions = [] } = useCatalogCategoryOptions({ includeInactive: true });
+  const { deactivateCategory } = useCategoryMutations();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [dialogKey, setDialogKey] = useState(0);
+
+  const openCreate = () => { setEditing(null); setDialogKey((key) => key + 1); setDialogOpen(true); };
+  const openEdit = (category) => { setEditing(category); setDialogKey((key) => key + 1); setDialogOpen(true); };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2.5 border-b">
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b px-3 py-2.5">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {de ? 'Kategorien' : 'Categories'}
         </span>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={openCreate} aria-label="Create category">
+          <Plus className="h-3.5 w-3.5" />
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
-        {/* All articles option */}
-        <div
+        <button
+          type="button"
           className={cn(
-            'flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm transition-colors mb-1',
-            !selectedId ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted/60 text-foreground/80',
+            'mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+            !selectedId ? 'bg-primary/10 font-medium text-primary' : 'text-foreground/80 hover:bg-muted/60',
           )}
           onClick={() => onSelect(null)}
         >
           <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
           <span>{de ? 'Alle Artikel' : 'All Articles'}</span>
-        </div>
+        </button>
 
-        {isLoading ? (
-          <div className="px-3 py-4 text-xs text-muted-foreground">{de ? 'Lädt...' : 'Loading...'}</div>
-        ) : (
-          tree.map((node) => (
-            <CategoryNode
-              key={node._id || node.id}
-              node={node}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              onEdit={() => {}}
-            />
-          ))
-        )}
+        {isLoading && <div className="px-3 py-4 text-xs text-muted-foreground">{de ? 'Laedt...' : 'Loading...'}</div>}
+        {isError && <div className="px-3 py-4 text-xs text-destructive">Could not load categories.</div>}
+        {!isLoading && !isError && tree.map((node) => (
+          <CategoryNode
+            key={node._id || node.id}
+            node={node}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            onEdit={openEdit}
+            onDeactivate={(category) => deactivateCategory.mutate(category._id || category.id)}
+          />
+        ))}
       </div>
+
+      <CategoryDialog
+        key={dialogKey}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        category={editing}
+        categories={categoryOptions}
+      />
     </div>
   );
 }

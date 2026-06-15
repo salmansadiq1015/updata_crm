@@ -6,6 +6,7 @@ import auditService from '../auth/audit.service.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import { normalizeSearchTerm } from './catalogNormalization.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const TREE_TTL = { l1Ttl: 60, l2Ttl: 300 };
@@ -13,17 +14,41 @@ const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 class CatalogCategoryService {
   async list(queryParams) {
-    const { cursor, limit, sortBy, sortOrder, search, ...filters } = queryParams;
+    const { cursor, limit, sortBy, sortOrder, includeCounts = true, ...rawFilters } = queryParams;
+    const search = normalizeSearchTerm(queryParams);
+    const filters = { ...rawFilters };
+    delete filters.q;
+    delete filters.search;
     const filterKey = Object.entries(filters)
       .filter(([, v]) => v !== undefined)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${k}=${v}`)
       .join('&');
-    const cacheKey = `catalog:categories:list:${cursor || ''}:${limit}:${sortBy}:${sortOrder}:${search || ''}:${filterKey}`;
+    const cacheKey = `catalog:categories:list:${cursor || ''}:${limit}:${sortBy}:${sortOrder}:${search || ''}:${includeCounts}:${filterKey}`;
 
     return cacheManager.getOrSet(
       cacheKey,
-      () => catalogCategoryRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters, search }),
+      async () => {
+        const result = await catalogCategoryRepository.findWithCursor({
+          cursor,
+          limit,
+          sortBy,
+          sortOrder,
+          filters,
+          search,
+        });
+        if (!includeCounts) return result;
+        const countMap = await catalogCategoryRepository.countArticlesByCategoryIds(
+          result.data.map((item) => item._id),
+        );
+        return {
+          ...result,
+          data: result.data.map((item) => ({
+            ...item,
+            articleCount: countMap.get(item._id.toString()) || 0,
+          })),
+        };
+      },
       LIST_TTL,
     );
   }
@@ -39,23 +64,30 @@ class CatalogCategoryService {
     return category;
   }
 
-  async getTree() {
-    const cacheKey = 'catalog:categories:tree';
+  async getTree(options = {}) {
+    const { status, includeCounts = true } = options;
+    const cacheKey = `catalog:categories:tree:${status || 'ALL'}:${includeCounts}`;
     return cacheManager.getOrSet(
       cacheKey,
       async () => {
-        const roots = await catalogCategoryRepository.findRoots();
         const all = await catalogCategoryRepository.findWithCursor({
           limit: 10000,
           sortBy: 'sortOrder',
           sortOrder: 'asc',
-          filters: {},
+          filters: status ? { status } : {},
         });
 
         const items = all.data || [];
+        const countMap = includeCounts
+          ? await catalogCategoryRepository.countArticlesByCategoryIds(items.map((item) => item._id))
+          : new Map();
         const map = new Map();
         for (const item of items) {
-          map.set(item._id.toString(), { ...item, children: [] });
+          map.set(item._id.toString(), {
+            ...item,
+            articleCount: countMap.get(item._id.toString()) || 0,
+            children: [],
+          });
         }
 
         const tree = [];
@@ -72,6 +104,15 @@ class CatalogCategoryService {
         return tree;
       },
       TREE_TTL,
+    );
+  }
+
+  async getSelectOptions({ includeInactive = false } = {}) {
+    const cacheKey = `catalog:categories:select:${includeInactive}`;
+    return cacheManager.getOrSet(
+      cacheKey,
+      () => catalogCategoryRepository.findSelectOptions({ includeInactive }),
+      LIST_TTL,
     );
   }
 
@@ -146,8 +187,14 @@ class CatalogCategoryService {
 
     let newAncestors = [];
     if (newParentId) {
+      if (newParentId.toString() === id.toString()) {
+        throw new ConflictError('Category cannot be moved under itself');
+      }
       const newParent = await catalogCategoryRepository.findById(newParentId);
       if (!newParent) throw new NotFoundError('CatalogCategory (new parent)', newParentId);
+      if ((newParent.ancestors || []).some((ancestorId) => ancestorId.toString() === id.toString())) {
+        throw new ConflictError('Category cannot be moved under one of its descendants');
+      }
       newAncestors = [...(newParent.ancestors || []), newParentId];
     }
 
@@ -211,7 +258,8 @@ class CatalogCategoryService {
 
   async _invalidateCaches(id) {
     await cacheManager.del(`catalog:category:${id}`);
-    await cacheManager.del('catalog:categories:tree');
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:categories:tree:*`);
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:categories:select:*`);
     await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:categories:list:*`);
   }
 }

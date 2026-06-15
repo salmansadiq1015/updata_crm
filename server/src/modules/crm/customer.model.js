@@ -15,6 +15,7 @@ const customerSchema = new mongoose.Schema(
       trim: true,
       maxlength: 255,
     },
+    ownerName: { type: String, trim: true, maxlength: 255, default: null },
     type: {
       type: String,
       enum: ['private', 'business'],
@@ -70,13 +71,14 @@ customerSchema.index({ postalCode: 1 });
 customerSchema.index({ isDeleted: 1, status: 1 });
 customerSchema.index({ createdAt: -1 });
 customerSchema.index({ type: 1 });
+customerSchema.index({ ownerName: 1 });
 customerSchema.index({ uidNumber: 1 });
 customerSchema.index({ vatNumber: 1 });
 customerSchema.index({ name: 1, postalCode: 1 }); // duplicate detection
 customerSchema.index({ 'migration.sourceSystem': 1, 'migration.sourceId': 1 });
 customerSchema.index(
-  { name: 'text', city: 'text', email: 'text' },
-  { weights: { name: 10, email: 5, city: 2 } },
+  { name: 'text', ownerName: 'text', city: 'text', email: 'text' },
+  { weights: { name: 10, ownerName: 6, email: 5, city: 2 } },
 );
 
 // --- Soft-delete pre-hook ---

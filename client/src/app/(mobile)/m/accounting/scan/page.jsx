@@ -78,7 +78,7 @@ export default function MobileAccountingScanPage() {
 
   const submit = async () => {
     if (!file) {
-      toast.error(lang === 'de' ? 'Bitte Dokument auswaehlen' : 'Please select a document');
+      toast.error(lang === 'de' ? 'Bitte Dokument auswählen' : 'Please select a document');
       return;
     }
 
@@ -162,7 +162,7 @@ export default function MobileAccountingScanPage() {
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
               <FileText className="h-10 w-10" />
               <p className="text-sm font-medium">
-                {lang === 'de' ? 'Kein Dokument ausgewaehlt' : 'No document selected'}
+                {lang === 'de' ? 'Kein Dokument ausgewählt' : 'No document selected'}
               </p>
             </div>
           )}

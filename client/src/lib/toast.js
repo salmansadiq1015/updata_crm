@@ -1,7 +1,8 @@
 import toast from 'react-hot-toast';
+import { normalizeGermanOrthography } from '@/lib/i18n/german-orthography';
 
 export const showSuccess = (message) =>
-  toast.success(message, { duration: 3000 });
+  toast.success(normalizeGermanOrthography(message), { duration: 3000 });
 
 /**
  * Display an error toast.
@@ -30,14 +31,18 @@ export const showError = (input) => {
     message = String(input);
   }
 
-  toast.error(message, { duration: 5000 });
+  toast.error(normalizeGermanOrthography(message), { duration: 5000 });
 };
 
 export const showLoading = (message) =>
-  toast.loading(message || 'Wird geladen...');
+  toast.loading(normalizeGermanOrthography(message || 'Wird geladen...'));
 
 export const dismissToast = (id) =>
   toast.dismiss(id);
 
 export const showPromise = (promise, { loading, success, error }) =>
-  toast.promise(promise, { loading, success, error });
+  toast.promise(promise, {
+    loading: normalizeGermanOrthography(loading),
+    success: normalizeGermanOrthography(success),
+    error: normalizeGermanOrthography(error),
+  });

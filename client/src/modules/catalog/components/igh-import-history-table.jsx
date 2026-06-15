@@ -15,6 +15,7 @@ import { IghImportPreviewDialog } from './igh-import-preview-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 const STATUS_VARIANT = {
+  PREVIEW: 'secondary',
   PENDING: 'secondary',
   RUNNING: 'default',
   COMPLETED: 'outline',
@@ -84,7 +85,7 @@ function JobRow({ job }) {
 export function IghImportHistoryTable() {
   const { t } = useLanguage();
   const { data: jobs = [], isLoading } = useIghImportHistory();
-  const { previewImport, importFull, importDelta } = useIghMutations();
+  const { previewImport, approveImport, importDelta } = useIghMutations();
   const { data: config } = useIghConfig();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -104,7 +105,7 @@ export function IghImportHistoryTable() {
           <Button
             size="sm"
             variant="outline"
-            disabled={previewImport.isPending || importFull.isPending}
+            disabled={previewImport.isPending || approveImport.isPending}
             onClick={async () => {
               const result = await previewImport.mutateAsync();
               setPreview(result?.data ?? result);
@@ -161,10 +162,10 @@ export function IghImportHistoryTable() {
         onClose={() => setPreviewOpen(false)}
         preview={preview}
         onConfirm={() => {
-          importFull.mutate();
+          if (preview?._id) approveImport.mutate(preview._id);
           setPreviewOpen(false);
         }}
-        isImporting={importFull.isPending}
+        isImporting={approveImport.isPending}
       />
     </>
   );

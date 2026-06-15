@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Eye, History, Save, X } from 'lucide-react';
@@ -27,12 +27,32 @@ export default function TemplateDetailPage() {
   const [changeDesc, setChangeDesc] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [validationIssues, setValidationIssues] = useState([]);
 
   const current = draft || template;
 
+  useEffect(() => {
+    if (!draft) return undefined;
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [draft]);
+
+  const handleEditorValidation = useCallback((issues) => {
+    setValidationIssues(issues);
+  }, []);
+
   const handleSave = async () => {
-    if (!draft || !changeDesc.trim()) return;
-    await update.mutateAsync({ id, ...draft, changeDescription: changeDesc.trim() });
+    if (!draft || !changeDesc.trim() || validationIssues.length) return;
+    await update.mutateAsync({
+      id,
+      ...draft,
+      expectedVersion: template.currentVersion,
+      changeDescription: changeDesc.trim(),
+    });
     setDraft(null);
     setChangeDesc('');
   };
@@ -83,7 +103,7 @@ export default function TemplateDetailPage() {
 
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 rounded-lg border bg-card p-5 shadow-sm">
-          <TemplateEditor template={current} onChange={setDraft} />
+          <TemplateEditor template={current} onChange={setDraft} onValidationChange={handleEditorValidation} />
 
           {draft && (
             <div className="mt-5 space-y-3 border-t pt-4">
@@ -97,7 +117,7 @@ export default function TemplateDetailPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={handleSave} disabled={!changeDesc.trim() || update.isPending} className="gap-1.5">
+                <Button onClick={handleSave} disabled={!changeDesc.trim() || update.isPending || validationIssues.length > 0} className="gap-1.5">
                   <Save className="h-4 w-4" />
                   {update.isPending ? t('doctpl.templates.saving') : t('doctpl.templates.saveChanges')}
                 </Button>
@@ -119,7 +139,7 @@ export default function TemplateDetailPage() {
         {showHistory && (
           <aside className="w-full shrink-0 rounded-lg border bg-card p-5 shadow-sm xl:w-96">
             <h3 className="mb-3 text-sm font-semibold">{t('doctpl.templates.history')}</h3>
-            <TemplateVersionHistory templateId={id} />
+            <TemplateVersionHistory templateId={id} expectedVersion={current.currentVersion} />
           </aside>
         )}
       </div>

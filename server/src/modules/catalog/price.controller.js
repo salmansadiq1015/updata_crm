@@ -1,6 +1,21 @@
 import priceService from './price.service.js';
 
 class PriceController {
+  async preview(req, res, next) {
+    try {
+      const data = await priceService.preview(req.body);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  async listBatches(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await priceService.listBatches(query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
+
   async updatePrice(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

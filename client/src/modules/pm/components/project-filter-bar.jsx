@@ -364,7 +364,7 @@ export function ProjectFilterBar({
       {hasActiveFilters && (
         <Button variant="ghost" size="sm" onClick={onClear} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground">
           <X className="h-3.5 w-3.5 mr-1" />
-          {language === 'de' ? 'Zuruecksetzen' : 'Reset'}
+          {language === 'de' ? 'Zurücksetzen' : 'Reset'}
         </Button>
       )}
     </div>

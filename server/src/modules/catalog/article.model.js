@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { buildArticleSearchTokens } from './catalogNormalization.js';
 
 export const ARTICLE_TYPES = ['MATERIAL', 'SERVICE'];
 export const ARTICLE_SOURCES = ['INTERNAL', 'IGH'];
@@ -80,6 +81,11 @@ const articleSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    searchTokens: {
+      type: [String],
+      default: [],
+      index: true,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -110,10 +116,15 @@ articleSchema.index(
 );
 articleSchema.index({ isDeleted: 1, status: 1 });
 articleSchema.index({ createdAt: -1 });
+articleSchema.index({ searchTokens: 1 });
 articleSchema.index(
   { name: 'text', description: 'text', articleNumber: 'text', supplierReference: 'text' },
   { weights: { articleNumber: 10, name: 8, description: 3, supplierReference: 3 } },
 );
+
+articleSchema.pre('validate', function () {
+  this.searchTokens = buildArticleSearchTokens(this);
+});
 
 // --- Soft-delete pre-hook ---
 articleSchema.pre(/^find/, function () {

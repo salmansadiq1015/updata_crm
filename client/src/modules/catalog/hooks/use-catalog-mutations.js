@@ -8,11 +8,14 @@ export function useArticleMutations() {
 
   const invalidateArticles = () => qc.invalidateQueries({ queryKey: ['catalog', 'articles'] });
   const invalidateFacets = () => qc.invalidateQueries({ queryKey: ['catalog', 'facets'] });
-  const invalidateCategories = () => qc.invalidateQueries({ queryKey: queryKeys.catalog.categories() });
+  const invalidateCategories = () => {
+    qc.invalidateQueries({ queryKey: queryKeys.catalog.categories() });
+    qc.invalidateQueries({ queryKey: queryKeys.catalog.categoryTree() });
+  };
 
   const createArticle = useMutation({
     mutationFn: articleService.create,
-    onSuccess: () => { invalidateArticles(); invalidateFacets(); },
+    onSuccess: () => { invalidateArticles(); invalidateFacets(); invalidateCategories(); },
   });
 
   const updateArticle = useMutation({
@@ -21,12 +24,13 @@ export function useArticleMutations() {
       qc.invalidateQueries({ queryKey: queryKeys.catalog.articleDetail(id) });
       invalidateArticles();
       invalidateFacets();
+      invalidateCategories();
     },
   });
 
   const removeArticle = useMutation({
     mutationFn: (id) => articleService.remove(id),
-    onSuccess: () => { invalidateArticles(); invalidateFacets(); },
+    onSuccess: () => { invalidateArticles(); invalidateFacets(); invalidateCategories(); },
   });
 
   const updatePrice = useMutation({
@@ -53,6 +57,7 @@ export function useArticleMutations() {
     onSuccess: () => {
       invalidateArticles();
       invalidateFacets();
+      invalidateCategories();
     },
   });
 
@@ -61,7 +66,10 @@ export function useArticleMutations() {
 
 export function useCategoryMutations() {
   const qc = useQueryClient();
-  const invalidate = () => qc.invalidateQueries({ queryKey: queryKeys.catalog.categories() });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: queryKeys.catalog.categories() });
+    qc.invalidateQueries({ queryKey: queryKeys.catalog.categoryTree() });
+  };
 
   const createCategory = useMutation({ mutationFn: categoryService.create, onSuccess: invalidate });
   const updateCategory = useMutation({
@@ -69,6 +77,10 @@ export function useCategoryMutations() {
     onSuccess: invalidate,
   });
   const deactivateCategory = useMutation({ mutationFn: categoryService.deactivate, onSuccess: invalidate });
+  const moveCategory = useMutation({
+    mutationFn: ({ id, newParentId }) => categoryService.move(id, { newParentId }),
+    onSuccess: invalidate,
+  });
 
-  return { createCategory, updateCategory, deactivateCategory };
+  return { createCategory, updateCategory, deactivateCategory, moveCategory };
 }

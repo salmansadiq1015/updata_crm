@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
 
 export const CATALOG_SOURCES = ['IGH', 'INTERNAL', 'CUSTOM'];
 
@@ -20,6 +21,7 @@ const materialLineItemSchema = new mongoose.Schema(
       required: true,
     },
     catalogItemId: { type: String, maxlength: 50, default: null },
+    catalogSnapshot: { type: catalogSnapshotSchema, default: null },
     description: {
       type: String,
       required: true,

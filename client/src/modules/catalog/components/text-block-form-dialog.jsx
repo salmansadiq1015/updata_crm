@@ -29,6 +29,18 @@ const schema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE']),
 });
 
+function buildTextBlockDefaults(textBlock) {
+  return textBlock
+    ? {
+      title: textBlock.title,
+      categoryId: textBlock.categoryId ?? '__none__',
+      price: textBlock.price ?? '',
+      unit: textBlock.unit ?? '',
+      status: textBlock.status ?? 'ACTIVE',
+    }
+    : { title: '', categoryId: '__none__', price: '', unit: '', status: 'ACTIVE' };
+}
+
 function RichTextEditor({ value, onChange }) {
   const editor = useEditor({
     extensions: [StarterKit],
@@ -82,29 +94,12 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
   const { data: categories = [] } = useCatalogCategories();
   const isEdit = !!textBlock;
 
-  const [bodyHtml, setBodyHtml] = useState(textBlock?.bodyHtml ?? '');
+  const [bodyHtml, setBodyHtml] = useState(() => textBlock?.bodyHtml ?? '');
 
   const form = useForm({
     resolver: zodResolver(schema),
-    defaultValues: { title: '', categoryId: '__none__', price: '', unit: '', status: 'ACTIVE' },
+    defaultValues: buildTextBlockDefaults(textBlock),
   });
-
-  useEffect(() => {
-    if (open) {
-      if (textBlock) {
-        form.reset({
-          title: textBlock.title,
-          categoryId: textBlock.categoryId ?? '__none__',
-          price: textBlock.price ?? '',
-          unit: textBlock.unit ?? '',
-          status: textBlock.status ?? 'ACTIVE',
-        });
-      } else {
-        form.reset({ title: '', categoryId: '__none__', price: '', unit: '', status: 'ACTIVE' });
-      }
-      setBodyHtml(textBlock?.bodyHtml ?? '');
-    }
-  }, [textBlock, open]); // eslint-disable-line
 
   const onSubmit = async (values) => {
     const payload = {

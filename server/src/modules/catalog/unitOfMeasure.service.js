@@ -1,10 +1,9 @@
 import unitOfMeasureRepository from './unitOfMeasure.repository.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
-import eventBus from '../../shared/events/EventBus.js';
 import auditService from '../auth/audit.service.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
-import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
+import { normalizeUnitCode } from './catalogNormalization.js';
 
 const UNITS_TTL = { l1Ttl: 300, l2Ttl: 900 };
 const ALL_UNITS_KEY = 'catalog:units:all';
@@ -13,16 +12,26 @@ class UnitOfMeasureService {
   async list() {
     return cacheManager.getOrSet(
       ALL_UNITS_KEY,
-      () => unitOfMeasureRepository.findAll(),
+      async () => {
+        const [units, usageCounts] = await Promise.all([
+          unitOfMeasureRepository.findAll(),
+          unitOfMeasureRepository.usageCountsByCode(),
+        ]);
+        return units.map((unit) => ({
+          ...unit,
+          usageCount: usageCounts.get(unit.code) || 0,
+        }));
+      },
       UNITS_TTL,
     );
   }
 
   async create(data, userId, meta = {}) {
-    const existing = await unitOfMeasureRepository.findByCode(data.code);
-    if (existing) throw new ConflictError(`Unit of measure with code '${data.code}' already exists`);
+    const payload = { ...data, code: normalizeUnitCode(data.code) };
+    const existing = await unitOfMeasureRepository.findByCode(payload.code);
+    if (existing) throw new ConflictError(`Unit of measure with code '${payload.code}' already exists`);
 
-    const unit = await unitOfMeasureRepository.create(data);
+    const unit = await unitOfMeasureRepository.create(payload);
     await this._invalidateCache();
 
     auditService.logEvent({
@@ -74,10 +83,11 @@ class UnitOfMeasureService {
       );
     }
 
-    const referenced = await unitOfMeasureRepository.isReferenced(code);
-    if (referenced) {
+    const referenceCount = await unitOfMeasureRepository.referenceCount(code);
+    if (referenceCount > 0) {
       throw new ConflictError(
         `Unit '${code}' is still referenced by articles and cannot be deleted`,
+        { referenceCount },
       );
     }
 

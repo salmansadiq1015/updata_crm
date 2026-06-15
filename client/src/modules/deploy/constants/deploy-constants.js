@@ -14,7 +14,7 @@ export const ASSIGNMENT_TYPE_META = Object.freeze({
 
 export const ASSIGNMENT_STATUS_META = Object.freeze({
   PLANNED: { labelKey: 'deploy.assignmentStatus.planned', label: 'Geplant', dotColor: 'bg-slate-400', bgColor: 'bg-slate-500/10', textColor: 'text-slate-600' },
-  CONFIRMED: { labelKey: 'deploy.assignmentStatus.confirmed', label: 'Bestaetigt', dotColor: 'bg-blue-500', bgColor: 'bg-blue-500/10', textColor: 'text-blue-600' },
+  CONFIRMED: { labelKey: 'deploy.assignmentStatus.confirmed', label: 'Bestätigt', dotColor: 'bg-blue-500', bgColor: 'bg-blue-500/10', textColor: 'text-blue-600' },
   IN_PROGRESS: { labelKey: 'deploy.assignmentStatus.inProgress', label: 'In Arbeit', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-600' },
   COMPLETED: { labelKey: 'deploy.assignmentStatus.completed', label: 'Abgeschlossen', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-600' },
   CANCELLED: { labelKey: 'deploy.assignmentStatus.cancelled', label: 'Storniert', dotColor: 'bg-gray-400', bgColor: 'bg-gray-500/10', textColor: 'text-gray-500' },
@@ -29,7 +29,7 @@ export const PRIORITY_META = Object.freeze({
 export const CONFIRMATION_STATUS_META = Object.freeze({
   PENDING: { labelKey: 'deploy.appointmentStatus.pending', label: 'Ausstehend', dotColor: 'bg-slate-400', bgColor: 'bg-slate-500/10' },
   SENT: { labelKey: 'deploy.appointmentStatus.sent', label: 'Gesendet', dotColor: 'bg-blue-500', bgColor: 'bg-blue-500/10' },
-  CONFIRMED: { labelKey: 'deploy.appointmentStatus.confirmed', label: 'Bestaetigt', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10' },
+  CONFIRMED: { labelKey: 'deploy.appointmentStatus.confirmed', label: 'Bestätigt', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10' },
   RESCHEDULED: { labelKey: 'deploy.appointmentStatus.rescheduled', label: 'Verschoben', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10' },
   IN_PROGRESS: { labelKey: 'deploy.appointmentStatus.inProgress', label: 'In Arbeit', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10' },
   COMPLETED: { labelKey: 'deploy.appointmentStatus.completed', label: 'Erledigt', dotColor: 'bg-emerald-600', bgColor: 'bg-emerald-600/10' },

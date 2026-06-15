@@ -13,7 +13,7 @@ const eventLabels = {
   'login.success': 'Anmeldung',
   'login.failed': 'Fehlgeschlagene Anmeldung',
   'logout': 'Abmeldung',
-  'password.changed': 'Passwort geaendert',
+  'password.changed': 'Passwort geändert',
   'user.created': 'Benutzer erstellt',
   'user.updated': 'Benutzer aktualisiert',
   'user.deactivated': 'Benutzer deaktiviert',
@@ -53,7 +53,7 @@ export function RecentActivity() {
             ))}
           </div>
         ) : entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">Keine Aktivitaeten vorhanden.</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">Keine Aktivitäten vorhanden.</p>
         ) : (
           <div className="space-y-1">
             {entries.map((entry, i) => (

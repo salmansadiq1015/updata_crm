@@ -13,7 +13,10 @@ export function usePriceHistory(articleId) {
 export function usePriceBatches() {
   return useQuery({
     queryKey: queryKeys.catalog.priceBatches(),
-    queryFn: () => priceService.getBatches().then((r) => (Array.isArray(r) ? r : (r?.data ?? []))),
+    queryFn: () => priceService.getBatches().then((r) => ({
+      data: Array.isArray(r) ? r : (r?.data ?? []),
+      pagination: r?.pagination ?? null,
+    })),
     staleTime: 30_000,
   });
 }

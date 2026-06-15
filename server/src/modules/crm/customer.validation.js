@@ -15,11 +15,22 @@ const phone = Joi.string().trim().max(30)
   .messages({ 'string.pattern.base': 'Please enter a valid phone number (e.g., +41 44 123 45 67)' });
 
 const taxIdentifier = Joi.string().trim().uppercase().max(50);
+const businessRequiredText = (label, max = 255) => Joi.when('type', {
+  is: 'business',
+  then: Joi.string().trim().max(max).required().messages({ 'any.required': `${label} is required for company customers`, 'string.empty': `${label} is required for company customers` }),
+  otherwise: Joi.string().trim().max(max).allow('', null),
+});
+const businessRequiredTaxIdentifier = Joi.when('type', {
+  is: 'business',
+  then: taxIdentifier.required().messages({ 'any.required': 'UID number is required for company customers', 'string.empty': 'UID number is required for company customers' }),
+  otherwise: taxIdentifier.allow('', null),
+});
 
 export const createCustomerSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(255),
     type: Joi.string().valid('private', 'business').required(),
+    ownerName: businessRequiredText('Owner name'),
     street: Joi.string().trim().max(255).required(),
     postalCode: swissPostalCode.required(),
     city: Joi.string().trim().max(100).required(),
@@ -29,7 +40,7 @@ export const createCustomerSchema = {
     mobile: phone.allow('', null),
     email: Joi.string().email().trim().max(255).allow('', null),
     website: Joi.string().uri({ scheme: ['http', 'https'] }).trim().max(255).allow('', null),
-    uidNumber: taxIdentifier.allow('', null),
+    uidNumber: businessRequiredTaxIdentifier,
     vatNumber: taxIdentifier.allow('', null),
     newsletterOptIn: Joi.boolean().default(false),
     newsletterChannel: Joi.string().valid('email', 'whatsapp', 'both').default('email'),
@@ -42,6 +53,7 @@ export const updateCustomerSchema = {
   body: Joi.object({
     name: Joi.string().trim().max(255),
     type: Joi.string().valid('private', 'business'),
+    ownerName: businessRequiredText('Owner name'),
     street: Joi.string().trim().max(255).allow('', null),
     postalCode: swissPostalCode.allow('', null),
     city: Joi.string().trim().max(100).allow('', null),
@@ -51,7 +63,7 @@ export const updateCustomerSchema = {
     mobile: phone.allow('', null),
     email: Joi.string().email().trim().max(255).allow('', null),
     website: Joi.string().uri({ scheme: ['http', 'https'] }).trim().max(255).allow('', null),
-    uidNumber: taxIdentifier.allow('', null),
+    uidNumber: businessRequiredTaxIdentifier,
     vatNumber: taxIdentifier.allow('', null),
     newsletterOptIn: Joi.boolean(),
     newsletterChannel: Joi.string().valid('email', 'whatsapp', 'both'),

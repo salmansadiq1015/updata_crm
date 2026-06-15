@@ -182,7 +182,7 @@ export const CONFIRMATION_STATUSES = [
 export const CONFIRMATION_STATUS_CONFIG = {
   DRAFT: { label: 'Entwurf', labelEn: 'Draft', dotColor: 'bg-slate-400', bgColor: 'bg-slate-500/10', textColor: 'text-slate-700 dark:text-slate-300' },
   SENT: { label: 'Gesendet', labelEn: 'Sent', dotColor: 'bg-blue-500', bgColor: 'bg-blue-500/10', textColor: 'text-blue-700 dark:text-blue-400' },
-  CONFIRMED: { label: 'Bestaetigt', labelEn: 'Confirmed', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-700 dark:text-emerald-400' },
+  CONFIRMED: { label: 'Bestätigt', labelEn: 'Confirmed', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-700 dark:text-emerald-400' },
   DECLINED: { label: 'Abgelehnt', labelEn: 'Declined', dotColor: 'bg-red-500', bgColor: 'bg-red-500/10', textColor: 'text-red-700 dark:text-red-400' },
   ALTERNATIVE_PROPOSED: { label: 'Alternative vorgeschlagen', labelEn: 'Alternative Proposed', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-700 dark:text-amber-400' },
 };

@@ -21,3 +21,14 @@ export const useDocumentsBySource = (mod, rid) => useQuery({
   enabled: !!(mod && rid),
   select: (r) => r?.data ?? [],
 });
+
+export const useDocumentBatchStatus = (batchId, enabled = true) => useQuery({
+  queryKey: ['doctpl', 'documents', 'batch', batchId],
+  queryFn: () => documentService.batchStatus(batchId),
+  enabled: !!batchId && enabled,
+  refetchInterval: (query) => {
+    const status = query.state.data?.data?.status;
+    return ['COMPLETED', 'PARTIAL_FAILED', 'FAILED'].includes(status) ? false : 2500;
+  },
+  select: (r) => r?.data,
+});

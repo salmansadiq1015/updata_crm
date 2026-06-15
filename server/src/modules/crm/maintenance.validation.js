@@ -38,6 +38,8 @@ export const maintenanceDashboardSchema = {
 export const maintenanceListSchema = {
   query: cursorPagination.keys({
     maintenanceType: Joi.string().valid('annual_service', 'filter_change', 'chimney_sweep', 'general_inspection', 'other'),
+    sortBy: Joi.string().valid('nextDueDate', 'createdAt', '_id').default('nextDueDate'),
+    sortOrder: Joi.string().valid('asc', 'desc').default('asc'),
   }),
 };
 
@@ -46,5 +48,15 @@ export const maintenanceExportSchema = {
     status: Joi.string().valid('due', 'overdue', 'all').default('all'),
     maintenanceType: Joi.string().valid('annual_service', 'filter_change', 'chimney_sweep', 'general_inspection', 'other'),
     format: Joi.string().valid('csv').default('csv'),
+  }),
+};
+
+export const maintenanceSettingsReadSchema = {
+  query: Joi.object({}),
+};
+
+export const maintenanceSettingsUpdateSchema = {
+  body: Joi.object({
+    escalationDays: Joi.number().integer().min(1).max(365).required(),
   }),
 };

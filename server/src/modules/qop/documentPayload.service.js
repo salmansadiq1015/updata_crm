@@ -100,11 +100,20 @@ function buildCustomerBlock(document, customer, contact) {
 function buildBaseData({ document, customer, contact, project, templateType, documentNumber, documentDate }) {
   const customerBlock = buildCustomerBlock(document, customer, contact);
   const projectName = project?.name || document.projectName || '';
+  const customerId = toId(document.customerId || customer);
+  const projectId = toId(document.projectId || project);
+  const departmentId = toId(document.departmentId);
 
   return {
     templateType,
     documentNumber,
     documentDate,
+    customerId,
+    projectId,
+    departmentId,
+    sourceCustomerId: customerId,
+    sourceProjectId: projectId,
+    sourceDepartmentId: departmentId,
     customerName: document.customerName || customer?.name || '',
     ...customerBlock,
     project: project ? {
@@ -130,6 +139,9 @@ function buildBaseData({ document, customer, contact, project, templateType, doc
       projectName,
       documentNumber,
       templateType,
+      sourceCustomerId: customerId,
+      sourceProjectId: projectId,
+      sourceDepartmentId: departmentId,
     },
   };
 }
@@ -222,6 +234,9 @@ class QopDocumentPayloadService {
     const advanceDeductions = (invoice.advanceDeductions || []).map((deduction) => ({
       invoiceNumber: deduction.advanceInvoiceNumber,
       date: formatDate(deduction.advanceInvoiceDate),
+      netAmount: Number(deduction.netAmount || 0),
+      vatAmount: Number(deduction.vatAmount || 0),
+      totalAmount: Number(deduction.totalAmount || 0),
       amount: Number(deduction.totalAmount || 0),
     }));
 

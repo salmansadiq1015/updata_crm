@@ -7,6 +7,8 @@ const mockSendAppointmentConfirmationEmail = jest.fn();
 const mockSendAppointmentReminderEmail = jest.fn();
 const mockSendAppointmentCancellationEmail = jest.fn();
 const mockSendAppointmentRescheduledEmail = jest.fn();
+const mockSendQuotationEmail = jest.fn();
+const mockSendQopAppointmentReminderEmail = jest.fn();
 
 jest.unstable_mockModule('../../shared/mail/mail.js', () => ({
   sendInvoiceSentEmail: jest.fn(),
@@ -20,6 +22,8 @@ jest.unstable_mockModule('../../shared/mail/mail.js', () => ({
   sendAppointmentReminderEmail: mockSendAppointmentReminderEmail,
   sendAppointmentCancellationEmail: mockSendAppointmentCancellationEmail,
   sendAppointmentRescheduledEmail: mockSendAppointmentRescheduledEmail,
+  sendQuotationEmail: mockSendQuotationEmail,
+  sendQopAppointmentReminderEmail: mockSendQopAppointmentReminderEmail,
 }));
 
 // ── Logger (suppress output in tests) ────────────────────────────────────────

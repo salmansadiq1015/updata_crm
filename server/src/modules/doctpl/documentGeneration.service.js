@@ -69,6 +69,10 @@ class DocumentGenerationService {
       fileSizeBytes: pdfBuffer.length,
       pageCount,
       metadata: renderData.metadata || {},
+      sourceCustomerId: this._toObjectIdOrNull(renderData.sourceCustomerId || renderData.customerId || renderData.metadata?.sourceCustomerId),
+      sourceProjectId: this._toObjectIdOrNull(renderData.sourceProjectId || renderData.projectId || renderData.project?._id || renderData.metadata?.sourceProjectId),
+      sourceDepartmentId: this._toObjectIdOrNull(renderData.sourceDepartmentId || renderData.departmentId || renderData.metadata?.sourceDepartmentId),
+      ownerUserId: this._toObjectIdOrNull(renderData.ownerUserId || renderData.metadata?.ownerUserId || generatedBy),
       generatedBy,
     });
 
@@ -207,6 +211,11 @@ class DocumentGenerationService {
 
   _cleanPathSegment(value = '') {
     return `${value}`.trim().replace(/[\\/]+/g, '-').replace(/\s+/g, '_').substring(0, 80);
+  }
+
+  _toObjectIdOrNull(value) {
+    if (!value) return null;
+    return value._id || value.id || value;
   }
 }
 

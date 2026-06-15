@@ -6,13 +6,18 @@ import auditService from '../auth/audit.service.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import { normalizeSearchTerm, sanitizeCatalogHtml } from './catalogNormalization.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 class TextBlockService {
   async list(queryParams) {
-    const { cursor, limit, sortBy, sortOrder, search, ...filters } = queryParams;
+    const { cursor, limit, sortBy, sortOrder, ...rawFilters } = queryParams;
+    const search = normalizeSearchTerm(queryParams);
+    const filters = { ...rawFilters };
+    delete filters.q;
+    delete filters.search;
     const filterKey = Object.entries(filters)
       .filter(([, v]) => v !== undefined)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -39,7 +44,11 @@ class TextBlockService {
   }
 
   async create(data, createdBy, meta = {}) {
-    const textBlock = await textBlockRepository.create({ ...data, createdBy });
+    const payload = {
+      ...data,
+      bodyHtml: sanitizeCatalogHtml(data.bodyHtml),
+    };
+    const textBlock = await textBlockRepository.create({ ...payload, createdBy });
     await this._invalidateListCache();
 
     eventBus.publish(EVENT_TYPES.CATALOG_TEXT_BLOCK_CREATED, {
@@ -67,7 +76,12 @@ class TextBlockService {
     const existing = await textBlockRepository.findById(id);
     if (!existing) throw new NotFoundError('TextBlock', id);
 
-    const updated = await textBlockRepository.updateById(id, { ...data, updatedBy });
+    const payload = { ...data };
+    if (payload.bodyHtml !== undefined) {
+      payload.bodyHtml = sanitizeCatalogHtml(payload.bodyHtml);
+    }
+
+    const updated = await textBlockRepository.updateById(id, { ...payload, updatedBy });
     await this._invalidateTextBlockCache(id);
     await this._invalidateListCache();
 

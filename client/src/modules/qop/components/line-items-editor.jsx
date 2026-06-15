@@ -6,10 +6,12 @@ import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Plus, Trash2 } from 'lucide-react';
+import { PackageSearch, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { VAT_RATES } from '../constants/qop-constants';
+import { ArticlePickerDialog } from '@/modules/catalog/components/article-picker-dialog';
+import { CatalogLinePriceDrift } from './catalog-line-price-drift';
 
 function calcLineTotal(qty, price, discount) {
   const q = parseFloat(qty) || 0;
@@ -41,6 +43,7 @@ function uid() { return ++_uid; }
 export function LineItemsEditor({ value = [], onChange, disabled = false }) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const addItem = useCallback(() => {
     const newItem = {
@@ -57,6 +60,29 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
       isOptional: false,
     };
     onChange([...value, newItem]);
+  }, [value, onChange]);
+
+  const addCatalogItem = useCallback((snapshot) => {
+    const catalogSnapshot = snapshot.catalogSnapshot || null;
+    const unitPrice = Number(snapshot.snapshotPrice ?? catalogSnapshot?.snapshotBasePrice ?? 0);
+    const newItem = {
+      _uid: uid(),
+      position: value.length + 1,
+      type: snapshot.type === 'MATERIAL' ? 'material' : 'service',
+      catalogItemId: snapshot.catalogArticleId || catalogSnapshot?.catalogArticleId || null,
+      catalogSnapshot,
+      articleNumber: snapshot.articleNumber || catalogSnapshot?.articleNumber || '',
+      description: snapshot.name || catalogSnapshot?.articleName || '',
+      quantity: 1,
+      unit: snapshot.unitOfMeasure || catalogSnapshot?.unitOfMeasure || 'Stk',
+      unitPrice,
+      discountPercent: 0,
+      vatRate: 8.1,
+      lineTotal: unitPrice,
+      isOptional: false,
+    };
+    onChange([...value, newItem]);
+    setPickerOpen(false);
   }, [value, onChange]);
 
   const removeItem = useCallback((idx) => {
@@ -116,7 +142,7 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
             </div>
             <div className="flex items-center px-1 py-1">
               <Input
-                value={item.articleNumber}
+                value={item.articleNumber || item.catalogSnapshot?.articleNumber || ''}
                 onChange={(e) => updateItem(idx, 'articleNumber', e.target.value)}
                 disabled={disabled}
                 className="h-7 text-xs px-1.5 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
@@ -124,13 +150,16 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
               />
             </div>
             <div className="flex items-center px-1 py-1">
-              <Input
-                value={item.description}
-                onChange={(e) => updateItem(idx, 'description', e.target.value)}
-                disabled={disabled}
-                className="h-7 text-xs px-1.5 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
-                placeholder={de ? 'Beschreibung...' : 'Description...'}
-              />
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <Input
+                  value={item.description}
+                  onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                  disabled={disabled}
+                  className="h-7 min-w-0 text-xs px-1.5 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
+                  placeholder={de ? 'Beschreibung...' : 'Description...'}
+                />
+                <CatalogLinePriceDrift item={item} />
+              </div>
             </div>
             <div className="flex items-center px-1 py-1">
               <Input
@@ -218,10 +247,16 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
 
       {/* Add item button */}
       {!disabled && (
-        <Button type="button" variant="outline" size="sm" onClick={addItem} className="self-start gap-1.5 h-8">
-          <Plus className="h-3.5 w-3.5" />
-          {de ? 'Position hinzufügen' : 'Add item'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)} className="gap-1.5 h-8">
+            <PackageSearch className="h-3.5 w-3.5" />
+            {de ? 'Katalogartikel' : 'Catalog article'}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={addItem} className="gap-1.5 h-8">
+            <Plus className="h-3.5 w-3.5" />
+            {de ? 'Freitextposition' : 'Free-text item'}
+          </Button>
+        </div>
       )}
 
       {/* Totals summary */}
@@ -245,6 +280,11 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
           </div>
         </div>
       )}
+      <ArticlePickerDialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={addCatalogItem}
+      />
     </div>
   );
 }

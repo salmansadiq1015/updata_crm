@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
+import { catalogSnapshotJoi } from '../../shared/validation/catalogSnapshot.schema.js';
 
 const CATALOG_SOURCES = ['IGH', 'INTERNAL', 'CUSTOM'];
 
@@ -20,6 +21,7 @@ export const createReportSchema = {
       Joi.object({
         catalogSource: Joi.string().valid(...CATALOG_SOURCES).required(),
         catalogItemId: Joi.string().max(50).allow('', null),
+        catalogSnapshot: catalogSnapshotJoi,
         description: Joi.string().max(300).required(),
         quantity: Joi.number().min(0).required(),
         unit: Joi.string().max(20).required(),
@@ -48,6 +50,7 @@ export const updateReportSchema = {
       Joi.object({
         catalogSource: Joi.string().valid(...CATALOG_SOURCES).required(),
         catalogItemId: Joi.string().max(50).allow('', null),
+        catalogSnapshot: catalogSnapshotJoi,
         description: Joi.string().max(300).required(),
         quantity: Joi.number().min(0).required(),
         unit: Joi.string().max(20).required(),

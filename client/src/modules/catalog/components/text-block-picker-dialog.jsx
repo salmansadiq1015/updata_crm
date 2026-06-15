@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, FileText } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -9,8 +9,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
-import apiClient from '@/lib/api/client';
-import { ENDPOINTS } from '@/lib/api/endpoints';
+import { textBlockService } from '../services/text-block-service';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 
 function toSnapshot(block) {
@@ -27,27 +26,28 @@ export function TextBlockPickerDialog({ open, onClose, onSelect }) {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 250);
 
-  useEffect(() => {
-    if (!open) setQuery('');
-  }, [open]);
+  const closeDialog = () => {
+    setQuery('');
+    onClose();
+  };
 
   const { data: blocks = [], isLoading } = useQuery({
     queryKey: queryKeys.catalog.pickerTextBlocks({ q: debouncedQuery }),
     queryFn: () =>
-      apiClient
-        .get(ENDPOINTS.CATALOG.PICKER_TEXT_BLOCKS, { params: { q: debouncedQuery } })
+      textBlockService
+        .picker(debouncedQuery)
         .then((r) => (Array.isArray(r) ? r : (r?.data ?? []))),
-    enabled: open,
+    enabled: open && debouncedQuery.trim().length > 0,
     staleTime: 15_000,
   });
 
   const handleSelect = (block) => {
     onSelect(toSnapshot(block));
-    onClose();
+    closeDialog();
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v) => !v && closeDialog()}>
       <DialogContent className="max-w-lg p-0 overflow-hidden">
         <DialogHeader className="px-4 pt-4 pb-0">
           <DialogTitle>Select Text Block</DialogTitle>
@@ -94,7 +94,7 @@ export function TextBlockPickerDialog({ open, onClose, onSelect }) {
             ))}
             {!isLoading && blocks.length === 0 && (
               <div className="px-4 py-6 text-sm text-center text-muted-foreground">
-                No text blocks found.
+                {query ? 'No text blocks found.' : 'Start typing to search text blocks.'}
               </div>
             )}
           </div>

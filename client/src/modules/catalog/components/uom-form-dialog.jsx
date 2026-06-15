@@ -50,7 +50,7 @@ export function UomFormDialog({ open, onClose, unit }) {
     } else {
       form.reset({ code: '', nameDe: '', nameFr: '', nameIt: '', baseUnitCode: '', conversionFactor: '' });
     }
-  }, [unit, open]);
+  }, [form, unit, open]);
 
   const onSubmit = async (values) => {
     const payload = {

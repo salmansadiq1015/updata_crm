@@ -19,7 +19,4 @@ export const useDeleteDocument = () => {
 
 export const useDownloadDocument = () => useMutation({
   mutationFn: (id) => documentService.download(id),
-  onSuccess: (r) => {
-    if (r?.data?.downloadUrl) window.open(r.data.downloadUrl, '_blank');
-  },
 });

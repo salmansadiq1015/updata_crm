@@ -6,12 +6,13 @@ jest.unstable_mockModule('../article.model.js', () => ({
   default: { bulkWrite: mockBulkWrite },
 }));
 
-let parseIghCsv, parseIghJson, batchUpsertArticles;
+let parseIghCsv, parseIghJson, parseIghXml, batchUpsertArticles;
 
 beforeAll(async () => {
   const mod = await import('../igh-import-adapters.js');
   parseIghCsv = mod.parseIghCsv;
   parseIghJson = mod.parseIghJson;
+  parseIghXml = mod.parseIghXml;
   batchUpsertArticles = mod.batchUpsertArticles;
 });
 
@@ -26,7 +27,7 @@ describe('IGH import adapters', () => {
       expect(articles[0]).toMatchObject({
         ighArticleNumber: '12345',
         name: 'Rohr 28mm',
-        unitOfMeasure: 'm',
+        unitOfMeasure: 'M',
         basePrice: 15.5,
         source: 'IGH',
       });
@@ -49,9 +50,25 @@ describe('IGH import adapters', () => {
       expect(articles[0]).toMatchObject({
         ighArticleNumber: 'A001',
         name: 'Fitting',
-        unitOfMeasure: 'Stk',
+        unitOfMeasure: 'STK',
         basePrice: 4.8,
         source: 'IGH',
+      });
+    });
+
+    it('parses XML article blocks into canonical units', () => {
+      const xml = `
+        <catalog>
+          <article><IGH_NR>X001</IGH_NR><BEZEICHNUNG>Pumpe</BEZEICHNUNG><EINHEIT>Stk</EINHEIT><PREIS_CHF>25,40</PREIS_CHF></article>
+        </catalog>
+      `;
+      const articles = parseIghXml(xml);
+      expect(articles).toHaveLength(1);
+      expect(articles[0]).toMatchObject({
+        ighArticleNumber: 'X001',
+        name: 'Pumpe',
+        unitOfMeasure: 'STK',
+        basePrice: 25.4,
       });
     });
   });
@@ -60,8 +77,8 @@ describe('IGH import adapters', () => {
     it('calls Article.bulkWrite with upsert operations', async () => {
       mockBulkWrite.mockResolvedValue({ upsertedCount: 2, modifiedCount: 0 });
       const articles = [
-        { ighArticleNumber: 'A001', name: 'Fitting', unitOfMeasure: 'Stk', basePrice: 4.8 },
-        { ighArticleNumber: 'A002', name: 'Pipe', unitOfMeasure: 'm', basePrice: 12.0 },
+        { ighArticleNumber: 'A001', name: 'Fitting', unitOfMeasure: 'STK', basePrice: 4.8 },
+        { ighArticleNumber: 'A002', name: 'Pipe', unitOfMeasure: 'M', basePrice: 12.0 },
       ];
       const result = await batchUpsertArticles(articles, 'admin-user-id');
       expect(mockBulkWrite).toHaveBeenCalledTimes(1);
@@ -77,7 +94,7 @@ describe('IGH import adapters', () => {
       const articles = Array.from({ length: 1100 }, (_, i) => ({
         ighArticleNumber: `A${i}`,
         name: `Article ${i}`,
-        unitOfMeasure: 'Stk',
+        unitOfMeasure: 'STK',
         basePrice: 1,
       }));
       await batchUpsertArticles(articles, 'admin-user-id');

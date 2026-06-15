@@ -1,10 +1,35 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 
+function normalizeUser(raw) {
+  if (!raw || typeof raw !== 'object') return raw;
+  const id = raw._id || raw.id;
+  return { ...raw, _id: id, id };
+}
+
+function normalizeUserList(payload) {
+  const items = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload?.results)
+    ? payload.results
+    : [];
+
+  return items.map(normalizeUser).filter((user) => user?._id);
+}
+
 export const userService = {
   async getUsers(params = {}) {
     const res = await apiClient.get(ENDPOINTS.USERS.LIST, { params });
     return res;
+  },
+
+  async getDirectory(params = {}) {
+    const res = await apiClient.get(ENDPOINTS.USERS.DIRECTORY, { params });
+    return normalizeUserList(res?.data);
   },
 
   async getUserById(id) {

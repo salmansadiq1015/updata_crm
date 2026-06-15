@@ -10,8 +10,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
-import apiClient from '@/lib/api/client';
 import { searchService } from '../services/search-service';
+import { useQopDepartments } from '../hooks/use-qop-queries';
 
 const EMPTY_FILTERS = {
   type: 'all', status: '', dateFrom: '', dateTo: '',
@@ -33,11 +33,7 @@ export function QopAdvancedFilters({ onFiltersChange }) {
     select: (r) => Array.isArray(r.data) ? r.data : [],
   });
 
-  const { data: departments = [] } = useQuery({
-    queryKey: ['departments'],
-    queryFn: () => apiClient.get('/admin/departments'),
-    select: (r) => Array.isArray(r.data) ? r.data : [],
-  });
+  const { data: departments = [] } = useQopDepartments();
 
   const savePreset = useMutation({
     mutationFn: () => searchService.savePreset(presetName, filters),

@@ -669,6 +669,9 @@ export function CustomerDetail() {
             <SidebarRow t={t} icon={Mail} iconBg="bg-sky-500/10" iconColor="text-sky-400" label={t('crm.email', 'Email')} value={customer.email} />
             <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" label={t('crm.phone', 'Phone')} value={formatPhone(customer.phone) || customer.phone} rawValue={customer.phone} />
             <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" label={t('crm.mobile', 'Mobile')} value={formatPhone(customer.mobile) || customer.mobile} rawValue={customer.mobile} />
+            {isBusiness && (
+              <SidebarRow t={t} icon={User} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" label={t('crm.ownerName', 'Owner name')} value={customer.ownerName} />
+            )}
             <SidebarRow t={t} icon={ReceiptText} iconBg="bg-amber-500/10" iconColor="text-amber-400" label={t('crm.uidVat', 'UID / VAT')} value={customer.uidNumber || customer.vatNumber} />
             <SidebarRow t={t} icon={Globe} iconBg="bg-indigo-500/10" iconColor="text-indigo-400" label={t('crm.website', 'Website')} value={customer.website} />
           </div>
@@ -721,6 +724,9 @@ export function CustomerDetail() {
             <TabsContent value="overview">
               <div className="grid gap-3 sm:grid-cols-2 p-4 bg-white/2 rounded-xl border border-white/5">
                 <InfoGridCell label={t('crm.type', 'Type')} value={isBusiness ? t('crm.typeBusiness', 'Business') : t('crm.typePrivate', 'Private')} />
+                {isBusiness && (
+                  <InfoGridCell label={t('crm.ownerName', 'Owner name')} value={customer.ownerName || 'â€”'} />
+                )}
                 <InfoGridCell label={t('crm.customerNumber', 'Customer number')} value={customer.customerNumber || '—'} mono />
                 <InfoGridCell label={t('crm.uidVat', 'UID / VAT')} value={customer.uidNumber || customer.vatNumber || '—'} mono />
                 <InfoGridCell label={t('crm.email', 'Email')} value={customer.email || '—'} />

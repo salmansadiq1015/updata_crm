@@ -93,7 +93,7 @@ export default function InstallationCapturePage() {
         } catch {
           toast(
             lang === 'de'
-              ? 'OCR ist nicht verfuegbar. Lokale Hinweise bleiben erhalten.'
+              ? 'OCR ist nicht verfügbar. Lokale Hinweise bleiben erhalten.'
               : 'OCR is unavailable. Local hints are kept.',
             { icon: '!' },
           );
@@ -174,7 +174,7 @@ export default function InstallationCapturePage() {
           <WifiOff className="h-4 w-4 shrink-0" />
           <span>
             {lang === 'de'
-              ? 'Offline-Modus: Aenderungen werden lokal gespeichert und spaeter synchronisiert.'
+              ? 'Offline-Modus: Änderungen werden lokal gespeichert und später synchronisiert.'
               : 'Offline mode: changes are saved locally and synced later.'}
           </span>
         </div>
@@ -284,7 +284,7 @@ export default function InstallationCapturePage() {
             )}
             {nameplateCapture?.hints?.extraction?.lowConfidenceFields?.length > 0 && (
               <p className="mt-2 text-[11px] text-amber-700">
-                {lang === 'de' ? 'Bitte pruefen' : 'Please verify'}: {nameplateCapture.hints.extraction.lowConfidenceFields.join(', ')}
+                {lang === 'de' ? 'Bitte prüfen' : 'Please verify'}: {nameplateCapture.hints.extraction.lowConfidenceFields.join(', ')}
               </p>
             )}
 
@@ -330,7 +330,7 @@ export default function InstallationCapturePage() {
               render={({ field }) => (
                 <Select value={field.value || ''} onValueChange={field.onChange} disabled={isSubmitting}>
                   <SelectTrigger className="h-11">
-                    <SelectValue placeholder={lang === 'de' ? 'Auswaehlen' : 'Select'} />
+                    <SelectValue placeholder={lang === 'de' ? 'Auswählen' : 'Select'} />
                   </SelectTrigger>
                   <SelectContent>
                     {FUEL_TYPE_OPTIONS.map((option) => (

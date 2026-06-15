@@ -20,6 +20,10 @@ describe('catalog constants', () => {
     expect(ENDPOINTS.CATALOG.ARTICLES_IMPORT).toBe('/catalog/articles/import');
   });
 
+  it('has recent search endpoint', () => {
+    expect(ENDPOINTS.CATALOG.SEARCH_RECENT).toBe('/catalog/search/recent');
+  });
+
   it('has article image endpoints', () => {
     expect(ENDPOINTS.CATALOG.ARTICLE_IMAGES('abc')).toBe('/catalog/articles/abc/images');
     expect(ENDPOINTS.CATALOG.ARTICLE_IMAGE('abc', 'img1')).toBe('/catalog/articles/abc/images/img1');
@@ -52,6 +56,10 @@ describe('catalog constants', () => {
   it('has facets query key', () => {
     const key = queryKeys.catalog.facets({ categoryId: 'x' });
     expect(key).toEqual(['catalog', 'facets', { categoryId: 'x' }]);
+  });
+
+  it('has recent search query key', () => {
+    expect(queryKeys.catalog.recentSearches()).toEqual(['catalog', 'search', 'recent']);
   });
 
   it('has units query keys', () => {

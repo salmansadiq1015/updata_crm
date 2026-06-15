@@ -9,4 +9,7 @@ export const textBlockService = {
   create: (data) => apiClient.post(E.TEXT_BLOCKS, data),
   update: (id, data) => apiClient.put(E.TEXT_BLOCK_BY_ID(id), data),
   remove: (id) => apiClient.delete(E.TEXT_BLOCK_BY_ID(id)),
+  picker: (query, params = {}) => apiClient.get(E.PICKER_TEXT_BLOCKS, {
+    params: { ...params, q: query },
+  }),
 };

@@ -22,6 +22,7 @@ export function MaterialItemsList({ control, register, setValue, getValues, lang
     if (pickerIndex == null) return;
     const base = `materialOrderDetails.items.${pickerIndex}`;
     setValue?.(`${base}.catalogItemId`, snapshot.catalogArticleId || null, { shouldDirty: true });
+    setValue?.(`${base}.catalogSnapshot`, snapshot.catalogSnapshot || null, { shouldDirty: true });
     if (snapshot.name) setValue?.(`${base}.description`, snapshot.name, { shouldDirty: true });
     if (snapshot.unitOfMeasure) setValue?.(`${base}.unit`, snapshot.unitOfMeasure, { shouldDirty: true });
     setPickerIndex(null);
@@ -29,6 +30,7 @@ export function MaterialItemsList({ control, register, setValue, getValues, lang
 
   const clearCatalogLink = (index) => {
     setValue?.(`materialOrderDetails.items.${index}.catalogItemId`, null, { shouldDirty: true });
+    setValue?.(`materialOrderDetails.items.${index}.catalogSnapshot`, null, { shouldDirty: true });
   };
 
   return (

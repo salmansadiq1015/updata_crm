@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
+import { catalogSnapshotJoi } from '../../shared/validation/catalogSnapshot.schema.js';
 
 const QUOTATION_STATUSES = [
   'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED',
@@ -11,6 +12,7 @@ const lineItemSchema = Joi.object({
   position: Joi.number().integer().required(),
   type: Joi.string().valid(...LINE_ITEM_TYPES).required(),
   catalogItemId: objectId.allow(null),
+  catalogSnapshot: catalogSnapshotJoi,
   description: Joi.string().max(2000).required(),
   unit: Joi.string().max(20).allow('', null),
   quantity: Joi.number().min(0),

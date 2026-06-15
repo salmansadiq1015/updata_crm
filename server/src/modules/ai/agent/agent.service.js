@@ -13,6 +13,7 @@ import logger from '../../../shared/logger/index.js';
 import { randomUUID } from 'crypto';
 
 const INTENT_TO_WORKFLOW = {
+  create_customer: 'FIELD_SERVICE_AGENT',
   create_task: 'FIELD_SERVICE_AGENT',
   update_task: 'FIELD_SERVICE_AGENT',
   send_notification: 'NOTIFICATION',
@@ -55,7 +56,7 @@ class AgentService {
       const response = await llm.invoke([
         {
           role: 'system',
-          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_task, update_task, send_notification, create_order, update_order, create_assignment, reschedule_assignment, create_report, update_project, create_note, send_chat_message, record_time, search_customer, create_quotation, create_invoice, general>", "confidence": 0.0-1.0}',
+          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_customer, create_task, update_task, send_notification, create_order, update_order, create_assignment, reschedule_assignment, create_report, update_project, create_note, send_chat_message, record_time, search_customer, create_quotation, create_invoice, general>", "confidence": 0.0-1.0}',
         },
         { role: 'user', content: input },
       ]);
@@ -79,6 +80,7 @@ class AgentService {
     if (has('project', 'projekt') && has('status', 'update', 'set', 'change', 'aktualisier')) return 'update_project';
     if (has('order', 'job', 'auftrag')) return has('update', 'status', 'change', 'set') ? 'update_order' : 'create_order';
     if (has('note', 'notiz', 'documentation', 'dokumentation')) return 'create_note';
+    if (has('create', 'new', 'add', 'erstelle', 'neue', 'neuen', 'firma anlegen', 'kunde anlegen') && has('customer', 'kunde', 'client', 'company', 'firma')) return 'create_customer';
     if (has('customer', 'kunde', 'client', 'show me', 'find', 'search', 'suche')) return 'search_customer';
     if (has('task', 'aufgabe', 'todo')) return has('complete', 'done', 'erledigt', 'in progress', 'bearbeitung') ? 'update_task' : 'create_task';
     return null;

@@ -17,27 +17,28 @@ const optionalStr = (max) =>
 
 const optionalPhone = z
   .union([
-    z.string().max(30).regex(PHONE, 'Bitte gueltige Telefonnummer eingeben (z.B. +41 44 123 45 67)'),
+    z.string().max(30).regex(PHONE, 'Bitte gültige Telefonnummer eingeben (z.B. +41 44 123 45 67)'),
     z.literal(''),
   ])
   .optional();
 
 const optionalEmail = z
   .union([
-    z.string().email('Bitte gueltige E-Mail eingeben').max(255),
+    z.string().email('Bitte gültige E-Mail eingeben').max(255),
     z.literal(''),
   ])
   .optional();
 
 const optionalUrl = z
-  .union([z.string().url('Bitte gueltige URL').max(255), z.literal('')])
+  .union([z.string().url('Bitte gültige URL').max(255), z.literal('')])
   .optional();
 
-export const createCustomerSchema = z.object({
+const customerBaseSchema = z.object({
   name: z.string().min(1, 'Name ist erforderlich').max(255),
   type: z.enum(['private', 'business'], {
     errorMap: () => ({ message: 'Typ ist erforderlich' }),
   }),
+  ownerName: optionalStr(255),
   // Address
   street: z
     .string()
@@ -56,13 +57,13 @@ export const createCustomerSchema = z.object({
     .max(100, 'Ort darf maximal 100 Zeichen lang sein'),
   canton: z
     .union([
-      z.enum(VALID_CANTONS, { errorMap: () => ({ message: 'Bitte gueltigen Kanton waehlen' }) }),
+      z.enum(VALID_CANTONS, { errorMap: () => ({ message: 'Bitte gültigen Kanton wählen' }) }),
       z.literal(''),
     ])
     .optional(),
   country: z
     .string()
-    .length(2, 'Bitte 2-Buchstaben-Laendercode verwenden (z.B. CH, DE)')
+    .length(2, 'Bitte 2-Buchstaben-Ländercode verwenden (z.B. CH, DE)')
     .optional()
     .or(z.literal('')),
   // Contact
@@ -79,8 +80,40 @@ export const createCustomerSchema = z.object({
   notes: optionalStr(5000),
 });
 
-export const updateCustomerSchema = createCustomerSchema
+function requireBusinessIdentity(data, ctx, { requireName = false } = {}) {
+  if (data.type !== 'business') return;
+  if (requireName && !data.name?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['name'],
+      message: 'Firmenname ist erforderlich',
+    });
+  }
+  if (!data.ownerName?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['ownerName'],
+      message: 'Inhabername ist erforderlich',
+    });
+  }
+  if (!data.uidNumber?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['uidNumber'],
+      message: 'UID Nummer ist erforderlich',
+    });
+  }
+}
+
+export const createCustomerSchema = customerBaseSchema.superRefine((data, ctx) => {
+  requireBusinessIdentity(data, ctx, { requireName: true });
+});
+
+export const updateCustomerSchema = customerBaseSchema
   .partial()
+  .superRefine((data, ctx) => {
+    requireBusinessIdentity(data, ctx);
+  })
   .refine((data) => Object.keys(data).length > 0, {
-    message: 'Mindestens ein Feld muss geaendert werden',
+    message: 'Mindestens ein Feld muss geändert werden',
   });

@@ -5,6 +5,7 @@ export const queryKeys = {
   users: {
     all: () => ['users'],
     list: (filters) => ['users', 'list', filters],
+    directory: (params) => ['users', 'directory', params],
     detail: (id) => ['users', 'detail', id],
     sessions: (id) => ['users', id, 'sessions'],
   },
@@ -26,11 +27,13 @@ export const queryKeys = {
   },
   catalog: {
     categories: () => ['catalog', 'categories'],
+    categoryTree: () => ['catalog', 'categories', 'tree'],
     categoryDetail: (id) => ['catalog', 'categories', 'detail', id],
     articles: (filters) => ['catalog', 'articles', filters],
     articleDetail: (id) => ['catalog', 'articles', 'detail', id],
     articleVersions: (id) => ['catalog', 'articles', 'versions', id],
     articleImages: (id) => ['catalog', 'articles', 'images', id],
+    recentSearches: () => ['catalog', 'search', 'recent'],
     facets: (filters) => ['catalog', 'facets', filters],
     textBlocks: (filters) => ['catalog', 'textBlocks', filters],
     textBlockDetail: (id) => ['catalog', 'textBlocks', 'detail', id],
@@ -105,6 +108,7 @@ export const queryKeys = {
     },
     contacts: {
       all: () => ['crm', 'contacts'],
+      overview: (params) => ['crm', 'contacts', 'overview', params],
       byCustomer: (customerId) => ['crm', 'contacts', 'byCustomer', customerId],
       detail: (id) => ['crm', 'contacts', 'detail', id],
       search: (q) => ['crm', 'contacts', 'search', q],
@@ -128,12 +132,28 @@ export const queryKeys = {
       search: (q) => ['crm', 'spareParts', 'search', q],
       byInstallation: (installationId) => ['crm', 'spareParts', 'byInstallation', installationId],
       orderRequests: (filters) => ['crm', 'spareParts', 'orderRequests', filters],
+      stats: () => ['crm', 'spareParts', 'stats'],
+      lowStock: (filters) => ['crm', 'spareParts', 'lowStock', filters],
+      movements: (filters) => ['crm', 'spareParts', 'movements', filters],
+      movementsByPart: (id) => ['crm', 'spareParts', 'movements', id],
+    },
+    suppliers: {
+      all: () => ['crm', 'suppliers'],
+      list: (filters) => ['crm', 'suppliers', 'list', filters],
+      detail: (id) => ['crm', 'suppliers', 'detail', id],
+      search: (q) => ['crm', 'suppliers', 'search', q],
+    },
+    purchaseOrders: {
+      all: () => ['crm', 'purchaseOrders'],
+      list: (filters) => ['crm', 'purchaseOrders', 'list', filters],
+      detail: (id) => ['crm', 'purchaseOrders', 'detail', id],
     },
     maintenance: {
       all: () => ['crm', 'maintenance'],
       dashboard: () => ['crm', 'maintenance', 'dashboard'],
       due: (filters) => ['crm', 'maintenance', 'due', filters],
       overdue: (filters) => ['crm', 'maintenance', 'overdue', filters],
+      settings: () => ['crm', 'maintenance', 'settings'],
       byInstallation: (installationId) => ['crm', 'maintenance', 'byInstallation', installationId],
     },
     notes: {

@@ -4,13 +4,29 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
-import { NotFoundError } from '../../shared/errors/AppError.js';
+import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
+import { sanitizeObject } from '../../shared/utils/sanitize.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
 const ENTITY_TTL = { l1Ttl: 300, l2Ttl: 900 };
 const LIST_TTL = { l1Ttl: 300, l2Ttl: 900 };
 const MAX_VERSIONS_KEPT = 20;
+const LANGUAGES = ['de', 'fr', 'it', 'en'];
+const PAGE_SIZES_MM = {
+  A4: { width: 210, height: 297 },
+  Letter: { width: 216, height: 279 },
+};
+const REQUIRED_VISIBLE_SECTIONS = {
+  quotation: ['header', 'body', 'table', 'totals', 'footer'],
+  order_confirmation: ['header', 'body', 'table', 'totals', 'footer'],
+  invoice_standard: ['header', 'body', 'table', 'totals', 'qr_bill', 'footer'],
+  invoice_advance: ['header', 'body', 'totals', 'qr_bill', 'footer'],
+  invoice_final: ['header', 'body', 'table', 'deductions', 'totals', 'qr_bill', 'footer'],
+  cover_letter: ['header', 'body', 'footer'],
+  service_report: ['header', 'body', 'footer'],
+  inspection_certificate: ['header', 'body', 'footer'],
+};
 const COMPARABLE_TEMPLATE_FIELDS = [
   'name',
   'description',
@@ -39,7 +55,9 @@ class TemplateService {
   }
 
   async create(data, userId, meta = {}) {
-    const created = await documentTemplateRepository.create({ ...data, createdBy: userId });
+    const cleanData = sanitizeObject(data);
+    this._validateTemplateForSave(cleanData);
+    const created = await documentTemplateRepository.create({ ...cleanData, createdBy: userId });
     await this._invalidateListCache();
 
     eventBus.publish(EVENT_TYPES.DOCTPL_TEMPLATE_UPDATED, {
@@ -116,20 +134,36 @@ class TemplateService {
   async update(id, data, userId, meta = {}) {
     const existing = await documentTemplateRepository.findById(id);
     if (!existing) throw new NotFoundError('DocumentTemplate', id);
+    const cleanData = sanitizeObject(data);
+    const expectedVersion = cleanData.expectedVersion ? Number(cleanData.expectedVersion) : null;
+    if (expectedVersion && Number(existing.currentVersion) !== expectedVersion) {
+      throw new ConflictError('Template has changed since it was loaded', {
+        expectedVersion,
+        currentVersion: existing.currentVersion,
+      });
+    }
 
-    // Create version snapshot of current state before update
+    // Remove changeDescription from update data (not a template field)
+    const { changeDescription: _changeDescription, expectedVersion: _expectedVersion, ...updateData } = cleanData;
+    this._validateTemplateForSave({ ...existing, ...updateData });
+
+    // Create version snapshot of current state before update.
     await templateVersionRepository.create({
       templateId: id,
       version: existing.currentVersion,
-      changeDescription: data.changeDescription || '',
+      changeDescription: cleanData.changeDescription || '',
       templateSnapshot: existing,
       createdBy: userId,
     });
 
-    // Remove changeDescription from update data (not a template field)
-    const { changeDescription: _changeDescription, ...updateData } = data;
-
-    const updated = await documentTemplateRepository.updateById(id, { ...updateData, updatedBy: userId });
+    const updated = await documentTemplateRepository.updateById(
+      id,
+      { ...updateData, updatedBy: userId },
+      expectedVersion,
+    );
+    if (!updated) {
+      throw new ConflictError('Template has changed since it was loaded', { expectedVersion });
+    }
 
     // Prune old versions (keep MAX_VERSIONS_KEPT)
     await this._pruneVersions(id);
@@ -232,9 +266,15 @@ class TemplateService {
     };
   }
 
-  async revertToVersion(templateId, version, userId, meta = {}) {
+  async revertToVersion(templateId, version, userId, meta = {}, expectedVersion = null) {
     const existing = await documentTemplateRepository.findById(templateId);
     if (!existing) throw new NotFoundError('DocumentTemplate', templateId);
+    if (expectedVersion && Number(existing.currentVersion) !== Number(expectedVersion)) {
+      throw new ConflictError('Template has changed since it was loaded', {
+        expectedVersion: Number(expectedVersion),
+        currentVersion: existing.currentVersion,
+      });
+    }
 
     const oldVersion = await templateVersionRepository.findByTemplateIdAndVersion(templateId, version);
     if (!oldVersion) throw new NotFoundError('TemplateVersion', `${templateId}/v${version}`);
@@ -259,11 +299,15 @@ class TemplateService {
       currentVersion: _snapshotCurrentVersion,
       ...snapshotFields
     } = oldVersion.templateSnapshot;
+    this._validateTemplateForSave({ ...snapshotFields, isActive: snapshotFields.isActive ?? existing.isActive });
 
     const updated = await documentTemplateRepository.updateById(templateId, {
       ...snapshotFields,
       updatedBy: userId,
-    });
+    }, expectedVersion ? Number(expectedVersion) : null);
+    if (!updated) {
+      throw new ConflictError('Template has changed since it was loaded', { expectedVersion });
+    }
 
     await this._pruneVersions(templateId);
     await this._invalidateTemplateCache(templateId);
@@ -302,7 +346,8 @@ class TemplateService {
 
     const { DocumentRenderer } = await import('./renderer/index.js');
     const renderer = new DocumentRenderer();
-    const buffer = await renderer.render(template, renderCiConfig, sampleData, language);
+    const previewData = this._buildPreviewData(template, sampleData, language);
+    const buffer = await renderer.render(template, renderCiConfig, previewData, language);
 
     const { default: fileService } = await import('../files/file.service.js');
     const fileMeta = await fileService.upload({
@@ -328,6 +373,71 @@ class TemplateService {
     });
 
     return { downloadUrl, sizeBytes: buffer.length };
+  }
+
+  _buildPreviewData(template, sampleData = {}, language = 'de') {
+    const templateType = sampleData.templateType || template.templateType || 'quotation';
+    const hasInvoiceDeductions = templateType === 'invoice_final';
+    const base = {
+      templateType,
+      documentNumber: 'PREVIEW-2026-0001',
+      documentDate: '2026-06-15',
+      dueDate: '2026-07-15',
+      validUntil: '2026-07-15',
+      reference: 'PREVIEW',
+      currency: 'CHF',
+      customer: {
+        name: 'Muster AG',
+        addressLine1: 'Bahnhofstrasse 1',
+        zip: '8001',
+        city: 'Zuerich',
+        country: 'CH',
+      },
+      introduction: template.textBlocks?.[language]?.introduction || 'Preview document generated from the active template layout.',
+      textBlocks: template.textBlocks || {},
+      lineItems: [
+        { position: 1, description: 'Boiler service package', quantity: 1, unitPrice: 1200, discountPercent: 0, total: 1200 },
+        { position: 2, description: 'Installation material', quantity: 2, unitPrice: 150, discountPercent: 0, total: 300 },
+      ],
+      subtotal: 1500,
+      vatBreakdown: [{ rate: 0.081, amount: 121.50 }],
+      grandTotal: 1621.50,
+      grandTotalRounded: 1621.50,
+      qrBill: {
+        iban: 'CH4431999123000889012',
+        amount: 1621.50,
+        currency: 'CHF',
+        reference: '210000000003139471430009017',
+        debtor: {
+          name: 'Muster AG',
+          address: 'Bahnhofstrasse 1',
+          zip: '8001',
+          city: 'Zuerich',
+          country: 'CH',
+        },
+      },
+      advanceDeductions: hasInvoiceDeductions ? [
+        {
+          invoiceNumber: 'AK-2026-0001',
+          date: '2026-05-15',
+          netAmount: 500,
+          vatAmount: 40.50,
+          totalAmount: 540.50,
+          amount: 540.50,
+        },
+      ] : [],
+      netBalance: hasInvoiceDeductions ? 1081 : undefined,
+    };
+
+    return {
+      ...base,
+      ...sampleData,
+      customer: { ...base.customer, ...(sampleData.customer || {}) },
+      qrBill: { ...base.qrBill, ...(sampleData.qrBill || {}) },
+      textBlocks: sampleData.textBlocks || base.textBlocks,
+      lineItems: sampleData.lineItems || base.lineItems,
+      advanceDeductions: sampleData.advanceDeductions || base.advanceDeductions,
+    };
   }
 
   async remove(id, userId, meta = {}) {
@@ -391,6 +501,70 @@ class TemplateService {
       sorted[key] = value[key];
     }
     return JSON.stringify(sorted);
+  }
+
+  _validateTemplateForSave(template) {
+    const details = [];
+    this._validateLayout(template.layout, details);
+    this._validateColumns(template.tableColumns || [], template.isActive, details);
+    if (template.isActive !== false) {
+      this._validateRequiredSections(template, details);
+      this._validateLanguageCompleteness(template.textBlocks || {}, details);
+    }
+    if (details.length) throw new ValidationError('Document template validation failed', details);
+  }
+
+  _validateLayout(layout = {}, details) {
+    const margins = layout.margins || {};
+    const page = PAGE_SIZES_MM[layout.pageSize || 'A4'] || PAGE_SIZES_MM.A4;
+    const top = Number(margins.top ?? 25);
+    const bottom = Number(margins.bottom ?? 20);
+    const left = Number(margins.left ?? 20);
+    const right = Number(margins.right ?? 15);
+    if (top + bottom > page.height - 80) {
+      details.push({ field: 'layout.margins', message: 'Vertical margins leave too little printable space' });
+    }
+    if (left + right > page.width - 80) {
+      details.push({ field: 'layout.margins', message: 'Horizontal margins leave too little printable space' });
+    }
+  }
+
+  _validateColumns(columns, isActive, details) {
+    if (!columns.length) return;
+    const total = columns.reduce((sum, column) => sum + Number(column.widthPercent || 0), 0);
+    if (Math.abs(total - 100) > 1) {
+      details.push({ field: 'tableColumns', message: 'Column widths must sum to 100%' });
+    }
+    if (isActive !== false) {
+      for (const [index, column] of columns.entries()) {
+        for (const lang of LANGUAGES) {
+          if (!`${column.label?.[lang] || ''}`.trim()) {
+            details.push({ field: `tableColumns.${index}.label.${lang}`, message: 'Active templates require table labels in DE/FR/IT/EN' });
+          }
+        }
+      }
+    }
+  }
+
+  _validateRequiredSections(template, details) {
+    const required = REQUIRED_VISIBLE_SECTIONS[template.templateType] || ['header', 'body', 'footer'];
+    const visibleTypes = new Set((template.sections || [])
+      .filter((section) => section.isVisible !== false)
+      .map((section) => section.type));
+    for (const type of required) {
+      if (!visibleTypes.has(type)) {
+        details.push({ field: 'sections', message: `Active ${template.templateType} templates require a visible ${type} section` });
+      }
+    }
+  }
+
+  _validateLanguageCompleteness(textBlocks, details) {
+    for (const lang of LANGUAGES) {
+      const block = textBlocks[lang] || {};
+      if (!`${block.footer || ''}`.trim()) {
+        details.push({ field: `textBlocks.${lang}.footer`, message: 'Active templates require footer text in DE/FR/IT/EN' });
+      }
+    }
   }
 
   async _pruneVersions(templateId) {

@@ -3,7 +3,7 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
-import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
+import { NotFoundError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
@@ -33,6 +33,7 @@ class ContactService {
     });
 
     await this._invalidateCustomerContactsCache(customerId);
+    await this._invalidateOverviewCache();
 
     eventBus.publish(EVENT_TYPES.CONTACT_CREATED, {
       contactId: contact._id,
@@ -82,6 +83,7 @@ class ContactService {
 
     const updated = await contactRepository.updateById(id, data);
     await this._invalidateCustomerContactsCache(existing.customerId);
+    await this._invalidateOverviewCache();
 
     eventBus.publish(EVENT_TYPES.CONTACT_UPDATED, {
       contactId: id,
@@ -107,12 +109,19 @@ class ContactService {
     const contact = await contactRepository.findById(id);
     if (!contact) throw new NotFoundError('Contact', id);
 
+    let replacementPrimaryId = null;
     if (contact.isPrimary) {
-      throw new ConflictError('Cannot delete the primary contact. Please assign a different primary contact first.');
+      const contacts = await contactRepository.findByCustomerId(contact.customerId);
+      const replacement = contacts.find((candidate) => String(candidate._id) !== String(id));
+      if (replacement) replacementPrimaryId = replacement._id;
     }
 
     await contactRepository.softDelete(id);
+    if (replacementPrimaryId) {
+      await contactRepository.updateById(replacementPrimaryId, { isPrimary: true });
+    }
     await this._invalidateCustomerContactsCache(contact.customerId);
+    await this._invalidateOverviewCache();
 
     eventBus.publish(EVENT_TYPES.CONTACT_DELETED, {
       contactId: id,
@@ -126,7 +135,7 @@ class ContactService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { contactId: id, customerId: contact.customerId },
+      details: { contactId: id, customerId: contact.customerId, replacementPrimaryId },
       module: 'crm',
     });
   }
@@ -138,6 +147,7 @@ class ContactService {
     await contactRepository.unsetPrimaryForCustomer(contact.customerId);
     const updated = await contactRepository.updateById(id, { isPrimary: true });
     await this._invalidateCustomerContactsCache(contact.customerId);
+    await this._invalidateOverviewCache();
 
     auditService.logEvent({
       eventType: 'contact.set_primary',
@@ -161,12 +171,32 @@ class ContactService {
     );
   }
 
+  async listOverview(params = {}) {
+    const normalized = {
+      search: String(params.search || '').trim(),
+      type: ['private', 'business'].includes(params.type) ? params.type : 'all',
+      page: Number.parseInt(params.page, 10) || 1,
+      limit: Number.parseInt(params.limit, 10) || 25,
+    };
+    const cacheKey = `crm:contacts:overview:${JSON.stringify(normalized)}`;
+    return cacheManager.getOrSet(
+      cacheKey,
+      () => contactRepository.findOverview(normalized),
+      LIST_TTL,
+    );
+  }
+
   async search(searchTerm, limit = 25) {
     return contactRepository.search(searchTerm, limit);
   }
 
   async _invalidateCustomerContactsCache(customerId) {
     await cacheManager.del(`crm:contacts:customer:${customerId}`);
+    await cacheManager.del('crm:contacts:all:500');
+  }
+
+  async _invalidateOverviewCache() {
+    await cacheManager.invalidatePattern('crm:contacts:overview:*');
   }
 }
 

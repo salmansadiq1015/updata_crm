@@ -45,6 +45,8 @@ export const PERMISSIONS = {
   QOP_READ: 'qop:read',
   QOP_WRITE: 'qop:write',
   QOP_DELETE: 'qop:delete',
+  DOCUMENTS_READ: 'documents:read',
+  DOCUMENTS_DELETE: 'documents:delete',
   TEMPLATES_READ: 'templates:read',
   TEMPLATES_WRITE: 'templates:write',
   TEMPLATES_DELETE: 'templates:delete',

@@ -18,8 +18,16 @@ class IghController {
 
   async previewImport(req, res, next) {
     try {
-      const data = await ighService.previewImport();
+      const data = await ighService.previewImport(req.user._id, req.body?.type || 'FULL');
       return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  async approveImport(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const data = await ighService.approveImport(req.params.jobId, req.user._id, meta);
+      return res.success({ data, message: 'IGH import approved and queued' });
     } catch (err) { next(err); }
   }
 

@@ -22,9 +22,16 @@ describe('satisfiesPermission — granular permission implications', () => {
     expect(satisfiesPermission(['crm:write'], 'project:create')).toBe(false);
   });
 
-  it('implication map is purely additive (coarse keys only)', () => {
-    for (const key of Object.keys(PERMISSION_IMPLICATIONS)) {
-      expect(key.startsWith('projects:')).toBe(true);
+  it('implication map is purely additive and explicit', () => {
+    for (const [key, impliedPermissions] of Object.entries(PERMISSION_IMPLICATIONS)) {
+      expect(key).toContain(':');
+      expect(Array.isArray(impliedPermissions)).toBe(true);
+      expect(impliedPermissions.length).toBeGreaterThan(0);
+      expect(impliedPermissions).not.toContain(key);
+      for (const permission of impliedPermissions) {
+        expect(permission).toContain(':');
+        expect(permission).not.toContain('*');
+      }
     }
   });
 });

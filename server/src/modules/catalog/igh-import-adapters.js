@@ -1,45 +1,52 @@
 import { parse } from 'csv-parse/sync';
 import Article from './article.model.js';
+import { buildArticleSearchTokens, normalizeUnitCode } from './catalogNormalization.js';
 
 const BATCH_SIZE = 500;
 
-export async function parseIghCsv(csvString) {
+export function parseIghCsv(csvString) {
   const rows = parse(csvString, {
     delimiter: ';',
     columns: true,
     skip_empty_lines: true,
     trim: true,
+    bom: true,
   });
 
   return rows
     .filter((row) => row.IGH_NR && row.IGH_NR.trim())
-    .map((row) => ({
+    .map((row) => normalizeIghArticle({
       ighArticleNumber: row.IGH_NR.trim(),
       name: row.BEZEICHNUNG?.trim() ?? '',
       description: row.BESCHREIBUNG?.trim() ?? '',
-      unitOfMeasure: normalizeUnit(row.EINHEIT?.trim()),
-      basePrice: parseFloat((row.PREIS_CHF ?? '0').replace(',', '.')) || 0,
-      currency: 'CHF',
-      type: 'MATERIAL',
-      source: 'IGH',
-      status: 'ACTIVE',
+      unitOfMeasure: row.EINHEIT?.trim(),
+      basePrice: row.PREIS_CHF,
     }));
 }
 
 export function parseIghJson(jsonArray) {
   return jsonArray
     .filter((item) => item.ighNr || item.igh_nr || item.IGH_NR)
-    .map((item) => ({
+    .map((item) => normalizeIghArticle({
       ighArticleNumber: String(item.ighNr ?? item.igh_nr ?? item.IGH_NR),
       name: item.name ?? item.bezeichnung ?? '',
       description: item.description ?? item.beschreibung ?? '',
-      unitOfMeasure: normalizeUnit(item.unit ?? item.einheit ?? 'Stk'),
-      basePrice: parseFloat(item.price ?? item.preis ?? '0') || 0,
-      currency: 'CHF',
-      type: 'MATERIAL',
-      source: 'IGH',
-      status: 'ACTIVE',
+      unitOfMeasure: item.unit ?? item.einheit ?? 'STK',
+      basePrice: item.price ?? item.preis ?? '0',
     }));
+}
+
+export function parseIghXml(xmlString) {
+  const articleBlocks = String(xmlString).match(/<article\b[\s\S]*?<\/article>|<ARTIKEL\b[\s\S]*?<\/ARTIKEL>/gi) || [];
+  return articleBlocks
+    .map((block) => normalizeIghArticle({
+      ighArticleNumber: readXmlValue(block, ['IGH_NR', 'ighArticleNumber', 'ArticleNumber', 'ARTNR']),
+      name: readXmlValue(block, ['BEZEICHNUNG', 'name', 'Name', 'TITLE']),
+      description: readXmlValue(block, ['BESCHREIBUNG', 'description', 'Description', 'TEXT']),
+      unitOfMeasure: readXmlValue(block, ['EINHEIT', 'unit', 'Unit']) || 'STK',
+      basePrice: readXmlValue(block, ['PREIS_CHF', 'price', 'Price']) || '0',
+    }))
+    .filter((article) => article.ighArticleNumber);
 }
 
 export async function batchUpsertArticles(articles, importedBy, defaultCategoryId = null) {
@@ -60,6 +67,10 @@ export async function batchUpsertArticles(articles, importedBy, defaultCategoryI
             type: article.type,
             source: article.source,
             status: article.status ?? 'ACTIVE',
+            searchTokens: buildArticleSearchTokens({
+              ...article,
+              articleNumber: `IGH-${article.ighArticleNumber}`,
+            }),
             updatedBy: importedBy,
           },
           $setOnInsert: {
@@ -68,6 +79,7 @@ export async function batchUpsertArticles(articles, importedBy, defaultCategoryI
             createdBy: importedBy,
             ...(defaultCategoryId ? { categoryId: defaultCategoryId } : {}),
           },
+          $inc: { version: 1 },
         },
         upsert: true,
       },
@@ -85,15 +97,29 @@ export async function batchUpsertArticles(articles, importedBy, defaultCategoryI
   return totals;
 }
 
-function normalizeUnit(raw) {
-  if (!raw) return 'Stk';
-  const map = {
-    'stück': 'Stk', 'stuck': 'Stk', 'stk': 'Stk', 'pcs': 'Stk',
-    'meter': 'm', 'metre': 'm',
-    'laufmeter': 'lfm',
-    'stunde': 'h', 'hour': 'h',
-    'liter': 'l',
-    'kilogramm': 'kg',
+function normalizeIghArticle(article) {
+  return {
+    ighArticleNumber: String(article.ighArticleNumber || '').trim(),
+    name: String(article.name || '').trim(),
+    description: String(article.description || '').trim(),
+    unitOfMeasure: normalizeUnitCode(article.unitOfMeasure || 'STK'),
+    basePrice: parseFloat(String(article.basePrice ?? '0').replace(',', '.')) || 0,
+    currency: 'CHF',
+    type: 'MATERIAL',
+    source: 'IGH',
+    status: 'ACTIVE',
   };
-  return map[raw.toLowerCase()] ?? raw;
+}
+
+function readXmlValue(block, names) {
+  for (const name of names) {
+    const match = block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, 'i'));
+    if (match?.[1]) {
+      return match[1]
+        .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+        .replace(/<[^>]+>/g, '')
+        .trim();
+    }
+  }
+  return '';
 }

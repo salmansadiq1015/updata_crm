@@ -4,10 +4,37 @@ import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
+import { ValidationError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 
 const CI_CACHE_TTL = { l1Ttl: 600, l2Ttl: 1800 };
 const CI_CACHE_KEY = 'doctpl:ci:active';
+const CI_ASSET_RULES = {
+  logo_cmyk: {
+    mimeTypes: ['application/postscript', 'image/x-eps'],
+    extensions: ['.eps'],
+  },
+  logo_rgb: {
+    mimeTypes: ['image/png', 'image/jpeg', 'image/svg+xml'],
+    extensions: ['.png', '.jpg', '.jpeg', '.svg'],
+  },
+  logo_png: {
+    mimeTypes: ['image/png'],
+    extensions: ['.png'],
+  },
+  font_300: {
+    mimeTypes: ['font/ttf', 'font/otf', 'application/x-font-ttf', 'application/x-font-opentype', 'application/octet-stream'],
+    extensions: ['.ttf', '.otf'],
+  },
+  font_500: {
+    mimeTypes: ['font/ttf', 'font/otf', 'application/x-font-ttf', 'application/x-font-opentype', 'application/octet-stream'],
+    extensions: ['.ttf', '.otf'],
+  },
+  font_700: {
+    mimeTypes: ['font/ttf', 'font/otf', 'application/x-font-ttf', 'application/x-font-opentype', 'application/octet-stream'],
+    extensions: ['.ttf', '.otf'],
+  },
+};
 const ASSET_CONFIG_FIELDS = {
   logo_cmyk: 'logo.cmykFileId',
   logo_rgb: 'logo.rgbFileId',
@@ -80,6 +107,7 @@ class CIService {
   }
 
   async uploadAsset(fileData, assetType, userId, meta = {}) {
+    this._validateAssetFile(fileData, assetType);
     // Lazy import to avoid circular dependencies
     const fileService = (await import('../files/file.service.js')).default;
 
@@ -319,6 +347,22 @@ class CIService {
       status: checks.some((check) => check.status === 'failed') ? 'failed' : checks.some((check) => check.status === 'warning') ? 'warning' : 'passed',
       checks,
     };
+  }
+
+  _validateAssetFile(fileData, assetType) {
+    const rule = CI_ASSET_RULES[assetType];
+    if (!rule) return;
+    const lowerName = `${fileData.originalname || ''}`.toLowerCase();
+    const extensionOk = rule.extensions.some((extension) => lowerName.endsWith(extension));
+    const mimeOk = rule.mimeTypes.includes(fileData.mimetype);
+    if (!extensionOk || !mimeOk) {
+      throw new ValidationError('Invalid CI asset file type', [
+        {
+          field: 'file',
+          message: `${assetType} requires ${rule.extensions.join(', ')} with a matching MIME type`,
+        },
+      ]);
+    }
   }
 }
 

@@ -9,6 +9,22 @@ class CatalogCategoryController {
     } catch (err) { next(err); }
   }
 
+  async tree(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const data = await catalogCategoryService.getTree(query);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  async selectOptions(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const data = await catalogCategoryService.getSelectOptions(query);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async getById(req, res, next) {
     try {
       const category = await catalogCategoryService.getById(req.params.id);

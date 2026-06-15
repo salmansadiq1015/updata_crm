@@ -113,6 +113,8 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'quotations', action: 'admin', description: 'Full quotation administration' },
 
   // Document Templates
+  { module: 'documents', action: 'read', description: 'View generated PDFs and document repository records' },
+  { module: 'documents', action: 'delete', description: 'Delete generated document repository records' },
   { module: 'templates', action: 'read', description: 'View document templates and generated documents' },
   { module: 'templates', action: 'write', description: 'Create, update, preview, and generate document templates' },
   { module: 'templates', action: 'delete', description: 'Delete document templates and generated documents' },
@@ -187,7 +189,9 @@ export const ROLE_DEFINITIONS = [
       'project:prep-actions:manage', 'project:schedule:manage',
       'project:documents:read', 'project:documents:write',
       'project:documents:create', 'project:documents:delete',
+      'documents:read', 'documents:delete',
       'quotations:read', 'quotations:write', 'quotations:delete', 'quotations:admin',
+      'templates:read', 'templates:write',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'field-service:read',
       'tasks:read', 'tasks:write', 'tasks:delete', 'tasks:admin',
@@ -205,6 +209,7 @@ export const ROLE_DEFINITIONS = [
     permissionKeys: [
       'crm:read',
       'project:read', 'project:documents:read',
+      'documents:read',
       'field-service:read', 'field-service:write', 'field-service:admin',
       'tasks:read', 'tasks:write',
       'notifications:read',
@@ -219,6 +224,7 @@ export const ROLE_DEFINITIONS = [
     permissionKeys: [
       'crm:read',
       'project:read', 'project:documents:read',
+      'documents:read',
       'invoicing:read', 'invoicing:write', 'invoicing:delete', 'invoicing:admin',
       ...ACCOUNTING_PERMISSION_KEYS,
       'reports:read', 'reports:write',
@@ -235,6 +241,7 @@ export const ROLE_DEFINITIONS = [
     permissionKeys: [
       'crm:read',
       'project:read', 'project:schedule:manage', 'project:documents:read',
+      'documents:read',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'field-service:read',
       'tasks:read', 'tasks:write',
@@ -250,6 +257,7 @@ export const ROLE_DEFINITIONS = [
     description: 'Limited field access, supervised',
     permissionKeys: [
       'project:read',
+      'documents:read',
       'field-service:read',
       'tasks:read',
       'notifications:read',

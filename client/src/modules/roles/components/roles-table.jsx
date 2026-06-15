@@ -76,7 +76,7 @@ export function RolesTable() {
     mutationFn: (id) => roleService.deleteRole(id),
     onSuccess: () => {
       invalidateAll();
-      showSuccess('Rolle geloescht');
+      showSuccess('Rolle gelöscht');
       setConfirmOpen(false);
     },
     onError: (err) => showError(err.message),
@@ -86,15 +86,15 @@ export function RolesTable() {
     mutationFn: (ids) => roleService.bulkDeleteRoles(ids),
     onSuccess: ({ deletedCount, failed }) => {
       invalidateAll();
-      if (deletedCount > 0) showSuccess(`${deletedCount} Rolle(n) geloescht`);
-      if (failed > 0) showError(`${failed} Rolle(n) konnten nicht geloescht werden`);
+      if (deletedCount > 0) showSuccess(`${deletedCount} Rolle(n) gelöscht`);
+      if (failed > 0) showError(`${failed} Rolle(n) konnten nicht gelöscht werden`);
       setRowSelection({});
       setBulkDeleteOpen(false);
     },
     onError: (err) => showError(err.message),
   });
 
-  const roles = rolesData?.data || [];
+  const roles = useMemo(() => rolesData?.data || [], [rolesData]);
   const systemCount = roles.filter((r) => r.isSystem).length;
   const customCount = roles.filter((r) => !r.isSystem).length;
   const totalPermissions = roles.reduce((sum, r) => sum + (r.permissions?.length || 0), 0);
@@ -363,7 +363,7 @@ export function RolesTable() {
               onClick={clearFilters}
             >
               <X className="h-3 w-3" />
-              Zuruecksetzen
+              Zurücksetzen
             </Button>
           </>
         )}
@@ -385,11 +385,11 @@ export function RolesTable() {
                 onClick={() => setBulkDeleteOpen(true)}
               >
                 <Trash2 className="h-3.5 w-3.5 mr-1" />
-                {deletableSelectedIds.length} loeschen
+                {deletableSelectedIds.length} löschen
               </Button>
             ) : (
               <span className="text-xs text-muted-foreground italic">
-                Geschuetzte Rollen koennen nicht geloescht werden
+                Geschützte Rollen können nicht gelöscht werden
               </span>
             )}
             {deletableSelectedIds.length > 0 && deletableSelectedIds.length < selectedIds.length && (
@@ -507,8 +507,8 @@ export function RolesTable() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Rolle loeschen?"
-        description={`Moechten Sie die Rolle "${deleteTarget?.name}" wirklich loeschen?${
+        title="Rolle löschen?"
+        description={`Möchten Sie die Rolle "${deleteTarget?.name}" wirklich löschen?${
           (deleteTarget?.userCount > 0) ? ` Diese Rolle ist ${deleteTarget.userCount} Benutzern zugewiesen.` : ''
         }`}
         onConfirm={() => deleteMutation.mutate(deleteTarget?._id)}
@@ -520,11 +520,11 @@ export function RolesTable() {
       <ConfirmDialog
         open={bulkDeleteOpen}
         onOpenChange={setBulkDeleteOpen}
-        title={`${deletableSelectedIds.length} Rolle(n) loeschen?`}
-        description="Die ausgewaehlten Rollen werden unwiderruflich geloescht. Geschuetzte System-Rollen (Admin, User) werden uebersprungen."
+        title={`${deletableSelectedIds.length} Rolle(n) löschen?`}
+        description="Die ausgewählten Rollen werden unwiderruflich gelöscht. Geschützte System-Rollen (Admin, User) werden übersprungen."
         onConfirm={() => bulkDeleteMutation.mutate(deletableSelectedIds)}
         loading={bulkDeleteMutation.isPending}
-        confirmText="Alle loeschen"
+        confirmText="Alle löschen"
         variant="destructive"
       />
     </div>

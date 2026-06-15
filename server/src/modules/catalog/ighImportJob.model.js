@@ -48,6 +48,20 @@ const ighImportJobSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: null,
     },
+    sourceChecksum: {
+      type: String,
+      maxlength: 128,
+      default: null,
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
     log: {
       type: String,
       maxlength: 100000,

@@ -1,5 +1,4 @@
 import invoiceRepository from './invoice.repository.js';
-import invoicePdfService from './invoicePdf.service.js';
 import counterService from './counter.service.js';
 import { calculateTotals, roundToFiveRappen } from './vatCalculation.js';
 import auditService from '../auth/audit.service.js';
@@ -319,6 +318,8 @@ class InvoiceService {
     const lineItems = (quotation.lineItems || []).map((item, index) => ({
       position: item.position || index + 1,
       articleNumber: item.articleNumber || '',
+      catalogItemId: item.catalogItemId || null,
+      catalogSnapshot: item.catalogSnapshot || null,
       description: item.description,
       unit: item.unit || 'pcs',
       quantity: item.quantity || 0,
@@ -866,7 +867,7 @@ class InvoiceService {
 
     await invoice.save();
 
-    await invoicePdfService.generateAndStore(id, userId, meta);
+    await this._generateDoctplInvoicePdf(id, userId, meta);
 
     await this._invalidateInvoiceCache(id);
 
@@ -892,26 +893,10 @@ class InvoiceService {
   }
 
   async generatePdf(id, userId, meta = {}) {
-    const result = await invoicePdfService.generateAndStore(id, userId, meta);
+    const result = await this._generateDoctplInvoicePdf(id, userId, meta);
     await this._invalidateInvoiceCache(id);
     await this._invalidateListCache();
-    let downloadUrl = null;
-    try {
-      const { default: accountingDocumentService } = await import('../accounting/accountingDocument.service.js');
-      downloadUrl = await accountingDocumentService.getDownloadUrl(result.document._id);
-    } catch (err) {
-      logger.warn('Invoice PDF download URL unavailable', {
-        module: 'qop',
-        action: 'invoice.pdf.download_url',
-        invoiceId: id,
-        error: err.message,
-      });
-    }
-    return {
-      ...result,
-      documentId: result.document._id,
-      downloadUrl,
-    };
+    return result;
   }
 
   async send(id, userId, meta = {}) {
@@ -925,7 +910,7 @@ class InvoiceService {
     }
 
     if (!invoice.pdfDocumentId) {
-      await invoicePdfService.generateAndStore(id, userId, meta);
+      await this._generateDoctplInvoicePdf(id, userId, meta);
       await this._invalidateInvoiceCache(id);
     }
 
@@ -1118,6 +1103,35 @@ class InvoiceService {
 
   async _invalidateInvoiceCache(id) {
     await cacheManager.del(`qop:invoice:${id}`);
+  }
+
+  async _generateDoctplInvoicePdf(id, userId, meta = {}) {
+    const { default: qopDocumentPayloadService } = await import('./documentPayload.service.js');
+    const result = await qopDocumentPayloadService.generateDocument({
+      documentType: 'invoice',
+      documentOrId: id,
+      generatedBy: userId,
+      meta,
+    });
+
+    const Invoice = (await import('./invoice.model.js')).default;
+    await Invoice.updateOne(
+      { _id: id },
+      {
+        $set: {
+          pdfDocumentId: result.documentId,
+          pdfGeneratedAt: new Date(),
+          qrBillReference: result.document?.metadata?.documentNumber || result.document?.metadata?.qrReference || undefined,
+        },
+        $inc: { version: 1 },
+      },
+    );
+
+    return {
+      ...result,
+      documentId: result.documentId,
+      generatedDocumentId: result.documentId,
+    };
   }
 
   async _invalidateListCache() {

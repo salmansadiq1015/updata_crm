@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { createContactSchema } from '@/modules/crm/validations/contact';
@@ -25,10 +25,18 @@ const BLANK = {
   notes: '',
 };
 
-export function ContactForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
+export function ContactForm({
+  open,
+  onOpenChange,
+  onSubmit,
+  defaultValues,
+  isLoading,
+  contextField = null,
+  isSubmitDisabled = false,
+}) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, setValue, control, formState: { errors } } = useForm({
     resolver: zodResolver(createContactSchema),
     defaultValues: BLANK,
   });
@@ -52,7 +60,7 @@ export function ContactForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
     }
   }, [defaultValues, reset, open]);
 
-  const isPrimary = watch('isPrimary');
+  const isPrimary = useWatch({ control, name: 'isPrimary' });
 
   const submit = async (data) => {
     const cleaned = {
@@ -97,6 +105,12 @@ export function ContactForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
         {/* Scrollable Body */}
         <form onSubmit={handleSubmit(submit)} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin space-y-4">
+            {contextField && (
+              <div className="space-y-1.5">
+                {contextField}
+              </div>
+            )}
+
             <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
               {t('crm.contacts.sectionName', 'Name')}
             </p>
@@ -182,7 +196,7 @@ export function ContactForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
             </Button>
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isSubmitDisabled}
               className="bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white gap-2"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}

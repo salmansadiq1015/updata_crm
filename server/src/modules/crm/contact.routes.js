@@ -4,7 +4,7 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   createContactSchema, updateContactSchema, contactIdParamSchema,
-  customerIdParamSchema, searchContactsSchema,
+  customerIdParamSchema, searchContactsSchema, contactOverviewQuerySchema,
 } from './contact.validation.js';
 
 const router = Router();
@@ -13,6 +13,7 @@ const router = Router();
 router.get('/', authenticate, requirePermission('crm:read'), (req, res, next) => contactController.listAll(req, res, next));
 
 // Named routes BEFORE /:id
+router.get('/overview', authenticate, requirePermission('crm:read'), validate(contactOverviewQuerySchema), (req, res, next) => contactController.overview(req, res, next));
 router.get('/search', authenticate, requirePermission('crm:read'), validate(searchContactsSchema), (req, res, next) => contactController.search(req, res, next));
 
 // Standard CRUD
@@ -25,7 +26,13 @@ router.post('/:id/set-primary', authenticate, requirePermission('crm:write'), va
 const customerContactsRouter = Router({ mergeParams: true });
 
 customerContactsRouter.get('/', authenticate, requirePermission('crm:read'), validate(customerIdParamSchema), (req, res, next) => contactController.listByCustomer(req, res, next));
-customerContactsRouter.post('/', authenticate, requirePermission('crm:write'), validate(customerIdParamSchema), (req, res, next) => contactController.create(req, res, next));
+customerContactsRouter.post(
+  '/',
+  authenticate,
+  requirePermission('crm:write'),
+  validate({ ...customerIdParamSchema, ...createContactSchema }),
+  (req, res, next) => contactController.create(req, res, next),
+);
 
 export { customerContactsRouter };
 export default router;

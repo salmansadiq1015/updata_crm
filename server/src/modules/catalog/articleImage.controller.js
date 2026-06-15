@@ -101,7 +101,7 @@ class ArticleImageController {
       // Delete the FileMetadata (soft-delete via file service) — best-effort
       try {
         await fileService.delete(image.fileId.toString());
-      } catch (_) {
+      } catch {
         // Storage/service delete is best-effort; don't fail the request
       }
 

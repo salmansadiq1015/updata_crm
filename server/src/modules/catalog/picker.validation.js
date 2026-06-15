@@ -24,3 +24,9 @@ export const barcodeSchema = {
     code: Joi.string().required().max(50),
   }),
 };
+
+export const articleUseSchema = {
+  params: Joi.object({
+    id: objectId.required(),
+  }),
+};

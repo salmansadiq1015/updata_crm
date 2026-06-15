@@ -83,6 +83,7 @@ class TemplateController {
         Number(req.params.version),
         req.user._id,
         meta,
+        req.body?.expectedVersion,
       );
       return res.success({ data: template, message: 'Template reverted successfully' });
     } catch (err) { next(err); }

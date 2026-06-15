@@ -43,6 +43,11 @@ export const scheduleService = {
     return res.data;
   },
 
+  async getGeneratedDocumentDownloadUrl(documentId) {
+    const res = await apiClient.get(ENDPOINTS.DOCTPL.DOCUMENT_DOWNLOAD(documentId));
+    return res?.data?.downloadUrl || res?.downloadUrl || null;
+  },
+
   async exportSchedule(projectId, format = 'ical') {
     if (format === 'ical') {
       const { data } = await apiClient.get(ENDPOINTS.PM.SCHEDULE_EXPORT(projectId), {

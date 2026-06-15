@@ -8,9 +8,7 @@ import logger from '../shared/logger/index.js';
 /**
  * IGH import job.
  *
- * Processes a full or delta import from the IGH catalog API.
- * Currently a placeholder — actual IGH API integration will be added
- * once the external API specification is finalized.
+ * Processes full and delta imports from the configured IGH catalog feed.
  */
 export class IghImportWorker extends BaseWorker {
   constructor() {
@@ -25,7 +23,12 @@ export class IghImportWorker extends BaseWorker {
     const IghConfig = (await import('../modules/catalog/ighConfig.model.js')).default;
     const CatalogCategory = (await import('../modules/catalog/catalogCategory.model.js')).default;
     const { default: axios } = await import('axios');
-    const { parseIghCsv, parseIghJson, batchUpsertArticles } = await import('../modules/catalog/igh-import-adapters.js');
+    const {
+      parseIghCsv,
+      parseIghJson,
+      parseIghXml,
+      batchUpsertArticles,
+    } = await import('../modules/catalog/igh-import-adapters.js');
 
     try {
       // Update job status to RUNNING and retrieve createdBy (the triggering user)
@@ -93,11 +96,14 @@ export class IghImportWorker extends BaseWorker {
       // Detect format and parse
       let articles;
       const contentType = (response.headers['content-type'] ?? '').toLowerCase();
-      if (contentType.includes('json')) {
+      const rawText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+      if (contentType.includes('json') || rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
         const json = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
         articles = parseIghJson(Array.isArray(json) ? json : (json.articles ?? json.data ?? []));
+      } else if (contentType.includes('xml') || rawText.trim().startsWith('<')) {
+        articles = parseIghXml(rawText);
       } else {
-        articles = await parseIghCsv(response.data);
+        articles = parseIghCsv(rawText);
       }
 
       await IghImportJob.findByIdAndUpdate(importJobId, {

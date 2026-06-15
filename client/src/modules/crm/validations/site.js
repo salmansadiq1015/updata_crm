@@ -16,7 +16,7 @@ export const createSiteSchema = z.object({
   city: z.string().trim().max(100).optional().or(z.literal('')),
   canton: z
     .union([
-      z.enum(VALID_CANTONS, { errorMap: () => ({ message: 'Bitte gueltigen Kanton waehlen' }) }),
+      z.enum(VALID_CANTONS, { errorMap: () => ({ message: 'Bitte gültigen Kanton wählen' }) }),
       z.literal(''),
     ])
     .optional(),

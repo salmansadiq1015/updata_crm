@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useMemo, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { createUserSchema } from '@/modules/users/validations/user';
@@ -13,8 +13,14 @@ import { FormField } from '@/components/ui/form-field';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {
+  DEPARTMENT_POSITION_PRESETS,
+  getPositionPreset,
+  getPositionPresets,
+  getRoleByPresetName,
+} from '@/modules/users/constants/department-position-presets';
+import {
   Loader2, User, Mail, Shield, MapPin, Briefcase,
-  ChevronLeft, Check, ArrowRight,
+  ChevronLeft, Check, ArrowRight, AlertTriangle, ShieldCheck,
 } from 'lucide-react';
 
 const STEPS = [
@@ -30,8 +36,9 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   const isEdit = !!defaultValues?._id;
   const defaultRoleId = roles.find((r) => r.name === 'User')?._id || '';
   const [currentStep, setCurrentStep] = useState(0);
+  const [pendingPresetRoleName, setPendingPresetRoleName] = useState(null);
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors }, trigger } = useForm({
+  const { register, handleSubmit, reset, setValue, getValues, control, formState: { errors }, trigger } = useForm({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
       firstName: '', lastName: '', email: '', phone: '',
@@ -43,7 +50,6 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   });
 
   useEffect(() => {
-    if (open) setCurrentStep(0);
     if (defaultValues) {
       reset({
         firstName: defaultValues.firstName || '',
@@ -69,13 +75,190 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     }
   }, [defaultValues, reset, defaultRoleId, open]);
 
+  const selectedDepartment = useWatch({ control, name: 'department' });
+  const selectedPosition = useWatch({ control, name: 'position' });
+  const selectedRoleId = useWatch({ control, name: 'roleId' });
+  const selectedLanguage = useWatch({ control, name: 'language' });
+
+  const departmentOptions = useMemo(() => {
+    if (
+      !selectedDepartment ||
+      DEPARTMENT_POSITION_PRESETS.some((department) => department.value === selectedDepartment)
+    ) {
+      return DEPARTMENT_POSITION_PRESETS;
+    }
+
+    return [
+      ...DEPARTMENT_POSITION_PRESETS,
+      { value: selectedDepartment, label: selectedDepartment, positions: [] },
+    ];
+  }, [selectedDepartment]);
+
+  const positionOptions = useMemo(() => {
+    const presets = getPositionPresets(selectedDepartment);
+
+    if (
+      !selectedPosition ||
+      presets.some((position) => position.value === selectedPosition)
+    ) {
+      return presets;
+    }
+
+    return [
+      ...presets,
+      { value: selectedPosition, label: selectedPosition, roleName: null },
+    ];
+  }, [selectedDepartment, selectedPosition]);
+
+  const selectedPositionPreset = useMemo(
+    () => getPositionPreset(selectedDepartment, selectedPosition),
+    [selectedDepartment, selectedPosition],
+  );
+
+  const mappedRole = useMemo(
+    () => getRoleByPresetName(roles, selectedPositionPreset?.roleName),
+    [roles, selectedPositionPreset],
+  );
+
+  const currentRole = useMemo(
+    () => roles.find((role) => role?._id === selectedRoleId) || null,
+    [roles, selectedRoleId],
+  );
+
+  const isMappedRoleMissing = Boolean(
+    selectedPositionPreset?.roleName && roles.length > 0 && !mappedRole,
+  );
+  const isPresetRoleApplied = Boolean(
+    selectedPositionPreset?.roleName && mappedRole?._id && mappedRole._id === selectedRoleId,
+  );
+  const isManualRoleOverride = Boolean(
+    selectedPositionPreset?.roleName &&
+    mappedRole?._id &&
+    selectedRoleId &&
+    mappedRole._id !== selectedRoleId
+  );
+
+  const rolePresetNotice = useMemo(() => {
+    if (!selectedPositionPreset?.roleName) return null;
+
+    if (roles.length === 0) {
+      return {
+        tone: 'pending',
+        title: 'Rolle wird vorbereitet',
+        description: `${selectedPositionPreset.roleName} wird angewendet, sobald Rollen geladen sind.`,
+      };
+    }
+
+    if (isMappedRoleMissing) {
+      return {
+        tone: 'warning',
+        title: 'Standardrolle fehlt',
+        description: `Die Rolle ${selectedPositionPreset.roleName} ist nicht verfügbar. Wählen Sie im Zugang-Schritt eine Rolle manuell aus.`,
+      };
+    }
+
+    if (isManualRoleOverride) {
+      return {
+        tone: 'override',
+        title: 'Manuell angepasst',
+        description: `${selectedPositionPreset.roleName} wäre die Standardrolle für diese Position. Aktuell ist ${currentRole?.name || 'eine andere Rolle'} ausgewählt.`,
+      };
+    }
+
+    if (isPresetRoleApplied) {
+      return {
+        tone: 'applied',
+        title: 'Zugriff automatisch gesetzt',
+        description: `Die Berechtigungen werden über die Rolle ${mappedRole.name} angewendet.`,
+      };
+    }
+
+    return null;
+  }, [
+    currentRole,
+    isManualRoleOverride,
+    isMappedRoleMissing,
+    isPresetRoleApplied,
+    mappedRole,
+    roles.length,
+    selectedPositionPreset,
+  ]);
+
+  useEffect(() => {
+    if (!pendingPresetRoleName) return;
+
+    const role = getRoleByPresetName(roles, pendingPresetRoleName);
+    if (!role?._id) return;
+
+    setValue('roleId', role._id, { shouldDirty: true, shouldValidate: true });
+  }, [pendingPresetRoleName, roles, setValue]);
+
+  const applyPresetRole = (positionPreset) => {
+    if (!positionPreset?.roleName) {
+      setPendingPresetRoleName(null);
+      return;
+    }
+
+    const role = getRoleByPresetName(roles, positionPreset.roleName);
+    if (role?._id) {
+      setValue('roleId', role._id, { shouldDirty: true, shouldValidate: true });
+      setPendingPresetRoleName(null);
+      return;
+    }
+
+    setPendingPresetRoleName(positionPreset.roleName);
+  };
+
+  const handleDepartmentChange = (department) => {
+    const previousDepartment = getValues('department');
+    const currentPosition = getValues('position');
+    const currentRoleId = getValues('roleId');
+    const previousPositionPreset = getPositionPreset(previousDepartment, currentPosition);
+    const previousMappedRole = getRoleByPresetName(roles, previousPositionPreset?.roleName);
+
+    setValue('department', department, { shouldDirty: true, shouldValidate: true });
+
+    const nextPositions = getPositionPresets(department);
+    const canKeepPosition = nextPositions.some((position) => position.value === currentPosition);
+
+    if (!canKeepPosition) {
+      setValue('position', '', { shouldDirty: true, shouldValidate: true });
+      setPendingPresetRoleName(null);
+
+      if (previousMappedRole?._id && currentRoleId === previousMappedRole._id) {
+        setValue('roleId', defaultRoleId || '', { shouldDirty: true, shouldValidate: true });
+      }
+
+      return;
+    }
+
+    applyPresetRole(getPositionPreset(department, currentPosition));
+  };
+
+  const handlePositionChange = (position) => {
+    const department = getValues('department');
+    setValue('position', position, { shouldDirty: true, shouldValidate: true });
+    applyPresetRole(getPositionPreset(department, position));
+  };
+
+  const handleRoleChange = (roleId) => {
+    setPendingPresetRoleName(null);
+    setValue('roleId', roleId, { shouldDirty: true, shouldValidate: true });
+  };
+
+  const handleDialogOpenChange = (nextOpen) => {
+    setCurrentStep(0);
+    setPendingPresetRoleName(null);
+    onOpenChange(nextOpen);
+  };
+
   const handleFormSubmit = (data) => {
     // Guard: only actually submit on the final step
     if (currentStep < STEPS.length - 1) {
       return;
     }
     onSubmit(data);
-    onOpenChange(false);
+    handleDialogOpenChange(false);
     reset();
   };
 
@@ -91,7 +274,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   const step = STEPS[currentStep];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
@@ -200,11 +383,40 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {currentStep === 2 && (
               <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <FormField label={t('users.department') || 'Abteilung'}>
-                  <Input placeholder={t('users.departmentPlaceholder') || 'z.B. Technik'} {...register('department')} autoFocus />
+                  <Select value={selectedDepartment || ''} onValueChange={handleDepartmentChange}>
+                    <SelectTrigger autoFocus>
+                      <SelectValue placeholder={t('users.departmentPlaceholder') || 'z.B. Technik'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departmentOptions.map((department) => (
+                        <SelectItem key={department.value} value={department.value}>
+                          {department.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FormField>
                 <FormField label={t('users.position') || 'Position'}>
-                  <Input placeholder={t('users.positionPlaceholder') || 'z.B. Projektleiter'} {...register('position')} />
+                  <Select
+                    value={selectedPosition || ''}
+                    onValueChange={handlePositionChange}
+                    disabled={!selectedDepartment || positionOptions.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('users.positionPlaceholder') || 'z.B. Projektleiter'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {positionOptions.map((position) => (
+                        <SelectItem key={position.value} value={position.value}>
+                          {position.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </FormField>
+                {rolePresetNotice && (
+                  <RolePresetNotice notice={rolePresetNotice} className="col-span-2" />
+                )}
               </div>
             )}
 
@@ -232,7 +444,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {currentStep === 4 && (
               <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <FormField label={t('users.role')} error={errors.roleId?.message} required>
-                  <Select value={watch('roleId')} onValueChange={(val) => setValue('roleId', val)}>
+                  <Select value={selectedRoleId || ''} onValueChange={handleRoleChange}>
                     <SelectTrigger>
                       <SelectValue placeholder={t('users.selectRole')} />
                     </SelectTrigger>
@@ -244,7 +456,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                   </Select>
                 </FormField>
                 <FormField label={t('users.language')}>
-                  <Select value={watch('language')} onValueChange={(val) => setValue('language', val)}>
+                  <Select value={selectedLanguage || 'de'} onValueChange={(val) => setValue('language', val)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -256,6 +468,9 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     </SelectContent>
                   </Select>
                 </FormField>
+                {rolePresetNotice && (
+                  <RolePresetNotice notice={rolePresetNotice} className="col-span-2" />
+                )}
               </div>
             )}
           </div>
@@ -268,10 +483,10 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 rounded-lg h-9" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  Zurueck
+                  Zurück
                 </Button>
               ) : (
-                <Button type="button" variant="ghost" className="rounded-lg h-9" onClick={() => onOpenChange(false)}>
+                <Button type="button" variant="ghost" className="rounded-lg h-9" onClick={() => handleDialogOpenChange(false)}>
                   {t('users.cancel')}
                 </Button>
               )}
@@ -318,3 +533,26 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   );
 }
 
+function RolePresetNotice({ notice, className }) {
+  const isWarning = notice.tone === 'warning' || notice.tone === 'override';
+  const Icon = isWarning ? AlertTriangle : ShieldCheck;
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-xs',
+        isWarning
+          ? 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300'
+          : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300',
+        notice.tone === 'pending' && 'border-border bg-muted/40 text-muted-foreground',
+        className,
+      )}
+    >
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <div className="min-w-0">
+        <p className="font-semibold">{notice.title}</p>
+        <p className="mt-0.5 leading-relaxed opacity-80">{notice.description}</p>
+      </div>
+    </div>
+  );
+}

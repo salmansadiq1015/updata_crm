@@ -37,6 +37,7 @@ const uploadImage = multer({
 });
 
 // Named routes BEFORE /:id
+router.get('/import/template', authenticate, requirePermission('catalog:read'), (req, res, next) => articleController.importTemplate(req, res, next));
 router.post('/import', authenticate, requirePermission('catalog:admin'), upload.single('file'), validate(bulkImportSchema), (req, res, next) => articleController.bulkImport(req, res, next));
 router.get('/facets', authenticate, requirePermission('catalog:read'), (req, res, next) => articleController.getFacets(req, res, next));
 

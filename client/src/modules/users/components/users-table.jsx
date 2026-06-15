@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '@/modules/users/services/user-service';
 import { roleService } from '@/modules/roles/services/role-service';
 import { queryKeys } from '@/lib/query/keys';
+import { useCursorList } from '@/modules/crm/hooks/use-cursor-list';
+import { useDebounce } from '@/shared/hooks/use-debounce';
 import { DataTableShell } from '@/shared/components/data-table/data-table-shell';
 import { UserForm } from '@/modules/users/components/user-form';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
@@ -43,7 +45,6 @@ export function UsersTable() {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState('table');
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 });
   const [sorting, setSorting] = useState([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -54,18 +55,31 @@ export function UsersTable() {
   const [targetUser, setTargetUser] = useState(null);
   const [rowSelection, setRowSelection] = useState({});
   const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
+  const debouncedGlobalFilter = useDebounce(globalFilter, 300);
 
-  const { data: usersData, isLoading } = useQuery({
-    queryKey: queryKeys.users.list({ ...pagination, sorting, globalFilter, statusFilter, roleFilter }),
-    queryFn: () => userService.getUsers({
-      page: pagination.pageIndex + 1,
-      pageSize: pagination.pageSize,
-      sortBy: sorting[0]?.id || 'createdAt',
-      sortOrder: sorting[0]?.desc ? 'desc' : 'asc',
-      search: globalFilter || undefined,
-      status: statusFilter !== 'all' ? statusFilter : undefined,
-      role: roleFilter !== 'all' ? roleFilter : undefined,
-    }),
+  const userListParams = useMemo(() => ({
+    sortBy: sorting[0]?.id || 'createdAt',
+    sortOrder: sorting[0]?.desc ? 'desc' : 'asc',
+    ...(debouncedGlobalFilter ? { search: debouncedGlobalFilter } : {}),
+    ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+    ...(roleFilter !== 'all' ? { role: roleFilter } : {}),
+  }), [debouncedGlobalFilter, roleFilter, sorting, statusFilter]);
+
+  const {
+    items: users,
+    pageSize,
+    setPageSize,
+    hasNext,
+    hasPrev,
+    isFetching,
+    onNext,
+    onPrev,
+    reset: resetCursor,
+  } = useCursorList({
+    queryKey: (params) => queryKeys.users.list(params),
+    queryFn: (params) => userService.getUsers(params),
+    params: userListParams,
+    initialSize: 25,
   });
 
   const { data: rolesData } = useQuery({
@@ -122,8 +136,11 @@ export function UsersTable() {
     onError: (err) => showError(err.message),
   });
 
-  const users = usersData?.data || [];
-  const totalItems = usersData?.pagination?.totalItems || 0;
+  useEffect(() => {
+    resetCursor();
+  }, [resetCursor, userListParams]);
+
+  const totalItems = users.length + (hasNext ? '+' : '');
   const roles = rolesData?.data || [];
 
   const activeCount = users.filter((u) => u.status === 'active' || u.isActive).length;
@@ -255,6 +272,7 @@ export function UsersTable() {
     setStatusFilter('all');
     setRoleFilter('all');
     setGlobalFilter('');
+    resetCursor();
   };
 
   return (
@@ -431,7 +449,7 @@ export function UsersTable() {
               onClick={clearFilters}
             >
               <X className="h-3 w-3" />
-              {t('users.resetFilters') || 'Zuruecksetzen'}
+              {t('users.resetFilters') || 'Zurücksetzen'}
             </Button>
           </>
         )}
@@ -443,7 +461,7 @@ export function UsersTable() {
           <PermissionGate permission="users:write">
             <Select onValueChange={handleBulkRoleChange}>
               <SelectTrigger className="w-[160px] text-xs">
-                <SelectValue placeholder="Rolle aendern" />
+                <SelectValue placeholder="Rolle ändern" />
               </SelectTrigger>
               <SelectContent position="popper" sideOffset={4}>
                 {roles.map((r) => (
@@ -471,10 +489,8 @@ export function UsersTable() {
         <DataTableShell
           columns={columns}
           data={users}
-          isLoading={isLoading}
-          rowCount={totalItems}
-          pagination={pagination}
-          onPaginationChange={setPagination}
+          isLoading={isFetching && users.length === 0}
+          rowCount={users.length}
           sorting={sorting}
           onSortingChange={setSorting}
           globalFilter={globalFilter}
@@ -482,6 +498,15 @@ export function UsersTable() {
           enableRowSelection
           rowSelection={rowSelection}
           onRowSelectionChange={setRowSelection}
+          cursorPagination={{
+            pageSize,
+            onPageSizeChange: setPageSize,
+            hasNext,
+            hasPrev,
+            isFetching,
+            onNext,
+            onPrev,
+          }}
           renderTopToolbarCustomActions={() => null}
           renderRowActions={({ row }) => {
             const u = row.original;
@@ -541,7 +566,7 @@ export function UsersTable() {
       ) : (
         <UserCardGrid
           users={users}
-          isLoading={isLoading}
+          isLoading={isFetching && users.length === 0}
           onEdit={(u) => { setEditUser(u); setFormOpen(true); }}
           onToggle={(u) => { setTargetUser(u); setConfirmOpen(true); }}
           globalFilter={globalFilter}
@@ -563,7 +588,7 @@ export function UsersTable() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={targetUser?.isActive || targetUser?.status === 'active' ? 'Benutzer deaktivieren?' : 'Benutzer aktivieren?'}
-        description={`Moechten Sie ${targetUser?.firstName} ${targetUser?.lastName} wirklich ${targetUser?.isActive || targetUser?.status === 'active' ? 'deaktivieren' : 'aktivieren'}?`}
+        description={`Möchten Sie ${targetUser?.firstName} ${targetUser?.lastName} wirklich ${targetUser?.isActive || targetUser?.status === 'active' ? 'deaktivieren' : 'aktivieren'}?`}
         onConfirm={handleToggleActive}
         loading={deactivateMutation.isPending || activateMutation.isPending}
         confirmText={targetUser?.isActive || targetUser?.status === 'active' ? 'Deaktivieren' : 'Aktivieren'}
@@ -574,7 +599,7 @@ export function UsersTable() {
         open={bulkDeactivateOpen}
         onOpenChange={setBulkDeactivateOpen}
         title={`${selectedIds.length} Benutzer deaktivieren?`}
-        description="Die ausgewaehlten Benutzer werden deaktiviert und koennen sich nicht mehr anmelden."
+        description="Die ausgewählten Benutzer werden deaktiviert und können sich nicht mehr anmelden."
         onConfirm={() => bulkDeleteMutation.mutate(selectedIds)}
         loading={bulkDeleteMutation.isPending}
         confirmText="Alle deaktivieren"

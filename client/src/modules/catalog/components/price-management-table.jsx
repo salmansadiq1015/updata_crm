@@ -27,12 +27,15 @@ function fmtDateTime(val) {
 
 export function PriceManagementTable() {
   const { t } = useLanguage();
-  const { data: articles = [], isLoading: articlesLoading } = useArticles({});
-  const { data: batches = [] } = usePriceBatches();
+  const { data: articleResult = { data: [] }, isLoading: articlesLoading } = useArticles({ limit: 50 });
+  const { data: batchResult = { data: [] } } = usePriceBatches();
+  const articles = articleResult.data ?? [];
+  const batches = batchResult.data ?? [];
   const { rollbackBatch } = usePriceMutations();
   const [selected, setSelected] = useState(new Set());
   const [updateOpen, setUpdateOpen] = useState(false);
   const [historyArticleId, setHistoryArticleId] = useState(null);
+  const [now] = useState(() => Date.now());
 
   const toggleSelect = (id) => {
     const next = new Set(selected);
@@ -42,13 +45,13 @@ export function PriceManagementTable() {
 
   const allSelected = articles.length > 0 && selected.size === articles.length;
   const someSelected = selected.size > 0 && selected.size < articles.length;
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(articles.map((a) => a._id)));
-  const selectedArticles = articles.filter((a) => selected.has(a._id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(articles.map((a) => a._id || a.id)));
+  const selectedArticles = articles.filter((a) => selected.has(a._id || a.id));
 
   const recentBatches = batches.filter((b) => b.status === 'APPLIED').slice(0, 5);
 
   const canRollback = (batch) => {
-    const diff = (Date.now() - new Date(batch.appliedAt).getTime()) / (1000 * 60 * 60 * 24);
+    const diff = (now - new Date(batch.appliedAt).getTime()) / (1000 * 60 * 60 * 24);
     return diff <= 30;
   };
 
@@ -86,11 +89,11 @@ export function PriceManagementTable() {
                   <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No articles found.</TableCell>
                 </TableRow>
               ) : articles.map((article) => (
-                <TableRow key={article._id} className={selected.has(article._id) ? 'bg-muted/30' : undefined}>
+                <TableRow key={article._id || article.id} className={selected.has(article._id || article.id) ? 'bg-muted/30' : undefined}>
                   <TableCell>
                     <Checkbox
-                      checked={selected.has(article._id)}
-                      onCheckedChange={() => toggleSelect(article._id)}
+                      checked={selected.has(article._id || article.id)}
+                      onCheckedChange={() => toggleSelect(article._id || article.id)}
                       aria-label={`Select ${article.articleNumber}`}
                     />
                   </TableCell>
@@ -102,7 +105,7 @@ export function PriceManagementTable() {
                   <TableCell>
                     <Button
                       variant="ghost" size="sm" className="text-xs h-7"
-                      onClick={() => setHistoryArticleId(historyArticleId === article._id ? null : article._id)}
+                      onClick={() => setHistoryArticleId(historyArticleId === (article._id || article.id) ? null : (article._id || article.id))}
                     >
                       History
                     </Button>

@@ -6,6 +6,7 @@ import { articleService } from '../services/article-service';
 import { Trash2, ImagePlus } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { showError } from '@/lib/toast';
+import Image from 'next/image';
 
 export function ArticleImageGallery({ articleId, onUpload, onDelete }) {
   const fileRef = useRef(null);
@@ -20,10 +21,13 @@ export function ArticleImageGallery({ articleId, onUpload, onDelete }) {
     <div className="flex flex-wrap gap-2">
       {images.map((img) => (
         <div key={img._id} className="relative group w-20 h-20">
-          <img
+          <Image
             src={img.url}
             alt={img.originalName || 'Article image'}
-            className="w-full h-full object-cover rounded-md border"
+            fill
+            sizes="80px"
+            unoptimized
+            className="rounded-md border object-cover"
           />
           <button
             type="button"

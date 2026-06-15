@@ -23,10 +23,29 @@ export const useUpdateTemplate = () => {
   });
 };
 
+export const useDuplicateTemplate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) => templateService.duplicate(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['doctpl', 'templates', 'list'] }),
+  });
+};
+
+export const useDeleteTemplate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }) => templateService.remove(id),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.detail(v.id) });
+      qc.invalidateQueries({ queryKey: ['doctpl', 'templates', 'list'] });
+    },
+  });
+};
+
 export const useRevertTemplate = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, version }) => templateService.revert(id, version),
+    mutationFn: ({ id, version, expectedVersion }) => templateService.revert(id, version, expectedVersion ? { expectedVersion } : undefined),
     onSuccess: (_, v) => {
       qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.detail(v.id) });
       qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.versions(v.id) });

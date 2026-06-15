@@ -88,7 +88,7 @@ export default function MobileSparePartsPage() {
           <EmptyState
             variant="error"
             title={lang === 'de' ? 'Anlage fehlt' : 'Installation missing'}
-            description={lang === 'de' ? 'Ersatzteile brauchen eine gueltige Anlage.' : 'Spare parts require a valid installation.'}
+            description={lang === 'de' ? 'Ersatzteile brauchen eine gültige Anlage.' : 'Spare parts require a valid installation.'}
           />
         </div>
       </div>
@@ -104,7 +104,7 @@ export default function MobileSparePartsPage() {
           <WifiOff className="h-4 w-4 shrink-0" />
           <span>
             {lang === 'de'
-              ? 'Ersatzteil-Suche und Bestellmarkierung sind nur online verfuegbar.'
+              ? 'Ersatzteil-Suche und Bestellmarkierung sind nur online verfügbar.'
               : 'Spare-part search and ordering flags require internet.'}
           </span>
         </div>
@@ -143,7 +143,7 @@ export default function MobileSparePartsPage() {
             <EmptyState
               variant="error"
               title={lang === 'de' ? 'Ersatzteile nicht geladen' : 'Spare parts not loaded'}
-              description={lang === 'de' ? 'Bitte spaeter erneut versuchen.' : 'Please try again later.'}
+              description={lang === 'de' ? 'Bitte später erneut versuchen.' : 'Please try again later.'}
             />
           )}
           {!linkedParts.isLoading && !linkedParts.isError && (linkedParts.data || []).length === 0 && (

@@ -4,7 +4,8 @@ import { ENDPOINTS } from '@/lib/api/endpoints';
 export const ighService = {
   getConfig: () => apiClient.get(ENDPOINTS.CATALOG.IGH_CONFIG),
   saveConfig: (data) => apiClient.put(ENDPOINTS.CATALOG.IGH_CONFIG, data),
-  previewImport: () => apiClient.post(ENDPOINTS.CATALOG.IGH_IMPORT_PREVIEW),
+  previewImport: (type = 'FULL') => apiClient.post(ENDPOINTS.CATALOG.IGH_IMPORT_PREVIEW, { type }),
+  approveImport: (jobId) => apiClient.post(ENDPOINTS.CATALOG.IGH_IMPORT_APPROVE(jobId)),
   importFull: () => apiClient.post(ENDPOINTS.CATALOG.IGH_IMPORT_FULL),
   importDelta: () => apiClient.post(ENDPOINTS.CATALOG.IGH_IMPORT_DELTA),
   getImportHistory: () => apiClient.get(ENDPOINTS.CATALOG.IGH_IMPORT_HISTORY),

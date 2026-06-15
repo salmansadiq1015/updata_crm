@@ -5,7 +5,8 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import {
   updateMaintenanceSchema, maintenanceIdParamSchema,
   maintenanceDashboardSchema, maintenanceListSchema,
-  maintenanceExportSchema,
+  maintenanceExportSchema, maintenanceSettingsReadSchema,
+  maintenanceSettingsUpdateSchema,
 } from './maintenance.validation.js';
 
 const router = Router();
@@ -14,6 +15,8 @@ const router = Router();
 router.get('/dashboard', authenticate, requirePermission('crm:read'), validate(maintenanceDashboardSchema), (req, res, next) => maintenanceController.dashboard(req, res, next));
 router.get('/due', authenticate, requirePermission('crm:read'), validate(maintenanceListSchema), (req, res, next) => maintenanceController.listDue(req, res, next));
 router.get('/overdue', authenticate, requirePermission('crm:read'), validate(maintenanceListSchema), (req, res, next) => maintenanceController.listOverdue(req, res, next));
+router.get('/settings', authenticate, requirePermission('crm:read'), validate(maintenanceSettingsReadSchema), (req, res, next) => maintenanceController.getSettings(req, res, next));
+router.patch('/settings', authenticate, requirePermission('crm:admin'), validate(maintenanceSettingsUpdateSchema), (req, res, next) => maintenanceController.updateSettings(req, res, next));
 router.get('/export', authenticate, requirePermission('crm:read'), validate(maintenanceExportSchema), (req, res, next) => maintenanceController.exportCsv(req, res, next));
 
 // By ID

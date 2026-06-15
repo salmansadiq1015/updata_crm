@@ -51,6 +51,29 @@ const generatedDocumentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    sourceCustomerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Customer',
+      default: null,
+      index: true,
+    },
+    sourceProjectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Project',
+      default: null,
+      index: true,
+    },
+    sourceDepartmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+      index: true,
+    },
+    ownerUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
     generatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -66,6 +89,8 @@ const generatedDocumentSchema = new mongoose.Schema(
 
 // --- Indexes ---
 generatedDocumentSchema.index({ sourceModule: 1, sourceRecordId: 1 });
+generatedDocumentSchema.index({ sourceModule: 1, sourceProjectId: 1, generatedAt: -1 });
+generatedDocumentSchema.index({ sourceModule: 1, sourceCustomerId: 1, generatedAt: -1 });
 generatedDocumentSchema.index({ generatedAt: -1 });
 
 const GeneratedDocument = mongoose.model('GeneratedDocument', generatedDocumentSchema);

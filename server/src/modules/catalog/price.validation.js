@@ -1,49 +1,56 @@
 import Joi from 'joi';
-import { objectId } from '../../shared/validation/commonSchemas.js';
+import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
+
+const priceUpdateBodySchema = Joi.object({
+  type: Joi.string().valid('individual', 'bulk', 'percentage').required(),
+
+  articleId: Joi.when('type', {
+    is: 'individual',
+    then: objectId.required(),
+    otherwise: Joi.forbidden(),
+  }),
+  newPrice: Joi.when('type', {
+    is: 'individual',
+    then: Joi.number().min(0).required(),
+    otherwise: Joi.forbidden(),
+  }),
+
+  updates: Joi.when('type', {
+    is: 'bulk',
+    then: Joi.array().items(
+      Joi.object({
+        articleId: objectId.required(),
+        newPrice: Joi.number().min(0).required(),
+      }),
+    ).min(1).max(10000).required(),
+    otherwise: Joi.forbidden(),
+  }),
+
+  filter: Joi.when('type', {
+    is: 'percentage',
+    then: Joi.object({
+      categoryId: objectId,
+      type: Joi.string().valid('MATERIAL', 'SERVICE'),
+      status: Joi.string().valid('ACTIVE', 'INACTIVE'),
+      source: Joi.string().valid('INTERNAL', 'IGH'),
+    }).min(1).required(),
+    otherwise: Joi.forbidden(),
+  }),
+  percentage: Joi.when('type', {
+    is: 'percentage',
+    then: Joi.number().min(-100).max(1000).required(),
+    otherwise: Joi.forbidden(),
+  }),
+
+  description: Joi.string().max(500),
+});
 
 export const updatePriceSchema = {
-  body: Joi.object({
-    type: Joi.string().valid('individual', 'bulk', 'percentage').required(),
+  body: priceUpdateBodySchema,
+};
 
-    // individual
-    articleId: Joi.when('type', {
-      is: 'individual',
-      then: objectId.required(),
-      otherwise: Joi.forbidden(),
-    }),
-    newPrice: Joi.when('type', {
-      is: 'individual',
-      then: Joi.number().min(0).required(),
-      otherwise: Joi.forbidden(),
-    }),
-
-    // bulk
-    updates: Joi.when('type', {
-      is: 'bulk',
-      then: Joi.array().items(
-        Joi.object({
-          articleId: objectId.required(),
-          newPrice: Joi.number().min(0).required(),
-        }),
-      ).min(1).max(10000).required(),
-      otherwise: Joi.forbidden(),
-    }),
-
-    // percentage
-    filter: Joi.when('type', {
-      is: 'percentage',
-      then: Joi.object().required(),
-      otherwise: Joi.forbidden(),
-    }),
-    percentage: Joi.when('type', {
-      is: 'percentage',
-      then: Joi.number().required(),
-      otherwise: Joi.forbidden(),
-    }),
-
-    // shared optional
-    description: Joi.string().max(500),
-  }),
+export const previewPriceSchema = {
+  body: priceUpdateBodySchema,
 };
 
 export const priceHistorySchema = {
@@ -57,18 +64,15 @@ export const priceHistorySchema = {
 };
 
 export const schedulePriceSchema = {
-  body: Joi.object({
+  body: priceUpdateBodySchema.keys({
     scheduledDate: Joi.date().iso().greater('now').required(),
+  }),
+};
+
+export const listBatchesSchema = {
+  query: cursorPagination.keys({
+    status: Joi.string().valid('PENDING', 'APPLIED', 'ROLLED_BACK'),
     type: Joi.string().valid('MANUAL', 'PERCENTAGE', 'IMPORT', 'SCHEDULED'),
-    description: Joi.string().max(500),
-    updates: Joi.array().items(
-      Joi.object({
-        articleId: objectId.required(),
-        newPrice: Joi.number().min(0).required(),
-      }),
-    ),
-    filter: Joi.object(),
-    percentage: Joi.number(),
   }),
 };
 

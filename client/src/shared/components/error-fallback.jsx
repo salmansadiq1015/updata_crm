@@ -3,6 +3,7 @@
 import { AlertTriangle, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { getDisplayErrorCode, getDisplayErrorMessage } from '@/lib/errors/display-error';
 
 /**
  * Reusable error fallback. Auto-translated.
@@ -12,6 +13,8 @@ export function ErrorFallback({ error, reset }) {
   const { t } = useLanguage();
 
   const isForbidden = error?.statusCode === 403 || error?.response?.status === 403;
+  const errorCode = getDisplayErrorCode(error);
+  const message = getDisplayErrorMessage(error, t('errors.unexpected', 'An unexpected error occurred.'));
 
   if (isForbidden) {
     return (
@@ -30,8 +33,14 @@ export function ErrorFallback({ error, reset }) {
       <AlertTriangle className="h-8 w-8 text-destructive mb-4" />
       <h3 className="text-sm font-medium">{t('errors.loadingTitle', 'Could not load')}</h3>
       <p className="mt-1 text-sm text-muted-foreground max-w-sm">
-        {error?.message || t('errors.unexpected', 'An unexpected error occurred.')}
+        {message}
       </p>
+      {errorCode && (
+        <div className="mt-3 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{t('errors.code', 'Error code')}:</span>{' '}
+          <code>{String(errorCode)}</code>
+        </div>
+      )}
       {reset && (
         <Button variant="outline" size="sm" onClick={reset} className="mt-4">
           {t('common.retry', 'Retry')}

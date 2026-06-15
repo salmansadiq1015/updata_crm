@@ -1,7 +1,5 @@
 import { BaseWorker } from '../shared/queue/BaseWorker.js';
 import cacheManager from '../shared/cache/CacheManager.js';
-import eventBus from '../shared/events/EventBus.js';
-import EVENT_TYPES from '../shared/events/eventTypes.js';
 import config from '../config/index.js';
 import logger from '../shared/logger/index.js';
 
@@ -16,11 +14,10 @@ export class ScheduledPriceUpdateWorker extends BaseWorker {
     super('scheduled-price-update');
   }
 
-  async process(job) {
+  async process(_job) {
     // Lazy imports to avoid circular dependencies
     const PriceUpdateBatch = (await import('../modules/catalog/priceUpdateBatch.model.js')).default;
-    const Article = (await import('../modules/catalog/article.model.js')).default;
-    const PriceHistory = (await import('../modules/catalog/priceHistory.model.js')).default;
+    const priceService = (await import('../modules/catalog/price.service.js')).default;
 
     const now = new Date();
 
@@ -34,9 +31,6 @@ export class ScheduledPriceUpdateWorker extends BaseWorker {
 
     for (const batch of batches) {
       try {
-        // Retrieve the stored update data from the batch
-        // For scheduled batches, updates may be stored in the batch itself
-        // or derived from the batch type (percentage, manual, etc.)
         logger.info('Processing scheduled price batch', {
           module: 'jobs',
           action: 'scheduled-price-update',
@@ -44,18 +38,9 @@ export class ScheduledPriceUpdateWorker extends BaseWorker {
           type: batch.type,
         });
 
-        // Mark as applied
-        await PriceUpdateBatch.findByIdAndUpdate(batch._id, {
-          status: 'APPLIED',
-          appliedAt: new Date(),
+        await priceService.applyScheduledBatch(batch._id, {
+          source: 'scheduled-price-update',
         });
-
-        eventBus.publish(EVENT_TYPES.CATALOG_PRICE_BATCH_APPLIED, {
-          batchId: batch._id,
-          type: batch.type,
-          articleCount: batch.articleCount,
-          source: 'scheduled',
-        }, { source: 'jobs:scheduled-price-update' });
 
         batchesProcessed++;
       } catch (err) {

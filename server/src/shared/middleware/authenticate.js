@@ -45,6 +45,44 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
     'project:delete',
     'project:documents:delete',
   ],
+  'project:documents:read': [
+    'documents:read',
+  ],
+  'project:documents:delete': [
+    'documents:delete',
+  ],
+  'templates:read': [
+    'documents:read',
+  ],
+  'templates:delete': [
+    'documents:delete',
+  ],
+  'quotations:read': [
+    'documents:read',
+  ],
+  'invoicing:read': [
+    'documents:read',
+  ],
+  'accounting:documents:read': [
+    'documents:read',
+  ],
+  'catalog:write': [
+    'catalog:manage',
+  ],
+  'catalog:admin': [
+    'catalog:manage',
+    'catalog:igh:manage',
+    'catalog:pricing',
+  ],
+  'catalog:price': [
+    'catalog:pricing',
+  ],
+  'catalog:pricing': [
+    'catalog:price',
+  ],
+  'catalog:manage': [
+    'catalog:write',
+  ],
 });
 
 /**

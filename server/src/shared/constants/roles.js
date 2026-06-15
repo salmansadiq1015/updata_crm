@@ -72,6 +72,8 @@ const PERMISSIONS = Object.freeze({
   QUOTATIONS_ADMIN: 'quotations:admin',
 
   // Document Templates
+  DOCUMENTS_READ: 'documents:read',
+  DOCUMENTS_DELETE: 'documents:delete',
   TEMPLATES_READ: 'templates:read',
   TEMPLATES_WRITE: 'templates:write',
   TEMPLATES_DELETE: 'templates:delete',
@@ -113,6 +115,16 @@ const PERMISSIONS = Object.freeze({
   // Reports
   REPORTS_READ: 'reports:read',
   REPORTS_WRITE: 'reports:write',
+
+  // Catalog
+  CATALOG_READ: 'catalog:read',
+  CATALOG_WRITE: 'catalog:write',
+  CATALOG_MANAGE: 'catalog:manage',
+  CATALOG_DELETE: 'catalog:delete',
+  CATALOG_PRICE: 'catalog:price',
+  CATALOG_PRICING: 'catalog:pricing',
+  CATALOG_IGH_MANAGE: 'catalog:igh:manage',
+  CATALOG_ADMIN: 'catalog:admin',
 
   // Time Tracking
   TIME_TRACKING_READ: 'time-tracking:read',

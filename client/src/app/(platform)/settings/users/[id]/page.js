@@ -39,7 +39,7 @@ const statusConfig = {
   locked: { label: 'Gesperrt', dotColor: 'bg-red-500', bgColor: 'bg-red-500/10', textColor: 'text-red-700 dark:text-red-400', ringColor: 'ring-red-500/30' },
 };
 
-const langNames = { de: 'Deutsch', en: 'English', fr: 'Francais', it: 'Italiano' };
+const langNames = { de: 'Deutsch', en: 'English', fr: 'Français', it: 'Italiano' };
 
 export default function UserDetailPage() {
   const { t } = useLanguage();
@@ -228,7 +228,7 @@ export default function UserDetailPage() {
             <TabsList variant="line">
               <TabsTrigger value="overview" className="gap-1.5">
                 <Activity className="h-3.5 w-3.5" />
-                Uebersicht
+                Übersicht
               </TabsTrigger>
               {canAdmin && (
                 <TabsTrigger value="sessions" className="gap-1.5">
@@ -239,7 +239,7 @@ export default function UserDetailPage() {
               {canAudit && (
                 <TabsTrigger value="activity" className="gap-1.5">
                   <Clock className="h-3.5 w-3.5" />
-                  Aktivitaet
+                  Aktivität
                 </TabsTrigger>
               )}
             </TabsList>
@@ -278,7 +278,7 @@ export default function UserDetailPage() {
                   <CardHeader className="pb-4">
                     <CardTitle className="text-base flex items-center gap-2">
                       <Activity className="h-4 w-4 text-muted-foreground" />
-                      Letzte Aktivitaeten
+                      Letzte Aktivitäten
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -305,7 +305,7 @@ export default function UserDetailPage() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={isActive ? 'Benutzer deaktivieren?' : 'Benutzer aktivieren?'}
-        description={`Moechten Sie ${user.firstName} ${user.lastName} wirklich ${isActive ? 'deaktivieren' : 'aktivieren'}?`}
+        description={`Möchten Sie ${user.firstName} ${user.lastName} wirklich ${isActive ? 'deaktivieren' : 'aktivieren'}?`}
         onConfirm={() => toggleActiveMutation.mutate()}
         loading={toggleActiveMutation.isPending}
         confirmText={isActive ? 'Deaktivieren' : 'Aktivieren'}
@@ -381,13 +381,13 @@ function AuditActivityTimeline({ userId }) {
     'login.success': { label: 'Anmeldung erfolgreich', icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
     'login.failed': { label: 'Anmeldung fehlgeschlagen', icon: UserX, color: 'text-red-500', bg: 'bg-red-500/10' },
     'logout': { label: 'Abmeldung', icon: ExternalLink, color: 'text-muted-foreground', bg: 'bg-muted' },
-    'password.changed': { label: 'Passwort geaendert', icon: KeyRound, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+    'password.changed': { label: 'Passwort geändert', icon: KeyRound, color: 'text-amber-500', bg: 'bg-amber-500/10' },
     'password.reset_requested': { label: 'Passwort-Reset angefordert', icon: KeyRound, color: 'text-amber-500', bg: 'bg-amber-500/10' },
     'user.updated': { label: 'Profil aktualisiert', icon: Pencil, color: 'text-primary', bg: 'bg-primary/10' },
     'user.created': { label: 'Konto erstellt', icon: Activity, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
     'session.revoked': { label: 'Sitzung widerrufen', icon: Monitor, color: 'text-red-500', bg: 'bg-red-500/10' },
     'account.activated': { label: 'Konto aktiviert', icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    'role.changed': { label: 'Rolle geaendert', icon: Shield, color: 'text-violet-500', bg: 'bg-violet-500/10' },
+    'role.changed': { label: 'Rolle geändert', icon: Shield, color: 'text-violet-500', bg: 'bg-violet-500/10' },
   };
 
   const defaultEvent = { label: '', icon: Activity, color: 'text-muted-foreground', bg: 'bg-muted' };
@@ -408,7 +408,7 @@ function AuditActivityTimeline({ userId }) {
     );
   }
 
-  if (!entries.length) return <EmptyState title="Keine Aktivitaeten" description="Keine Aktivitaeten fuer diesen Benutzer." />;
+  if (!entries.length) return <EmptyState title="Keine Aktivitäten" description="Keine Aktivitäten für diesen Benutzer." />;
 
   return (
     <div className="relative">

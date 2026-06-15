@@ -14,9 +14,9 @@ import {
 import { connectTestDb, clearTestDb, disconnectTestDb } from '../setup.js';
 import { PERMISSIONS } from '../../src/shared/constants/roles.js';
 
-let Customer, Site, Installation, MaintenanceInterval, EntityNote, EntityImage, SparePart, AuditLog, Permission, Role, User;
+let Customer, Site, Installation, MaintenanceInterval, MaintenanceSettings, EntityNote, EntityImage, SparePart, AuditLog, Permission, Role, User;
 let customerService, contactService, siteService, installationService, maintenanceIntervalService;
-let entityNoteService, entityImageService, sparePartService, cacheManager, eventBus;
+let maintenanceSettingsService, entityNoteService, entityImageService, sparePartService, cacheManager, eventBus;
 let MaintenanceCheckWorker;
 let appConfig;
 
@@ -34,6 +34,7 @@ beforeAll(async () => {
   await import('../../src/modules/crm/site.model.js');
   await import('../../src/modules/crm/installation.model.js');
   await import('../../src/modules/crm/maintenanceInterval.model.js');
+  await import('../../src/modules/crm/maintenanceSettings.model.js');
   await import('../../src/modules/crm/entityNote.model.js');
   await import('../../src/modules/crm/entityImage.model.js');
   await import('../../src/modules/crm/sparePart.model.js');
@@ -41,6 +42,7 @@ beforeAll(async () => {
   Site = mongoose.model('Site');
   Installation = mongoose.model('Installation');
   MaintenanceInterval = mongoose.model('MaintenanceInterval');
+  MaintenanceSettings = mongoose.model('MaintenanceSettings');
   EntityNote = mongoose.model('EntityNote');
   EntityImage = mongoose.model('EntityImage');
   SparePart = mongoose.model('SparePart');
@@ -53,6 +55,7 @@ beforeAll(async () => {
   ({ default: siteService } = await import('../../src/modules/crm/site.service.js'));
   ({ default: installationService } = await import('../../src/modules/crm/installation.service.js'));
   ({ default: maintenanceIntervalService } = await import('../../src/modules/crm/maintenanceInterval.service.js'));
+  ({ default: maintenanceSettingsService } = await import('../../src/modules/crm/maintenanceSettings.service.js'));
   ({ default: entityNoteService } = await import('../../src/modules/crm/entityNote.service.js'));
   ({ default: entityImageService } = await import('../../src/modules/crm/entityImage.service.js'));
   ({ default: sparePartService } = await import('../../src/modules/crm/sparePart.service.js'));
@@ -648,6 +651,104 @@ describe('CRM Service Contracts', () => {
     expect(contacts.find((contact) => String(contact._id) === String(second._id)).isPrimary).toBe(true);
   });
 
+  test('contact overview filters by customer type and includes relationship counts', async () => {
+    const user = await seedUser();
+    const [Project, Quotation, Order] = await Promise.all([
+      import('../../src/modules/pm/project.model.js').then((module) => module.default),
+      import('../../src/modules/qop/quotation.model.js').then((module) => module.default),
+      import('../../src/modules/qop/order.model.js').then((module) => module.default),
+    ]);
+    const privateCustomer = await seedCustomer({
+      createdBy: user._id,
+      name: 'Jonas Mueller',
+      type: 'private',
+      customerNumber: 'K-92001',
+    });
+    const businessCustomer = await seedCustomer({
+      createdBy: user._id,
+      name: 'Meier Immobilien AG',
+      type: 'business',
+      customerNumber: 'K-92002',
+    });
+
+    await contactService.create(privateCustomer._id, {
+      firstName: 'Jonas',
+      lastName: 'Mueller',
+      email: 'jonas@example.test',
+    }, user._id);
+    const businessContact = await contactService.create(businessCustomer._id, {
+      firstName: 'Anna',
+      lastName: 'Meier',
+      email: 'anna@meier.example.test',
+    }, user._id);
+
+    await Project.create({
+      projectNumber: 'P-92002',
+      name: 'Heating replacement',
+      projectType: 'RENOVATION',
+      customerId: businessCustomer._id,
+      projectManagerId: user._id,
+      createdBy: user._id,
+    });
+    await Quotation.create({
+      quotationNumber: 'ANG-92002',
+      customerId: businessCustomer._id,
+      customerName: businessCustomer.name,
+      contactId: businessContact._id,
+      validUntil: new Date(Date.now() + 86400000),
+      createdBy: user._id,
+    });
+    await Order.create({
+      orderNumber: 'AUF-92002',
+      customerId: businessCustomer._id,
+      customerName: businessCustomer.name,
+      contactId: businessContact._id,
+      createdBy: user._id,
+    });
+
+    const result = await contactService.listOverview({ type: 'business', limit: 10 });
+
+    expect(result.summary).toMatchObject({ total: 2, private: 1, business: 1 });
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      firstName: 'Anna',
+      contactType: 'business',
+      related: {
+        projectCount: 1,
+        quotationCount: 1,
+        orderCount: 1,
+        directQuotationCount: 1,
+        directOrderCount: 1,
+      },
+    });
+    expect(result.data[0].customer).toMatchObject({
+      name: 'Meier Immobilien AG',
+      type: 'business',
+    });
+  });
+
+  test('archiving a primary contact promotes another customer contact', async () => {
+    const user = await seedUser();
+    const customer = await seedCustomer({ createdBy: user._id });
+    const first = await contactService.create(customer._id, {
+      firstName: 'Primary',
+      lastName: 'Contact',
+    }, user._id);
+    const second = await contactService.create(customer._id, {
+      firstName: 'Backup',
+      lastName: 'Contact',
+    }, user._id);
+
+    await contactService.delete(first._id, user._id);
+
+    const [archived, promoted] = await Promise.all([
+      mongoose.model('Contact').findById(first._id).setOptions({ includeDeleted: true }).lean(),
+      mongoose.model('Contact').findById(second._id).lean(),
+    ]);
+    expect(archived.isDeleted).toBe(true);
+    expect(promoted.isPrimary).toBe(true);
+  });
+
   test('site creation rejects archived customers', async () => {
     const user = await seedUser();
     const customer = await seedCustomer({ createdBy: user._id, status: 'archived' });
@@ -747,6 +848,75 @@ describe('CRM Service Contracts', () => {
     expect(new Date(interval.nextDueDate).toISOString()).toBe('2027-02-10T00:00:00.000Z');
   });
 
+  test('maintenance settings persist the escalation threshold', async () => {
+    const user = await seedUser();
+
+    const initial = await maintenanceSettingsService.getSettings();
+    const updated = await maintenanceSettingsService.updateSettings({ escalationDays: 12 }, user._id);
+    const stored = await MaintenanceSettings.findOne({ key: 'default' }).lean();
+
+    expect(initial.escalationDays).toBe(appConfig.maintenance.escalationDays);
+    expect(updated).toMatchObject({ escalationDays: 12 });
+    expect(String(stored.updatedBy)).toBe(String(user._id));
+    expect(stored.escalationDays).toBe(12);
+  });
+
+  test('maintenance overdue list filters by status and active installations', async () => {
+    const user = await seedUser();
+    const customer = await seedCustomer({ createdBy: user._id });
+    const site = await seedSite(customer._id, { createdBy: user._id });
+    const activeInstallation = await Installation.create({
+      installationNumber: 'A-99996',
+      siteId: site._id,
+      type: 'boiler',
+      manufacturer: 'Hoval',
+      model: 'UltraGas',
+      createdBy: user._id,
+    });
+    const decommissionedInstallation = await Installation.create({
+      installationNumber: 'A-99997',
+      siteId: site._id,
+      type: 'boiler',
+      manufacturer: 'Hoval',
+      model: 'UltraGas',
+      status: 'decommissioned',
+      createdBy: user._id,
+    });
+
+    const overdueDate = new Date();
+    overdueDate.setDate(overdueDate.getDate() - 7);
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+
+    const [activeOverdue] = await MaintenanceInterval.create([
+      {
+        installationId: activeInstallation._id,
+        maintenanceType: 'annual_service',
+        frequencyMonths: 12,
+        nextDueDate: overdueDate,
+        maintenanceStatus: 'overdue',
+      },
+      {
+        installationId: activeInstallation._id,
+        maintenanceType: 'filter_change',
+        frequencyMonths: 6,
+        nextDueDate: dueDate,
+        maintenanceStatus: 'due',
+      },
+      {
+        installationId: decommissionedInstallation._id,
+        maintenanceType: 'general_inspection',
+        frequencyMonths: 24,
+        nextDueDate: overdueDate,
+        maintenanceStatus: 'overdue',
+      },
+    ]);
+
+    const result = await maintenanceIntervalService.listOverdue({ limit: 25 });
+
+    expect(result.data.map((interval) => String(interval._id))).toEqual([String(activeOverdue._id)]);
+  });
+
   test('maintenance check marks intervals idempotently while skipping linked service work', async () => {
     const user = await seedUser();
     const schedulingRecipient = await seedSchedulingRecipient();
@@ -829,6 +999,65 @@ describe('CRM Service Contracts', () => {
       {
         count: 1,
         assignedTo: [schedulingRecipient._id],
+      },
+      { source: 'jobs:maintenance-check' },
+    );
+  });
+
+  test('maintenance check honors persisted escalation threshold', async () => {
+    const user = await seedUser();
+    await MaintenanceSettings.create({ escalationDays: 5, updatedBy: user._id });
+    const customer = await seedCustomer({ createdBy: user._id });
+    const site = await seedSite(customer._id, { createdBy: user._id });
+    const installation = await Installation.create({
+      installationNumber: 'A-99998',
+      siteId: site._id,
+      type: 'boiler',
+      manufacturer: 'Hoval',
+      model: 'UltraGas',
+      createdBy: user._id,
+    });
+    const tenDaysAgo = new Date();
+    tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+    const [shouldEscalate, shouldWait] = await MaintenanceInterval.create([
+      {
+        installationId: installation._id,
+        maintenanceType: 'annual_service',
+        frequencyMonths: 12,
+        nextDueDate: tenDaysAgo,
+        maintenanceStatus: 'overdue',
+        escalated: false,
+      },
+      {
+        installationId: installation._id,
+        maintenanceType: 'filter_change',
+        frequencyMonths: 6,
+        nextDueDate: threeDaysAgo,
+        maintenanceStatus: 'overdue',
+        escalated: false,
+      },
+    ]);
+    const publish = jest.spyOn(eventBus, 'publish');
+    const worker = new MaintenanceCheckWorker();
+
+    const result = await worker.process({});
+    const [escalatedInterval, waitingInterval] = await Promise.all([
+      MaintenanceInterval.findById(shouldEscalate._id).lean(),
+      MaintenanceInterval.findById(shouldWait._id).lean(),
+    ]);
+
+    expect(result).toEqual({ updatedDue: 0, updatedOverdue: 0 });
+    expect(escalatedInterval.escalated).toBe(true);
+    expect(waitingInterval.escalated).toBe(false);
+    expect(publish).toHaveBeenCalledWith(
+      'maintenance.escalated',
+      {
+        count: 1,
+        daysOverdue: 5,
+        assignedTo: [],
       },
       { source: 'jobs:maintenance-check' },
     );

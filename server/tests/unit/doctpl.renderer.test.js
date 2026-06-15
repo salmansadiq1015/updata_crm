@@ -1,6 +1,8 @@
 import { jest, describe, test, expect } from '@jest/globals';
 import { t, LABELS } from '../../src/modules/doctpl/renderer/i18n.js';
 import PageManager from '../../src/modules/doctpl/renderer/PageManager.js';
+import DocumentRenderer from '../../src/modules/doctpl/renderer/DocumentRenderer.js';
+import TotalsRenderer from '../../src/modules/doctpl/renderer/renderers/TotalsRenderer.js';
 import { pdfColors } from '../../src/modules/doctpl/renderer/renderers/colors.js';
 import { pdfFonts, registerCiFonts } from '../../src/modules/doctpl/renderer/renderers/fonts.js';
 
@@ -21,6 +23,13 @@ describe('i18n t()', () => {
   test('all 4 languages have grandTotal', () => {
     for (const lang of ['de','fr','it','en']) {
       expect(LABELS[lang].grandTotal).toBeTruthy();
+    }
+  });
+  test('all 4 languages have final invoice deduction labels', () => {
+    for (const lang of ['de','fr','it','en']) {
+      expect(LABELS[lang].net).toBeTruthy();
+      expect(LABELS[lang].vatAmount).toBeTruthy();
+      expect(LABELS[lang].grossTotal).toBeTruthy();
     }
   });
 });
@@ -89,5 +98,94 @@ describe('CI renderer helpers', () => {
       bold: 'MBB-CI-Bold',
       italic: 'Helvetica-Oblique',
     });
+  });
+});
+
+describe('DocumentRenderer acceptance fixtures', () => {
+  const ciConfig = {
+    companyName: 'MB Boiler & Heizung AG',
+    colors: { primary: '#1B3F8B', accent: '#D4002A' },
+    companyDetails: {
+      vatNumber: 'CHE-123.456.789 MWST',
+      bankDetails: { bankName: 'Test Bank' },
+      address: { street: 'Boilerstrasse 1', zip: '8001', city: 'Zuerich' },
+    },
+  };
+
+  const sections = [
+    { id: 'header', type: 'header', position: 0, isVisible: true },
+    { id: 'body', type: 'body', position: 1, isVisible: true },
+    { id: 'table', type: 'table', position: 2, isVisible: true },
+    { id: 'totals', type: 'totals', position: 3, isVisible: true },
+    { id: 'footer', type: 'footer', position: 99, isVisible: true },
+  ];
+
+  const template = (overrides = {}) => ({
+    templateType: 'quotation',
+    layout: { margins: { top: 25, bottom: 20, left: 20, right: 15 } },
+    sections,
+    ...overrides,
+  });
+
+  const data = (overrides = {}) => ({
+    templateType: 'quotation',
+    documentNumber: 'OFF-2026-0042',
+    documentDate: '2026-06-15',
+    validUntil: '2026-07-15',
+    currency: 'CHF',
+    customer: { name: 'Muster AG', addressLine1: 'Bahnhofstrasse 1', zip: '8001', city: 'Zuerich', country: 'CH' },
+    introduction: 'Thank you for your request.',
+    lineItems: Array.from({ length: 120 }, (_, index) => ({
+      position: index + 1,
+      description: `Service line ${index + 1}`,
+      quantity: 1,
+      unitPrice: 10,
+      total: 10,
+    })),
+    subtotal: 1200,
+    vatBreakdown: [{ rate: 0.081, amount: 97.20 }],
+    grandTotal: 1297.20,
+    ...overrides,
+  });
+
+  test('renders large quotation fixtures as multi-page PDFs', async () => {
+    const renderer = new DocumentRenderer();
+    const result = await renderer.renderWithMetadata(template(), ciConfig, data(), 'en');
+
+    expect(result.buffer.subarray(0, 4).toString()).toBe('%PDF');
+    expect(result.pageCount).toBeGreaterThan(1);
+  });
+
+  test('rejects invoice rendering when QR-bill data is incomplete', async () => {
+    const renderer = new DocumentRenderer();
+    await expect(renderer.render(
+      template({
+        templateType: 'invoice_standard',
+        sections: [
+          { id: 'header', type: 'header', position: 0, isVisible: true },
+          { id: 'qr_bill', type: 'qr_bill', position: 1, isVisible: true },
+          { id: 'footer', type: 'footer', position: 99, isVisible: true },
+        ],
+      }),
+      ciConfig,
+      data({ templateType: 'invoice_standard', qrBill: { iban: 'CH4431999123000889012' } }),
+      'en',
+    )).rejects.toThrow('QR-bill data is required');
+  });
+
+  test('formats final invoice advance deductions with net VAT and total', () => {
+    const renderer = new TotalsRenderer();
+    const deduction = {
+      invoiceNumber: 'AK-2026-0001',
+      date: '2026-05-15',
+      netAmount: 500,
+      vatAmount: 40.5,
+      totalAmount: 540.5,
+      amount: 540.5,
+    };
+
+    expect(renderer._deductionLabel(deduction)).toBe('AK-2026-0001 (2026-05-15)');
+    expect(renderer._deductionTotal(deduction, 'CHF')).toBe('-CHF 540.50');
+    expect(renderer._deductionDetail(deduction, 'CHF', 'en')).toBe('Net CHF 500.00 | VAT CHF 40.50 | Total CHF 540.50');
   });
 });

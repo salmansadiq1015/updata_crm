@@ -24,18 +24,20 @@ class TextBlockRepository {
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+    const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
     const filter = {
       ...buildFilter(filters, ALLOWED_FILTERS),
-      ...buildCursorQuery(cursor, sortBy, sortOrder),
+      ...buildCursorQuery(cursor, safeSortBy, sortOrder),
     };
 
     if (search) {
       filter.$or = [
         { title: { $regex: search, $options: 'i' } },
+        { bodyHtml: { $regex: search, $options: 'i' } },
       ];
     }
 
-    const sort = buildCursorSort(sortBy, sortOrder);
+    const sort = buildCursorSort(safeSortBy, sortOrder);
 
     const docs = await TextBlock.find(filter)
       .sort(sort)
@@ -43,7 +45,7 @@ class TextBlockRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    return buildCursorResponse(docs, limit, safeSortBy);
   }
 
   async textSearch(searchTerm, limit = 25) {

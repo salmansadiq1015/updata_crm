@@ -13,8 +13,10 @@ import { MAX_STEPS, MIN_AGENT_INPUT_LENGTH } from '../agent/agent.guardrails.js'
 import agentRunRepository from '../agent/agentRun.repository.js';
 import { WorkflowState } from './workflow.state.js';
 import logger from '../../../shared/logger/index.js';
+import swissPlzService from '../../../shared/ai/swissPlz.service.js';
 
 const ACTIONS = Object.freeze({
+  CREATE_CUSTOMER: 'CREATE_CUSTOMER',
   CREATE_TASK: 'CREATE_TASK',
   UPDATE_TASK: 'UPDATE_TASK',
   CREATE_ORDER: 'CREATE_ORDER',
@@ -33,6 +35,7 @@ const ACTIONS = Object.freeze({
 });
 
 const ACTION_LABELS = {
+  [ACTIONS.CREATE_CUSTOMER]: 'create a customer',
   [ACTIONS.CREATE_TASK]: 'create a task',
   [ACTIONS.UPDATE_TASK]: 'update a task',
   [ACTIONS.CREATE_ORDER]: 'create an order',
@@ -93,7 +96,7 @@ async function executeAction(state) {
   const effectiveInput = previousFollowUp?.originalInput
     ? `${previousFollowUp.originalInput}\nFollow-up answer: ${input}`
     : input;
-  const context = await resolveContext(effectiveInput, previousFollowUp);
+  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp);
   let output;
 
   try {
@@ -153,6 +156,7 @@ async function executeAction(state) {
 
 function classifyAction(input) {
   const text = input.toLowerCase();
+  if (hasAny(text, ['create customer', 'new customer', 'add customer', 'create company', 'new company', 'add company', 'kunde anlegen', 'kunden anlegen', 'neuer kunde', 'neuen kunden', 'firma erstellen', 'firma anlegen', 'neue firma'])) return ACTIONS.CREATE_CUSTOMER;
   if (hasAny(text, ['quotation', 'quote', 'offerte', 'angebot'])) return ACTIONS.CREATE_QUOTATION;
   if (hasAny(text, ['invoice', 'rechnung'])) return ACTIONS.CREATE_INVOICE;
   if (hasAny(text, ['service report', 'work report', 'rapport', 'bericht'])) return ACTIONS.CREATE_REPORT;
@@ -176,6 +180,8 @@ function classifyAction(input) {
 
 async function performAction(action, input, context, userId) {
   switch (action) {
+    case ACTIONS.CREATE_CUSTOMER:
+      return createCustomer(input, context, userId);
     case ACTIONS.CREATE_TASK:
       return createTask(input, context, userId);
     case ACTIONS.UPDATE_PROJECT:
@@ -204,11 +210,37 @@ async function performAction(action, input, context, userId) {
       return {
         action,
         status: 'needs_follow_up',
-        message: 'I can create tasks, schedule work, create reports, record hours, send chat messages, create notes, update project status, and look up customer data.',
+        message: 'I can create customers, create tasks, schedule work, create reports, record hours, send chat messages, create notes, update project status, and look up customer data.',
         followUpQuestions: ['What would you like me to do?'],
         missingFields: ['action'],
       };
   }
+}
+
+async function createCustomer(input, context, userId) {
+  const draft = extractCustomerDraft(input);
+  const missingFields = [];
+
+  if (!draft.name) missingFields.push(draft.type === 'business' ? 'company name' : 'customer name');
+  if (draft.type === 'business' && !draft.ownerName) missingFields.push('owner name');
+  if (draft.type === 'business' && !draft.uidNumber) missingFields.push('UID number');
+  if (!draft.street || !draft.postalCode || !draft.city) missingFields.push('street address with postal code and city');
+
+  if (missingFields.length) {
+    return needsFollowUp(ACTIONS.CREATE_CUSTOMER, missingFields, context);
+  }
+
+  const customerService = (await import('../../crm/customer.service.js')).default;
+  const customer = await customerService.create(draft, userId, { source: 'ai-agent' });
+
+  return {
+    action: ACTIONS.CREATE_CUSTOMER,
+    status: 'completed',
+    message: `Customer ${customer.customerNumber} created: ${customer.name}.`,
+    recordType: 'customer',
+    recordId: customer._id,
+    record: compactCustomer(customer),
+  };
 }
 
 async function createTask(input, context, userId) {
@@ -406,6 +438,7 @@ async function searchCustomer(input, context) {
     records: customers.map((customer) => ({
       id: customer._id,
       name: customer.name,
+      ownerName: customer.ownerName,
       customerNumber: customer.customerNumber,
       email: customer.email,
       phone: customer.phone || customer.mobile,
@@ -498,7 +531,7 @@ async function loadPreviousUser(id) {
 async function loadPreviousCustomer(id) {
   if (!id) return null;
   const Customer = (await import('../../crm/customer.model.js')).default;
-  return Customer.findById(id).select('name customerNumber email phone mobile city uidNumber vatNumber').lean().catch(() => null);
+  return Customer.findById(id).select('name ownerName customerNumber email phone mobile city uidNumber vatNumber').lean().catch(() => null);
 }
 
 async function loadPreviousProject(id) {
@@ -541,11 +574,11 @@ async function findCustomer(input, objectId, previousFollowUp) {
   const previousCandidates = previousFollowUp?.candidates?.customers || [];
   const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
   if (selectedPrevious?._id) {
-    const selected = await Customer.findById(selectedPrevious._id).select('name customerNumber email phone mobile city uidNumber vatNumber').lean();
+    const selected = await Customer.findById(selectedPrevious._id).select('name ownerName customerNumber email phone mobile city uidNumber vatNumber').lean();
     if (selected) return { selected, candidates: [] };
   }
   if (objectId) {
-    const found = await Customer.findById(objectId).select('name customerNumber email phone mobile city uidNumber vatNumber').lean().catch(() => null);
+    const found = await Customer.findById(objectId).select('name ownerName customerNumber email phone mobile city uidNumber vatNumber').lean().catch(() => null);
     if (found) return { selected: found, candidates: [] };
   }
   const candidates = await findCustomers(extractSearchTerm(input), 5);
@@ -556,7 +589,7 @@ async function findCustomers(term, limit = 5) {
   const Customer = (await import('../../crm/customer.model.js')).default;
   if (!term || term.length < 2) return [];
   return Customer.find({ $text: { $search: term } })
-    .select('name customerNumber email phone mobile city uidNumber vatNumber')
+    .select('name ownerName customerNumber email phone mobile city uidNumber vatNumber')
     .limit(limit)
     .lean();
 }
@@ -691,6 +724,82 @@ function extractMaterials(input) {
   return materials.slice(0, 10);
 }
 
+function extractCustomerDraft(input) {
+  const text = String(input || '').replace(/\s+/g, ' ').trim();
+  const lower = text.toLowerCase();
+  const type = hasAny(lower, ['company', 'business', 'firma', 'gmbh', ' ag ', 'uid', 'vat', 'mwst']) ? 'business' : 'private';
+  const address = extractCustomerAddress(text);
+
+  return {
+    type,
+    name: type === 'business' ? extractCompanyName(text) : extractCustomerName(text),
+    ownerName: type === 'business' ? extractOwnerName(text) : null,
+    uidNumber: type === 'business' ? extractUidNumber(text) : null,
+    street: address.street,
+    postalCode: address.postalCode,
+    city: address.city,
+    canton: address.canton,
+    country: 'CH',
+    newsletterOptIn: false,
+    newsletterChannel: 'email',
+    notes: '',
+  };
+}
+
+function extractCompanyName(input) {
+  const quoted = input.match(/["\u201c](.+?)["\u201d]/)?.[1];
+  if (quoted) return cleanExtractedCustomerValue(quoted);
+  const match = input.match(/\b(?:company|firma|business|customer|kunde)(?:\s+(?:named|name|called|namens|heisst|ist))?\s+(.+?)(?=\s+(?:owner|owners|owner's|inhaber|besitzer|eigentuemer|eigent\u00fcmer|uid|vat|mwst|address|adresse|at)\b|[,;.]|$)/iu);
+  return cleanExtractedCustomerValue(match?.[1]);
+}
+
+function extractCustomerName(input) {
+  const quoted = input.match(/["\u201c](.+?)["\u201d]/)?.[1];
+  if (quoted) return cleanExtractedCustomerValue(quoted);
+  const match = input.match(/\b(?:customer|kunde|client)(?:\s+(?:named|name|called|namens|heisst|ist))?\s+(.+?)(?=\s+(?:address|adresse|at|phone|telefon|email)\b|[,;.]|$)/iu);
+  return cleanExtractedCustomerValue(match?.[1] || extractAfter(input, ['create customer', 'new customer', 'add customer', 'neuer kunde', 'neuen kunden', 'kunde anlegen']));
+}
+
+function extractOwnerName(input) {
+  const match = input.match(/\b(?:owner(?:'s)?(?:\s+name)?|owners name|inhaber(?:name)?|besitzer|eigentuemer|eigent\u00fcmer)\s*(?:is|ist|:)?\s+(.+?)(?=\s+(?:uid|vat|mwst|address|adresse|at)\b|[,;.]|$)/iu);
+  return cleanExtractedCustomerValue(match?.[1]);
+}
+
+function extractUidNumber(input) {
+  const match = input.match(/\b(?:uid(?:\s+(?:number|nr|nummer))?|vat|mwst)\s*(?:number|nr\.?|nummer|is|ist|:)?\s*([A-Z]{2,3}[-\s.]?\d{3}[\s.-]?\d{3}[\s.-]?\d{3}|[A-Z0-9][A-Z0-9 .-]{4,40})/i);
+  if (!match?.[1]) return null;
+  return match[1].trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+function extractCustomerAddress(input) {
+  const empty = { street: null, postalCode: null, city: null, canton: null };
+  const explicit = input.match(/\b(?:address|adresse|at)\s+(.+)$/i)?.[1];
+  const postalIndex = input.search(/\b[1-9]\d{3}\b/);
+  const source = explicit || (postalIndex >= 0 ? input.slice(Math.max(0, input.lastIndexOf(',', postalIndex) + 1)) : '');
+  const candidate = source
+    .replace(/\s+\b(?:owner|owners|owner's|inhaber|besitzer|eigentuemer|eigent\u00fcmer|uid|vat|mwst|email|phone|telefon)\b[\s\S]*$/iu, '')
+    .trim();
+  if (!candidate || !/\b[1-9]\d{3}\b/.test(candidate)) return empty;
+  const parsed = swissPlzService.parseAddress(candidate);
+  if (!parsed.street || !parsed.postalCode || !parsed.city) return empty;
+  return {
+    street: parsed.houseNumber ? `${parsed.street} ${parsed.houseNumber}` : parsed.street,
+    postalCode: parsed.postalCode,
+    city: parsed.city,
+    canton: parsed.canton,
+  };
+}
+
+function cleanExtractedCustomerValue(value) {
+  if (!value) return null;
+  const cleaned = String(value)
+    .replace(/\bfollow-up answer\s*:/gi, ' ')
+    .replace(/\b(create|new|add|erstelle|erstellen|anlegen|neue|neuen|company|firma|business|customer|kunde|client)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || null;
+}
+
 function extractPersonName(input) {
   const match = input.match(/\b(?:to|for|assign(?:ed)? to|für|an)\s+([A-ZÄÖÜ][\p{L}.'-]+(?:\s+[A-ZÄÖÜ][\p{L}.'-]+)?)/u);
   return match?.[1] || null;
@@ -772,6 +881,17 @@ function compactTask(task) {
     priority: task.priority,
     assigneeId: task.assigneeId,
     dueDate: task.dueDate,
+  };
+}
+
+function compactCustomer(customer) {
+  return {
+    id: customer._id,
+    customerNumber: customer.customerNumber,
+    name: customer.name,
+    type: customer.type,
+    ownerName: customer.ownerName,
+    uidNumber: customer.uidNumber,
   };
 }
 

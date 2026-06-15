@@ -14,6 +14,15 @@ class UnitOfMeasureRepository {
     return UnitOfMeasure.find().sort({ code: 1 }).lean();
   }
 
+  async usageCountsByCode() {
+    const Article = (await import('./article.model.js')).default;
+    const rows = await Article.aggregate([
+      { $match: { isDeleted: false } },
+      { $group: { _id: '$unitOfMeasure', count: { $sum: 1 } } },
+    ]);
+    return new Map(rows.map((row) => [row._id, row.count]));
+  }
+
   async updateByCode(code, data) {
     return UnitOfMeasure.findOneAndUpdate({ code }, data, {
       returnDocument: 'after',
@@ -26,10 +35,12 @@ class UnitOfMeasureRepository {
   }
 
   async isReferenced(code) {
-    // Lazy import to avoid circular dependencies
+    return (await this.referenceCount(code)) > 0;
+  }
+
+  async referenceCount(code) {
     const Article = (await import('./article.model.js')).default;
-    const count = await Article.countDocuments({ unitOfMeasure: code, isDeleted: false });
-    return count > 0;
+    return Article.countDocuments({ unitOfMeasure: code, isDeleted: false });
   }
 }
 

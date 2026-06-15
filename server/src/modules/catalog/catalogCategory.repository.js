@@ -35,14 +35,23 @@ class CatalogCategoryRepository {
     return CatalogCategory.find({ parentId: null }).sort({ sortOrder: 1 }).lean();
   }
 
+  async findSelectOptions({ includeInactive = false } = {}) {
+    const filter = includeInactive ? {} : { status: 'ACTIVE' };
+    return CatalogCategory.find(filter)
+      .sort({ name: 1, code: 1 })
+      .select('_id code name parentId status ancestors')
+      .lean();
+  }
+
   async findSubtree(ancestorId) {
     return CatalogCategory.find({ ancestors: ancestorId }).lean();
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+    const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
     const filter = {
       ...buildFilter(filters, ALLOWED_FILTERS),
-      ...buildCursorQuery(cursor, sortBy, sortOrder),
+      ...buildCursorQuery(cursor, safeSortBy, sortOrder),
     };
 
     if (search) {
@@ -52,7 +61,7 @@ class CatalogCategoryRepository {
       ];
     }
 
-    const sort = buildCursorSort(sortBy, sortOrder);
+    const sort = buildCursorSort(safeSortBy, sortOrder);
 
     const docs = await CatalogCategory.find(filter)
       .sort(sort)
@@ -60,7 +69,7 @@ class CatalogCategoryRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    return buildCursorResponse(docs, limit, safeSortBy);
   }
 
   async updateById(id, data) {
@@ -88,6 +97,16 @@ class CatalogCategoryRepository {
     const Article = (await import('./article.model.js')).default;
     const count = await Article.countDocuments({ categoryId: id, isDeleted: false });
     return count > 0;
+  }
+
+  async countArticlesByCategoryIds(ids) {
+    if (!ids?.length) return new Map();
+    const Article = (await import('./article.model.js')).default;
+    const rows = await Article.aggregate([
+      { $match: { categoryId: { $in: ids }, isDeleted: false } },
+      { $group: { _id: '$categoryId', count: { $sum: 1 } } },
+    ]);
+    return new Map(rows.map((row) => [row._id.toString(), row.count]));
   }
 }
 

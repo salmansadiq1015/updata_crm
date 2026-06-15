@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
+import { catalogSnapshotJoi } from '../../shared/validation/catalogSnapshot.schema.js';
 
 export const createPrepActionSchema = {
   params: Joi.object({ id: objectId.required() }),
@@ -41,6 +42,7 @@ export const createPrepActionSchema = {
           quantity: Joi.number().required().min(0),
           unit: Joi.string().trim().max(20).default('Stk.'),
           catalogItemId: objectId.allow(null),
+          catalogSnapshot: catalogSnapshotJoi,
         }),
       ),
     }).when('actionType', {
@@ -83,6 +85,7 @@ export const updatePrepActionSchema = {
           quantity: Joi.number().required().min(0),
           unit: Joi.string().trim().max(20).default('Stk.'),
           catalogItemId: objectId.allow(null),
+          catalogSnapshot: catalogSnapshotJoi,
         }),
       ),
     }),

@@ -51,7 +51,15 @@ export default class TotalsRenderer {
       pm.moveDown(LINE);
       doc.restore();
       for (const d of data.advanceDeductions) {
-        row(`${d.invoiceNumber} (${d.date})`, `-${currency} ${d.amount.toFixed(2)}`);
+        row(this._deductionLabel(d), this._deductionTotal(d, currency));
+        const detail = this._deductionDetail(d, currency, language);
+        if (detail) {
+          pm.checkSpace(12);
+          doc.save().font(fonts.body).fontSize(7).fillColor(colors.muted);
+          doc.text(detail, labelX, pm.currentY - 2, { width: labelW + valueW, align: 'right' });
+          doc.restore();
+          pm.moveDown(10);
+        }
       }
       if (data.netBalance != null) {
         row(t(language, 'netBalance'), `${currency} ${data.netBalance.toFixed(2)}`);
@@ -59,5 +67,30 @@ export default class TotalsRenderer {
     }
 
     row(t(language, 'grandTotal'), `${currency} ${(data.grandTotalRounded ?? data.grandTotal ?? 0).toFixed(2)}`, true);
+  }
+
+  _deductionLabel(deduction) {
+    return [deduction.invoiceNumber, deduction.date ? `(${deduction.date})` : '']
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  _deductionTotal(deduction, currency) {
+    const total = deduction.totalAmount ?? deduction.amount ?? 0;
+    return `-${currency} ${Number(total).toFixed(2)}`;
+  }
+
+  _deductionDetail(deduction, currency, language) {
+    const parts = [];
+    if (deduction.netAmount != null) {
+      parts.push(`${t(language, 'net')} ${currency} ${Number(deduction.netAmount).toFixed(2)}`);
+    }
+    if (deduction.vatAmount != null) {
+      parts.push(`${t(language, 'vatAmount')} ${currency} ${Number(deduction.vatAmount).toFixed(2)}`);
+    }
+    if (deduction.totalAmount != null) {
+      parts.push(`${t(language, 'grossTotal')} ${currency} ${Number(deduction.totalAmount).toFixed(2)}`);
+    }
+    return parts.join(' | ');
   }
 }

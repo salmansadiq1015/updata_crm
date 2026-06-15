@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
+import { catalogSnapshotJoi } from '../../shared/validation/catalogSnapshot.schema.js';
 
 const catalogSource = Joi.string().valid(
   'IGH',
@@ -12,6 +13,7 @@ const catalogSource = Joi.string().valid(
 const materialBody = {
   articleCode: Joi.string().trim().max(50).allow('', null),
   catalogItemId: Joi.string().trim().max(50).allow('', null),
+  catalogSnapshot: catalogSnapshotJoi,
   catalogSource,
   description: Joi.string().trim().max(300).required(),
   quantity: Joi.number().min(0).required(),

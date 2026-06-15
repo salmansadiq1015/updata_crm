@@ -6,6 +6,21 @@ export const listCategoriesSchema = {
     status: Joi.string().valid('ACTIVE', 'INACTIVE'),
     parentId: objectId.allow(null),
     search: Joi.string().trim().max(100),
+    q: Joi.string().trim().max(100),
+    includeCounts: Joi.boolean().default(true),
+  }),
+};
+
+export const categoryTreeSchema = {
+  query: Joi.object({
+    status: Joi.string().valid('ACTIVE', 'INACTIVE'),
+    includeCounts: Joi.boolean().default(true),
+  }),
+};
+
+export const categorySelectOptionsSchema = {
+  query: Joi.object({
+    includeInactive: Joi.boolean().default(false),
   }),
 };
 

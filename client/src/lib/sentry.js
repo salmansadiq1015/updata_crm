@@ -1,19 +1,24 @@
 /**
  * Client-side Sentry initialization.
  *
- * Dynamically imports @sentry/nextjs so the app works fine when the
- * package is not installed. Guarded by NEXT_PUBLIC_SENTRY_DSN — when
- * the env var is empty or missing, this module is a no-op.
+ * Optional Sentry hook. The package is not installed in this project, so this
+ * module stays a no-op unless a real loader is wired after adding @sentry/nextjs.
+ * Keeping the bare package import out of the bundle prevents build warnings.
  */
 
 let sentryInstance = null;
+
+async function loadSentryClient() {
+  return null;
+}
 
 export async function initSentry() {
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
   if (!dsn || sentryInstance) return;
 
   try {
-    const Sentry = await import('@sentry/nextjs');
+    const Sentry = await loadSentryClient();
+    if (!Sentry) return;
     Sentry.init({
       dsn,
       environment: process.env.NEXT_PUBLIC_APP_ENV || process.env.NODE_ENV || 'development',
@@ -24,7 +29,7 @@ export async function initSentry() {
     });
     sentryInstance = Sentry;
   } catch {
-    // @sentry/nextjs not installed — continue without error tracking
+    // Optional error tracking failed to initialize; continue without it.
   }
 }
 

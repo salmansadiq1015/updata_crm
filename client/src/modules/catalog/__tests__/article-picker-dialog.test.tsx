@@ -12,7 +12,7 @@ vi.mock('@/lib/i18n/language-context', () => ({
 // Mock apiClient — vi.mock is hoisted so the factory must not reference
 // variables declared later. Use vi.fn() directly inside the factory.
 vi.mock('@/lib/api/client', () => ({
-  default: { get: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn() },
 }));
 
 const mockArticles = [
@@ -51,6 +51,7 @@ const makeWrapper = () => {
 
 beforeEach(() => {
   vi.mocked(apiClient.get).mockResolvedValue({ data: mockArticles });
+  vi.mocked(apiClient.post).mockResolvedValue({ data: { success: true } });
 });
 
 afterEach(() => {
@@ -71,6 +72,7 @@ describe('ArticlePickerDialog', () => {
       <ArticlePickerDialog open={true} onClose={() => {}} onSelect={() => {}} />,
       { wrapper: makeWrapper() }
     );
+    await userEvent.type(screen.getByPlaceholderText(/search/i), 'Rohr');
     expect(await screen.findByText('Rohr 28mm', {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
@@ -80,8 +82,9 @@ describe('ArticlePickerDialog', () => {
       <ArticlePickerDialog open={true} onClose={() => {}} onSelect={onSelect} />,
       { wrapper: makeWrapper() }
     );
+    await userEvent.type(screen.getByPlaceholderText(/search/i), 'Rohr');
     fireEvent.click(await screen.findByText('Rohr 28mm', {}, { timeout: 5000 }));
-    expect(onSelect).toHaveBeenCalledWith({
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({
       catalogArticleId: 'art1',
       articleNumber: 'A001',
       name: 'Rohr 28mm',
@@ -90,7 +93,12 @@ describe('ArticlePickerDialog', () => {
       snapshotPrice: 14.5,
       type: 'MATERIAL',
       source: 'INTERNAL',
-    });
+      catalogSnapshot: expect.objectContaining({
+        catalogArticleId: 'art1',
+        snapshotBasePrice: 14.5,
+        catalogSource: 'INTERNAL',
+      }),
+    }));
   });
 
   it('shows free-text button when no articles found', async () => {
@@ -104,7 +112,7 @@ describe('ArticlePickerDialog', () => {
     const freeTextBtn = await screen.findByRole('button', { name: /add as free text/i }, { timeout: 5000 });
     fireEvent.click(freeTextBtn);
     expect(onSelect).toHaveBeenCalledWith(
-      expect.objectContaining({ catalogArticleId: null, name: 'Custom item' })
+      expect.objectContaining({ catalogArticleId: null, name: 'Custom item', catalogSnapshot: null })
     );
   });
 });

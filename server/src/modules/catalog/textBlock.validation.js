@@ -27,6 +27,7 @@ export const listTextBlocksSchema = {
   query: cursorPagination.keys({
     status: Joi.string().valid('ACTIVE', 'INACTIVE'),
     categoryId: objectId,
+    q: Joi.string().trim().max(200),
     search: Joi.string().trim().max(200),
   }),
 };

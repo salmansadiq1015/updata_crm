@@ -45,13 +45,14 @@ export function UomManagementTable() {
               <TableHead>{t('catalog.units.nameIt')}</TableHead>
               <TableHead>{t('catalog.units.baseUnit')}</TableHead>
               <TableHead>{t('catalog.units.conversionFactor')}</TableHead>
+              <TableHead className="text-right">Usage</TableHead>
               <TableHead className="w-20" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {units.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No units defined.</TableCell>
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No units defined.</TableCell>
               </TableRow>
             ) : units.map((unit) => (
               <TableRow key={unit.code}>
@@ -64,6 +65,7 @@ export function UomManagementTable() {
                 <TableCell>{unit.nameIt}</TableCell>
                 <TableCell>{unit.baseUnitCode ?? '—'}</TableCell>
                 <TableCell>{unit.conversionFactor ?? '—'}</TableCell>
+                <TableCell className="text-right tabular-nums">{unit.usageCount ?? 0}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="h-7 w-7" disabled={unit.isSystem} onClick={() => openEdit(unit)}>

@@ -19,11 +19,11 @@ const EVENT_LABELS = {
   'login.success': 'Erfolgreiche Anmeldung',
   'login.failed': 'Fehlgeschlagene Anmeldung',
   'logout': 'Abmeldung',
-  'password.changed': 'Passwort geaendert',
+  'password.changed': 'Passwort geändert',
   'password.reset_requested': 'Passwort-Reset angefordert',
   'user.created': 'Benutzer erstellt',
   'user.deactivated': 'Benutzer deaktiviert',
-  'role.changed': 'Rolle geaendert',
+  'role.changed': 'Rolle geändert',
   'session.revoked': 'Sitzung widerrufen',
   'permission.denied': 'Zugriff verweigert',
 };

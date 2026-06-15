@@ -1,4 +1,5 @@
 import maintenanceIntervalService from './maintenanceInterval.service.js';
+import maintenanceSettingsService from './maintenanceSettings.service.js';
 
 class MaintenanceController {
   async createForInstallation(req, res, next) {
@@ -39,6 +40,20 @@ class MaintenanceController {
     } catch (err) { next(err); }
   }
 
+  async getSettings(req, res, next) {
+    try {
+      const data = await maintenanceSettingsService.getSettings();
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  async updateSettings(req, res, next) {
+    try {
+      const data = await maintenanceSettingsService.updateSettings(req.body, req.user._id);
+      return res.success({ data, message: 'Maintenance settings updated successfully' });
+    } catch (err) { next(err); }
+  }
+
   async listDue(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
@@ -58,7 +73,7 @@ class MaintenanceController {
   async exportCsv(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
-      const { format, ...filters } = query;
+      const { format: _format, ...filters } = query;
       const csv = await maintenanceIntervalService.exportCsv(filters);
       const filename = `maintenance-${filters.status || 'all'}-${new Date().toISOString().split('T')[0]}.csv`;
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');

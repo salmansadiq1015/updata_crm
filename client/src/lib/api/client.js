@@ -2,6 +2,7 @@ import axios from 'axios';
 import { generateId } from '@/lib/utils/ids';
 import { API_URL } from './config';
 import { ENDPOINTS } from './endpoints';
+import { normalizeGermanOrthography } from '@/lib/i18n/german-orthography';
 import {
   isRefreshSessionNetworkError,
   refreshSession,
@@ -119,9 +120,9 @@ export function normalizeApiError(error) {
   if (isCanceled) {
     message = 'Anfrage abgebrochen';
   } else if (isOffline) {
-    message = 'Keine Internetverbindung. Bitte pruefen Sie Ihre Verbindung.';
+    message = 'Keine Internetverbindung. Bitte prüfen Sie Ihre Verbindung.';
   } else if (isTimeout) {
-    message = 'Zeitueberschreitung beim Server. Bitte erneut versuchen.';
+    message = 'Zeitüberschreitung beim Server. Bitte erneut versuchen.';
   } else if (isNetworkError) {
     message = 'Server nicht erreichbar. Bitte erneut versuchen.';
   } else {
@@ -142,17 +143,17 @@ export function normalizeApiError(error) {
     } else if (response?.status === 401) {
       message = 'Nicht autorisiert. Bitte erneut anmelden.';
     } else if (response?.status === 403) {
-      message = 'Keine Berechtigung fuer diese Aktion.';
+      message = 'Keine Berechtigung für diese Aktion.';
     } else if (response?.status === 404) {
       message = 'Die angeforderte Ressource wurde nicht gefunden.';
     } else if (response?.status === 409) {
       message = 'Konflikt: Die Aktion kollidiert mit dem aktuellen Zustand.';
     } else if (response?.status === 422) {
-      message = 'Validierungsfehler. Bitte Eingaben pruefen.';
+      message = 'Validierungsfehler. Bitte Eingaben prüfen.';
     } else if (response?.status === 429) {
       message = 'Zu viele Anfragen. Bitte einen Moment warten.';
     } else if (response?.status >= 500) {
-      message = 'Serverfehler. Bitte spaeter erneut versuchen.';
+      message = 'Serverfehler. Bitte später erneut versuchen.';
     } else {
       message = error?.message || 'Ein unbekannter Fehler ist aufgetreten.';
     }
@@ -163,7 +164,7 @@ export function normalizeApiError(error) {
     code:
       envelopeError?.code ||
       (isTimeout ? 'TIMEOUT' : isOffline ? 'OFFLINE' : isNetworkError ? 'NETWORK_ERROR' : isCanceled ? 'CANCELED' : 'UNKNOWN'),
-    message,
+    message: normalizeGermanOrthography(message),
     details,
     data: envelopeError?.data ?? null,
     requestId: data?.meta?.requestId || response?.headers?.['x-request-id'] || null,

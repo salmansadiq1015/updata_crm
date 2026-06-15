@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
-import apiClient from '@/lib/api/client';
-import { ENDPOINTS } from '@/lib/api/endpoints';
 import { quotationService } from '../services/quotation-service';
 import { orderService } from '../services/order-service';
 import { invoiceService } from '../services/invoice-service';
 import { searchService } from '../services/search-service';
 import { reminderService } from '../services/reminder-service';
+import { referenceService } from '../services/reference-service';
 
 export function useQuotations(filters = {}) {
   return useQuery({
@@ -132,9 +131,36 @@ export function useInvoiceAging() {
 export function useBillingPlan(orderId) {
   return useQuery({
     queryKey: ['qop', 'billing-plan', orderId],
-    queryFn: () => apiClient.get(ENDPOINTS.QOP.ORDER_BILLING_PLAN(orderId)),
+    queryFn: () => orderService.getBillingPlan(orderId),
     enabled: !!orderId,
     select: (r) => r.data,
+  });
+}
+
+export function useQopCustomerSearch(query) {
+  return useQuery({
+    queryKey: ['qop', 'references', 'customers', query],
+    queryFn: () => referenceService.searchCustomers(query),
+    enabled: query.length >= 2,
+    select: (r) => r.data ?? [],
+  });
+}
+
+export function useQopDepartments() {
+  return useQuery({
+    queryKey: ['qop', 'references', 'departments'],
+    queryFn: () => referenceService.listDepartments(),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useQopCustomerProjects(customerId) {
+  return useQuery({
+    queryKey: ['qop', 'references', 'projects', customerId],
+    queryFn: () => referenceService.listCustomerProjects(customerId),
+    enabled: !!customerId,
+    select: (r) => Array.isArray(r.data) ? r.data : [],
   });
 }
 

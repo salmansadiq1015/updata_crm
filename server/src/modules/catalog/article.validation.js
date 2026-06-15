@@ -41,6 +41,7 @@ export const updateArticleSchema = {
 export const listArticlesSchema = {
   query: cursorPagination.keys({
     q: Joi.string().trim().max(200),
+    search: Joi.string().trim().max(200),
     categoryId: objectId,
     type: Joi.string().valid(...ARTICLE_TYPES),
     status: Joi.string().valid('ACTIVE', 'INACTIVE'),
@@ -63,6 +64,6 @@ export const articleVersionParamSchema = {
 
 export const bulkImportSchema = {
   body: Joi.object({
-    format: Joi.string().valid('csv', 'json').required(),
+    format: Joi.string().valid('csv', 'json').optional(),
   }),
 };

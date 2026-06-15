@@ -1,0 +1,135 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Building2, Check, Loader2, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { queryKeys } from '@/lib/query/keys';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { useDebounce } from '@/shared/hooks/use-debounce';
+import { customerService } from '@/modules/crm/services/customer-service';
+import { cn } from '@/lib/utils';
+
+const CUSTOMER_PICKER_LIMIT = 20;
+
+function normalizeCustomers(payload) {
+  const items = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload?.results)
+    ? payload.results
+    : [];
+
+  return items.filter((customer) => customer?._id);
+}
+
+export function CustomerPicker({ selectedCustomer, onSelect, disabled = false, error }) {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 250).trim();
+
+  const { data, isFetching } = useQuery({
+    queryKey: debouncedSearch
+      ? queryKeys.crm.customers.search(debouncedSearch)
+      : queryKeys.crm.customers.list({ limit: CUSTOMER_PICKER_LIMIT, sortBy: 'name', sortOrder: 'asc' }),
+    queryFn: () => (
+      debouncedSearch
+        ? customerService.searchCustomers(debouncedSearch, CUSTOMER_PICKER_LIMIT)
+        : customerService.getCustomers({ limit: CUSTOMER_PICKER_LIMIT, sortBy: 'name', sortOrder: 'asc' })
+    ),
+    enabled: open,
+    staleTime: 120_000,
+  });
+
+  const customers = useMemo(() => normalizeCustomers(data), [data]);
+
+  return (
+    <div className="space-y-1.5">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            className={cn(
+              'h-10 w-full justify-between rounded-lg border-white/10 bg-white/4 px-3 text-left text-[13px] font-normal text-white/90 hover:bg-white/6',
+              error && 'border-red-400/70',
+            )}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <Building2 className="h-4 w-4 shrink-0 text-white/40" />
+              <span className={cn('truncate', !selectedCustomer?.name && 'text-white/35')}>
+                {selectedCustomer?.name || t('crm.contacts.selectCustomer', 'Kunde auswählen')}
+              </span>
+            </span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[--radix-popover-trigger-width] overflow-hidden rounded-xl border-white/10 bg-[#0D1117] p-0 shadow-2xl" align="start">
+          <div className="border-b border-white/8 p-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t('crm.contacts.customerSearch', 'Kunde suchen...')}
+                className="h-9 rounded-lg border-white/10 bg-white/4 pl-8 text-[13px] text-white/90 placeholder:text-white/30"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <div className="max-h-64 overflow-y-auto p-1.5">
+            {customers.map((customer) => {
+              const selected = selectedCustomer?._id === customer._id;
+              return (
+                <button
+                  key={customer._id}
+                  type="button"
+                  onClick={() => {
+                    onSelect(customer);
+                    setOpen(false);
+                    setSearch('');
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-white/80 transition-colors hover:bg-white/6',
+                    selected && 'bg-violet-500/12 text-white',
+                  )}
+                >
+                  <Building2 className="h-3.5 w-3.5 shrink-0 text-white/35" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{customer.name}</span>
+                    {customer.customerNumber && (
+                      <span className="block truncate text-[11px] text-white/35">{customer.customerNumber}</span>
+                    )}
+                  </span>
+                  {selected && <Check className="h-3.5 w-3.5 shrink-0 text-violet-300" />}
+                </button>
+              );
+            })}
+
+            {isFetching && customers.length === 0 && (
+              <div className="flex items-center justify-center gap-2 py-6 text-xs text-white/45">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {t('common.loading', 'Wird geladen...')}
+              </div>
+            )}
+
+            {!isFetching && customers.length === 0 && (
+              <p className="py-6 text-center text-xs text-white/45">
+                {t('crm.contacts.noCustomersFound', 'Keine Kunden gefunden')}
+              </p>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {error && <p className="text-[11px] text-red-400">{error}</p>}
+    </div>
+  );
+}

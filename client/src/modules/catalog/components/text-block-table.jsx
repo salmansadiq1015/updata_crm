@@ -24,13 +24,14 @@ export function TextBlockTable() {
   const [search, setSearch] = useState('');
   const [dialogBlock, setDialogBlock] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogKey, setDialogKey] = useState(0);
   const debouncedSearch = useDebounce(search, 300);
 
   const { data: blocks = [], isLoading } = useTextBlocks({ q: debouncedSearch || undefined });
   const { deleteTextBlock } = useTextBlockMutations();
 
-  const openCreate = () => { setDialogBlock(null); setDialogOpen(true); };
-  const openEdit = (b) => { setDialogBlock(b); setDialogOpen(true); };
+  const openCreate = () => { setDialogBlock(null); setDialogKey((key) => key + 1); setDialogOpen(true); };
+  const openEdit = (b) => { setDialogBlock(b); setDialogKey((key) => key + 1); setDialogOpen(true); };
 
   return (
     <div className="space-y-4">
@@ -113,6 +114,7 @@ export function TextBlockTable() {
       </div>
 
       <TextBlockFormDialog
+        key={dialogKey}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         textBlock={dialogBlock}

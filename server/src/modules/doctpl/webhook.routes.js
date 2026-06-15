@@ -2,6 +2,7 @@ import { Router } from 'express';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
+import emailWebhookSecurityService from './emailWebhookSecurity.service.js';
 
 /**
  * Email webhook routes.
@@ -11,6 +12,14 @@ const router = Router();
 
 router.post('/', async (req, res) => {
   try {
+    if (!emailWebhookSecurityService.verify(req)) {
+      logger.warn('Email webhook rejected due to invalid signature', {
+        module: 'doctpl',
+        action: 'webhook.email',
+      });
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+
     const { emailRecordId, status, messageId, bounceReason } = req.body;
 
     if (!emailRecordId || !status) {

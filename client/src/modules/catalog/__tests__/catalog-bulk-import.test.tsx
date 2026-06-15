@@ -7,7 +7,7 @@ import { CatalogBulkImportDialog } from '../components/catalog-bulk-import-dialo
 vi.mock('@/lib/i18n/language-context', () => {
   const dict: Record<string, string> = {
     'catalog.articles.importTitle': 'Bulk Import',
-    'catalog.articles.importDescription': 'Upload a CSV or Excel file to import articles.',
+    'catalog.articles.importDescription': 'Upload a CSV or JSON file to import articles.',
     'catalog.articles.importDownloadTemplate': 'Download Template',
     'catalog.articles.importErrors': 'Import Errors',
     'catalog.articles.bulkImport': 'Bulk Import',

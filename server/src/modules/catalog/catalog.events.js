@@ -144,7 +144,7 @@ export function registerCatalogEvents() {
       const { articleId } = event.payload;
 
       // Fire-and-forget — do not await for response envelope
-      articleRepository.updateById(articleId, { lastUsedAt: new Date() }).catch((updateErr) => {
+      articleRepository.updateLastUsedAt(articleId).catch((updateErr) => {
         logger.warn('Failed to update article lastUsedAt', {
           module: 'catalog',
           action: 'event.article_used',

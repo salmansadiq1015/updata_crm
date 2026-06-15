@@ -16,7 +16,7 @@ export function BulkActionsBar({ count, onClear, children }) {
       className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-primary/20 bg-card shadow-theme-lg px-5 py-3 backdrop-blur-md"
     >
       <span className="text-sm font-semibold text-primary">
-        {count} ausgewaehlt
+        {count} ausgewählt
       </span>
       <div className="h-4 w-px bg-border" />
       <div className="flex items-center gap-2">

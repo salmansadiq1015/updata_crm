@@ -19,6 +19,12 @@ export const importJobParamSchema = {
   }),
 };
 
+export const previewImportSchema = {
+  body: Joi.object({
+    type: Joi.string().valid('FULL', 'DELTA').default('FULL'),
+  }).default({}),
+};
+
 export const importHistorySchema = {
   query: cursorPagination.keys({
     type: Joi.string().valid('FULL', 'DELTA'),

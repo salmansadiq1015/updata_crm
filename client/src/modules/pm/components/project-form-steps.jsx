@@ -96,7 +96,7 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
           <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" role="combobox" className={cn('w-full justify-between font-normal', !watchedCustomerId && 'text-muted-foreground')}>
-                {selectedCustomer?.name || (watchedCustomerId ? watchedCustomerId : (language === 'de' ? 'Kunde waehlen...' : 'Select customer...'))}
+                {selectedCustomer?.name || (watchedCustomerId ? watchedCustomerId : (language === 'de' ? 'Kunde wählen...' : 'Select customer...'))}
                 <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
@@ -148,7 +148,7 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
             onValueChange={(v) => setValue('siteId', v === 'none' ? '' : v, { shouldValidate: true })}
             disabled={!watchedCustomerId}
           >
-            <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Objekt waehlen...' : 'Select site...'} /></SelectTrigger>
+            <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Objekt wählen...' : 'Select site...'} /></SelectTrigger>
             <SelectContent>
               <SelectItem value="none">{language === 'de' ? 'Kein Objekt' : 'No site'}</SelectItem>
               {sites.map((s) => (
@@ -182,7 +182,7 @@ export function Step3ManagerDates({ form, language, t }) {
     <div className="space-y-4">
       <Field label={t('pm.projectManager', 'Project Manager')} error={errors.projectManagerId} required>
         <Select value={watch('projectManagerId')} onValueChange={(v) => setValue('projectManagerId', v, { shouldValidate: true })}>
-          <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Projektleiter waehlen...' : 'Select PM...'} /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Projektleiter wählen...' : 'Select PM...'} /></SelectTrigger>
           <SelectContent>
             {users.map((u) => (
               <SelectItem key={u._id} value={u._id}>
@@ -249,7 +249,7 @@ export function Step4BudgetNotes({ form, language, t }) {
 
 // ── Step 5: Review ────────────────────────────────────────────
 const REVIEW_SECTIONS = [
-  { key: 'overview', stepIndex: 0, icon: FileText, labelEn: 'Overview', labelDe: 'Uebersicht' },
+  { key: 'overview', stepIndex: 0, icon: FileText, labelEn: 'Overview', labelDe: 'Übersicht' },
   { key: 'customer', stepIndex: 1, icon: Building2, labelEn: 'Customer & Site', labelDe: 'Kunde & Objekt' },
   { key: 'manager', stepIndex: 2, icon: CalendarClock, labelEn: 'Manager & Dates', labelDe: 'Leiter & Termine' },
   { key: 'budget', stepIndex: 3, icon: Wallet, labelEn: 'Budget & Notes', labelDe: 'Budget & Notizen' },

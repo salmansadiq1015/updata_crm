@@ -3,6 +3,7 @@ import unitOfMeasureRoutes from './unitOfMeasure.routes.js';
 import priceRoutes from './price.routes.js';
 import ighRoutes from './igh.routes.js';
 import pickerRoutes from './picker.routes.js';
+import catalogSearchRoutes from './catalogSearch.routes.js';
 
 /**
  * Catalog route aggregator.
@@ -57,5 +58,8 @@ router.use('/igh', ighRoutes);
 
 // Picker
 router.use('/picker', pickerRoutes);
+
+// Search analytics/recent searches
+router.use('/search', catalogSearchRoutes);
 
 export default router;

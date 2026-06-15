@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -59,8 +59,8 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
     defaultValues: BLANK_VALUES,
   });
 
-  const { reset, watch, setValue, getValues, trigger } = form;
-  const watchedCustomerId = watch('customerId');
+  const { reset, setValue, getValues, trigger } = form;
+  const watchedCustomerId = useWatch({ control: form.control, name: 'customerId' });
 
   // ── Customer search state ────────────────────────────────────
   const [customerSearch, setCustomerSearch] = useState('');
@@ -89,7 +89,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
       return res.data;
     },
   });
-  const users = Array.isArray(usersData) ? usersData : [];
+  const users = useMemo(() => (Array.isArray(usersData) ? usersData : []), [usersData]);
 
   // ── Sites for review display ─────────────────────────────────
   const { data: sitesData } = useQuery({
@@ -100,9 +100,10 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
     },
     enabled: !!watchedCustomerId,
   });
-  const sites = Array.isArray(sitesData) ? sitesData : [];
+  const sites = useMemo(() => (Array.isArray(sitesData) ? sitesData : []), [sitesData]);
 
   // ── Reset on open/close ──────────────────────────────────────
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!open) return;
     setCurrentStep(0);
@@ -137,14 +138,15 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
       setCustomerSearch('');
     }
   }, [open, defaultValues, reset]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ── Steps config ─────────────────────────────────────────────
   const steps = useMemo(() => [
-    { label: language === 'de' ? 'Uebersicht' : 'Overview', icon: FileText },
+    { label: language === 'de' ? 'Übersicht' : 'Overview', icon: FileText },
     { label: language === 'de' ? 'Kunde & Objekt' : 'Customer & Site', icon: Building2 },
     { label: language === 'de' ? 'Leiter & Termine' : 'Manager & Dates', icon: CalendarClock },
     { label: language === 'de' ? 'Budget & Notizen' : 'Budget & Notes', icon: Wallet },
-    { label: language === 'de' ? 'Ueberpruefung' : 'Review', icon: ClipboardCheck },
+    { label: language === 'de' ? 'Überprüfung' : 'Review', icon: ClipboardCheck },
   ], [language]);
 
   // ── Navigation ───────────────────────────────────────────────
@@ -219,12 +221,12 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
       case 4: return <Step5Review {...props} onGoToStep={goToStep} resolvers={resolvers} initialValues={initialFormValues} isEdit={isEdit} />;
       default: return null;
     }
-  }, [currentStep, form, language, t, customerState, goToStep, resolvers]);
+  }, [currentStep, form, language, t, customerState, goToStep, resolvers, initialFormValues, isEdit]);
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => {
       if (!isOpen && form.formState.isDirty) {
-        if (window.confirm(language === 'de' ? 'Aenderungen verwerfen?' : 'Discard changes?')) {
+        if (window.confirm(language === 'de' ? 'Änderungen verwerfen?' : 'Discard changes?')) {
           onOpenChange(false);
         }
       } else {
@@ -252,7 +254,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
           isLoading={isLoading}
           labels={{
             next: language === 'de' ? 'Weiter' : 'Next',
-            back: language === 'de' ? 'Zurueck' : 'Back',
+            back: language === 'de' ? 'Zurück' : 'Back',
             cancel: t('common.cancel', 'Cancel'),
             submit: isEdit ? t('common.save', 'Save') : t('common.create', 'Create'),
           }}

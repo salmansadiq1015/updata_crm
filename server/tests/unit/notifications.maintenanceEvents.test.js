@@ -80,4 +80,38 @@ describe('maintenance notification events', () => {
 
     expect(createNotification).not.toHaveBeenCalled();
   });
+
+  test('dispatches critical maintenance escalation notifications with overdue threshold', async () => {
+    registerNotificationsEvents();
+
+    eventBus.publish(EVENT_TYPES.MAINTENANCE_ESCALATED, {
+      assignedTo: ['admin-1'],
+      count: 2,
+      daysOverdue: 14,
+      maintenanceId: 'maintenance-2',
+    }, { source: 'jobs:maintenance-check' });
+
+    await flushEventHandlers();
+
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    expect(createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'maintenance_escalated',
+        category: 'MAINTENANCE',
+        priority: 'CRITICAL',
+        channels: ['IN_APP', 'EMAIL'],
+        recipientIds: ['admin-1'],
+        sourceModule: 'crm',
+        sourceEvent: 'MAINTENANCE_ESCALATED',
+        sourceEntityType: 'MaintenanceInterval',
+        sourceEntityId: 'maintenance-2',
+        payload: {
+          count: 2,
+          daysOverdue: 14,
+        },
+      }),
+      null,
+      { ipAddress: 'internal', userAgent: 'event-handler' },
+    );
+  });
 });

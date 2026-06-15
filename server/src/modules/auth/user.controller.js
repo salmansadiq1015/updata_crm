@@ -2,8 +2,6 @@ import userService from './user.service.js';
 import sessionService from './session.service.js';
 import auditService from './audit.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
-import eventBus from '../../shared/events/EventBus.js';
-import EVENT_TYPES from '../../shared/events/eventTypes.js';
 
 /**
  * User controller — HTTP layer only.
@@ -65,8 +63,16 @@ class UserController {
    */
   async directory(req, res, next) {
     try {
-      const result = await userService.listUsers({ status: 'active', limit: 500, page: 1 });
+      const query = req._validatedQuery || req.query;
+      const result = await userService.listUsers({
+        status: 'active',
+        limit: query.limit || 80,
+        search: query.search || undefined,
+        sortBy: 'firstName',
+        sortOrder: 'asc',
+      });
       const users = (result.data ?? []).map((u) => ({
+        _id: u._id ?? u.id,
         id: u._id ?? u.id,
         firstName: u.firstName,
         lastName: u.lastName,

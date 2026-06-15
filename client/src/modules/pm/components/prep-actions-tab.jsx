@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { queryKeys } from '@/lib/query/keys';
 import { prepActionService } from '@/modules/pm/services/prep-action-service';
@@ -409,12 +409,12 @@ export function PrepActionsTab({ projectId }) {
   const isEdit = !!editAction;
   const schema = isEdit ? updatePrepActionSchema : createPrepActionSchema;
 
-  const { register, handleSubmit, watch, setValue, getValues, reset, control, formState: { errors } } = useForm({
+  const { register, handleSubmit, setValue, getValues, reset, control, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: { actionType: 'OTHER', title: '', isMandatory: false, assignedToId: null, externalReference: '' },
   });
 
-  const watchType = watch('actionType');
+  const watchType = useWatch({ control, name: 'actionType' });
 
   const openCreate = () => {
     setEditAction(null);
@@ -713,7 +713,7 @@ export function PrepActionsTab({ projectId }) {
         open={!!deleteTarget}
         onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
         title={t('pm.actionDeleted', 'Delete Action')}
-        description={language === 'de' ? `"${deleteTarget?.title}" wirklich loeschen?` : `Delete "${deleteTarget?.title}"?`}
+        description={language === 'de' ? `"${deleteTarget?.title}" wirklich löschen?` : `Delete "${deleteTarget?.title}"?`}
         onConfirm={() => remove.mutate(deleteTarget._id)}
         isLoading={remove.isPending}
         variant="destructive"

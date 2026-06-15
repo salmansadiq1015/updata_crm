@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { queryKeys } from '@/lib/query/keys';
 import { scheduleService } from '@/modules/pm/services/schedule-service';
@@ -24,7 +24,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { FormField, FormBody } from '@/components/ui/form-field';
-import { Controller } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,9 +32,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/formatters';
 import { useDebounce } from '@/shared/hooks/use-debounce';
-import { ENDPOINTS } from '@/lib/api/endpoints';
-import apiClient from '@/lib/api/client';
 import { customerService } from '@/modules/crm/services/customer-service';
+import { useUserDirectory } from '@/modules/users/hooks/use-user-directory';
 import {
   Plus, Pencil, Trash2, Loader2, ArrowRight, Milestone,
   Send, MessageSquare, Calendar, Users, Building2,
@@ -52,16 +50,11 @@ function InternalUserPicker({ value, onChange, language }) {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
 
-  const { data: usersData } = useQuery({
-    queryKey: queryKeys.users.list({ status: 'active', limit: 100, q: debouncedSearch }),
-    queryFn: async () => {
-      const res = await apiClient.get(ENDPOINTS.USERS.LIST, {
-        params: { status: 'active', limit: 100, ...(debouncedSearch ? { search: debouncedSearch } : {}) },
-      });
-      return res.data;
-    },
+  const { data: users = [], isFetching } = useUserDirectory({
+    enabled: true,
+    search: debouncedSearch,
+    limit: 80,
   });
-  const users = Array.isArray(usersData) ? usersData : [];
   const selected = users.find((u) => u._id === value) || null;
 
   return (
@@ -113,7 +106,12 @@ function InternalUserPicker({ value, onChange, language }) {
               {u._id === value && <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />}
             </button>
           ))}
-          {users.length === 0 && (
+          {isFetching && users.length === 0 && (
+            <p className="px-3 py-3 text-xs text-muted-foreground text-center">
+              {language === 'de' ? 'Benutzer werden geladen...' : 'Loading users...'}
+            </p>
+          )}
+          {!isFetching && users.length === 0 && (
             <p className="px-3 py-3 text-xs text-muted-foreground text-center">
               {language === 'de' ? 'Keine Nutzer gefunden' : 'No users found'}
             </p>
@@ -140,8 +138,7 @@ function PartnerCompanyPicker({ value, onChange, language }) {
     queryKey: ['customerName', value],
     queryFn: async () => {
       if (!value) return null;
-      const res = await apiClient.get(`/crm/customers/${value}`);
-      return res.data;
+      return customerService.getCustomerById(value);
     },
     enabled: !!value,
     staleTime: 60000,
@@ -282,6 +279,7 @@ function computeConflicts(entries, language) {
 
 function ScheduleTimeline({ entries, language, canWrite, serverConflicts, onReschedule, onEditEntry }) {
   const containerRef = useRef(null);
+  const [timelineNow] = useState(() => Date.now());
   // Local drag state: { id, kind, deltaDays, startX } while dragging; null otherwise.
   const [drag, setDrag] = useState(null);
   const dragRef = useRef(null);
@@ -305,7 +303,7 @@ function ScheduleTimeline({ entries, language, canWrite, serverConflicts, onResc
   const maxTime = Math.max(...allDates.map((d) => d.getTime()));
   const range = maxTime - minTime || DAY_MS;
 
-  const todayPos = ((Date.now() - minTime) / range) * 100;
+  const todayPos = ((timelineNow - minTime) / range) * 100;
   const toPercent = (dateStr) => ((new Date(dateStr).getTime() - minTime) / range) * 100;
 
   // Convert a horizontal pixel delta into a whole-day delta using the live scale:
@@ -477,8 +475,7 @@ function ScheduleTimeline({ entries, language, canWrite, serverConflicts, onResc
 // confirmation links a doctpl GeneratedDocument via documentId.
 async function openGeneratedPdf(documentId) {
   try {
-    const res = await apiClient.get(ENDPOINTS.DOCTPL.DOCUMENT_DOWNLOAD(documentId));
-    const url = res?.data?.downloadUrl || res?.downloadUrl;
+    const url = await scheduleService.getGeneratedDocumentDownloadUrl(documentId);
     if (url) window.open(url, '_blank', 'noopener');
   } catch {
     // download errors surface via the api client interceptor
@@ -630,6 +627,8 @@ export function ScheduleTab({ projectId }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editEntry, setEditEntry] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const entryBodyRef = useRef(null);
+  const [entryScrollRequest, setEntryScrollRequest] = useState(0);
 
   // Confirmation dialogs
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
@@ -810,8 +809,13 @@ export function ScheduleTab({ projectId }) {
   const onEntryInvalid = (errors) => {
     const first = Object.values(errors)[0];
     showError(first?.message || (language === 'de' ? 'Bitte Pflichtfelder ausfüllen.' : 'Please fill in the required fields.'));
-    entryBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    setEntryScrollRequest((value) => value + 1);
   };
+
+  useEffect(() => {
+    if (!entryScrollRequest) return;
+    entryBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [entryScrollRequest]);
 
   // ── Send confirmation form ─────────────────────────────────
 
@@ -853,6 +857,7 @@ export function ScheduleTab({ projectId }) {
     resolver: zodResolver(updateConfirmationSchema),
     defaultValues: { confirmationStatus: 'CONFIRMED', responseNotes: '' },
   });
+  const responseStatus = useWatch({ control: responseForm.control, name: 'confirmationStatus' });
 
   const openUpdateConfirmation = (entry, conf) => {
     setConfirmResponseEntry(entry);
@@ -1294,7 +1299,7 @@ export function ScheduleTab({ projectId }) {
               )}
 
               <FormField label={t('pm.status', 'Status')}>
-                <Select value={responseForm.watch('confirmationStatus')} onValueChange={(v) => responseForm.setValue('confirmationStatus', v)}>
+                <Select value={responseStatus} onValueChange={(v) => responseForm.setValue('confirmationStatus', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="CONFIRMED">{language === 'de' ? 'Bestätigt' : 'Confirmed'}</SelectItem>

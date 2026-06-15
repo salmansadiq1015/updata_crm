@@ -55,6 +55,20 @@ class ContactController {
     } catch (err) { next(err); }
   }
 
+  async overview(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const data = await contactService.listOverview(query);
+      return res.success({
+        data: {
+          contacts: data.data,
+          summary: data.summary,
+        },
+        pagination: data.pagination,
+      });
+    } catch (err) { next(err); }
+  }
+
   async search(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;

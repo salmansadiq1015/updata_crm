@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
+import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
 
 export const QUOTATION_STATUSES = [
   'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED',
@@ -17,6 +18,10 @@ const lineItemSchema = new mongoose.Schema(
     },
     catalogItemId: {
       type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    catalogSnapshot: {
+      type: catalogSnapshotSchema,
       default: null,
     },
     description: {

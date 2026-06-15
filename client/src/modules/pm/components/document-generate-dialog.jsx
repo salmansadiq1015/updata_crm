@@ -22,7 +22,7 @@ import {
 export const PM_TEMPLATE_TYPES = [
   {
     value: 'project_appointment_confirmation',
-    label: 'Terminbestaetigung',
+    label: 'Terminbestätigung',
     labelEn: 'Appointment Confirmation',
     icon: CalendarCheck,
   },
@@ -48,7 +48,7 @@ export function templateLabel(value, language) {
 
 // Overridable fields shown in the edit step (AC-4). Mirrors the server overridesSchema.
 const OVERRIDE_FIELDS = [
-  { key: 'recipientName', type: 'input', label: 'Empfaenger', labelEn: 'Recipient name' },
+  { key: 'recipientName', type: 'input', label: 'Empfänger', labelEn: 'Recipient name' },
   { key: 'documentDate', type: 'input', label: 'Dokumentdatum', labelEn: 'Document date' },
   { key: 'projectManager', type: 'input', label: 'Projektleiter', labelEn: 'Project manager' },
   { key: 'intro', type: 'textarea', label: 'Einleitung', labelEn: 'Intro' },
@@ -80,6 +80,7 @@ export function DocumentGenerateDialog({ open, onOpenChange, projectId, draft = 
   });
 
   // Initialise from a resumed draft, or reset on open.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!open) return;
     if (draft) {
@@ -92,6 +93,7 @@ export function DocumentGenerateDialog({ open, onOpenChange, projectId, draft = 
       setStep('pick');
     }
   }, [open, draft]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const setField = (key, value) => setOverrides((prev) => ({ ...prev, [key]: value }));
 
@@ -122,7 +124,7 @@ export function DocumentGenerateDialog({ open, onOpenChange, projectId, draft = 
   const busy = generate.isPending || saveDraft.isPending;
 
   const heading = useMemo(() => {
-    if (step === 'pick') return language === 'de' ? 'Vorlage waehlen' : 'Choose a template';
+    if (step === 'pick') return language === 'de' ? 'Vorlage wählen' : 'Choose a template';
     return templateLabel(templateType, language);
   }, [step, templateType, language]);
 
@@ -171,7 +173,7 @@ export function DocumentGenerateDialog({ open, onOpenChange, projectId, draft = 
           <FormBody>
             <p className="text-xs text-muted-foreground -mt-1">
               {language === 'de'
-                ? 'Felder leer lassen, um die Projektdaten zu verwenden. Eingetragene Werte ueberschreiben die Vorlage.'
+                ? 'Felder leer lassen, um die Projektdaten zu verwenden. Eingetragene Werte überschreiben die Vorlage.'
                 : 'Leave fields empty to use project data. Entered values override the template.'}
             </p>
             {OVERRIDE_FIELDS.map((f) => (
@@ -227,7 +229,7 @@ export function DocumentGenerateDialog({ open, onOpenChange, projectId, draft = 
               onClick={() => setStep('pick')}
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              {language === 'de' ? 'Zurueck' : 'Back'}
+              {language === 'de' ? 'Zurück' : 'Back'}
             </Button>
           )}
           <Button type="button" variant="outline" onClick={close} disabled={busy}>

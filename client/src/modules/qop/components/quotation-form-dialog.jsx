@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -14,9 +13,8 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { useLanguage } from '@/lib/i18n/language-context';
-import apiClient from '@/lib/api/client';
-import { ENDPOINTS } from '@/lib/api/endpoints';
 import { useQuotationMutations } from '../hooks/use-qop-mutations';
+import { useQopCustomerProjects, useQopCustomerSearch, useQopDepartments } from '../hooks/use-qop-queries';
 import { LineItemsEditor } from './line-items-editor';
 import { CURRENCIES, DEFAULT_VALIDITY_DAYS } from '../constants/qop-constants';
 import { SourceDocumentsPanel } from '@/modules/doctpl/components/SourceDocumentsPanel';
@@ -55,28 +53,13 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   const isPending = createQuotation.isPending || updateQuotation.isPending;
 
   // Customer search
-  const { data: customerResults = [] } = useQuery({
-    queryKey: ['crm', 'customers', 'search', customerQuery],
-    queryFn: () => apiClient.get(ENDPOINTS.CRM.CUSTOMERS, { params: { q: customerQuery, limit: 10 } }),
-    enabled: customerQuery.length >= 2,
-    select: (r) => r.data ?? [],
-  });
+  const { data: customerResults = [] } = useQopCustomerSearch(customerQuery);
 
   // Department list
-  const { data: departments = [] } = useQuery({
-    queryKey: ['departments'],
-    queryFn: () => apiClient.get('/admin/departments'),
-    select: (r) => r.data ?? [],
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: departments = [] } = useQopDepartments();
 
   // Projects for selected customer
-  const { data: projects = [] } = useQuery({
-    queryKey: ['pm', 'projects', 'for-customer', form.customerId],
-    queryFn: () => apiClient.get(ENDPOINTS.PM.PROJECTS, { params: { customerId: form.customerId, limit: 50, status: 'ACTIVE' } }),
-    enabled: !!form.customerId,
-    select: (r) => Array.isArray(r.data) ? r.data : [],
-  });
+  const { data: projects = [] } = useQopCustomerProjects(form.customerId);
 
   // Populate form on edit
   useEffect(() => {
@@ -116,7 +99,8 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
       unitPrice: Number(li.unitPrice),
       discountPercent: Number(li.discountPercent) || 0,
       vatRate: Number(li.vatRate),
-      catalogItemId: li.catalogItemId || undefined,
+      catalogItemId: li.catalogItemId || li.catalogSnapshot?.catalogArticleId || undefined,
+      catalogSnapshot: li.catalogSnapshot || undefined,
     }));
     const payload = {
       customerId: form.customerId,

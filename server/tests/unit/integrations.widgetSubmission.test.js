@@ -20,6 +20,10 @@ let Permission;
 let Role;
 let User;
 
+jest.unstable_mockModule('../../src/shared/mail/mail.js', () => ({
+  default: jest.fn(async () => ({ messageId: 'widget-confirmation-test' })),
+}));
+
 const validPayload = {
   widgetId: 'mb-main',
   contact: {

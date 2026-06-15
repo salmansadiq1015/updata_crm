@@ -1,11 +1,14 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
+import { catalogSnapshotJoi } from '../../shared/validation/catalogSnapshot.schema.js';
 
 const ORDER_STATUSES = ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 
 const lineItemSchema = Joi.object({
   position: Joi.number().integer().min(1).required(),
   articleNumber: Joi.string().trim().max(50).allow('', null),
+  catalogItemId: objectId.allow(null),
+  catalogSnapshot: catalogSnapshotJoi,
   description: Joi.string().required().trim().max(1000),
   unit: Joi.string().trim().max(20).default('pcs'),
   quantity: Joi.number().min(0).required(),

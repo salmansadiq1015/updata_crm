@@ -13,10 +13,17 @@ async function loadInvoiceService({
     findById: jest.fn(async () => repositoryInvoice || { _id: 'invoice-new' }),
     updateById: jest.fn(async (id, data) => ({ _id: id, ...data })),
   };
-  const invoicePdfService = {
-    generateAndStore: jest.fn(async () => ({
-      invoice: { _id: 'invoice-1', pdfDocumentId: 'doc-1' },
-      document: { _id: 'doc-1' },
+  const qopDocumentPayloadService = {
+    generateDocument: jest.fn(async () => ({
+      documentId: 'generated-doc-1',
+      generatedDocumentId: 'generated-doc-1',
+      document: {
+        _id: 'generated-doc-1',
+        metadata: { documentNumber: 'RE-2026-00001' },
+      },
+      fileId: 'file-1',
+      fileName: 'Rechnung_RE-2026-00001.pdf',
+      downloadUrl: 'https://example.test/download',
     })),
   };
   const counterService = {
@@ -51,8 +58,8 @@ async function loadInvoiceService({
   jest.unstable_mockModule('../../src/modules/qop/invoice.repository.js', () => ({
     default: invoiceRepository,
   }));
-  jest.unstable_mockModule('../../src/modules/qop/invoicePdf.service.js', () => ({
-    default: invoicePdfService,
+  jest.unstable_mockModule('../../src/modules/qop/documentPayload.service.js', () => ({
+    default: qopDocumentPayloadService,
   }));
   jest.unstable_mockModule('../../src/modules/qop/counter.service.js', () => ({
     default: counterService,
@@ -95,7 +102,7 @@ async function loadInvoiceService({
   return {
     service,
     invoiceRepository,
-    invoicePdfService,
+    qopDocumentPayloadService,
     counterService,
     queueManager,
     documentStatusLogService,
@@ -129,14 +136,30 @@ describe('QOP invoice lifecycle hardening', () => {
       pdfDocumentId: null,
       save: jest.fn(async () => undefined),
     };
-    const { service, invoicePdfService, queueManager, documentStatusLogService } = await loadInvoiceService({
+    const { service, qopDocumentPayloadService, queueManager, documentStatusLogService, Invoice } = await loadInvoiceService({
       modelInvoice: invoiceDoc,
       repositoryInvoice: { _id: 'invoice-1', status: 'SENT' },
     });
 
     await service.send('invoice-1', 'user-1');
 
-    expect(invoicePdfService.generateAndStore).toHaveBeenCalledWith('invoice-1', 'user-1', {});
+    expect(qopDocumentPayloadService.generateDocument).toHaveBeenCalledWith({
+      documentType: 'invoice',
+      documentOrId: 'invoice-1',
+      generatedBy: 'user-1',
+      meta: {},
+    });
+    expect(Invoice.updateOne).toHaveBeenCalledWith(
+      { _id: 'invoice-1' },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          pdfDocumentId: 'generated-doc-1',
+          pdfGeneratedAt: expect.any(Date),
+          qrBillReference: 'RE-2026-00001',
+        }),
+        $inc: { version: 1 },
+      }),
+    );
     expect(invoiceDoc.status).toBe('SENT');
     expect(invoiceDoc.sentAt).toBeInstanceOf(Date);
     expect(invoiceDoc.save).toHaveBeenCalledTimes(1);

@@ -13,7 +13,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useArticleMutations } from '../hooks/use-catalog-mutations';
 import { useLanguage } from '@/lib/i18n/language-context';
-import apiClient from '@/lib/api/client';
+import { articleService } from '../services/article-service';
+
+function inferFormat(file) {
+  const name = file?.name?.toLowerCase() || '';
+  return name.endsWith('.json') ? 'json' : 'csv';
+}
 
 export function CatalogBulkImportDialog({ open, onClose, importErrors: externalErrors }) {
   const { t } = useLanguage();
@@ -24,15 +29,19 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
   const handleFile = async (file) => {
     setResult(null);
     try {
-      const res = await bulkImport.mutateAsync(file);
+      const res = await bulkImport.mutateAsync({ file, format: inferFormat(file) });
       setResult({ success: true, data: res.data ?? res });
     } catch (err) {
       setResult({ success: false, errors: err.response?.data?.errors ?? [] });
     }
   };
 
-  const importErrors = externalErrors ?? (result?.success === false ? result.errors : []);
   const importSummary = result?.success ? result.data : null;
+  const importErrors = externalErrors ?? (
+    result?.success === false
+      ? result.errors
+      : (importSummary?.rowErrors ?? [])
+  );
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { setResult(null); onClose(); } }}>
@@ -45,7 +54,7 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" asChild>
-              <a href={`${apiClient.defaults.baseURL}/catalog/articles/import/template`} download>
+              <a href={articleService.importTemplateUrl()} download>
                 <FileSpreadsheet className="w-4 h-4 mr-2" />
                 {t('catalog.articles.importDownloadTemplate')}
               </a>
@@ -62,7 +71,7 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".csv,.json,text/csv,application/json"
               className="hidden"
               onChange={(e) => {
                 if (bulkImport.isPending) return;
@@ -101,13 +110,16 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
                     </tr>
                   </thead>
                   <tbody>
-                    {importErrors.map((err, i) => (
-                      <tr key={i} className="border-t">
-                        <td className="px-3 py-1.5 text-muted-foreground">{err.row}</td>
-                        <td className="px-3 py-1.5 font-mono">{err.field}</td>
-                        <td className="px-3 py-1.5 text-destructive">{err.message}</td>
-                      </tr>
-                    ))}
+                    {importErrors.flatMap((err, i) => {
+                      const messages = err.errors || [err.message];
+                      return messages.map((message, messageIndex) => (
+                        <tr key={`${i}-${messageIndex}`} className="border-t">
+                          <td className="px-3 py-1.5 text-muted-foreground">{err.row}</td>
+                          <td className="px-3 py-1.5 font-mono">{err.field || err.articleNumber || '-'}</td>
+                          <td className="px-3 py-1.5 text-destructive">{message}</td>
+                        </tr>
+                      ));
+                    })}
                   </tbody>
                 </table>
               </div>

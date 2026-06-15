@@ -78,7 +78,14 @@ export function createApp() {
   // app.use(morgan('combined'));
 
   // Body parsing — 10MB for JSON, 50MB handled at multer level for files
-  app.use(bodyParser.json({ limit: "10mb" }));
+  app.use(bodyParser.json({
+    limit: "10mb",
+    verify: (req, _res, buf) => {
+      if (req.originalUrl?.startsWith('/api/v1/webhooks/email')) {
+        req.rawBody = Buffer.from(buf);
+      }
+    },
+  }));
   app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
   app.use(cookieParser());
 

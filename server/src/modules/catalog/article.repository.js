@@ -5,6 +5,7 @@ import {
   buildCursorResponse,
 } from '../../shared/utils/pagination.js';
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
+import { buildSearchTokens } from './catalogNormalization.js';
 
 const ALLOWED_FILTERS = {
   categoryId: 'objectId',
@@ -36,17 +37,20 @@ class ArticleRepository {
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+    const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
     const filter = {
       ...buildFilter(filters, ALLOWED_FILTERS),
-      ...buildCursorQuery(cursor, sortBy, sortOrder),
+      ...buildCursorQuery(cursor, safeSortBy, sortOrder),
     };
 
     if (search) {
+      const searchTokens = buildSearchTokens(search);
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
         { articleNumber: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
         { supplierReference: { $regex: search, $options: 'i' } },
+        ...(searchTokens.length ? [{ searchTokens: { $in: searchTokens } }] : []),
       ];
     }
 
@@ -57,7 +61,7 @@ class ArticleRepository {
       if (filters.priceMax !== undefined) filter.basePrice.$lte = filters.priceMax;
     }
 
-    const sort = buildCursorSort(sortBy, sortOrder);
+    const sort = buildCursorSort(safeSortBy, sortOrder);
 
     const docs = await Article.find(filter)
       .sort(sort)
@@ -66,7 +70,7 @@ class ArticleRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    return buildCursorResponse(docs, limit, safeSortBy);
   }
 
   async textSearch(searchTerm, limit = 25) {
@@ -81,9 +85,10 @@ class ArticleRepository {
       .lean();
   }
 
-  async updateById(id, data) {
-    return Article.findByIdAndUpdate(
-      id,
+  async updateById(id, data, { expectedVersion } = {}) {
+    const filter = expectedVersion === undefined ? { _id: id } : { _id: id, version: expectedVersion };
+    return Article.findOneAndUpdate(
+      filter,
       { ...data, $inc: { version: 1 } },
       { returnDocument: 'after', runValidators: true },
     )

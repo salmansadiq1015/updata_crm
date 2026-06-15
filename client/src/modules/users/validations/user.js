@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const createUserSchema = z.object({
   firstName: z.string().min(1, 'Vorname ist erforderlich').max(100),
   lastName: z.string().min(1, 'Nachname ist erforderlich').max(100),
-  email: z.string().email('Bitte gueltige E-Mail-Adresse eingeben'),
+  email: z.string().email('Bitte gültige E-Mail-Adresse eingeben'),
   phone: z.string().max(30).optional().or(z.literal('')),
   department: z.string().max(100).optional().or(z.literal('')),
   position: z.string().max(100).optional().or(z.literal('')),
@@ -17,5 +17,5 @@ export const createUserSchema = z.object({
 
 export const updateUserSchema = createUserSchema.partial().refine(
   (data) => Object.keys(data).length > 0,
-  { message: 'Mindestens ein Feld muss geaendert werden' }
+  { message: 'Mindestens ein Feld muss geändert werden' }
 );

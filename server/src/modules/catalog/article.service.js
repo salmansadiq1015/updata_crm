@@ -7,23 +7,29 @@ import auditService from '../auth/audit.service.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import {
+  normalizeArticlePayload,
+  normalizeSearchTerm,
+} from './catalogNormalization.js';
+import catalogSearchService from './catalogSearch.service.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 class ArticleService {
   async create(data, createdBy, meta = {}) {
+    const payload = normalizeArticlePayload(data);
     // Validate categoryId exists
     const catalogCategoryRepository = (await import('./catalogCategory.repository.js')).default;
-    const category = await catalogCategoryRepository.findById(data.categoryId);
-    if (!category) throw new NotFoundError('CatalogCategory', data.categoryId);
+    const category = await catalogCategoryRepository.findById(payload.categoryId);
+    if (!category) throw new NotFoundError('CatalogCategory', payload.categoryId);
 
     // Validate unitOfMeasure exists
     const unitOfMeasureRepository = (await import('./unitOfMeasure.repository.js')).default;
-    const unit = await unitOfMeasureRepository.findByCode(data.unitOfMeasure);
-    if (!unit) throw new NotFoundError('UnitOfMeasure', data.unitOfMeasure);
+    const unit = await unitOfMeasureRepository.findByCode(payload.unitOfMeasure);
+    if (!unit) throw new NotFoundError('UnitOfMeasure', payload.unitOfMeasure);
 
-    const article = await articleRepository.create({ ...data, createdBy });
+    const article = await articleRepository.create({ ...payload, createdBy });
     await this._invalidateListCache();
 
     eventBus.publish(EVENT_TYPES.CATALOG_ARTICLE_CREATED, {
@@ -60,8 +66,12 @@ class ArticleService {
     return article;
   }
 
-  async list(queryParams) {
-    const { cursor, limit, sortBy, sortOrder, search, ...filters } = queryParams;
+  async list(queryParams, meta = {}) {
+    const { cursor, limit, sortBy, sortOrder, ...rawFilters } = queryParams;
+    const search = normalizeSearchTerm(queryParams);
+    const filters = { ...rawFilters };
+    delete filters.q;
+    delete filters.search;
     const filterKey = Object.entries(filters)
       .filter(([, v]) => v !== undefined)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -69,11 +79,22 @@ class ArticleService {
       .join('&');
     const cacheKey = `catalog:articles:list:${cursor || ''}:${limit}:${sortBy}:${sortOrder}:${search || ''}:${filterKey}`;
 
-    return cacheManager.getOrSet(
+    const result = await cacheManager.getOrSet(
       cacheKey,
       () => articleRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters, search }),
       LIST_TTL,
     );
+    if (search) {
+      catalogSearchService.recordSearch({
+        userId: meta.userId,
+        queryParams,
+        resultCount: result.data?.length ?? 0,
+        surface: meta.surface || 'articles',
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      }).catch(() => {});
+    }
+    return result;
   }
 
   async getFacets(filter = {}) {
@@ -93,8 +114,30 @@ class ArticleService {
       throw new ConflictError('Article number is immutable and cannot be changed');
     }
 
+    if (Number(data.version) !== Number(existing.version)) {
+      throw new ConflictError('Article has been modified by another user', {
+        currentVersion: existing.version,
+        submittedVersion: data.version,
+      });
+    }
+
     // Remove articleNumber from data if present (immutable)
-    const { articleNumber, ...updateData } = data;
+    const rawUpdateData = { ...data };
+    delete rawUpdateData.articleNumber;
+    delete rawUpdateData.version;
+    const updateData = normalizeArticlePayload(rawUpdateData);
+
+    if (updateData.categoryId) {
+      const catalogCategoryRepository = (await import('./catalogCategory.repository.js')).default;
+      const category = await catalogCategoryRepository.findById(updateData.categoryId);
+      if (!category) throw new NotFoundError('CatalogCategory', updateData.categoryId);
+    }
+
+    if (updateData.unitOfMeasure) {
+      const unitOfMeasureRepository = (await import('./unitOfMeasure.repository.js')).default;
+      const unit = await unitOfMeasureRepository.findByCode(updateData.unitOfMeasure);
+      if (!unit) throw new NotFoundError('UnitOfMeasure', updateData.unitOfMeasure);
+    }
 
     // Create version snapshot before update
     await articleVersionRepository.create({
@@ -105,7 +148,17 @@ class ArticleService {
       createdBy: updatedBy,
     });
 
-    const updated = await articleRepository.updateById(id, { ...updateData, updatedBy });
+    const updated = await articleRepository.updateById(
+      id,
+      { ...updateData, updatedBy },
+      { expectedVersion: existing.version },
+    );
+    if (!updated) {
+      throw new ConflictError('Article has been modified by another user', {
+        currentVersion: existing.version,
+        submittedVersion: data.version,
+      });
+    }
     await this._invalidateArticleCache(id);
     await this._invalidateListCache();
 
@@ -164,21 +217,62 @@ class ArticleService {
     });
   }
 
-  async bulkImport(fileBuffer, format, userId, meta = {}) {
+  async bulkImport(file, format, userId, meta = {}) {
     const { default: queueManager } = await import('../../shared/queue/QueueManager.js');
     const crypto = await import('crypto');
     const jobId = crypto.randomUUID();
+    if (!file?.buffer) {
+      throw new ConflictError('Import file is required');
+    }
+    const resolvedFormat = format || this._inferImportFormat(file);
 
     await queueManager.addJob('article-import', `import-${jobId}`, {
-      fileBuffer: fileBuffer.toString('base64'),
-      format,
-      importedBy: userId,
+      fileBuffer: file.buffer.toString('base64'),
+      format: resolvedFormat,
+      createdBy: userId,
       meta: { ipAddress: meta.ipAddress, userAgent: meta.userAgent },
     });
 
-    logger.info('Article bulk import queued', { module: 'catalog', action: 'bulkImport', jobId });
+    logger.info('Article bulk import queued', {
+      module: 'catalog',
+      action: 'bulkImport',
+      jobId,
+      format: resolvedFormat,
+    });
 
-    return { jobId, status: 'QUEUED' };
+    return { jobId, status: 'QUEUED', format: resolvedFormat };
+  }
+
+  importTemplate() {
+    const header = [
+      'articleNumber',
+      'name',
+      'description',
+      'categoryId',
+      'type',
+      'unitOfMeasure',
+      'basePrice',
+      'currency',
+      'supplierReference',
+      'ighArticleNumber',
+      'source',
+      'status',
+    ];
+    const sample = [
+      'MB-HK-0042',
+      'Brennwertkessel BW-200',
+      'Condensing boiler, 200kW',
+      'REPLACE_WITH_CATEGORY_ID',
+      'MATERIAL',
+      'STK',
+      '12500.00',
+      'CHF',
+      'SUP-BW200',
+      '',
+      'INTERNAL',
+      'ACTIVE',
+    ];
+    return `${header.join(',')}\n${sample.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')}\n`;
   }
 
   async getVersions(articleId, params = {}) {
@@ -205,6 +299,14 @@ class ArticleService {
 
   async _invalidateListCache() {
     await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:articles:list:*`);
+  }
+
+  _inferImportFormat(file) {
+    const name = String(file?.originalname || '').toLowerCase();
+    const mimetype = String(file?.mimetype || '').toLowerCase();
+    if (name.endsWith('.json') || mimetype.includes('json')) return 'json';
+    if (name.endsWith('.csv') || mimetype.includes('csv') || mimetype.includes('text/plain')) return 'csv';
+    throw new ConflictError('Unsupported import format. Upload CSV or JSON.');
   }
 }
 

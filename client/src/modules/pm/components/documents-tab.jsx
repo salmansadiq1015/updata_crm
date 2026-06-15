@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller } from 'react-hook-form';
 import { queryKeys } from '@/lib/query/keys';
@@ -70,6 +70,7 @@ function DocumentCard({
                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                 : 'bg-primary/8 text-primary',
         )}>
+          {/* eslint-disable-next-line react-hooks/static-components */}
           <FileIcon className="h-5 w-5" />
         </div>
 
@@ -252,6 +253,7 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
               ? 'bg-gradient-to-br from-emerald-500/5 to-emerald-500/10'
               : 'bg-gradient-to-br from-muted/30 to-muted/60',
       )}>
+        {/* eslint-disable-next-line react-hooks/static-components */}
         <FileIcon className={cn(
           'h-10 w-10',
           doc.mimeType?.startsWith('image/')
@@ -569,6 +571,7 @@ export function DocumentsTab({ projectId }) {
     resolver: zodResolver(updateDocumentSchema),
     defaultValues: { category: 'OTHER', description: '' },
   });
+  const metaCategory = useWatch({ control: metaForm.control, name: 'category' });
 
   const openEditDoc = (doc) => {
     setEditDoc(doc);
@@ -688,7 +691,7 @@ export function DocumentsTab({ projectId }) {
               size="icon"
               className="h-7 w-7 rounded-md"
               onClick={() => { setDateFrom(''); setDateTo(''); }}
-              title={language === 'de' ? 'Datumsfilter zuruecksetzen' : 'Clear date filter'}
+              title={language === 'de' ? 'Datumsfilter zurücksetzen' : 'Clear date filter'}
             >
               <X className="h-3.5 w-3.5" />
             </Button>
@@ -804,7 +807,7 @@ export function DocumentsTab({ projectId }) {
           <form onSubmit={metaForm.handleSubmit(onMetaSubmit)} className="flex flex-1 flex-col overflow-hidden">
             <FormBody>
               <FormField label={language === 'de' ? 'Kategorie' : 'Category'}>
-                <Select value={metaForm.watch('category')} onValueChange={(v) => metaForm.setValue('category', v)}>
+                <Select value={metaCategory} onValueChange={(v) => metaForm.setValue('category', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(DOCUMENT_CATEGORY_CONFIG).map(([key, cfg]) => (
@@ -866,7 +869,7 @@ export function DocumentsTab({ projectId }) {
           </DialogHeader>
 
           <FormBody>
-            <FormField label={language === 'de' ? 'Empfaenger E-Mail' : 'Recipient email'}>
+            <FormField label={language === 'de' ? 'Empfänger E-Mail' : 'Recipient email'}>
               <Input
                 type="email"
                 value={emailTo}
@@ -901,7 +904,7 @@ export function DocumentsTab({ projectId }) {
         open={!!deleteTarget}
         onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
         title={t('pm.documentDeleted', 'Delete Document')}
-        description={language === 'de' ? `"${deleteTarget?.originalName || deleteTarget?.fileName}" wirklich loeschen?` : `Delete "${deleteTarget?.originalName || deleteTarget?.fileName}"?`}
+        description={language === 'de' ? `"${deleteTarget?.originalName || deleteTarget?.fileName}" wirklich löschen?` : `Delete "${deleteTarget?.originalName || deleteTarget?.fileName}"?`}
         onConfirm={() => remove.mutate(deleteTarget._id)}
         isLoading={remove.isPending}
         variant="destructive"

@@ -18,6 +18,7 @@ import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
 import { orderService } from '../services/order-service';
 import { InvoiceFormDialog } from './invoice-form-dialog';
+import { CatalogLinePriceDrift } from './catalog-line-price-drift';
 
 // Valid order transitions
 const ORDER_TRANSITIONS = {
@@ -99,8 +100,13 @@ function LineItemsTab({ order, de }) {
           <div key={i} className="grid grid-cols-[2rem_1fr_4rem_5rem_4rem_4rem_6rem] border-b last:border-0 hover:bg-muted/20">
             <div className="px-3 py-2.5 text-xs text-muted-foreground">{li.position ?? i + 1}</div>
             <div className="px-3 py-2.5">
-              {li.articleNumber && <span className="text-xs text-muted-foreground mr-1.5">{li.articleNumber}</span>}
-              {li.description}
+              {(li.articleNumber || li.catalogSnapshot?.articleNumber) && (
+                <span className="text-xs text-muted-foreground mr-1.5">
+                  {li.articleNumber || li.catalogSnapshot?.articleNumber}
+                </span>
+              )}
+              <span>{li.description}</span>
+              <span className="ml-1.5 align-middle"><CatalogLinePriceDrift item={li} /></span>
             </div>
             <div className="px-3 py-2.5 text-right">{li.quantity}</div>
             <div className="px-3 py-2.5">{li.unit}</div>

@@ -22,7 +22,12 @@ class ArticleController {
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
-      const result = await articleService.list(query);
+      const result = await articleService.list(query, {
+        userId: req.user?._id,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        surface: 'articles',
+      });
       return res.success({ data: result.data, pagination: result.pagination });
     } catch (err) { next(err); }
   }
@@ -53,8 +58,17 @@ class ArticleController {
   async bulkImport(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      const result = await articleService.bulkImport(req.file.buffer, req.body.format, req.user._id, meta);
+      const result = await articleService.bulkImport(req.file, req.body.format, req.user._id, meta);
       return res.success({ data: result, message: 'Import job queued', statusCode: 202 });
+    } catch (err) { next(err); }
+  }
+
+  async importTemplate(req, res, next) {
+    try {
+      const csv = articleService.importTemplate();
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="catalog-article-import-template.csv"');
+      return res.status(200).send(csv);
     } catch (err) { next(err); }
   }
 

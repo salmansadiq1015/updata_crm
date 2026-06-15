@@ -94,7 +94,7 @@ export default function InstallationsPage() {
               entityType="site"
               entityId={siteId}
               createNote={createNote}
-              placeholder={lang === 'de' ? 'Standortnotiz fuer das Team' : 'Site note for the team'}
+              placeholder={lang === 'de' ? 'Standortnotiz für das Team' : 'Site note for the team'}
             />
             {items.map((inst) => (
               <InstallationCard
@@ -347,7 +347,7 @@ function InlineNoteComposer({ lang, entityType, entityId, createNote, placeholde
         className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-border text-xs font-medium text-foreground"
       >
         <Plus className="h-3.5 w-3.5" />
-        {lang === 'de' ? 'Notiz hinzufuegen' : 'Add note'}
+        {lang === 'de' ? 'Notiz hinzufügen' : 'Add note'}
       </button>
     );
   }

@@ -1,15 +1,10 @@
+import { parse } from 'csv-parse/sync';
 import { BaseWorker } from '../shared/queue/BaseWorker.js';
 import cacheManager from '../shared/cache/CacheManager.js';
 import config from '../config/index.js';
 import logger from '../shared/logger/index.js';
+import { normalizeArticlePayload } from '../modules/catalog/catalogNormalization.js';
 
-/**
- * Article import job.
- *
- * Processes a CSV or JSON file upload to bulk-create/update articles.
- * Accepts a base64-encoded file buffer, parses it, validates rows,
- * and upserts articles by articleNumber.
- */
 export class ArticleImportWorker extends BaseWorker {
   constructor() {
     super('article-import');
@@ -18,82 +13,89 @@ export class ArticleImportWorker extends BaseWorker {
   async process(job) {
     const { fileBuffer, format, createdBy } = job.data;
 
-    // Lazy import to avoid circular dependencies
     const Article = (await import('../modules/catalog/article.model.js')).default;
+    const CatalogCategory = (await import('../modules/catalog/catalogCategory.model.js')).default;
+    const UnitOfMeasure = (await import('../modules/catalog/unitOfMeasure.model.js')).default;
 
-    const counts = { created: 0, updated: 0, skipped: 0, errors: 0 };
+    const counts = { created: 0, updated: 0, skipped: 0, errors: 0, rowErrors: [] };
 
     try {
-      // Decode base64 buffer
-      const buffer = Buffer.from(fileBuffer, 'base64');
-      const content = buffer.toString('utf-8');
+      const content = Buffer.from(fileBuffer, 'base64').toString('utf-8');
+      const rows = this._parseRows(content, format);
 
-      let rows = [];
+      const [categories, units] = await Promise.all([
+        CatalogCategory.find({ status: 'ACTIVE' }).select('_id').lean(),
+        UnitOfMeasure.find().select('code').lean(),
+      ]);
+      const categoryIds = new Set(categories.map((category) => category._id.toString()));
+      const unitCodes = new Set(units.map((unit) => unit.code));
 
-      if (format === 'json') {
-        rows = JSON.parse(content);
-      } else {
-        // CSV parsing — split by newline, first row is header
-        const lines = content.split('\n').filter((l) => l.trim());
-        if (lines.length < 2) {
-          logger.warn('Article import: empty file', { module: 'jobs', action: 'article-import' });
-          return counts;
-        }
-
-        const headers = lines[0].split(',').map((h) => h.trim());
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',').map((v) => v.trim());
-          const row = {};
-          headers.forEach((header, idx) => {
-            row[header] = values[idx] || '';
-          });
-          rows.push(row);
-        }
-      }
-
-      // Validate and prepare bulk operations
       const bulkOps = [];
-      for (const row of rows) {
-        if (!row.articleNumber || !row.name) {
-          counts.skipped++;
-          continue;
+      rows.forEach((row, index) => {
+        const payload = normalizeArticlePayload({
+          articleNumber: row.articleNumber,
+          name: row.name,
+          description: row.description || '',
+          categoryId: row.categoryId,
+          basePrice: Number.parseFloat(row.basePrice ?? 0) || 0,
+          unitOfMeasure: row.unitOfMeasure || 'STK',
+          type: row.type || 'MATERIAL',
+          currency: row.currency || 'CHF',
+          supplierReference: row.supplierReference || null,
+          ighArticleNumber: row.ighArticleNumber || null,
+          source: row.source || 'INTERNAL',
+          status: row.status || 'ACTIVE',
+        });
+
+        const rowErrors = this._validateRow(payload, categoryIds, unitCodes);
+        if (rowErrors.length) {
+          counts.skipped += 1;
+          counts.errors += 1;
+          counts.rowErrors.push({
+            row: format === 'json' ? index + 1 : index + 2,
+            articleNumber: payload.articleNumber || null,
+            errors: rowErrors,
+          });
+          return;
         }
 
-        try {
-          bulkOps.push({
-            updateOne: {
-              filter: { articleNumber: row.articleNumber },
-              update: {
-                $set: {
-                  name: row.name,
-                  description: row.description || '',
-                  basePrice: parseFloat(row.basePrice) || 0,
-                  unitOfMeasure: row.unitOfMeasure || 'STK',
-                  type: row.type || 'MATERIAL',
-                  source: row.source || 'INTERNAL',
-                  updatedBy: createdBy,
-                },
-                $setOnInsert: {
-                  articleNumber: row.articleNumber,
-                  createdBy,
-                  isDeleted: false,
-                },
+        bulkOps.push({
+          updateOne: {
+            filter: { articleNumber: payload.articleNumber },
+            update: {
+              $set: {
+                name: payload.name,
+                description: payload.description,
+                categoryId: payload.categoryId,
+                basePrice: payload.basePrice,
+                unitOfMeasure: payload.unitOfMeasure,
+                type: payload.type,
+                currency: payload.currency,
+                supplierReference: payload.supplierReference,
+                ighArticleNumber: payload.ighArticleNumber,
+                source: payload.source,
+                status: payload.status,
+                searchTokens: payload.searchTokens,
+                updatedBy: createdBy,
               },
-              upsert: true,
+              $setOnInsert: {
+                articleNumber: payload.articleNumber,
+                createdBy,
+                isDeleted: false,
+              },
+              $inc: { version: 1 },
             },
-          });
-        } catch (err) {
-          counts.errors++;
-        }
-      }
+            upsert: true,
+          },
+        });
+      });
 
       if (bulkOps.length) {
-        const result = await Article.bulkWrite(bulkOps);
+        const result = await Article.bulkWrite(bulkOps, { ordered: false });
         counts.created = result.upsertedCount || 0;
         counts.updated = result.modifiedCount || 0;
       }
 
-      // Invalidate caches
       await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:articles:list:*`);
       await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:picker:*`);
 
@@ -101,6 +103,7 @@ export class ArticleImportWorker extends BaseWorker {
         module: 'jobs',
         action: 'article-import',
         ...counts,
+        rowErrorCount: counts.rowErrors.length,
         totalRows: rows.length,
       });
 
@@ -114,6 +117,36 @@ export class ArticleImportWorker extends BaseWorker {
 
       throw err;
     }
+  }
+
+  _parseRows(content, format) {
+    if (format === 'json') {
+      const parsed = JSON.parse(content);
+      return Array.isArray(parsed) ? parsed : parsed.rows || parsed.articles || [];
+    }
+
+    return parse(content, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+      bom: true,
+    });
+  }
+
+  _validateRow(payload, categoryIds, unitCodes) {
+    const errors = [];
+    if (!payload.articleNumber) errors.push('articleNumber is required');
+    if (!payload.name) errors.push('name is required');
+    if (!payload.categoryId || !categoryIds.has(String(payload.categoryId))) {
+      errors.push('categoryId must reference an active category');
+    }
+    if (!unitCodes.has(payload.unitOfMeasure)) {
+      errors.push(`unitOfMeasure '${payload.unitOfMeasure}' does not exist`);
+    }
+    if (!['MATERIAL', 'SERVICE'].includes(payload.type)) errors.push('type must be MATERIAL or SERVICE');
+    if (!['INTERNAL', 'IGH'].includes(payload.source)) errors.push('source must be INTERNAL or IGH');
+    if (!['ACTIVE', 'INACTIVE'].includes(payload.status)) errors.push('status must be ACTIVE or INACTIVE');
+    return errors;
   }
 }
 

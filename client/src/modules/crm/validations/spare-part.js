@@ -25,7 +25,7 @@ export const createSparePartSchema = z.object({
 export const updateSparePartSchema = createSparePartSchema.partial();
 
 export const linkSparePartSchema = z.object({
-  sparePartId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Ungueltige Ersatzteil-ID'),
+  sparePartId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Ungültige Ersatzteil-ID'),
   quantity: z.number().int().min(1).default(1),
   lastReplacedDate: z.string().nullable().optional().or(z.literal('')),
   notes: z.string().max(1000).optional().or(z.literal('')),

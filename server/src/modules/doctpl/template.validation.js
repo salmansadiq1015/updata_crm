@@ -24,6 +24,7 @@ export const updateTemplateSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     changeDescription: Joi.string().max(1000).required(),
+    expectedVersion: Joi.number().integer().min(1),
     name: Joi.string().trim().max(255),
     description: Joi.string().max(1000).allow('', null),
     isActive: Joi.boolean(),
@@ -110,6 +111,16 @@ export const versionParamSchema = {
     id: objectId.required(),
     version: Joi.number().integer().min(1).required(),
   }),
+};
+
+export const revertTemplateSchema = {
+  params: Joi.object({
+    id: objectId.required(),
+    version: Joi.number().integer().min(1).required(),
+  }),
+  body: Joi.object({
+    expectedVersion: Joi.number().integer().min(1),
+  }).default({}),
 };
 
 export const compareVersionsSchema = {

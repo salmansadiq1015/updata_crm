@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod/v4';
 import {
@@ -47,7 +47,7 @@ const schema = z.object({
 
 export function PriceUpdateDialog({ open, onClose, selectedArticles = [] }) {
   const { t } = useLanguage();
-  const { updatePrices, schedulePrices } = usePriceMutations();
+  const { previewPrices, updatePrices, schedulePrices } = usePriceMutations();
   const [preview, setPreview] = useState(null);
 
   const form = useForm({
@@ -55,31 +55,38 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles = [] }) {
     defaultValues: { mode: 'fixed', value: '', effectiveDate: '' },
   });
 
-  const mode = form.watch('mode');
+  const mode = useWatch({ control: form.control, name: 'mode' });
 
-  const computePreview = (vals) => {
-    return selectedArticles.map((a) => {
+  const buildPayload = (vals) => {
+    const updates = selectedArticles.map((a) => {
       const oldPrice = Number(a.basePrice) || 0;
-      const newPrice = vals.mode === 'percentage'
+      const newPrice = vals.mode === 'percentage' || vals.mode === 'schedule'
         ? Math.round(oldPrice * (1 + Number(vals.value) / 100) * 100) / 100
         : Number(vals.value);
-      return { ...a, oldPrice, newPrice, delta: newPrice - oldPrice };
+      return { articleId: a._id || a.id, newPrice };
     });
+    return {
+      type: 'bulk',
+      updates,
+      description: vals.mode === 'percentage' || vals.mode === 'schedule'
+        ? `Selected articles ${vals.value}% adjustment`
+        : 'Selected articles fixed price update',
+    };
   };
 
-  const onPreview = form.handleSubmit((vals) => {
-    setPreview(computePreview(vals));
+  const onPreview = form.handleSubmit(async (vals) => {
+    const payload = buildPayload(vals);
+    const response = await previewPrices.mutateAsync(payload);
+    setPreview(response?.data?.rows ?? response?.rows ?? []);
   });
 
   const onConfirm = form.handleSubmit(async (vals) => {
-    const articleIds = selectedArticles.map((a) => a._id);
+    const payload = buildPayload(vals);
     try {
       if (vals.mode === 'schedule') {
-        await schedulePrices.mutateAsync({ articleIds, percentage: Number(vals.value), scheduledDate: vals.effectiveDate });
-      } else if (vals.mode === 'percentage') {
-        await updatePrices.mutateAsync({ articleIds, percentage: Number(vals.value) });
+        await schedulePrices.mutateAsync({ ...payload, scheduledDate: vals.effectiveDate });
       } else {
-        await updatePrices.mutateAsync({ articleIds, newPrice: Number(vals.value) });
+        await updatePrices.mutateAsync(payload);
       }
       onClose();
     } catch {
@@ -87,7 +94,7 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles = [] }) {
     }
   });
 
-  const isPending = updatePrices.isPending || schedulePrices.isPending;
+  const isPending = previewPrices.isPending || updatePrices.isPending || schedulePrices.isPending;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) { setPreview(null); form.reset(); onClose(); } }}>
@@ -179,7 +186,7 @@ export function PriceUpdateDialog({ open, onClose, selectedArticles = [] }) {
                 </thead>
                 <tbody>
                   {preview.map((row) => (
-                    <tr key={row._id} className="border-t">
+                    <tr key={row.articleId || row._id} className="border-t">
                       <td className="px-3 py-1.5 font-mono">{row.articleNumber}</td>
                       <td className="px-3 py-1.5 text-right text-muted-foreground">{row.oldPrice.toFixed(2)}</td>
                       <td className="px-3 py-1.5 text-right font-medium">{row.newPrice.toFixed(2)}</td>

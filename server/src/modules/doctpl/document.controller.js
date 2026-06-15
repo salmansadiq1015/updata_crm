@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import generatedDocumentRepository from './generatedDocument.repository.js';
+import documentGenerationBatchRepository from './documentGenerationBatch.repository.js';
+import documentAccessPolicyService from './documentAccessPolicy.service.js';
 import auditService from '../auth/audit.service.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 
@@ -21,10 +23,18 @@ class DocumentController {
     try {
       const { default: queueManager } = await import('../../shared/queue/QueueManager.js');
       const batchId = crypto.randomUUID();
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      await documentGenerationBatchRepository.create({
+        batchId,
+        items: req.body.items,
+        createdBy: req.user._id,
+        meta,
+      });
       await queueManager.addJob('document-generation', `batch-${batchId}`, {
+        batchId,
         items: req.body.items,
         generatedBy: req.user._id,
-        meta: { ipAddress: req.ip, userAgent: req.get('user-agent') },
+        meta,
       });
       return res.success({
         data: {
@@ -37,11 +47,23 @@ class DocumentController {
     } catch (err) { next(err); }
   }
 
+  async getBatchStatus(req, res, next) {
+    try {
+      const batch = await documentGenerationBatchRepository.findByBatchId(req.params.batchId);
+      if (!batch) throw new NotFoundError('DocumentGenerationBatch', req.params.batchId);
+      return res.success({ data: batch });
+    } catch (err) { next(err); }
+  }
+
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
       const result = await generatedDocumentRepository.findWithCursor(query);
-      return res.success({ data: result.data, pagination: result.pagination });
+      const visibleDocs = [];
+      for (const doc of result.data) {
+        if (await documentAccessPolicyService.canRead(doc, req.user)) visibleDocs.push(doc);
+      }
+      return res.success({ data: visibleDocs, pagination: result.pagination });
     } catch (err) { next(err); }
   }
 
@@ -49,7 +71,11 @@ class DocumentController {
     try {
       const { sourceModule, sourceRecordId } = req.params;
       const docs = await generatedDocumentRepository.findBySource(sourceModule, sourceRecordId);
-      return res.success({ data: docs });
+      const visibleDocs = [];
+      for (const doc of docs) {
+        if (await documentAccessPolicyService.canRead(doc, req.user)) visibleDocs.push(doc);
+      }
+      return res.success({ data: visibleDocs });
     } catch (err) { next(err); }
   }
 
@@ -57,6 +83,7 @@ class DocumentController {
     try {
       const doc = await generatedDocumentRepository.findById(req.params.id);
       if (!doc) throw new NotFoundError('GeneratedDocument', req.params.id);
+      await documentAccessPolicyService.assertCanRead(doc, req.user);
       return res.success({ data: doc });
     } catch (err) { next(err); }
   }
@@ -65,6 +92,7 @@ class DocumentController {
     try {
       const doc = await generatedDocumentRepository.findById(req.params.id);
       if (!doc) throw new NotFoundError('GeneratedDocument', req.params.id);
+      await documentAccessPolicyService.assertCanRead(doc, req.user);
 
       const { default: fileService } = await import('../files/file.service.js');
       const downloadUrl = await fileService.getDownloadUrl(doc.fileId);
@@ -76,6 +104,7 @@ class DocumentController {
     try {
       const doc = await generatedDocumentRepository.findById(req.params.id);
       if (!doc) throw new NotFoundError('GeneratedDocument', req.params.id);
+      await documentAccessPolicyService.assertCanDelete(doc, req.user);
 
       const { default: fileService } = await import('../files/file.service.js');
       await fileService.delete(doc.fileId);

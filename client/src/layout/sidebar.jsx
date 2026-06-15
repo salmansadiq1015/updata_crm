@@ -39,6 +39,7 @@ const navSectionDefs = [
     titleKey: 'sidebar.mainMenu',
     items: [
       { type: 'leaf', labelKey: 'sidebar.dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { type: 'leaf', labelKey: 'sidebar.employmentManagement', href: '/settings/users', icon: Users, permission: 'users:read' },
     ],
   },
   {
@@ -94,7 +95,7 @@ const navSectionDefs = [
           { type: 'leaf', labelKey: 'catalog.igh.title', href: '/catalog/igh', icon: RefreshCw, permission: PERMISSIONS.CATALOG_ADMIN },
         ],
       },
-      { type: 'leaf', labelKey: 'sidebar.documents', href: '/documents', icon: Files, permission: 'documents:read' },
+      { type: 'leaf', labelKey: 'sidebar.documents', href: '/documents', icon: Files, permission: PERMISSIONS.DOCUMENTS_READ },
       { type: 'leaf', labelKey: 'sidebar.tasks', href: '/tasks', icon: CheckSquare, permission: 'tasks:read' },
       { type: 'leaf', labelKey: 'sidebar.notifications', href: '/notifications', icon: Bell, permission: 'notifications:feed' },
       { type: 'leaf', labelKey: 'sidebar.ai', href: '/ai', icon: Sparkles },

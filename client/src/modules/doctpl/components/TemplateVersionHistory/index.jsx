@@ -13,7 +13,7 @@ function formatValue(value) {
   return JSON.stringify(value).slice(0, 120);
 }
 
-export function TemplateVersionHistory({ templateId }) {
+export function TemplateVersionHistory({ templateId, expectedVersion }) {
   const { t, locale } = useLanguage();
   const { data, isLoading } = useTemplateVersions(templateId);
   const revert = useRevertTemplate();
@@ -90,7 +90,7 @@ export function TemplateVersionHistory({ templateId }) {
                     className="h-7 w-7"
                     title={t('doctpl.version.revertTo', null, { value: version.version })}
                     disabled={isCurrent || revert.isPending}
-                    onClick={() => revert.mutate({ id: templateId, version: version.version })}
+                    onClick={() => revert.mutate({ id: templateId, version: version.version, expectedVersion })}
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                   </Button>

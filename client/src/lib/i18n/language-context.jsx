@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { translations } from './translations';
+import { normalizeGermanOrthography } from './german-orthography';
 
 const LanguageContext = createContext(null);
 
@@ -95,7 +96,7 @@ export function LanguageProvider({ children }) {
       if (vars && typeof out === 'string') {
         out = out.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : `{${k}}`));
       }
-      return out;
+      return locale === 'de' ? normalizeGermanOrthography(out) : out;
     },
     [locale],
   );

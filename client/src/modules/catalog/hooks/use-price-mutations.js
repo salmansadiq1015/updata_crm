@@ -16,6 +16,10 @@ export function usePriceMutations() {
     onSuccess: invalidateAll,
   });
 
+  const previewPrices = useMutation({
+    mutationFn: priceService.preview,
+  });
+
   const schedulePrices = useMutation({
     mutationFn: priceService.schedule,
     onSuccess: invalidateAll,
@@ -26,5 +30,5 @@ export function usePriceMutations() {
     onSuccess: invalidateAll,
   });
 
-  return { updatePrices, schedulePrices, rollbackBatch };
+  return { previewPrices, updatePrices, schedulePrices, rollbackBatch };
 }

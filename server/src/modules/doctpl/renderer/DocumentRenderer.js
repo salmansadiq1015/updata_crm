@@ -26,6 +26,7 @@ export default class DocumentRenderer {
 
   async renderWithMetadata(template, ciConfig, data, language = 'de') {
     const margins = template.layout?.margins || { top:25, bottom:20, left:20, right:15 };
+    const templateType = data.templateType || template.templateType || 'quotation';
 
     const doc = new PDFDocument({
       size: 'A4',
@@ -39,7 +40,7 @@ export default class DocumentRenderer {
       autoFirstPage: true,
     });
 
-    doc.info.Title = data.documentNumber || data.templateType || 'Document';
+    doc.info.Title = data.documentNumber || templateType || 'Document';
     doc.info.Author = ciConfig?.companyName || 'MB Boiler & Heizung AG';
     doc.info.Creator = 'MB Boiler ERP';
     doc.info.CreationDate = new Date();
@@ -76,10 +77,15 @@ export default class DocumentRenderer {
       const renderer = rendererMap[section.type];
       if (!renderer) continue;
 
+      if (section.type === 'qr_bill' && this._requiresQrBill(templateType)) {
+        this._assertQrBillData(data.qrBill);
+      }
+
+      const sectionConfig = { ...(section.config || {}), templateType };
       if (renderer.draw.constructor.name === 'AsyncFunction') {
-        await renderer.draw(doc, pm, ciConfig, data, language, section.config || {});
+        await renderer.draw(doc, pm, ciConfig, data, language, sectionConfig);
       } else {
-        renderer.draw(doc, pm, ciConfig, data, language, section.config || {});
+        renderer.draw(doc, pm, ciConfig, data, language, sectionConfig);
       }
     }
 
@@ -97,5 +103,19 @@ export default class DocumentRenderer {
         reject(err);
       }
     });
+  }
+
+  _requiresQrBill(templateType) {
+    return ['invoice_standard', 'invoice_advance', 'invoice_final'].includes(templateType);
+  }
+
+  _assertQrBillData(qrBill) {
+    const missing = [];
+    if (!`${qrBill?.iban || ''}`.trim()) missing.push('iban');
+    if (qrBill?.amount == null || Number(qrBill.amount) <= 0) missing.push('amount');
+    if (!`${qrBill?.reference || ''}`.trim()) missing.push('reference');
+    if (missing.length) {
+      throw new Error(`QR-bill data is required for invoice documents: ${missing.join(', ')}`);
+    }
   }
 }

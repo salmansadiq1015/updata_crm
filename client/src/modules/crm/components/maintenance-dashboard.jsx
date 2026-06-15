@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { maintenanceService } from '@/modules/crm/services/maintenance-service';
 import { queryKeys } from '@/lib/query/keys';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -17,19 +17,33 @@ import { cn } from '@/lib/utils';
 import {
   AlertTriangle, Clock, CheckCircle2, Calendar,
   ArrowRight, Wrench, Building2, Download,
+  Save, Settings2, ShieldAlert,
 } from 'lucide-react';
 import {
   MAINTENANCE_TYPE_META, MAINTENANCE_STATUS_META,
   INSTALLATION_TYPE_META,
 } from '@/modules/crm/constants/crm-constants';
 
+const DEFAULT_ESCALATION_DAYS = 30;
+const MIN_ESCALATION_DAYS = 1;
+const MAX_ESCALATION_DAYS = 365;
+const DAY_MS = 1000 * 60 * 60 * 24;
+const EMPTY_MAINTENANCE_ITEMS = [];
+
 export function MaintenanceDashboard() {
   const { t } = useLanguage();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState('overdue');
+  const [escalationDraftOverride, setEscalationDraftOverride] = useState(null);
 
   const { data: dashboard, isLoading: loadingDash } = useQuery({
     queryKey: queryKeys.crm.maintenance.dashboard(),
     queryFn: () => maintenanceService.getDashboard(),
+  });
+
+  const { data: settings, isLoading: loadingSettings } = useQuery({
+    queryKey: queryKeys.crm.maintenance.settings(),
+    queryFn: () => maintenanceService.getSettings(),
   });
 
   const { data: overdueRes, isLoading: loadingOverdue } = useQuery({
@@ -42,10 +56,25 @@ export function MaintenanceDashboard() {
     queryFn: () => maintenanceService.listDue({ limit: 50 }),
   });
 
-  const overdueItems = overdueRes?.data ?? [];
-  const dueItems = dueRes?.data ?? [];
+  const overdueItems = useMemo(
+    () => overdueRes?.data ?? EMPTY_MAINTENANCE_ITEMS,
+    [overdueRes?.data],
+  );
+  const dueItems = useMemo(
+    () => dueRes?.data ?? EMPTY_MAINTENANCE_ITEMS,
+    [dueRes?.data],
+  );
 
   const stats = dashboard || { overdue: 0, due: 0, scheduled: 0, ok: 0, total: 0 };
+  const escalationDays = Number.isInteger(settings?.escalationDays)
+    ? settings.escalationDays
+    : DEFAULT_ESCALATION_DAYS;
+  const escalationDraft = escalationDraftOverride
+    ?? (Number.isInteger(settings?.escalationDays) ? String(settings.escalationDays) : '');
+  const overdueSummary = useMemo(
+    () => summarizeOverdueItems(overdueItems, escalationDays),
+    [overdueItems, escalationDays],
+  );
 
   const exportCsv = useMutation({
     mutationFn: (status) => maintenanceService.exportCsv({ status }),
@@ -54,6 +83,25 @@ export function MaintenanceDashboard() {
     },
     onError: (err) => showError(err.message),
   });
+
+  const updateSettings = useMutation({
+    mutationFn: (payload) => maintenanceService.updateSettings(payload),
+    onSuccess: (updatedSettings) => {
+      queryClient.setQueryData(queryKeys.crm.maintenance.settings(), updatedSettings);
+      setEscalationDraftOverride(null);
+      showSuccess(t('crm.maintenance.escalationSaved', 'Escalation threshold saved'));
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const saveEscalationSettings = () => {
+    const days = Number(escalationDraft);
+    if (!Number.isInteger(days) || days < MIN_ESCALATION_DAYS || days > MAX_ESCALATION_DAYS) {
+      showError(t('crm.maintenance.escalationInvalid', 'Enter a value between 1 and 365 days.'));
+      return;
+    }
+    updateSettings.mutate({ escalationDays: days });
+  };
 
   return (
     <div className="space-y-6">
@@ -72,17 +120,28 @@ export function MaintenanceDashboard() {
             </p>
           </div>
         </div>
-        <PermissionGate permission="crm:read">
-          <Button
-            variant="outline"
-            onClick={() => exportCsv.mutate(tab === 'due' ? 'due' : tab === 'overdue' ? 'overdue' : 'all')}
-            disabled={exportCsv.isPending}
-            className="gap-2 h-9 border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white/80"
-          >
-            <Download className="h-4 w-4" />
-            {exportCsv.isPending ? t('common.exporting', 'Exporting...') : t('crm.exportCsv', 'Export CSV')}
-          </Button>
-        </PermissionGate>
+        <div className="flex items-center justify-end gap-2 flex-wrap">
+          <EscalationSettingsControl
+            draft={escalationDraft}
+            escalationDays={escalationDays}
+            loading={loadingSettings}
+            saving={updateSettings.isPending}
+            onDraftChange={setEscalationDraftOverride}
+            onSave={saveEscalationSettings}
+            t={t}
+          />
+          <PermissionGate permission="crm:read">
+            <Button
+              variant="outline"
+              onClick={() => exportCsv.mutate(tab === 'due' ? 'due' : tab === 'overdue' ? 'overdue' : 'all')}
+              disabled={exportCsv.isPending}
+              className="gap-2 h-9 border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white/80"
+            >
+              <Download className="h-4 w-4" />
+              {exportCsv.isPending ? t('common.exporting', 'Exporting...') : t('crm.exportCsv', 'Export CSV')}
+            </Button>
+          </PermissionGate>
+        </div>
       </div>
 
       {/* Stats */}
@@ -121,6 +180,16 @@ export function MaintenanceDashboard() {
         />
       </div>
 
+      {(stats.overdue ?? 0) > 0 && (
+        <OverduePriorityBanner
+          count={stats.overdue ?? overdueItems.length}
+          oldestDays={overdueSummary.oldestDays}
+          threshold={escalationDays}
+          onView={() => setTab('overdue')}
+          t={t}
+        />
+      )}
+
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <TabsList>
@@ -143,12 +212,103 @@ export function MaintenanceDashboard() {
         </TabsList>
 
         <TabsContent value="overdue">
-          <MaintenanceList items={overdueItems} loading={loadingOverdue} emptyMessage={t('crm.maintenance.noOverdue', 'No overdue maintenance.')} allGoodMessage={t('crm.maintenance.allGood', 'Everything is up to date.')} t={t} />
+          <MaintenanceList items={overdueItems} loading={loadingOverdue} emptyMessage={t('crm.maintenance.noOverdue', 'No overdue maintenance.')} allGoodMessage={t('crm.maintenance.allGood', 'Everything is up to date.')} escalationDays={escalationDays} t={t} />
         </TabsContent>
         <TabsContent value="due">
-          <MaintenanceList items={dueItems} loading={loadingDue} emptyMessage={t('crm.maintenance.noDue', 'No upcoming maintenance.')} allGoodMessage={t('crm.maintenance.allGood', 'Everything is up to date.')} t={t} />
+          <MaintenanceList items={dueItems} loading={loadingDue} emptyMessage={t('crm.maintenance.noDue', 'No upcoming maintenance.')} allGoodMessage={t('crm.maintenance.allGood', 'Everything is up to date.')} escalationDays={escalationDays} t={t} />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function EscalationSettingsControl({
+  draft,
+  escalationDays,
+  loading,
+  saving,
+  onDraftChange,
+  onSave,
+  t,
+}) {
+  const draftValue = Number(draft);
+  const invalid = draft === ''
+    || !Number.isInteger(draftValue)
+    || draftValue < MIN_ESCALATION_DAYS
+    || draftValue > MAX_ESCALATION_DAYS;
+  const unchanged = !invalid && draftValue === escalationDays;
+
+  return (
+    <PermissionGate permission="crm:admin">
+      <div className="flex min-h-9 items-center gap-2 rounded-xl border border-white/10 bg-white/4 px-2.5 py-1.5 text-white/65">
+        <Settings2 className="h-4 w-4 shrink-0 text-red-300" />
+        <label htmlFor="maintenance-escalation-days" className="text-[12px] font-medium whitespace-nowrap">
+          {t('crm.maintenance.escalationThreshold', 'Escalate after')}
+        </label>
+        <input
+          id="maintenance-escalation-days"
+          type="number"
+          min={MIN_ESCALATION_DAYS}
+          max={MAX_ESCALATION_DAYS}
+          value={draft}
+          placeholder={String(escalationDays)}
+          disabled={loading || saving}
+          onChange={(event) => onDraftChange(event.target.value)}
+          className="h-7 w-16 rounded-lg border border-white/10 bg-[#0D1117] px-2 text-center text-[13px] font-semibold text-white outline-none transition focus:border-red-400/60 focus:ring-2 focus:ring-red-400/15 disabled:opacity-50"
+          aria-label={t('crm.maintenance.escalationThreshold', 'Escalate after')}
+          aria-invalid={invalid}
+        />
+        <span className="text-[12px] text-white/40">
+          {t('crm.maintenance.escalationDaysUnit', 'days')}
+        </span>
+        <Button
+          type="button"
+          size="xs"
+          variant="outline"
+          onClick={onSave}
+          disabled={loading || saving || invalid || unchanged}
+          className="ml-1 border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+          aria-label={t('common.save', 'Save')}
+          title={t('common.save', 'Save')}
+        >
+          <Save className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </PermissionGate>
+  );
+}
+
+function OverduePriorityBanner({ count, oldestDays, threshold, onView, t }) {
+  return (
+    <div className="rounded-xl border border-red-500/35 bg-red-500/[0.10] px-4 py-3 shadow-[0_18px_60px_rgba(239,68,68,0.14)]">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-500/15 ring-1 ring-red-500/30">
+            <ShieldAlert className="h-5 w-5 text-red-300" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-red-100">
+              {t('crm.maintenance.overdueAlertTitle', '{count} maintenance task(s) overdue', { count })}
+            </p>
+            <p className="mt-0.5 text-xs text-red-100/65">
+              {t('crm.maintenance.overdueAlertDesc', 'Oldest task is {days} days overdue. Escalation starts after {threshold} days.', {
+                days: oldestDays ?? 0,
+                threshold,
+              })}
+            </p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onView}
+          className="border-red-300/25 bg-red-400/10 text-red-50 hover:bg-red-400/20 hover:text-white"
+        >
+          {t('crm.maintenance.overdueAlertAction', 'Show overdue')}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -220,7 +380,34 @@ function groupByMonth(items, t) {
   return Array.from(buckets.values()).sort((a, b) => a.sortValue - b.sortValue);
 }
 
-function MaintenanceList({ items, loading, emptyMessage, allGoodMessage, t }) {
+function getDaysDiff(nextDueDate, now = new Date()) {
+  if (!nextDueDate) return null;
+  const date = new Date(nextDueDate);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.floor((date.getTime() - now.getTime()) / DAY_MS);
+}
+
+function getOverdueDays(nextDueDate, now = new Date()) {
+  const daysDiff = getDaysDiff(nextDueDate, now);
+  return daysDiff != null && daysDiff < 0 ? Math.abs(daysDiff) : 0;
+}
+
+function summarizeOverdueItems(items, escalationDays) {
+  let oldestDays = 0;
+  let criticalCount = 0;
+
+  for (const item of items) {
+    const overdueDays = getOverdueDays(item.nextDueDate);
+    oldestDays = Math.max(oldestDays, overdueDays);
+    if (item.escalated || overdueDays >= escalationDays) {
+      criticalCount += 1;
+    }
+  }
+
+  return { oldestDays, criticalCount };
+}
+
+function MaintenanceList({ items, loading, emptyMessage, allGoodMessage, escalationDays, t }) {
   if (loading) {
     return (
       <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-2">
@@ -264,7 +451,14 @@ function MaintenanceList({ items, loading, emptyMessage, allGoodMessage, t }) {
             <div className="h-px flex-1 bg-white/6" />
           </div>
           <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-2">
-            {group.items.map((m) => <MaintenanceDashboardRow key={m._id} item={m} t={t} />)}
+            {group.items.map((m) => (
+              <MaintenanceDashboardRow
+                key={m._id}
+                item={m}
+                escalationDays={escalationDays}
+                t={t}
+              />
+            ))}
           </div>
         </div>
       ))}
@@ -272,7 +466,7 @@ function MaintenanceList({ items, loading, emptyMessage, allGoodMessage, t }) {
   );
 }
 
-function MaintenanceDashboardRow({ item: m, t }) {
+function MaintenanceDashboardRow({ item: m, escalationDays, t }) {
   const typeMeta = MAINTENANCE_TYPE_META[m.maintenanceType] || MAINTENANCE_TYPE_META.other;
   const statusMeta = MAINTENANCE_STATUS_META[m.maintenanceStatus] || MAINTENANCE_STATUS_META.ok;
   const typeLabel = m.maintenanceType === 'other' && m.customTypeLabel
@@ -286,9 +480,12 @@ function MaintenanceDashboardRow({ item: m, t }) {
   const siteName = installation?.siteId?.name;
 
   const nextDate = m.nextDueDate ? new Date(m.nextDueDate) : null;
-  const now = new Date();
-  const daysDiff = nextDate ? Math.floor((nextDate - now) / (1000 * 60 * 60 * 24)) : null;
-  const daysLabel = daysDiff == null ? '—' :
+  const daysDiff = getDaysDiff(m.nextDueDate);
+  const overdueDays = getOverdueDays(m.nextDueDate);
+  const isOverdue = m.maintenanceStatus === 'overdue';
+  const isEscalated = Boolean(m.escalated);
+  const isCritical = isOverdue && (isEscalated || overdueDays >= escalationDays);
+  const daysLabel = daysDiff == null ? '--' :
     daysDiff < 0 ? t('crm.maintenance.daysOverdue', '{days} days overdue', { days: Math.abs(daysDiff) }) :
     daysDiff === 0 ? t('crm.maintenance.dueToday', 'Due today') :
     t('crm.maintenance.inDays', 'In {days} days', { days: daysDiff });
@@ -296,11 +493,20 @@ function MaintenanceDashboardRow({ item: m, t }) {
   return (
     <Link
       href={installation?._id ? `/crm/installations/${installation._id}` : '#'}
-      className="group/row block rounded-xl border border-white/5 bg-white/2 p-3.5 hover:border-white/10 hover:bg-white/4 transition-all"
+      className={cn(
+        'group/row block rounded-xl border p-3.5 transition-all',
+        isOverdue
+          ? 'border-red-500/25 bg-red-500/[0.07] shadow-[inset_3px_0_0_rgba(248,113,113,0.65)] hover:border-red-400/45 hover:bg-red-500/[0.11]'
+          : 'border-white/5 bg-white/2 hover:border-white/10 hover:bg-white/4',
+        isCritical && 'border-red-400/45 bg-red-500/[0.12] shadow-[inset_3px_0_0_rgba(252,165,165,0.9),0_12px_40px_rgba(239,68,68,0.12)]',
+      )}
     >
       <div className="flex items-start gap-3">
-        <div className={cn('h-10 w-10 shrink-0 rounded-lg flex items-center justify-center', typeMeta.bg)}>
-          <TypeIcon className={cn('h-4 w-4', typeMeta.color)} />
+        <div className={cn(
+          'h-10 w-10 shrink-0 rounded-lg flex items-center justify-center',
+          isOverdue ? 'bg-red-500/15 ring-1 ring-red-500/25' : typeMeta.bg,
+        )}>
+          <TypeIcon className={cn('h-4 w-4', isOverdue ? 'text-red-300' : typeMeta.color)} />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -310,6 +516,14 @@ function MaintenanceDashboardRow({ item: m, t }) {
               <span className={cn('h-1 w-1 rounded-full', statusMeta.dot)} />
               {t(`crm.maintenance.status.${m.maintenanceStatus}`, statusMeta.label)}
             </span>
+            {isCritical && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-red-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-200 ring-1 ring-red-300/20">
+                <ShieldAlert className="h-3 w-3" />
+                {isEscalated
+                  ? t('crm.maintenance.escalated', 'Escalated')
+                  : t('crm.maintenance.escalationDue', 'Escalation due')}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 text-xs text-white/40 flex-wrap">
@@ -328,7 +542,7 @@ function MaintenanceDashboardRow({ item: m, t }) {
         </div>
 
         <div className="text-right shrink-0">
-          <p className={cn('text-xs font-semibold', m.maintenanceStatus === 'overdue' ? 'text-red-400' : 'text-amber-400')}>
+          <p className={cn('text-xs font-semibold', isCritical ? 'text-red-200' : isOverdue ? 'text-red-400' : 'text-amber-400')}>
             {daysLabel}
           </p>
           {nextDate && (

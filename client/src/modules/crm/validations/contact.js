@@ -4,7 +4,7 @@ const PHONE = /^(\+[1-9]\d{0,2}[\s.\-]?)?(\(?\d{1,4}\)?[\s.\-]?){1,5}\d{1,4}$/;
 
 const optionalPhone = z
   .union([
-    z.string().max(30).regex(PHONE, 'Bitte gueltige Telefonnummer eingeben (z.B. +41 44 123 45 67)'),
+    z.string().max(30).regex(PHONE, 'Bitte gültige Telefonnummer eingeben (z.B. +41 44 123 45 67)'),
     z.literal(''),
     z.null(),
   ])

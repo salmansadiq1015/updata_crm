@@ -55,6 +55,13 @@ export const listUsersSchema = {
   }),
 };
 
+export const directoryUsersSchema = {
+  query: Joi.object({
+    limit: Joi.number().integer().min(1).max(100).default(80),
+    search: Joi.string().trim().max(100).allow(''),
+  }),
+};
+
 export const userIdParamSchema = {
   params: Joi.object({
     id: objectId.required(),

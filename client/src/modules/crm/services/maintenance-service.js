@@ -7,6 +7,14 @@ export const maintenanceService = {
     const res = await apiClient.get(ENDPOINTS.CRM.MAINTENANCE_DASHBOARD);
     return res.data;
   },
+  async getSettings() {
+    const res = await apiClient.get(ENDPOINTS.CRM.MAINTENANCE_SETTINGS);
+    return res.data;
+  },
+  async updateSettings(data) {
+    const res = await apiClient.patch(ENDPOINTS.CRM.MAINTENANCE_SETTINGS, data);
+    return res.data;
+  },
   async listDue(params = {}) {
     const res = await apiClient.get(ENDPOINTS.CRM.MAINTENANCE_DUE, { params });
     return res;

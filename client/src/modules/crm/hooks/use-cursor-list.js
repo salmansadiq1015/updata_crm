@@ -46,8 +46,8 @@ export function useCursorList({ queryKey, queryFn, params = {}, initialSize = 25
   });
 
   const items = data?.data || [];
-  const nextCursor = data?.pagination?.cursor || null;
-  const hasMore = !!data?.pagination?.hasMore;
+  const nextCursor = data?.pagination?.nextCursor || data?.pagination?.cursor || null;
+  const hasMore = !!(data?.pagination?.hasNext ?? data?.pagination?.hasMore);
 
   const onNext = useCallback(() => {
     if (!hasMore || !nextCursor) return;

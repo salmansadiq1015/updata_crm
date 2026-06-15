@@ -42,6 +42,7 @@ class CustomerRepository {
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
+        { ownerName: { $regex: search, $options: 'i' } },
         { customerNumber: { $regex: search, $options: 'i' } },
         { uidNumber: { $regex: search, $options: 'i' } },
         { vatNumber: { $regex: search, $options: 'i' } },

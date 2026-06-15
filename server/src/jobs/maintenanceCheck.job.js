@@ -4,6 +4,7 @@ import eventBus from '../shared/events/EventBus.js';
 import EVENT_TYPES from '../shared/events/eventTypes.js';
 import config from '../config/index.js';
 import logger from '../shared/logger/index.js';
+import maintenanceSettingsService from '../modules/crm/maintenanceSettings.service.js';
 
 /**
  * Maintenance check job.
@@ -78,7 +79,7 @@ export class MaintenanceCheckWorker extends BaseWorker {
     const now = new Date();
     const lookaheadDays = config.maintenance?.lookaheadDays || 30;
     const lookaheadDate = new Date(now.getTime() + lookaheadDays * 24 * 60 * 60 * 1000);
-    const escalationDays = config.maintenance?.escalationDays || 30;
+    const escalationDays = await maintenanceSettingsService.getEscalationDays();
     const escalationCutoff = new Date(now.getTime() - escalationDays * 24 * 60 * 60 * 1000);
 
     // Lazy import to avoid circular dependencies
@@ -147,6 +148,7 @@ export class MaintenanceCheckWorker extends BaseWorker {
     if (updatedEscalated > 0) {
       eventBus.publish(EVENT_TYPES.MAINTENANCE_ESCALATED, {
         count: updatedEscalated,
+        daysOverdue: escalationDays,
         assignedTo: await this._getEscalationRecipientIds(),
       }, { source: 'jobs:maintenance-check' });
     }

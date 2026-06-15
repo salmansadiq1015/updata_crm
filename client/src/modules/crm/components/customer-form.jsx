@@ -28,7 +28,7 @@ import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 import { DuplicateWarning } from './duplicate-warning';
 
 const STEPS = [
-  { id: 'basic', icon: User, fields: ['name', 'type'] },
+  { id: 'basic', icon: User, fields: ['name', 'type', 'ownerName', 'uidNumber'] },
   { id: 'contact', icon: Mail, fields: ['phone', 'mobile', 'email', 'website'] },
   { id: 'address', icon: MapPin, fields: ['street', 'postalCode', 'city', 'canton', 'country'] },
   { id: 'preferences', icon: Bell, fields: ['newsletterOptIn', 'newsletterChannel', 'notes'] },
@@ -36,11 +36,14 @@ const STEPS = [
 
 const BLANK_VALUES = {
   name: '',
+  ownerName: '',
   type: 'private',
   phone: '',
   mobile: '',
   email: '',
   website: '',
+  uidNumber: '',
+  vatNumber: '',
   street: '',
   postalCode: '',
   city: '',
@@ -63,23 +66,25 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
     { id: 'preferences', label: t('crm.stepPreferences', 'Einstellungen'), icon: Bell },
   ], [t]);
 
-  const { register, handleSubmit, reset, setValue, watch, trigger, control, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, setValue, trigger, control, formState: { errors } } = useForm({
     resolver: zodResolver(createCustomerSchema),
     defaultValues: BLANK_VALUES,
   });
 
   useEffect(() => {
-    if (open) setCurrentStep(0);
     if (defaultValues) {
       reset({
         ...BLANK_VALUES,
         ...defaultValues,
         name: defaultValues.name || '',
+        ownerName: defaultValues.ownerName || '',
         type: defaultValues.type || 'private',
         phone: defaultValues.phone || '',
         mobile: defaultValues.mobile || '',
         email: defaultValues.email || '',
         website: defaultValues.website || '',
+        uidNumber: defaultValues.uidNumber || '',
+        vatNumber: defaultValues.vatNumber || '',
         street: defaultValues.street || '',
         postalCode: defaultValues.postalCode || '',
         city: defaultValues.city || '',
@@ -96,6 +101,10 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
 
   const watchedName = useWatch({ control, name: 'name' });
   const watchedPlz = useWatch({ control, name: 'postalCode' });
+  const typeVal = useWatch({ control, name: 'type' });
+  const newsletterOptIn = useWatch({ control, name: 'newsletterOptIn' });
+  const selectedCanton = useWatch({ control, name: 'canton' });
+  const newsletterChannel = useWatch({ control, name: 'newsletterChannel' });
   const debouncedName = useDebounce(watchedName, 400);
   const debouncedPlz = useDebounce(watchedPlz, 400);
 
@@ -111,7 +120,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
     if (currentStep < STEPS.length - 1) return;
     try {
       await onSubmit(data);
-      onOpenChange(false);
+      handleOpenChange(false);
       reset(BLANK_VALUES);
     } catch {
       // Keep modal open so the user can fix & retry.
@@ -126,15 +135,26 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   const goBack = () => setCurrentStep((s) => Math.max(s - 1, 0));
 
   const isLastStep = currentStep === STEPS.length - 1;
-  const typeVal = watch('type');
-  const newsletterOptIn = watch('newsletterOptIn');
+  const isBusiness = typeVal === 'business';
   const voiceCustomerId = defaultValues?._id || null;
+  const handleOpenChange = (nextOpen) => {
+    if (!nextOpen) setCurrentStep(0);
+    onOpenChange(nextOpen);
+  };
+  const selectCustomerType = (nextType) => {
+    setValue('type', nextType, { shouldValidate: true, shouldDirty: true });
+    if (nextType !== 'business') {
+      setValue('ownerName', '', { shouldValidate: true, shouldDirty: true });
+      setValue('uidNumber', '', { shouldValidate: true, shouldDirty: true });
+      setValue('vatNumber', '', { shouldValidate: false, shouldDirty: true });
+    }
+  };
 
   const inputCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20';
   const selectTriggerCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 focus:border-violet-500/50 focus:ring-violet-500/20';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col border border-white/8 bg-[#0D1117] shadow-2xl">
         {/* Header */}
         <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
@@ -188,12 +208,6 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     </div>
                     <span className="hidden sm:inline truncate">{s.label}</span>
                   </button>
-                  {i < stepMeta.length - 1 && (
-                    <div className={cn(
-                      'h-px w-4 sm:w-6 transition-colors shrink-0',
-                      isCompleted ? 'bg-emerald-500' : 'bg-white/10',
-                    )} />
-                  )}
                 </div>
               );
             })}
@@ -218,7 +232,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                 title={t('crm.duplicateWarningTitle', 'Mögliche Duplikate gefunden')}
                 description={t('crm.duplicateWarningDesc', 'Kunden mit ähnlichem Namen existieren bereits:')}
                 duplicates={dupesData.duplicates || []}
-                onDismiss={() => onOpenChange(false)}
+                onDismiss={() => handleOpenChange(false)}
                 className="mb-6"
               />
             )}
@@ -236,10 +250,10 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   </div>
                 </div>
 
-                <DarkField label={t('crm.name', 'Name')} required error={errors.name}>
+                <DarkField label={isBusiness ? t('crm.companyName', 'Firmenname') : t('crm.name', 'Name')} required error={errors.name}>
                   <Input
                     id="name"
-                    placeholder={t('crm.namePlaceholder', 'z.B. Muster GmbH')}
+                    placeholder={isBusiness ? t('crm.companyNamePlaceholder', 'z.B. Muster GmbH') : t('crm.namePlaceholder', 'z.B. Max Muster')}
                     autoFocus
                     {...register('name')}
                     className={inputCls}
@@ -253,7 +267,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => setValue('type', 'private', { shouldValidate: true })}
+                      onClick={() => selectCustomerType('private')}
                       className={cn(
                         'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
                         typeVal === 'private'
@@ -271,7 +285,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     </button>
                     <button
                       type="button"
-                      onClick={() => setValue('type', 'business', { shouldValidate: true })}
+                      onClick={() => selectCustomerType('business')}
                       className={cn(
                         'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
                         typeVal === 'business'
@@ -294,6 +308,25 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     </p>
                   )}
                 </div>
+
+                {isBusiness && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4">
+                    <DarkField label={t('crm.ownerName', 'Inhabername')} required error={errors.ownerName}>
+                      <Input
+                        placeholder={t('crm.ownerNamePlaceholder', 'z.B. Max Muster')}
+                        {...register('ownerName')}
+                        className={inputCls}
+                      />
+                    </DarkField>
+                    <DarkField label={t('crm.uidNumber', 'UID Nummer')} required error={errors.uidNumber}>
+                      <Input
+                        placeholder={t('crm.uidNumberPlaceholder', 'z.B. CHE-123.456.789')}
+                        {...register('uidNumber')}
+                        className={inputCls}
+                      />
+                    </DarkField>
+                  </div>
+                )}
               </div>
             )}
 
@@ -354,7 +387,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   </DarkField>
                   <DarkField label={t('crm.canton', 'Kanton')} error={errors.canton}>
                     <Select
-                      value={watch('canton') || ''}
+                      value={selectedCanton || ''}
                       onValueChange={(v) => setValue('canton', v, { shouldValidate: true })}
                     >
                       <SelectTrigger className={selectTriggerCls}>
@@ -435,7 +468,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                         {t('crm.newsletterChannel', 'Kanal')}
                       </Label>
                       <Select
-                        value={watch('newsletterChannel') || 'email'}
+                        value={newsletterChannel || 'email'}
                         onValueChange={(v) => setValue('newsletterChannel', v)}
                       >
                         <SelectTrigger className={selectTriggerCls}>
@@ -482,7 +515,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   {t('common.back', 'Zurück')}
                 </Button>
               ) : (
-                <Button type="button" variant="ghost" className="h-9 text-white/55 hover:text-white/80 hover:bg-white/5" onClick={() => onOpenChange(false)}>
+                <Button type="button" variant="ghost" className="h-9 text-white/55 hover:text-white/80 hover:bg-white/5" onClick={() => handleOpenChange(false)}>
                   {t('common.cancel', 'Abbrechen')}
                 </Button>
               )}

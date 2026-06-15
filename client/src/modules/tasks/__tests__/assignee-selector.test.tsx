@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
+import { LanguageProvider } from '@/lib/i18n/language-context';
 import { AssigneeSelector } from '../ui/assignee-selector';
 
 type WorkspaceUser = {
@@ -17,20 +19,25 @@ const USERS: WorkspaceUser[] = [
 ];
 
 beforeEach(() => {
+  window.localStorage.setItem('mb-locale', 'en');
   vi.clearAllMocks();
 });
+
+function renderWithProviders(ui: ReactElement) {
+  return render(<LanguageProvider>{ui}</LanguageProvider>);
+}
 
 describe('AssigneeSelector', () => {
   describe('unassigned state', () => {
     it('renders "Assign" text when assigneeId is null and users list is empty', () => {
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId={null} users={[]} onAssigneeChange={vi.fn()} />
       );
       expect(screen.getByText('Assign')).toBeInTheDocument();
     });
 
     it('renders "Assign" text when assigneeId is null even with users provided', () => {
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId={null} users={USERS} onAssigneeChange={vi.fn()} />
       );
       expect(screen.getByText('Assign')).toBeInTheDocument();
@@ -39,7 +46,7 @@ describe('AssigneeSelector', () => {
 
   describe('assigned state', () => {
     it('shows user initials when assigneeId matches a user in the users list', () => {
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId="u1" users={USERS} onAssigneeChange={vi.fn()} />
       );
       // Initials for Alice Smith = "AS"
@@ -47,14 +54,14 @@ describe('AssigneeSelector', () => {
     });
 
     it('shows the user full name when assigned', () => {
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId="u1" users={USERS} onAssigneeChange={vi.fn()} />
       );
       expect(screen.getByText('Alice Smith')).toBeInTheDocument();
     });
 
     it('shows initials for second user when their id is assigned', () => {
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId="u2" users={USERS} onAssigneeChange={vi.fn()} />
       );
       // Initials for Bob Jones = "BJ"
@@ -66,7 +73,7 @@ describe('AssigneeSelector', () => {
     it('opens the popover with user list when the trigger button is clicked', async () => {
       const user = userEvent.setup();
 
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId={null} users={USERS} onAssigneeChange={vi.fn()} />
       );
 
@@ -81,7 +88,7 @@ describe('AssigneeSelector', () => {
     it('shows "Unassigned" option in the popover', async () => {
       const user = userEvent.setup();
 
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId="u1" users={USERS} onAssigneeChange={vi.fn()} />
       );
 
@@ -95,7 +102,7 @@ describe('AssigneeSelector', () => {
       const onAssigneeChange = vi.fn();
       const user = userEvent.setup();
 
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId={null} users={USERS} onAssigneeChange={onAssigneeChange} />
       );
 
@@ -113,7 +120,7 @@ describe('AssigneeSelector', () => {
       const onAssigneeChange = vi.fn();
       const user = userEvent.setup();
 
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId="u1" users={USERS} onAssigneeChange={onAssigneeChange} />
       );
 
@@ -129,17 +136,17 @@ describe('AssigneeSelector', () => {
     it('shows "No users found" when search yields no results', async () => {
       const user = userEvent.setup();
 
-      render(
+      renderWithProviders(
         <AssigneeSelector assigneeId={null} users={USERS} onAssigneeChange={vi.fn()} />
       );
 
       const trigger = screen.getByRole('button');
       await user.click(trigger);
 
-      const searchInput = await screen.findByPlaceholderText('Search...');
+      const searchInput = await screen.findByPlaceholderText('Search members...');
       await user.type(searchInput, 'zzznomatch');
 
-      expect(await screen.findByText('No users found')).toBeInTheDocument();
+      expect(await screen.findByText('No members found')).toBeInTheDocument();
     });
   });
 });

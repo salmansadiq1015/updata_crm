@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
 
 // --- Enum constants ---
 const ACTION_TYPES = ['FUNDING_APPLICATION', 'MATERIAL_ORDER', 'SCHEDULING', 'OTHER'];
@@ -29,6 +30,7 @@ const materialItemSchema = new mongoose.Schema(
     quantity: { type: Number, required: true, min: 0 },
     unit: { type: String, trim: true, maxlength: 20, default: 'Stk.' },
     catalogItemId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    catalogSnapshot: { type: catalogSnapshotSchema, default: null },
   },
   { _id: false },
 );

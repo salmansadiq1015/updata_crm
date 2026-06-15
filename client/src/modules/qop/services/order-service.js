@@ -8,6 +8,7 @@ export const orderService = {
   transitionStatus: (id, targetStatus, reason) =>
     apiClient.patch(E.ORDER_STATUS(id), { targetStatus, reason }),
   getInvoices:      (id)          => apiClient.get(E.ORDER_INVOICES(id)),
+  getBillingPlan:   (id)          => apiClient.get(E.ORDER_BILLING_PLAN(id)),
   generateDocument: (id)          => apiClient.post(E.ORDER_GENERATE_DOC(id)),
   getHistory:       (id)          => apiClient.get(E.ORDER_HISTORY(id)),
 };

@@ -5,6 +5,7 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import {
   generateSchema,
   generateBatchSchema,
+  batchStatusParamSchema,
   documentIdParamSchema,
   listDocumentsSchema,
   sourceParamSchema,
@@ -30,11 +31,20 @@ router.post(
   (req, res, next) => documentController.generateBatch(req, res, next),
 );
 
+// Batch status
+router.get(
+  '/generate/batch/:batchId/status',
+  authenticate,
+  requirePermission('documents:read'),
+  validate(batchStatusParamSchema),
+  (req, res, next) => documentController.getBatchStatus(req, res, next),
+);
+
 // List documents (cursor-paginated)
 router.get(
   '/',
   authenticate,
-  requirePermission('templates:read'),
+  requirePermission('documents:read'),
   validate(listDocumentsSchema),
   (req, res, next) => documentController.list(req, res, next),
 );
@@ -43,7 +53,7 @@ router.get(
 router.get(
   '/source/:sourceModule/:sourceRecordId',
   authenticate,
-  requirePermission('templates:read'),
+  requirePermission('documents:read'),
   validate(sourceParamSchema),
   (req, res, next) => documentController.listBySource(req, res, next),
 );
@@ -52,7 +62,7 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  requirePermission('templates:read'),
+  requirePermission('documents:read'),
   validate(documentIdParamSchema),
   (req, res, next) => documentController.getById(req, res, next),
 );
@@ -61,7 +71,7 @@ router.get(
 router.get(
   '/:id/download',
   authenticate,
-  requirePermission('templates:read'),
+  requirePermission('documents:read'),
   validate(documentIdParamSchema),
   (req, res, next) => documentController.download(req, res, next),
 );
@@ -70,7 +80,7 @@ router.get(
 router.delete(
   '/:id',
   authenticate,
-  requirePermission('templates:delete'),
+  requirePermission('documents:delete'),
   validate(documentIdParamSchema),
   (req, res, next) => documentController.delete(req, res, next),
 );

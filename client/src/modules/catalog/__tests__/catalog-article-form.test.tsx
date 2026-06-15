@@ -29,6 +29,18 @@ beforeEach(() => {
     http.get(`${BASE}/catalog/categories`, () =>
       HttpResponse.json({ success: true, data: [] }),
     ),
+    http.get(`${BASE}/catalog/categories/select-options`, () =>
+      HttpResponse.json({
+        success: true,
+        data: [{ _id: 'cat1', name: 'Materials', path: 'Materials', status: 'ACTIVE' }],
+      }),
+    ),
+    http.get(`${BASE}/catalog/units`, () =>
+      HttpResponse.json({
+        success: true,
+        data: [{ code: 'STK', nameDe: 'Stuck', nameFr: 'Piece', nameIt: 'Pezzo', status: 'ACTIVE' }],
+      }),
+    ),
     http.get(`${BASE}/catalog/articles/:id/images`, () =>
       HttpResponse.json({ success: true, data: [] }),
     ),

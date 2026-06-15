@@ -37,6 +37,14 @@ class IghImportJobRepository {
     ).lean();
   }
 
+  async updateById(id, data) {
+    return IghImportJob.findByIdAndUpdate(
+      id,
+      data,
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+  }
+
   async appendLog(id, logText) {
     return IghImportJob.findByIdAndUpdate(
       id,

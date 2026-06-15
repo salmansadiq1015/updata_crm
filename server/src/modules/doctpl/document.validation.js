@@ -27,6 +27,12 @@ export const generateBatchSchema = {
   }),
 };
 
+export const batchStatusParamSchema = {
+  params: Joi.object({
+    batchId: Joi.string().guid({ version: ['uuidv4'] }).required(),
+  }),
+};
+
 export const documentIdParamSchema = {
   params: Joi.object({ id: objectId.required() }),
 };
@@ -36,6 +42,8 @@ export const listDocumentsSchema = {
     sourceModule: Joi.string().trim(),
     sourceRecordId: objectId,
     documentType: Joi.string().trim(),
+    sourceCustomerId: objectId,
+    sourceProjectId: objectId,
     search: Joi.string().trim().max(120).allow(''),
   }),
 };

@@ -80,6 +80,7 @@ export const listApSchema = {
     supplierId: objectId,
     dueDateFrom: Joi.date().iso(),
     dueDateTo: Joi.date().iso(),
+    q: Joi.string().trim().max(200),
   }),
 };
 

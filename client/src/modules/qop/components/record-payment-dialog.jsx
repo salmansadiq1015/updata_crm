@@ -7,7 +7,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -16,8 +15,7 @@ import { useInvoiceMutations } from '../hooks/use-qop-mutations';
 import { PAYMENT_METHODS } from '../constants/qop-constants';
 
 export function RecordPaymentDialog({ open, onClose, invoiceId, outstandingAmount = 0, currency = 'CHF' }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
 
   const { recordPayment } = useInvoiceMutations();
 
@@ -65,19 +63,19 @@ export function RecordPaymentDialog({ open, onClose, invoiceId, outstandingAmoun
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>{de ? 'Zahlung erfassen' : 'Record Payment'}</DialogTitle>
+          <DialogTitle>{t('qop.payment.title', 'Zahlung erfassen')}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-2">
           {outstandingAmount > 0 && (
             <p className="text-sm text-muted-foreground">
-              {de ? 'Offener Betrag:' : 'Outstanding:'}{' '}
+              {t('qop.payment.outstanding', 'Offener Betrag:')}{' '}
               <span className="font-semibold text-foreground">{fmt(outstandingAmount)} {currency}</span>
             </p>
           )}
 
           <div className="flex flex-col gap-1.5">
-            <Label>{de ? 'Betrag *' : 'Amount *'}</Label>
+            <Label>{t('qop.payment.amount', 'Betrag')} *</Label>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -93,7 +91,7 @@ export function RecordPaymentDialog({ open, onClose, invoiceId, outstandingAmoun
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label>{de ? 'Datum *' : 'Payment Date *'}</Label>
+            <Label>{t('qop.payment.date', 'Datum')} *</Label>
             <Input
               type="date"
               value={form.paymentDate}
@@ -103,7 +101,7 @@ export function RecordPaymentDialog({ open, onClose, invoiceId, outstandingAmoun
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label>{de ? 'Zahlungsart' : 'Payment Method'}</Label>
+            <Label>{t('qop.payment.method', 'Zahlungsart')}</Label>
             <Select value={form.paymentMethod} onValueChange={(v) => set('paymentMethod', v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -115,22 +113,22 @@ export function RecordPaymentDialog({ open, onClose, invoiceId, outstandingAmoun
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label>{de ? 'Referenz' : 'Reference'}</Label>
+            <Label>{t('qop.payment.reference', 'Referenz')}</Label>
             <Input
               value={form.reference}
               onChange={(e) => set('reference', e.target.value)}
-              placeholder={de ? 'z.B. ESR-Referenz...' : 'e.g. payment ref...'}
+              placeholder={t('qop.payment.refPlaceholder', 'z.B. ESR-Referenz...')}
             />
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={recordPayment.isPending}>
-              {de ? 'Abbrechen' : 'Cancel'}
+              {t('common.cancel', 'Abbrechen')}
             </Button>
             <Button type="submit" disabled={recordPayment.isPending || !form.amount}>
               {recordPayment.isPending
-                ? (de ? 'Speichern...' : 'Saving...')
-                : (de ? 'Zahlung erfassen' : 'Record Payment')}
+                ? t('common.saving', 'Speichern...')
+                : t('qop.payment.title', 'Zahlung erfassen')}
             </Button>
           </DialogFooter>
         </form>

@@ -9,6 +9,7 @@ import bankingRoutes from './banking.routes.js';
 import reconciliationRoutes from './reconciliation.routes.js';
 import cashManagementRoutes from './cashManagement.routes.js';
 import openItemsRoutes from './openItems.routes.js';
+import reportsRoutes from './reports.routes.js';
 
 /**
  * Accounting route aggregator.
@@ -24,6 +25,7 @@ import openItemsRoutes from './openItems.routes.js';
  *   /api/v1/accounting/reconciliation      — bank reconciliation
  *   /api/v1/accounting/cash                — cash management + forecast
  *   /api/v1/accounting/open-items          — combined AR/AP open items + aging
+ *   /api/v1/accounting/reports             — financial reports
  */
 const router = Router();
 
@@ -37,5 +39,6 @@ router.use('/bank', bankingRoutes);
 router.use('/reconciliation', reconciliationRoutes);
 router.use('/cash', cashManagementRoutes);
 router.use('/open-items', openItemsRoutes);
+router.use('/reports', reportsRoutes);
 
 export default router;

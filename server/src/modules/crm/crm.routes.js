@@ -8,6 +8,10 @@ import maintenanceRoutes from './maintenance.routes.js';
 import noteRoutes from './note.routes.js';
 import imageRoutes from './image.routes.js';
 import newsletterRoutes from './newsletter/newsletter.routes.js';
+import supplierRoutes from './supplier.routes.js';
+import purchaseOrderRoutes from './purchaseOrder.routes.js';
+import procurementRoutes from './procurement.routes.js';
+import addressBookRoutes from './addressBook.routes.js';
 
 /**
  * CRM route aggregator.
@@ -30,6 +34,9 @@ const router = Router();
 // Customer routes (includes /search, /duplicates, /bulk-update, /bulk-delete, /merge)
 router.use('/customers', customerRoutes);
 
+// Shared address book read model over customers, contacts, and sites
+router.use('/address-book', addressBookRoutes);
+
 // Nested routers under customers
 router.use('/customers/:customerId/contacts', customerContactsRouter);
 router.use('/customers/:customerId/sites', customerSitesRouter);
@@ -51,6 +58,11 @@ router.use('/installations/:id/spare-parts', installationSparePartsRouter);
 
 // Spare parts standalone routes
 router.use('/spare-parts', sparePartRoutes);
+
+// Procurement routes
+router.use('/suppliers', supplierRoutes);
+router.use('/purchase-orders', purchaseOrderRoutes);
+router.use('/procurement', procurementRoutes);
 
 // Maintenance standalone routes (dashboard, due, overdue, update, delete)
 router.use('/maintenance', maintenanceRoutes);

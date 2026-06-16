@@ -20,7 +20,6 @@ import { orderService } from '../services/order-service';
 import { InvoiceFormDialog } from './invoice-form-dialog';
 import { CatalogLinePriceDrift } from './catalog-line-price-drift';
 
-// Valid order transitions
 const ORDER_TRANSITIONS = {
   CONFIRMED:   ['IN_PROGRESS', 'CANCELLED'],
   IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
@@ -44,32 +43,36 @@ function InfoRow({ label, value, mono = false }) {
   );
 }
 
-function OverviewTab({ order, de, language, onTransition, onDownloadPdf, pdfLoading }) {
+function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading }) {
+  const { locale: language, t } = useLanguage();
   const allowed = ORDER_TRANSITIONS[order?.status] ?? [];
+
+  const transitionLabels = {
+    IN_PROGRESS: t('qop.orders.statusInProgress', 'In Bearbeitung'),
+    COMPLETED:   t('qop.orders.statusCompleted', 'Abschliessen'),
+    CANCELLED:   t('qop.orders.statusCancelled', 'Stornieren'),
+  };
+
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-2 gap-4">
-        <InfoRow label={de ? 'Auftragsnummer' : 'Order Number'} value={order?.orderNumber} mono />
-        <InfoRow label={de ? 'Status' : 'Status'} value={<OrderStatusBadge status={order?.status} />} />
-        <InfoRow label={de ? 'Kunde' : 'Customer'} value={order?.customerName ?? order?.customer?.name} />
-        <InfoRow label={de ? 'Erstellt' : 'Created'} value={fmtDate(order?.createdAt, language)} />
-        <InfoRow label={de ? 'Quelle' : 'Source Quotation'} value={order?.sourceQuotationNumber ?? '—'} mono />
+        <InfoRow label={t('qop.orders.fieldNumber', 'Auftragsnummer')} value={order?.orderNumber} mono />
+        <InfoRow label={t('qop.orders.fieldStatus', 'Status')} value={<OrderStatusBadge status={order?.status} />} />
+        <InfoRow label={t('qop.orders.fieldCustomer', 'Kunde')} value={order?.customerName ?? order?.customer?.name} />
+        <InfoRow label={t('qop.orders.fieldCreated', 'Erstellt')} value={fmtDate(order?.createdAt, language)} />
+        <InfoRow label={t('qop.orders.fieldSource', 'Quelle')} value={order?.sourceQuotationNumber ?? '—'} mono />
         <InfoRow
-          label={de ? 'Gesamtbetrag' : 'Total'}
+          label={t('qop.orders.fieldTotal', 'Gesamtbetrag')}
           value={<AmountDisplay amount={order?.grandTotalRounded ?? order?.grandTotal} currency={order?.currency} className="font-semibold" />}
         />
       </div>
 
       <div className="flex gap-2 flex-wrap">
         {allowed.map((s) => {
-          const labels = {
-            de: { IN_PROGRESS: 'In Bearbeitung', COMPLETED: 'Abschliessen', CANCELLED: 'Stornieren' },
-            en: { IN_PROGRESS: 'Start', COMPLETED: 'Complete', CANCELLED: 'Cancel' },
-          };
           const variant = s === 'CANCELLED' ? 'destructive' : s === 'COMPLETED' ? 'default' : 'outline';
           return (
             <Button key={s} size="sm" variant={variant} onClick={() => onTransition(s)}>
-              {labels[de ? 'de' : 'en'][s] ?? s}
+              {transitionLabels[s] ?? s}
             </Button>
           );
         })}
@@ -77,22 +80,30 @@ function OverviewTab({ order, de, language, onTransition, onDownloadPdf, pdfLoad
           {pdfLoading
             ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
             : <Download className="h-4 w-4 mr-2" />}
-          {de ? 'PDF herunterladen' : 'Download PDF'}
+          {t('qop.orders.downloadPdf', 'PDF herunterladen')}
         </Button>
       </div>
     </div>
   );
 }
 
-function LineItemsTab({ order, de }) {
+function LineItemsTab({ order }) {
+  const { t } = useLanguage();
   const items = order?.lineItems ?? [];
   const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-lg border border-border overflow-hidden text-sm">
         <div className="grid grid-cols-[2rem_1fr_4rem_5rem_4rem_4rem_6rem] bg-muted/50 border-b text-xs font-medium text-muted-foreground">
-          {['#', de ? 'Beschreibung' : 'Description', de ? 'Menge' : 'Qty', de ? 'Einheit' : 'Unit',
-            de ? 'Preis' : 'Price', 'MwSt', de ? 'Total' : 'Total'].map((h, i) => (
+          {[
+            '#',
+            t('qop.lineItems.colDescription', 'Beschreibung'),
+            t('qop.lineItems.colQty', 'Menge'),
+            t('qop.lineItems.colUnit', 'Einheit'),
+            t('qop.lineItems.colUnitPrice', 'Preis'),
+            'MwSt',
+            t('qop.lineItems.colTotal', 'Total'),
+          ].map((h, i) => (
             <div key={i} className={`px-3 py-2 ${i >= 4 ? 'text-right' : ''}`}>{h}</div>
           ))}
         </div>
@@ -118,7 +129,7 @@ function LineItemsTab({ order, de }) {
       </div>
       <div className="self-end w-64 rounded-lg border border-border overflow-hidden text-sm">
         <div className="flex justify-between px-4 py-2">
-          <span className="text-muted-foreground">{de ? 'Zwischensumme' : 'Subtotal'}</span>
+          <span className="text-muted-foreground">{t('qop.lineItems.subtotal', 'Zwischensumme')}</span>
           <span className="tabular-nums">{fmt(order?.subtotal)}</span>
         </div>
         {(order?.vatBreakdown ?? []).map((v) => (
@@ -127,7 +138,7 @@ function LineItemsTab({ order, de }) {
           </div>
         ))}
         <div className="flex justify-between px-4 py-2.5 bg-muted/30 font-semibold border-t border-border">
-          <span>{de ? 'Gesamt' : 'Total'}</span>
+          <span>{t('qop.lineItems.grandTotal', 'Gesamt')}</span>
           <span className="tabular-nums">{fmt(order?.grandTotalRounded ?? order?.grandTotal)}</span>
         </div>
       </div>
@@ -135,12 +146,13 @@ function LineItemsTab({ order, de }) {
   );
 }
 
-function BillingPlanTab({ orderId, de }) {
+function BillingPlanTab({ orderId }) {
+  const { t } = useLanguage();
   const { data: plan, isLoading } = useBillingPlan(orderId);
   const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
 
   if (isLoading) return <Skeleton className="h-32 w-full" />;
-  if (!plan) return <p className="text-sm text-muted-foreground py-6 text-center">{de ? 'Keine Daten.' : 'No data.'}</p>;
+  if (!plan) return <p className="text-sm text-muted-foreground py-6 text-center">{t('common.noData', 'Keine Daten.')}</p>;
 
   const pct = plan.percentInvoiced || 0;
 
@@ -148,9 +160,9 @@ function BillingPlanTab({ orderId, de }) {
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: de ? 'Projektwert' : 'Project Value', value: fmt(plan.projectTotal), color: 'text-foreground' },
-          { label: de ? 'Bereits fakturiert' : 'Invoiced', value: fmt(plan.advancesInvoiced), color: 'text-amber-700' },
-          { label: de ? 'Restbetrag' : 'Remaining', value: fmt(plan.remainingForFinal), color: 'text-emerald-700' },
+          { label: t('qop.orders.billingProjectValue', 'Projektwert'), value: fmt(plan.projectTotal), color: 'text-foreground' },
+          { label: t('qop.orders.billingInvoiced', 'Bereits fakturiert'), value: fmt(plan.advancesInvoiced), color: 'text-amber-700' },
+          { label: t('qop.orders.billingRemaining', 'Restbetrag'), value: fmt(plan.remainingForFinal), color: 'text-emerald-700' },
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-lg border border-border p-3 flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">{label}</span>
@@ -161,7 +173,7 @@ function BillingPlanTab({ orderId, de }) {
 
       <div className="flex flex-col gap-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{de ? 'Fortschritt' : 'Progress'}</span><span>{pct}%</span>
+          <span>{t('qop.orders.billingProgress', 'Fortschritt')}</span><span>{pct}%</span>
         </div>
         <div className="h-3 rounded-full bg-muted overflow-hidden">
           <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -171,11 +183,11 @@ function BillingPlanTab({ orderId, de }) {
       {(plan.advances ?? []).length > 0 && (
         <div className="rounded-lg border border-border overflow-hidden text-sm">
           <div className="grid grid-cols-[1fr_5rem_5rem_6rem_5rem] bg-muted/50 border-b text-xs font-medium text-muted-foreground px-3 py-2">
-            <div>{de ? 'Akontorechnung' : 'Advance Invoice'}</div>
-            <div>{de ? 'Datum' : 'Date'}</div>
+            <div>{t('qop.orders.billingAdvInvoice', 'Akontorechnung')}</div>
+            <div>{t('qop.orders.billingDate', 'Datum')}</div>
             <div className="text-right">%</div>
-            <div className="text-right">{de ? 'Betrag' : 'Amount'}</div>
-            <div>{de ? 'Status' : 'Status'}</div>
+            <div className="text-right">{t('qop.orders.colAmount', 'Betrag')}</div>
+            <div>{t('qop.orders.colStatus', 'Status')}</div>
           </div>
           {plan.advances.map((a) => (
             <div key={a._id} className="grid grid-cols-[1fr_5rem_5rem_6rem_5rem] border-b last:border-0 px-3 py-2.5">
@@ -192,7 +204,8 @@ function BillingPlanTab({ orderId, de }) {
   );
 }
 
-function InvoicesTab({ orderId, de, language, onCreateInvoice }) {
+function InvoicesTab({ orderId, onCreateInvoice }) {
+  const { locale: language, t } = useLanguage();
   const { data: invoices = [], isLoading } = useOrderInvoices(orderId);
   const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
 
@@ -200,25 +213,31 @@ function InvoicesTab({ orderId, de, language, onCreateInvoice }) {
     <div className="flex flex-col gap-3">
       <div className="flex gap-2 justify-end flex-wrap">
         <Button size="sm" variant="outline" onClick={() => onCreateInvoice('STANDARD')}>
-          <Plus className="h-4 w-4 mr-1.5" />{de ? 'Rechnung' : 'Invoice'}
+          <Plus className="h-4 w-4 mr-1.5" />{t('qop.invoices.standard', 'Rechnung')}
         </Button>
         <Button size="sm" variant="outline" onClick={() => onCreateInvoice('ADVANCE')}>
-          <Plus className="h-4 w-4 mr-1.5" />{de ? 'Akontorechnung' : 'Advance'}
+          <Plus className="h-4 w-4 mr-1.5" />{t('qop.invoices.advance', 'Akontorechnung')}
         </Button>
         <Button size="sm" variant="outline" onClick={() => onCreateInvoice('FINAL')}>
-          <Plus className="h-4 w-4 mr-1.5" />{de ? 'Schlussrechnung' : 'Final'}
+          <Plus className="h-4 w-4 mr-1.5" />{t('qop.invoices.final', 'Schlussrechnung')}
         </Button>
       </div>
       {isLoading && <Skeleton className="h-32 w-full" />}
       {!isLoading && invoices.length === 0 && (
         <p className="text-sm text-muted-foreground py-6 text-center">
-          {de ? 'Keine Rechnungen.' : 'No invoices yet.'}
+          {t('qop.orders.noInvoices', 'Keine Rechnungen.')}
         </p>
       )}
       {!isLoading && invoices.length > 0 && (
         <div className="rounded-lg border border-border overflow-hidden text-sm">
           <div className="grid grid-cols-[8rem_6rem_7rem_7rem_1fr] bg-muted/50 border-b text-xs font-medium text-muted-foreground">
-            {[de ? 'Nummer' : 'Number', de ? 'Typ' : 'Type', de ? 'Status' : 'Status', de ? 'Fällig' : 'Due', de ? 'Betrag' : 'Amount'].map((h, i) => (
+            {[
+              t('qop.invoices.colNumber', 'Nummer'),
+              t('qop.invoices.colType', 'Typ'),
+              t('qop.invoices.colStatus', 'Status'),
+              t('qop.invoices.colDue', 'Faellig'),
+              t('qop.invoices.colAmount', 'Betrag'),
+            ].map((h, i) => (
               <div key={i} className={`px-3 py-2 ${i === 4 ? 'text-right' : ''}`}>{h}</div>
             ))}
           </div>
@@ -238,8 +257,7 @@ function InvoicesTab({ orderId, de, language, onCreateInvoice }) {
 }
 
 export function OrderDetailDialog({ open, onClose, orderId }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const [tab, setTab] = useState('overview');
   const [transitionTarget, setTransitionTarget] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -273,8 +291,8 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">
               {isLoading
-                ? (de ? 'Auftrag laden...' : 'Loading order...')
-                : `${de ? 'Auftrag' : 'Order'} ${order?.orderNumber ?? ''}`}
+                ? t('qop.orders.loading', 'Auftrag laden...')
+                : `${t('qop.orders.titlePrefix', 'Auftrag')} ${order?.orderNumber ?? ''}`}
             </DialogTitle>
           </DialogHeader>
 
@@ -285,23 +303,23 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
           ) : (
             <Tabs value={tab} onValueChange={setTab} className="mt-2">
               <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="overview">{de ? 'Übersicht' : 'Overview'}</TabsTrigger>
-                <TabsTrigger value="items">{de ? 'Positionen' : 'Items'}</TabsTrigger>
-                <TabsTrigger value="billing">{de ? 'Fakturierung' : 'Billing'}</TabsTrigger>
-                <TabsTrigger value="invoices">{de ? 'Rechnungen' : 'Invoices'}</TabsTrigger>
-                <TabsTrigger value="history">{de ? 'Verlauf' : 'History'}</TabsTrigger>
+                <TabsTrigger value="overview">{t('qop.orders.tabOverview', 'Uebersicht')}</TabsTrigger>
+                <TabsTrigger value="items">{t('qop.orders.tabItems', 'Positionen')}</TabsTrigger>
+                <TabsTrigger value="billing">{t('qop.orders.tabBilling', 'Fakturierung')}</TabsTrigger>
+                <TabsTrigger value="invoices">{t('qop.orders.tabInvoices', 'Rechnungen')}</TabsTrigger>
+                <TabsTrigger value="history">{t('qop.orders.tabHistory', 'Verlauf')}</TabsTrigger>
               </TabsList>
               <TabsContent value="overview" className="mt-4">
-                <OverviewTab order={order} de={de} language={language} onTransition={setTransitionTarget} onDownloadPdf={handleDownloadPdf} pdfLoading={pdfLoading} />
+                <OverviewTab order={order} onTransition={setTransitionTarget} onDownloadPdf={handleDownloadPdf} pdfLoading={pdfLoading} />
               </TabsContent>
               <TabsContent value="items" className="mt-4">
-                <LineItemsTab order={order} de={de} />
+                <LineItemsTab order={order} />
               </TabsContent>
               <TabsContent value="billing" className="mt-4">
-                <BillingPlanTab orderId={orderId} de={de} />
+                <BillingPlanTab orderId={orderId} />
               </TabsContent>
               <TabsContent value="invoices" className="mt-4">
-                <InvoicesTab orderId={orderId} de={de} language={language} onCreateInvoice={setInvoiceType} />
+                <InvoicesTab orderId={orderId} onCreateInvoice={setInvoiceType} />
               </TabsContent>
               <TabsContent value="history" className="mt-4">
                 <DocumentHistoryTimeline history={history} />
@@ -311,7 +329,6 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
         </DialogContent>
       </Dialog>
 
-      {/* Create invoice from order */}
       {invoiceType && (
         <InvoiceFormDialog
           open={!!invoiceType}
@@ -322,26 +339,23 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
         />
       )}
 
-      {/* Confirm status transition */}
       <Dialog open={!!transitionTarget} onOpenChange={() => setTransitionTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{de ? 'Status bestätigen' : 'Confirm Status Change'}</DialogTitle>
+            <DialogTitle>{t('qop.orders.confirmStatusTitle', 'Status bestaetigen')}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {de
-              ? `Status zu "${transitionTarget}" ändern?`
-              : `Change status to "${transitionTarget}"?`}
+            {t('qop.orders.confirmStatusMsg', 'Status zu "{status}" aendern?').replace('{status}', transitionTarget ?? '')}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTransitionTarget(null)}>
-              {de ? 'Abbrechen' : 'Cancel'}
+              {t('common.cancel', 'Abbrechen')}
             </Button>
             <Button
               variant={transitionTarget === 'CANCELLED' ? 'destructive' : 'default'}
               onClick={handleTransitionConfirm}
             >
-              {de ? 'Bestätigen' : 'Confirm'}
+              {t('common.confirm', 'Bestaetigen')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -7,6 +7,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 
 export function DashboardUpcomingChart({ upcoming7Days = [] }) {
   const { t } = useLanguage();
+  const assignmentsLabel = (count) => t('deploy.dashboard.assignmentsCount', '{count} Einsätze').replace('{count}', count);
 
   const chartData = upcoming7Days.map((count, i) => ({
     name: format(addDays(new Date(), i + 1), 'EEE', { locale: de }),
@@ -32,7 +33,7 @@ export function DashboardUpcomingChart({ upcoming7Days = [] }) {
                 return (
                   <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md">
                     <p className="font-medium">{d.fullDate}</p>
-                    <p className="text-muted-foreground">{d.count} Einsätze</p>
+                    <p className="text-muted-foreground">{assignmentsLabel(d.count)}</p>
                   </div>
                 );
               }}

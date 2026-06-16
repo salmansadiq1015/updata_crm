@@ -24,6 +24,24 @@ function normalizeSort(sortBy) {
   return OPEN_ITEM_SORT_FIELDS.includes(sortBy) ? sortBy : 'dueDate';
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function applySearchFilter(filter, q, fields) {
+  if (!q) return filter;
+  const regex = new RegExp(escapeRegExp(q), 'i');
+  const searchFilter = { $or: fields.map((field) => ({ [field]: regex })) };
+  if (filter.$or) {
+    const { $or: cursorOr, ...rest } = filter;
+    return {
+      ...rest,
+      $and: [{ $or: cursorOr }, searchFilter],
+    };
+  }
+  return { ...filter, $or: searchFilter.$or };
+}
+
 function coerceCursorFieldTypes(filter, sortBy) {
   if (!filter || !['dueDate', 'createdAt'].includes(sortBy)) return filter;
 
@@ -165,7 +183,7 @@ class OpenItemsService {
   async getOpenItems(params = {}) {
     const {
       cursor, limit = 25, sortBy = 'dueDate', sortOrder = 'asc',
-      entityType = 'ALL', customerId, supplierId, agingBucket,
+      entityType = 'ALL', customerId, supplierId, agingBucket, q,
     } = params;
 
     const safeLimit = normalizeLimit(limit);
@@ -190,7 +208,7 @@ class OpenItemsService {
     if (entityType === 'ALL' || entityType === 'AR') {
       queries.push((async () => {
         const Invoice = (await import('../qop/invoice.model.js')).default;
-        const arFilter = {
+        let arFilter = {
           isDeleted: false,
           status: { $in: OPEN_AR_STATUSES },
           amountDue: { $gt: 0 },
@@ -198,6 +216,7 @@ class OpenItemsService {
           ...cursorFilter,
         };
         if (customerId) arFilter.customerId = customerId;
+        arFilter = applySearchFilter(arFilter, q, ['customerName', 'invoiceNumber', 'title', 'description']);
 
         const docs = await Invoice.find(arFilter)
           .sort(sort)
@@ -219,7 +238,7 @@ class OpenItemsService {
     if (entityType === 'ALL' || entityType === 'AP') {
       queries.push((async () => {
         const ApInvoice = (await import('./apInvoice.model.js')).default;
-        const apFilter = {
+        let apFilter = {
           isDeleted: false,
           status: { $in: OPEN_AP_STATUSES },
           outstandingAmount: { $gt: 0 },
@@ -227,6 +246,7 @@ class OpenItemsService {
           ...cursorFilter,
         };
         if (supplierId) apFilter.supplierId = supplierId;
+        apFilter = applySearchFilter(apFilter, q, ['supplierName', 'apInvoiceNumber', 'supplierInvoiceNumber', 'projectReference', 'orderReference']);
 
         const docs = await ApInvoice.find(apFilter)
           .sort(sort)

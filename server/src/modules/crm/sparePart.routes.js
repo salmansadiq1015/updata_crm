@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import sparePartController from './sparePart.controller.js';
+import procurementController from './procurement.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
@@ -18,6 +19,12 @@ import {
   flagSparePartOrderSchema,
   updateSparePartOrderStatusSchema,
 } from './sparePart.validation.js';
+import {
+  listLowStockSchema,
+  listInventoryMovementsSchema,
+  listPartInventoryMovementsSchema,
+  adjustStockSchema,
+} from './procurement.validation.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -33,10 +40,17 @@ router.get('/search', authenticate, requirePermission('crm:read'), validate(sear
 
 router.get('/order-requests', authenticate, requirePermission('crm:read'), validate(listOrderRequestsSchema), (req, res, next) => sparePartController.listOrderRequests(req, res, next));
 
+router.get('/stats', authenticate, requirePermission('crm:read'), (req, res, next) => procurementController.getStats(req, res, next));
+router.get('/low-stock', authenticate, requirePermission('crm:read'), validate(listLowStockSchema), (req, res, next) => procurementController.listLowStock(req, res, next));
+router.get('/movements', authenticate, requirePermission('crm:read'), validate(listInventoryMovementsSchema), (req, res, next) => procurementController.listInventoryMovements(req, res, next));
+
 // CSV export — BEFORE /:id
 router.get('/export', authenticate, requirePermission('crm:read'), validate(exportSparePartsSchema), (req, res, next) => sparePartController.exportCsv(req, res, next));
 
 router.post('/import', authenticate, requirePermission('crm:write'), upload.single('file'), validate(importSparePartsSchema), (req, res, next) => sparePartController.importCsv(req, res, next));
+
+router.get('/:id/movements', authenticate, requirePermission('crm:read'), validate(listPartInventoryMovementsSchema), (req, res, next) => procurementController.listInventoryMovements(req, res, next));
+router.post('/:id/stock', authenticate, requirePermission('crm:write'), validate(adjustStockSchema), (req, res, next) => procurementController.adjustStock(req, res, next));
 
 // Get by ID
 router.get('/:id', authenticate, requirePermission('crm:read'), validate(sparePartIdParamSchema), (req, res, next) => sparePartController.getById(req, res, next));

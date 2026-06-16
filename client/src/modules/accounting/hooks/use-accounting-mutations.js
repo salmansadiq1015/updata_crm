@@ -1,5 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { chartService, journalService, apService, arService, bankService } from '../services/accounting-service';
+import {
+  chartService, journalService, apService, arService, bankService,
+  cashService, reconciliationService, openItemsService, accDocService,
+} from '../services/accounting-service';
 import toast from 'react-hot-toast';
 
 function inv(qc, ...keys) {
@@ -11,11 +14,11 @@ export function useChartMutations() {
   const qc = useQueryClient();
   const createAccount = useMutation({
     mutationFn: chartService.create,
-    onSuccess: () => { inv(qc, ['accounting', 'accounts']); toast.success('Account created'); },
+    onSuccess: () => { inv(qc, ['accounting', 'accounts'], ['accounting', 'account-tree']); toast.success('Account created'); },
   });
   const updateAccount = useMutation({
     mutationFn: ({ id, data }) => chartService.update(id, data),
-    onSuccess: () => { inv(qc, ['accounting', 'accounts']); toast.success('Account updated'); },
+    onSuccess: () => { inv(qc, ['accounting', 'accounts'], ['accounting', 'account-tree']); toast.success('Account updated'); },
   });
   return { createAccount, updateAccount };
 }
@@ -113,5 +116,103 @@ export function useBankMutations() {
     mutationFn: bankService.importStatement,
     onSuccess: () => { inv(qc, ['accounting', 'bank-transactions']); toast.success('Statement imported'); },
   });
-  return { createBankAccount, updateBankAccount, importStatement };
+  const importPaymentStatus = useMutation({
+    mutationFn: bankService.importPaymentStatus,
+    onSuccess: () => { inv(qc, ['accounting', 'ap-invoices']); toast.success('Payment status imported'); },
+  });
+  const retrieveStatements = useMutation({
+    mutationFn: bankService.retrieve,
+    onSuccess: () => {
+      inv(qc, ['accounting', 'bank-transactions'], ['accounting', 'bank-accounts'], ['accounting', 'cash-balances'], ['accounting', 'cash-forecast']);
+      toast.success('Bank retrieval completed');
+    },
+  });
+  return { createBankAccount, updateBankAccount, importStatement, importPaymentStatus, retrieveStatements };
+}
+
+// â”€â”€ Cash â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function useCashMutations() {
+  const qc = useQueryClient();
+  const updateManualBalance = useMutation({
+    mutationFn: cashService.manualBalance,
+    onSuccess: () => {
+      inv(qc, ['accounting', 'cash-balances'], ['accounting', 'cash-forecast'], ['accounting', 'bank-accounts']);
+      toast.success('Balance updated');
+    },
+  });
+  return { updateManualBalance };
+}
+
+// â”€â”€ Reconciliation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function useReconciliationMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => inv(
+    qc,
+    ['accounting', 'reconciliation-unmatched'],
+    ['accounting', 'bank-transactions'],
+    ['accounting', 'ar-receivables'],
+    ['accounting', 'ap-invoices'],
+    ['accounting', 'journal'],
+  );
+
+  const runReconciliation = useMutation({
+    mutationFn: reconciliationService.run,
+    onSuccess: () => { invalidate(); toast.success('Reconciliation completed'); },
+  });
+  const matchAr = useMutation({
+    mutationFn: reconciliationService.matchAr,
+    onSuccess: () => { invalidate(); toast.success('AR transaction matched'); },
+  });
+  const matchAp = useMutation({
+    mutationFn: reconciliationService.matchAp,
+    onSuccess: () => { invalidate(); toast.success('AP transaction matched'); },
+  });
+  const categorize = useMutation({
+    mutationFn: reconciliationService.categorize,
+    onSuccess: () => { invalidate(); toast.success('Transaction categorized'); },
+  });
+
+  return { runReconciliation, matchAr, matchAp, categorize };
+}
+
+// â”€â”€ Open Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function useOpenItemMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => inv(qc, ['accounting', 'open-items'], ['accounting', 'open-items-aging'], ['accounting', 'ar-receivables'], ['accounting', 'ap-invoices']);
+  const generateStatement = useMutation({
+    mutationFn: ({ entityId, params, data }) => openItemsService.statement(entityId, params, data),
+    onSuccess: () => { inv(qc, ['accounting', 'documents']); toast.success('Statement generated'); },
+  });
+  const netItems = useMutation({
+    mutationFn: openItemsService.netItems,
+    onSuccess: () => { invalidate(); toast.success('Items netted'); },
+  });
+  return { generateStatement, netItems };
+}
+
+// â”€â”€ Documents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function useAccDocumentMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => inv(qc, ['accounting', 'documents']);
+  const uploadDocument = useMutation({
+    mutationFn: ({ file, meta }) => accDocService.upload(file, meta),
+    onSuccess: () => { invalidate(); toast.success('Document uploaded'); },
+  });
+  const triggerOcr = useMutation({
+    mutationFn: accDocService.triggerOcr,
+    onSuccess: () => { invalidate(); toast.success('OCR queued'); },
+  });
+  const confirmOcr = useMutation({
+    mutationFn: ({ id, data }) => accDocService.confirmOcr(id, data),
+    onSuccess: () => { invalidate(); inv(qc, ['accounting', 'document-ocr-result']); toast.success('OCR confirmed'); },
+  });
+  const rejectOcr = useMutation({
+    mutationFn: ({ id, data }) => accDocService.rejectOcr(id, data),
+    onSuccess: () => { invalidate(); inv(qc, ['accounting', 'document-ocr-result']); toast.success('OCR rejected'); },
+  });
+  const assignDocument = useMutation({
+    mutationFn: ({ id, data }) => accDocService.assign(id, data),
+    onSuccess: () => { invalidate(); toast.success('Document assigned'); },
+  });
+  return { uploadDocument, triggerOcr, confirmOcr, rejectOcr, assignDocument };
 }

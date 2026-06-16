@@ -57,6 +57,7 @@ export const listTransactionsSchema = {
     transactionDateFrom: Joi.date().iso(),
     transactionDateTo: Joi.date().iso(),
     reconciliationStatus: Joi.string().valid(...RECONCILIATION_STATUSES),
+    q: Joi.string().trim().max(200),
   }),
 };
 

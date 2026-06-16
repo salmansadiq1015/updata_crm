@@ -51,8 +51,7 @@ export function InvoiceFormDialog({
   sourceOrder = null,
   sourceQuotation = null,
 }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const {
     createInvoiceFromOrder, createInvoiceFromQuotation,
     createAdvanceInvoice, createFinalInvoice,
@@ -103,7 +102,6 @@ export function InvoiceFormDialog({
     }));
   }, [effectiveSourceOrder, open, type]);
 
-  // Billing plan for FINAL invoices
   const { data: billingPlan } = useBillingPlan(type === 'FINAL' ? effectiveSourceOrderId : null);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
@@ -163,10 +161,12 @@ export function InvoiceFormDialog({
     onClose();
   };
 
-  const titles = {
-    de: { STANDARD: 'Neue Rechnung', ADVANCE: 'Akontorechnung', FINAL: 'Schlussrechnung' },
-    en: { STANDARD: 'New Invoice', ADVANCE: 'Advance Invoice', FINAL: 'Final Invoice' },
+  const titleMap = {
+    STANDARD: t('qop.invoices.formTitleStandard', 'Neue Rechnung'),
+    ADVANCE:  t('qop.invoices.formTitleAdvance', 'Akontorechnung'),
+    FINAL:    t('qop.invoices.formTitleFinal', 'Schlussrechnung'),
   };
+
   const canSubmit = type === 'STANDARD'
     ? Boolean(effectiveSourceOrderId || sourceQuotationId)
     : Boolean(effectiveSourceOrderId);
@@ -176,7 +176,7 @@ export function InvoiceFormDialog({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
-            {titles[de ? 'de' : 'en'][type]}
+            {titleMap[type]}
           </DialogTitle>
         </DialogHeader>
 
@@ -184,10 +184,10 @@ export function InvoiceFormDialog({
           {!sourceOrderId && !sourceQuotationId && (
             <div className="rounded-lg border border-border bg-muted/20 p-4">
               <div className="flex flex-col gap-1.5">
-                <Label>{de ? 'Auftrag' : 'Order'}</Label>
+                <Label>{t('qop.invoices.orderField', 'Auftrag')}</Label>
                 <Select value={form.sourceOrderId || undefined} onValueChange={(v) => set('sourceOrderId', v)}>
                   <SelectTrigger>
-                    <SelectValue placeholder={ordersLoading ? (de ? 'Laden...' : 'Loading...') : (de ? 'Auftrag wählen' : 'Select order')} />
+                    <SelectValue placeholder={ordersLoading ? t('common.loading', 'Laden...') : t('qop.invoices.selectOrder', 'Auftrag waehlen')} />
                   </SelectTrigger>
                   <SelectContent>
                     {orders.map((order) => {
@@ -214,7 +214,7 @@ export function InvoiceFormDialog({
           {/* Header fields */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label>{de ? 'Währung' : 'Currency'}</Label>
+              <Label>{t('qop.form.currency', 'Waehrung')}</Label>
               <Select value={form.currency} onValueChange={(v) => set('currency', v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -223,20 +223,20 @@ export function InvoiceFormDialog({
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>{de ? 'Zahlungsfrist' : 'Payment Terms'}</Label>
+              <Label>{t('qop.invoices.paymentTerms', 'Zahlungsfrist')}</Label>
               <Select value={String(form.paymentTermsDays)} onValueChange={handleTermChange}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PAYMENT_TERMS.map((d) => (
                     <SelectItem key={d} value={String(d)}>
-                      {d} {de ? 'Tage netto' : 'days net'}
+                      {d} {t('qop.invoices.daysNet', 'Tage netto')}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>{de ? 'Fälligkeitsdatum' : 'Due Date'}</Label>
+              <Label>{t('qop.invoices.dueDate', 'Faelligkeitsdatum')}</Label>
               <Input
                 type="date"
                 value={form.dueDate}
@@ -255,20 +255,20 @@ export function InvoiceFormDialog({
                   variant={form.milestoneAmountMode === 'percent' ? 'default' : 'outline'}
                   onClick={() => set('milestoneAmountMode', 'percent')}
                 >
-                  {de ? 'Prozent %' : 'Percentage %'}
+                  {t('qop.invoices.modePercent', 'Prozent %')}
                 </Button>
                 <Button
                   type="button" size="sm"
                   variant={form.milestoneAmountMode === 'fixed' ? 'default' : 'outline'}
                   onClick={() => set('milestoneAmountMode', 'fixed')}
                 >
-                  {de ? 'Fixbetrag CHF' : 'Fixed Amount CHF'}
+                  {t('qop.invoices.modeFixed', 'Fixbetrag CHF')}
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {form.milestoneAmountMode === 'percent' ? (
                   <div className="flex flex-col gap-1.5">
-                    <Label>{de ? 'Anzahlung %' : 'Advance %'}</Label>
+                    <Label>{t('qop.invoices.advancePercent', 'Anzahlung %')}</Label>
                     <Input
                       type="number" min="1" max="100" step="0.1"
                       value={form.milestonePercent}
@@ -278,7 +278,7 @@ export function InvoiceFormDialog({
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1.5">
-                    <Label>{de ? 'Betrag (CHF)' : 'Amount (CHF)'}</Label>
+                    <Label>{t('qop.invoices.advanceAmount', 'Betrag (CHF)')}</Label>
                     <Input
                       type="number" min="0.05" step="0.05"
                       value={form.milestoneAmount}
@@ -288,11 +288,11 @@ export function InvoiceFormDialog({
                   </div>
                 )}
                 <div className="flex flex-col gap-1.5">
-                  <Label>{de ? 'Meilenstein-Beschreibung' : 'Milestone Description'}</Label>
+                  <Label>{t('qop.invoices.milestoneDesc', 'Meilenstein-Beschreibung')}</Label>
                   <Input
                     value={form.milestoneDescription}
                     onChange={(e) => set('milestoneDescription', e.target.value)}
-                    placeholder={de ? 'z.B. Anzahlung Auftragsbeginn' : 'e.g. Upfront payment'}
+                    placeholder={t('qop.invoices.milestoneDescPlaceholder', 'z.B. Anzahlung Auftragsbeginn')}
                   />
                 </div>
               </div>
@@ -303,14 +303,14 @@ export function InvoiceFormDialog({
           {type === 'FINAL' && billingPlan && (
             <div className="flex flex-col gap-3 p-4 rounded-lg bg-violet-50 border border-violet-200">
               <p className="text-sm font-medium text-violet-800">
-                {de ? 'Vorschau: Abzüge Akontozahlungen' : 'Preview: Advance Deductions'}
+                {t('qop.invoices.finalPreviewTitle', 'Vorschau: Abzuege Akontozahlungen')}
               </p>
               <div className="rounded border border-violet-200 overflow-hidden text-sm bg-white">
                 <div className="grid grid-cols-[1fr_5rem_5rem_6rem] bg-violet-50 border-b text-xs font-medium text-muted-foreground px-3 py-2">
-                  <div>{de ? 'Akontorechnung' : 'Advance Invoice'}</div>
-                  <div className="text-right">{de ? 'Datum' : 'Date'}</div>
+                  <div>{t('qop.orders.billingAdvInvoice', 'Akontorechnung')}</div>
+                  <div className="text-right">{t('qop.orders.billingDate', 'Datum')}</div>
                   <div className="text-right">%</div>
-                  <div className="text-right">{de ? 'Betrag' : 'Amount'}</div>
+                  <div className="text-right">{t('qop.orders.colAmount', 'Betrag')}</div>
                 </div>
                 {(billingPlan.advances ?? []).map((adv) => (
                   <div key={adv._id} className="grid grid-cols-[1fr_5rem_5rem_6rem] border-b last:border-0 px-3 py-2">
@@ -321,7 +321,7 @@ export function InvoiceFormDialog({
                   </div>
                 ))}
                 <div className="grid grid-cols-[1fr_6rem] border-t bg-violet-50 px-3 py-2.5 font-semibold">
-                  <div>{de ? 'Restbetrag fällig' : 'Balance Due'}</div>
+                  <div>{t('qop.invoices.finalBalanceDue', 'Restbetrag faellig')}</div>
                   <div className="text-right">{fmt(billingPlan.remainingForFinal)} {sourceOrder?.currency ?? 'CHF'}</div>
                 </div>
               </div>
@@ -330,9 +330,7 @@ export function InvoiceFormDialog({
 
           {type === 'FINAL' && !billingPlan && (
             <div className="p-4 rounded-lg bg-violet-50 border border-violet-200 text-sm text-violet-700">
-              {de
-                ? 'Die Schlussrechnung zeigt den Gesamtbetrag abzüglich aller bisherigen Akontozahlungen.'
-                : 'The final invoice shows the total project amount minus all previous advance payments.'}
+              {t('qop.invoices.finalHint', 'Die Schlussrechnung zeigt den Gesamtbetrag abzueglich aller bisherigen Akontozahlungen.')}
             </div>
           )}
 
@@ -341,7 +339,7 @@ export function InvoiceFormDialog({
             <>
               <Separator />
               <div className="flex flex-col gap-2">
-                <Label className="text-sm font-medium">{de ? 'Positionen' : 'Line Items'}</Label>
+                <Label className="text-sm font-medium">{t('qop.form.positions', 'Positionen')}</Label>
                 <LineItemsEditor value={form.lineItems} onChange={(items) => set('lineItems', items)} />
               </div>
             </>
@@ -351,24 +349,24 @@ export function InvoiceFormDialog({
 
           {/* Notes */}
           <div className="flex flex-col gap-1.5">
-            <Label>{de ? 'Bemerkungen' : 'Notes'}</Label>
+            <Label>{t('qop.form.notes', 'Bemerkungen')}</Label>
             <Textarea
               rows={3}
               value={form.notes}
               onChange={(e) => set('notes', e.target.value)}
-              placeholder={de ? 'Optionale Anmerkungen auf der Rechnung...' : 'Optional notes on invoice...'}
+              placeholder={t('qop.invoices.notesPlaceholder', 'Optionale Anmerkungen auf der Rechnung...')}
               className="resize-none text-sm"
             />
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
-              {de ? 'Abbrechen' : 'Cancel'}
+              {t('common.cancel', 'Abbrechen')}
             </Button>
             <Button type="submit" disabled={isPending || !canSubmit}>
               {isPending
-                ? (de ? 'Erstellen...' : 'Creating...')
-                : (de ? 'Rechnung erstellen' : 'Create Invoice')}
+                ? t('common.creating', 'Wird erstellt...')
+                : t('qop.invoices.createBtn', 'Rechnung erstellen')}
             </Button>
           </DialogFooter>
         </form>

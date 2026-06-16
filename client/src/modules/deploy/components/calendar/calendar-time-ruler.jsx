@@ -1,6 +1,6 @@
 'use client';
 
-import { format, isToday } from 'date-fns';
+import { format, isToday, getISOWeek } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { CALENDAR_VIEWS, DAY_START_HOUR, DAY_END_HOUR, SIDEBAR_WIDTH } from '../../constants/deploy-constants';
@@ -46,8 +46,20 @@ export function CalendarTimeRuler({ view, days, timeSlots }) {
     );
   }
 
+  const kw = days.length > 0 ? getISOWeek(days[0]) : null;
+
   return (
     <div className="flex border-b bg-muted/30 sticky top-0 z-20" style={{ paddingLeft: SIDEBAR_WIDTH }}>
+      {kw !== null && (
+        <div
+          className="absolute left-0 top-0 flex items-center justify-center border-r bg-muted/30"
+          style={{ width: SIDEBAR_WIDTH, height: '100%' }}
+        >
+          <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+            KW {kw}
+          </span>
+        </div>
+      )}
       {days.map((day) => (
         <div key={day.toISOString()} className="flex-1 border-r last:border-r-0">
           <div

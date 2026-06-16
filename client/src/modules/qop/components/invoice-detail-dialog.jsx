@@ -28,7 +28,8 @@ function fmtDate(d, lang) {
   }).format(new Date(d));
 }
 
-function PaymentProgress({ invoice, de, payments }) {
+function PaymentProgress({ invoice, payments }) {
+  const { t } = useLanguage();
   const total = invoice?.grandTotalRounded || invoice?.amountDue || 0;
   const paid = (payments ?? []).reduce((s, p) => s + (p.amount || 0), 0);
   const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
@@ -36,18 +37,19 @@ function PaymentProgress({ invoice, de, payments }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex justify-between text-sm">
-        <span className="text-muted-foreground">{de ? 'Bezahlt' : 'Paid'}</span>
+        <span className="text-muted-foreground">{t('qop.invoice.paid', 'Bezahlt')}</span>
         <span className="font-medium">{fmt(paid)} / {fmt(total)} {invoice?.currency}</span>
       </div>
       <div className="h-2 rounded-full bg-muted overflow-hidden">
         <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <p className="text-xs text-muted-foreground text-right">{pct}% {de ? 'bezahlt' : 'paid'}</p>
+      <p className="text-xs text-muted-foreground text-right">{pct}% {t('qop.invoice.paidPct', 'bezahlt')}</p>
     </div>
   );
 }
 
-function PaymentsTab({ invoiceId, invoice, de, language }) {
+function PaymentsTab({ invoiceId, invoice }) {
+  const { locale: language, t } = useLanguage();
   const { data: payments = [], isLoading } = useInvoicePayments(invoiceId);
   const [payOpen, setPayOpen] = useState(false);
   const isPayable = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(invoice?.status);
@@ -56,19 +58,24 @@ function PaymentsTab({ invoiceId, invoice, de, language }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <PaymentProgress invoice={invoice} de={de} payments={payments} />
+      <PaymentProgress invoice={invoice} payments={payments} />
 
       {isPayable && (
         <Button size="sm" onClick={() => setPayOpen(true)} className="self-start">
           <CheckCircle className="h-4 w-4 mr-2" />
-          {de ? 'Zahlung erfassen' : 'Record Payment'}
+          {t('qop.invoice.recordPayment', 'Zahlung erfassen')}
         </Button>
       )}
 
       {payments.length > 0 ? (
         <div className="rounded-lg border border-border overflow-hidden text-sm">
           <div className="grid grid-cols-[6rem_7rem_6rem_1fr] bg-muted/50 border-b text-xs font-medium text-muted-foreground">
-            {[de ? 'Datum' : 'Date', de ? 'Betrag' : 'Amount', de ? 'Methode' : 'Method', de ? 'Referenz' : 'Reference'].map((h, i) => (
+            {[
+              t('qop.invoice.colDate', 'Datum'),
+              t('qop.invoice.colAmount', 'Betrag'),
+              t('qop.invoice.colMethod', 'Methode'),
+              t('qop.invoice.colRef', 'Referenz'),
+            ].map((h, i) => (
               <div key={i} className="px-3 py-2">{h}</div>
             ))}
           </div>
@@ -83,7 +90,7 @@ function PaymentsTab({ invoiceId, invoice, de, language }) {
         </div>
       ) : (
         <p className="text-sm text-muted-foreground text-center py-4">
-          {de ? 'Noch keine Zahlungen.' : 'No payments yet.'}
+          {t('qop.invoice.noPayments', 'Noch keine Zahlungen.')}
         </p>
       )}
 
@@ -99,8 +106,7 @@ function PaymentsTab({ invoiceId, invoice, de, language }) {
 }
 
 export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { locale: language, t } = useLanguage();
   const [tab, setTab] = useState('overview');
 
   const { data: invoice, isLoading } = useInvoiceDetail(open ? invoiceId : null);
@@ -122,7 +128,7 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">
-            {isLoading ? '...' : `${de ? 'Rechnung' : 'Invoice'} ${invoice?.invoiceNumber ?? ''}`}
+            {isLoading ? '...' : `${t('qop.invoice.title', 'Rechnung')} ${invoice?.invoiceNumber ?? ''}`}
           </DialogTitle>
         </DialogHeader>
 
@@ -143,10 +149,10 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
               {invoice?.status === 'DRAFT' && (
                 <>
                   <Button size="sm" variant="outline" onClick={() => finalizeInvoice.mutate(invoiceId)}>
-                    {de ? 'Abschliessen' : 'Finalize'}
+                    {t('qop.invoice.finalize', 'Abschliessen')}
                   </Button>
                   <Button size="sm" onClick={() => sendInvoice.mutate(invoiceId)}>
-                    <Send className="h-4 w-4 mr-1.5" />{de ? 'Senden' : 'Send'}
+                    <Send className="h-4 w-4 mr-1.5" />{t('qop.invoice.send', 'Senden')}
                   </Button>
                 </>
               )}
@@ -155,27 +161,27 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
                   size="sm" variant="destructive"
                   onClick={() => transitionInvoiceStatus.mutate({ id: invoiceId, targetStatus: 'CANCELLED' })}
                 >
-                  <XCircle className="h-4 w-4 mr-1.5" />{de ? 'Stornieren' : 'Cancel'}
+                  <XCircle className="h-4 w-4 mr-1.5" />{t('qop.invoice.cancel', 'Stornieren')}
                 </Button>
               )}
             </div>
 
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="overview">{de ? 'Übersicht' : 'Overview'}</TabsTrigger>
-                <TabsTrigger value="payments">{de ? 'Zahlungen' : 'Payments'}</TabsTrigger>
-                <TabsTrigger value="history">{de ? 'Verlauf' : 'History'}</TabsTrigger>
+                <TabsTrigger value="overview">{t('qop.invoice.tabOverview', 'Uebersicht')}</TabsTrigger>
+                <TabsTrigger value="payments">{t('qop.invoice.tabPayments', 'Zahlungen')}</TabsTrigger>
+                <TabsTrigger value="history">{t('qop.invoice.tabHistory', 'Verlauf')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="mt-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   {[
-                    [de ? 'Nummer' : 'Number', <span key="n" className="font-mono">{invoice?.invoiceNumber}</span>],
-                    [de ? 'Typ' : 'Type', <InvoiceTypeBadge key="t" type={invoice?.invoiceType} />],
-                    [de ? 'Kunde' : 'Customer', invoice?.customerName],
-                    [de ? 'Fällig am' : 'Due Date', fmtDate(invoice?.dueDate, language)],
-                    [de ? 'Betrag' : 'Amount', <AmountDisplay key="a" amount={invoice?.grandTotalRounded} currency={invoice?.currency} className="font-semibold" />],
-                    [de ? 'Offener Betrag' : 'Amount Due', <AmountDisplay key="d" amount={invoice?.amountDue} currency={invoice?.currency} />],
+                    [t('qop.invoice.fieldNumber', 'Nummer'), <span key="n" className="font-mono">{invoice?.invoiceNumber}</span>],
+                    [t('qop.invoice.fieldType', 'Typ'), <InvoiceTypeBadge key="t" type={invoice?.invoiceType} />],
+                    [t('qop.invoice.fieldCustomer', 'Kunde'), invoice?.customerName],
+                    [t('qop.invoice.fieldDueDate', 'Faellig am'), fmtDate(invoice?.dueDate, language)],
+                    [t('qop.invoice.fieldAmount', 'Betrag'), <AmountDisplay key="a" amount={invoice?.grandTotalRounded} currency={invoice?.currency} className="font-semibold" />],
+                    [t('qop.invoice.fieldAmountDue', 'Offener Betrag'), <AmountDisplay key="d" amount={invoice?.amountDue} currency={invoice?.currency} />],
                   ].map(([label, value], i) => (
                     <div key={i} className="flex flex-col gap-0.5">
                       <span className="text-xs text-muted-foreground">{label}</span>
@@ -188,7 +194,7 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
                 {invoice?.invoiceType === 'FINAL' && (invoice?.advanceDeductions ?? []).length > 0 && (
                   <div className="mt-4 flex flex-col gap-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {de ? 'Abzüge Akontozahlungen' : 'Advance Deductions'}
+                      {t('qop.invoice.advanceDeductions', 'Abzuege Akontozahlungen')}
                     </p>
                     {invoice.advanceDeductions.map((d, i) => (
                       <div key={i} className="flex justify-between text-sm">
@@ -197,7 +203,7 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
                       </div>
                     ))}
                     <div className="flex justify-between text-sm font-semibold border-t pt-2 mt-1">
-                      <span>{de ? 'Restbetrag' : 'Net Balance'}</span>
+                      <span>{t('qop.invoice.netBalance', 'Restbetrag')}</span>
                       <span>{fmt(invoice.netSubtotal)} {invoice.currency}</span>
                     </div>
                   </div>
@@ -205,7 +211,7 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
               </TabsContent>
 
               <TabsContent value="payments" className="mt-4">
-                <PaymentsTab invoiceId={invoiceId} invoice={invoice} de={de} language={language} />
+                <PaymentsTab invoiceId={invoiceId} invoice={invoice} />
               </TabsContent>
 
               <TabsContent value="history" className="mt-4">

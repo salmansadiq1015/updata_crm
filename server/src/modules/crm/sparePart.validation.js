@@ -56,6 +56,7 @@ export const listSparePartsSchema = {
     isActive: Joi.string().valid('true', 'false'),
     supplierId: objectId,
     manufacturer: Joi.string().trim().max(255),
+    stockStatus: Joi.string().valid('low', 'ok', 'out'),
     search: Joi.string().trim().max(100),
   }),
 };

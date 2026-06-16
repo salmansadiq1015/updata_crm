@@ -6,7 +6,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-export function useAssignmentMutations({ onCreate, onUpdate, onDelete, onMove, onResize } = {}) {
+export function useAssignmentMutations({ onCreate, onUpdate, onDelete, onMove, onResize, onConflict } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -16,6 +16,11 @@ export function useAssignmentMutations({ onCreate, onUpdate, onDelete, onMove, o
     queryClient.invalidateQueries({ queryKey: queryKeys.deploy.conflicts.all() });
   };
 
+  const handleError = (err, variables) => {
+    const handled = onConflict?.(err, variables);
+    if (!handled) showError(err);
+  };
+
   const create = useMutation({
     mutationFn: (data) => assignmentService.createAssignment(data),
     onSuccess: (res) => {
@@ -23,7 +28,7 @@ export function useAssignmentMutations({ onCreate, onUpdate, onDelete, onMove, o
       showSuccess(t('deploy.assignments.created', 'Einsatz erstellt'));
       onCreate?.(res);
     },
-    onError: (err) => showError(err),
+    onError: handleError,
   });
 
   const update = useMutation({
@@ -34,7 +39,7 @@ export function useAssignmentMutations({ onCreate, onUpdate, onDelete, onMove, o
       showSuccess(t('deploy.assignments.updated', 'Einsatz aktualisiert'));
       onUpdate?.(res);
     },
-    onError: (err) => showError(err),
+    onError: handleError,
   });
 
   const remove = useMutation({
@@ -44,7 +49,7 @@ export function useAssignmentMutations({ onCreate, onUpdate, onDelete, onMove, o
       showSuccess(t('deploy.assignments.deleted', 'Einsatz gelöscht'));
       onDelete?.();
     },
-    onError: (err) => showError(err),
+    onError: handleError,
   });
 
   const move = useMutation({
@@ -54,7 +59,7 @@ export function useAssignmentMutations({ onCreate, onUpdate, onDelete, onMove, o
       showSuccess(t('deploy.assignments.moved', 'Einsatz verschoben'));
       onMove?.(res);
     },
-    onError: (err) => showError(err),
+    onError: handleError,
   });
 
   const resize = useMutation({
@@ -64,7 +69,7 @@ export function useAssignmentMutations({ onCreate, onUpdate, onDelete, onMove, o
       showSuccess(t('deploy.assignments.resized', 'Dauer geändert'));
       onResize?.(res);
     },
-    onError: (err) => showError(err),
+    onError: handleError,
   });
 
   return { create, update, remove, move, resize };

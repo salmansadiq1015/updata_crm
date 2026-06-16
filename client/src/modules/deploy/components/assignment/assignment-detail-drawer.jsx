@@ -21,7 +21,7 @@ import { DeployEmptyState } from '../shared/deploy-empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Clock, FileText, User, Hash, Pencil, Trash2, Loader2,
-  CalendarCheck, SearchX,
+  CalendarCheck, ClipboardList, SearchX,
 } from 'lucide-react';
 
 function DetailRow({ icon: Icon, label, children }) {
@@ -123,6 +123,13 @@ export function AssignmentDetailDrawer({ assignmentId, open, onOpenChange, onEdi
                 <DetailRow icon={User} label={t('deploy.detail.employee', 'Mitarbeiter')}>
                   {assignment.employeeId?.firstName} {assignment.employeeId?.lastName}
                 </DetailRow>
+
+                {assignment.orderId && (
+                  <DetailRow icon={ClipboardList} label={t('deploy.detail.order', 'Auftrag')}>
+                    {assignment.orderId.orderNumber || assignment.orderId.title}
+                    {assignment.orderId.customerName ? ` - ${assignment.orderId.customerName}` : ''}
+                  </DetailRow>
+                )}
 
                 {assignment.projectId && (
                   <DetailRow icon={FileText} label={t('deploy.detail.project', 'Projekt')}>

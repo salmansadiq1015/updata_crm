@@ -58,6 +58,7 @@ export const ENDPOINTS = Object.freeze({
     CONTACT_BY_ID: (id) => `/crm/contacts/${id}`,
     CONTACT_SET_PRIMARY: (id) => `/crm/contacts/${id}/set-primary`,
     CONTACTS_SEARCH: '/crm/contacts/search',
+    ADDRESS_BOOK: '/crm/address-book',
     // Sites (Phase 2)
     SITES: '/crm/sites',
     CUSTOMER_SITES: (customerId) => `/crm/customers/${customerId}/sites`,
@@ -91,6 +92,26 @@ export const ENDPOINTS = Object.freeze({
     INSTALLATION_SPARE_PART_ORDER_FLAG: (installationId, sparePartId) => `/crm/installations/${installationId}/spare-parts/${sparePartId}/order-flag`,
     INSTALLATION_SPARE_PART_ORDER_STATUS: (installationId, sparePartId) => `/crm/installations/${installationId}/spare-parts/${sparePartId}/order-status`,
     INSTALLATION_SPARE_PART_UNLINK: (installationId, sparePartId) => `/crm/installations/${installationId}/spare-parts/${sparePartId}`,
+    // Suppliers
+    SUPPLIERS: '/crm/suppliers',
+    SUPPLIER_BY_ID: (id) => `/crm/suppliers/${id}`,
+    SUPPLIERS_SEARCH: '/crm/suppliers/search',
+    // Purchase Orders
+    PURCHASE_ORDERS: '/crm/purchase-orders',
+    PURCHASE_ORDER_BY_ID: (id) => `/crm/purchase-orders/${id}`,
+    PURCHASE_ORDER_RECEIVE: (id) => `/crm/purchase-orders/${id}/receive`,
+    PURCHASE_ORDER_CANCEL: (id) => `/crm/purchase-orders/${id}/cancel`,
+    PURCHASE_ORDER_ITEMS: (id) => `/crm/purchase-orders/${id}/items`,
+    // Inventory movements & stats
+    SPARE_PARTS_STATS: '/crm/spare-parts/stats',
+    SPARE_PARTS_LOW_STOCK: '/crm/spare-parts/low-stock',
+    SPARE_PARTS_MOVEMENTS: '/crm/spare-parts/movements',
+    SPARE_PART_MOVEMENTS: (id) => `/crm/spare-parts/${id}/movements`,
+    SPARE_PART_ADJUST_STOCK: (id) => `/crm/spare-parts/${id}/stock`,
+    // Delivery note OCR
+    DELIVERY_NOTE_OCR: '/crm/procurement/delivery-note/ocr',
+    DELIVERY_NOTE_OCR_RESULT: (jobId) => `/crm/procurement/delivery-note/${jobId}/result`,
+    DELIVERY_NOTE_OCR_CONFIRM: (jobId) => `/crm/procurement/delivery-note/${jobId}/confirm`,
     // Notes (polymorphic — site or installation)
     SITE_NOTES: (siteId) => `/crm/sites/${siteId}/notes`,
     INSTALLATION_NOTES: (installationId) => `/crm/installations/${installationId}/notes`,
@@ -337,6 +358,7 @@ export const ENDPOINTS = Object.freeze({
   },
   DEPLOY: {
     CALENDAR: '/scheduling/calendar',
+    EMPLOYEES: '/scheduling/employees',
     ASSIGNMENTS: '/scheduling/assignments',
     ASSIGNMENT_BY_ID: (id) => `/scheduling/assignments/${id}`,
     ASSIGNMENT_MOVE: (id) => `/scheduling/assignments/${id}/move`,
@@ -406,12 +428,22 @@ export const ENDPOINTS = Object.freeze({
     APPOINTMENT_REMINDERS: '/qop/reminders/appointments',
     APPOINTMENT_REMINDER_BY_ID: (id) => `/qop/reminders/appointments/${id}`,
     APPOINTMENT_REMINDER_STATUS: (id) => `/qop/reminders/appointments/${id}/status`,
+    // Quotation templates
+    QUOTATION_TEMPLATES: '/qop/quotation-templates',
+    QUOTATION_TEMPLATE_BY_ID: (id) => `/qop/quotation-templates/${id}`,
+    QUOTATION_TEMPLATE_USE: (id) => `/qop/quotation-templates/${id}/use`,
+    QUOTATION_TEMPLATE_CATEGORIES: '/qop/quotation-templates/categories',
+    // Analytics
+    QUOTATION_RECURRING_ITEMS: '/qop/quotations/analytics/recurring-items',
   },
   ACCOUNTING: {
     // Chart of Accounts
     ACCOUNTS: '/accounting/accounts',
+    ACCOUNT_TREE: '/accounting/accounts/tree',
     ACCOUNT_BY_ID: (id) => `/accounting/accounts/${id}`,
     ACCOUNT_BALANCE: (id) => `/accounting/accounts/${id}/balance`,
+    ACCOUNT_OVERVIEW: (id) => `/accounting/accounts/${id}/overview`,
+    ACCOUNT_OVERVIEW_EXPORT: (id) => `/accounting/accounts/${id}/overview/export`,
     // Journal Entries
     JOURNAL: '/accounting/journal',
     JOURNAL_BY_ID: (id) => `/accounting/journal/${id}`,
@@ -429,6 +461,7 @@ export const ENDPOINTS = Object.freeze({
     AP_DOCUMENT: (id) => `/accounting/ap/invoices/${id}/document`,
     AP_PAYMENT_BATCH: '/accounting/ap/invoices/payment-batch',
     AP_PAYMENT_BATCH_BY_ID: (batchId) => `/accounting/ap/invoices/payment-batch/${batchId}`,
+    AP_PAYMENT_BATCH_EXPORT: (batchId) => `/accounting/ap/invoices/payment-batch/${batchId}/export-pain001`,
     // AR Receivables
     AR_RECEIVABLES: '/accounting/ar/receivables',
     AR_AGING: '/accounting/ar/receivables/aging',
@@ -451,6 +484,26 @@ export const ENDPOINTS = Object.freeze({
     BANK_IMPORT: '/accounting/bank/import',
     BANK_PAYMENT_STATUS_IMPORT: '/accounting/bank/payment-status/import',
     BANK_RETRIEVE: '/accounting/bank/retrieve',
+    // Reconciliation
+    RECONCILIATION_RUN: '/accounting/reconciliation/run',
+    RECONCILIATION_UNMATCHED: '/accounting/reconciliation/unmatched',
+    RECONCILIATION_SUGGESTIONS: (txId) => `/accounting/reconciliation/suggestions/${txId}`,
+    RECONCILIATION_MATCH_AR: '/accounting/reconciliation/match',
+    RECONCILIATION_MATCH_AP: '/accounting/reconciliation/match-ap',
+    RECONCILIATION_CATEGORIZE: '/accounting/reconciliation/categorize',
+    // Cash
+    CASH_BALANCES: '/accounting/cash/balances',
+    CASH_FORECAST: '/accounting/cash/forecast',
+    CASH_MANUAL_BALANCE: '/accounting/cash/balances/manual',
+    // Open Items
+    OPEN_ITEMS: '/accounting/open-items',
+    OPEN_ITEMS_AGING: '/accounting/open-items/aging',
+    OPEN_ITEMS_STATEMENT: (entityId) => `/accounting/open-items/statement/${entityId}`,
+    OPEN_ITEMS_NET_POSITION: (entityId) => `/accounting/open-items/net/${entityId}`,
+    OPEN_ITEMS_NETTING: '/accounting/open-items/netting',
+    // Reports
+    PROFIT_LOSS: '/accounting/reports/profit-loss',
+    PROFIT_LOSS_EXPORT: '/accounting/reports/profit-loss/export',
     // Documents
     ACC_DOCUMENTS: '/accounting/documents',
     ACC_DOCUMENT_BY_ID: (id) => `/accounting/documents/${id}`,
@@ -458,8 +511,10 @@ export const ENDPOINTS = Object.freeze({
     ACC_DOCUMENT_OCR: (id) => `/accounting/documents/${id}/ocr`,
     ACC_DOCUMENT_OCR_RESULT: (id) => `/accounting/documents/${id}/ocr/result`,
     ACC_DOCUMENT_OCR_CONFIRM: (id) => `/accounting/documents/${id}/ocr/confirm`,
+    ACC_DOCUMENT_OCR_REJECT: (id) => `/accounting/documents/${id}/ocr/reject`,
     ACC_DOCUMENT_ASSIGN: (id) => `/accounting/documents/${id}/assign`,
     ACC_DOCUMENT_BULK_ASSIGN: '/accounting/documents/bulk-assign',
+    ACC_DOCUMENT_BULK_DOWNLOAD: '/accounting/documents/bulk-download',
     ACC_DOCUMENT_UPLOAD: '/accounting/documents/upload',
   },
   AI: {

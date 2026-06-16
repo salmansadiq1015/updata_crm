@@ -16,6 +16,7 @@ const ALLOWED_FILTERS = {
 
 const POPULATE_FIELDS = [
   { path: 'employeeId', select: 'firstName lastName email' },
+  { path: 'orderId', select: 'orderNumber title customerName status projectId customerId' },
   { path: 'customerId', select: 'name phone email street postalCode city' },
   { path: 'siteId', select: 'name street postalCode city' },
   {

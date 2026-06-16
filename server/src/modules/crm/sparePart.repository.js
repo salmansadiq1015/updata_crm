@@ -1,5 +1,7 @@
 import SparePart from './sparePart.model.js';
 import InstallationSparePart from './installationSparePart.model.js';
+import InventoryMovement from './inventoryMovement.model.js';
+import Customer from './customer.model.js';
 import {
   buildCursorQuery,
   buildCursorSort,
@@ -23,9 +25,12 @@ class SparePartRepository {
   }
 
   async findById(id) {
-    return SparePart.findById(id)
+    const doc = await SparePart.findById(id)
       .populate({ path: 'supplierId', select: 'name customerNumber' })
       .lean();
+    if (!doc) return doc;
+    const [enriched] = await this._attachProcurementSupplierFields([doc]);
+    return enriched;
   }
 
   async findByIds(ids) {
@@ -82,10 +87,19 @@ class SparePartRepository {
   }
 
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+    const { stockStatus, ...safeFilters } = filters;
     const filter = {
-      ...buildFilter(filters, ALLOWED_FILTERS),
+      ...buildFilter(safeFilters, ALLOWED_FILTERS),
       ...buildCursorQuery(cursor, sortBy, sortOrder),
     };
+
+    if (stockStatus === 'low') {
+      filter.$expr = { $lte: ['$currentStock', '$minStockLevel'] };
+    } else if (stockStatus === 'ok') {
+      filter.$expr = { $gt: ['$currentStock', '$minStockLevel'] };
+    } else if (stockStatus === 'out') {
+      filter.currentStock = 0;
+    }
 
     if (search) {
       filter.$or = [
@@ -104,7 +118,63 @@ class SparePartRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    const response = buildCursorResponse(docs, limit, sortBy);
+    response.data = await this._attachProcurementSupplierFields(response.data);
+    return response;
+  }
+
+  async _attachProcurementSupplierFields(parts) {
+    if (!parts.length) return parts;
+
+    const missingPreferredIds = parts
+      .filter((part) => !part.supplierId)
+      .map((part) => part._id);
+    if (!missingPreferredIds.length) {
+      return parts.map((part) => ({
+        ...part,
+        preferredSupplier: part.supplierId || null,
+        supplierName: part.supplierId?.name || null,
+      }));
+    }
+
+    const latestRows = await InventoryMovement.aggregate([
+      {
+        $match: {
+          sparePartId: { $in: missingPreferredIds },
+          supplierId: { $ne: null },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: '$sparePartId',
+          supplierId: { $first: '$supplierId' },
+          lastPurchaseDate: { $first: '$createdAt' },
+        },
+      },
+    ]);
+
+    const supplierIds = latestRows.map((row) => row.supplierId);
+    const suppliers = supplierIds.length
+      ? await Customer.find({ _id: { $in: supplierIds } }).select('name customerNumber').lean()
+      : [];
+    const supplierById = new Map(suppliers.map((supplier) => [String(supplier._id), supplier]));
+    const latestByPart = new Map(latestRows.map((row) => [String(row._id), {
+      supplier: supplierById.get(String(row.supplierId)) || null,
+      lastPurchaseDate: row.lastPurchaseDate,
+    }]));
+
+    return parts.map((part) => {
+      const latest = latestByPart.get(String(part._id));
+      const preferred = part.supplierId || latest?.supplier || null;
+      return {
+        ...part,
+        preferredSupplier: preferred,
+        lastSupplierId: latest?.supplier || null,
+        lastPurchaseDate: latest?.lastPurchaseDate || null,
+        supplierName: preferred?.name || null,
+      };
+    });
   }
 
   async textSearch(term, limit = 20) {

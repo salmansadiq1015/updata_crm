@@ -16,13 +16,12 @@ function fmtDate(dateStr, lang) {
 }
 
 export function DocumentHistoryTimeline({ history = [], className }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { locale: language, t } = useLanguage();
 
   if (!history.length) {
     return (
       <p className="text-sm text-muted-foreground py-4 text-center">
-        {de ? 'Keine Verlaufseinträge.' : 'No history entries.'}
+        {t('qop.history.noEntries', 'Keine Verlaufseintraege.')}
       </p>
     );
   }

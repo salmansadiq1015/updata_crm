@@ -17,6 +17,13 @@ class AccountController {
     } catch (err) { next(err); }
   }
 
+  async getChart(req, res, next) {
+    try {
+      const data = await accountService.getChartOfAccounts();
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async getById(req, res, next) {
     try {
       const account = await accountService.getById(req.params.id);

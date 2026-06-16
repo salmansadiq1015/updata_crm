@@ -14,8 +14,9 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { useArReceivables, useArSummary, useArAging, useArPayments, useArOverdue } from '@/modules/accounting/hooks/use-accounting-queries';
+import { useArReceivables, useArSummary, useArOverdue } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useArMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
+import { cursorPageLabel } from '@/modules/accounting/utils/accounting-ui';
 
 const fmt = (n, currency = 'CHF') =>
   new Intl.NumberFormat('de-CH', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n ?? 0);
@@ -93,22 +94,32 @@ function ReceivablesTab({ de }) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
   const [payTarget, setPayTarget] = useState(null);
+  const [cursorStack, setCursorStack] = useState([null]);
+  const cursor = cursorStack[cursorStack.length - 1];
 
   const filters = {
+    limit: 50,
     ...(status !== 'ALL' && { status }),
     ...(search && { q: search }),
+    ...(cursor && { cursor }),
   };
 
-  const { data: { items = [] } = {}, isLoading } = useArReceivables(filters);
+  const { data: { items = [], pagination } = {}, isLoading } = useArReceivables(filters);
+  const resetList = () => setCursorStack([null]);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9 h-9" placeholder={de ? 'Kunde suchen...' : 'Search customer...'} value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input
+            className="pl-9 h-9"
+            placeholder={de ? 'Kunde suchen...' : 'Search customer...'}
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); resetList(); }}
+          />
         </div>
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={(value) => { setStatus(value); resetList(); }}>
           <SelectTrigger className="h-9 w-40 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">{de ? 'Alle Status' : 'All Statuses'}</SelectItem>
@@ -179,6 +190,25 @@ function ReceivablesTab({ de }) {
             )}
           </tbody>
         </table>
+        <div className="flex items-center justify-between border-t border-border px-3 py-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCursorStack((current) => (current.length > 1 ? current.slice(0, -1) : current))}
+            disabled={cursorStack.length <= 1}
+          >
+            {de ? 'Zurueck' : 'Previous'}
+          </Button>
+          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1)}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => pagination?.nextCursor && setCursorStack((current) => [...current, pagination.nextCursor])}
+            disabled={!pagination?.hasNext}
+          >
+            {de ? 'Weiter' : 'Next'}
+          </Button>
+        </div>
       </div>
 
       {payTarget && (

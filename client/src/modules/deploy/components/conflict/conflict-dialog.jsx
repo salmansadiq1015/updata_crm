@@ -49,7 +49,7 @@ export function ConflictDialog({ open, conflicts, onOverride, onCancel }) {
           <DialogDescription>
             {hasHardConflicts
               ? t('deploy.conflicts.hardInfo', 'Diese Verschiebung enthaelt harte Konflikte und kann nicht uebersteuert werden.')
-              : t('deploy.conflicts.moveInfo', 'Die Verschiebung verursacht folgende Konflikte:')}
+              : t('deploy.conflicts.planInfo', 'Die Planung verursacht folgende Konflikte:')}
           </DialogDescription>
         </DialogHeader>
 

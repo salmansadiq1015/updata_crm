@@ -7,6 +7,7 @@ export const listOpenItemsSchema = {
     customerId: objectId,
     supplierId: objectId,
     agingBucket: Joi.string().valid('current', '1_30', '31_60', '61_90', '90_plus'),
+    q: Joi.string().trim().max(200),
   }),
 };
 

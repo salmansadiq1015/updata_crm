@@ -29,8 +29,7 @@ function fmtDate(d, lang) {
 }
 
 export function OrdersTable({ advancedFilters = {} }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { locale: language, t } = useLanguage();
 
   const [search, setSearch]       = useState('');
   const [statusFilter, setStatus] = useState('');
@@ -52,16 +51,16 @@ export function OrdersTable({ advancedFilters = {} }) {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={de ? 'Auftrag suchen...' : 'Search orders...'}
+            placeholder={t('qop.orders.search', 'Auftrag suchen...')}
             className="pl-9 h-9 text-sm"
           />
         </div>
         <Select value={statusFilter || 'ALL'} onValueChange={(v) => setStatus(v === 'ALL' ? '' : v)}>
           <SelectTrigger className="h-9 w-44 text-sm">
-            <SelectValue placeholder={de ? 'Alle Status' : 'All statuses'} />
+            <SelectValue placeholder={t('qop.orders.allStatuses', 'Alle Status')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">{de ? 'Alle Status' : 'All statuses'}</SelectItem>
+            <SelectItem value="ALL">{t('qop.orders.allStatuses', 'Alle Status')}</SelectItem>
             {ORDER_STATUSES.filter(Boolean).map((s) => (
               <SelectItem key={s} value={s}><OrderStatusBadge status={s} /></SelectItem>
             ))}
@@ -73,12 +72,12 @@ export function OrdersTable({ advancedFilters = {} }) {
       <div className="rounded-lg border border-border overflow-hidden">
         <div className="grid grid-cols-[9rem_1fr_8rem_7rem_7rem_8rem_2.5rem] bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground">
           {[
-            de ? 'Nummer' : 'Number',
-            de ? 'Kunde' : 'Customer',
-            de ? 'Status' : 'Status',
-            de ? 'Erstellt' : 'Created',
-            de ? 'Quelle' : 'From Quote',
-            de ? 'Betrag' : 'Amount',
+            t('qop.orders.colNumber', 'Nummer'),
+            t('qop.orders.colCustomer', 'Kunde'),
+            t('qop.orders.colStatus', 'Status'),
+            t('qop.orders.colCreated', 'Erstellt'),
+            t('qop.orders.colSource', 'Quelle'),
+            t('qop.orders.colAmount', 'Betrag'),
             '',
           ].map((h, i) => (
             <div key={i} className={`px-3 py-2.5 ${i >= 5 ? 'text-right' : ''}`}>{h}</div>
@@ -95,7 +94,7 @@ export function OrdersTable({ advancedFilters = {} }) {
           <div className="py-12 text-center">
             <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">
-              {de ? 'Keine Aufträge gefunden.' : 'No orders found.'}
+              {t('qop.orders.empty', 'Keine Auftraege gefunden.')}
             </p>
           </div>
         )}
@@ -129,7 +128,7 @@ export function OrdersTable({ advancedFilters = {} }) {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-40">
                     <DropdownMenuItem onClick={() => setDetailId(id)}>
-                      <Eye className="h-4 w-4 mr-2" />{de ? 'Details' : 'View Details'}
+                      <Eye className="h-4 w-4 mr-2" />{t('qop.orders.viewDetails', 'Details')}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

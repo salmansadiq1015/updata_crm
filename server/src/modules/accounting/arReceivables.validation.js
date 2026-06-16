@@ -10,6 +10,7 @@ export const listReceivablesSchema = {
     amountMin: Joi.number().min(0),
     amountMax: Joi.number().min(0),
     overdue: Joi.boolean(),
+    q: Joi.string().trim().max(200),
   }),
 };
 

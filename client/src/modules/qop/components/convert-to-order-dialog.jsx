@@ -14,8 +14,7 @@ function fmt(n) {
 }
 
 export function ConvertToOrderDialog({ open, onClose, quotation }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const { convertQuotation } = useQuotationMutations();
 
   const lineItems = (quotation?.lineItems ?? []).filter((li) => li.type !== 'text' && li.type !== 'subtotal');
@@ -39,26 +38,24 @@ export function ConvertToOrderDialog({ open, onClose, quotation }) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{de ? 'Auftrag erstellen' : 'Convert to Order'}</DialogTitle>
+          <DialogTitle>{t('qop.convert.title', 'Auftrag erstellen')}</DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-3 mt-2">
           <p className="text-sm text-muted-foreground">
-            {de
-              ? 'Wähle die Positionen aus, die in den Auftrag übernommen werden sollen.'
-              : 'Select which line items to include in the order.'}
+            {t('qop.convert.desc', 'Wähle die Positionen aus, die in den Auftrag übernommen werden sollen.')}
           </p>
 
           <div className="rounded-lg border border-border overflow-hidden text-sm">
             <div className="grid grid-cols-[2rem_1fr_5rem_5rem] bg-muted/50 border-b text-xs font-medium text-muted-foreground">
               <div className="px-3 py-2" />
-              <div className="px-3 py-2">{de ? 'Beschreibung' : 'Description'}</div>
-              <div className="px-3 py-2 text-right">{de ? 'Menge' : 'Qty'}</div>
-              <div className="px-3 py-2 text-right">{de ? 'Total' : 'Total'}</div>
+              <div className="px-3 py-2">{t('qop.convert.colDescription', 'Beschreibung')}</div>
+              <div className="px-3 py-2 text-right">{t('qop.convert.colQty', 'Menge')}</div>
+              <div className="px-3 py-2 text-right">{t('qop.convert.colTotal', 'Total')}</div>
             </div>
             {lineItems.length === 0 && (
               <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                {de ? 'Keine Positionen vorhanden.' : 'No line items.'}
+                {t('qop.convert.noItems', 'Keine Positionen vorhanden.')}
               </div>
             )}
             {lineItems.map((li) => {
@@ -79,7 +76,7 @@ export function ConvertToOrderDialog({ open, onClose, quotation }) {
                     <span>{li.description}</span>
                     {li.isOptional && (
                       <Badge variant="outline" className="ml-2 text-xs">
-                        {de ? 'Optional' : 'Optional'}
+                        {t('qop.convert.optional', 'Optional')}
                       </Badge>
                     )}
                   </div>
@@ -91,21 +88,23 @@ export function ConvertToOrderDialog({ open, onClose, quotation }) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            {selected.size} / {lineItems.length} {de ? 'Positionen ausgewählt' : 'items selected'}
+            {t('qop.convert.selected', '{count} / {total} Positionen ausgewählt')
+              .replace('{count}', selected.size)
+              .replace('{total}', lineItems.length)}
           </p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={convertQuotation.isPending}>
-            {de ? 'Abbrechen' : 'Cancel'}
+            {t('common.cancel', 'Abbrechen')}
           </Button>
           <Button
             onClick={handleConvert}
             disabled={selected.size === 0 || convertQuotation.isPending}
           >
             {convertQuotation.isPending
-              ? (de ? 'Konvertiere...' : 'Converting...')
-              : (de ? 'Auftrag erstellen' : 'Create Order')}
+              ? t('qop.convert.converting', 'Konvertiere...')
+              : t('qop.convert.confirm', 'Auftrag erstellen')}
           </Button>
         </DialogFooter>
       </DialogContent>

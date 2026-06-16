@@ -14,6 +14,7 @@ const router = Router();
 router.post('/', authenticate, requirePermission('quotations:write'), validate(createQuotationSchema), (req, res, next) => quotationController.create(req, res, next));
 router.get('/', authenticate, requirePermission('quotations:read'), validate(listQuotationsSchema), (req, res, next) => quotationController.list(req, res, next));
 router.get('/reminders', authenticate, requirePermission('quotations:read'), (req, res, next) => quotationController.listReminders(req, res, next));
+router.get('/analytics/recurring-items', authenticate, requirePermission('quotations:read'), (req, res, next) => quotationController.recurringItems(req, res, next));
 
 // Single-resource routes
 router.get('/:id', authenticate, requirePermission('quotations:read'), validate(quotationIdParamSchema), (req, res, next) => quotationController.getById(req, res, next));

@@ -75,6 +75,12 @@ const EVENT_TYPES = Object.freeze({
   SPARE_PART_UNLINKED: 'spare_part.unlinked',
   SPARE_PART_ORDER_REQUESTED: 'spare_part.order_requested',
   SPARE_PART_ORDER_STATUS_UPDATED: 'spare_part.order_status_updated',
+  INVENTORY_MOVEMENT_CREATED: 'inventory.movement.created',
+  PURCHASE_ORDER_CREATED: 'purchase_order.created',
+  PURCHASE_ORDER_RECEIVED: 'purchase_order.received',
+  PURCHASE_ORDER_CANCELLED: 'purchase_order.cancelled',
+  DELIVERY_NOTE_OCR_EXTRACTED: 'delivery_note.ocr.extracted',
+  DELIVERY_NOTE_CONFIRMED: 'delivery_note.confirmed',
 
   // CRM — Newsletters
   NEWSLETTER_CREATED: 'newsletter.created',

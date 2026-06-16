@@ -9,6 +9,8 @@ import { getCreateAssignmentSchema } from '../../validations/assignment';
 import { useAssignmentMutations } from '../../hooks/use-assignment-mutations';
 import { useDeployEmployees } from '../../hooks/use-deploy-employees';
 import { AssignmentRecurrenceForm } from './assignment-recurrence-form';
+import { AssignmentWorkContextFields } from './assignment-work-context-fields';
+import { ConflictDialog } from '../conflict/conflict-dialog';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
   DialogDescription, DialogFooter,
@@ -22,7 +24,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { FormField, FormSection, FormBody } from '@/components/ui/form-field';
-import { Loader2, CalendarClock, Repeat, Check, ChevronsUpDown, X, Search, UsersRound } from 'lucide-react';
+import {
+  AlertTriangle, BadgeCheck, BriefcaseBusiness, CalendarClock, Check,
+  ChevronsUpDown, Loader2, Repeat, Search, ShieldAlert, UsersRound, X,
+} from 'lucide-react';
 import { ASSIGNMENT_TYPE_META, PRIORITY_META, translateMetaLabel } from '../../constants/deploy-constants';
 
 const BLANK = {
@@ -55,6 +60,40 @@ const DEFAULT_RECURRENCE = {
 };
 
 const EMPLOYEE_PICKER_LIMIT = 80;
+const EMPLOYEE_FILTERS = [
+  { value: 'ALL', labelKey: 'deploy.form.employeeFilterAll', fallback: 'Alle' },
+  { value: 'AVAILABLE', labelKey: 'deploy.form.employeeFilterAvailable', fallback: 'Verfuegbar' },
+  { value: 'WARNING', labelKey: 'deploy.form.employeeFilterWarnings', fallback: 'Warnungen' },
+  { value: 'UNAVAILABLE', labelKey: 'deploy.form.employeeFilterUnavailable', fallback: 'Abwesend' },
+  { value: 'QUALIFIED', labelKey: 'deploy.form.employeeFilterQualified', fallback: 'Passend' },
+];
+
+const EMPLOYEE_STATUS_META = {
+  AVAILABLE: {
+    labelKey: 'deploy.form.employeeAvailable',
+    fallback: 'Verfuegbar',
+    icon: BadgeCheck,
+    className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  },
+  WARNING: {
+    labelKey: 'deploy.form.employeeWarning',
+    fallback: 'Konflikt',
+    icon: AlertTriangle,
+    className: 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  },
+  UNAVAILABLE: {
+    labelKey: 'deploy.form.employeeUnavailable',
+    fallback: 'Abwesend',
+    icon: ShieldAlert,
+    className: 'border-destructive/25 bg-destructive/10 text-destructive',
+  },
+  UNKNOWN: {
+    labelKey: 'deploy.form.employeeUnknown',
+    fallback: 'Zeit offen',
+    icon: CalendarClock,
+    className: 'border-muted-foreground/20 bg-muted text-muted-foreground',
+  },
+};
 
 function employeeLabel(employee) {
   return `${employee?.firstName || ''} ${employee?.lastName || ''}`.trim() || employee?.email || '';
@@ -78,6 +117,42 @@ function splitList(value) {
     .filter(Boolean);
 }
 
+function toQueryList(value) {
+  return splitList(value).join(',');
+}
+
+function extractSchedulingConflicts(error) {
+  const data = error?.data || {};
+  const conflicts = Array.isArray(data.conflicts)
+    ? data.conflicts
+    : Array.isArray(data.hardConflicts)
+      ? data.hardConflicts
+      : [];
+  return conflicts.filter(Boolean);
+}
+
+function hasCapabilityWarning(employee) {
+  return employee?.availability?.conflicts?.some((conflict) => (
+    conflict.conflictType === 'SKILL_MISMATCH' ||
+    conflict.conflictType === 'CERTIFICATION_MISSING'
+  ));
+}
+
+function hasHardAvailabilityConflict(employee) {
+  return employee?.availability?.conflicts?.some((conflict) => conflict.severity === 'HARD');
+}
+
+function matchesEmployeeFilter(employee, filter) {
+  if (filter === 'ALL') return true;
+  if (filter === 'QUALIFIED') return !hasCapabilityWarning(employee);
+  return employee?.availability?.status === filter;
+}
+
+function formatHours(value) {
+  const amount = Number(value || 0);
+  return Number.isInteger(amount) ? String(amount) : amount.toFixed(1);
+}
+
 function normalizeDateTime(value, { isFullDay, isEnd } = {}) {
   if (!value) return value;
   if (isFullDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -86,23 +161,20 @@ function normalizeDateTime(value, { isFullDay, isEnd } = {}) {
   return value;
 }
 
+function normalizeReferenceId(value) {
+  return value?._id || value?.id || value || '';
+}
+
 export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
   const assignmentSchema = useMemo(() => getCreateAssignmentSchema(t), [t]);
   const [employeeSearch, setEmployeeSearch] = useState('');
+  const [employeeFilter, setEmployeeFilter] = useState('ALL');
+  const [formConflicts, setFormConflicts] = useState([]);
+  const [pendingConflictSubmission, setPendingConflictSubmission] = useState(null);
+  const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const debouncedEmployeeSearch = useDebounce(employeeSearch, 250);
-
-  const { data: employees = [], isFetching: employeesFetching } = useDeployEmployees({
-    enabled: open,
-    search: debouncedEmployeeSearch,
-    limit: EMPLOYEE_PICKER_LIMIT,
-  });
-
-  const { create, update } = useAssignmentMutations({
-    onCreate: () => onOpenChange(false),
-    onUpdate: () => onOpenChange(false),
-  });
 
   const {
     register, handleSubmit, reset, setValue, control,
@@ -119,6 +191,10 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
         ...BLANK,
         ...defaultValues,
         employeeIds: defaultValues.employeeId ? [defaultValues.employeeId._id || defaultValues.employeeId] : [],
+        orderId: normalizeReferenceId(defaultValues.orderId),
+        projectId: normalizeReferenceId(defaultValues.projectId),
+        customerId: normalizeReferenceId(defaultValues.customerId),
+        siteId: normalizeReferenceId(defaultValues.siteId),
         startDatetime: defaultValues.startDatetime?.slice(0, 16) || '',
         endDatetime: defaultValues.endDatetime?.slice(0, 16) || '',
         requiredSkills: joinList(defaultValues.requiredSkills),
@@ -130,6 +206,10 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
       reset(values);
     } else {
       const values = { ...BLANK, ...(prefill || {}) };
+      values.orderId = normalizeReferenceId(values.orderId);
+      values.projectId = normalizeReferenceId(values.projectId);
+      values.customerId = normalizeReferenceId(values.customerId);
+      values.siteId = normalizeReferenceId(values.siteId);
       if (prefill?.startDatetime) values.startDatetime = prefill.startDatetime.slice(0, 16);
       if (prefill?.endDatetime) values.endDatetime = prefill.endDatetime.slice(0, 16);
       reset(values);
@@ -138,10 +218,16 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
 
   const assignmentType = useWatch({ control, name: 'assignmentType' });
   const priority = useWatch({ control, name: 'priority' });
+  const startDatetime = useWatch({ control, name: 'startDatetime' });
+  const endDatetime = useWatch({ control, name: 'endDatetime' });
   const isFullDay = useWatch({ control, name: 'isFullDay' });
   const isCustomerAppointment = useWatch({ control, name: 'isCustomerAppointment' });
   const recurrenceValue = useWatch({ control, name: 'recurrence' });
   const selectedEmployees = useWatch({ control, name: 'employeeIds' }) || [];
+  const requiredSkills = useWatch({ control, name: 'requiredSkills' });
+  const recommendedSkills = useWatch({ control, name: 'recommendedSkills' });
+  const requiredCertifications = useWatch({ control, name: 'requiredCertifications' });
+  const recommendedCertifications = useWatch({ control, name: 'recommendedCertifications' });
   const confirmationMethod = useWatch({ control, name: 'appointment.confirmationMethod' });
   const showRecurrence = Boolean(recurrenceValue);
   const assignmentMeta = ASSIGNMENT_TYPE_META[assignmentType];
@@ -149,8 +235,65 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const priorityMeta = PRIORITY_META[priority];
   const PriorityIcon = priorityMeta?.icon;
 
-  const filteredEmployees = employees;
-  const hiddenEmployeeCount = 0;
+  const employeeStartDatetime = normalizeDateTime(startDatetime, { isFullDay });
+  const employeeEndDatetime = normalizeDateTime(endDatetime, { isFullDay, isEnd: true });
+  const { data: employees = [], isFetching: employeesFetching } = useDeployEmployees({
+    enabled: open,
+    search: debouncedEmployeeSearch,
+    limit: EMPLOYEE_PICKER_LIMIT,
+    startDatetime: employeeStartDatetime,
+    endDatetime: employeeEndDatetime,
+    requiredSkills: toQueryList(requiredSkills),
+    recommendedSkills: toQueryList(recommendedSkills),
+    requiredCertifications: toQueryList(requiredCertifications),
+    recommendedCertifications: toQueryList(recommendedCertifications),
+    includeEmployeeIds: selectedEmployees.join(','),
+  });
+
+  const employeeById = useMemo(
+    () => new Map(employees.map((employee) => [employee._id, employee])),
+    [employees],
+  );
+
+  const filteredEmployees = useMemo(
+    () => employees.filter((employee) => matchesEmployeeFilter(employee, employeeFilter)),
+    [employees, employeeFilter],
+  );
+
+  const hiddenEmployeeCount = Math.max(0, employees.length - filteredEmployees.length);
+
+  const handleAssignmentConflict = (err, variables) => {
+    const conflicts = extractSchedulingConflicts(err);
+    if (!conflicts.length) return false;
+
+    const isUpdateConflict = Boolean(variables?.id);
+    setPendingConflictSubmission({
+      type: isUpdateConflict ? 'update' : 'create',
+      id: variables?.id || defaultValues?._id || null,
+      data: isUpdateConflict ? variables.data : variables,
+    });
+    setFormConflicts(conflicts);
+    setConflictDialogOpen(true);
+    return true;
+  };
+
+  const clearConflictState = () => {
+    setFormConflicts([]);
+    setPendingConflictSubmission(null);
+    setConflictDialogOpen(false);
+  };
+
+  const { create, update } = useAssignmentMutations({
+    onCreate: () => {
+      clearConflictState();
+      onOpenChange(false);
+    },
+    onUpdate: () => {
+      clearConflictState();
+      onOpenChange(false);
+    },
+    onConflict: handleAssignmentConflict,
+  });
 
   const submit = async (data) => {
     const cleaned = {
@@ -179,17 +322,46 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
         await create.mutateAsync(cleaned);
       }
     } catch {
-      // Mutation onError already renders the user-facing failure state.
+      // Mutation onError renders toast or conflict dialog.
     }
+  };
+
+  const handleConflictOverride = async (overrideReason) => {
+    if (!pendingConflictSubmission?.data) return;
+
+    const data = {
+      ...pendingConflictSubmission.data,
+      overrideConflicts: true,
+      overrideReason,
+    };
+
+    try {
+      if (pendingConflictSubmission.type === 'update') {
+        await update.mutateAsync({ id: pendingConflictSubmission.id, data });
+      } else {
+        await create.mutateAsync(data);
+      }
+    } catch {
+      // Mutation onError renders toast or conflict dialog.
+    }
+  };
+
+  const handleConflictCancel = () => {
+    clearConflictState();
   };
 
   const isPending = create.isPending || update.isPending;
   const handleOpenChange = (nextOpen) => {
-    if (!nextOpen) setEmployeeSearch('');
+    if (!nextOpen) {
+      setEmployeeSearch('');
+      setEmployeeFilter('ALL');
+      clearConflictState();
+    }
     onOpenChange(nextOpen);
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[760px]">
         <DialogHeader className="pr-14">
@@ -302,7 +474,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] overflow-hidden rounded-2xl p-0" align="start">
-                    <div className="border-b border-border p-2">
+                    <div className="space-y-2 border-b border-border p-2">
                       <div className="relative">
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
@@ -312,14 +484,42 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                           className="h-10 rounded-xl pl-9 text-sm"
                         />
                       </div>
+                      <div className="flex gap-1 overflow-x-auto">
+                        {EMPLOYEE_FILTERS.map((filter) => (
+                          <button
+                            key={filter.value}
+                            type="button"
+                            onClick={() => setEmployeeFilter(filter.value)}
+                            className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                              employeeFilter === filter.value
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {t(filter.labelKey, filter.fallback)}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="max-h-[260px] overflow-y-auto p-1.5">
+                    <div className="max-h-[340px] overflow-y-auto p-1.5">
                       {filteredEmployees.map((emp) => {
                         const isSelected = selectedEmployees.includes(emp._id);
+                        const status = emp.availability?.status || 'UNKNOWN';
+                        const statusMeta = EMPLOYEE_STATUS_META[status] || EMPLOYEE_STATUS_META.UNKNOWN;
+                        const StatusIcon = statusMeta.icon;
+                        const isUnavailable = hasHardAvailabilityConflict(emp);
+                        const isDisabled = isUnavailable && !isSelected;
+                        const skills = emp.schedulingSkills || [];
+                        const certifications = emp.schedulingCertifications || [];
+                        const role = emp.position || emp.roleName || emp.department || emp.email;
+                        const workload = emp.workload || {};
+                        const primaryConflict = emp.availability?.conflicts?.[0];
                         return (
                           <button
                             key={emp._id}
                             type="button"
+                            disabled={isDisabled}
+                            aria-pressed={isSelected}
                             onClick={() => {
                               const next = isSelected
                                 ? selectedEmployees.filter((id) => id !== emp._id)
@@ -328,16 +528,51 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                                   : [...selectedEmployees, emp._id];
                               setValue('employeeIds', next, { shouldValidate: true });
                             }}
-                            className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-sm transition-colors hover:bg-muted/60"
+                            className="flex w-full items-start gap-3 rounded-xl px-2.5 py-2 text-sm transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                               {employeeInitials(emp)}
                             </span>
                             <span className="min-w-0 flex-1 text-left">
-                              <span className="block truncate font-medium text-foreground">{employeeLabel(emp)}</span>
-                              {emp.email && <span className="block truncate text-xs text-muted-foreground">{emp.email}</span>}
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="truncate font-medium text-foreground">{employeeLabel(emp)}</span>
+                                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] ${statusMeta.className}`}>
+                                  <StatusIcon className="h-3 w-3" />
+                                  {t(statusMeta.labelKey, statusMeta.fallback)}
+                                </span>
+                              </span>
+                              {role && (
+                                <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                                  <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate">{role}</span>
+                                </span>
+                              )}
+                              <span className="mt-1 block truncate text-xs text-muted-foreground">
+                                {t('deploy.form.employeeWorkload', '{percent}% Auslastung · {hours}h geplant')
+                                  .replace('{percent}', String(Math.round(workload.utilizationPercent || 0)))
+                                  .replace('{hours}', formatHours(workload.assignedHours))}
+                              </span>
+                              {primaryConflict && (
+                                <span className="mt-1 block truncate text-xs text-amber-700 dark:text-amber-300">
+                                  {primaryConflict.description}
+                                </span>
+                              )}
+                              {(skills.length > 0 || certifications.length > 0) && (
+                                <span className="mt-1.5 flex flex-wrap gap-1">
+                                  {skills.slice(0, 2).map((skill) => (
+                                    <span key={`skill-${skill}`} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {certifications.slice(0, 2).map((certification) => (
+                                    <span key={`cert-${certification}`} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                                      {certification}
+                                    </span>
+                                  ))}
+                                </span>
+                              )}
                             </span>
-                            <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30'}`}>
+                            <div className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/30'}`}>
                               {isSelected && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
                             </div>
                           </button>
@@ -356,7 +591,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                     </div>
                     {hiddenEmployeeCount > 0 && (
                       <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-                        {t('deploy.form.employeeResultsLimited', '{count} weitere Treffer - Suche verfeinern').replace('{count}', hiddenEmployeeCount)}
+                        {t('deploy.form.employeeResultsLimited', '{count} weitere Treffer ausgeblendet').replace('{count}', hiddenEmployeeCount)}
                       </p>
                     )}
                   </PopoverContent>
@@ -364,11 +599,10 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                 {selectedEmployees.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {selectedEmployees.map((id) => {
-                      const emp = employees.find((e) => e._id === id);
-                      if (!emp) return null;
+                      const emp = employeeById.get(id);
                       return (
                         <span key={id} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                          {employeeLabel(emp)}
+                          {emp ? employeeLabel(emp) : id}
                           <button
                             type="button"
                             onClick={() => setValue('employeeIds', selectedEmployees.filter((eid) => eid !== id), { shouldValidate: true })}
@@ -383,6 +617,16 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                 )}
               </FormField>
             </FormSection>
+
+            <AssignmentWorkContextFields
+              control={control}
+              setValue={setValue}
+              errors={errors}
+              defaultValues={defaultValues}
+              prefill={prefill}
+              open={open}
+              t={t}
+            />
 
             {/* Schedule */}
             <FormSection title={t('deploy.form.scheduling', 'Zeitplanung')} className="border-b border-border/70 pb-6">
@@ -523,7 +767,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
           </FormBody>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isPending}>
               {t('deploy.common.cancel', 'Abbrechen')}
             </Button>
             <Button type="submit" disabled={isPending} className="gap-2">
@@ -534,5 +778,12 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
         </form>
       </DialogContent>
     </Dialog>
+    <ConflictDialog
+      open={conflictDialogOpen}
+      conflicts={formConflicts}
+      onOverride={handleConflictOverride}
+      onCancel={handleConflictCancel}
+    />
+    </>
   );
 }

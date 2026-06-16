@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { chartService, journalService, apService, arService, bankService, accDocService } from '../services/accounting-service';
+import {
+  chartService, journalService, apService, arService, bankService, accDocService,
+  cashService, reconciliationService, openItemsService, reportsService,
+} from '../services/accounting-service';
 
 // ── Chart of Accounts ─────────────────────────────────────────
 export function useAccounts(params = {}) {
@@ -10,10 +13,27 @@ export function useAccounts(params = {}) {
   });
 }
 
+export function useChartTree() {
+  return useQuery({
+    queryKey: ['accounting', 'account-tree'],
+    queryFn: () => chartService.tree(),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+  });
+}
+
 export function useAccountBalance(id) {
   return useQuery({
     queryKey: ['accounting', 'account-balance', id],
     queryFn: () => chartService.getBalance(id),
+    enabled: !!id,
+    select: (r) => r.data,
+  });
+}
+
+export function useAccountOverview(id, params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'account-overview', id, params],
+    queryFn: () => chartService.getOverview(id, params),
     enabled: !!id,
     select: (r) => r.data,
   });
@@ -146,11 +166,90 @@ export function useBankTransactions(params = {}) {
   });
 }
 
+// â”€â”€ Cash â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function useCashBalances() {
+  return useQuery({
+    queryKey: ['accounting', 'cash-balances'],
+    queryFn: () => cashService.balances(),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+  });
+}
+
+export function useCashForecast(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'cash-forecast', params],
+    queryFn: () => cashService.forecast(params),
+    select: (r) => r.data,
+  });
+}
+
+// â”€â”€ Reconciliation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function useReconciliationUnmatched(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'reconciliation-unmatched', params],
+    queryFn: () => reconciliationService.unmatched(params),
+    select: (r) => ({ items: Array.isArray(r.data) ? r.data : [], pagination: r.pagination }),
+  });
+}
+
+export function useReconciliationSuggestions(txId) {
+  return useQuery({
+    queryKey: ['accounting', 'reconciliation-suggestions', txId],
+    queryFn: () => reconciliationService.suggestions(txId),
+    enabled: !!txId,
+    select: (r) => r.data,
+  });
+}
+
+// â”€â”€ Open Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function useOpenItems(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'open-items', params],
+    queryFn: () => openItemsService.list(params),
+    select: (r) => ({ items: Array.isArray(r.data) ? r.data : [], pagination: r.pagination }),
+  });
+}
+
+export function useOpenItemsAging(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'open-items-aging', params],
+    queryFn: () => openItemsService.aging(params),
+    select: (r) => r.data,
+  });
+}
+
+// â”€â”€ Reports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export function useProfitLoss(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'profit-loss', params],
+    queryFn: () => reportsService.profitLoss(params),
+    select: (r) => r.data,
+  });
+}
+
 // ── Documents ─────────────────────────────────────────────────
 export function useAccDocuments(params = {}) {
   return useQuery({
     queryKey: ['accounting', 'documents', params],
     queryFn: () => accDocService.list(params),
     select: (r) => ({ items: Array.isArray(r.data) ? r.data : [], pagination: r.pagination }),
+  });
+}
+
+export function useAccDocument(id) {
+  return useQuery({
+    queryKey: ['accounting', 'document', id],
+    queryFn: () => accDocService.getById(id),
+    enabled: !!id,
+    select: (r) => r.data,
+  });
+}
+
+export function useAccDocumentOcrResult(id) {
+  return useQuery({
+    queryKey: ['accounting', 'document-ocr-result', id],
+    queryFn: () => accDocService.getOcrResult(id),
+    enabled: !!id,
+    select: (r) => r.data,
   });
 }

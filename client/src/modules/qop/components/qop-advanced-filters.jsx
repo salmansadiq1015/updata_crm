@@ -19,8 +19,7 @@ const EMPTY_FILTERS = {
 };
 
 export function QopAdvancedFilters({ onFiltersChange }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -82,7 +81,7 @@ export function QopAdvancedFilters({ onFiltersChange }) {
       <div className="flex gap-2 items-center flex-wrap">
         <Button size="sm" variant="outline" onClick={() => setOpen((o) => !o)}>
           <Filter className="h-4 w-4 mr-1.5" />
-          {de ? 'Filter' : 'Filters'}
+          {t('qop.filter.toggle', 'Filter')}
           {open ? <ChevronUp className="h-4 w-4 ml-1.5" /> : <ChevronDown className="h-4 w-4 ml-1.5" />}
         </Button>
 
@@ -103,7 +102,7 @@ export function QopAdvancedFilters({ onFiltersChange }) {
 
         <div className="flex-1" />
         <Button size="sm" variant="outline" onClick={handleExport}>
-          <Download className="h-4 w-4 mr-1.5" />{de ? 'CSV Export' : 'Export CSV'}
+          <Download className="h-4 w-4 mr-1.5" />{t('qop.filter.exportCsv', 'CSV Export')}
         </Button>
       </div>
 
@@ -111,19 +110,19 @@ export function QopAdvancedFilters({ onFiltersChange }) {
         <div className="rounded-lg border border-border p-4 flex flex-col gap-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Typ' : 'Type'}</Label>
+              <Label className="text-xs">{t('qop.filter.type', 'Typ')}</Label>
               <Select value={filters.type} onValueChange={(v) => set('type', v)}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{de ? 'Alle' : 'All'}</SelectItem>
-                  <SelectItem value="quotation">{de ? 'Offerte' : 'Quotation'}</SelectItem>
-                  <SelectItem value="order">{de ? 'Auftrag' : 'Order'}</SelectItem>
-                  <SelectItem value="invoice">{de ? 'Rechnung' : 'Invoice'}</SelectItem>
+                  <SelectItem value="all">{t('common.all', 'Alle')}</SelectItem>
+                  <SelectItem value="quotation">{t('qop.filter.quotation', 'Offerte')}</SelectItem>
+                  <SelectItem value="order">{t('qop.filter.order', 'Auftrag')}</SelectItem>
+                  <SelectItem value="invoice">{t('qop.filter.invoice', 'Rechnung')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Status' : 'Status'}</Label>
+              <Label className="text-xs">{t('qop.filter.status', 'Status')}</Label>
               <Input
                 className="h-8 text-xs"
                 placeholder="e.g. DRAFT"
@@ -132,11 +131,11 @@ export function QopAdvancedFilters({ onFiltersChange }) {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Abteilung' : 'Department'}</Label>
+              <Label className="text-xs">{t('qop.filter.department', 'Abteilung')}</Label>
               <Select value={filters.departmentId || 'ALL'} onValueChange={(v) => set('departmentId', v === 'ALL' ? '' : v)}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">{de ? 'Alle' : 'All'}</SelectItem>
+                  <SelectItem value="ALL">{t('common.all', 'Alle')}</SelectItem>
                   {departments.map((department) => (
                     <SelectItem key={department._id} value={department._id}>
                       {department.code ? `${department.code} · ${department.name}` : department.name}
@@ -146,7 +145,7 @@ export function QopAdvancedFilters({ onFiltersChange }) {
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Von (Datum)' : 'Date From'}</Label>
+              <Label className="text-xs">{t('qop.filter.dateFrom', 'Von (Datum)')}</Label>
               <Input
                 type="date"
                 className="h-8 text-xs"
@@ -155,7 +154,7 @@ export function QopAdvancedFilters({ onFiltersChange }) {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Bis (Datum)' : 'Date To'}</Label>
+              <Label className="text-xs">{t('qop.filter.dateTo', 'Bis (Datum)')}</Label>
               <Input
                 type="date"
                 className="h-8 text-xs"
@@ -164,7 +163,7 @@ export function QopAdvancedFilters({ onFiltersChange }) {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Betrag Min' : 'Amount Min'}</Label>
+              <Label className="text-xs">{t('qop.filter.amountMin', 'Betrag Min')}</Label>
               <Input
                 type="number"
                 className="h-8 text-xs"
@@ -174,7 +173,7 @@ export function QopAdvancedFilters({ onFiltersChange }) {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Betrag Max' : 'Amount Max'}</Label>
+              <Label className="text-xs">{t('qop.filter.amountMax', 'Betrag Max')}</Label>
               <Input
                 type="number"
                 className="h-8 text-xs"
@@ -187,12 +186,12 @@ export function QopAdvancedFilters({ onFiltersChange }) {
 
           <div className="flex gap-2 items-end flex-wrap">
             <Button size="sm" variant="ghost" onClick={clearFilters}>
-              {de ? 'Filter löschen' : 'Clear filters'}
+              {t('qop.filter.clear', 'Filter loeschen')}
             </Button>
             <div className="flex-1" />
             <Input
               className="h-8 text-xs w-40"
-              placeholder={de ? 'Preset Name...' : 'Preset name...'}
+              placeholder={t('qop.filter.presetName', 'Preset Name...')}
               value={presetName}
               onChange={(e) => setPresetName(e.target.value)}
             />
@@ -201,7 +200,7 @@ export function QopAdvancedFilters({ onFiltersChange }) {
               onClick={() => savePreset.mutate()}
               disabled={!presetName || savePreset.isPending}
             >
-              <Save className="h-4 w-4 mr-1.5" />{de ? 'Speichern' : 'Save'}
+              <Save className="h-4 w-4 mr-1.5" />{t('common.save', 'Speichern')}
             </Button>
           </div>
         </div>

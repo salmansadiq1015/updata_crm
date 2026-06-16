@@ -12,6 +12,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { VAT_RATES } from '../constants/qop-constants';
 import { ArticlePickerDialog } from '@/modules/catalog/components/article-picker-dialog';
 import { CatalogLinePriceDrift } from './catalog-line-price-drift';
+import { TextBlockPicker } from './text-block-picker';
 
 function calcLineTotal(qty, price, discount) {
   const q = parseFloat(qty) || 0;
@@ -41,8 +42,7 @@ let _uid = 0;
 function uid() { return ++_uid; }
 
 export function LineItemsEditor({ value = [], onChange, disabled = false }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const addItem = useCallback(() => {
@@ -110,21 +110,21 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
       <div className="rounded-lg border border-border overflow-hidden">
         <div className="grid grid-cols-[2rem_3rem_1fr_5rem_5rem_6rem_5rem_5rem_6rem_2rem] gap-0 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground">
           <div className="px-2 py-2">#</div>
-          <div className="px-2 py-2">{de ? 'Art.' : 'Art.'}</div>
-          <div className="px-2 py-2">{de ? 'Beschreibung' : 'Description'}</div>
-          <div className="px-2 py-2 text-right">{de ? 'Menge' : 'Qty'}</div>
-          <div className="px-2 py-2">{de ? 'Einheit' : 'Unit'}</div>
-          <div className="px-2 py-2 text-right">{de ? 'Einzelpreis' : 'Unit Price'}</div>
-          <div className="px-2 py-2 text-right">{de ? 'Rabatt %' : 'Disc %'}</div>
-          <div className="px-2 py-2 text-right">{de ? 'MwSt %' : 'VAT %'}</div>
-          <div className="px-2 py-2 text-right">{de ? 'Total' : 'Total'}</div>
+          <div className="px-2 py-2">{t('qop.lineItems.colArt', 'Art.')}</div>
+          <div className="px-2 py-2">{t('qop.lineItems.colDescription', 'Beschreibung')}</div>
+          <div className="px-2 py-2 text-right">{t('qop.lineItems.colQty', 'Menge')}</div>
+          <div className="px-2 py-2">{t('qop.lineItems.colUnit', 'Einheit')}</div>
+          <div className="px-2 py-2 text-right">{t('qop.lineItems.colUnitPrice', 'Einzelpreis')}</div>
+          <div className="px-2 py-2 text-right">{t('qop.lineItems.colDiscount', 'Rabatt %')}</div>
+          <div className="px-2 py-2 text-right">{t('qop.lineItems.colVat', 'MwSt %')}</div>
+          <div className="px-2 py-2 text-right">{t('qop.lineItems.colTotal', 'Total')}</div>
           <div className="px-2 py-2" />
         </div>
 
         {/* Rows */}
         {value.length === 0 && (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            {de ? 'Noch keine Positionen. Klicken Sie auf „Position hinzufügen".' : 'No items yet. Click "Add item" to start.'}
+            {t('qop.lineItems.empty', 'Noch keine Positionen. Klicken Sie auf „Position hinzufügen".')}
           </div>
         )}
 
@@ -150,14 +150,19 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
               />
             </div>
             <div className="flex items-center px-1 py-1">
-              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <div className="flex min-w-0 flex-1 items-center gap-1">
                 <Input
                   value={item.description}
                   onChange={(e) => updateItem(idx, 'description', e.target.value)}
                   disabled={disabled}
                   className="h-7 min-w-0 text-xs px-1.5 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
-                  placeholder={de ? 'Beschreibung...' : 'Description...'}
+                  placeholder={t('qop.lineItems.descriptionPlaceholder', 'Beschreibung...')}
                 />
+                {!disabled && (
+                  <TextBlockPicker
+                    onSelect={(text) => updateItem(idx, 'description', text)}
+                  />
+                )}
                 <CatalogLinePriceDrift item={item} />
               </div>
             </div>
@@ -250,11 +255,11 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)} className="gap-1.5 h-8">
             <PackageSearch className="h-3.5 w-3.5" />
-            {de ? 'Katalogartikel' : 'Catalog article'}
+            {t('qop.lineItems.addCatalog', 'Katalogartikel')}
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={addItem} className="gap-1.5 h-8">
             <Plus className="h-3.5 w-3.5" />
-            {de ? 'Freitextposition' : 'Free-text item'}
+            {t('qop.lineItems.addFreeText', 'Freitextposition')}
           </Button>
         </div>
       )}
@@ -264,17 +269,17 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
         <div className="self-end w-72 rounded-lg border border-border overflow-hidden">
           <div className="divide-y divide-border">
             <div className="flex justify-between px-4 py-2 text-sm">
-              <span className="text-muted-foreground">{de ? 'Zwischensumme' : 'Subtotal'}</span>
+              <span className="text-muted-foreground">{t('qop.lineItems.subtotal', 'Zwischensumme')}</span>
               <span className="tabular-nums font-medium">{fmt(totals.subtotal)}</span>
             </div>
             {totals.vatBreakdown.map((v) => (
               <div key={v.rate} className="flex justify-between px-4 py-1.5 text-xs text-muted-foreground">
-                <span>MwSt {v.rate}% ({de ? 'auf' : 'on'} {fmt(v.base)})</span>
+                <span>MwSt {v.rate}% ({t('qop.lineItems.vatOn', 'auf')} {fmt(v.base)})</span>
                 <span className="tabular-nums">{fmt(v.vat)}</span>
               </div>
             ))}
             <div className="flex justify-between px-4 py-2.5 bg-muted/30 text-sm font-semibold">
-              <span>{de ? 'Gesamtbetrag' : 'Grand Total'}</span>
+              <span>{t('qop.lineItems.grandTotal', 'Gesamtbetrag')}</span>
               <span className="tabular-nums">{fmt(totals.grandTotal)}</span>
             </div>
           </div>

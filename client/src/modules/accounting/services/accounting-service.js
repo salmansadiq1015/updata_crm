@@ -56,10 +56,13 @@ function normalizeBankTransaction(transaction = {}) {
 
 export const chartService = {
   list:       (params = {}) => apiClient.get(E.ACCOUNTS, { params }),
+  tree:       ()            => apiClient.get(E.ACCOUNT_TREE),
   getById:    (id)          => apiClient.get(E.ACCOUNT_BY_ID(id)),
   create:     (data)        => apiClient.post(E.ACCOUNTS, data),
   update:     (id, data)    => apiClient.put(E.ACCOUNT_BY_ID(id), data),
   getBalance: (id)          => apiClient.get(E.ACCOUNT_BALANCE(id)),
+  getOverview:(id, params = {}) => apiClient.get(E.ACCOUNT_OVERVIEW(id), { params }),
+  exportOverview:(id, params = {}) => apiClient.get(E.ACCOUNT_OVERVIEW_EXPORT(id), { params, responseType: 'blob' }),
 };
 
 export const journalService = {
@@ -82,6 +85,8 @@ export const apService = {
   secondApprove: (id)          => apiClient.post(E.AP_SECOND_APPROVE(id)),
   dispute:       (id, reason)  => apiClient.post(E.AP_DISPUTE(id), { reason }),
   paymentBatch:  (data)        => apiClient.post(E.AP_PAYMENT_BATCH, data),
+  paymentBatchById: (batchId)  => apiClient.get(E.AP_PAYMENT_BATCH_BY_ID(batchId)),
+  exportPaymentBatch: (batchId) => apiClient.post(E.AP_PAYMENT_BATCH_EXPORT(batchId), {}, { responseType: 'blob' }),
 };
 
 export const arService = {
@@ -139,6 +144,34 @@ export const bankService = {
   retrieve:       (data)        => apiClient.post(E.BANK_RETRIEVE, data),
 };
 
+export const reconciliationService = {
+  run:          (data)        => apiClient.post(E.RECONCILIATION_RUN, data),
+  unmatched:    (params = {}) => apiClient.get(E.RECONCILIATION_UNMATCHED, { params }).then((r) => mapEnvelope(r, normalizeBankTransaction)),
+  suggestions:  (txId)        => apiClient.get(E.RECONCILIATION_SUGGESTIONS(txId)),
+  matchAr:      (data)        => apiClient.post(E.RECONCILIATION_MATCH_AR, data),
+  matchAp:      (data)        => apiClient.post(E.RECONCILIATION_MATCH_AP, data),
+  categorize:   (data)        => apiClient.post(E.RECONCILIATION_CATEGORIZE, data),
+};
+
+export const cashService = {
+  balances:      ()            => apiClient.get(E.CASH_BALANCES),
+  forecast:      (params = {}) => apiClient.get(E.CASH_FORECAST, { params }),
+  manualBalance: (data)        => apiClient.post(E.CASH_MANUAL_BALANCE, data),
+};
+
+export const openItemsService = {
+  list:        (params = {}) => apiClient.get(E.OPEN_ITEMS, { params }),
+  aging:       (params = {}) => apiClient.get(E.OPEN_ITEMS_AGING, { params }),
+  statement:   (entityId, params = {}, data = {}) => apiClient.post(E.OPEN_ITEMS_STATEMENT(entityId), data, { params }),
+  netPosition: (entityId) => apiClient.post(E.OPEN_ITEMS_NET_POSITION(entityId)),
+  netItems:    (data) => apiClient.post(E.OPEN_ITEMS_NETTING, data),
+};
+
+export const reportsService = {
+  profitLoss:       (params = {}) => apiClient.get(E.PROFIT_LOSS, { params }),
+  exportProfitLoss: (params = {}) => apiClient.get(E.PROFIT_LOSS_EXPORT, { params, responseType: 'blob' }),
+};
+
 export const accDocService = {
   list:       (params = {}) => apiClient.get(E.ACC_DOCUMENTS, { params }),
   getById:    (id)          => apiClient.get(E.ACC_DOCUMENT_BY_ID(id)),
@@ -156,6 +189,8 @@ export const accDocService = {
   triggerOcr:    (id)          => apiClient.post(E.ACC_DOCUMENT_OCR(id)),
   getOcrResult:  (id)          => apiClient.get(E.ACC_DOCUMENT_OCR_RESULT(id)),
   confirmOcr:    (id, data)    => apiClient.post(E.ACC_DOCUMENT_OCR_CONFIRM(id), data),
+  rejectOcr:     (id, data)    => apiClient.post(E.ACC_DOCUMENT_OCR_REJECT(id), data),
   assign:        (id, data)    => apiClient.post(E.ACC_DOCUMENT_ASSIGN(id), data),
   bulkAssign:    (data)        => apiClient.post(E.ACC_DOCUMENT_BULK_ASSIGN, data),
+  bulkDownload:  (data)        => apiClient.post(E.ACC_DOCUMENT_BULK_DOWNLOAD, data, { responseType: 'blob' }),
 };

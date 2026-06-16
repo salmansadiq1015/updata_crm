@@ -276,7 +276,13 @@ class SparePartService {
 
     if (data.status === 'received') {
       receivedQuantity = data.receivedQuantity || link.orderQuantity || 1;
-      await sparePartRepository.incrementStock(sparePartId, receivedQuantity);
+      const procurementService = (await import('./procurement.service.js')).default;
+      await procurementService.receiveInstallationOrderRequest({
+        sparePartId,
+        quantity: receivedQuantity,
+        installationId,
+        notes: data.notes || link.orderNotes || null,
+      }, userId, meta);
       update.needsOrdering = false;
       update.orderFulfilledAt = new Date();
       update.orderFulfilledBy = userId;

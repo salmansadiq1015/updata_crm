@@ -128,6 +128,48 @@ class QuotationController {
       return res.success({ data: reminder, message: 'Reminder snoozed successfully' });
     } catch (err) { next(err); }
   }
+
+  async recurringItems(req, res, next) {
+    try {
+      const { default: Quotation } = await import('./quotation.model.js');
+      const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+      const items = await Quotation.aggregate([
+        { $match: { isDeleted: false } },
+        { $unwind: '$lineItems' },
+        { $match: { 'lineItems.type': { $in: ['service', 'material'] } } },
+        {
+          $group: {
+            _id: {
+              description: '$lineItems.description',
+              unit: '$lineItems.unit',
+              type: '$lineItems.type',
+            },
+            count: { $sum: 1 },
+            avgUnitPrice: { $avg: '$lineItems.unitPrice' },
+            avgQuantity: { $avg: '$lineItems.quantity' },
+            catalogItemId: { $first: '$lineItems.catalogItemId' },
+            vatRate: { $first: '$lineItems.vatRate' },
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: limit },
+        {
+          $project: {
+            _id: 0,
+            description: '$_id.description',
+            unit: '$_id.unit',
+            type: '$_id.type',
+            count: 1,
+            avgUnitPrice: { $round: ['$avgUnitPrice', 2] },
+            avgQuantity: { $round: ['$avgQuantity', 2] },
+            catalogItemId: 1,
+            vatRate: 1,
+          },
+        },
+      ]);
+      return res.success({ data: items });
+    } catch (err) { next(err); }
+  }
 }
 
 const quotationController = new QuotationController();

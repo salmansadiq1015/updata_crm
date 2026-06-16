@@ -10,6 +10,7 @@ import {
 const router = Router();
 
 router.get('/', authenticate, requirePermission('accounting:chart:read'), validate(listAccountsSchema), (req, res, next) => accountController.list(req, res, next));
+router.get('/tree', authenticate, requirePermission('accounting:chart:read'), (req, res, next) => accountController.getChart(req, res, next));
 router.post('/', authenticate, requirePermission('accounting:chart:manage'), validate(createAccountSchema), (req, res, next) => accountController.create(req, res, next));
 router.get('/:id', authenticate, requirePermission('accounting:chart:read'), validate(accountIdParamSchema), (req, res, next) => accountController.getById(req, res, next));
 router.put('/:id', authenticate, requirePermission('accounting:chart:manage'), validate(updateAccountSchema), (req, res, next) => accountController.update(req, res, next));

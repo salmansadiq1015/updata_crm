@@ -5,7 +5,7 @@ import {
   startOfDay, endOfDay, startOfWeek, endOfWeek,
   startOfMonth, endOfMonth, addDays, addWeeks, addMonths,
   subDays, subWeeks, subMonths, format, eachDayOfInterval,
-  differenceInMinutes, getHours, getMinutes,
+  differenceInMinutes, getHours, getMinutes, getISOWeek,
 } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { useSchedulingStore } from '../stores/scheduling-store';
@@ -54,7 +54,8 @@ export function useCalendarNavigation() {
       case CALENDAR_VIEWS.WEEK: {
         const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
         const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
-        return `${format(weekStart, 'd. MMM', { locale: de })} – ${format(weekEnd, 'd. MMM yyyy', { locale: de })}`;
+        const kw = getISOWeek(weekStart);
+        return `KW ${kw} · ${format(weekStart, 'd. MMM', { locale: de })} – ${format(weekEnd, 'd. MMM yyyy', { locale: de })}`;
       }
       case CALENDAR_VIEWS.MONTH:
         return format(currentDate, 'MMMM yyyy', { locale: de });

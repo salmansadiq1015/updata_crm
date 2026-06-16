@@ -21,6 +21,10 @@ const POPULATE_FIELDS = [
   { path: 'paymentBatchId', select: 'batchNumber status totalAmount' },
 ];
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function coerceCursorFieldTypes(filter, sortBy) {
   if (!filter || !['dueDate', 'createdAt'].includes(sortBy)) return filter;
   const coerceValue = (value) => (typeof value === 'string' ? new Date(value) : value);
@@ -163,6 +167,25 @@ class ApInvoiceRepository {
       if (filter.dueDateTo) {
         filter.dueDate.$lte = filter.dueDateTo.$lte || filter.dueDateTo;
         delete filter.dueDateTo;
+      }
+    }
+
+    if (filters.q) {
+      const regex = new RegExp(escapeRegExp(filters.q), 'i');
+      const searchFilter = {
+        $or: [
+          { apInvoiceNumber: regex },
+          { supplierInvoiceNumber: regex },
+          { supplierName: regex },
+          { projectReference: regex },
+          { orderReference: regex },
+        ],
+      };
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, searchFilter];
+        delete filter.$or;
+      } else {
+        filter.$or = searchFilter.$or;
       }
     }
 

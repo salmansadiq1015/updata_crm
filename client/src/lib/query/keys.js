@@ -113,6 +113,10 @@ export const queryKeys = {
       detail: (id) => ['crm', 'contacts', 'detail', id],
       search: (q) => ['crm', 'contacts', 'search', q],
     },
+    addressBook: {
+      all: () => ['crm', 'addressBook'],
+      list: (params) => ['crm', 'addressBook', 'list', params],
+    },
     sites: {
       all: () => ['crm', 'sites'],
       list: (filters) => ['crm', 'sites', 'list', filters],
@@ -244,6 +248,10 @@ export const queryKeys = {
     aging: () => ['qop', 'aging'],
     customerDocs: (customerId) => ['qop', 'customerDocs', customerId],
     projectDocs: (projectId) => ['qop', 'projectDocs', projectId],
+    quotationTemplates: (params) => ['qop', 'quotation-templates', params],
+    quotationTemplateDetail: (id) => ['qop', 'quotation-templates', 'detail', id],
+    quotationTemplateCategories: () => ['qop', 'quotation-templates', 'categories'],
+    recurringItems: (params) => ['qop', 'recurring-items', params],
   },
   tasks: {
     all: () => ['tasks'],
@@ -271,6 +279,7 @@ export const queryKeys = {
   },
   deploy: {
     all: () => ['deploy'],
+    employees: (params) => ['deploy', 'employees', params],
     calendar: {
       all: () => ['deploy', 'calendar'],
       data: (params) => ['deploy', 'calendar', 'data', params],

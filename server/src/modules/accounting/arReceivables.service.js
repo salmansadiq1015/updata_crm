@@ -45,6 +45,10 @@ function normalizeSort(sortBy) {
   return RECEIVABLE_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function coerceCursorFieldTypes(filter, sortBy) {
   if (!filter || !['dueDate', 'createdAt'].includes(sortBy)) return filter;
   const coerceValue = (value) => (typeof value === 'string' ? new Date(value) : value);
@@ -349,6 +353,11 @@ class ArReceivablesService {
         amountDue: { $gt: 0 },
         ...cursorFilter,
       };
+      if (filters.status) {
+        const statuses = filters.status === 'OPEN' ? ['SENT'] : [filters.status];
+        const validStatuses = statuses.filter((status) => OPEN_AR_STATUSES.includes(status));
+        filter.status = validStatuses.length ? { $in: validStatuses } : filters.status;
+      }
       if (filters.customerId) filter.customerId = filters.customerId;
       if (filters.dueDateFrom || filters.dueDateTo) {
         filter.dueDate = {};
@@ -362,6 +371,23 @@ class ArReceivablesService {
       }
       if (filters.overdue === 'true' || filters.overdue === true) {
         filter.dueDate = { ...filter.dueDate, $lt: new Date() };
+      }
+      if (filters.q) {
+        const regex = new RegExp(escapeRegExp(filters.q), 'i');
+        const searchFilter = {
+          $or: [
+            { invoiceNumber: regex },
+            { customerName: regex },
+            { title: regex },
+            { description: regex },
+          ],
+        };
+        if (filter.$or) {
+          filter.$and = [{ $or: filter.$or }, searchFilter];
+          delete filter.$or;
+        } else {
+          filter.$or = searchFilter.$or;
+        }
       }
 
       const docs = await Invoice.find(filter)

@@ -41,13 +41,12 @@ function fmtDate(d, lang) {
 }
 
 function HistoryDrawer({ open, onClose, invoiceId }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const { data: history = [], isLoading } = useInvoiceHistory(open ? invoiceId : null);
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{de ? 'Verlauf' : 'History'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t('qop.status.historyTitle', 'Verlauf')}</DialogTitle></DialogHeader>
         {isLoading ? <Skeleton className="h-32 w-full" /> : <DocumentHistoryTimeline history={history} className="mt-2" />}
       </DialogContent>
     </Dialog>
@@ -55,8 +54,7 @@ function HistoryDrawer({ open, onClose, invoiceId }) {
 }
 
 export function InvoicesTable({ advancedFilters = {} }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { locale: language, t } = useLanguage();
 
   const [search, setSearch]           = useState('');
   const [statusFilter, setStatus]     = useState('');
@@ -86,7 +84,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
   };
 
   const handleFinalize = (id) => {
-    if (confirm(de ? 'Rechnung finalisieren? Dies kann nicht rückgängig gemacht werden.' : 'Finalize invoice? This cannot be undone.')) {
+    if (confirm(t('qop.invoices.finalizeConfirm', 'Rechnung finalisieren? Dies kann nicht rueckgaengig gemacht werden.'))) {
       finalizeInvoice.mutate(id);
     }
   };
@@ -114,16 +112,16 @@ export function InvoicesTable({ advancedFilters = {} }) {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={de ? 'Rechnung suchen...' : 'Search invoices...'}
+            placeholder={t('qop.invoices.search', 'Rechnung suchen...')}
             className="pl-9 h-9 text-sm"
           />
         </div>
         <Select value={statusFilter || 'ALL'} onValueChange={(v) => setStatus(v === 'ALL' ? '' : v)}>
           <SelectTrigger className="h-9 w-44 text-sm">
-            <SelectValue placeholder={de ? 'Alle Status' : 'All statuses'} />
+            <SelectValue placeholder={t('qop.invoices.allStatuses', 'Alle Status')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">{de ? 'Alle Status' : 'All statuses'}</SelectItem>
+            <SelectItem value="ALL">{t('qop.invoices.allStatuses', 'Alle Status')}</SelectItem>
             {INV_STATUSES.filter(Boolean).map((s) => (
               <SelectItem key={s} value={s}><InvoiceStatusBadge status={s} /></SelectItem>
             ))}
@@ -135,18 +133,18 @@ export function InvoicesTable({ advancedFilters = {} }) {
           <DropdownMenuTrigger asChild>
             <Button size="sm" className="h-9 gap-1.5 ml-auto">
               <Plus className="h-3.5 w-3.5" />
-              {de ? 'Neue Rechnung' : 'New Invoice'}
+              {t('qop.invoices.new', 'Neue Rechnung')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => openNewForm('STANDARD')}>
-              <FileText className="h-4 w-4 mr-2" />{de ? 'Rechnung' : 'Standard Invoice'}
+              <FileText className="h-4 w-4 mr-2" />{t('qop.invoices.standard', 'Rechnung')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => openNewForm('ADVANCE')}>
-              <DollarSign className="h-4 w-4 mr-2" />{de ? 'Akontorechnung' : 'Advance Invoice'}
+              <DollarSign className="h-4 w-4 mr-2" />{t('qop.invoices.advance', 'Akontorechnung')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => openNewForm('FINAL')}>
-              <CheckCircle className="h-4 w-4 mr-2" />{de ? 'Schlussrechnung' : 'Final Invoice'}
+              <CheckCircle className="h-4 w-4 mr-2" />{t('qop.invoices.final', 'Schlussrechnung')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -156,13 +154,13 @@ export function InvoicesTable({ advancedFilters = {} }) {
       <div className="rounded-lg border border-border overflow-hidden">
         <div className="grid grid-cols-[9rem_6rem_1fr_8rem_7rem_7rem_8rem_2.5rem] bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground">
           {[
-            de ? 'Nummer' : 'Number',
-            de ? 'Typ' : 'Type',
-            de ? 'Kunde' : 'Customer',
-            de ? 'Status' : 'Status',
-            de ? 'Fällig' : 'Due Date',
-            de ? 'Erstellt' : 'Created',
-            de ? 'Betrag' : 'Amount',
+            t('qop.invoices.colNumber', 'Nummer'),
+            t('qop.invoices.colType', 'Typ'),
+            t('qop.invoices.colCustomer', 'Kunde'),
+            t('qop.invoices.colStatus', 'Status'),
+            t('qop.invoices.colDue', 'Faellig'),
+            t('qop.invoices.colCreated', 'Erstellt'),
+            t('qop.invoices.colAmount', 'Betrag'),
             '',
           ].map((h, i) => (
             <div key={i} className={`px-3 py-2.5 ${i >= 6 ? 'text-right' : ''}`}>{h}</div>
@@ -179,7 +177,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
           <div className="py-12 text-center">
             <FileText className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">
-              {de ? 'Keine Rechnungen gefunden.' : 'No invoices found.'}
+              {t('qop.invoices.empty', 'Keine Rechnungen gefunden.')}
             </p>
           </div>
         )}
@@ -187,7 +185,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
         {items.map((inv) => {
           const id = inv._id ?? inv.id;
           const canFinalize = inv.status === 'DRAFT';
-          const canSend     = inv.status === 'DRAFT'; // after finalize, also 'FINALIZED' if you have that
+          const canSend     = inv.status === 'DRAFT';
           const canPay      = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status);
           const canWriteOff = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status);
 
@@ -224,30 +222,30 @@ export function InvoicesTable({ advancedFilters = {} }) {
                   <DropdownMenuContent align="end" className="w-48">
                     {canFinalize && (
                       <DropdownMenuItem onClick={() => handleFinalize(id)}>
-                        <CheckCircle className="h-4 w-4 mr-2" />{de ? 'Finalisieren' : 'Finalize'}
+                        <CheckCircle className="h-4 w-4 mr-2" />{t('qop.invoices.finalize', 'Finalisieren')}
                       </DropdownMenuItem>
                     )}
                     {canSend && (
                       <DropdownMenuItem onClick={() => handleSend(id)}>
-                        <Send className="h-4 w-4 mr-2" />{de ? 'Senden' : 'Send'}
+                        <Send className="h-4 w-4 mr-2" />{t('qop.invoices.send', 'Senden')}
                       </DropdownMenuItem>
                     )}
                     {canPay && (
                       <DropdownMenuItem onClick={() => setPaying(inv)}>
-                        <DollarSign className="h-4 w-4 mr-2" />{de ? 'Zahlung erfassen' : 'Record Payment'}
+                        <DollarSign className="h-4 w-4 mr-2" />{t('qop.invoices.recordPayment', 'Zahlung erfassen')}
                       </DropdownMenuItem>
                     )}
                     {canWriteOff && (
                       <DropdownMenuItem onClick={() => setWriteOffInvoice(inv)}>
-                        <XCircle className="h-4 w-4 mr-2" />{de ? 'Abschreiben' : 'Write Off'}
+                        <XCircle className="h-4 w-4 mr-2" />{t('qop.invoices.writeOff', 'Abschreiben')}
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem onClick={() => handleGeneratePdf(id)}>
-                      <Download className="h-4 w-4 mr-2" />{de ? 'PDF herunterladen' : 'Download PDF'}
+                      <Download className="h-4 w-4 mr-2" />{t('qop.invoices.downloadPdf', 'PDF herunterladen')}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setHistoryFor(id)}>
-                      <History className="h-4 w-4 mr-2" />{de ? 'Verlauf' : 'History'}
+                      <History className="h-4 w-4 mr-2" />{t('qop.table.history', 'Verlauf')}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -283,10 +281,10 @@ export function InvoicesTable({ advancedFilters = {} }) {
       <Dialog open={!!writeOffInvoice} onOpenChange={() => setWriteOffInvoice(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{de ? 'Rechnung abschreiben' : 'Write off invoice'}</DialogTitle>
+            <DialogTitle>{t('qop.invoices.writeOffTitle', 'Rechnung abschreiben')}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2">
-            <Label>{de ? 'Grund' : 'Reason'}</Label>
+            <Label>{t('qop.invoices.reason', 'Grund')}</Label>
             <Textarea
               value={writeOffReason}
               onChange={(event) => setWriteOffReason(event.target.value)}
@@ -296,14 +294,14 @@ export function InvoicesTable({ advancedFilters = {} }) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setWriteOffInvoice(null)}>
-              {de ? 'Abbrechen' : 'Cancel'}
+              {t('common.cancel', 'Abbrechen')}
             </Button>
             <Button
               variant="destructive"
               onClick={handleWriteOff}
               disabled={!writeOffReason.trim() || transitionInvoiceStatus.isPending}
             >
-              {de ? 'Abschreiben' : 'Write Off'}
+              {t('qop.invoices.writeOff', 'Abschreiben')}
             </Button>
           </DialogFooter>
         </DialogContent>

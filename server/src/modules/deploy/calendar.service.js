@@ -62,16 +62,6 @@ class CalendarService {
           });
         }
 
-        // Fetch availability
-        let availability = [];
-        if (employeeIds?.length) {
-          availability = await availabilityRepository.findByEmployeesAndDateRange(
-            employeeIds,
-            start,
-            end,
-          );
-        }
-
         // Fetch coarse allocations if week-level view is relevant
         let coarseAllocations = [];
         try {
@@ -99,6 +89,16 @@ class CalendarService {
           .sort({ firstName: 1, lastName: 1 })
           .limit(500)
           .lean();
+
+        const visibleEmployeeIds = employees.map((employee) => employee._id.toString());
+        const availabilityEmployeeIds = employeeIds?.length ? employeeIds : visibleEmployeeIds;
+        const availability = availabilityEmployeeIds.length
+          ? await availabilityRepository.findByEmployeesAndDateRange(
+            availabilityEmployeeIds,
+            startOfDay(start),
+            endOfDay(end),
+          )
+          : [];
 
         // Group by employee
         const employeeMap = new Map();
@@ -170,6 +170,18 @@ function getISOWeek(date) {
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+}
+
+function startOfDay(date) {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function endOfDay(date) {
+  const value = new Date(date);
+  value.setHours(23, 59, 59, 999);
+  return value;
 }
 
 const calendarService = new CalendarService();

@@ -13,6 +13,10 @@ const ALLOWED_FILTERS = {
   reconciliationStatus: 'exact',
 };
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 class BankTransactionRepository {
   async create(data, options = {}) {
     const txn = new BankTransaction(data);
@@ -57,6 +61,26 @@ class BankTransactionRepository {
       if (filter.transactionDateTo) {
         filter.transactionDate.$lte = filter.transactionDateTo.$lte || filter.transactionDateTo;
         delete filter.transactionDateTo;
+      }
+    }
+
+    if (filters.q) {
+      const regex = new RegExp(escapeRegExp(filters.q), 'i');
+      const searchFilter = {
+        $or: [
+          { description: regex },
+          { bookingText: regex },
+          { reference: regex },
+          { payerPayeeName: regex },
+          { endToEndId: regex },
+          { creditorReference: regex },
+        ],
+      };
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, searchFilter];
+        delete filter.$or;
+      } else {
+        filter.$or = searchFilter.$or;
       }
     }
 

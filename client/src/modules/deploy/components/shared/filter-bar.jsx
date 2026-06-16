@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { X } from 'lucide-react';
@@ -18,10 +19,41 @@ export function FilterBar() {
 
   const { data: employees = [] } = useDeployEmployees();
 
-  const hasFilters = filters.assignmentType || filters.status || filters.employeeIds?.length;
+  const departments = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    for (const emp of employees) {
+      const dept = emp.department;
+      if (dept && !seen.has(dept)) {
+        seen.add(dept);
+        result.push(dept);
+      }
+    }
+    return result.sort((a, b) => a.localeCompare(b));
+  }, [employees]);
+
+  const hasFilters = filters.assignmentType || filters.status || filters.employeeIds?.length || filters.teamId;
 
   return (
     <div className="flex items-center gap-2">
+      {departments.length > 0 && (
+        <Select
+          value={filters.teamId || ''}
+          onValueChange={(v) => setFilters({ teamId: v || null })}
+        >
+          <SelectTrigger className="w-[140px] h-8 text-xs">
+            <SelectValue placeholder={t('deploy.filters.team', 'Team')} />
+          </SelectTrigger>
+          <SelectContent>
+            {departments.map((dept) => (
+              <SelectItem key={dept} value={dept} className="text-xs">
+                {dept}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       <Select
         value={filters.employeeIds?.[0] || ''}
         onValueChange={(v) => setFilters({ employeeIds: v ? [v] : [] })}

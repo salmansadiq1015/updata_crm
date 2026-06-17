@@ -8,12 +8,12 @@ import { useCIAssets } from '../../hooks/useCIQueries';
 import { useDeleteCIAsset, useUploadCIAsset } from '../../hooks/useCIMutations';
 
 const ASSET_DEFS = [
-  { type: 'logo_png', label: 'Logo (PNG)', accept: 'image/png' },
-  { type: 'logo_rgb', label: 'Logo (RGB PNG/JPEG)', accept: 'image/png,image/jpeg' },
-  { type: 'logo_cmyk', label: 'Logo (CMYK EPS)', accept: '.eps,application/postscript,image/x-eps' },
-  { type: 'font_300', label: 'Museo Sans 300 (Light)', accept: '.ttf,.otf,font/ttf,font/otf' },
-  { type: 'font_500', label: 'Museo Sans 500 (Medium)', accept: '.ttf,.otf,font/ttf,font/otf' },
-  { type: 'font_700', label: 'Museo Sans 700 (Bold)', accept: '.ttf,.otf,font/ttf,font/otf' },
+  { type: 'logo_png', labelKey: 'doctpl.ci.asset.logoPng', accept: 'image/png' },
+  { type: 'logo_rgb', labelKey: 'doctpl.ci.asset.logoRgb', accept: 'image/png,image/jpeg' },
+  { type: 'logo_cmyk', labelKey: 'doctpl.ci.asset.logoCmyk', accept: '.eps,application/postscript,image/x-eps' },
+  { type: 'font_300', labelKey: 'doctpl.ci.asset.font300', accept: '.ttf,.otf,font/ttf,font/otf' },
+  { type: 'font_500', labelKey: 'doctpl.ci.asset.font500', accept: '.ttf,.otf,font/ttf,font/otf' },
+  { type: 'font_700', labelKey: 'doctpl.ci.asset.font700', accept: '.ttf,.otf,font/ttf,font/otf' },
 ];
 
 export function CIAssetUploader() {
@@ -34,7 +34,7 @@ export function CIAssetUploader() {
 
   return (
     <div className="space-y-2">
-      {ASSET_DEFS.map(({ type, label, accept }) => {
+      {ASSET_DEFS.map(({ type, labelKey, accept }) => {
         const existing = getAsset(type);
         return (
           <div key={type} className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3">
@@ -43,7 +43,7 @@ export function CIAssetUploader() {
                 ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
                 : <Upload className="h-4 w-4 shrink-0 text-muted-foreground" />}
               <div className="min-w-0">
-                <p className="text-sm font-medium">{label}</p>
+                <p className="text-sm font-medium">{t(labelKey)}</p>
                 {existing && <p className="truncate text-xs text-muted-foreground">{existing.fileName}</p>}
               </div>
             </div>

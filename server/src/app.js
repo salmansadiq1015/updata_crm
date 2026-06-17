@@ -31,6 +31,7 @@ import mobileRoutes from './modules/mobile/mobile.routes.js';
 import qopRoutes from './modules/qop/qop.routes.js';
 import departmentRoutes from './modules/qop/department.routes.js';
 import doctplRoutes from './modules/doctpl/doctpl.routes.js';
+import documentIndexRoutes from './modules/documents/documentIndex.routes.js';
 import webhookRoutes from './modules/doctpl/webhook.routes.js';
 import catalogRoutes from './modules/catalog/catalog.routes.js';
 import accountingRoutes from './modules/accounting/accounting.routes.js';
@@ -141,6 +142,7 @@ export function createApp() {
   app.use("/api/v1/qop", qopRoutes);
   app.use("/api/v1/admin/departments", departmentRoutes);
   app.use("/api/v1/doctpl", doctplRoutes);
+  app.use("/api/v1/documents", documentIndexRoutes);
   app.use("/api/v1/catalog", catalogRoutes);
   app.use("/api/v1/accounting", accountingRoutes);
   app.use("/api/v1/tasks", tasksRoutes);

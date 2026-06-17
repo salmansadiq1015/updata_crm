@@ -272,7 +272,7 @@ function AccountsTab({ de, onImport, onImportStatus }) {
   );
 }
 
-function TransactionsTab({ de }) {
+function TransactionsTab({ de, t }) {
   const [search, setSearch] = useState('');
   const [bankAccountId, setBankAccountId] = useState('ALL');
   const [reconciliationStatus, setReconciliationStatus] = useState('ALL');
@@ -381,7 +381,7 @@ function TransactionsTab({ de }) {
           >
             {de ? 'Zurueck' : 'Previous'}
           </Button>
-          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1)}</span>
+          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button
             size="sm"
             variant="outline"
@@ -397,7 +397,7 @@ function TransactionsTab({ de }) {
 }
 
 export default function BankPage() {
-  const { locale: language } = useLanguage();
+  const { locale: language, t } = useLanguage();
   const de = language === 'de';
   const [importOpen, setImportOpen] = useState(false);
   const [statusImportOpen, setStatusImportOpen] = useState(false);
@@ -421,7 +421,7 @@ export default function BankPage() {
           <AccountsTab de={de} onImport={() => setImportOpen(true)} onImportStatus={() => setStatusImportOpen(true)} />
         </TabsContent>
         <TabsContent value="transactions" className="mt-4">
-          <TransactionsTab de={de} />
+          <TransactionsTab de={de} t={t} />
         </TabsContent>
       </Tabs>
 

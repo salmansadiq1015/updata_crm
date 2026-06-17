@@ -4,21 +4,27 @@ import {
   cashService, reconciliationService, openItemsService, accDocService,
 } from '../services/accounting-service';
 import toast from 'react-hot-toast';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 function inv(qc, ...keys) {
   keys.forEach((k) => qc.invalidateQueries({ queryKey: k }));
 }
 
+function success(t, key, fallback) {
+  toast.success(t(`accounting.toast.${key}`, fallback));
+}
+
 // ── Chart of Accounts ─────────────────────────────────────────
 export function useChartMutations() {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const createAccount = useMutation({
     mutationFn: chartService.create,
-    onSuccess: () => { inv(qc, ['accounting', 'accounts'], ['accounting', 'account-tree']); toast.success('Account created'); },
+    onSuccess: () => { inv(qc, ['accounting', 'accounts'], ['accounting', 'account-tree']); success(t, 'accountCreated', 'Account created'); },
   });
   const updateAccount = useMutation({
     mutationFn: ({ id, data }) => chartService.update(id, data),
-    onSuccess: () => { inv(qc, ['accounting', 'accounts'], ['accounting', 'account-tree']); toast.success('Account updated'); },
+    onSuccess: () => { inv(qc, ['accounting', 'accounts'], ['accounting', 'account-tree']); success(t, 'accountUpdated', 'Account updated'); },
   });
   return { createAccount, updateAccount };
 }
@@ -26,13 +32,14 @@ export function useChartMutations() {
 // ── Journal ───────────────────────────────────────────────────
 export function useJournalMutations() {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const createEntry = useMutation({
     mutationFn: journalService.create,
-    onSuccess: () => { inv(qc, ['accounting', 'journal']); toast.success('Journal entry created'); },
+    onSuccess: () => { inv(qc, ['accounting', 'journal']); success(t, 'journalEntryCreated', 'Journal entry created'); },
   });
   const reverseEntry = useMutation({
     mutationFn: (id) => journalService.reverse(id),
-    onSuccess: () => { inv(qc, ['accounting', 'journal']); toast.success('Entry reversed'); },
+    onSuccess: () => { inv(qc, ['accounting', 'journal']); success(t, 'entryReversed', 'Entry reversed'); },
   });
   return { createEntry, reverseEntry };
 }
@@ -40,31 +47,32 @@ export function useJournalMutations() {
 // ── AP ────────────────────────────────────────────────────────
 export function useApMutations() {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const invalidate = () => inv(qc, ['accounting', 'ap-invoices'], ['accounting', 'ap-summary'], ['accounting', 'ap-aging']);
 
   const createApInvoice = useMutation({
     mutationFn: apService.create,
-    onSuccess: () => { invalidate(); toast.success('AP invoice recorded'); },
+    onSuccess: () => { invalidate(); success(t, 'apInvoiceRecorded', 'AP invoice recorded'); },
   });
   const updateApInvoice = useMutation({
     mutationFn: ({ id, data }) => apService.update(id, data),
-    onSuccess: () => { invalidate(); toast.success('AP invoice updated'); },
+    onSuccess: () => { invalidate(); success(t, 'apInvoiceUpdated', 'AP invoice updated'); },
   });
   const approveApInvoice = useMutation({
     mutationFn: (id) => apService.approve(id),
-    onSuccess: () => { invalidate(); toast.success('Invoice approved'); },
+    onSuccess: () => { invalidate(); success(t, 'invoiceApproved', 'Invoice approved'); },
   });
   const secondApproveApInvoice = useMutation({
     mutationFn: (id) => apService.secondApprove(id),
-    onSuccess: () => { invalidate(); toast.success('Second approval granted'); },
+    onSuccess: () => { invalidate(); success(t, 'secondApprovalGranted', 'Second approval granted'); },
   });
   const disputeApInvoice = useMutation({
     mutationFn: ({ id, reason }) => apService.dispute(id, reason),
-    onSuccess: () => { invalidate(); toast.success('Invoice disputed'); },
+    onSuccess: () => { invalidate(); success(t, 'invoiceDisputed', 'Invoice disputed'); },
   });
   const createPaymentBatch = useMutation({
     mutationFn: apService.paymentBatch,
-    onSuccess: () => { invalidate(); toast.success('Payment batch created'); },
+    onSuccess: () => { invalidate(); success(t, 'paymentBatchCreated', 'Payment batch created'); },
   });
   return {
     createApInvoice, updateApInvoice,
@@ -76,27 +84,28 @@ export function useApMutations() {
 // ── AR ────────────────────────────────────────────────────────
 export function useArMutations() {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const invalidate = () => inv(qc, ['accounting', 'ar-receivables'], ['accounting', 'ar-summary'], ['accounting', 'ar-payments']);
 
   const recordPayment = useMutation({
     mutationFn: arService.recordPayment,
-    onSuccess: () => { invalidate(); toast.success('Payment recorded'); },
+    onSuccess: () => { invalidate(); success(t, 'paymentRecorded', 'Payment recorded'); },
   });
   const recordInvoicePayment = useMutation({
     mutationFn: arService.recordAndAllocateInvoicePayment,
-    onSuccess: () => { invalidate(); toast.success('Payment recorded and allocated'); },
+    onSuccess: () => { invalidate(); success(t, 'paymentRecordedAllocated', 'Payment recorded and allocated'); },
   });
   const allocatePayment = useMutation({
     mutationFn: ({ id, data }) => arService.allocatePayment(id, data),
-    onSuccess: () => { invalidate(); toast.success('Payment allocated'); },
+    onSuccess: () => { invalidate(); success(t, 'paymentAllocated', 'Payment allocated'); },
   });
   const writeOff = useMutation({
     mutationFn: ({ id, reason }) => arService.writeOff(id, reason),
-    onSuccess: () => { invalidate(); toast.success('Written off'); },
+    onSuccess: () => { invalidate(); success(t, 'writtenOff', 'Written off'); },
   });
   const generateDunning = useMutation({
     mutationFn: arService.generateDunning,
-    onSuccess: () => { inv(qc, ['accounting', 'ar-overdue']); toast.success('Dunning letters generated'); },
+    onSuccess: () => { inv(qc, ['accounting', 'ar-overdue']); success(t, 'dunningLettersGenerated', 'Dunning letters generated'); },
   });
   return { recordPayment, recordInvoicePayment, allocatePayment, writeOff, generateDunning };
 }
@@ -104,27 +113,28 @@ export function useArMutations() {
 // ── Bank ──────────────────────────────────────────────────────
 export function useBankMutations() {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const createBankAccount = useMutation({
     mutationFn: bankService.create,
-    onSuccess: () => { inv(qc, ['accounting', 'bank-accounts']); toast.success('Bank account added'); },
+    onSuccess: () => { inv(qc, ['accounting', 'bank-accounts']); success(t, 'bankAccountAdded', 'Bank account added'); },
   });
   const updateBankAccount = useMutation({
     mutationFn: ({ id, data }) => bankService.update(id, data),
-    onSuccess: () => { inv(qc, ['accounting', 'bank-accounts']); toast.success('Bank account updated'); },
+    onSuccess: () => { inv(qc, ['accounting', 'bank-accounts']); success(t, 'bankAccountUpdated', 'Bank account updated'); },
   });
   const importStatement = useMutation({
     mutationFn: bankService.importStatement,
-    onSuccess: () => { inv(qc, ['accounting', 'bank-transactions']); toast.success('Statement imported'); },
+    onSuccess: () => { inv(qc, ['accounting', 'bank-transactions']); success(t, 'statementImported', 'Statement imported'); },
   });
   const importPaymentStatus = useMutation({
     mutationFn: bankService.importPaymentStatus,
-    onSuccess: () => { inv(qc, ['accounting', 'ap-invoices']); toast.success('Payment status imported'); },
+    onSuccess: () => { inv(qc, ['accounting', 'ap-invoices']); success(t, 'paymentStatusImported', 'Payment status imported'); },
   });
   const retrieveStatements = useMutation({
     mutationFn: bankService.retrieve,
     onSuccess: () => {
       inv(qc, ['accounting', 'bank-transactions'], ['accounting', 'bank-accounts'], ['accounting', 'cash-balances'], ['accounting', 'cash-forecast']);
-      toast.success('Bank retrieval completed');
+      success(t, 'bankRetrievalCompleted', 'Bank retrieval completed');
     },
   });
   return { createBankAccount, updateBankAccount, importStatement, importPaymentStatus, retrieveStatements };
@@ -133,11 +143,12 @@ export function useBankMutations() {
 // â”€â”€ Cash â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function useCashMutations() {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const updateManualBalance = useMutation({
     mutationFn: cashService.manualBalance,
     onSuccess: () => {
       inv(qc, ['accounting', 'cash-balances'], ['accounting', 'cash-forecast'], ['accounting', 'bank-accounts']);
-      toast.success('Balance updated');
+      success(t, 'balanceUpdated', 'Balance updated');
     },
   });
   return { updateManualBalance };
@@ -146,6 +157,7 @@ export function useCashMutations() {
 // â”€â”€ Reconciliation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function useReconciliationMutations() {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const invalidate = () => inv(
     qc,
     ['accounting', 'reconciliation-unmatched'],
@@ -157,19 +169,19 @@ export function useReconciliationMutations() {
 
   const runReconciliation = useMutation({
     mutationFn: reconciliationService.run,
-    onSuccess: () => { invalidate(); toast.success('Reconciliation completed'); },
+    onSuccess: () => { invalidate(); success(t, 'reconciliationCompleted', 'Reconciliation completed'); },
   });
   const matchAr = useMutation({
     mutationFn: reconciliationService.matchAr,
-    onSuccess: () => { invalidate(); toast.success('AR transaction matched'); },
+    onSuccess: () => { invalidate(); success(t, 'arTransactionMatched', 'AR transaction matched'); },
   });
   const matchAp = useMutation({
     mutationFn: reconciliationService.matchAp,
-    onSuccess: () => { invalidate(); toast.success('AP transaction matched'); },
+    onSuccess: () => { invalidate(); success(t, 'apTransactionMatched', 'AP transaction matched'); },
   });
   const categorize = useMutation({
     mutationFn: reconciliationService.categorize,
-    onSuccess: () => { invalidate(); toast.success('Transaction categorized'); },
+    onSuccess: () => { invalidate(); success(t, 'transactionCategorized', 'Transaction categorized'); },
   });
 
   return { runReconciliation, matchAr, matchAp, categorize };
@@ -178,14 +190,15 @@ export function useReconciliationMutations() {
 // â”€â”€ Open Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function useOpenItemMutations() {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const invalidate = () => inv(qc, ['accounting', 'open-items'], ['accounting', 'open-items-aging'], ['accounting', 'ar-receivables'], ['accounting', 'ap-invoices']);
   const generateStatement = useMutation({
     mutationFn: ({ entityId, params, data }) => openItemsService.statement(entityId, params, data),
-    onSuccess: () => { inv(qc, ['accounting', 'documents']); toast.success('Statement generated'); },
+    onSuccess: () => { inv(qc, ['accounting', 'documents']); success(t, 'statementGenerated', 'Statement generated'); },
   });
   const netItems = useMutation({
     mutationFn: openItemsService.netItems,
-    onSuccess: () => { invalidate(); toast.success('Items netted'); },
+    onSuccess: () => { invalidate(); success(t, 'itemsNetted', 'Items netted'); },
   });
   return { generateStatement, netItems };
 }
@@ -193,26 +206,27 @@ export function useOpenItemMutations() {
 // â”€â”€ Documents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export function useAccDocumentMutations() {
   const qc = useQueryClient();
+  const { t } = useLanguage();
   const invalidate = () => inv(qc, ['accounting', 'documents']);
   const uploadDocument = useMutation({
     mutationFn: ({ file, meta }) => accDocService.upload(file, meta),
-    onSuccess: () => { invalidate(); toast.success('Document uploaded'); },
+    onSuccess: () => { invalidate(); success(t, 'documentUploaded', 'Document uploaded'); },
   });
   const triggerOcr = useMutation({
     mutationFn: accDocService.triggerOcr,
-    onSuccess: () => { invalidate(); toast.success('OCR queued'); },
+    onSuccess: () => { invalidate(); success(t, 'ocrQueued', 'OCR queued'); },
   });
   const confirmOcr = useMutation({
     mutationFn: ({ id, data }) => accDocService.confirmOcr(id, data),
-    onSuccess: () => { invalidate(); inv(qc, ['accounting', 'document-ocr-result']); toast.success('OCR confirmed'); },
+    onSuccess: () => { invalidate(); inv(qc, ['accounting', 'document-ocr-result']); success(t, 'ocrConfirmed', 'OCR confirmed'); },
   });
   const rejectOcr = useMutation({
     mutationFn: ({ id, data }) => accDocService.rejectOcr(id, data),
-    onSuccess: () => { invalidate(); inv(qc, ['accounting', 'document-ocr-result']); toast.success('OCR rejected'); },
+    onSuccess: () => { invalidate(); inv(qc, ['accounting', 'document-ocr-result']); success(t, 'ocrRejected', 'OCR rejected'); },
   });
   const assignDocument = useMutation({
     mutationFn: ({ id, data }) => accDocService.assign(id, data),
-    onSuccess: () => { invalidate(); toast.success('Document assigned'); },
+    onSuccess: () => { invalidate(); success(t, 'documentAssigned', 'Document assigned'); },
   });
   return { uploadDocument, triggerOcr, confirmOcr, rejectOcr, assignDocument };
 }

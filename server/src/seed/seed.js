@@ -114,6 +114,7 @@ export const PERMISSION_DEFINITIONS = [
 
   // Document Templates
   { module: 'documents', action: 'read', description: 'View generated PDFs and document repository records' },
+  { module: 'documents', action: 'write', description: 'Upload and organize central document repository records' },
   { module: 'documents', action: 'delete', description: 'Delete generated document repository records' },
   { module: 'templates', action: 'read', description: 'View document templates and generated documents' },
   { module: 'templates', action: 'write', description: 'Create, update, preview, and generate document templates' },
@@ -189,7 +190,7 @@ export const ROLE_DEFINITIONS = [
       'project:prep-actions:manage', 'project:schedule:manage',
       'project:documents:read', 'project:documents:write',
       'project:documents:create', 'project:documents:delete',
-      'documents:read', 'documents:delete',
+      'documents:read', 'documents:write', 'documents:delete',
       'quotations:read', 'quotations:write', 'quotations:delete', 'quotations:admin',
       'templates:read', 'templates:write',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',

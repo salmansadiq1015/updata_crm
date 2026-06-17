@@ -11,6 +11,9 @@ describe('satisfiesPermission — granular permission implications', () => {
     expect(satisfiesPermission(['projects:write'], 'project:create')).toBe(true);
     expect(satisfiesPermission(['projects:write'], 'project:edit')).toBe(true);
     expect(satisfiesPermission(['projects:write'], 'project:documents:write')).toBe(true);
+    expect(satisfiesPermission(['project:documents:write'], 'documents:write')).toBe(true);
+    expect(satisfiesPermission(['templates:write'], 'documents:write')).toBe(true);
+    expect(satisfiesPermission(['accounting:documents:manage'], 'documents:write')).toBe(true);
     expect(satisfiesPermission(['projects:read'], 'project:read')).toBe(true);
     expect(satisfiesPermission(['projects:admin'], 'project:status:override')).toBe(true);
     expect(satisfiesPermission(['projects:delete'], 'project:documents:delete')).toBe(true);

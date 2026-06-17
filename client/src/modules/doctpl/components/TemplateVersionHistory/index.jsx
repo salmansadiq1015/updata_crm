@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useTemplateVersionComparison, useTemplateVersions } from '../../hooks/useTemplateQueries';
 import { useRevertTemplate } from '../../hooks/useTemplateMutations';
+import { formatSwissDate } from '../../utils/localization';
 
 function formatValue(value) {
   if (value === null || value === undefined || value === '') return '-';
@@ -29,7 +30,6 @@ export function TemplateVersionHistory({ templateId, expectedVersion }) {
       : null
   ), [currentVersion, selectedVersion]);
   const comparison = useTemplateVersionComparison(templateId, comparisonParams, !!comparisonParams);
-  const dateLocale = locale === 'de' ? 'de-CH' : 'en-CH';
 
   if (isLoading) {
     return (
@@ -61,7 +61,7 @@ export function TemplateVersionHistory({ templateId, expectedVersion }) {
                       </span>
                     )}
                     <span className="text-xs text-muted-foreground">
-                      {version.createdAt ? new Date(version.createdAt).toLocaleDateString(dateLocale) : '-'}
+                      {formatSwissDate(version.createdAt, locale)}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground truncate">

@@ -1,0 +1,672 @@
+import mongoose from 'mongoose';
+import documentIndexRepository from './documentIndex.repository.js';
+import DocumentIndex from './documentIndex.model.js';
+import GeneratedDocument from '../doctpl/generatedDocument.model.js';
+import generatedDocumentRepository from '../doctpl/generatedDocument.repository.js';
+import documentAccessPolicyService from '../doctpl/documentAccessPolicy.service.js';
+import ProjectDocument from '../pm/projectDocument.model.js';
+import AccountingDocument from '../accounting/accountingDocument.model.js';
+import FileMetadata from '../files/file.model.js';
+import fileService from '../files/file.service.js';
+import storageService from '../../shared/storage/StorageService.js';
+import auditService from '../auth/audit.service.js';
+import { AuthorizationError, NotFoundError } from '../../shared/errors/AppError.js';
+import { loadUserPermissions, satisfiesPermission } from '../../shared/middleware/authenticate.js';
+import logger from '../../shared/logger/index.js';
+
+const CENTRAL_SOURCES = ['repository', 'generated', 'project', 'customer', 'accounting', 'mobile'];
+const SOURCE_LABELS = {
+  repository: 'Repository',
+  generated: 'Generated',
+  project: 'Project',
+  customer: 'Customer',
+  accounting: 'Accounting',
+  mobile: 'Mobile',
+};
+
+function cleanPathSegment(value = '') {
+  return `${value}`.trim().replace(/[\\/]+/g, '-').replace(/\s+/g, '_').slice(0, 80);
+}
+
+function createRecordId(source, id) {
+  return `${source}:${id}`;
+}
+
+export function parseRecordId(recordId) {
+  const [source, id] = `${recordId || ''}`.split(':');
+  if (!CENTRAL_SOURCES.includes(source) || !mongoose.Types.ObjectId.isValid(id)) return null;
+  return { source, id };
+}
+
+function escapeRegex(value) {
+  return `${value}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function toStringId(value) {
+  if (!value) return null;
+  return String(value._id || value.id || value);
+}
+
+function toDate(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeDate(value) {
+  const date = toDate(value);
+  return date ? date.toISOString() : null;
+}
+
+function compactObject(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== null && entry !== ''));
+}
+
+function sortDocuments(items, sortOrder) {
+  const direction = sortOrder === 'asc' ? 1 : -1;
+  return items.sort((left, right) => {
+    const leftDate = toDate(left.createdAt)?.getTime() || 0;
+    const rightDate = toDate(right.createdAt)?.getTime() || 0;
+    if (leftDate !== rightDate) return (leftDate - rightDate) * direction;
+    return String(left.id).localeCompare(String(right.id)) * direction;
+  });
+}
+
+function encodeCursor(item) {
+  if (!item) return null;
+  return Buffer.from(JSON.stringify({ createdAt: item.createdAt, id: item.id })).toString('base64url');
+}
+
+function decodeCursor(cursor) {
+  if (!cursor) return null;
+  try {
+    const decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8'));
+    return decoded?.createdAt && decoded?.id ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+function isAfterCursor(item, cursor, sortOrder) {
+  if (!cursor) return true;
+  const direction = sortOrder === 'asc' ? 1 : -1;
+  const itemDate = toDate(item.createdAt)?.getTime() || 0;
+  const cursorDate = toDate(cursor.createdAt)?.getTime() || 0;
+  if (itemDate !== cursorDate) return (itemDate - cursorDate) * direction > 0;
+  return String(item.id).localeCompare(String(cursor.id)) * direction > 0;
+}
+
+function addDateFilter(filter, field, query) {
+  if (!query.dateFrom && !query.dateTo) return;
+  filter[field] = {};
+  if (query.dateFrom) filter[field].$gte = new Date(query.dateFrom);
+  if (query.dateTo) filter[field].$lte = new Date(query.dateTo);
+}
+
+function sourceAllowed(query, source) {
+  return !query.source || query.source === 'all' || query.source === source;
+}
+
+function originAllowed(query, origin) {
+  return !query.origin || query.origin === 'all' || query.origin === origin;
+}
+
+function hasPermission(permissions, permission) {
+  return satisfiesPermission(permissions, permission);
+}
+
+function isAdmin(user) {
+  return user?.role?.name === 'Admin' || user?.role === 'Admin';
+}
+
+class DocumentIndexService {
+  async list(query = {}, user) {
+    const permissions = await this._permissions(user);
+    const limit = Math.min(Number(query.limit || 25), 100);
+    const cursor = decodeCursor(query.cursor);
+    const fetchLimit = Math.max(limit + 1, Math.min(limit * 2, 200));
+
+    const sources = await Promise.all([
+      this._listRepositoryDocuments(query, fetchLimit, permissions, user),
+      this._listGeneratedDocuments(query, fetchLimit, user),
+      this._listProjectDocuments(query, fetchLimit, permissions, user),
+      this._listCustomerDocuments(query, fetchLimit, permissions, user),
+      this._listAccountingDocuments(query, fetchLimit, permissions, user),
+      this._listMobileDocuments(query, fetchLimit, permissions, user),
+    ]);
+
+    const sorted = sortDocuments(sources.flat().filter((item) => isAfterCursor(item, cursor, query.sortOrder)), query.sortOrder);
+    const pageItems = sorted.slice(0, limit);
+    const hasNext = sorted.length > limit;
+    return {
+      data: pageItems,
+      pagination: {
+        hasNext,
+        nextCursor: hasNext ? encodeCursor(pageItems[pageItems.length - 1]) : null,
+        limit,
+      },
+    };
+  }
+
+  async upload(fileData, metadata, user, meta = {}) {
+    if (!fileData?.buffer) throw new NotFoundError('File', 'multipart file');
+
+    const folderPath = this._buildFolderPath(metadata);
+    const fileMeta = await fileService.upload({
+      buffer: fileData.buffer,
+      originalName: fileData.originalname,
+      mimeType: fileData.mimetype,
+      sizeBytes: fileData.size,
+      module: 'documents',
+      entityType: metadata.sourceRecordType || 'repository_document',
+      entityId: metadata.sourceRecordId || metadata.projectId || metadata.customerId || metadata.jobId || metadata.employeeId || null,
+      uploadedBy: user._id,
+      bucket: 'documents',
+      folderPath,
+      category: metadata.category || 'OTHER',
+    });
+
+    const record = await documentIndexRepository.create({
+      source: 'repository',
+      origin: 'uploaded',
+      sourceDocumentId: fileMeta._id,
+      fileId: fileMeta._id,
+      title: metadata.title || fileData.originalname,
+      fileName: fileData.originalname,
+      mimeType: fileData.mimetype,
+      fileSizeBytes: fileData.size,
+      documentType: metadata.documentType || 'OTHER',
+      category: metadata.category || 'OTHER',
+      folderPath,
+      description: metadata.description || '',
+      sourceRecordType: metadata.sourceRecordType || '',
+      sourceRecordId: metadata.sourceRecordId || null,
+      customerId: metadata.customerId || null,
+      projectId: metadata.projectId || null,
+      jobId: metadata.jobId || null,
+      employeeId: metadata.employeeId || null,
+      ownerUserId: user._id,
+      uploadedBy: user._id,
+      metadata: { directUpload: true },
+    });
+
+    auditService.logEvent({
+      eventType: 'document_repository.uploaded',
+      userId: user._id,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: record._id, fileName: record.fileName, projectId: metadata.projectId, customerId: metadata.customerId },
+      module: 'documents',
+    });
+
+    return this._normalizeRepositoryDocument(record);
+  }
+
+  async download(recordId, user) {
+    const parsed = parseRecordId(recordId);
+    if (!parsed) throw new NotFoundError('Document', recordId);
+
+    switch (parsed.source) {
+      case 'repository':
+        return this._downloadRepository(parsed.id, user);
+      case 'generated':
+        return this._downloadGenerated(parsed.id, user);
+      case 'project':
+        return this._downloadProject(parsed.id, user);
+      case 'customer':
+      case 'mobile':
+        return this._downloadFileMetadata(parsed.id, user);
+      case 'accounting':
+        return this._downloadAccounting(parsed.id, user);
+      default:
+        throw new NotFoundError('Document', recordId);
+    }
+  }
+
+  async delete(recordId, user, meta = {}) {
+    const parsed = parseRecordId(recordId);
+    if (!parsed) throw new NotFoundError('Document', recordId);
+    const permissions = await this._permissions(user);
+    if (!isAdmin(user) && !hasPermission(permissions, 'documents:delete')) {
+      throw new AuthorizationError('You do not have permission to delete this document');
+    }
+
+    switch (parsed.source) {
+      case 'repository':
+        await this._deleteRepository(parsed.id, user);
+        break;
+      case 'generated':
+        await this._deleteGenerated(parsed.id, user);
+        break;
+      case 'project': {
+        const { default: projectDocumentService } = await import('../pm/document.service.js');
+        await projectDocumentService.delete(parsed.id, user._id, meta);
+        break;
+      }
+      case 'customer':
+      case 'mobile':
+        await fileService.delete(parsed.id);
+        break;
+      case 'accounting': {
+        const { default: accountingDocumentService } = await import('../accounting/accountingDocument.service.js');
+        await accountingDocumentService.deleteDocument(parsed.id, user._id, meta);
+        break;
+      }
+      default:
+        throw new NotFoundError('Document', recordId);
+    }
+
+    auditService.logEvent({
+      eventType: 'document_repository.deleted',
+      userId: user._id,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: recordId },
+      module: 'documents',
+    });
+
+    return { deleted: true };
+  }
+
+  async _listRepositoryDocuments(query, limit, permissions, user) {
+    if (!sourceAllowed(query, 'repository') || !originAllowed(query, 'uploaded')) return [];
+    if (!isAdmin(user) && !hasPermission(permissions, 'documents:read')) return [];
+
+    const result = await documentIndexRepository.findWithCursor({
+      limit,
+      sortBy: 'createdAt',
+      sortOrder: query.sortOrder,
+      filters: {
+        ...query,
+        source: 'repository',
+        origin: query.origin === 'all' ? undefined : query.origin,
+      },
+    });
+    return result.data.map((doc) => this._normalizeRepositoryDocument(doc));
+  }
+
+  async _listGeneratedDocuments(query, limit, user) {
+    if (!sourceAllowed(query, 'generated') || !originAllowed(query, 'generated')) return [];
+    const filter = {};
+    addDateFilter(filter, 'generatedAt', query);
+    if (query.documentType) filter.documentType = query.documentType;
+    if (query.customerId) filter.sourceCustomerId = query.customerId;
+    if (query.projectId) filter.sourceProjectId = query.projectId;
+    if (query.jobId) filter.sourceRecordId = query.jobId;
+    if (query.sourceRecordId) filter.sourceRecordId = query.sourceRecordId;
+    if (query.search) {
+      const regex = new RegExp(escapeRegex(query.search), 'i');
+      filter.$or = [
+        { fileName: regex },
+        { documentType: regex },
+        { sourceModule: regex },
+        { 'metadata.customerName': regex },
+        { 'metadata.projectName': regex },
+      ];
+    }
+
+    const docs = await GeneratedDocument.find(filter)
+      .sort({ generatedAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
+      .limit(limit)
+      .select('-__v')
+      .lean();
+    const visible = [];
+    for (const doc of docs) {
+      if (await documentAccessPolicyService.canRead(doc, user)) visible.push(this._normalizeGeneratedDocument(doc));
+    }
+    return visible;
+  }
+
+  async _listProjectDocuments(query, limit, permissions, user) {
+    if (!sourceAllowed(query, 'project')) return [];
+    if (!originAllowed(query, 'uploaded') && !originAllowed(query, 'generated') && !originAllowed(query, 'draft')) return [];
+    if (!isAdmin(user) && !hasPermission(permissions, 'project:documents:read') && !hasPermission(permissions, 'projects:read')) return [];
+
+    const filter = {};
+    addDateFilter(filter, 'createdAt', query);
+    if (query.projectId) filter.projectId = query.projectId;
+    if (query.category) filter.category = query.category;
+    if (query.documentType) filter.templateType = query.documentType;
+    if (query.status) filter.status = query.status;
+    if (query.search) {
+      const regex = new RegExp(escapeRegex(query.search), 'i');
+      filter.$or = [{ fileName: regex }, { description: regex }, { templateType: regex }, { category: regex }];
+    }
+
+    const docs = await ProjectDocument.find(filter)
+      .populate({ path: 'fileId', select: 'originalName mimeType sizeBytes folderPath category' })
+      .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
+      .limit(limit)
+      .lean();
+    return docs.map((doc) => this._normalizeProjectDocument(doc));
+  }
+
+  async _listCustomerDocuments(query, limit, permissions, user) {
+    if (!sourceAllowed(query, 'customer') || !originAllowed(query, 'received') && !originAllowed(query, 'uploaded')) return [];
+    if (!isAdmin(user) && !hasPermission(permissions, 'crm:read')) return [];
+
+    const filter = { module: 'crm', entityType: 'customer' };
+    addDateFilter(filter, 'createdAt', query);
+    if (query.customerId) filter.entityId = query.customerId;
+    if (query.category) filter.category = query.category;
+    if (query.search) {
+      const regex = new RegExp(escapeRegex(query.search), 'i');
+      filter.$or = [{ originalName: regex }, { mimeType: regex }, { category: regex }, { folderPath: regex }];
+    }
+
+    const files = await FileMetadata.find(filter)
+      .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
+      .limit(limit)
+      .lean();
+    return files.map((file) => this._normalizeFileMetadata(file, {
+      source: 'customer',
+      origin: 'received',
+      sourceRecordType: 'customer',
+      customerId: file.entityId,
+    }));
+  }
+
+  async _listAccountingDocuments(query, limit, permissions, user) {
+    if (!sourceAllowed(query, 'accounting') || !originAllowed(query, 'received')) return [];
+    if (!isAdmin(user) && !hasPermission(permissions, 'accounting:documents:read')) return [];
+
+    const filter = {};
+    addDateFilter(filter, 'createdAt', query);
+    if (query.documentType) filter.documentType = query.documentType;
+    if (query.category) filter.accountingCategory = query.category;
+    if (query.status) filter.processingStatus = query.status;
+    if (query.projectId) filter.projectId = query.projectId;
+    if (query.customerId) filter.customerId = query.customerId;
+    if (query.employeeId) filter.employeeId = query.employeeId;
+    if (query.search) {
+      const regex = new RegExp(escapeRegex(query.search), 'i');
+      filter.$or = [
+        { fileName: regex },
+        { documentType: regex },
+        { supplierName: regex },
+        { projectReference: regex },
+        { accountingCategory: regex },
+        { notes: regex },
+      ];
+    }
+
+    const docs = await AccountingDocument.find(filter)
+      .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
+      .limit(limit)
+      .select('-__v')
+      .lean();
+    return docs.map((doc) => this._normalizeAccountingDocument(doc));
+  }
+
+  async _listMobileDocuments(query, limit, permissions, user) {
+    if (!sourceAllowed(query, 'mobile') || !originAllowed(query, 'uploaded')) return [];
+    if (!isAdmin(user) && !hasPermission(permissions, 'mobile:read') && !hasPermission(permissions, 'field-service:read')) return [];
+
+    const filter = { module: 'mobile', entityType: 'document' };
+    addDateFilter(filter, 'createdAt', query);
+    if (query.jobId) filter.entityId = query.jobId;
+    if (query.category) filter.category = query.category;
+    if (query.search) {
+      const regex = new RegExp(escapeRegex(query.search), 'i');
+      filter.$or = [{ originalName: regex }, { mimeType: regex }, { category: regex }, { folderPath: regex }];
+    }
+
+    const files = await FileMetadata.find(filter)
+      .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
+      .limit(limit)
+      .lean();
+    return files.map((file) => this._normalizeFileMetadata(file, {
+      source: 'mobile',
+      origin: 'uploaded',
+      sourceRecordType: 'job',
+      jobId: file.entityId,
+    }));
+  }
+
+  _normalizeRepositoryDocument(doc) {
+    return compactObject({
+      id: createRecordId('repository', doc._id),
+      source: 'repository',
+      sourceLabel: SOURCE_LABELS.repository,
+      origin: 'uploaded',
+      title: doc.title || doc.fileName,
+      fileName: doc.fileName,
+      mimeType: doc.mimeType,
+      fileSizeBytes: doc.fileSizeBytes,
+      documentType: doc.documentType,
+      category: doc.category,
+      status: doc.status,
+      folderPath: doc.folderPath,
+      description: doc.description,
+      sourceRecordType: doc.sourceRecordType,
+      sourceRecordId: toStringId(doc.sourceRecordId),
+      customerId: toStringId(doc.customerId),
+      projectId: toStringId(doc.projectId),
+      jobId: toStringId(doc.jobId),
+      employeeId: toStringId(doc.employeeId),
+      ownerUserId: toStringId(doc.ownerUserId),
+      uploadedBy: toStringId(doc.uploadedBy),
+      createdAt: normalizeDate(doc.createdAt),
+      updatedAt: normalizeDate(doc.updatedAt),
+      metadata: doc.metadata || {},
+      canDelete: true,
+    });
+  }
+
+  _normalizeGeneratedDocument(doc) {
+    return compactObject({
+      id: createRecordId('generated', doc._id),
+      source: 'generated',
+      sourceLabel: SOURCE_LABELS.generated,
+      origin: 'generated',
+      title: doc.metadata?.documentNumber || doc.fileName,
+      fileName: doc.fileName,
+      mimeType: 'application/pdf',
+      fileSizeBytes: doc.fileSizeBytes,
+      documentType: doc.documentType,
+      category: doc.documentType,
+      status: 'FINAL',
+      folderPath: doc.metadata?.folderPath || '',
+      sourceRecordType: doc.sourceModule,
+      sourceRecordId: toStringId(doc.sourceRecordId),
+      customerId: toStringId(doc.sourceCustomerId),
+      projectId: toStringId(doc.sourceProjectId),
+      employeeId: toStringId(doc.ownerUserId),
+      ownerUserId: toStringId(doc.ownerUserId),
+      uploadedBy: toStringId(doc.generatedBy),
+      templateVersion: doc.templateVersion,
+      pageCount: doc.pageCount,
+      createdAt: normalizeDate(doc.generatedAt),
+      metadata: doc.metadata || {},
+      canDelete: true,
+    });
+  }
+
+  _normalizeProjectDocument(doc) {
+    const file = typeof doc.fileId === 'object' ? doc.fileId : null;
+    const origin = doc.status === 'DRAFT' ? 'draft' : doc.isGenerated ? 'generated' : 'uploaded';
+    return compactObject({
+      id: createRecordId('project', doc._id),
+      source: 'project',
+      sourceLabel: SOURCE_LABELS.project,
+      origin,
+      title: doc.fileName,
+      fileName: file?.originalName || doc.fileName,
+      mimeType: file?.mimeType || '',
+      fileSizeBytes: file?.sizeBytes || 0,
+      documentType: doc.templateType || doc.category || 'OTHER',
+      category: doc.category,
+      status: doc.status || 'FINAL',
+      folderPath: file?.folderPath || '',
+      description: doc.description,
+      sourceRecordType: 'project',
+      sourceRecordId: toStringId(doc.projectId),
+      projectId: toStringId(doc.projectId),
+      uploadedBy: toStringId(doc.uploadedBy),
+      createdAt: normalizeDate(doc.createdAt),
+      updatedAt: normalizeDate(doc.updatedAt),
+      metadata: { version: doc.version, previousVersionId: toStringId(doc.previousVersionId), isGenerated: Boolean(doc.isGenerated) },
+      canDelete: true,
+    });
+  }
+
+  _normalizeAccountingDocument(doc) {
+    return compactObject({
+      id: createRecordId('accounting', doc._id),
+      source: 'accounting',
+      sourceLabel: SOURCE_LABELS.accounting,
+      origin: 'received',
+      title: doc.fileName,
+      fileName: doc.fileName,
+      mimeType: doc.mimeType,
+      fileSizeBytes: doc.fileSize,
+      documentType: doc.documentType,
+      category: doc.accountingCategory || doc.documentType,
+      status: doc.processingStatus,
+      folderPath: `Accounting/${doc.documentType}`,
+      description: doc.notes,
+      sourceRecordType: 'accounting',
+      sourceRecordId: toStringId(doc._id),
+      customerId: toStringId(doc.customerId),
+      projectId: toStringId(doc.projectId),
+      employeeId: toStringId(doc.employeeId),
+      uploadedBy: toStringId(doc.createdBy),
+      createdAt: normalizeDate(doc.createdAt),
+      updatedAt: normalizeDate(doc.updatedAt),
+      metadata: {
+        ocrStatus: doc.ocrStatus,
+        supplierName: doc.supplierName,
+        projectReference: doc.projectReference,
+        retentionUntil: normalizeDate(doc.retentionUntil),
+        assignedTo: toStringId(doc.assignedTo),
+      },
+      canDelete: Boolean(doc.retentionUntil && new Date(doc.retentionUntil) <= new Date()),
+    });
+  }
+
+  _normalizeFileMetadata(file, context) {
+    return compactObject({
+      id: createRecordId(context.source, file._id),
+      source: context.source,
+      sourceLabel: SOURCE_LABELS[context.source],
+      origin: context.origin,
+      title: file.originalName,
+      fileName: file.originalName,
+      mimeType: file.mimeType,
+      fileSizeBytes: file.sizeBytes,
+      documentType: file.category || 'OTHER',
+      category: file.category || 'OTHER',
+      status: 'FINAL',
+      folderPath: file.folderPath || `${SOURCE_LABELS[context.source]}/${file.category || 'general'}`,
+      sourceRecordType: context.sourceRecordType,
+      sourceRecordId: toStringId(file.entityId),
+      customerId: toStringId(context.customerId),
+      projectId: toStringId(context.projectId),
+      jobId: toStringId(context.jobId),
+      employeeId: toStringId(context.employeeId),
+      uploadedBy: toStringId(file.uploadedBy),
+      createdAt: normalizeDate(file.createdAt),
+      updatedAt: normalizeDate(file.updatedAt),
+      metadata: { bucket: file.bucket, storageBackend: file.storageBackend },
+      canDelete: true,
+    });
+  }
+
+  async _downloadRepository(id, user) {
+    const record = await documentIndexRepository.findById(id);
+    if (!record) throw new NotFoundError('Document', id);
+    await this._assertRepositoryReadable(record, user);
+    return { downloadUrl: await fileService.getDownloadUrl(record.fileId), fileName: record.fileName };
+  }
+
+  async _downloadGenerated(id, user) {
+    const doc = await generatedDocumentRepository.findById(id);
+    if (!doc) throw new NotFoundError('GeneratedDocument', id);
+    await documentAccessPolicyService.assertCanRead(doc, user);
+    return { downloadUrl: await fileService.getDownloadUrl(doc.fileId), fileName: doc.fileName };
+  }
+
+  async _downloadProject(id, user) {
+    const permissions = await this._permissions(user);
+    if (!isAdmin(user) && !hasPermission(permissions, 'project:documents:read') && !hasPermission(permissions, 'projects:read')) {
+      throw new AuthorizationError('You do not have access to this project document');
+    }
+    const { default: projectDocumentService } = await import('../pm/document.service.js');
+    const doc = await projectDocumentService.getById(id);
+    const downloadUrl = await projectDocumentService.getDownloadUrl(id);
+    return { downloadUrl, fileName: doc.originalName || doc.fileName };
+  }
+
+  async _downloadFileMetadata(id, user) {
+    const file = await fileService.getById(id);
+    if (!file) throw new NotFoundError('File', id);
+    const permissions = await this._permissions(user);
+    const isCustomer = file.module === 'crm';
+    const isMobile = file.module === 'mobile';
+    const allowed = isAdmin(user)
+      || (isCustomer && hasPermission(permissions, 'crm:read'))
+      || (isMobile && (hasPermission(permissions, 'mobile:read') || hasPermission(permissions, 'field-service:read')));
+    if (!allowed) throw new AuthorizationError('You do not have access to this file');
+    return { downloadUrl: await fileService.getDownloadUrl(id), fileName: file.originalName };
+  }
+
+  async _downloadAccounting(id, user) {
+    const permissions = await this._permissions(user);
+    if (!isAdmin(user) && !hasPermission(permissions, 'accounting:documents:read')) {
+      throw new AuthorizationError('You do not have access to this accounting document');
+    }
+    const doc = await AccountingDocument.findById(id).lean();
+    if (!doc) throw new NotFoundError('AccountingDocument', id);
+    return { downloadUrl: await storageService.getPresignedUrl(doc.filePath), fileName: doc.fileName };
+  }
+
+  async _deleteRepository(id, user) {
+    const record = await documentIndexRepository.findById(id);
+    if (!record) throw new NotFoundError('Document', id);
+    if (record.fileId) await fileService.delete(record.fileId);
+    await documentIndexRepository.softDelete(id, user._id);
+  }
+
+  async _deleteGenerated(id, user) {
+    const doc = await generatedDocumentRepository.findById(id);
+    if (!doc) throw new NotFoundError('GeneratedDocument', id);
+    await documentAccessPolicyService.assertCanDelete(doc, user);
+    if (doc.fileId) await fileService.delete(doc.fileId);
+    await generatedDocumentRepository.deleteById(id);
+  }
+
+  async _assertRepositoryReadable(record, user) {
+    const permissions = await this._permissions(user);
+    if (isAdmin(user) || hasPermission(permissions, 'documents:read')) return;
+    if (record.ownerUserId && String(record.ownerUserId) === String(user?._id)) return;
+    throw new AuthorizationError('You do not have access to this document');
+  }
+
+  async _permissions(user) {
+    if (!user) return [];
+    return loadUserPermissions(user);
+  }
+
+  _buildFolderPath(metadata) {
+    const base = metadata.projectId
+      ? `Projects/${metadata.projectId}`
+      : metadata.customerId
+        ? `Customers/${metadata.customerId}`
+        : metadata.jobId
+          ? `Jobs/${metadata.jobId}`
+          : metadata.employeeId
+            ? `Employees/${metadata.employeeId}`
+            : 'Documents';
+    const folder = metadata.folderPath ? `${metadata.folderPath}` : base;
+    return folder
+      .split('/')
+      .map((part) => cleanPathSegment(part))
+      .filter(Boolean)
+      .join('/');
+  }
+}
+
+const documentIndexService = new DocumentIndexService();
+export default documentIndexService;

@@ -18,7 +18,7 @@ import {
 } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useAccDocumentMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
 import { accDocService } from '@/modules/accounting/services/accounting-service';
-import { downloadResponse, formatDate, formatMoney, toDateInput } from '@/modules/accounting/utils/accounting-ui';
+import { cursorPageLabel, downloadResponse, formatDate, formatMoney, toDateInput } from '@/modules/accounting/utils/accounting-ui';
 
 const DOCUMENT_TYPES = [
   'SUPPLIER_INVOICE',
@@ -54,7 +54,7 @@ function buildOcrCorrections(result) {
   return corrections;
 }
 
-function OcrReviewDialog({ document, open, onClose, de }) {
+function OcrReviewDialog({ document, open, onClose, de, t }) {
   const { data: result, isLoading } = useAccDocumentOcrResult(document?._id);
   const { confirmOcr, rejectOcr } = useAccDocumentMutations();
   const corrections = result ? buildOcrCorrections(result) : {};
@@ -71,7 +71,10 @@ function OcrReviewDialog({ document, open, onClose, de }) {
 
   const handleReject = async () => {
     if (!document?._id) return;
-    await rejectOcr.mutateAsync({ id: document._id, data: { reason: 'Rejected in accounting review' } });
+    await rejectOcr.mutateAsync({
+      id: document._id,
+      data: { reason: t('accounting.reason.ocrRejected', 'Rejected in accounting review') },
+    });
     onClose();
   };
 
@@ -130,7 +133,7 @@ function OcrReviewDialog({ document, open, onClose, de }) {
 }
 
 export default function AccountingDocumentsPage() {
-  const { locale: language } = useLanguage();
+  const { locale: language, t } = useLanguage();
   const de = language === 'de';
   const fileRef = useRef(null);
   const [documentType, setDocumentType] = useState('SUPPLIER_INVOICE');
@@ -274,12 +277,12 @@ export default function AccountingDocumentsPage() {
         </table>
         <div className="flex items-center justify-between border-t border-border px-3 py-2">
           <Button size="sm" variant="outline" onClick={() => setCursorStack((current) => current.length > 1 ? current.slice(0, -1) : current)} disabled={cursorStack.length <= 1}>{de ? 'Zurueck' : 'Previous'}</Button>
-          <span className="text-xs text-muted-foreground">Page {cursorStack.length}</span>
+          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button size="sm" variant="outline" onClick={() => pagination?.nextCursor && setCursorStack((current) => [...current, pagination.nextCursor])} disabled={!pagination?.hasNext}>{de ? 'Weiter' : 'Next'}</Button>
         </div>
       </div>
 
-      <OcrReviewDialog document={reviewDoc} open={!!reviewDoc} onClose={() => setReviewDoc(null)} de={de} />
+      <OcrReviewDialog document={reviewDoc} open={!!reviewDoc} onClose={() => setReviewDoc(null)} de={de} t={t} />
     </div>
   );
 }

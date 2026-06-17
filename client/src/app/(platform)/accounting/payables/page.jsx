@@ -101,7 +101,7 @@ function ApproveDialog({ invoice, open, onClose, de }) {
 }
 
 export default function PayablesPage() {
-  const { locale: language } = useLanguage();
+  const { locale: language, t } = useLanguage();
   const de = language === 'de';
 
   const [search, setSearch] = useState('');
@@ -340,7 +340,7 @@ export default function PayablesPage() {
           >
             {de ? 'Zurueck' : 'Previous'}
           </Button>
-          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1)}</span>
+          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button
             size="sm"
             variant="outline"

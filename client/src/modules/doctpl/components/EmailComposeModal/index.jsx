@@ -68,7 +68,7 @@ function EmailComposeForm({ initialValues, onClose }) {
       <div className="space-y-3 py-1">
         <div>
           <Label>{t('doctpl.to')}</Label>
-          <Input value={form.to} onChange={set('to')} placeholder="email@example.com, ..." />
+          <Input value={form.to} onChange={set('to')} placeholder={t('doctpl.email.recipientPlaceholder')} />
         </div>
         <div>
           <Label>{t('doctpl.cc')}</Label>

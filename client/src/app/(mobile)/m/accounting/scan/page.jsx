@@ -20,14 +20,25 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 const DOCUMENT_OPTIONS = [
-  { value: ACCOUNTING_DOCUMENT_TYPE.SUPPLIER_INVOICE, de: 'Lieferantenrechnung', en: 'Supplier invoice' },
-  { value: ACCOUNTING_DOCUMENT_TYPE.RECEIPT, de: 'Beleg', en: 'Receipt' },
-  { value: ACCOUNTING_DOCUMENT_TYPE.OTHER, de: 'Sonstiges', en: 'Other' },
+  {
+    value: ACCOUNTING_DOCUMENT_TYPE.SUPPLIER_INVOICE,
+    labelKey: 'mobile.accountingScan.documentType.supplierInvoice',
+    fallback: 'Supplier invoice',
+  },
+  {
+    value: ACCOUNTING_DOCUMENT_TYPE.RECEIPT,
+    labelKey: 'mobile.accountingScan.documentType.receipt',
+    fallback: 'Receipt',
+  },
+  {
+    value: ACCOUNTING_DOCUMENT_TYPE.OTHER,
+    labelKey: 'mobile.accountingScan.documentType.other',
+    fallback: 'Other',
+  },
 ];
 
 export default function MobileAccountingScanPage() {
-  const { locale } = useLanguage();
-  const lang = locale === 'en' ? 'en' : 'de';
+  const { t } = useLanguage();
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const scan = useAccountingDocumentScan();
@@ -39,8 +50,11 @@ export default function MobileAccountingScanPage() {
   const [notes, setNotes] = useState('');
 
   const selectedLabel = useMemo(
-    () => DOCUMENT_OPTIONS.find((option) => option.value === documentType)?.[lang] || documentType,
-    [documentType, lang]
+    () => {
+      const option = DOCUMENT_OPTIONS.find((item) => item.value === documentType);
+      return option ? t(option.labelKey, option.fallback) : documentType;
+    },
+    [documentType, t]
   );
 
   useEffect(() => () => {
@@ -52,7 +66,7 @@ export default function MobileAccountingScanPage() {
     if (!selected) return;
 
     if (selected.size > 20 * 1024 * 1024) {
-      toast.error(lang === 'de' ? 'Datei ist groesser als 20 MB' : 'File exceeds 20 MB');
+      toast.error(t('mobile.accountingScan.fileTooLarge', 'File exceeds 20 MB'));
       return;
     }
 
@@ -78,7 +92,7 @@ export default function MobileAccountingScanPage() {
 
   const submit = async () => {
     if (!file) {
-      toast.error(lang === 'de' ? 'Bitte Dokument auswählen' : 'Please select a document');
+      toast.error(t('mobile.accountingScan.selectDocument', 'Please select a document'));
       return;
     }
 
@@ -94,19 +108,19 @@ export default function MobileAccountingScanPage() {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <MobileHeader title={lang === 'de' ? 'Accounting Scan' : 'Accounting Scan'} showBack />
+      <MobileHeader title={t('mobile.accountingScan.title', 'Accounting Scan')} showBack />
 
       <main className="flex-1 space-y-4 overflow-y-auto px-4 pb-28 pt-4">
         <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="grid grid-cols-2 gap-3">
             <CaptureButton
               icon={Camera}
-              label={lang === 'de' ? 'Kamera' : 'Camera'}
+              label={t('mobile.accountingScan.camera', 'Camera')}
               onClick={() => cameraInputRef.current?.click()}
             />
             <CaptureButton
               icon={Upload}
-              label={lang === 'de' ? 'Datei' : 'File'}
+              label={t('mobile.accountingScan.file', 'File')}
               onClick={() => fileInputRef.current?.click()}
             />
           </div>
@@ -148,7 +162,7 @@ export default function MobileAccountingScanPage() {
                   size="icon"
                   className="absolute right-2 top-2 h-10 w-10 bg-background/90"
                   onClick={clearFile}
-                  aria-label="Remove selected document"
+                  aria-label={t('mobile.accountingScan.removeSelectedDocument', 'Remove selected document')}
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -162,7 +176,7 @@ export default function MobileAccountingScanPage() {
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
               <FileText className="h-10 w-10" />
               <p className="text-sm font-medium">
-                {lang === 'de' ? 'Kein Dokument ausgewählt' : 'No document selected'}
+                {t('mobile.accountingScan.noDocumentSelected', 'No document selected')}
               </p>
             </div>
           )}
@@ -176,7 +190,7 @@ export default function MobileAccountingScanPage() {
             <SelectContent>
               {DOCUMENT_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
-                  {option[lang]}
+                  {t(option.labelKey, option.fallback)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -187,14 +201,14 @@ export default function MobileAccountingScanPage() {
             onChange={(event) => setProjectReference(event.target.value)}
             maxLength={100}
             className="h-11"
-            placeholder={lang === 'de' ? 'Projekt / Auftrag (optional)' : 'Project / order (optional)'}
+            placeholder={t('mobile.accountingScan.projectPlaceholder', 'Project / order (optional)')}
           />
           <Input
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
             maxLength={500}
             className="h-11"
-            placeholder={lang === 'de' ? 'Notiz (optional)' : 'Note (optional)'}
+            placeholder={t('mobile.accountingScan.notePlaceholder', 'Note (optional)')}
           />
         </section>
       </main>
@@ -203,8 +217,8 @@ export default function MobileAccountingScanPage() {
         <Button className="h-11 w-full" disabled={!file || scan.isPending} onClick={submit}>
           {scan.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
           {scan.isPending
-            ? (lang === 'de' ? 'Wird gespeichert...' : 'Saving...')
-            : (lang === 'de' ? 'Archivieren' : 'Archive')}
+            ? t('mobile.accountingScan.saving', 'Saving...')
+            : t('mobile.accountingScan.archive', 'Archive')}
         </Button>
       </div>
     </div>

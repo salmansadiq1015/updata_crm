@@ -1,6 +1,7 @@
 'use client';
 
 import toast from 'react-hot-toast';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { accDocService } from '@/modules/accounting/services/accounting-service';
 import { generateId } from '@/lib/utils/ids';
 import { db } from '../db/mobile-db';
@@ -18,13 +19,13 @@ function buildMetadata({ documentType, notes, projectReference }) {
   };
 }
 
-async function prepareFile(file) {
-  if (!file) throw new Error('No file selected');
+async function prepareFile(file, messages) {
+  if (!file) throw new Error(messages.noFileSelected);
   if (!ALLOWED_FILE_TYPES.has(file.type)) {
-    throw new Error('Unsupported file type');
+    throw new Error(messages.unsupportedFileType);
   }
   if (file.size > PHOTO_CONFIG.MAX_FILE_SIZE) {
-    throw new Error('File exceeds 20 MB');
+    throw new Error(messages.fileTooLarge);
   }
 
   if (file.type.startsWith('image/')) {
@@ -44,9 +45,16 @@ async function prepareFile(file) {
 }
 
 export function useAccountingDocumentScan() {
+  const { t } = useLanguage();
+  const messages = {
+    noFileSelected: t('mobile.accountingScan.noFileSelected', 'No file selected'),
+    unsupportedFileType: t('mobile.accountingScan.unsupportedFileType', 'Unsupported file type'),
+    fileTooLarge: t('mobile.accountingScan.fileTooLarge', 'File exceeds 20 MB'),
+  };
+
   return useOfflineMutation({
     mutationFn: async ({ file, documentType = ACCOUNTING_DOCUMENT_TYPE.RECEIPT, notes, projectReference }) => {
-      const prepared = await prepareFile(file);
+      const prepared = await prepareFile(file, messages);
       return accDocService.upload(
         new File([prepared.blob], prepared.fileName, { type: prepared.mimeType }),
         buildMetadata({ documentType, notes, projectReference })
@@ -55,7 +63,7 @@ export function useAccountingDocumentScan() {
     entityType: SYNC_ENTITY_TYPE.ACCOUNTING_DOCUMENT,
     invalidateKeys: [['accounting', 'documents']],
     onOfflineWrite: async ({ file, documentType = ACCOUNTING_DOCUMENT_TYPE.RECEIPT, notes, projectReference }) => {
-      const prepared = await prepareFile(file);
+      const prepared = await prepareFile(file, messages);
       const id = generateId();
       const now = new Date().toISOString();
       const metadata = buildMetadata({ documentType, notes, projectReference });
@@ -79,7 +87,7 @@ export function useAccountingDocumentScan() {
         payload: { metadata },
       };
     },
-    onSuccess: () => toast.success('Document saved'),
-    onError: (err) => toast.error(err.message),
+    onSuccess: () => toast.success(t('mobile.accountingScan.documentSaved', 'Document saved')),
+    onError: (err) => toast.error(err?.message || t('common.tryAgain', 'Please try again.')),
   });
 }

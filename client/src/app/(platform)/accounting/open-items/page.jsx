@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useOpenItems, useOpenItemsAging } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useOpenItemMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
-import { formatDate, formatMoney } from '@/modules/accounting/utils/accounting-ui';
+import { cursorPageLabel, formatDate, formatMoney } from '@/modules/accounting/utils/accounting-ui';
 
 const TYPE_LABELS = {
   AR: { de: 'Forderung', en: 'Receivable', badge: 'bg-emerald-100 text-emerald-700' },
@@ -23,7 +23,7 @@ function selectedByType(items, selectedIds, type) {
 }
 
 export default function OpenItemsPage() {
-  const { locale: language } = useLanguage();
+  const { locale: language, t } = useLanguage();
   const de = language === 'de';
   const [entityType, setEntityType] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -67,7 +67,7 @@ export default function OpenItemsPage() {
       supplierId: selectedAp[0].entityId,
       arInvoiceIds: selectedAr.map((item) => item._id),
       apInvoiceIds: selectedAp.map((item) => item._id),
-      reason: 'Manual open-item netting',
+      reason: t('accounting.reason.manualOpenItemNetting', 'Manual open-item netting'),
     });
     setSelectedIds(new Set());
   };
@@ -176,7 +176,7 @@ export default function OpenItemsPage() {
         </table>
         <div className="flex items-center justify-between border-t border-border px-3 py-2">
           <Button size="sm" variant="outline" onClick={() => setCursorStack((current) => current.length > 1 ? current.slice(0, -1) : current)} disabled={cursorStack.length <= 1}>{de ? 'Zurueck' : 'Previous'}</Button>
-          <span className="text-xs text-muted-foreground">Page {cursorStack.length}</span>
+          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button size="sm" variant="outline" onClick={() => pagination?.nextCursor && setCursorStack((current) => [...current, pagination.nextCursor])} disabled={!pagination?.hasNext}>{de ? 'Weiter' : 'Next'}</Button>
         </div>
       </div>

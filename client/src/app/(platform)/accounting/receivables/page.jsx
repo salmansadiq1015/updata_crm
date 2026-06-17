@@ -90,7 +90,7 @@ function RecordPaymentDialog({ invoice, open, onClose, de }) {
   );
 }
 
-function ReceivablesTab({ de }) {
+function ReceivablesTab({ de, t }) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
   const [payTarget, setPayTarget] = useState(null);
@@ -199,7 +199,7 @@ function ReceivablesTab({ de }) {
           >
             {de ? 'Zurueck' : 'Previous'}
           </Button>
-          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1)}</span>
+          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button
             size="sm"
             variant="outline"
@@ -310,7 +310,7 @@ function DunningTab({ de }) {
 }
 
 export default function ReceivablesPage() {
-  const { locale: language } = useLanguage();
+  const { locale: language, t } = useLanguage();
   const de = language === 'de';
   const { data: summary } = useArSummary();
 
@@ -344,7 +344,7 @@ export default function ReceivablesPage() {
           <TabsTrigger value="dunning" className="text-xs">{de ? 'Mahnwesen' : 'Dunning'}</TabsTrigger>
         </TabsList>
         <TabsContent value="receivables" className="mt-4">
-          <ReceivablesTab de={de} />
+          <ReceivablesTab de={de} t={t} />
         </TabsContent>
         <TabsContent value="dunning" className="mt-4">
           <DunningTab de={de} />

@@ -7,12 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { DocumentPreviewDrawer } from '../DocumentPreviewDrawer';
 import { useDownloadDocument } from '../../hooks/useDocumentMutations';
-
-const TYPE_LABELS = {
-  quotation: 'Quotation', order_confirmation: 'Order Conf.', invoice_standard: 'Invoice',
-  invoice_advance: 'Advance Inv.', invoice_final: 'Final Inv.', cover_letter: 'Cover Letter',
-  service_report: 'Service Report', inspection_certificate: 'Inspection Cert.',
-};
+import { formatSwissDate } from '../../utils/localization';
 
 export function DocumentsTable({
   documents = [],
@@ -23,7 +18,7 @@ export function DocumentsTable({
   onPreview,
   onDownload,
 }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [preview, setPreview] = useState(null);
   const download = useDownloadDocument();
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -90,7 +85,11 @@ export function DocumentsTable({
             <tr className="border-b bg-muted/50">
               {onSelectionChange && (
                 <th className="w-10 px-4 py-2.5 text-left">
-                  <Checkbox checked={allSelected} onCheckedChange={(checked) => toggleAll(Boolean(checked))} aria-label="Select all documents" />
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={(checked) => toggleAll(Boolean(checked))}
+                    aria-label={t('doctpl.documents.selectAll', 'Select all documents')}
+                  />
                 </th>
               )}
               <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">{t('doctpl.type')}</th>
@@ -108,19 +107,19 @@ export function DocumentsTable({
                     <Checkbox
                       checked={selectedSet.has(doc._id)}
                       onCheckedChange={(checked) => toggleOne(doc._id, Boolean(checked))}
-                      aria-label={`Select ${doc.fileName}`}
+                      aria-label={t('doctpl.documents.selectOne', 'Select {value}', { value: doc.fileName })}
                     />
                   </td>
                 )}
                 <td className="px-4 py-2">
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                     <FileText className="h-3.5 w-3.5" />
-                    {TYPE_LABELS[doc.documentType] || doc.documentType}
+                    {t(`doctpl.type.${doc.documentType}`, doc.documentType)}
                   </span>
                 </td>
                 <td className="px-4 py-2 font-mono text-xs truncate max-w-[200px]">{doc.fileName}</td>
                 <td className="px-4 py-2 text-xs text-muted-foreground">
-                  {doc.generatedAt ? new Date(doc.generatedAt).toLocaleDateString('de-CH') : '—'}
+                  {formatSwissDate(doc.generatedAt, locale)}
                 </td>
                 <td className="px-4 py-2 text-xs text-muted-foreground">
                   {doc.fileSizeBytes ? `${Math.round(doc.fileSizeBytes / 1024)} KB` : '—'}

@@ -48,11 +48,17 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
   'project:documents:read': [
     'documents:read',
   ],
+  'project:documents:write': [
+    'documents:write',
+  ],
   'project:documents:delete': [
     'documents:delete',
   ],
   'templates:read': [
     'documents:read',
+  ],
+  'templates:write': [
+    'documents:write',
   ],
   'templates:delete': [
     'documents:delete',
@@ -65,6 +71,12 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
   ],
   'accounting:documents:read': [
     'documents:read',
+  ],
+  'accounting:documents:manage': [
+    'documents:write',
+  ],
+  'crm:write': [
+    'documents:write',
   ],
   'catalog:write': [
     'catalog:manage',

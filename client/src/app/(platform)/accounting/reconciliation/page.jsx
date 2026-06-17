@@ -16,7 +16,7 @@ import {
   useReconciliationUnmatched,
 } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useReconciliationMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
-import { formatDate, formatMoney } from '@/modules/accounting/utils/accounting-ui';
+import { cursorPageLabel, formatDate, formatMoney } from '@/modules/accounting/utils/accounting-ui';
 
 function ReconciliationStatus({ transaction, de }) {
   const incoming = Number(transaction.amount || 0) > 0;
@@ -28,7 +28,7 @@ function ReconciliationStatus({ transaction, de }) {
 }
 
 export default function ReconciliationPage() {
-  const { locale: language } = useLanguage();
+  const { locale: language, t } = useLanguage();
   const de = language === 'de';
   const [bankAccountId, setBankAccountId] = useState('ALL');
   const [cursorStack, setCursorStack] = useState([null]);
@@ -145,7 +145,7 @@ export default function ReconciliationPage() {
           </table>
           <div className="flex items-center justify-between border-t border-border px-3 py-2">
             <Button size="sm" variant="outline" onClick={handlePrev} disabled={cursorStack.length <= 1}>{de ? 'Zurueck' : 'Previous'}</Button>
-            <span className="text-xs text-muted-foreground">Page {cursorStack.length}</span>
+            <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
             <Button size="sm" variant="outline" onClick={handleNext} disabled={!pagination?.hasNext}>{de ? 'Weiter' : 'Next'}</Button>
           </div>
         </div>

@@ -73,6 +73,7 @@ const PERMISSIONS = Object.freeze({
 
   // Document Templates
   DOCUMENTS_READ: 'documents:read',
+  DOCUMENTS_WRITE: 'documents:write',
   DOCUMENTS_DELETE: 'documents:delete',
   TEMPLATES_READ: 'templates:read',
   TEMPLATES_WRITE: 'templates:write',

@@ -1,6 +1,5 @@
 'use client';
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { FileText, Mail, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DocumentsTable } from '../DocumentsTable';
@@ -11,22 +10,22 @@ import { useDocumentsBySource } from '../../hooks/useDocumentQueries';
 import { useGenerateDocument } from '../../hooks/useDocumentMutations';
 import { useDownloadDocument } from '../../hooks/useDocumentMutations';
 import { useComposeEmail } from '../../hooks/useEmailMutations';
-import apiClient from '@/lib/api/client';
-import { ENDPOINTS } from '@/lib/api/endpoints';
+import { useEmails } from '../../hooks/useEmailQueries';
+import { formatSwissDate } from '../../utils/localization';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateType, documentData = {}, language = 'de' }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailInit, setEmailInit] = useState({});
   const [preview, setPreview]     = useState(null);
 
   const { data: docs = [], refetch, isLoading } = useDocumentsBySource(sourceModule, sourceRecordId);
-  const { data: emails = [] } = useQuery({
-    queryKey: ['doctpl', 'emails', sourceModule, sourceRecordId],
-    queryFn: () => apiClient.get(ENDPOINTS.DOCTPL.EMAILS, { params: { sourceModule, sourceRecordId, limit: 5 } }).then(r => r.data ?? []),
-    enabled: !!sourceRecordId,
-  });
+  const emailFilters = useMemo(
+    () => ({ sourceModule, sourceRecordId, limit: 5 }),
+    [sourceModule, sourceRecordId],
+  );
+  const { data: emails = [] } = useEmails(emailFilters, Boolean(sourceRecordId));
   const generate = useGenerateDocument();
   const compose  = useComposeEmail();
   const download = useDownloadDocument();
@@ -61,7 +60,7 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
 
   const handleDownload = async (doc) => {
     const r = await download.mutateAsync(doc._id);
-    if (r?.data?.downloadUrl) window.open(r.data.downloadUrl, '_blank');
+    if (r?.data?.downloadUrl) window.open(r.data.downloadUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -99,7 +98,7 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
             <div key={email._id} className="flex items-center justify-between text-xs text-muted-foreground py-1 border-t border-border/50">
               <span className="truncate">{email.to?.join(', ')}</span>
               <div className="flex items-center gap-2 shrink-0">
-                <span>{new Date(email.createdAt).toLocaleDateString('de-CH')}</span>
+                <span>{formatSwissDate(email.createdAt, locale)}</span>
                 <EmailStatusBadge status={email.status} />
               </div>
             </div>

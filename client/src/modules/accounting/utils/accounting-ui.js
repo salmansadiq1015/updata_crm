@@ -29,6 +29,9 @@ export function downloadResponse(response, fallbackFileName, contentType = 'text
   URL.revokeObjectURL(url);
 }
 
-export function cursorPageLabel(stackLength) {
-  return `Page ${Math.max(1, stackLength + 1)}`;
+export function cursorPageLabel(stackLength, t) {
+  const page = Math.max(1, stackLength + 1);
+  return typeof t === 'function'
+    ? t('accounting.pagination.page', 'Page {page}', { page })
+    : `Page ${page}`;
 }

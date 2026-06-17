@@ -38,13 +38,24 @@ export class ArticleImportWorker extends BaseWorker {
           description: row.description || '',
           categoryId: row.categoryId,
           basePrice: Number.parseFloat(row.basePrice ?? 0) || 0,
+          purchasePrice: Number.parseFloat(row.purchasePrice ?? row.basePrice ?? 0) || 0,
+          salesPrice: Number.parseFloat(row.salesPrice ?? row.basePrice ?? 0) || 0,
           unitOfMeasure: row.unitOfMeasure || 'STK',
           type: row.type || 'MATERIAL',
           currency: row.currency || 'CHF',
+          catalogConnectionId: row.catalogConnectionId || null,
+          externalCatalogItemId: row.externalCatalogItemId || null,
+          supplierId: row.supplierId || null,
+          supplierName: row.supplierName || null,
           supplierReference: row.supplierReference || null,
+          manufacturerName: row.manufacturerName || null,
+          manufacturerPartNumber: row.manufacturerPartNumber || null,
+          productGroup: row.productGroup || null,
           ighArticleNumber: row.ighArticleNumber || null,
           source: row.source || 'INTERNAL',
           status: row.status || 'ACTIVE',
+          availabilityStatus: row.availabilityStatus || 'UNKNOWN',
+          availableQuantity: row.availableQuantity !== undefined ? Number.parseFloat(row.availableQuantity) : null,
         });
 
         const rowErrors = this._validateRow(payload, categoryIds, unitCodes);
@@ -68,13 +79,24 @@ export class ArticleImportWorker extends BaseWorker {
                 description: payload.description,
                 categoryId: payload.categoryId,
                 basePrice: payload.basePrice,
+                purchasePrice: payload.purchasePrice,
+                salesPrice: payload.salesPrice,
                 unitOfMeasure: payload.unitOfMeasure,
                 type: payload.type,
                 currency: payload.currency,
+                catalogConnectionId: payload.catalogConnectionId,
+                externalCatalogItemId: payload.externalCatalogItemId,
+                supplierId: payload.supplierId,
+                supplierName: payload.supplierName,
                 supplierReference: payload.supplierReference,
+                manufacturerName: payload.manufacturerName,
+                manufacturerPartNumber: payload.manufacturerPartNumber,
+                productGroup: payload.productGroup,
                 ighArticleNumber: payload.ighArticleNumber,
                 source: payload.source,
                 status: payload.status,
+                availabilityStatus: payload.availabilityStatus,
+                availableQuantity: payload.availableQuantity,
                 searchTokens: payload.searchTokens,
                 updatedBy: createdBy,
               },
@@ -144,7 +166,9 @@ export class ArticleImportWorker extends BaseWorker {
       errors.push(`unitOfMeasure '${payload.unitOfMeasure}' does not exist`);
     }
     if (!['MATERIAL', 'SERVICE'].includes(payload.type)) errors.push('type must be MATERIAL or SERVICE');
-    if (!['INTERNAL', 'IGH'].includes(payload.source)) errors.push('source must be INTERNAL or IGH');
+    if (!['INTERNAL', 'IGH', 'SUPPLIER', 'MANUFACTURER'].includes(payload.source)) {
+      errors.push('source must be INTERNAL, IGH, SUPPLIER, or MANUFACTURER');
+    }
     if (!['ACTIVE', 'INACTIVE'].includes(payload.status)) errors.push('status must be ACTIVE or INACTIVE');
     return errors;
   }

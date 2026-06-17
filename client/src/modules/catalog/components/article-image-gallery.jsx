@@ -7,8 +7,10 @@ import { Trash2, ImagePlus } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { showError } from '@/lib/toast';
 import Image from 'next/image';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function ArticleImageGallery({ articleId, onUpload, onDelete }) {
+  const { t } = useLanguage();
   const fileRef = useRef(null);
   const [deletingId, setDeletingId] = useState(null);
   const { data: images = [] } = useQuery({
@@ -23,7 +25,7 @@ export function ArticleImageGallery({ articleId, onUpload, onDelete }) {
         <div key={img._id} className="relative group w-20 h-20">
           <Image
             src={img.url}
-            alt={img.originalName || 'Article image'}
+            alt={img.originalName || t('catalog.images.articleAlt')}
             fill
             sizes="80px"
             unoptimized
@@ -48,7 +50,7 @@ export function ArticleImageGallery({ articleId, onUpload, onDelete }) {
         className="w-20 h-20 flex flex-col items-center justify-center rounded-md border border-dashed text-muted-foreground hover:border-primary hover:text-primary transition-colors"
       >
         <ImagePlus className="w-5 h-5" />
-        <span className="text-xs mt-1">Add</span>
+        <span className="text-xs mt-1">{t('common.add')}</span>
       </button>
       <input
         ref={fileRef}
@@ -59,7 +61,7 @@ export function ArticleImageGallery({ articleId, onUpload, onDelete }) {
           const file = e.target.files?.[0];
           if (!file) return;
           if (file.size > 2 * 1024 * 1024) {
-            showError('File too large. Max 2 MB per image.');
+            showError(t('catalog.images.fileTooLarge'));
             e.target.value = '';
             return;
           }

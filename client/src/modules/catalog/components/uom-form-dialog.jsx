@@ -83,7 +83,7 @@ export function UomFormDialog({ open, onClose, unit }) {
                 <FormItem>
                   <FormLabel>{t('catalog.units.code')}</FormLabel>
                   <FormControl>
-                    <Input {...field} disabled={isEdit} placeholder="e.g. lfm" />
+                    <Input {...field} disabled={isEdit} placeholder={t('catalog.units.codePlaceholder')} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -110,7 +110,7 @@ export function UomFormDialog({ open, onClose, unit }) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t('catalog.units.baseUnit')}</FormLabel>
-                    <FormControl><Input {...field} placeholder="e.g. m" /></FormControl>
+                    <FormControl><Input {...field} placeholder={t('catalog.units.baseUnitPlaceholder')} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -121,15 +121,15 @@ export function UomFormDialog({ open, onClose, unit }) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t('catalog.units.conversionFactor')}</FormLabel>
-                    <FormControl><Input {...field} type="number" step="any" placeholder="e.g. 0.01" /></FormControl>
+                    <FormControl><Input {...field} type="number" step="any" placeholder={t('catalog.units.conversionFactorPlaceholder')} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save'}</Button>
+              <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+              <Button type="submit" disabled={isPending}>{isPending ? t('common.saving') : t('common.save')}</Button>
             </div>
           </form>
         </Form>

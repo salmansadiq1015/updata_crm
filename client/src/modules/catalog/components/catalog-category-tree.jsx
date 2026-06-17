@@ -34,6 +34,7 @@ function buildCategoryForm(category) {
 }
 
 function CategoryNode({ node, selectedId, onSelect, onEdit, onDeactivate, depth = 0 }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(depth === 0);
   const id = node._id || node.id;
   const hasChildren = node.children?.length > 0;
@@ -52,7 +53,7 @@ function CategoryNode({ node, selectedId, onSelect, onEdit, onDeactivate, depth 
           type="button"
           className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
           onClick={() => setOpen((value) => !value)}
-          aria-label={open ? 'Collapse category' : 'Expand category'}
+          aria-label={open ? t('catalog.categories.collapse') : t('catalog.categories.expand')}
         >
           {hasChildren ? (open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />) : null}
         </button>
@@ -77,11 +78,11 @@ function CategoryNode({ node, selectedId, onSelect, onEdit, onDeactivate, depth 
           <DropdownMenuContent align="end" className="w-40">
             <DropdownMenuItem onClick={() => onEdit(node)}>
               <Pencil className="mr-2 h-3.5 w-3.5" />
-              Edit
+              {t('common.edit')}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onDeactivate(node)} disabled={node.status === 'INACTIVE'}>
               <Ban className="mr-2 h-3.5 w-3.5" />
-              Deactivate
+              {t('catalog.articles.deactivate')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -102,6 +103,7 @@ function CategoryNode({ node, selectedId, onSelect, onEdit, onDeactivate, depth 
 }
 
 function CategoryDialog({ open, onOpenChange, category, categories }) {
+  const { t } = useLanguage();
   const { createCategory, updateCategory, moveCategory } = useCategoryMutations();
   const [form, setForm] = useState(() => buildCategoryForm(category));
   const isEdit = Boolean(category);
@@ -140,33 +142,33 @@ function CategoryDialog({ open, onOpenChange, category, categories }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Category' : 'New Category'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('catalog.categories.edit') : t('catalog.categories.create')}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="category-code">Code</Label>
+              <Label htmlFor="category-code">{t('catalog.categories.code')}</Label>
               <Input id="category-code" value={form.code} onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value.toUpperCase() }))} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="category-sort">Sort</Label>
+              <Label htmlFor="category-sort">{t('catalog.categories.sort')}</Label>
               <Input id="category-sort" type="number" value={form.sortOrder} onChange={(event) => setForm((prev) => ({ ...prev, sortOrder: event.target.value }))} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="category-name">Name</Label>
+            <Label htmlFor="category-name">{t('catalog.categories.name')}</Label>
             <Input id="category-name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="category-description">Description</Label>
+            <Label htmlFor="category-description">{t('catalog.categories.description')}</Label>
             <Input id="category-description" value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
           </div>
           <div className="space-y-1.5">
-            <Label>Parent</Label>
+            <Label>{t('catalog.categories.parent')}</Label>
             <Select value={form.parentId || ROOT_VALUE} onValueChange={(value) => setForm((prev) => ({ ...prev, parentId: value }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ROOT_VALUE}>Root</SelectItem>
+                <SelectItem value={ROOT_VALUE}>{t('catalog.categories.root')}</SelectItem>
                 {parentOptions.map((item) => (
                   <SelectItem key={item._id || item.id} value={item._id || item.id}>
                     {item.name}
@@ -177,9 +179,9 @@ function CategoryDialog({ open, onOpenChange, category, categories }) {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
           <Button size="sm" onClick={save} disabled={!form.code || !form.name || createCategory.isPending || updateCategory.isPending || moveCategory.isPending}>
-            Save
+            {t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -188,8 +190,7 @@ function CategoryDialog({ open, onOpenChange, category, categories }) {
 }
 
 export function CatalogCategoryTree({ selectedId, onSelect }) {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const { data: tree = [], isLoading, isError } = useCatalogCategoryTree();
   const { data: categoryOptions = [] } = useCatalogCategoryOptions({ includeInactive: true });
   const { deactivateCategory } = useCategoryMutations();
@@ -204,9 +205,9 @@ export function CatalogCategoryTree({ selectedId, onSelect }) {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-3 py-2.5">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {de ? 'Kategorien' : 'Categories'}
+          {t('catalog.categories.title')}
         </span>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={openCreate} aria-label="Create category">
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={openCreate} aria-label={t('catalog.categories.create')}>
           <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -221,11 +222,11 @@ export function CatalogCategoryTree({ selectedId, onSelect }) {
           onClick={() => onSelect(null)}
         >
           <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <span>{de ? 'Alle Artikel' : 'All Articles'}</span>
+          <span>{t('catalog.categories.allArticles')}</span>
         </button>
 
-        {isLoading && <div className="px-3 py-4 text-xs text-muted-foreground">{de ? 'Laedt...' : 'Loading...'}</div>}
-        {isError && <div className="px-3 py-4 text-xs text-destructive">Could not load categories.</div>}
+        {isLoading && <div className="px-3 py-4 text-xs text-muted-foreground">{t('common.loading')}</div>}
+        {isError && <div className="px-3 py-4 text-xs text-destructive">{t('catalog.categories.loadError')}</div>}
         {!isLoading && !isError && tree.map((node) => (
           <CategoryNode
             key={node._id || node.id}

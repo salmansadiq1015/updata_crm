@@ -32,18 +32,24 @@ class PickerService {
           { name: { $regex: query, $options: 'i' } },
           { articleNumber: { $regex: query, $options: 'i' } },
           { description: { $regex: query, $options: 'i' } },
+          { supplierName: { $regex: query, $options: 'i' } },
           { supplierReference: { $regex: query, $options: 'i' } },
+          { manufacturerName: { $regex: query, $options: 'i' } },
+          { manufacturerPartNumber: { $regex: query, $options: 'i' } },
+          { productGroup: { $regex: query, $options: 'i' } },
+          { externalCatalogItemId: { $regex: query, $options: 'i' } },
           { ighArticleNumber: { $regex: query, $options: 'i' } },
           ...(searchTokens.length ? [{ searchTokens: { $in: searchTokens } }] : []),
         ];
 
         const articles = await Article.find(filter)
-          .select('_id articleNumber name description unitOfMeasure basePrice currency type source categoryId supplierReference ighArticleNumber')
+          .select('_id articleNumber name description unitOfMeasure basePrice purchasePrice salesPrice currency type source categoryId catalogConnectionId externalCatalogItemId supplierId supplierName supplierReference manufacturerName manufacturerPartNumber productGroup availabilityStatus availableQuantity markupPercent marginPercent ighArticleNumber')
           .limit(limit)
           .lean();
         return articles.map((article) => ({
           ...article,
           catalogArticleId: article._id,
+          snapshotPrice: article.salesPrice ?? article.basePrice,
           snapshot: {
             catalogArticleId: article._id,
             articleNumber: article.articleNumber,
@@ -51,8 +57,22 @@ class PickerService {
             articleDescription: article.description,
             unitOfMeasure: article.unitOfMeasure,
             snapshotBasePrice: article.basePrice,
+            snapshotPurchasePrice: article.purchasePrice ?? 0,
+            snapshotSalesPrice: article.salesPrice ?? article.basePrice,
             snapshotCurrency: article.currency || 'CHF',
             catalogSource: article.source || 'INTERNAL',
+            catalogConnectionId: article.catalogConnectionId ?? null,
+            externalCatalogItemId: article.externalCatalogItemId || '',
+            supplierId: article.supplierId ?? null,
+            supplierName: article.supplierName || '',
+            manufacturerName: article.manufacturerName || '',
+            manufacturerPartNumber: article.manufacturerPartNumber || '',
+            productGroup: article.productGroup || '',
+            availabilityStatus: article.availabilityStatus || 'UNKNOWN',
+            availableQuantity: article.availableQuantity ?? null,
+            appliedMarkupPercent: article.markupPercent ?? null,
+            marginPercent: article.marginPercent ?? null,
+            manualPriceOverride: false,
             snapshotTakenAt: new Date().toISOString(),
           },
         }));

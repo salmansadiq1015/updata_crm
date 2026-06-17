@@ -1,7 +1,26 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { extname, join } from 'node:path';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import { queryKeys } from '@/lib/query/keys';
 import { translations } from '@/lib/i18n/translations';
+
+const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx']);
+
+function listSourceFiles(root: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(root)) {
+    const fullPath = join(root, entry);
+    const stat = statSync(fullPath);
+    if (stat.isDirectory()) {
+      if (entry === '__tests__') continue;
+      files.push(...listSourceFiles(fullPath));
+    } else if (sourceExtensions.has(extname(entry))) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
 
 describe('catalog constants', () => {
   it('has all catalog permission keys', () => {
@@ -53,6 +72,13 @@ describe('catalog constants', () => {
     expect(ENDPOINTS.CATALOG.PICKER_BARCODE).toBe('/catalog/picker/barcode');
   });
 
+  it('has connected catalog and markup endpoints', () => {
+    expect(ENDPOINTS.CATALOG.CONNECTIONS).toBe('/catalog/connections');
+    expect(ENDPOINTS.CATALOG.CONNECTION_SYNC('abc')).toBe('/catalog/connections/abc/sync');
+    expect(ENDPOINTS.CATALOG.MARKUPS).toBe('/catalog/markups');
+    expect(ENDPOINTS.CATALOG.MARKUP_RESOLVE).toBe('/catalog/markups/resolve');
+  });
+
   it('has facets query key', () => {
     const key = queryKeys.catalog.facets({ categoryId: 'x' });
     expect(key).toEqual(['catalog', 'facets', { categoryId: 'x' }]);
@@ -71,6 +97,11 @@ describe('catalog constants', () => {
     expect(queryKeys.catalog.priceBatches()).toEqual(['catalog', 'priceBatches']);
   });
 
+  it('has connected catalog query keys', () => {
+    expect(queryKeys.catalog.connections({ type: 'SUPPLIER' })).toEqual(['catalog', 'connections', { type: 'SUPPLIER' }]);
+    expect(queryKeys.catalog.markups({ scope: 'GLOBAL' })).toEqual(['catalog', 'markups', { scope: 'GLOBAL' }]);
+  });
+
   it('has German catalog translations', () => {
     const t = translations.de;
     expect(t['catalog.articles.title']).toBeDefined();
@@ -80,8 +111,11 @@ describe('catalog constants', () => {
     expect(t['catalog.filter.status']).toBeDefined();
     expect(t['catalog.filter.source']).toBeDefined();
     expect(t['catalog.filter.priceRange']).toBeDefined();
+    expect(t['catalog.filter.manufacturer']).toBeDefined();
     expect(t['catalog.articles.versions']).toBeDefined();
     expect(t['catalog.images.upload']).toBeDefined();
+    expect(t['catalog.connections.title']).toBeDefined();
+    expect(t['catalog.markups.title']).toBeDefined();
   });
 
   it('has English catalog translations', () => {
@@ -90,5 +124,55 @@ describe('catalog constants', () => {
     expect(t['catalog.articles.create']).toBeDefined();
     expect(t['catalog.images.upload']).toBeDefined();
     expect(t['catalog.igh.title']).toBeDefined();
+    expect(t['catalog.connections.title']).toBeDefined();
+    expect(t['catalog.markups.title']).toBeDefined();
+  });
+
+  it('has explicit catalog translations in all supported locales', () => {
+    const requiredKeys = Object.keys(translations.de).filter((key) =>
+      key === 'sidebar.catalog'
+      || key.startsWith('features.catalog.')
+      || key.startsWith('catalog.')
+      || key.startsWith('qop.lineItems.')
+      || [
+        'common.cancel',
+        'common.category',
+        'common.delete',
+        'common.edit',
+        'common.add',
+        'common.firstPage',
+        'common.loading',
+        'common.save',
+        'common.saving',
+        'common.selectAll',
+        'common.status',
+        'common.title',
+        'common.active',
+        'common.inactive',
+      ].includes(key)
+    );
+
+    for (const locale of ['de', 'en', 'fr', 'it'] as const) {
+      for (const key of requiredKeys) {
+        expect(translations[locale][key], `${locale}:${key}`).toBeDefined();
+      }
+    }
+  });
+
+  it('does not use German-only locale branches in catalog UI source', () => {
+    const roots = [
+      join(process.cwd(), 'src', 'modules', 'catalog'),
+      join(process.cwd(), 'src', 'app', '(platform)', 'catalog'),
+    ];
+
+    const violations = roots
+      .flatMap(listSourceFiles)
+      .filter((file) => {
+        const content = readFileSync(file, 'utf8');
+        return /\b(?:const|let|var)\s+de\s*=|(?:language|locale)\s*===\s*['"]de/.test(content);
+      })
+      .map((file) => file.replace(process.cwd(), ''));
+
+    expect(violations).toEqual([]);
   });
 });

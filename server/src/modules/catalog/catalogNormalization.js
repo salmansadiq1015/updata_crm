@@ -70,7 +70,12 @@ export function buildArticleSearchTokens(article = {}) {
     article.articleNumber,
     article.name,
     article.description,
+    article.supplierName,
     article.supplierReference,
+    article.manufacturerName,
+    article.manufacturerPartNumber,
+    article.productGroup,
+    article.externalCatalogItemId,
     article.ighArticleNumber,
   ].filter(Boolean).join(' '));
 }
@@ -86,6 +91,21 @@ export function sanitizeCatalogHtml(html = '') {
 
 export function normalizeArticlePayload(data = {}) {
   const normalized = { ...data };
+  const trimFields = [
+    'supplierName',
+    'supplierReference',
+    'manufacturerName',
+    'manufacturerPartNumber',
+    'productGroup',
+    'externalCatalogItemId',
+    'ighArticleNumber',
+  ];
+  for (const field of trimFields) {
+    if (normalized[field] !== undefined) {
+      const value = String(normalized[field] ?? '').trim();
+      normalized[field] = value || null;
+    }
+  }
   if (normalized.unitOfMeasure !== undefined) {
     normalized.unitOfMeasure = normalizeUnitCode(normalized.unitOfMeasure);
   }
@@ -98,11 +118,25 @@ export function normalizeArticlePayload(data = {}) {
   if (normalized.type !== undefined) {
     normalized.type = String(normalized.type || 'MATERIAL').trim().toUpperCase();
   }
+  if (normalized.availabilityStatus !== undefined) {
+    normalized.availabilityStatus = String(normalized.availabilityStatus || 'UNKNOWN').trim().toUpperCase();
+  }
+  if (normalized.salesPrice === undefined && normalized.basePrice !== undefined) {
+    normalized.salesPrice = normalized.basePrice;
+  }
+  if (normalized.basePrice === undefined && normalized.salesPrice !== undefined) {
+    normalized.basePrice = normalized.salesPrice;
+  }
   const hasSearchFields = [
     'articleNumber',
     'name',
     'description',
+    'supplierName',
     'supplierReference',
+    'manufacturerName',
+    'manufacturerPartNumber',
+    'productGroup',
+    'externalCatalogItemId',
     'ighArticleNumber',
   ].some((field) => normalized[field] !== undefined);
   if (hasSearchFields) {

@@ -42,6 +42,7 @@ function buildTextBlockDefaults(textBlock) {
 }
 
 function RichTextEditor({ value, onChange }) {
+  const { t } = useLanguage();
   const editor = useEditor({
     extensions: [StarterKit],
     content: value || '',
@@ -77,7 +78,7 @@ function RichTextEditor({ value, onChange }) {
           onMouseDown={(e) => { e.preventDefault(); editor?.chain().focus().toggleBulletList().run(); }}
           className={`px-1.5 py-0.5 text-xs rounded hover:bg-muted ${editor?.isActive('bulletList') ? 'bg-muted' : ''}`}
         >
-          • List
+          {t('catalog.textBlocks.list')}
         </button>
       </div>
       <EditorContent
@@ -130,7 +131,7 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
             {isEdit ? t('catalog.textBlocks.edit') : t('catalog.textBlocks.create')}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            {isEdit ? 'Edit text block content and settings.' : 'Create a new reusable text block.'}
+            {isEdit ? t('catalog.textBlocks.editDescription') : t('catalog.textBlocks.createDescription')}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -140,7 +141,7 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Title</FormLabel>
+                  <FormLabel>{t('common.title')}</FormLabel>
                   <FormControl><Input {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -152,13 +153,13 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
                 name="categoryId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category</FormLabel>
+                    <FormLabel>{t('common.category')}</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger><SelectValue placeholder="No category" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder={t('catalog.textBlocks.noCategory')} /></SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="__none__">No category</SelectItem>
+                        <SelectItem value="__none__">{t('catalog.textBlocks.noCategory')}</SelectItem>
                         {categories.map((c) => (
                           <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
                         ))}
@@ -208,7 +209,7 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t('catalog.articles.unitOfMeasure')}</FormLabel>
-                    <FormControl><Input {...field} placeholder="e.g. h" /></FormControl>
+                    <FormControl><Input {...field} placeholder={t('catalog.textBlocks.unitPlaceholder')} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -219,8 +220,8 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
               <RichTextEditor value={bodyHtml} onChange={setBodyHtml} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>{isPending ? 'Saving...' : 'Save'}</Button>
+              <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+              <Button type="submit" disabled={isPending}>{isPending ? t('common.saving') : t('common.save')}</Button>
             </div>
           </form>
         </Form>

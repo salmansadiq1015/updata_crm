@@ -189,6 +189,10 @@ const EVENT_TYPES = Object.freeze({
   CATALOG_IGH_IMPORT_STARTED: 'catalog.igh.import.started',
   CATALOG_IGH_IMPORT_COMPLETED: 'catalog.igh.import.completed',
   CATALOG_IGH_IMPORT_FAILED: 'catalog.igh.import.failed',
+  CATALOG_CONNECTION_CHANGED: 'catalog.connection.changed',
+  CATALOG_MARKUP_RULE_CHANGED: 'catalog.markup_rule.changed',
+  CATALOG_SYNC_COMPLETED: 'catalog.sync.completed',
+  CATALOG_SYNC_FAILED: 'catalog.sync.failed',
   CATALOG_TEXT_BLOCK_CREATED: 'catalog.text_block.created',
   CATALOG_TEXT_BLOCK_UPDATED: 'catalog.text_block.updated',
 

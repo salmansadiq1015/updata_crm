@@ -6,7 +6,23 @@ import { ArticlePickerDialog } from '../components/article-picker-dialog';
 import React from 'react';
 
 vi.mock('@/lib/i18n/language-context', () => ({
-  useLanguage: () => ({ locale: 'en', t: (k: string) => k }),
+  useLanguage: () => ({
+    locale: 'en',
+    t: (k: string, fallback?: string | null, vars?: Record<string, string>) => {
+      const messages: Record<string, string> = {
+        'catalog.picker.articleTitle': 'Select Article',
+        'catalog.picker.articleDescription': 'Search catalog articles and insert a snapshot into the current document.',
+        'catalog.picker.articleSearchPlaceholder': 'Search by name or article number...',
+        'catalog.picker.searching': 'Searching...',
+        'catalog.picker.startArticleSearch': 'Start typing to search the catalog.',
+        'catalog.picker.noArticlesFor': 'No articles found for "{query}".',
+        'catalog.picker.addFreeText': 'Add as free text: "{query}"',
+        'catalog.articles.purchaseShort': 'Buy',
+      };
+      const value = messages[k] ?? fallback ?? k;
+      return value.replace(/\{(\w+)\}/g, (_, key) => vars?.[key] ?? `{${key}}`);
+    },
+  }),
 }));
 
 // Mock apiClient — vi.mock is hoisted so the factory must not reference

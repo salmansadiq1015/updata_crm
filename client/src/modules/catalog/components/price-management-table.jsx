@@ -71,7 +71,7 @@ export function PriceManagementTable() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
-                  <Checkbox checked={allSelected ? true : someSelected ? 'indeterminate' : false} onCheckedChange={toggleAll} aria-label="Select all" />
+                  <Checkbox checked={allSelected ? true : someSelected ? 'indeterminate' : false} onCheckedChange={toggleAll} aria-label={t('common.selectAll')} />
                 </TableHead>
                 <TableHead>{t('catalog.articles.articleNumber')}</TableHead>
                 <TableHead>{t('common.name')}</TableHead>
@@ -82,11 +82,11 @@ export function PriceManagementTable() {
             <TableBody>
               {articlesLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading...</TableCell>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t('common.loading')}</TableCell>
                 </TableRow>
               ) : articles.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No articles found.</TableCell>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t('catalog.articles.empty')}</TableCell>
                 </TableRow>
               ) : articles.map((article) => (
                 <TableRow key={article._id || article.id} className={selected.has(article._id || article.id) ? 'bg-muted/30' : undefined}>
@@ -94,7 +94,7 @@ export function PriceManagementTable() {
                     <Checkbox
                       checked={selected.has(article._id || article.id)}
                       onCheckedChange={() => toggleSelect(article._id || article.id)}
-                      aria-label={`Select ${article.articleNumber}`}
+                      aria-label={t('catalog.prices.selectArticle', null, { articleNumber: article.articleNumber })}
                     />
                   </TableCell>
                   <TableCell className="font-mono text-sm">{article.articleNumber}</TableCell>
@@ -107,7 +107,7 @@ export function PriceManagementTable() {
                       variant="ghost" size="sm" className="text-xs h-7"
                       onClick={() => setHistoryArticleId(historyArticleId === (article._id || article.id) ? null : (article._id || article.id))}
                     >
-                      History
+                      {t('catalog.articles.history')}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -130,7 +130,7 @@ export function PriceManagementTable() {
             {recentBatches.map((batch) => (
               <div key={batch._id} className="flex items-center gap-4 rounded-md border px-4 py-3 text-sm">
                 <Badge variant="outline">{batch.type ?? 'UPDATE'}</Badge>
-                <span className="text-muted-foreground">{batch.articleCount ?? 0} articles</span>
+                <span className="text-muted-foreground">{t('catalog.prices.articleCount', null, { count: batch.articleCount ?? 0 })}</span>
                 <span className="text-muted-foreground">{fmtDateTime(batch.appliedAt)}</span>
                 <div className="ml-auto">
                   {canRollback(batch) ? (

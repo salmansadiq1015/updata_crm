@@ -11,8 +11,13 @@ export function CatalogLinePriceDrift({ item }) {
   const articleId = getCatalogArticleId(item);
   const { data } = useArticleDetail(articleId);
   const article = data?.data ?? data;
-  const snapshotPrice = Number(item?.catalogSnapshot?.snapshotBasePrice ?? item?.unitPrice ?? 0);
-  const currentPrice = article?.basePrice;
+  const snapshotPrice = Number(
+    item?.catalogSnapshot?.snapshotSalesPrice
+    ?? item?.catalogSnapshot?.snapshotBasePrice
+    ?? item?.unitPrice
+    ?? 0,
+  );
+  const currentPrice = article?.salesPrice ?? article?.basePrice;
 
   if (!articleId || !snapshotPrice || currentPrice == null) return null;
 

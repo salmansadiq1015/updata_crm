@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { articleService } from '../services/article-service';
 import { categoryService } from '../services/category-service';
+import { connectionService } from '../services/connection-service';
+import { markupService } from '../services/markup-service';
 
 export function useArticleMutations() {
   const qc = useQueryClient();
@@ -83,4 +85,55 @@ export function useCategoryMutations() {
   });
 
   return { createCategory, updateCategory, deactivateCategory, moveCategory };
+}
+
+export function useCatalogConnectionMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['catalog', 'connections'] });
+    qc.invalidateQueries({ queryKey: ['catalog', 'articles'] });
+    qc.invalidateQueries({ queryKey: ['catalog', 'facets'] });
+    qc.invalidateQueries({ queryKey: ['catalog', 'picker'] });
+  };
+
+  const createConnection = useMutation({ mutationFn: connectionService.create, onSuccess: invalidate });
+  const updateConnection = useMutation({
+    mutationFn: ({ id, data }) => connectionService.update(id, data),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.catalog.connectionDetail(id) });
+      invalidate();
+    },
+  });
+  const removeConnection = useMutation({ mutationFn: connectionService.remove, onSuccess: invalidate });
+  const syncConnection = useMutation({
+    mutationFn: ({ id, mode }) => connectionService.sync(id, mode),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.catalog.connectionLogs(id) });
+      invalidate();
+    },
+  });
+
+  return { createConnection, updateConnection, removeConnection, syncConnection };
+}
+
+export function useCatalogMarkupMutations() {
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['catalog', 'markups'] });
+    qc.invalidateQueries({ queryKey: ['catalog', 'articles'] });
+    qc.invalidateQueries({ queryKey: ['catalog', 'facets'] });
+    qc.invalidateQueries({ queryKey: ['catalog', 'picker'] });
+  };
+
+  const createMarkup = useMutation({ mutationFn: markupService.create, onSuccess: invalidate });
+  const updateMarkup = useMutation({
+    mutationFn: ({ id, data }) => markupService.update(id, data),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.catalog.markupDetail(id) });
+      invalidate();
+    },
+  });
+  const removeMarkup = useMutation({ mutationFn: markupService.remove, onSuccess: invalidate });
+
+  return { createMarkup, updateMarkup, removeMarkup };
 }

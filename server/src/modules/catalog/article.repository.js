@@ -9,15 +9,33 @@ import { buildSearchTokens } from './catalogNormalization.js';
 
 const ALLOWED_FILTERS = {
   categoryId: 'objectId',
+  catalogConnectionId: 'objectId',
+  supplierId: 'objectId',
+  supplierName: 'exact',
   type: 'exact',
   status: 'exact',
   source: 'exact',
+  manufacturerName: 'exact',
+  productGroup: 'exact',
+  availabilityStatus: 'exact',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'name', 'articleNumber', 'basePrice', '_id'];
+const ALLOWED_SORT_FIELDS = [
+  'createdAt',
+  'name',
+  'articleNumber',
+  'basePrice',
+  'purchasePrice',
+  'salesPrice',
+  'manufacturerName',
+  'supplierName',
+  '_id',
+];
 
 const POPULATE_FIELDS = [
   { path: 'categoryId', select: 'code name' },
+  { path: 'supplierId', select: 'companyName firstName lastName customerNumber' },
+  { path: 'catalogConnectionId', select: 'name providerKey type lastSyncStatus lastSyncedAt' },
 ];
 
 class ArticleRepository {
@@ -49,7 +67,12 @@ class ArticleRepository {
         { name: { $regex: search, $options: 'i' } },
         { articleNumber: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
+        { supplierName: { $regex: search, $options: 'i' } },
         { supplierReference: { $regex: search, $options: 'i' } },
+        { manufacturerName: { $regex: search, $options: 'i' } },
+        { manufacturerPartNumber: { $regex: search, $options: 'i' } },
+        { productGroup: { $regex: search, $options: 'i' } },
+        { externalCatalogItemId: { $regex: search, $options: 'i' } },
         ...(searchTokens.length ? [{ searchTokens: { $in: searchTokens } }] : []),
       ];
     }
@@ -112,7 +135,14 @@ class ArticleRepository {
     const operations = updates.map((u) => ({
       updateOne: {
         filter: { _id: u.id, isDeleted: false },
-        update: { $set: { basePrice: u.basePrice, updatedBy: u.updatedBy }, $inc: { version: 1 } },
+        update: {
+          $set: {
+            basePrice: u.basePrice,
+            salesPrice: u.basePrice,
+            updatedBy: u.updatedBy,
+          },
+          $inc: { version: 1 },
+        },
       },
     }));
     return Article.bulkWrite(operations);
@@ -146,6 +176,25 @@ class ArticleRepository {
           types: [{ $group: { _id: '$type', count: { $sum: 1 } } }],
           statuses: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
           sources: [{ $group: { _id: '$source', count: { $sum: 1 } } }],
+          manufacturers: [
+            { $match: { manufacturerName: { $nin: [null, ''] } } },
+            { $group: { _id: '$manufacturerName', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $limit: 50 },
+          ],
+          suppliers: [
+            { $match: { supplierName: { $nin: [null, ''] } } },
+            { $group: { _id: '$supplierName', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $limit: 50 },
+          ],
+          productGroups: [
+            { $match: { productGroup: { $nin: [null, ''] } } },
+            { $group: { _id: '$productGroup', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+            { $limit: 50 },
+          ],
+          availabilityStatuses: [{ $group: { _id: '$availabilityStatus', count: { $sum: 1 } } }],
           priceRange: [
             { $group: { _id: null, min: { $min: '$basePrice' }, max: { $max: '$basePrice' } } },
           ],
@@ -158,6 +207,10 @@ class ArticleRepository {
       types: (result?.types ?? []).map((f) => ({ value: f._id, count: f.count })),
       statuses: (result?.statuses ?? []).map((f) => ({ value: f._id, count: f.count })),
       sources: (result?.sources ?? []).map((f) => ({ value: f._id, count: f.count })),
+      manufacturers: (result?.manufacturers ?? []).map((f) => ({ value: f._id, count: f.count })),
+      suppliers: (result?.suppliers ?? []).map((f) => ({ value: f._id, count: f.count })),
+      productGroups: (result?.productGroups ?? []).map((f) => ({ value: f._id, count: f.count })),
+      availabilityStatuses: (result?.availabilityStatuses ?? []).map((f) => ({ value: f._id, count: f.count })),
       priceRange: result?.priceRange?.[0]
         ? { min: result.priceRange[0].min, max: result.priceRange[0].max }
         : { min: 0, max: 0 },

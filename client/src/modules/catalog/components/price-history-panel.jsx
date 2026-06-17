@@ -14,8 +14,8 @@ export function PriceHistoryPanel({ articleId }) {
   const { data: history = [], isLoading } = usePriceHistory(articleId);
 
   if (!articleId) return null;
-  if (isLoading) return <div className="p-4 text-sm text-muted-foreground animate-pulse">Loading...</div>;
-  if (history.length === 0) return <div className="p-4 text-sm text-muted-foreground">No price history.</div>;
+  if (isLoading) return <div className="p-4 text-sm text-muted-foreground animate-pulse">{t('common.loading')}</div>;
+  if (history.length === 0) return <div className="p-4 text-sm text-muted-foreground">{t('catalog.prices.noHistory')}</div>;
 
   return (
     <div className="space-y-2 p-4">

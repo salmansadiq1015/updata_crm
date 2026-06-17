@@ -53,6 +53,48 @@ export function registerCatalogEvents() {
     }
   });
 
+  // --- CATALOG_SYNC_COMPLETED ---
+  // Invalidate all article list caches and picker caches after connected catalog sync
+  eventBus.on(EVENT_TYPES.CATALOG_SYNC_COMPLETED, async (event) => {
+    try {
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:articles:list:*`);
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:picker:*`);
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:facets:*`);
+
+      logger.info('Article and picker caches invalidated after connected catalog sync', {
+        module: 'catalog',
+        action: 'event.catalog_sync_completed',
+        connectionId: event.payload.connectionId,
+      });
+    } catch (err) {
+      logger.error('Failed to handle CATALOG_SYNC_COMPLETED event', {
+        module: 'catalog',
+        action: 'event.catalog_sync_completed',
+        error: { message: err.message, stack: err.stack },
+      });
+    }
+  });
+
+  // --- CATALOG_MARKUP_RULE_CHANGED ---
+  eventBus.on(EVENT_TYPES.CATALOG_MARKUP_RULE_CHANGED, async (event) => {
+    try {
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:articles:list:*`);
+      await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:picker:*`);
+
+      logger.info('Catalog caches invalidated after markup rule change', {
+        module: 'catalog',
+        action: 'event.markup_rule_changed',
+        ruleId: event.payload.ruleId,
+      });
+    } catch (err) {
+      logger.error('Failed to handle CATALOG_MARKUP_RULE_CHANGED event', {
+        module: 'catalog',
+        action: 'event.markup_rule_changed',
+        error: { message: err.message, stack: err.stack },
+      });
+    }
+  });
+
   // --- CATALOG_IGH_IMPORT_FAILED ---
   // Notify users with admin or catalog:admin permissions when an IGH import fails
   eventBus.on(EVENT_TYPES.CATALOG_IGH_IMPORT_FAILED, async (event) => {

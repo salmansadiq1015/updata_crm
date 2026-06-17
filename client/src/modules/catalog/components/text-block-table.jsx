@@ -40,7 +40,7 @@ export function TextBlockTable() {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-8"
-            placeholder="Search text blocks..."
+            placeholder={t('catalog.textBlocks.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -62,11 +62,11 @@ export function TextBlockTable() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Loading...</TableCell>
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">{t('common.loading')}</TableCell>
               </TableRow>
             ) : blocks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No text blocks found.</TableCell>
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">{t('catalog.textBlocks.empty')}</TableCell>
               </TableRow>
             ) : blocks.map((block) => (
               <TableRow key={block._id}>
@@ -89,9 +89,9 @@ export function TextBlockTable() {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Delete &quot;{block.title}&quot;?</AlertDialogTitle>
+                          <AlertDialogTitle>{t('catalog.textBlocks.deleteTitle', null, { title: block.title })}</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Existing uses in quotations and reports will not be affected.
+                            {t('catalog.textBlocks.deleteDescription')}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -100,7 +100,7 @@ export function TextBlockTable() {
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             onClick={() => deleteTextBlock.mutate(block._id)}
                           >
-                            Delete
+                            {t('common.delete')}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>

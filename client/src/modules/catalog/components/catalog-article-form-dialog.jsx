@@ -14,7 +14,12 @@ import {
 import { useArticleMutations } from '../hooks/use-catalog-mutations';
 import { useCatalogCategoryOptions } from '../hooks/use-catalog-queries';
 import { useUnits } from '../hooks/use-unit-queries';
-import { ARTICLE_TYPES, ARTICLE_STATUSES } from '../constants/catalog-constants';
+import {
+  ARTICLE_TYPES,
+  ARTICLE_STATUSES,
+  ARTICLE_SOURCES,
+  ARTICLE_AVAILABILITY_STATUSES,
+} from '../constants/catalog-constants';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { ArticleImageGallery } from './article-image-gallery';
 
@@ -23,18 +28,26 @@ const DEFAULT_VALUES = {
   name: '',
   description: '',
   supplierReference: '',
+  supplierName: '',
+  manufacturerName: '',
+  manufacturerPartNumber: '',
+  productGroup: '',
   ighArticleNumber: '',
   type: 'MATERIAL',
   status: 'ACTIVE',
+  source: 'INTERNAL',
+  availabilityStatus: 'UNKNOWN',
+  availableQuantity: '',
   categoryId: '',
   unitOfMeasure: 'STK',
+  purchasePrice: '',
+  salesPrice: '',
   basePrice: '',
   currency: 'CHF',
 };
 
 export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article }) {
-  const { locale: language, t } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const handleClose = onOpenChange ?? onClose ?? (() => {});
   const { createArticle, updateArticle, uploadImage, deleteImage } = useArticleMutations();
   const { data: categories = [] } = useCatalogCategoryOptions();
@@ -58,12 +71,21 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
         name: article.name ?? '',
         description: article.description ?? '',
         supplierReference: article.supplierReference ?? article.supplierRef ?? '',
+        supplierName: article.supplierName ?? '',
+        manufacturerName: article.manufacturerName ?? '',
+        manufacturerPartNumber: article.manufacturerPartNumber ?? '',
+        productGroup: article.productGroup ?? '',
         ighArticleNumber: article.ighArticleNumber ?? '',
         type: article.type ?? 'MATERIAL',
         status: article.status ?? 'ACTIVE',
+        source: article.source ?? 'INTERNAL',
+        availabilityStatus: article.availabilityStatus ?? 'UNKNOWN',
+        availableQuantity: article.availableQuantity ?? '',
         categoryId: article.categoryId?._id || article.categoryId || '',
         unitOfMeasure: article.unitOfMeasure || article.unit || 'STK',
-        basePrice: article.basePrice ?? article.buyPrice ?? '',
+        purchasePrice: article.purchasePrice ?? article.buyPrice ?? '',
+        salesPrice: article.salesPrice ?? article.sellPrice ?? article.basePrice ?? '',
+        basePrice: article.basePrice ?? article.salesPrice ?? article.sellPrice ?? '',
         currency: article.currency || 'CHF',
       }
       : DEFAULT_VALUES);
@@ -72,7 +94,10 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
   const onSubmit = async (values) => {
     const payload = {
       ...values,
-      basePrice: values.basePrice !== '' ? Number(values.basePrice) : 0,
+      purchasePrice: values.purchasePrice !== '' ? Number(values.purchasePrice) : 0,
+      salesPrice: values.salesPrice !== '' ? Number(values.salesPrice) : Number(values.basePrice || 0),
+      basePrice: values.salesPrice !== '' ? Number(values.salesPrice) : Number(values.basePrice || 0),
+      availableQuantity: values.availableQuantity !== '' ? Number(values.availableQuantity) : null,
       supplierReference: values.supplierReference || undefined,
       ighArticleNumber: values.ighArticleNumber || undefined,
       version: article?.version,
@@ -88,6 +113,8 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
 
   const type = useWatch({ control, name: 'type' });
   const status = useWatch({ control, name: 'status' });
+  const source = useWatch({ control, name: 'source' });
+  const availabilityStatus = useWatch({ control, name: 'availabilityStatus' });
   const categoryId = useWatch({ control, name: 'categoryId' });
   const unitOfMeasure = useWatch({ control, name: 'unitOfMeasure' });
 
@@ -96,19 +123,17 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? (de ? 'Artikel bearbeiten' : 'Edit Article') : (de ? 'Neuer Artikel' : 'New Article')}
+            {isEdit ? t('catalog.articles.edit') : t('catalog.articles.create')}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            {de
-              ? 'Artikelnummer, Einheit, Kategorie, Preis und IGH-Referenzen verwalten.'
-              : 'Manage article number, unit, category, price, and IGH references.'}
+            {t('catalog.articles.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="articleNumber">{de ? 'Art.-Nr.' : 'Article No.'} *</Label>
+              <Label htmlFor="articleNumber">{t('catalog.articles.articleNumberShort')} *</Label>
               <Input
                 id="articleNumber"
                 {...register('articleNumber', { required: true, maxLength: 20 })}
@@ -116,13 +141,13 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
                 placeholder="ART-001"
                 className="h-8 text-sm"
               />
-              {errors.articleNumber && <p className="text-xs text-destructive">{de ? 'Pflichtfeld, max. 20 Zeichen' : 'Required, max 20 characters'}</p>}
+              {errors.articleNumber && <p className="text-xs text-destructive">{t('catalog.articles.articleNumberRequired')}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label>{de ? 'Einheit' : 'Unit'} *</Label>
+              <Label>{t('catalog.articles.unit')} *</Label>
               <Select value={unitOfMeasure} onValueChange={(value) => setValue('unitOfMeasure', value)}>
                 <SelectTrigger className="h-8 text-sm">
-                  <SelectValue placeholder={de ? 'Einheit wählen' : 'Select unit'} />
+                  <SelectValue placeholder={t('catalog.articles.selectUnit')} />
                 </SelectTrigger>
                 <SelectContent>
                   {units.map((unit) => (
@@ -136,13 +161,13 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="name">{de ? 'Bezeichnung' : 'Name'} *</Label>
+            <Label htmlFor="name">{t('catalog.articles.name')} *</Label>
             <Input id="name" {...register('name', { required: true })} className="h-8 text-sm" />
-            {errors.name && <p className="text-xs text-destructive">{de ? 'Pflichtfeld' : 'Required'}</p>}
+            {errors.name && <p className="text-xs text-destructive">{t('catalog.articles.required')}</p>}
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="description">{de ? 'Beschreibung' : 'Description'}</Label>
+            <Label htmlFor="description">{t('catalog.articles.description')}</Label>
             <Input id="description" {...register('description')} className="h-8 text-sm" />
           </div>
 
@@ -157,9 +182,28 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
             </div>
           </div>
 
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="supplierName">{t('catalog.articles.supplier')}</Label>
+              <Input id="supplierName" {...register('supplierName')} className="h-8 text-sm" maxLength={255} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="manufacturerName">{t('catalog.articles.manufacturer')}</Label>
+              <Input id="manufacturerName" {...register('manufacturerName')} className="h-8 text-sm" maxLength={255} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="manufacturerPartNumber">{t('catalog.articles.manufacturerPartNumber')}</Label>
+              <Input id="manufacturerPartNumber" {...register('manufacturerPartNumber')} className="h-8 text-sm" maxLength={100} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="productGroup">{t('catalog.articles.productGroup')}</Label>
+              <Input id="productGroup" {...register('productGroup')} className="h-8 text-sm" maxLength={100} />
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label>{de ? 'Typ' : 'Type'}</Label>
+              <Label>{t('catalog.articles.type')}</Label>
               <Select value={type} onValueChange={(value) => setValue('type', value)}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -168,7 +212,7 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>{de ? 'Status' : 'Status'}</Label>
+              <Label>{t('catalog.articles.status')}</Label>
               <Select value={status} onValueChange={(value) => setValue('status', value)}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -177,16 +221,45 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="basePrice">{de ? 'Basispreis (CHF)' : 'Base Price (CHF)'} *</Label>
-              <Input id="basePrice" {...register('basePrice', { required: true })} type="number" step="0.01" min="0" className="h-8 text-sm" />
+              <Label>{t('catalog.articles.source')}</Label>
+              <Select value={source} onValueChange={(value) => setValue('source', value)}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ARTICLE_SOURCES.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="purchasePrice">{t('catalog.articles.purchase')}</Label>
+              <Input id="purchasePrice" {...register('purchasePrice')} type="number" step="0.01" min="0" className="h-8 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="salesPrice">{t('catalog.articles.sales')} *</Label>
+              <Input id="salesPrice" {...register('salesPrice', { required: true })} type="number" step="0.01" min="0" className="h-8 text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('catalog.articles.availability')}</Label>
+              <Select value={availabilityStatus} onValueChange={(value) => setValue('availabilityStatus', value)}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ARTICLE_AVAILABILITY_STATUSES.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="availableQuantity">{t('catalog.articles.stock')}</Label>
+              <Input id="availableQuantity" {...register('availableQuantity')} type="number" step="0.01" min="0" className="h-8 text-sm" />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label>{de ? 'Kategorie' : 'Category'} *</Label>
+            <Label>{t('catalog.categories.category')} *</Label>
             <Select value={categoryId} onValueChange={(value) => setValue('categoryId', value)}>
               <SelectTrigger className="h-8 text-sm">
-                <SelectValue placeholder={de ? 'Kategorie wählen' : 'Select category'} />
+                <SelectValue placeholder={t('catalog.categories.selectCategory')} />
               </SelectTrigger>
               <SelectContent>
                 {categories.map((category) => (
@@ -196,7 +269,7 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
                 ))}
               </SelectContent>
             </Select>
-            {!categoryId && <p className="text-xs text-muted-foreground">{de ? 'Eine aktive Kategorie ist erforderlich.' : 'An active category is required.'}</p>}
+            {!categoryId && <p className="text-xs text-muted-foreground">{t('catalog.categories.activeRequired')}</p>}
           </div>
 
           {article && (
@@ -213,10 +286,10 @@ export function CatalogArticleFormDialog({ open, onOpenChange, onClose, article 
 
           <DialogFooter>
             <Button type="button" variant="outline" size="sm" onClick={() => handleClose(false)}>
-              {de ? 'Abbrechen' : 'Cancel'}
+              {t('common.cancel')}
             </Button>
             <Button type="submit" size="sm" disabled={isSubmitting || !categoryId}>
-              {isSubmitting ? (de ? 'Speichert...' : 'Saving...') : (de ? 'Speichern' : 'Save')}
+              {isSubmitting ? t('common.saving') : t('common.save')}
             </Button>
           </DialogFooter>
         </form>

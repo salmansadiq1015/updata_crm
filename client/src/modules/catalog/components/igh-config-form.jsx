@@ -58,7 +58,7 @@ export function IghConfigForm() {
     }
   };
 
-  if (isLoading) return <div className="p-4 text-sm text-muted-foreground animate-pulse">Loading...</div>;
+  if (isLoading) return <div className="p-4 text-sm text-muted-foreground animate-pulse">{t('common.loading')}</div>;
 
   return (
     <Form {...form}>
@@ -69,9 +69,9 @@ export function IghConfigForm() {
           render={({ field }) => (
             <FormItem className="flex items-center justify-between rounded-md border p-4">
               <div>
-                <FormLabel className="text-sm font-medium">Enable IGH Integration</FormLabel>
+                <FormLabel className="text-sm font-medium">{t('catalog.igh.config.enableIntegration')}</FormLabel>
                 <p className="text-xs text-muted-foreground mt-1">
-                  When disabled, no syncs run and the import section is hidden.
+                  {t('catalog.igh.config.enableDescription')}
                 </p>
               </div>
               <FormControl>
@@ -86,7 +86,7 @@ export function IghConfigForm() {
           name="endpointUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Endpoint URL</FormLabel>
+              <FormLabel>{t('catalog.connections.endpointUrl')}</FormLabel>
               <FormControl>
                 <Input {...field} placeholder="https://data.igh.ch/api/catalog" type="url" />
               </FormControl>
@@ -100,12 +100,12 @@ export function IghConfigForm() {
           name="apiKey"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>API Key</FormLabel>
+              <FormLabel>{t('catalog.connections.apiKey')}</FormLabel>
               <FormControl>
-                <Input {...field} type="password" placeholder="Leave blank to keep current key" />
+                <Input {...field} type="password" placeholder={t('catalog.igh.config.apiKeyPlaceholder')} />
               </FormControl>
               <p className="text-xs text-muted-foreground">
-                Stored server-side and never returned in full. Leave blank to keep the current value.
+                {t('catalog.igh.config.apiKeyDescription')}
               </p>
               <FormMessage />
             </FormItem>
@@ -117,12 +117,12 @@ export function IghConfigForm() {
           name="syncSchedule"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Sync Schedule (cron)</FormLabel>
+              <FormLabel>{t('catalog.igh.config.syncSchedule')}</FormLabel>
               <FormControl>
-                <Input {...field} placeholder="0 3 * * 0 (every Sunday 3am)" />
+                <Input {...field} placeholder={t('catalog.igh.config.syncPlaceholder')} />
               </FormControl>
               <p className="text-xs text-muted-foreground">
-                Standard cron syntax. Leave blank to disable automatic sync.
+                {t('catalog.igh.config.syncDescription')}
               </p>
               <FormMessage />
             </FormItem>
@@ -130,7 +130,7 @@ export function IghConfigForm() {
         />
 
         <Button type="submit" disabled={saveConfig.isPending}>
-          {saveConfig.isPending ? 'Saving...' : t('catalog.igh.configure')}
+          {saveConfig.isPending ? t('common.saving') : t('catalog.igh.configure')}
         </Button>
       </form>
     </Form>

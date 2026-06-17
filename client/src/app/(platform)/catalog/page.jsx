@@ -9,8 +9,7 @@ import { CatalogFilterPanel } from '@/modules/catalog/components/catalog-filter-
 import { useLanguage } from '@/lib/i18n/language-context';
 
 export default function CatalogPage() {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [filters, setFilters] = useState({});
 
@@ -18,10 +17,8 @@ export default function CatalogPage() {
     <div className="flex flex-col gap-5 h-full">
       <PageHeader
         icon={Boxes}
-        title={de ? 'Materialkatalog' : 'Material Catalog'}
-        description={de
-          ? 'Artikel, Dienstleistungen und Kategorien verwalten'
-          : 'Manage articles, services and categories'}
+        title={t('catalog.page.title')}
+        description={t('catalog.page.description')}
       />
 
       <div className="flex flex-1 gap-5 min-h-0 overflow-hidden">
@@ -34,7 +31,7 @@ export default function CatalogPage() {
         </div>
 
         {/* Faceted filter panel */}
-        <div className="w-48 shrink-0 rounded-xl border bg-card overflow-y-auto">
+        <div className="w-56 shrink-0 rounded-xl border bg-card overflow-y-auto">
           <CatalogFilterPanel
             filters={{ ...filters, categoryId: selectedCategoryId || undefined }}
             onFiltersChange={setFilters}

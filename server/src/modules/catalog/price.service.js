@@ -151,7 +151,7 @@ class PriceService {
     const bulkOps = rollbackData.map(({ articleId, oldPrice }) => ({
       updateOne: {
         filter: { _id: articleId, isDeleted: false },
-        update: { $set: { basePrice: oldPrice, updatedBy: userId }, $inc: { version: 1 } },
+        update: { $set: { basePrice: oldPrice, salesPrice: oldPrice, updatedBy: userId }, $inc: { version: 1 } },
       },
     }));
 
@@ -255,7 +255,7 @@ class PriceService {
       bulkOps.push({
         updateOne: {
           filter: { _id: article._id, isDeleted: false },
-          update: { $set: { basePrice: newPrice, updatedBy: userId }, $inc: { version: 1 } },
+          update: { $set: { basePrice: newPrice, salesPrice: newPrice, updatedBy: userId }, $inc: { version: 1 } },
         },
       });
     }
@@ -348,7 +348,7 @@ class PriceService {
 
   _sanitizeArticleFilter(filter) {
     const allowed = {};
-    for (const key of ['categoryId', 'type', 'status', 'source']) {
+    for (const key of ['categoryId', 'type', 'status', 'source', 'catalogConnectionId', 'supplierId', 'manufacturerName', 'productGroup']) {
       if (filter[key] !== undefined) allowed[key] = filter[key];
     }
     return allowed;

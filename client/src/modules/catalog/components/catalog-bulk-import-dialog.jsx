@@ -84,12 +84,12 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
 
           {importSummary && (
             <div className="rounded-md border bg-muted/30 p-4 space-y-1 text-sm">
-              <p className="font-medium">Import complete</p>
-              <p>Created: <Badge variant="outline">{importSummary.created ?? 0}</Badge></p>
-              <p>Updated: <Badge variant="outline">{importSummary.updated ?? 0}</Badge></p>
-              <p>Skipped: <Badge variant="outline">{importSummary.skipped ?? 0}</Badge></p>
+              <p className="font-medium">{t('catalog.articles.importComplete')}</p>
+              <p>{t('catalog.articles.importCreated')}: <Badge variant="outline">{importSummary.created ?? 0}</Badge></p>
+              <p>{t('catalog.articles.importUpdated')}: <Badge variant="outline">{importSummary.updated ?? 0}</Badge></p>
+              <p>{t('catalog.articles.importSkipped')}: <Badge variant="outline">{importSummary.skipped ?? 0}</Badge></p>
               {(importSummary.errors ?? 0) > 0 && (
-                <p>Errors: <Badge variant="destructive">{importSummary.errors}</Badge></p>
+                <p>{t('catalog.articles.importErrorCount')}: <Badge variant="destructive">{importSummary.errors}</Badge></p>
               )}
             </div>
           )}
@@ -104,9 +104,9 @@ export function CatalogBulkImportDialog({ open, onClose, importErrors: externalE
                 <table className="w-full text-xs">
                   <thead className="bg-muted sticky top-0">
                     <tr>
-                      <th className="text-left px-3 py-2">Row</th>
-                      <th className="text-left px-3 py-2">Field</th>
-                      <th className="text-left px-3 py-2">Error</th>
+                      <th className="text-left px-3 py-2">{t('catalog.articles.importRow')}</th>
+                      <th className="text-left px-3 py-2">{t('catalog.articles.importField')}</th>
+                      <th className="text-left px-3 py-2">{t('catalog.articles.importError')}</th>
                     </tr>
                   </thead>
                   <tbody>

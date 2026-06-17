@@ -14,6 +14,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { articleService } from '../services/article-service';
 import { buildCatalogSnapshot } from '../services/catalog-normalizers';
 import { useDebounce } from '@/shared/hooks/use-debounce';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 function toSnapshot(article) {
   const catalogSnapshot = buildCatalogSnapshot(article);
@@ -23,7 +24,7 @@ function toSnapshot(article) {
     name: article.name,
     description: article.description ?? '',
     unitOfMeasure: article.unitOfMeasure,
-    snapshotPrice: article.basePrice,
+    snapshotPrice: article.salesPrice ?? article.basePrice,
     type: article.type,
     source: article.source,
     catalogSnapshot,
@@ -31,6 +32,7 @@ function toSnapshot(article) {
 }
 
 export function ArticlePickerDialog({ open, onClose, onSelect }) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 250);
 
@@ -78,9 +80,9 @@ export function ArticlePickerDialog({ open, onClose, onSelect }) {
     <Dialog open={open} onOpenChange={(v) => !v && closeDialog()}>
       <DialogContent className="max-w-lg p-0 overflow-hidden">
         <DialogHeader className="px-4 pt-4 pb-0">
-          <DialogTitle>Select Article</DialogTitle>
+          <DialogTitle>{t('catalog.picker.articleTitle')}</DialogTitle>
           <DialogDescription className="sr-only">
-            Search catalog articles and insert a snapshot into the current document.
+            {t('catalog.picker.articleDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -90,7 +92,7 @@ export function ArticlePickerDialog({ open, onClose, onSelect }) {
             <Input
               autoFocus
               className="pl-8"
-              placeholder="Search by name or article number..."
+              placeholder={t('catalog.picker.articleSearchPlaceholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -100,21 +102,21 @@ export function ArticlePickerDialog({ open, onClose, onSelect }) {
         <ScrollArea className="max-h-80">
           {isLoading && (
             <div className="px-4 py-6 text-sm text-center text-muted-foreground animate-pulse">
-              Searching...
+              {t('catalog.picker.searching')}
             </div>
           )}
 
           {!isLoading && articles.length === 0 && !query && (
             <div className="px-4 py-6 text-sm text-center text-muted-foreground">
-              Start typing to search the catalog.
+              {t('catalog.picker.startArticleSearch')}
             </div>
           )}
 
           {!isLoading && articles.length === 0 && query && (
             <div className="px-4 py-4 text-sm text-muted-foreground">
-              <p className="mb-3">No articles found for &ldquo;{query}&rdquo;.</p>
+              <p className="mb-3">{t('catalog.picker.noArticlesFor', null, { query })}</p>
               <Button variant="outline" size="sm" onClick={handleFreeText}>
-                Add as free text: &ldquo;{query}&rdquo;
+                {t('catalog.picker.addFreeText', null, { query })}
               </Button>
             </div>
           )}
@@ -145,9 +147,19 @@ export function ArticlePickerDialog({ open, onClose, onSelect }) {
                       <span className="text-xs text-muted-foreground">/ {article.unitOfMeasure}</span>
                     )}
                   </div>
+                  {(article.supplierName || article.manufacturerName || article.availabilityStatus) && (
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {[article.supplierName || article.manufacturerName, article.availabilityStatus].filter(Boolean).join(' | ')}
+                    </div>
+                  )}
                 </div>
-                <div className="text-sm font-medium shrink-0">
-                  CHF {(Number(article.basePrice) || 0).toFixed(2)}
+                <div className="shrink-0 text-right">
+                  <div className="text-sm font-medium">
+                    CHF {(Number(article.salesPrice ?? article.basePrice) || 0).toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {t('catalog.articles.purchaseShort')} {(Number(article.purchasePrice) || 0).toFixed(2)}
+                  </div>
                 </div>
               </button>
             ))}
@@ -156,7 +168,7 @@ export function ArticlePickerDialog({ open, onClose, onSelect }) {
           {articles.length > 0 && query && (
             <div className="px-4 py-2 border-t">
               <Button variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={handleFreeText}>
-                + Add as free text: &ldquo;{query}&rdquo;
+                + {t('catalog.picker.addFreeText', null, { query })}
               </Button>
             </div>
           )}

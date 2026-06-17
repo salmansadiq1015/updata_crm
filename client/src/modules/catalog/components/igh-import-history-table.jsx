@@ -44,7 +44,7 @@ function JobRow({ job }) {
             ) : (
               <ChevronRight className="w-3.5 h-3.5" />
             )}
-            {current.type === 'FULL' ? 'Full Import' : 'Delta Sync'}
+            {current.type === 'FULL' ? t('catalog.igh.importType.full') : t('catalog.igh.importType.delta')}
           </button>
         </TableCell>
         <TableCell>
@@ -93,7 +93,7 @@ export function IghImportHistoryTable() {
   if (!config?.isEnabled) {
     return (
       <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
-        IGH integration is disabled. Enable it in the configuration above.
+        {t('catalog.igh.disabledNotice')}
       </div>
     );
   }
@@ -113,7 +113,7 @@ export function IghImportHistoryTable() {
             }}
           >
             <Download className="w-4 h-4 mr-2" />
-            {previewImport.isPending ? 'Loading...' : t('catalog.igh.importFull')}
+            {previewImport.isPending ? t('common.loading') : t('catalog.igh.importFull')}
           </Button>
           <Button
             size="sm"
@@ -130,23 +130,23 @@ export function IghImportHistoryTable() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Started</TableHead>
-                <TableHead>Result</TableHead>
+                <TableHead>{t('catalog.igh.table.type')}</TableHead>
+                <TableHead>{t('catalog.igh.table.status')}</TableHead>
+                <TableHead>{t('catalog.igh.table.started')}</TableHead>
+                <TableHead>{t('catalog.igh.table.result')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    Loading...
+                    {t('common.loading')}
                   </TableCell>
                 </TableRow>
               ) : jobs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    No imports yet.
+                    {t('catalog.igh.noImports')}
                   </TableCell>
                 </TableRow>
               ) : (

@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { articleService } from '../services/article-service';
 import { categoryService } from '../services/category-service';
+import { connectionService } from '../services/connection-service';
+import { markupService } from '../services/markup-service';
 import { normalizeListResponse } from '../services/catalog-normalizers';
 
 export function useCatalogCategories() {
@@ -79,5 +81,30 @@ export function usePriceHistory(id) {
     queryFn: () => articleService.getPriceHistory(id),
     enabled: !!id,
     select: (data) => (Array.isArray(data) ? data : (data?.data ?? [])),
+  });
+}
+
+export function useCatalogConnections(filters = {}) {
+  return useQuery({
+    queryKey: queryKeys.catalog.connections(filters),
+    queryFn: () => connectionService.list(filters),
+    select: normalizeListResponse,
+  });
+}
+
+export function useCatalogConnectionLogs(id) {
+  return useQuery({
+    queryKey: queryKeys.catalog.connectionLogs(id),
+    queryFn: () => connectionService.logs(id, { limit: 20 }),
+    enabled: !!id,
+    select: (data) => (Array.isArray(data) ? data : (data?.data ?? [])),
+  });
+}
+
+export function useCatalogMarkupRules(filters = {}) {
+  return useQuery({
+    queryKey: queryKeys.catalog.markups(filters),
+    queryFn: () => markupService.list(filters),
+    select: normalizeListResponse,
   });
 }

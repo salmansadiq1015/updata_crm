@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { textBlockService } from '../services/text-block-service';
 import { useDebounce } from '@/shared/hooks/use-debounce';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 function toSnapshot(block) {
   return {
@@ -23,6 +24,7 @@ function toSnapshot(block) {
 }
 
 export function TextBlockPickerDialog({ open, onClose, onSelect }) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 250);
 
@@ -50,7 +52,7 @@ export function TextBlockPickerDialog({ open, onClose, onSelect }) {
     <Dialog open={open} onOpenChange={(v) => !v && closeDialog()}>
       <DialogContent className="max-w-lg p-0 overflow-hidden">
         <DialogHeader className="px-4 pt-4 pb-0">
-          <DialogTitle>Select Text Block</DialogTitle>
+          <DialogTitle>{t('catalog.picker.textBlockTitle')}</DialogTitle>
         </DialogHeader>
 
         <div className="px-4 pt-3 pb-2 border-b">
@@ -59,7 +61,7 @@ export function TextBlockPickerDialog({ open, onClose, onSelect }) {
             <Input
               autoFocus
               className="pl-8"
-              placeholder="Search text blocks..."
+              placeholder={t('catalog.textBlocks.searchPlaceholder')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -69,7 +71,7 @@ export function TextBlockPickerDialog({ open, onClose, onSelect }) {
         <ScrollArea className="max-h-80">
           {isLoading && (
             <div className="px-4 py-6 text-sm text-center text-muted-foreground animate-pulse">
-              Searching...
+              {t('catalog.picker.searching')}
             </div>
           )}
 
@@ -94,7 +96,7 @@ export function TextBlockPickerDialog({ open, onClose, onSelect }) {
             ))}
             {!isLoading && blocks.length === 0 && (
               <div className="px-4 py-6 text-sm text-center text-muted-foreground">
-                {query ? 'No text blocks found.' : 'Start typing to search text blocks.'}
+                {query ? t('catalog.textBlocks.empty') : t('catalog.picker.startTextBlockSearch')}
               </div>
             )}
           </div>

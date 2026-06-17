@@ -23,7 +23,7 @@ import {
   BookOpen, ClipboardList, MessageSquare, Bell, Smartphone,
   FileCheck, Clock4, Files, LayoutTemplate,
   Type, TrendingUp, Ruler, RefreshCw, CalendarDays, Grid3X3, AlertTriangle,
-  ShoppingCart,
+  ShoppingCart, PlugZap, Percent,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import {
@@ -91,6 +91,8 @@ const navSectionDefs = [
           { type: 'leaf', labelKey: 'sidebar.catalog', href: '/catalog', icon: Boxes, permission: PERMISSIONS.CATALOG_READ },
           { type: 'leaf', labelKey: 'catalog.textBlocks.title', href: '/catalog/text-blocks', icon: Type, permission: PERMISSIONS.CATALOG_WRITE },
           { type: 'leaf', labelKey: 'catalog.prices.title', href: '/catalog/prices', icon: TrendingUp, permission: PERMISSIONS.CATALOG_PRICE },
+          { type: 'leaf', labelKey: 'catalog.connections.title', href: '/catalog/connections', icon: PlugZap, permission: PERMISSIONS.CATALOG_ADMIN },
+          { type: 'leaf', labelKey: 'catalog.markups.title', href: '/catalog/markups', icon: Percent, permission: PERMISSIONS.CATALOG_PRICE },
           { type: 'leaf', labelKey: 'catalog.units.title', href: '/catalog/settings/units', icon: Ruler, permission: PERMISSIONS.CATALOG_ADMIN },
           { type: 'leaf', labelKey: 'catalog.igh.title', href: '/catalog/igh', icon: RefreshCw, permission: PERMISSIONS.CATALOG_ADMIN },
         ],

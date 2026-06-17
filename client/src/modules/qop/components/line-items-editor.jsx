@@ -64,7 +64,12 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
 
   const addCatalogItem = useCallback((snapshot) => {
     const catalogSnapshot = snapshot.catalogSnapshot || null;
-    const unitPrice = Number(snapshot.snapshotPrice ?? catalogSnapshot?.snapshotBasePrice ?? 0);
+    const unitPrice = Number(
+      snapshot.snapshotPrice
+      ?? catalogSnapshot?.snapshotSalesPrice
+      ?? catalogSnapshot?.snapshotBasePrice
+      ?? 0,
+    );
     const newItem = {
       _uid: uid(),
       position: value.length + 1,
@@ -94,6 +99,17 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
     const next = value.map((it, i) => {
       if (i !== idx) return it;
       const updated = { ...it, [field]: raw };
+      if (field === 'unitPrice' && updated.catalogSnapshot) {
+        const snapshotPrice = Number(
+          updated.catalogSnapshot.snapshotSalesPrice
+          ?? updated.catalogSnapshot.snapshotBasePrice
+          ?? 0,
+        );
+        updated.catalogSnapshot = {
+          ...updated.catalogSnapshot,
+          manualPriceOverride: Number(raw) !== snapshotPrice,
+        };
+      }
       updated.lineTotal = calcLineTotal(updated.quantity, updated.unitPrice, updated.discountPercent);
       return updated;
     });
@@ -150,7 +166,8 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
               />
             </div>
             <div className="flex items-center px-1 py-1">
-              <div className="flex min-w-0 flex-1 items-center gap-1">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div className="flex min-w-0 items-center gap-1">
                 <Input
                   value={item.description}
                   onChange={(e) => updateItem(idx, 'description', e.target.value)}
@@ -164,6 +181,20 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
                   />
                 )}
                 <CatalogLinePriceDrift item={item} />
+                </div>
+                {item.catalogSnapshot && (
+                  <div className="truncate px-1.5 text-[10px] leading-4 text-muted-foreground">
+                    {[
+                      item.catalogSnapshot.supplierName || item.catalogSnapshot.manufacturerName,
+                      `${t('qop.lineItems.purchase', 'EK')} ${fmt(item.catalogSnapshot.snapshotPurchasePrice ?? 0)}`,
+                      `${t('qop.lineItems.sales', 'VK')} ${fmt(item.catalogSnapshot.snapshotSalesPrice ?? item.catalogSnapshot.snapshotBasePrice ?? 0)}`,
+                      item.catalogSnapshot.marginPercent !== null && item.catalogSnapshot.marginPercent !== undefined
+                        ? `${t('qop.lineItems.margin', 'Marge')} ${fmt(item.catalogSnapshot.marginPercent)}%`
+                        : null,
+                      item.catalogSnapshot.manualPriceOverride ? t('qop.lineItems.manualPrice', 'Manuell') : null,
+                    ].filter(Boolean).join(' | ')}
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center px-1 py-1">

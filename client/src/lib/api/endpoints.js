@@ -137,6 +137,12 @@ export const ENDPOINTS = Object.freeze({
   FILES: {
     DOWNLOAD: (fileId) => `/files/${fileId}/download`,
   },
+  DOCUMENTS: {
+    LIST: '/documents',
+    UPLOAD: '/documents/upload',
+    BY_ID: (id) => `/documents/${id}`,
+    DOWNLOAD: (id) => `/documents/${id}/download`,
+  },
   INTEGRATIONS: {
     LIST: '/admin/integrations',
     DASHBOARD: '/admin/integrations/dashboard',
@@ -268,6 +274,13 @@ export const ENDPOINTS = Object.freeze({
     PRICE_SCHEDULE: '/catalog/prices/schedule',
     PRICE_ROLLBACK: (batchId) => `/catalog/prices/rollback/${batchId}`,
     PRICE_BATCHES: '/catalog/prices/batches',
+    CONNECTIONS: '/catalog/connections',
+    CONNECTION_BY_ID: (id) => `/catalog/connections/${id}`,
+    CONNECTION_SYNC: (id) => `/catalog/connections/${id}/sync`,
+    CONNECTION_LOGS: (id) => `/catalog/connections/${id}/logs`,
+    MARKUPS: '/catalog/markups',
+    MARKUP_BY_ID: (id) => `/catalog/markups/${id}`,
+    MARKUP_RESOLVE: '/catalog/markups/resolve',
     PICKER: '/catalog/picker',
     PICKER_ARTICLES: '/catalog/picker/articles',
     PICKER_TEXT_BLOCKS: '/catalog/picker/text-blocks',

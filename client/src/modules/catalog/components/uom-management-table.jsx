@@ -27,7 +27,7 @@ export function UomManagementTable() {
   const openEdit = (u) => { setDialogUnit(u); setDialogOpen(true); };
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground animate-pulse">Loading units...</div>;
+    return <div className="p-6 text-sm text-muted-foreground animate-pulse">{t('catalog.units.loading')}</div>;
   }
 
   return (
@@ -45,14 +45,14 @@ export function UomManagementTable() {
               <TableHead>{t('catalog.units.nameIt')}</TableHead>
               <TableHead>{t('catalog.units.baseUnit')}</TableHead>
               <TableHead>{t('catalog.units.conversionFactor')}</TableHead>
-              <TableHead className="text-right">Usage</TableHead>
+              <TableHead className="text-right">{t('catalog.units.usage')}</TableHead>
               <TableHead className="w-20" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {units.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No units defined.</TableCell>
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">{t('catalog.units.empty')}</TableCell>
               </TableRow>
             ) : units.map((unit) => (
               <TableRow key={unit.code}>
@@ -89,7 +89,7 @@ export function UomManagementTable() {
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>{t('catalog.units.deleteTitle', { code: unit.code })}</AlertDialogTitle>
+                            <AlertDialogTitle>{t('catalog.units.deleteTitle', null, { code: unit.code })}</AlertDialogTitle>
                             <AlertDialogDescription>{t('common.cannotUndo')}</AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

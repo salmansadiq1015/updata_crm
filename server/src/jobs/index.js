@@ -18,6 +18,7 @@ import { NumberSequenceResetWorker } from './numberSequenceReset.job.js';
 import { DocumentGenerationWorker } from './documentGeneration.job.js';
 import { EmailDispatchWorker } from './emailDispatch.job.js';
 import { IghImportWorker } from './ighImport.job.js';
+import { CatalogSyncWorker } from './catalogSync.job.js';
 import { ScheduledPriceUpdateWorker } from './scheduledPriceUpdate.job.js';
 import { ArticleImportWorker } from './articleImport.job.js';
 import { BankStatementImportWorker } from './bankStatementImport.job.js';
@@ -306,6 +307,22 @@ export function registerJobs() {
   });
 
   // Scheduled price update — applies pending price batches daily at 05:00
+  const catalogSync = new CatalogSyncWorker();
+  queueManager.registerQueue('catalog-sync', catalogSync.getHandler(), {
+    concurrency: 2,
+    jobOptions: {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 60000 },
+    },
+  });
+
+  queueManager.addScheduledJob('catalog-sync', 'periodic-catalog-sync-scan', { scanDue: true }, '*/15 * * * *').catch((err) => {
+    logger.warn('Failed to schedule connected catalog sync scan', {
+      module: 'jobs',
+      error: { message: err.message },
+    });
+  });
+
   const scheduledPriceUpdate = new ScheduledPriceUpdateWorker();
   queueManager.registerQueue('scheduled-price-update', scheduledPriceUpdate.getHandler(), {
     concurrency: 1,
@@ -567,7 +584,7 @@ export function registerJobs() {
   logger.info('Background jobs registered', {
     module: 'jobs',
     action: 'register',
-    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', 'ai-agent', 'ai-agent-timeout'],
+    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'catalog-sync', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', 'ai-agent', 'ai-agent-timeout'],
   });
 }
 

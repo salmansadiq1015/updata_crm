@@ -8,7 +8,7 @@ export const articleService = {
   list: (params = {}) => apiClient.get(E.ARTICLES, { params }),
   getById: (id) => apiClient.get(E.ARTICLE_BY_ID(id)),
   create: (data) => apiClient.post(E.ARTICLES, normalizeArticlePayload(data)),
-  update: (id, data) => apiClient.put(E.ARTICLE_BY_ID(id), normalizeArticlePayload(data)),
+  update: (id, data) => apiClient.put(E.ARTICLE_BY_ID(id), normalizeArticlePayload(data, { partial: true })),
   remove: (id) => apiClient.delete(E.ARTICLE_BY_ID(id)),
   getVersions: (id) => apiClient.get(E.ARTICLE_VERSIONS(id)),
   updatePrice: (data) => apiClient.post(E.PRICE_UPDATE, data),

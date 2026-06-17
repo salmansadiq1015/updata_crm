@@ -21,8 +21,7 @@ const fmt = (value, currency = 'CHF') =>
   new Intl.NumberFormat('de-CH', { style: 'currency', currency }).format(value ?? 0);
 
 export function CatalogArticlesTable({ filters: externalFilters = {} }) {
-  const { locale: language, t } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [cursor, setCursor] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -42,7 +41,7 @@ export function CatalogArticlesTable({ filters: externalFilters = {} }) {
   const handleEdit = (article) => { setEditing(article); setFormOpen(true); };
   const handleNew = () => { setEditing(null); setFormOpen(true); };
   const handleDelete = (id) => {
-    if (confirm(de ? 'Artikel löschen?' : 'Delete article?')) removeArticle.mutate(id);
+    if (confirm(t('catalog.articles.deleteConfirm'))) removeArticle.mutate(id);
   };
   const handleToggleStatus = (article) => {
     const id = article._id || article.id;
@@ -63,22 +62,22 @@ export function CatalogArticlesTable({ filters: externalFilters = {} }) {
           <Input
             value={search}
             onChange={(event) => { setSearch(event.target.value); setCursor(''); }}
-            placeholder={de ? 'Artikel suchen...' : 'Search articles...'}
+            placeholder={t('catalog.articles.searchPlaceholder')}
             className="h-8 pl-9 text-sm"
           />
         </div>
         <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setImportOpen(true)}>
           <Upload className="h-3.5 w-3.5" />
-          {de ? 'Importieren' : 'Bulk Import'}
+          {t('catalog.articles.bulkImport')}
         </Button>
         <Button size="sm" className="h-8 gap-1.5" onClick={handleNew}>
           <Plus className="h-3.5 w-3.5" />
-          {de ? 'Artikel' : 'Article'}
+          {t('catalog.article')}
         </Button>
       </div>
       {!search && recentSearches.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{de ? 'Zuletzt gesucht:' : 'Recent:'}</span>
+          <span className="text-xs text-muted-foreground">{t('catalog.articles.recentSearches')}</span>
           {recentSearches.map((item) => (
             <button
               key={item._id || `${item.query}-${item.filtersHash || ''}`}
@@ -104,16 +103,16 @@ export function CatalogArticlesTable({ filters: externalFilters = {} }) {
           </div>
         ) : isError ? (
           <div className="flex items-center justify-center py-12 text-sm text-destructive">
-            {de ? 'Artikel konnten nicht geladen werden.' : 'Could not load articles.'}
+            {t('catalog.articles.loadError')}
           </div>
         ) : articles.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16">
             <p className="text-sm text-muted-foreground">
-              {de ? 'Keine Artikel gefunden' : 'No articles found'}
+              {t('catalog.articles.empty')}
             </p>
             <Button variant="outline" size="sm" onClick={handleNew}>
               <Plus className="mr-1.5 h-3.5 w-3.5" />
-              {de ? 'Ersten Artikel erstellen' : 'Create first article'}
+              {t('catalog.articles.createFirst')}
             </Button>
           </div>
         ) : (
@@ -121,19 +120,25 @@ export function CatalogArticlesTable({ filters: externalFilters = {} }) {
             <thead>
               <tr className="border-b bg-muted/30">
                 <th className="w-32 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {de ? 'Art.-Nr.' : 'Art. No.'}
+                  {t('catalog.articles.articleNumberShort')}
                 </th>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {de ? 'Bezeichnung' : 'Name'}
+                  {t('catalog.articles.name')}
                 </th>
                 <th className="w-28 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {de ? 'Typ' : 'Type'}
+                  {t('catalog.articles.type')}
+                </th>
+                <th className="w-44 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('catalog.articles.source')}
                 </th>
                 <th className="w-36 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {de ? 'Basispreis' : 'Base Price'}
+                  {t('catalog.articles.prices')}
+                </th>
+                <th className="w-32 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('catalog.articles.availability')}
                 </th>
                 <th className="w-28 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Status
+                  {t('catalog.articles.status')}
                 </th>
                 <th className="w-12" />
               </tr>
@@ -151,7 +156,25 @@ export function CatalogArticlesTable({ filters: externalFilters = {} }) {
                       )}
                     </td>
                     <td className="px-4 py-3"><ArticleTypeBadge type={article.type} size="sm" /></td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums">{fmt(article.basePrice, article.currency)}</td>
+                    <td className="px-4 py-3">
+                      <div className="truncate text-xs font-medium">{article.supplierName || article.manufacturerName || article.source}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {[article.manufacturerName, article.manufacturerPartNumber].filter(Boolean).join(' / ') || article.supplierRef || article.source}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      <div className="font-medium">{fmt(article.salesPrice ?? article.basePrice, article.currency)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {t('catalog.articles.purchaseShort')} {' '}
+                        {fmt(article.purchasePrice ?? article.buyPrice ?? 0, article.currency)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-xs font-medium">{article.availabilityStatus || 'UNKNOWN'}</div>
+                      {article.availableQuantity !== null && article.availableQuantity !== undefined && (
+                        <div className="text-xs text-muted-foreground">{article.availableQuantity} {article.unit}</div>
+                      )}
+                    </td>
                     <td className="px-4 py-3"><ArticleStatusBadge status={article.status} size="sm" /></td>
                     <td className="px-4 py-3">
                       <DropdownMenu>
@@ -163,22 +186,22 @@ export function CatalogArticlesTable({ filters: externalFilters = {} }) {
                         <DropdownMenuContent align="end" className="w-44">
                           <DropdownMenuItem onClick={() => handleEdit(article)}>
                             <Pencil className="mr-2 h-3.5 w-3.5" />
-                            {de ? 'Bearbeiten' : 'Edit'}
+                            {t('common.edit')}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleToggleStatus(article)}>
                             <ToggleLeft className="mr-2 h-3.5 w-3.5" />
                             {article.status === 'ACTIVE'
-                              ? (de ? 'Deaktivieren' : 'Deactivate')
-                              : (de ? 'Aktivieren' : 'Activate')}
+                              ? t('catalog.articles.deactivate')
+                              : t('catalog.articles.activate')}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => setHistoryArticle(historyArticle?._id === id || historyArticle?.id === id ? null : article)}>
                             <History className="mr-2 h-3.5 w-3.5" />
-                            {de ? 'Verlauf' : 'History'}
+                            {t('catalog.articles.history')}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(id)}>
                             <Trash2 className="mr-2 h-3.5 w-3.5" />
-                            {de ? 'Loeschen' : 'Delete'}
+                            {t('common.delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -195,12 +218,12 @@ export function CatalogArticlesTable({ filters: externalFilters = {} }) {
         <div className="flex justify-end gap-2">
           {cursor && (
             <Button variant="ghost" size="sm" onClick={() => setCursor('')}>
-              {de ? 'Erste Seite' : 'First page'}
+              {t('common.firstPage')}
             </Button>
           )}
           {pagination?.hasNext && (
             <Button variant="outline" size="sm" onClick={() => setCursor(pagination.nextCursor)}>
-              {de ? 'Weitere laden' : 'Load more'}
+              {t('catalog.articles.loadMore')}
             </Button>
           )}
         </div>

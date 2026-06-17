@@ -4,6 +4,8 @@ import priceRoutes from './price.routes.js';
 import ighRoutes from './igh.routes.js';
 import pickerRoutes from './picker.routes.js';
 import catalogSearchRoutes from './catalogSearch.routes.js';
+import catalogConnectionRoutes from './catalogConnection.routes.js';
+import catalogMarkupRuleRoutes from './catalogMarkupRule.routes.js';
 
 /**
  * Catalog route aggregator.
@@ -52,6 +54,12 @@ router.use('/units', unitOfMeasureRoutes);
 
 // Price management
 router.use('/prices', priceRoutes);
+
+// Supplier/manufacturer catalog connections
+router.use('/connections', catalogConnectionRoutes);
+
+// Markup and margin rules
+router.use('/markups', catalogMarkupRuleRoutes);
 
 // IGH integration
 router.use('/igh', ighRoutes);

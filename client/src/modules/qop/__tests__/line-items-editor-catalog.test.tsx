@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 import { LineItemsEditor } from '../components/line-items-editor';
 
 vi.mock('@/lib/i18n/language-context', () => ({
-  useLanguage: () => ({ locale: 'en', t: (key: string) => key }),
+  useLanguage: () => ({ locale: 'en', t: (_key: string, fallback?: string) => fallback ?? _key }),
 }));
 
 vi.mock('@/modules/catalog/components/article-picker-dialog', () => ({
@@ -26,6 +26,8 @@ vi.mock('@/modules/catalog/components/article-picker-dialog', () => ({
             articleName: 'Copper pipe',
             unitOfMeasure: 'm',
             snapshotBasePrice: 14.5,
+            snapshotPurchasePrice: 10,
+            snapshotSalesPrice: 14.5,
             catalogSource: 'INTERNAL',
           },
         })}
@@ -47,7 +49,7 @@ describe('LineItemsEditor catalog integration', () => {
 
     render(<LineItemsEditor value={[]} onChange={onChange} />);
 
-    await user.click(screen.getByRole('button', { name: /catalog article/i }));
+    await user.click(screen.getByRole('button', { name: /katalogartikel/i }));
     await user.click(screen.getByRole('button', { name: /pick mocked article/i }));
 
     expect(onChange).toHaveBeenCalledWith([
@@ -63,6 +65,7 @@ describe('LineItemsEditor catalog integration', () => {
           catalogArticleId: '64f000000000000000000001',
           snapshotBasePrice: 14.5,
           catalogSource: 'INTERNAL',
+          snapshotSalesPrice: 14.5,
         }),
       }),
     ]);

@@ -79,10 +79,14 @@ jest.unstable_mockModule('../../../shared/logger/index.js', () => ({
 
 let priceService;
 let catalogCategoryService;
+let calculateCatalogPrice;
+let syncIntervalMinutes;
 
 beforeAll(async () => {
   priceService = (await import('../price.service.js')).default;
   catalogCategoryService = (await import('../catalogCategory.service.js')).default;
+  calculateCatalogPrice = (await import('../catalogMarkupRule.service.js')).calculateCatalogPrice;
+  syncIntervalMinutes = (await import('../catalogConnection.service.js')).syncIntervalMinutes;
 });
 
 beforeEach(() => {
@@ -152,7 +156,7 @@ describe('catalog completion contracts', () => {
       expect.objectContaining({
         updateOne: expect.objectContaining({
           filter: { _id: 'a1', isDeleted: false },
-          update: { $set: { basePrice: 15, updatedBy: 'user1' }, $inc: { version: 1 } },
+          update: { $set: { basePrice: 15, salesPrice: 15, updatedBy: 'user1' }, $inc: { version: 1 } },
         }),
       }),
     ], { ordered: false });
@@ -179,5 +183,29 @@ describe('catalog completion contracts', () => {
       description: '\u00dcberdruck Ventil',
       supplierReference: 'M10X',
     })).toEqual(expect.arrayContaining(['hk001', 'hk0', 'k00', '001', 'hei', 'eiz', 'ube', 'ber', 'm10x', 'm10', '10x']));
+  });
+
+  it('calculates transparent catalog sales price from purchase price and markup rule', () => {
+    const calculation = calculateCatalogPrice(
+      { purchasePrice: 100, salesPrice: 0, basePrice: 0 },
+      { _id: 'rule1', name: 'Global 25%', markupPercent: 25 },
+    );
+
+    expect(calculation).toMatchObject({
+      purchasePrice: 100,
+      salesPrice: 125,
+      basePrice: 125,
+      appliedMarkupPercent: 25,
+      marginPercent: 20,
+      calculationMode: 'MARKUP',
+      ruleName: 'Global 25%',
+    });
+  });
+
+  it('resolves common catalog sync schedules to due intervals', () => {
+    expect(syncIntervalMinutes('@hourly')).toBe(60);
+    expect(syncIntervalMinutes('@daily')).toBe(1440);
+    expect(syncIntervalMinutes('*/15 * * * *')).toBe(15);
+    expect(syncIntervalMinutes('0 3 * * *')).toBe(1440);
   });
 });

@@ -1,6 +1,7 @@
 export const ARTICLE_TYPES = ['MATERIAL', 'SERVICE'];
 export const ARTICLE_STATUSES = ['ACTIVE', 'INACTIVE'];
-export const ARTICLE_SOURCES = ['INTERNAL', 'IGH'];
+export const ARTICLE_SOURCES = ['INTERNAL', 'IGH', 'SUPPLIER', 'MANUFACTURER'];
+export const ARTICLE_AVAILABILITY_STATUSES = ['UNKNOWN', 'IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK', 'DISCONTINUED'];
 
 export const ARTICLE_TYPE_CONFIG = {
   MATERIAL: { label: 'Material', labelEn: 'Material', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400', icon: '📦' },

@@ -20,6 +20,8 @@ export function CatalogFilterPanel({ filters, onFiltersChange }) {
   };
 
   const hasActiveFilters = !!(filters.type || filters.status || filters.source
+    || filters.supplierName
+    || filters.manufacturerName || filters.productGroup || filters.availabilityStatus
     || filters.priceMin || filters.priceMax);
 
   const reset = () => onFiltersChange({
@@ -27,6 +29,10 @@ export function CatalogFilterPanel({ filters, onFiltersChange }) {
     type: undefined,
     status: undefined,
     source: undefined,
+    supplierName: undefined,
+    manufacturerName: undefined,
+    productGroup: undefined,
+    availabilityStatus: undefined,
     priceMin: undefined,
     priceMax: undefined,
   });
@@ -103,6 +109,34 @@ export function CatalogFilterPanel({ filters, onFiltersChange }) {
         </div>
       </div>
 
+      <FacetGroup
+        label={t('catalog.filter.availability') || 'Availability'}
+        items={facets?.availabilityStatuses ?? []}
+        active={filters.availabilityStatus}
+        onToggle={(value) => toggle('availabilityStatus', value)}
+      />
+
+      <FacetGroup
+        label={t('catalog.filter.supplier') || 'Supplier'}
+        items={facets?.suppliers ?? []}
+        active={filters.supplierName}
+        onToggle={(value) => toggle('supplierName', value)}
+      />
+
+      <FacetGroup
+        label={t('catalog.filter.manufacturer') || 'Manufacturer'}
+        items={facets?.manufacturers ?? []}
+        active={filters.manufacturerName}
+        onToggle={(value) => toggle('manufacturerName', value)}
+      />
+
+      <FacetGroup
+        label={t('catalog.filter.productGroup') || 'Product group'}
+        items={facets?.productGroups ?? []}
+        active={filters.productGroup}
+        onToggle={(value) => toggle('productGroup', value)}
+      />
+
       {facets?.priceRange && (
         <div className="space-y-2">
           <p className="font-medium text-xs uppercase tracking-wide text-muted-foreground">
@@ -135,6 +169,33 @@ export function CatalogFilterPanel({ filters, onFiltersChange }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FacetGroup({ label, items = [], active, onToggle }) {
+  if (!items.length) return null;
+  return (
+    <div className="space-y-2">
+      <p className="font-medium text-xs uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((f) => (
+          <Badge
+            key={f.value}
+            role="button"
+            tabIndex={0}
+            variant={active === f.value ? 'default' : 'outline'}
+            className="max-w-full cursor-pointer select-none truncate"
+            onClick={() => onToggle(f.value)}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onToggle(f.value)}
+          >
+            <span className="truncate">{f.value}</span>
+            <span className="ml-1 opacity-60">{f.count}</span>
+          </Badge>
+        ))}
+      </div>
     </div>
   );
 }

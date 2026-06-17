@@ -4,8 +4,13 @@ import { cn } from '@/lib/utils';
 import { ARTICLE_STATUS_CONFIG } from '../constants/catalog-constants';
 import { useLanguage } from '@/lib/i18n/language-context';
 
+const STATUS_LABEL_KEYS = {
+  ACTIVE: 'catalog.articles.statusActive',
+  INACTIVE: 'catalog.articles.statusInactive',
+};
+
 export function ArticleStatusBadge({ status, size = 'md' }) {
-  const { locale: language } = useLanguage();
+  const { t } = useLanguage();
   const cfg = ARTICLE_STATUS_CONFIG[status];
   if (!cfg) return null;
   return (
@@ -15,7 +20,7 @@ export function ArticleStatusBadge({ status, size = 'md' }) {
       cfg.badge,
     )}>
       <span className={cn('h-1.5 w-1.5 rounded-full', cfg.dot)} />
-      {language === 'de' ? cfg.label : cfg.labelEn}
+      {t(STATUS_LABEL_KEYS[status], cfg.labelEn)}
     </span>
   );
 }

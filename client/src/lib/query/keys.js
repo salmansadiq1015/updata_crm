@@ -25,6 +25,10 @@ export const queryKeys = {
     feed: (filters) => ['notifications', 'feed', filters],
     unreadCount: () => ['notifications', 'unreadCount'],
   },
+  documents: {
+    all: () => ['documents'],
+    list: (filters) => ['documents', 'repository', 'list', filters],
+  },
   catalog: {
     categories: () => ['catalog', 'categories'],
     categoryTree: () => ['catalog', 'categories', 'tree'],
@@ -41,6 +45,11 @@ export const queryKeys = {
     unitDetail: (code) => ['catalog', 'units', code],
     priceHistory: (id) => ['catalog', 'prices', id],
     priceBatches: () => ['catalog', 'priceBatches'],
+    connections: (filters) => ['catalog', 'connections', filters],
+    connectionDetail: (id) => ['catalog', 'connections', 'detail', id],
+    connectionLogs: (id) => ['catalog', 'connections', 'logs', id],
+    markups: (filters) => ['catalog', 'markups', filters],
+    markupDetail: (id) => ['catalog', 'markups', 'detail', id],
     ighConfig: () => ['catalog', 'igh', 'config'],
     ighImportHistory: () => ['catalog', 'igh', 'importHistory'],
     ighImportDetail: (jobId) => ['catalog', 'igh', 'import', jobId],

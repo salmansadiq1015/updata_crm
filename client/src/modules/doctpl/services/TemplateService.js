@@ -10,6 +10,7 @@ export const templateService = {
   remove:       (id)     => apiClient.delete(E.TEMPLATE_BY_ID(id)),
   listVersions: (id, p)  => apiClient.get(E.TEMPLATE_VERSIONS(id), { params: p }),
   getVersion:   (id, v)  => apiClient.get(E.TEMPLATE_VERSION(id, v)),
+  previewVersion: (id, v, d) => apiClient.post(E.TEMPLATE_VERSION_PREVIEW(id, v), d),
   compareVersions: (id, p) => apiClient.get(E.TEMPLATE_COMPARE(id), { params: p }),
   revert:       (id, v, d = {})  => apiClient.post(E.TEMPLATE_REVERT(id, v), d),
   preview:      (id, d)  => apiClient.post(E.TEMPLATE_PREVIEW(id), d),

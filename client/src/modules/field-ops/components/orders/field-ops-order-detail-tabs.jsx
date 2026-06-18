@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -16,8 +17,11 @@ import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import {
   useFieldOpsOrderDetail, useFieldOpsOrderReports,
   useFieldOpsOrderTimeEntries, useFieldOpsOrderPhotos,
+  useFieldOpsOrderHistory,
 } from '@/modules/field-ops/hooks/use-field-ops-queries';
 import { useFieldOpsOrderMutations } from '@/modules/field-ops/hooks/use-field-ops-order-mutations';
+import { useOrderTasks } from '@/modules/tasks/hooks/use-task-queries';
+import { useTaskMutations } from '@/modules/tasks/hooks/use-task-mutations';
 import { FieldOpsCreateOrderDialog } from './field-ops-create-order-dialog';
 import { FieldOpsOrderStatusBadge } from './field-ops-order-status-badge';
 import { FieldOpsReportDetailPanel } from '@/modules/field-ops/components/reports/field-ops-report-detail-panel';
@@ -36,6 +40,7 @@ import {
   MapPin, Phone, Mail, User, Calendar, FileText, Clock,
   Camera, Wrench, MessageSquare, FileCheck, ClipboardList,
   AlertCircle, CheckCircle2, XCircle, Navigation,
+  History, ListChecks, PlayCircle, PlusCircle, RotateCcw, UsersRound,
 } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -89,6 +94,8 @@ function OverviewTab({ order, de }) {
   const email    = order.appointment?.customerContactEmail || order.customerEmail;
   const address  = order.siteAddress || order.appointment?.customerNotes;
   const emp      = order.employeeId;
+  const targetType = order.assignmentTargetType || order.assignment_target_type;
+  const targetLabel = order.assignmentTargetLabel || order.assignment_target_label || order.assignmentTargetId || order.assignment_target_id;
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -119,6 +126,11 @@ function OverviewTab({ order, de }) {
         <InfoRow icon={User} label={de ? 'Techniker' : 'Technician'}>
           {emp && typeof emp === 'object' ? `${emp.firstName} ${emp.lastName}` : '—'}
         </InfoRow>
+        {targetType && targetType !== 'EMPLOYEE' && (
+          <InfoRow icon={UsersRound} label={de ? 'Team / Abteilung' : 'Team / Department'}>
+            {targetLabel || targetType}
+          </InfoRow>
+        )}
       </div>
 
       {/* Customer & site card */}
@@ -273,6 +285,207 @@ function TimeTab({ orderId, de }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+function taskStatusLabel(status, de) {
+  const labels = {
+    OPEN: de ? 'Offen' : 'Open',
+    IN_PROGRESS: de ? 'In Arbeit' : 'In Progress',
+    ON_HOLD: de ? 'Pausiert' : 'On Hold',
+    COMPLETED: de ? 'Abgeschlossen' : 'Completed',
+    CANCELLED: de ? 'Storniert' : 'Cancelled',
+  };
+  return labels[status] || status;
+}
+
+function taskStatusClass(status) {
+  if (status === 'COMPLETED') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300';
+  if (status === 'IN_PROGRESS') return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+  if (status === 'ON_HOLD') return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
+  if (status === 'CANCELLED') return 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
+  return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+}
+
+function WorkPackagesTab({ order, orderId, de }) {
+  const { data: tasks = [], isLoading } = useOrderTasks(orderId, {
+    limit: 100,
+    sortBy: 'dueDate',
+    sortOrder: 'asc',
+  });
+  const { createTask, changeStatus, completeTask, reopenTask } = useTaskMutations();
+  const [title, setTitle] = useState('');
+
+  const employee = order.employeeId || order.employee_id;
+  const assigneeId = typeof employee === 'object' ? (employee._id || employee.id) : employee;
+  const isBusy = createTask.isPending || changeStatus.isPending || completeTask.isPending || reopenTask.isPending;
+
+  const handleCreate = () => {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return;
+    createTask.mutate({
+      title: trimmedTitle,
+      orderId,
+      priority: 'MEDIUM',
+      assigneeId: assigneeId || null,
+      dueDate: order.endDatetime || order.scheduledEnd || order.scheduled_end || null,
+    }, {
+      onSuccess: () => setTitle(''),
+    });
+  };
+
+  if (isLoading) {
+    return <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 sm:flex-row">
+        <Input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              handleCreate();
+            }
+          }}
+          placeholder={de ? 'Arbeitspaket hinzufuegen...' : 'Add work package...'}
+          className="h-9"
+        />
+        <Button size="sm" onClick={handleCreate} disabled={!title.trim() || createTask.isPending} className="gap-1.5">
+          <PlusCircle className="h-4 w-4" />
+          {de ? 'Erstellen' : 'Create'}
+        </Button>
+      </div>
+
+      {!tasks.length ? (
+        <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <ListChecks className="h-7 w-7 text-muted-foreground/50" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground/70">{de ? 'Keine Arbeitspakete' : 'No work packages'}</p>
+            <p className="text-xs text-muted-foreground">{de ? 'Erstelle naechste Schritte direkt fuer diesen Auftrag.' : 'Create next steps directly for this job.'}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {tasks.map((task) => {
+            const taskId = task._id || task.id;
+            const isCompleted = task.status === 'COMPLETED';
+            return (
+              <div key={taskId} className="flex flex-col gap-3 rounded-xl border border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className={cn('truncate text-sm font-medium', isCompleted && 'text-muted-foreground line-through')}>
+                      {task.title}
+                    </p>
+                    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', taskStatusClass(task.status))}>
+                      {taskStatusLabel(task.status, de)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {task.dueDate
+                      ? `${de ? 'Faellig' : 'Due'} ${formatDate(task.dueDate)}`
+                      : (task.priority ? `${de ? 'Prioritaet' : 'Priority'} ${task.priority}` : '')}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  {task.status === 'OPEN' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => changeStatus.mutate({ id: taskId, status: 'IN_PROGRESS' })}
+                      disabled={isBusy}
+                      className="h-8 gap-1.5"
+                    >
+                      <PlayCircle className="h-3.5 w-3.5" />
+                      {de ? 'Start' : 'Start'}
+                    </Button>
+                  )}
+                  {!isCompleted ? (
+                    <Button
+                      size="sm"
+                      onClick={() => completeTask.mutate({ id: taskId, completeSubtasks: true })}
+                      disabled={isBusy}
+                      className="h-8 gap-1.5"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {de ? 'Fertig' : 'Done'}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => reopenTask.mutate(taskId)}
+                      disabled={isBusy}
+                      className="h-8 gap-1.5"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      {de ? 'Oeffnen' : 'Reopen'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function historyIcon(type) {
+  if (type?.includes('report')) return FileCheck;
+  if (type?.includes('time')) return Clock;
+  if (type?.includes('photo')) return Camera;
+  if (type?.includes('document')) return FileText;
+  if (type?.includes('assignment')) return ClipboardList;
+  return History;
+}
+
+function HistoryTab({ orderId, de }) {
+  const { data: events = [], isLoading } = useFieldOpsOrderHistory(orderId);
+
+  if (isLoading) return <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>;
+  if (!events.length) return (
+    <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+        <History className="h-7 w-7 text-muted-foreground/50" />
+      </div>
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-foreground/70">{de ? 'Noch keine Historie' : 'No history yet'}</p>
+        <p className="text-xs text-muted-foreground">{de ? 'Status, Berichte, Zeiten, Fotos und Dokumente erscheinen hier.' : 'Status, reports, time, photos, and documents appear here.'}</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="relative space-y-0 pl-6">
+      <div className="absolute bottom-3 left-[11px] top-3 w-px bg-border" />
+      {events.map((event) => {
+        const Icon = historyIcon(event.type);
+        return (
+          <div key={event.id || `${event.type}-${event.date}`} className="relative pb-5">
+            <span className="absolute -left-6 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background">
+              <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+            </span>
+            <div className="rounded-xl border border-border bg-card px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">{event.title || event.type}</p>
+                <span className="text-xs text-muted-foreground">{formatDate(event.date)}</span>
+              </div>
+              {(event.description || event.notes || event.technician_name) && (
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                  {[event.description, event.technician_name, event.notes].filter(Boolean).join(' - ')}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function FieldOpsOrderDetailTabs({ orderId }) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
@@ -299,6 +512,8 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
   const typeCfg = ORDER_TYPE_LABELS[type];
   const projectId = order.projectId || order.project_id;
   const siteId = order.siteId || order.site_id;
+  const assignmentTargetType = order.assignmentTargetType || order.assignment_target_type;
+  const assignmentTargetLabel = order.assignmentTargetLabel || order.assignment_target_label || order.assignmentTargetId || order.assignment_target_id;
 
   const handleUpdate = (data) => {
     updateOrder.mutate({ id: order.id || order._id, data }, { onSuccess: () => setEditOpen(false) });
@@ -400,6 +615,15 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
               </div>
             </div>
           )}
+          {assignmentTargetType && assignmentTargetType !== 'EMPLOYEE' && (
+            <div className="flex items-center gap-3 py-2 text-sm">
+              <UsersRound className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div>
+                <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{de ? 'Team / Abteilung' : 'Team / Department'}</p>
+                <p>{assignmentTargetLabel || assignmentTargetType}</p>
+              </div>
+            </div>
+          )}
           {(() => {
             const name = order.appointment?.customerContactName || order.customerName;
             const phone = order.appointment?.customerContactPhone || order.customerPhone;
@@ -446,8 +670,10 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
             <TabsTrigger value="overview"  className="text-xs gap-1.5"><FileText className="h-3.5 w-3.5" />{de ? 'Übersicht' : 'Overview'}</TabsTrigger>
             <TabsTrigger value="reports"   className="text-xs gap-1.5"><FileCheck className="h-3.5 w-3.5" />{de ? 'Berichte' : 'Reports'}</TabsTrigger>
             <TabsTrigger value="time"      className="text-xs gap-1.5"><Clock className="h-3.5 w-3.5" />{de ? 'Zeiten' : 'Time'}</TabsTrigger>
+            <TabsTrigger value="work"      className="text-xs gap-1.5"><ListChecks className="h-3.5 w-3.5" />{de ? 'Arbeit' : 'Work'}</TabsTrigger>
             <TabsTrigger value="photos"    className="text-xs gap-1.5"><Camera className="h-3.5 w-3.5" />{de ? 'Fotos' : 'Photos'}</TabsTrigger>
             <TabsTrigger value="installations" className="text-xs gap-1.5"><Wrench className="h-3.5 w-3.5" />{de ? 'Anlagen' : 'Installations'}</TabsTrigger>
+            <TabsTrigger value="history"   className="text-xs gap-1.5"><History className="h-3.5 w-3.5" />{de ? 'Historie' : 'History'}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -459,11 +685,17 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
           <TabsContent value="time">
             <TimeTab orderId={orderId} de={de} />
           </TabsContent>
+          <TabsContent value="work">
+            <WorkPackagesTab order={order} orderId={orderId} de={de} />
+          </TabsContent>
           <TabsContent value="photos">
             <FieldOpsPhotoGallery orderId={orderId} />
           </TabsContent>
           <TabsContent value="installations">
             <FieldOpsInstallationsTable siteId={siteId} />
+          </TabsContent>
+          <TabsContent value="history">
+            <HistoryTab orderId={orderId} de={de} />
           </TabsContent>
         </Tabs>
       </main>

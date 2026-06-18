@@ -148,16 +148,28 @@ function serializeAssignment(assignment, appointment, maps, documents, syncTimes
   const projectId = normalizeId(assignment.projectId);
   const customerId = normalizeId(assignment.customerId);
   const siteId = normalizeId(assignment.siteId);
+  const employee = assignment.employeeId && typeof assignment.employeeId === 'object'
+    ? assignment.employeeId
+    : null;
+  const project = assignment.projectId && typeof assignment.projectId === 'object'
+    ? assignment.projectId
+    : null;
   const site = maps.siteMap.get(siteId);
-  const customer = maps.customerMap.get(customerId);
+  const customer = (assignment.customerId && typeof assignment.customerId === 'object')
+    ? assignment.customerId
+    : maps.customerMap.get(customerId);
   const parsedNotes = parseAppointmentNotes(appointment?.customerNotes);
-  const siteAddress = formatAddress(site) || parsedNotes.siteAddress || '';
-  const customerName = appointment?.customerContactName || customer?.name || '';
+  const siteAddress = formatAddress(site || assignment.siteId) || parsedNotes.siteAddress || '';
+  const customerName = appointment?.customerContactName || customer?.name || project?.customerName || '';
   const customerPhone = appointment?.customerContactPhone || customer?.phone || '';
   const customerEmail = appointment?.customerContactEmail || customer?.email || '';
   const scheduledStart = toIso(assignment.startDatetime);
   const scheduledEnd = toIso(assignment.endDatetime);
   const updatedAt = toIso(assignment.updatedAt);
+  const employeeName = employee
+    ? `${employee.firstName || ''} ${employee.lastName || ''}`.trim()
+    : '';
+  const assignmentTargetType = assignment.assignmentTargetType || (employeeId ? 'EMPLOYEE' : 'EMPLOYEE');
 
   return {
     id: assignmentId,
@@ -178,15 +190,44 @@ function serializeAssignment(assignment, appointment, maps, documents, syncTimes
     scheduledStart,
     scheduledEnd,
     employee_id: employeeId,
+    employeeId: employee ? {
+      _id: employeeId,
+      id: employeeId,
+      firstName: employee.firstName || '',
+      lastName: employee.lastName || '',
+      email: employee.email || '',
+      fullName: employeeName,
+    } : employeeId,
+    employee_name: employeeName,
+    employeeName,
     project_id: projectId,
+    projectId,
+    project_name: project?.name || '',
+    projectName: project?.name || '',
+    project_number: project?.projectNumber || '',
+    projectNumber: project?.projectNumber || '',
     customer_id: customerId,
+    customerId,
     site_id: siteId,
+    siteId,
     customer_name: customerName,
+    customerName,
     customer_phone: customerPhone,
+    customerPhone,
     customer_email: customerEmail,
+    customerEmail,
     site_address: siteAddress,
+    siteAddress,
     access_instructions: parsedNotes.accessInstructions,
+    accessInstructions: parsedNotes.accessInstructions,
     parking_info: parsedNotes.parkingInfo,
+    parkingInfo: parsedNotes.parkingInfo,
+    assignment_target_type: assignmentTargetType,
+    assignmentTargetType,
+    assignment_target_id: assignment.assignmentTargetId || null,
+    assignmentTargetId: assignment.assignmentTargetId || null,
+    assignment_target_label: assignment.assignmentTargetLabel || employeeName || null,
+    assignmentTargetLabel: assignment.assignmentTargetLabel || employeeName || null,
     is_customer_appointment: Boolean(assignment.isCustomerAppointment),
     appointment: appointment ? {
       customer_contact_name: appointment.customerContactName || '',

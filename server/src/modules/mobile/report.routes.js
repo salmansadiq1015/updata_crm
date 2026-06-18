@@ -1,29 +1,21 @@
 import { Router } from 'express';
-import Joi from 'joi';
 import reportController from './report.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
-import { objectId } from '../../shared/validation/commonSchemas.js';
 import {
   createReportSchema,
+  generateReportSchema,
   updateReportSchema,
   reportIdParamSchema,
   submitReportSchema,
+  rejectReportSchema,
+  markInvoicedSchema,
+  createInvoiceFromReportSchema,
+  reportHistorySchema,
+  listReportsQuerySchema,
+  reportExportQuerySchema,
   bulkReportIdsSchema,
 } from './report.validation.js';
-
-const listReportsQuerySchema = {
-  query: Joi.object({
-    status: Joi.string().valid('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED'),
-    orderId: objectId,
-    projectId: objectId,
-    technicianId: objectId,
-    dateFrom: Joi.date().iso(),
-    dateTo: Joi.date().iso(),
-    search: Joi.string().trim().max(200).allow(''),
-    includeArchived: Joi.boolean(),
-  }),
-};
 
 // Nested router for routes under /orders/:id
 const reportOrderRouter = Router({ mergeParams: true });
@@ -33,6 +25,14 @@ reportOrderRouter.get(
   authenticate,
   requirePermission('mobile:read'),
   (req, res, next) => reportController.listByOrder(req, res, next),
+);
+
+reportOrderRouter.post(
+  '/reports/generate',
+  authenticate,
+  requirePermission('mobile:write'),
+  validate(generateReportSchema),
+  (req, res, next) => reportController.generate(req, res, next),
 );
 
 reportOrderRouter.post(
@@ -52,6 +52,22 @@ reportRouter.get(
   requirePermission('mobile:read'),
   validate(listReportsQuerySchema),
   (req, res, next) => reportController.list(req, res, next),
+);
+
+reportRouter.get(
+  '/summary',
+  authenticate,
+  requirePermission('mobile:read'),
+  validate(listReportsQuerySchema),
+  (req, res, next) => reportController.summary(req, res, next),
+);
+
+reportRouter.get(
+  '/export',
+  authenticate,
+  requirePermission('mobile:read'),
+  validate(reportExportQuerySchema),
+  (req, res, next) => reportController.exportCsv(req, res, next),
 );
 
 // Bulk operations (before /:reportId to avoid param conflict)
@@ -117,6 +133,46 @@ reportRouter.post(
   requirePermission('mobile:write'),
   validate(submitReportSchema),
   (req, res, next) => reportController.submit(req, res, next),
+);
+
+reportRouter.post(
+  '/:reportId/approve',
+  authenticate,
+  requirePermission('mobile:write'),
+  validate(submitReportSchema),
+  (req, res, next) => reportController.approve(req, res, next),
+);
+
+reportRouter.post(
+  '/:reportId/reject',
+  authenticate,
+  requirePermission('mobile:write'),
+  validate(rejectReportSchema),
+  (req, res, next) => reportController.reject(req, res, next),
+);
+
+reportRouter.post(
+  '/:reportId/mark-invoiced',
+  authenticate,
+  requirePermission('invoicing:write'),
+  validate(markInvoicedSchema),
+  (req, res, next) => reportController.markInvoiced(req, res, next),
+);
+
+reportRouter.post(
+  '/:reportId/create-invoice',
+  authenticate,
+  requirePermission('invoicing:write'),
+  validate(createInvoiceFromReportSchema),
+  (req, res, next) => reportController.createInvoice(req, res, next),
+);
+
+reportRouter.get(
+  '/:reportId/history',
+  authenticate,
+  requirePermission('mobile:read'),
+  validate(reportHistorySchema),
+  (req, res, next) => reportController.history(req, res, next),
 );
 
 export { reportOrderRouter, reportRouter };

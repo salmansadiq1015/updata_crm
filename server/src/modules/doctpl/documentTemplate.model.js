@@ -14,6 +14,8 @@ export const TEMPLATE_TYPES = [
   'project_completion_certificate',
 ];
 
+export const TEMPLATE_TYPE_PATTERN = /^[a-z][a-z0-9_-]{1,79}$/;
+
 const sectionSchema = new mongoose.Schema(
   {
     id: { type: String, required: true },
@@ -63,8 +65,11 @@ const documentTemplateSchema = new mongoose.Schema(
   {
     templateType: {
       type: String,
-      enum: TEMPLATE_TYPES,
       required: true,
+      trim: true,
+      lowercase: true,
+      maxlength: 80,
+      match: [TEMPLATE_TYPE_PATTERN, 'Template type must be a lowercase slug'],
       index: true,
     },
     name: {

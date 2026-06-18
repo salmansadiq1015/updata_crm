@@ -415,18 +415,20 @@ class ScheduledNotificationService {
   }
 
   _cronFieldMatches(field, value, min, max) {
+    const isWithinBounds = (candidate) => Number.isInteger(candidate) && candidate >= min && candidate <= max;
+
     if (field === '*') return true;
 
     // Handle step values: */5
     if (field.startsWith('*/')) {
       const step = parseInt(field.substring(2), 10);
-      return value % step === 0;
+      return Number.isInteger(step) && step > 0 && value >= min && value <= max && value % step === 0;
     }
 
     // Handle ranges: 1-5
     if (field.includes('-') && !field.includes(',')) {
       const [start, end] = field.split('-').map(Number);
-      return value >= start && value <= end;
+      return isWithinBounds(start) && isWithinBounds(end) && start <= end && value >= start && value <= end;
     }
 
     // Handle lists: 1,3,5
@@ -435,14 +437,16 @@ class ScheduledNotificationService {
       return values.some((v) => {
         if (v.includes('-')) {
           const [start, end] = v.split('-').map(Number);
-          return value >= start && value <= end;
+          return isWithinBounds(start) && isWithinBounds(end) && start <= end && value >= start && value <= end;
         }
-        return parseInt(v, 10) === value;
+        const exact = parseInt(v, 10);
+        return isWithinBounds(exact) && exact === value;
       });
     }
 
     // Exact match
-    return parseInt(field, 10) === value;
+    const exact = parseInt(field, 10);
+    return isWithinBounds(exact) && exact === value;
   }
 }
 

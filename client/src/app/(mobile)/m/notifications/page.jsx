@@ -1,17 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Bell,
-  BellOff,
-  ClipboardList,
-  MessageSquare,
-  AlertTriangle,
-  Calendar,
-  Check,
   CheckCheck,
-  Trash2,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { MobileHeader } from '@/modules/mobile/components/mobile-header';
@@ -20,9 +12,17 @@ import { useNotifications, useNotificationMutations } from '@/modules/mobile/hoo
 import { NOTIFICATION_TYPE } from '@/modules/mobile/constants/mobile-constants';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { normalizeNotificationItem } from '@/modules/notifications/utils/notification-feed-utils';
+import {
+  getNotificationCategoryColor,
+  getNotificationCategoryLabel,
+  renderNotificationCategoryIcon,
+} from '@/modules/notifications/constants/notification-ui-config';
 import toast from 'react-hot-toast';
 
 function getNotificationLink(notification) {
+  if (notification.deepLink) return notification.deepLink;
+
   const orderId = notification.order_id || notification.reference_id;
   const projectId = notification.project_id;
   const type = notification.notification_type || notification.type;
@@ -43,58 +43,60 @@ function getNotificationLink(notification) {
 
 const TYPE_CONFIG = {
   [NOTIFICATION_TYPE.NEW_ASSIGNMENT]: {
-    icon: ClipboardList,
-    color: 'text-blue-600',
-    bg: 'bg-blue-500/10',
-    labelDe: 'Neuer Auftrag',
-    labelEn: 'New Assignment',
+    labelKey: 'notifications.type.new_assignment',
+    category: 'SCHEDULING',
   },
   [NOTIFICATION_TYPE.ORDER_CHANGED]: {
-    icon: ClipboardList,
-    color: 'text-amber-600',
-    bg: 'bg-amber-500/10',
-    labelDe: 'Auftrag geändert',
-    labelEn: 'Order Changed',
+    labelKey: 'notifications.type.order_status_changed',
+    category: 'ORDER',
   },
   [NOTIFICATION_TYPE.ORDER_CANCELLED]: {
-    icon: AlertTriangle,
-    color: 'text-red-600',
-    bg: 'bg-red-500/10',
-    labelDe: 'Auftrag storniert',
-    labelEn: 'Order Cancelled',
+    labelKey: 'notifications.type.assignment_cancelled',
+    category: 'SCHEDULING',
   },
   [NOTIFICATION_TYPE.CHAT_MESSAGE]: {
-    icon: MessageSquare,
-    color: 'text-green-600',
-    bg: 'bg-green-500/10',
-    labelDe: 'Neue Nachricht',
-    labelEn: 'New Message',
+    labelKey: 'notifications.type.chat_message',
+    category: 'CHAT',
   },
   [NOTIFICATION_TYPE.DAILY_REMINDER]: {
-    icon: Calendar,
-    color: 'text-purple-600',
-    bg: 'bg-purple-500/10',
-    labelDe: 'Tageserinnerung',
-    labelEn: 'Daily Reminder',
+    labelKey: 'notifications.type.task_reminder',
+    category: 'TASK',
   },
   [NOTIFICATION_TYPE.ESCALATION]: {
-    icon: AlertTriangle,
-    color: 'text-red-600',
-    bg: 'bg-red-500/10',
-    labelDe: 'Eskalation',
-    labelEn: 'Escalation',
+    labelKey: 'notifications.type.maintenance_escalated',
+    category: 'MAINTENANCE',
   },
 };
 
+function normalizeMobileNotification(notification) {
+  const normalized = normalizeNotificationItem(notification);
+  const notificationType = notification.notificationType || notification.notification_type || notification.type || null;
+  const typeConfig = TYPE_CONFIG[notificationType];
+
+  return {
+    ...notification,
+    ...normalized,
+    notificationType,
+    category: notification.category || typeConfig?.category || normalized.category,
+    is_read: normalized.isRead,
+    received_at: notification.received_at || notification.created_at || normalized.sentAt,
+  };
+}
+
 export default function NotificationsPage() {
-  const { t, locale } = useLanguage();
-  const lang = locale === 'en' ? 'en' : 'de';
+  const { t } = useLanguage();
   const [filter, setFilter] = useState('all');
 
   const { data, isLoading, isError, refetch } = useNotifications();
   const { markRead, markAllRead: markAllReadMutation } = useNotificationMutations();
 
-  const notifications = Array.isArray(data) ? data : data?.items || data?.notifications || [];
+  const notifications = useMemo(
+    () => {
+      const rawNotifications = Array.isArray(data) ? data : data?.items || data?.notifications || [];
+      return rawNotifications.map(normalizeMobileNotification);
+    },
+    [data],
+  );
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const filtered =
@@ -104,12 +106,12 @@ export default function NotificationsPage() {
 
   const markAllRead = async () => {
     await markAllReadMutation.mutateAsync();
-    toast.success(lang === 'de' ? 'Alle als gelesen markiert' : 'All marked as read');
+    toast.success(t('notifications.toast.allRead', 'All marked as read'));
   };
 
   const handleSnooze = (notificationId) => {
     markRead.mutate(notificationId);
-    toast.success(lang === 'de' ? 'Erinnerung in 1 Stunde' : 'Reminder in 1 hour');
+    toast.success(t('mobile.notifications.snoozed', 'Reminder in 1 hour'));
   };
 
   return (
@@ -120,7 +122,7 @@ export default function NotificationsPage() {
           unreadCount > 0 && (
             <Button variant="ghost" size="sm" onClick={markAllRead} className="text-xs h-8">
               <CheckCheck className="h-3.5 w-3.5 mr-1" />
-              {lang === 'de' ? 'Alle lesen' : 'Read all'}
+              {t('mobile.notifications.readAll', 'Read all')}
             </Button>
           )
         }
@@ -137,7 +139,7 @@ export default function NotificationsPage() {
               : 'text-muted-foreground'
           )}
         >
-          {lang === 'de' ? 'Alle' : 'All'} ({notifications.length})
+          {t('mobile.notifications.all', 'All')} ({notifications.length})
         </button>
         <button
           onClick={() => setFilter('unread')}
@@ -148,7 +150,7 @@ export default function NotificationsPage() {
               : 'text-muted-foreground'
           )}
         >
-          {lang === 'de' ? 'Ungelesen' : 'Unread'}
+          {t('mobile.notifications.unread', 'Unread')}
           {unreadCount > 0 && (
             <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
               {unreadCount}
@@ -165,14 +167,14 @@ export default function NotificationsPage() {
           <div className="px-4 py-8">
             <EmptyState
               variant="error"
-              title={lang === 'de' ? 'Laden fehlgeschlagen' : 'Failed to load'}
-              description={lang === 'de' ? 'Benachrichtigungen konnten nicht geladen werden.' : 'Could not load notifications.'}
+              title={t('notifications.error.title', 'Notifications could not be loaded')}
+              description={t('notifications.error.description', 'Please try again.')}
               action={
                 <button
                   onClick={() => refetch()}
                   className="mt-3 text-sm text-primary underline underline-offset-2"
                 >
-                  {lang === 'de' ? 'Erneut versuchen' : 'Try again'}
+                  {t('notifications.error.retry', 'Retry')}
                 </button>
               }
             />
@@ -184,8 +186,8 @@ export default function NotificationsPage() {
               title={t('mobile.notifications.empty', 'Keine Benachrichtigungen')}
               description={
                 filter === 'unread'
-                  ? (lang === 'de' ? 'Alle Benachrichtigungen gelesen.' : 'All notifications read.')
-                  : (lang === 'de' ? 'Sie haben noch keine Benachrichtigungen erhalten.' : 'You have no notifications yet.')
+                  ? t('mobile.notifications.emptyUnread', 'All notifications read.')
+                  : t('mobile.notifications.emptyAll', 'You have no notifications yet.')
               }
             />
           </div>
@@ -195,7 +197,6 @@ export default function NotificationsPage() {
               <NotificationItem
                 key={notification.id}
                 notification={notification}
-                lang={lang}
                 onMarkRead={() => markRead.mutate(notification.id)}
                 onSnooze={handleSnooze}
               />
@@ -207,18 +208,20 @@ export default function NotificationsPage() {
   );
 }
 
-function NotificationItem({ notification, lang, onMarkRead, onSnooze }) {
+function NotificationItem({ notification, onMarkRead, onSnooze }) {
   const router = useRouter();
-  const type = notification.notification_type || notification.type;
-  const config = TYPE_CONFIG[type] || TYPE_CONFIG[NOTIFICATION_TYPE.NEW_ASSIGNMENT];
-  const Icon = config.icon;
+  const { t } = useLanguage();
+  const type = notification.notificationType || notification.notification_type || notification.type;
+  const config = TYPE_CONFIG[type] || null;
+  const category = notification.category || config?.category || 'SYSTEM';
   const isRead = notification.is_read;
   const receivedAt = notification.received_at || notification.created_at;
+  const [renderedAt] = useState(() => Date.now());
 
   const timeAgo = (date) => {
-    const diff = Date.now() - new Date(date).getTime();
+    const diff = renderedAt - new Date(date).getTime();
     const min = Math.floor(diff / 60000);
-    if (min < 1) return lang === 'de' ? 'gerade eben' : 'just now';
+    if (min < 1) return t('notifications.time.now', 'Just now');
     if (min < 60) return `${min}m`;
     const hrs = Math.floor(min / 60);
     if (hrs < 24) return `${hrs}h`;
@@ -239,13 +242,13 @@ function NotificationItem({ notification, lang, onMarkRead, onSnooze }) {
         'active:bg-muted/50'
       )}
     >
-      <div className={cn('flex items-center justify-center h-9 w-9 rounded-full shrink-0', config.bg)}>
-        <Icon className={cn('h-4 w-4', config.color)} />
+      <div className={cn('flex items-center justify-center h-9 w-9 rounded-full shrink-0', getNotificationCategoryColor(category))}>
+        {renderNotificationCategoryIcon(category)}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className={cn('text-xs font-medium', config.color)}>
-            {lang === 'de' ? config.labelDe : config.labelEn}
+          <span className={cn('text-xs font-medium', getNotificationCategoryColor(category).split(' ')[0])}>
+            {config ? t(config.labelKey, type) : getNotificationCategoryLabel(category, t)}
           </span>
           {receivedAt && (
             <span className="text-[10px] text-muted-foreground">{timeAgo(receivedAt)}</span>
@@ -269,7 +272,7 @@ function NotificationItem({ notification, lang, onMarkRead, onSnooze }) {
           }}
           className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded-md shrink-0"
         >
-          1h snooze
+          {t('mobile.notifications.snoozeOneHour', 'Snooze 1h')}
         </button>
       )}
     </button>

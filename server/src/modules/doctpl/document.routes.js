@@ -76,6 +76,15 @@ router.get(
   (req, res, next) => documentController.download(req, res, next),
 );
 
+// Preview document in-app
+router.get(
+  '/:id/preview',
+  authenticate,
+  requirePermission('documents:read'),
+  validate(documentIdParamSchema),
+  (req, res, next) => documentController.preview(req, res, next),
+);
+
 // Delete document
 router.delete(
   '/:id',

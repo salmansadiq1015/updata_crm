@@ -12,8 +12,6 @@ const ALLOWED_FILTERS = {
   sourceRecordId: 'exact',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'sentAt', '_id'];
-
 class EmailRecordRepository {
   async create(data) {
     const record = new EmailRecord(data);

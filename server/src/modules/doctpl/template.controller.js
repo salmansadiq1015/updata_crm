@@ -91,7 +91,24 @@ class TemplateController {
 
   async preview(req, res, next) {
     try {
-      const result = await templateService.preview(req.params.id, req.body.sampleData, req.body.language);
+      const result = await templateService.preview(
+        req.params.id,
+        req.body.sampleData,
+        req.body.language,
+        req.body.draftTemplate,
+      );
+      return res.success({ data: result });
+    } catch (err) { next(err); }
+  }
+
+  async previewVersion(req, res, next) {
+    try {
+      const result = await templateService.previewVersion(
+        req.params.id,
+        Number(req.params.version),
+        req.body.sampleData,
+        req.body.language,
+      );
       return res.success({ data: result });
     } catch (err) { next(err); }
   }

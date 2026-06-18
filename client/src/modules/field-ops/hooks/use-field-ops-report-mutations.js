@@ -18,6 +18,7 @@ export function useFieldOpsReportMutations({
   onUnarchive,
   onBulkArchive,
   onUpdate,
+  onCreateInvoice,
 } = {}) {
   const queryClient = useQueryClient();
   const { t, locale: language } = useLanguage();
@@ -43,7 +44,7 @@ export function useFieldOpsReportMutations({
 
   const approve = useMutation({
     mutationFn: ({ reportId }) =>
-      reportService.updateReport(reportId, { status: 'APPROVED' }),
+      reportService.approveReport(reportId),
     onSuccess: (res, { orderId }) => {
       invalidate(orderId);
       showSuccess(de ? 'Bericht genehmigt.' : 'Report approved.');
@@ -54,7 +55,7 @@ export function useFieldOpsReportMutations({
 
   const reject = useMutation({
     mutationFn: ({ reportId, rejectionNote }) =>
-      reportService.updateReport(reportId, { status: 'REJECTED', rejectionNote }),
+      reportService.rejectReport(reportId, rejectionNote),
     onSuccess: (res, { orderId }) => {
       invalidate(orderId);
       showSuccess(de ? 'Bericht abgelehnt.' : 'Report rejected.');
@@ -125,6 +126,25 @@ export function useFieldOpsReportMutations({
     onError: (err) => showError(err.message),
   });
 
+  const createInvoice = useMutation({
+    mutationFn: ({ reportId, data }) => reportService.createInvoiceFromReport(reportId, data),
+    onSuccess: (res, { orderId }) => {
+      invalidate(orderId);
+      showSuccess(de ? 'Rechnung aus Bericht erstellt.' : 'Invoice created from report.');
+      onCreateInvoice?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const exportReports = useMutation({
+    mutationFn: ({ filters, type }) => reportService.exportReports({ ...filters, type }),
+    onSuccess: (blob, { type }) => {
+      downloadBlob(blob, `work-reports-${type || 'reports'}.csv`);
+      showSuccess(de ? 'Export erstellt.' : 'Export created.');
+    },
+    onError: (err) => showError(err.message),
+  });
+
   return {
     createReport,
     approve,
@@ -135,5 +155,19 @@ export function useFieldOpsReportMutations({
     archiveReport,
     unarchiveReport,
     bulkArchive,
+    createInvoice,
+    exportReports,
   };
+}
+
+function downloadBlob(blob, filename) {
+  if (typeof window === 'undefined') return;
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }

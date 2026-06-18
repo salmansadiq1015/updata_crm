@@ -14,8 +14,6 @@ const ALLOWED_FILTERS = {
   sourceProjectId: 'objectId',
 };
 
-const ALLOWED_SORT_FIELDS = ['generatedAt', '_id'];
-
 class GeneratedDocumentRepository {
   async create(data) {
     const doc = new GeneratedDocument(data);

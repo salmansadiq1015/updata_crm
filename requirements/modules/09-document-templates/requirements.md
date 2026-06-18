@@ -1,7 +1,7 @@
 # Module 09: Document Templates & Layout System -- Detailed Requirements
 
 ---
-
+make audit in this module & verify everything completed in this module if not then write list of features that are missing & start development & complete 100% without missing anything          ,       verify again if anything missing related to this module complete 100% & also verify translation 100%
 ## DOC-001: Quotation Template Creation
 
 | Field             | Value                                                                                          |

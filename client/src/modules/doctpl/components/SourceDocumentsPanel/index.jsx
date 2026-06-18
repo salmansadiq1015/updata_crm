@@ -8,7 +8,7 @@ import { DocumentPreviewDrawer } from '../DocumentPreviewDrawer';
 import { EmailStatusBadge } from '../EmailStatusBadge';
 import { useDocumentsBySource } from '../../hooks/useDocumentQueries';
 import { useGenerateDocument } from '../../hooks/useDocumentMutations';
-import { useDownloadDocument } from '../../hooks/useDocumentMutations';
+import { useDownloadDocument, usePreviewDocument } from '../../hooks/useDocumentMutations';
 import { useComposeEmail } from '../../hooks/useEmailMutations';
 import { useEmails } from '../../hooks/useEmailQueries';
 import { formatSwissDate } from '../../utils/localization';
@@ -29,6 +29,7 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
   const generate = useGenerateDocument();
   const compose  = useComposeEmail();
   const download = useDownloadDocument();
+  const previewDocument = usePreviewDocument();
 
   const handleGenerate = async () => {
     await generate.mutateAsync({ templateType, sourceModule, sourceRecordId, data: documentData, language });
@@ -54,8 +55,8 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
   };
 
   const handlePreview = async (doc) => {
-    const r = await download.mutateAsync(doc._id);
-    setPreview({ url: r?.data?.downloadUrl, fileName: doc.fileName });
+    const r = await previewDocument.mutateAsync(doc._id);
+    setPreview({ url: r?.data?.previewUrl || r?.data?.downloadUrl, fileName: r?.data?.fileName || doc.fileName });
   };
 
   const handleDownload = async (doc) => {

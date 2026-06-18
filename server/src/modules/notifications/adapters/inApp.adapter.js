@@ -9,6 +9,7 @@ class InAppAdapter {
         userId: delivery.recipientId,
         notificationId: delivery.notificationId,
         category: content.category || 'SYSTEM',
+        priority: content.priority || 'NORMAL',
         icon: content.icon || null,
         title: content.subject || content.title || 'Notification',
         body: content.body || '',
@@ -24,9 +25,12 @@ class InAppAdapter {
           global.io.to(userId).emit('newNotification', {
             id: inApp._id,
             category: inApp.category,
+            priority: inApp.priority,
             title: inApp.title,
             body: inApp.body,
             deepLink: inApp.deepLink,
+            relatedEntityType: inApp.relatedEntityType,
+            relatedEntityId: inApp.relatedEntityId,
             sentAt: inApp.sentAt,
           });
 

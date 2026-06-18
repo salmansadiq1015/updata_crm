@@ -8,7 +8,9 @@ const STATUS_OPTIONS = [
   { key: 'today', label: { de: 'Heute', en: 'Today' } },
   { key: 'all', label: { de: 'Alle', en: 'All' } },
   { key: ORDER_STATUS.PLANNED, label: { de: 'Geplant', en: 'Planned' } },
+  { key: ORDER_STATUS.CONFIRMED, label: { de: 'Bestaetigt', en: 'Confirmed' } },
   { key: ORDER_STATUS.IN_PROGRESS, label: { de: 'In Arbeit', en: 'In Progress' } },
+  { key: ORDER_STATUS.PAUSED, label: { de: 'Pausiert', en: 'Paused' } },
   { key: ORDER_STATUS.COMPLETED, label: { de: 'Erledigt', en: 'Done' } },
 ];
 

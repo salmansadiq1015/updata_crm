@@ -8,14 +8,18 @@ import { ORDER_STATUS, ORDER_PRIORITY, ORDER_TYPE } from '../constants/mobile-co
 
 const STATUS_STYLES = {
   [ORDER_STATUS.PLANNED]: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  [ORDER_STATUS.CONFIRMED]: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
   [ORDER_STATUS.IN_PROGRESS]: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  [ORDER_STATUS.PAUSED]: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   [ORDER_STATUS.COMPLETED]: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   [ORDER_STATUS.CANCELLED]: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
 };
 
 const STATUS_LABELS = {
   [ORDER_STATUS.PLANNED]: { de: 'Geplant', en: 'Planned' },
+  [ORDER_STATUS.CONFIRMED]: { de: 'Bestaetigt', en: 'Confirmed' },
   [ORDER_STATUS.IN_PROGRESS]: { de: 'In Arbeit', en: 'In Progress' },
+  [ORDER_STATUS.PAUSED]: { de: 'Pausiert', en: 'Paused' },
   [ORDER_STATUS.COMPLETED]: { de: 'Abgeschlossen', en: 'Completed' },
   [ORDER_STATUS.CANCELLED]: { de: 'Storniert', en: 'Cancelled' },
 };

@@ -2,7 +2,6 @@ import emailBodyTemplateRepository from './emailBodyTemplate.repository.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import auditService from '../auth/audit.service.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
-import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
 const LIST_TTL = { l1Ttl: 300, l2Ttl: 900 };

@@ -8,7 +8,7 @@ import {
 
 const router = Router();
 
-router.get('/', authenticate, requirePermission('templates:read'), (req, res, next) => emailTemplateController.list(req, res, next));
+router.get('/', authenticate, requirePermission('templates:read'), validate(listEmailTemplatesSchema), (req, res, next) => emailTemplateController.list(req, res, next));
 router.post('/', authenticate, requirePermission('templates:write'), validate(createEmailTemplateSchema), (req, res, next) => emailTemplateController.create(req, res, next));
 router.get('/:id', authenticate, requirePermission('templates:read'), validate(emailTemplateIdParamSchema), (req, res, next) => emailTemplateController.getById(req, res, next));
 router.put('/:id', authenticate, requirePermission('templates:write'), validate(updateEmailTemplateSchema), (req, res, next) => emailTemplateController.update(req, res, next));

@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ChevronLeft,
   ChevronRight,
   Copy,
   FileText,
+  Plus,
   RefreshCw,
   Search,
   Settings2,
@@ -32,23 +34,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { showError, showSuccess } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { PageHeader } from '@/shared/components/page-header';
+import { CreateTemplateDialog } from '@/modules/doctpl/components/CreateTemplateDialog';
 import { useTemplates } from '@/modules/doctpl/hooks/useTemplateQueries';
 import {
+  useCreateTemplate,
   useDeleteTemplate,
   useDuplicateTemplate,
   useUpdateTemplate,
 } from '@/modules/doctpl/hooks/useTemplateMutations';
+import { BUILT_IN_TEMPLATE_TYPES } from '@/modules/doctpl/utils/template-defaults';
 
 const TEMPLATE_TYPES = [
   ['all', 'doctpl.templates.allTypes'],
-  ['quotation', 'doctpl.type.quotation'],
-  ['order_confirmation', 'doctpl.type.order_confirmation'],
-  ['invoice_standard', 'doctpl.type.invoice_standard'],
-  ['invoice_advance', 'doctpl.type.invoice_advance'],
-  ['invoice_final', 'doctpl.type.invoice_final'],
-  ['cover_letter', 'doctpl.type.cover_letter'],
-  ['service_report', 'doctpl.type.service_report'],
-  ['inspection_certificate', 'doctpl.type.inspection_certificate'],
+  ...BUILT_IN_TEMPLATE_TYPES,
 ];
 
 const STATUS_OPTIONS = [
@@ -63,6 +61,7 @@ const SORT_OPTIONS = [
   ['name:asc', 'doctpl.templates.nameAsc'],
   ['templateType:asc', 'doctpl.templates.typeAsc'],
 ];
+const EMPTY_TEMPLATES = [];
 
 export function buildTemplateFilters({
   cursor,
@@ -86,12 +85,14 @@ export function buildTemplateFilters({
 
 export default function AdminTemplatesPage() {
   const { t, locale } = useLanguage();
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortValue, setSortValue] = useState('createdAt:desc');
   const [cursorStack, setCursorStack] = useState([]);
   const [templateToDelete, setTemplateToDelete] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const activeCursor = cursorStack[cursorStack.length - 1] || undefined;
 
   const filters = useMemo(() => buildTemplateFilters({
@@ -103,13 +104,23 @@ export default function AdminTemplatesPage() {
   }), [activeCursor, search, typeFilter, statusFilter, sortValue]);
 
   const { data, isLoading, isFetching, isError, refetch } = useTemplates(filters);
+  const create = useCreateTemplate();
   const update = useUpdateTemplate();
   const duplicate = useDuplicateTemplate();
   const remove = useDeleteTemplate();
-  const templates = data?.items ?? [];
+  const templates = data?.items ?? EMPTY_TEMPLATES;
   const pagination = data?.pagination ?? {};
   const dateLocale = locale === 'de' ? 'de-CH' : 'en-CH';
-  const busy = update.isPending || duplicate.isPending || remove.isPending;
+  const busy = create.isPending || update.isPending || duplicate.isPending || remove.isPending;
+  const templateTypeOptions = useMemo(() => {
+    const known = new Map(TEMPLATE_TYPES);
+    for (const template of templates) {
+      if (template?.templateType && !known.has(template.templateType)) {
+        known.set(template.templateType, `doctpl.type.${template.templateType}`);
+      }
+    }
+    return [...known.entries()];
+  }, [templates]);
 
   const resetPaging = () => {
     setCursorStack([]);
@@ -141,6 +152,19 @@ export default function AdminTemplatesPage() {
     }
   };
 
+  const createTemplate = async (payload) => {
+    try {
+      const response = await create.mutateAsync(payload);
+      const created = response?.data || response;
+      showSuccess(t('doctpl.templates.created', 'Template created'));
+      setCreateOpen(false);
+      resetPaging();
+      if (created?._id) router.push(`/admin/templates/${created._id}`);
+    } catch (error) {
+      showError(error);
+    }
+  };
+
   const deleteTemplate = async () => {
     if (!templateToDelete?._id) return;
     try {
@@ -160,12 +184,18 @@ export default function AdminTemplatesPage() {
           title={t('doctpl.templates.title')}
           description={t('doctpl.templates.description')}
         />
-        <Link href="/admin/templates/ci">
-          <Button variant="outline" className="gap-2">
-            <Settings2 className="h-4 w-4" />
-            {t('doctpl.templates.ciConfiguration')}
+        <div className="flex shrink-0 gap-2">
+          <Button className="gap-2" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            {t('doctpl.templates.create', 'Create template')}
           </Button>
-        </Link>
+          <Link href="/admin/templates/ci">
+            <Button variant="outline" className="gap-2">
+              <Settings2 className="h-4 w-4" />
+              {t('doctpl.templates.ciConfiguration')}
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm xl:flex-row xl:items-center xl:justify-between">
@@ -188,7 +218,7 @@ export default function AdminTemplatesPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {TEMPLATE_TYPES.map(([value, key]) => (
+              {templateTypeOptions.map(([value, key]) => (
                 <SelectItem key={value} value={value}>{t(key, value)}</SelectItem>
               ))}
             </SelectContent>
@@ -355,6 +385,15 @@ export default function AdminTemplatesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {createOpen && (
+        <CreateTemplateDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          onSubmit={createTemplate}
+          isSubmitting={create.isPending}
+        />
+      )}
     </div>
   );
 }

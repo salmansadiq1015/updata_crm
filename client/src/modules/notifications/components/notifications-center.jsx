@@ -1,327 +1,397 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useNotificationFeed, useNotificationMutations } from '../hooks/use-notification-feed';
+import {
+  AlertTriangle,
+  ArrowDown,
+  Bell,
+  CheckCheck,
+  ExternalLink,
+  Filter,
+  Inbox,
+  RefreshCw,
+  Search,
+  Settings,
+  Trash2,
+} from 'lucide-react';
+import { useInfiniteNotificationFeed, useNotificationMutations } from '../hooks/use-notification-feed';
+import { NotificationSettingsDialog } from './notification-settings-dialog';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { EMPTY_NOTIFICATION_SUMMARY } from '../utils/notification-feed-utils';
 import {
-  Bell, CheckCheck, Filter, Search, Trash2, RefreshCw,
-  CheckSquare, Package, MessageSquare, Settings,
-  DollarSign, Wrench, FileText, Users, FolderKanban, CalendarClock,
-} from 'lucide-react';
+  NOTIFICATION_CATEGORIES,
+  NOTIFICATION_PRIORITY_STYLES,
+  getNotificationCategoryColor,
+  getNotificationCategoryLabel,
+  getNotificationPriorityLabel,
+  renderNotificationCategoryIcon,
+} from '../constants/notification-ui-config';
 
-// ── Category config ───────────────────────────────────────────────────────────
+const EMPTY_NOTIFICATIONS = Object.freeze([]);
 
-const CATEGORIES = ['ALL', 'TASK', 'ORDER', 'CHAT', 'SYSTEM', 'FINANCE', 'MAINTENANCE', 'DOCUMENT', 'CRM', 'PROJECT', 'SCHEDULING'];
-
-const CAT_ICON = {
-  TASK: CheckSquare, ORDER: Package, CHAT: MessageSquare, SYSTEM: Settings,
-  FINANCE: DollarSign, MAINTENANCE: Wrench, DOCUMENT: FileText,
-  CRM: Users, PROJECT: FolderKanban, SCHEDULING: CalendarClock,
-};
-
-const CAT_COLOR = {
-  TASK:        'text-emerald-600 bg-emerald-500/10',
-  ORDER:       'text-blue-600    bg-blue-500/10',
-  CHAT:        'text-violet-600  bg-violet-500/10',
-  SYSTEM:      'text-slate-500   bg-slate-500/10',
-  FINANCE:     'text-amber-600   bg-amber-500/10',
-  MAINTENANCE: 'text-orange-600  bg-orange-500/10',
-  DOCUMENT:    'text-sky-600     bg-sky-500/10',
-  CRM:         'text-pink-600    bg-pink-500/10',
-  PROJECT:     'text-indigo-600  bg-indigo-500/10',
-  SCHEDULING:  'text-teal-600    bg-teal-500/10',
-};
-
-const CAT_LABEL = {
-  ALL:         { de: 'Alle',          en: 'All' },
-  TASK:        { de: 'Aufgaben',      en: 'Tasks' },
-  ORDER:       { de: 'Aufträge',      en: 'Orders' },
-  CHAT:        { de: 'Nachrichten',   en: 'Chat' },
-  SYSTEM:      { de: 'System',        en: 'System' },
-  FINANCE:     { de: 'Finanzen',      en: 'Finance' },
-  MAINTENANCE: { de: 'Wartung',       en: 'Maintenance' },
-  DOCUMENT:    { de: 'Dokumente',     en: 'Documents' },
-  CRM:         { de: 'CRM',           en: 'CRM' },
-  PROJECT:     { de: 'Projekte',      en: 'Projects' },
-  SCHEDULING:  { de: 'Planung',       en: 'Scheduling' },
-};
-
-const PRIORITY_BADGE = {
-  CRITICAL: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  HIGH:     'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  NORMAL:   null,
-  LOW:      null,
-};
-
-// ── Time helpers ──────────────────────────────────────────────────────────────
-
-function timeAgo(dateStr, de) {
+function timeAgo(dateStr, t) {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return de ? 'Gerade eben' : 'Just now';
+  if (mins < 1) return t('notifications.time.now', 'Just now');
   if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h`;
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d`;
-  return new Date(dateStr).toLocaleDateString(de ? 'de-CH' : 'en-GB', { month: 'short', day: 'numeric' });
+  return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function dayLabel(dateStr, de) {
-  const d = new Date(dateStr);
+function dayLabel(dateStr, t) {
+  const date = new Date(dateStr);
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return de ? 'Heute' : 'Today';
-  if (d.toDateString() === yesterday.toDateString()) return de ? 'Gestern' : 'Yesterday';
-  return d.toLocaleDateString(de ? 'de-CH' : 'en-GB', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  if (date.toDateString() === today.toDateString()) return t('notifications.day.today', 'Today');
+  if (date.toDateString() === yesterday.toDateString()) return t('notifications.day.yesterday', 'Yesterday');
+  return date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
 function groupByDay(notifications) {
-  const groups = {};
-  for (const n of notifications) {
-    const key = n.sentAt ? new Date(n.sentAt).toDateString() : 'Unknown';
-    if (!groups[key]) groups[key] = { date: n.sentAt, items: [] };
-    groups[key].items.push(n);
+  const groups = new Map();
+  for (const notification of notifications) {
+    const key = new Date(notification.sentAt).toDateString();
+    if (!groups.has(key)) groups.set(key, { date: notification.sentAt, items: [] });
+    groups.get(key).items.push(notification);
   }
-  return Object.values(groups);
+  return [...groups.values()];
 }
 
-// ── Notification item ─────────────────────────────────────────────────────────
+function SummaryTile({ label, value, sub, tone = 'default' }) {
+  const toneClass = {
+    default: 'border-border bg-card',
+    warning: 'border-orange-500/25 bg-orange-500/5',
+    danger: 'border-red-500/25 bg-red-500/5',
+  }[tone];
 
-function NotificationRow({ notification: n, de, onMarkRead, onDismiss }) {
+  return (
+    <div className={cn('rounded-lg border px-4 py-3', toneClass)}>
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className="mt-1 flex items-end gap-2">
+        <span className="text-2xl font-semibold tracking-normal">{value}</span>
+        {sub && <span className="pb-1 text-xs text-muted-foreground">{sub}</span>}
+      </div>
+    </div>
+  );
+}
+
+function SummaryStrip({ summary, t }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <SummaryTile label={t('notifications.summary.unread', 'Unread')} value={summary.unread} />
+      <SummaryTile
+        label={t('notifications.summary.highPriority', 'High priority')}
+        value={summary.highPriority}
+        tone={summary.highPriority > 0 ? 'warning' : 'default'}
+      />
+      <SummaryTile
+        label={t('notifications.summary.critical', 'Critical')}
+        value={summary.critical}
+        tone={summary.critical > 0 ? 'danger' : 'default'}
+      />
+      <SummaryTile label={t('notifications.summary.total', 'Total')} value={summary.total} sub={t('notifications.summary.active', 'active')} />
+    </div>
+  );
+}
+
+function ActionQueue({ actions, t, onMarkRead }) {
   const router = useRouter();
-  const Icon = CAT_ICON[n.category] || Bell;
-  const colorCls = CAT_COLOR[n.category] || 'text-slate-500 bg-slate-500/10';
-  const priorityBadge = PRIORITY_BADGE[n.priority];
+  if (!actions.length) return null;
+
+  return (
+    <div className="rounded-lg border bg-card">
+      <div className="flex items-center gap-2 border-b px-4 py-3">
+        <AlertTriangle className="h-4 w-4 text-orange-500" />
+        <p className="text-sm font-semibold">{t('notifications.actionQueue.title', 'Most important pending actions')}</p>
+      </div>
+      <div className="divide-y">
+        {actions.map((action) => {
+          return (
+            <button
+              key={action.id || action._id}
+              type="button"
+              onClick={() => {
+                if (!action.isRead) onMarkRead(action.id || action._id);
+                if (action.deepLink) router.push(action.deepLink);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+            >
+              <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', getNotificationCategoryColor(action.category))}>
+                {renderNotificationCategoryIcon(action.category)}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{action.title}</span>
+                <span className="block truncate text-xs text-muted-foreground">{action.body}</span>
+              </span>
+              {action.deepLink && <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function NotificationRow({ notification, t, onMarkRead, onDismiss }) {
+  const router = useRouter();
+  const priorityBadge = NOTIFICATION_PRIORITY_STYLES[notification.priority];
 
   const handleClick = () => {
-    if (!n.isRead) onMarkRead(n._id || n.id);
-    if (n.deepLink) router.push(n.deepLink);
+    if (!notification.isRead) onMarkRead(notification.id || notification._id);
+    if (notification.deepLink) router.push(notification.deepLink);
   };
 
   return (
     <div
       onClick={handleClick}
       className={cn(
-        'group flex items-start gap-3 px-5 py-4 cursor-pointer transition-colors',
-        'hover:bg-muted/40',
-        !n.isRead && 'bg-primary/[0.025]',
+        'group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 px-5 py-4 transition-colors hover:bg-muted/40',
+        !notification.isRead && 'bg-primary/[0.025]',
       )}
     >
-      {/* Category icon */}
-      <div className={cn('h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5', colorCls)}>
-        <Icon className="h-4 w-4" />
+      <div className={cn('mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', getNotificationCategoryColor(notification.category))}>
+        {renderNotificationCategoryIcon(notification.category)}
       </div>
 
-      {/* Body */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2 justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className={cn('text-sm leading-snug', !n.isRead ? 'font-semibold' : 'font-medium text-foreground/80')}>
-                {n.title}
-              </p>
-              {priorityBadge && (
-                <span className={cn('text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full', priorityBadge)}>
-                  {n.priority === 'CRITICAL' ? (de ? 'Kritisch' : 'Critical') : (de ? 'Hoch' : 'High')}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
-            {n.deepLink && (
-              <p className="text-[11px] text-primary mt-1 truncate">{n.deepLink}</p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 shrink-0 ml-2">
-            <span className="text-[11px] text-muted-foreground whitespace-nowrap">{timeAgo(n.sentAt, de)}</span>
-            <Button
-              size="icon" variant="ghost"
-              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDismiss(n._id || n.id); }}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className={cn('truncate text-sm leading-snug', !notification.isRead ? 'font-semibold' : 'font-medium text-foreground/80')}>
+            {notification.title}
+          </p>
+          {priorityBadge && (
+            <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide', priorityBadge)}>
+              {getNotificationPriorityLabel(notification.priority, t)}
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{notification.body}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          <span>{getNotificationCategoryLabel(notification.category, t)}</span>
+          {notification.deepLink && <span className="truncate text-primary">{notification.deepLink}</span>}
         </div>
       </div>
 
-      {/* Unread dot */}
-      {!n.isRead && <span className="mt-2.5 h-2 w-2 rounded-full bg-primary shrink-0" />}
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="whitespace-nowrap text-[11px] text-muted-foreground">{timeAgo(notification.sentAt, t)}</span>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDismiss(notification.id || notification._id);
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+        {!notification.isRead && <span className="h-2 w-2 rounded-full bg-primary" />}
+      </div>
     </div>
   );
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
-
-function EmptyState({ de, filtered }) {
+function LoadingSkeleton() {
   return (
-    <div className="flex flex-col items-center justify-center py-24 gap-4">
-      <div className="relative">
-        <span className="absolute inline-flex h-16 w-16 animate-ping rounded-full bg-primary/10" />
-        <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-          <Bell className="h-7 w-7 text-primary" />
+    <div className="divide-y">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div key={index} className="flex items-start gap-3 px-5 py-4">
+          <div className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-muted" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+          </div>
         </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ t, filtered }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 py-24">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+        {filtered ? <Inbox className="h-7 w-7 text-primary" /> : <Bell className="h-7 w-7 text-primary" />}
       </div>
-      <div className="text-center space-y-1">
+      <div className="space-y-1 text-center">
         <p className="text-sm font-medium">
-          {filtered
-            ? (de ? 'Keine Treffer' : 'No matches')
-            : (de ? 'Keine Benachrichtigungen' : 'No notifications')}
+          {filtered ? t('notifications.empty.filteredTitle', 'No matches') : t('notifications.empty.title', 'No notifications')}
         </p>
         <p className="text-xs text-muted-foreground">
-          {filtered
-            ? (de ? 'Versuchen Sie andere Filter.' : 'Try different filters.')
-            : (de ? 'Sie sind auf dem neuesten Stand.' : "You're all caught up.")}
+          {filtered ? t('notifications.empty.filteredDescription', 'Adjust filters and try again.') : t('notifications.empty.description', "You're all caught up.")}
         </p>
       </div>
     </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+function ErrorState({ t, onRetry }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+      <AlertTriangle className="h-8 w-8 text-destructive" />
+      <div>
+        <p className="text-sm font-medium">{t('notifications.error.title', 'Notifications could not be loaded')}</p>
+        <p className="text-xs text-muted-foreground">{t('notifications.error.description', 'Please try again.')}</p>
+      </div>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        <RefreshCw className="mr-2 h-3.5 w-3.5" />
+        {t('notifications.error.retry', 'Retry')}
+      </Button>
+    </div>
+  );
+}
 
 export function NotificationsCenter() {
-  const { locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
 
   const [category, setCategory] = useState('ALL');
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search);
 
-  const filters = {};
-  if (category !== 'ALL') filters.category = category;
-  if (showUnreadOnly) filters.isRead = false;
+  const filters = useMemo(() => {
+    const next = { limit: 50 };
+    if (category !== 'ALL') next.category = category;
+    if (showUnreadOnly) next.isRead = false;
+    if (deferredSearch.trim()) next.search = deferredSearch.trim();
+    return next;
+  }, [category, deferredSearch, showUnreadOnly]);
 
-  const { data: rawNotifications = [], isFetching, refetch } = useNotificationFeed(filters);
+  const {
+    data: feed,
+    isError,
+    isFetching,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    refetch,
+  } = useInfiniteNotificationFeed(filters);
   const { markRead, markAllRead, dismiss } = useNotificationMutations();
 
-  // Client-side search filter
-  const notifications = useMemo(() => {
-    if (!search.trim()) return rawNotifications;
-    const q = search.toLowerCase();
-    return rawNotifications.filter(
-      (n) => n.title?.toLowerCase().includes(q) || n.body?.toLowerCase().includes(q),
-    );
-  }, [rawNotifications, search]);
-
-  const unreadCount = rawNotifications.filter((n) => !n.isRead).length;
+  const notifications = feed?.items ?? EMPTY_NOTIFICATIONS;
+  const summary = feed?.summary || EMPTY_NOTIFICATION_SUMMARY;
   const groups = useMemo(() => groupByDay(notifications), [notifications]);
+  const filtered = Boolean(deferredSearch.trim() || showUnreadOnly || category !== 'ALL');
 
   return (
-    <div className="flex flex-col gap-5 w-full min-w-0">
+    <div className="flex w-full min-w-0 flex-col gap-5">
       <PageHeader
-        title={de ? 'Benachrichtigungen' : 'Notifications'}
-        description={de
-          ? 'Alle Systemmeldungen und Aktivitäten'
-          : 'All system alerts and activity'}
+        title={t('notifications.title', 'Notifications')}
+        description={t('notifications.description', 'Critical tasks, updates, and events')}
       >
         <div className="flex items-center gap-2">
-          <Button
-            size="icon" variant="ghost" className="h-8 w-8"
-            onClick={() => refetch()} disabled={isFetching}
-          >
+          <NotificationSettingsDialog>
+            <Button size="icon" variant="ghost" className="h-8 w-8">
+              <Settings className="h-3.5 w-3.5" />
+            </Button>
+          </NotificationSettingsDialog>
+          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
           </Button>
-          {unreadCount > 0 && (
+          {summary.unread > 0 && (
             <Button
-              size="sm" variant="outline" className="h-8 gap-1.5"
-              onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              onClick={() => markAllRead.mutate()}
+              disabled={markAllRead.isPending}
             >
               <CheckCheck className="h-3.5 w-3.5" />
-              {de ? 'Alle gelesen' : 'Mark all read'}
-              <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
-                {unreadCount}
+              {t('notifications.markAllRead', 'Mark all read')}
+              <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                {summary.unread}
               </span>
             </Button>
           )}
         </div>
       </PageHeader>
 
-      {/* Toolbar */}
+      <SummaryStrip summary={summary} t={t} />
+      <ActionQueue actions={summary.pendingActions || []} t={t} onMarkRead={(id) => markRead.mutate(id)} />
+
       <div className="flex flex-col gap-3">
-        {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={de ? 'Benachrichtigungen durchsuchen...' : 'Search notifications...'}
-            className="pl-9 h-8 text-sm"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t('notifications.search.placeholder', 'Search notifications...')}
+            className="h-9 pl-9 text-sm"
           />
         </div>
 
-        {/* Category tabs */}
-        <div className="flex gap-1 flex-wrap">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors',
-                category === cat
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              {de ? CAT_LABEL[cat].de : CAT_LABEL[cat].en}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-1">
+          {NOTIFICATION_CATEGORIES.map((cat) => {
+            const categoryCount = cat === 'ALL' ? summary.total : summary.byCategory?.[cat]?.total || 0;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategory(cat)}
+                className={cn(
+                  'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+                  category === cat
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                {getNotificationCategoryLabel(cat, t)}
+                {categoryCount > 0 && <span className="ml-1 opacity-70">{categoryCount}</span>}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Unread toggle */}
         <button
-          onClick={() => setShowUnreadOnly((v) => !v)}
+          type="button"
+          onClick={() => setShowUnreadOnly((value) => !value)}
           className={cn(
-            'self-start flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors',
+            'flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
             showUnreadOnly ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/60',
           )}
         >
           <Filter className="h-3.5 w-3.5" />
-          {de ? 'Nur ungelesen' : 'Unread only'}
+          {t('notifications.filter.unreadOnly', 'Unread only')}
         </button>
       </div>
 
-      {/* Notification list */}
-      <div className="rounded-xl border bg-card overflow-hidden">
-        {isFetching && notifications.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
+      <div className="overflow-hidden rounded-lg border bg-card">
+        {isLoading ? (
+          <LoadingSkeleton />
+        ) : isError ? (
+          <ErrorState t={t} onRetry={() => refetch()} />
         ) : notifications.length === 0 ? (
-          <EmptyState de={de} filtered={!!search || showUnreadOnly || category !== 'ALL'} />
+          <EmptyState t={t} filtered={filtered} />
         ) : (
           <div>
-            {groups.map((group, gi) => (
-              <div key={gi}>
-                {/* Day separator */}
-                <div className="flex items-center gap-3 px-5 py-2.5 bg-muted/30 border-b">
+            {groups.map((group) => (
+              <div key={new Date(group.date).toISOString()}>
+                <div className="flex items-center gap-3 border-b bg-muted/30 px-5 py-2.5">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {dayLabel(group.date, de)}
+                    {dayLabel(group.date, t)}
                   </span>
-                  <div className="flex-1 h-px bg-border" />
+                  <div className="h-px flex-1 bg-border" />
                   <span className="text-[11px] text-muted-foreground">
-                    {group.items.filter((n) => !n.isRead).length > 0 && (
-                      <span className="text-primary font-medium">
-                        {group.items.filter((n) => !n.isRead).length} {de ? 'ungelesen' : 'unread'}
-                      </span>
-                    )}
+                    {group.items.filter((item) => !item.isRead).length} {t('notifications.group.unread', 'unread')}
                   </span>
                 </div>
-                {/* Items */}
                 <div className="divide-y">
-                  {group.items.map((n) => (
+                  {group.items.map((notification) => (
                     <NotificationRow
-                      key={n._id || n.id}
-                      notification={n}
-                      de={de}
+                      key={notification.id || notification._id}
+                      notification={notification}
+                      t={t}
                       onMarkRead={(id) => markRead.mutate(id)}
                       onDismiss={(id) => dismiss.mutate(id)}
                     />
@@ -333,12 +403,25 @@ export function NotificationsCenter() {
         )}
       </div>
 
-      {/* Footer count */}
       {notifications.length > 0 && (
-        <p className="text-center text-xs text-muted-foreground pb-2">
-          {notifications.length} {de ? 'Benachrichtigungen' : 'notifications'}
-          {unreadCount > 0 && ` · ${unreadCount} ${de ? 'ungelesen' : 'unread'}`}
-        </p>
+        <div className="flex items-center justify-center pb-2">
+          {hasNextPage ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchNextPage()}
+              disabled={isFetchingNextPage}
+              className="gap-2"
+            >
+              {isFetchingNextPage ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <ArrowDown className="h-3.5 w-3.5" />}
+              {t('notifications.loadMore', 'Load more')}
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {t('notifications.countLabel', '{count} notifications', { count: notifications.length })}
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

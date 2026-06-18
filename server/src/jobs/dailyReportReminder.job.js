@@ -16,35 +16,32 @@ export class DailyReportReminderWorker extends BaseWorker {
 
   async process(job) {
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
     // Lazy imports to avoid circular dependencies
     const User = (await import('../modules/auth/user.model.js')).default;
-    const WorkReport = (await import('../modules/mobile/workReport.repository.js')).default;
+    const Role = (await import('../modules/auth/role.model.js')).default;
+    const Permission = (await import('../modules/auth/permission.model.js')).default;
+    const workReportRepository = (await import('../modules/mobile/workReport.repository.js')).default;
     const { default: notificationService } = await import('../modules/mobile/notification.service.js');
+
+    const mobilePermissionIds = await Permission.find({
+      $or: [
+        { module: 'mobile', action: 'read' },
+        { module: 'mobile', action: 'write' },
+      ],
+    }).distinct('_id');
+    const mobileRoleIds = await Role.find({ permissions: { $in: mobilePermissionIds } }).distinct('_id');
 
     // Find all active users with mobile access
     const mobileUsers = await User.find({
-      isActive: true,
-      $or: [
-        { 'role.permissions': { $in: ['mobile:read', 'mobile:write'] } },
-        { 'roles': { $elemMatch: { permissions: { $in: ['mobile:read', 'mobile:write'] } } } },
-      ],
+      status: 'active',
+      role: { $in: mobileRoleIds },
     }).select('_id').lean();
 
     let remindersCount = 0;
 
     for (const user of mobileUsers) {
       try {
-        // Count incomplete reports: DRAFT status or missing reports for scheduled orders
-        const incompleteCount = await WorkReport.countDocuments({
-          technicianId: user._id,
-          isDeleted: false,
-          $or: [
-            { status: 'DRAFT' },
-            { status: { $exists: false } },
-          ],
-        });
+        const incompleteCount = await workReportRepository.countIncompleteByTechnician(user._id);
 
         if (incompleteCount > 0) {
           await notificationService.sendNotification(user._id, {

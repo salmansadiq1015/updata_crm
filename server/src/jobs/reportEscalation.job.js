@@ -20,7 +20,7 @@ export class ReportEscalationWorker extends BaseWorker {
     const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
 
     // Lazy imports to avoid circular dependencies
-    const WorkReport = (await import('../modules/mobile/workReport.repository.js')).default;
+    const workReportRepository = (await import('../modules/mobile/workReport.repository.js')).default;
     const { default: notificationService } = await import('../modules/mobile/notification.service.js');
 
     // Find orders with scheduledDate before yesterday that have no submitted report
@@ -41,22 +41,17 @@ export class ReportEscalationWorker extends BaseWorker {
       startDatetime: { $lt: yesterday },
       status: { $ne: 'CANCELLED' },
       isDeleted: { $ne: true },
-    }).select('_id employeeIds title').lean();
+    }).select('_id employeeId title').lean();
 
     let escalationsCount = 0;
 
     for (const assignment of overdueAssignments) {
       try {
         // Check if a submitted report exists for this assignment/order
-        const submittedReport = await WorkReport.findOne({
-          orderId: assignment._id,
-          status: 'SUBMITTED',
-          isDeleted: false,
-        });
+        const submittedReport = await workReportRepository.hasSubmittedForOrder(assignment._id);
 
         if (!submittedReport) {
-          // Send escalation to each assigned employee
-          const employeeIds = assignment.employeeIds || [];
+          const employeeIds = assignment.employeeId ? [assignment.employeeId] : [];
           for (const employeeId of employeeIds) {
             await notificationService.sendNotification(employeeId, {
               notificationType: 'ESCALATION',

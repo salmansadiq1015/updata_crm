@@ -261,7 +261,8 @@ async function createTask(input, context, userId) {
     priority,
     ...(dueDate ? { dueDate } : {}),
     ...(context.assignee ? { assigneeId: context.assignee._id } : {}),
-    ...(context.project ? { projectId: context.project._id } : {}),
+    ...(context.order ? { orderId: context.order._id } : {}),
+    ...(!context.order && context.project ? { projectId: context.project._id } : {}),
   }, userId, { source: 'ai-agent' });
 
   return {

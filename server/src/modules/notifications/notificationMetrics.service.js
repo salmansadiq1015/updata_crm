@@ -1,6 +1,5 @@
 import notificationDeliveryRepository from './notificationDelivery.repository.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
-import logger from '../../shared/logger/index.js';
 
 const METRICS_TTL = { l1Ttl: 60, l2Ttl: 180 };
 

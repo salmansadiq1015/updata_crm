@@ -12,6 +12,11 @@ export const taskService = {
     return res.data;
   },
 
+  async listByOrder(orderId, params = {}) {
+    const res = await apiClient.get(ENDPOINTS.TASKS.ORDER_TASKS(orderId), { params });
+    return res.data;
+  },
+
   async create(data) {
     const res = await apiClient.post(ENDPOINTS.TASKS.LIST, data);
     return res.data;

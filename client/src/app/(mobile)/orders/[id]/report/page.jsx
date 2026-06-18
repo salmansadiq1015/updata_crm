@@ -118,7 +118,8 @@ export default function ReportPage() {
   const activeReport = creatingNew ? null : (allReports[selectedIdx] ?? null);
   const isSubmitted =
     activeReport?.status === REPORT_STATUS.SUBMITTED ||
-    activeReport?.status === REPORT_STATUS.APPROVED;
+    activeReport?.status === REPORT_STATUS.APPROVED ||
+    activeReport?.status === REPORT_STATUS.INVOICED;
 
   const {
     register,

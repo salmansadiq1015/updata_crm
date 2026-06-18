@@ -1,8 +1,9 @@
 import mongoose from 'mongoose';
 
 export const ASSIGNMENT_TYPES = ['SERVICE_CALL', 'PROJECT_WORK', 'MAINTENANCE', 'INSTALLATION', 'INSPECTION', 'OTHER'];
-export const ASSIGNMENT_STATUSES = ['PLANNED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+export const ASSIGNMENT_STATUSES = ['PLANNED', 'CONFIRMED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED'];
 export const PRIORITIES = ['NORMAL', 'HIGH', 'URGENT'];
+export const ASSIGNMENT_TARGET_TYPES = ['EMPLOYEE', 'TEAM', 'DEPARTMENT'];
 
 const assignmentSchema = new mongoose.Schema(
   {
@@ -15,6 +16,25 @@ const assignmentSchema = new mongoose.Schema(
     employeeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
+      default: null,
+    },
+    assignmentTargetType: {
+      type: String,
+      enum: ASSIGNMENT_TARGET_TYPES,
+      default: 'EMPLOYEE',
+      index: true,
+    },
+    assignmentTargetId: {
+      type: String,
+      trim: true,
+      maxlength: 100,
+      default: null,
+      index: true,
+    },
+    assignmentTargetLabel: {
+      type: String,
+      trim: true,
+      maxlength: 255,
       default: null,
     },
     orderId: {
@@ -140,6 +160,7 @@ const assignmentSchema = new mongoose.Schema(
 
 // --- Indexes ---
 assignmentSchema.index({ employeeId: 1, startDatetime: 1 }, { sparse: true });
+assignmentSchema.index({ assignmentTargetType: 1, assignmentTargetId: 1, startDatetime: 1 });
 assignmentSchema.index({ orderId: 1 });
 assignmentSchema.index({ projectId: 1 });
 assignmentSchema.index({ startDatetime: 1 });

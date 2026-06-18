@@ -120,24 +120,51 @@ class NotificationService {
   }
 
   async getPreferences(userId) {
-    const NotificationPreference = (await import('./notificationPreference.model.js')).default;
-
-    let prefs = await NotificationPreference.findOne({ userId }).lean();
-    if (!prefs) {
-      const created = await NotificationPreference.create({ userId });
-      prefs = created.toObject();
-    }
-    return prefs;
+    const notificationPreferenceService = (await import('../notifications/notificationPreference.service.js')).default;
+    return notificationPreferenceService.getPreferences(userId);
   }
 
   async updatePreferences(userId, data) {
-    const NotificationPreference = (await import('./notificationPreference.model.js')).default;
+    const notificationPreferenceService = (await import('../notifications/notificationPreference.service.js')).default;
+    const normalized = this._normalizePreferencePayload(data);
+    return notificationPreferenceService.updatePreferences(userId, normalized);
+  }
 
-    return NotificationPreference.findOneAndUpdate(
-      { userId },
-      { $set: data },
-      { upsert: true, returnDocument: 'after', runValidators: true },
-    ).lean();
+  _normalizePreferencePayload(data = {}) {
+    if (Array.isArray(data.preferences) || data.quietHours) {
+      return data;
+    }
+
+    const preferenceMap = data.preferences && typeof data.preferences === 'object' ? data.preferences : {};
+    const legacyPreferenceMap = {
+      newAssignment: 'new_assignment',
+      orderChanged: 'order_status_changed',
+      chatMessage: 'chat_message',
+      dailyReminder: 'task_reminder',
+      escalation: 'maintenance_escalated',
+    };
+    const legacyEntries = Object.entries(legacyPreferenceMap)
+      .filter(([key]) => typeof data[key] === 'boolean')
+      .map(([key, notificationType]) => [notificationType, data[key]]);
+
+    const entries = [...Object.entries(preferenceMap), ...legacyEntries].map(([notificationType, enabled]) => ({
+      notificationType,
+      channel: 'PUSH',
+      enabled: Boolean(enabled),
+    }));
+
+    const quietHours = data.quiet_hours ? {
+      enabled: Boolean(data.quiet_hours.enabled),
+      startTime: data.quiet_hours.start || data.quiet_hours.startTime || '20:00',
+      endTime: data.quiet_hours.end || data.quiet_hours.endTime || '07:00',
+      timezone: data.quiet_hours.timezone || 'Europe/Zurich',
+      bypassCritical: data.quiet_hours.bypassCritical ?? true,
+    } : undefined;
+
+    return {
+      ...(entries.length > 0 ? { preferences: entries } : {}),
+      ...(quietHours ? { quietHours } : {}),
+    };
   }
 
   async invalidateNotificationCache(userId) {

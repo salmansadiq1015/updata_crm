@@ -7,9 +7,104 @@ import {
 } from '../deploy/mobileAssignment.serializer.js';
 
 const VALID_TRANSITIONS = {
-  PLANNED: 'IN_PROGRESS',
-  IN_PROGRESS: 'COMPLETED',
+  PLANNED: ['IN_PROGRESS'],
+  CONFIRMED: ['IN_PROGRESS'],
+  IN_PROGRESS: ['PAUSED', 'COMPLETED'],
+  PAUSED: ['IN_PROGRESS', 'COMPLETED'],
 };
+
+function normalizeId(value) {
+  if (!value) return null;
+  return String(value._id || value);
+}
+
+function uniqueIds(values) {
+  return [...new Set(values.map(normalizeId).filter(Boolean))];
+}
+
+function normalizeTargetType(value) {
+  return ['EMPLOYEE', 'TEAM', 'DEPARTMENT'].includes(value) ? value : 'EMPLOYEE';
+}
+
+function buildUserTargetIds(user) {
+  return uniqueIds([
+    user?.department,
+    user?.preferences?.preferredDepartmentId,
+  ]);
+}
+
+async function findUsersForTarget(targetId) {
+  const normalizedTarget = String(targetId || '').trim();
+  if (!normalizedTarget) return [];
+
+  const { default: User } = await import('../auth/user.model.js');
+  return User.find({
+    status: 'active',
+    $or: [
+      { department: normalizedTarget },
+      { 'preferences.preferredDepartmentId': normalizedTarget },
+    ],
+  })
+    .select('_id firstName lastName email')
+    .lean();
+}
+
+async function resolveAssignmentTarget(body = {}) {
+  const requestedType = normalizeTargetType(
+    body.assignmentTargetType || (body.teamId ? 'TEAM' : body.departmentId ? 'DEPARTMENT' : 'EMPLOYEE'),
+  );
+
+  if (requestedType === 'EMPLOYEE') {
+    const employeeIds = uniqueIds([
+      ...(Array.isArray(body.employeeIds) ? body.employeeIds : []),
+      body.employeeId,
+    ]);
+    return {
+      type: 'EMPLOYEE',
+      targetId: null,
+      targetLabel: null,
+      employeeIds,
+      recipientIds: employeeIds,
+    };
+  }
+
+  const targetId = String(body.assignmentTargetId || body.teamId || body.departmentId || '').trim();
+  if (!targetId) {
+    return {
+      type: 'EMPLOYEE',
+      targetId: null,
+      targetLabel: null,
+      employeeIds: [],
+      recipientIds: [],
+    };
+  }
+
+  const targetUsers = await findUsersForTarget(targetId);
+  const recipientIds = uniqueIds(targetUsers.map((user) => user._id));
+
+  return {
+    type: requestedType,
+    targetId,
+    targetLabel: body.assignmentTargetLabel || targetId || requestedType,
+    employeeIds: [],
+    recipientIds,
+  };
+}
+
+async function resolveAssignmentRecipients(assignment) {
+  const employeeId = normalizeId(assignment?.employeeId);
+  if (employeeId) return [employeeId];
+  if (!['TEAM', 'DEPARTMENT'].includes(assignment?.assignmentTargetType)) return [];
+  const users = await findUsersForTarget(assignment.assignmentTargetId);
+  return uniqueIds(users.map((user) => user._id));
+}
+
+function toIso(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
 
 class OrderController {
   async createOrder(req, res, next) {
@@ -23,8 +118,8 @@ class OrderController {
         orderType, assignmentType,
         title, description, scopeOfWork, specialInstructions,
         priority, scheduledStart, scheduledEnd,
-        employeeId,
         projectId,
+        customerId, siteId,
         customerName, customerPhone, customerEmail,
         siteAddress, accessInstructions, parkingInfo,
       } = req.body;
@@ -51,11 +146,17 @@ class OrderController {
 
       let assignment;
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const target = await resolveAssignmentTarget(req.body);
 
-      if (employeeId) {
+      if (target.employeeIds.length > 0) {
         const [created] = await assignmentService.create({
-          employeeIds: [employeeId],
+          employeeIds: target.employeeIds,
           projectId: projectId || null,
+          customerId: customerId || null,
+          siteId: siteId || null,
+          assignmentTargetType: 'EMPLOYEE',
+          assignmentTargetId: null,
+          assignmentTargetLabel: null,
           assignmentType: resolvedType,
           title: title || null,
           instructions,
@@ -81,6 +182,11 @@ class OrderController {
           endDatetime,
           employeeId: null,
           projectId: projectId || null,
+          customerId: customerId || null,
+          siteId: siteId || null,
+          assignmentTargetType: target.type,
+          assignmentTargetId: target.targetId || null,
+          assignmentTargetLabel: target.targetLabel || null,
           status: 'PLANNED',
           isCustomerAppointment: Boolean(appointment),
           createdBy: req.user._id,
@@ -95,7 +201,10 @@ class OrderController {
           assignmentNumber,
           assignmentType: resolvedType,
           title: assignment.title,
-          employeeIds: [],
+          employeeIds: target.recipientIds,
+          assignmentTargetType: target.type,
+          assignmentTargetId: target.targetId,
+          assignmentTargetLabel: target.targetLabel,
           createdBy: req.user._id,
         }, { source: 'mobile:orders' });
       }
@@ -117,28 +226,40 @@ class OrderController {
         if (query.orderType || query.type) filters.assignmentType = query.orderType || query.type;
         if (query.employeeId) filters.employeeId = query.employeeId;
         if (query.projectId) filters.projectId = query.projectId;
+        if (query.customerId) filters.customerId = query.customerId;
+        if (query.siteId) filters.siteId = query.siteId;
         if (query.priority) filters.priority = query.priority;
+        if (query.assignmentTargetType) filters.assignmentTargetType = query.assignmentTargetType;
+        if (query.assignmentTargetId || query.teamId) filters.assignmentTargetId = query.assignmentTargetId || query.teamId;
         if (query.dateFrom) filters.dateFrom = query.dateFrom;
         if (query.dateTo) filters.dateTo = query.dateTo;
-        const result = await assignmentRepository.findWithCursor({
-          limit: query.limit ? parseInt(query.limit, 10) : 100,
-          cursor: query.cursor,
-          sortBy: query.sortBy || 'createdAt',
-          sortOrder: query.sortOrder || 'desc',
-          filters,
-          search: query.search,
-        });
+        const [result, summary] = await Promise.all([
+          assignmentRepository.findWithCursor({
+            limit: query.limit ? parseInt(query.limit, 10) : 100,
+            cursor: query.cursor,
+            sortBy: query.sortBy || 'createdAt',
+            sortOrder: query.sortOrder || 'desc',
+            filters,
+            search: query.search,
+          }),
+          assignmentRepository.getStatusSummary({ filters, search: query.search }),
+        ]);
         const syncTimestamp = new Date().toISOString();
         const data = await serializeMobileAssignments(result.data, { syncTimestamp });
-        return res.success({ data, pagination: result.pagination, syncTimestamp });
+        return res.success({ data, pagination: result.pagination, summary, syncTimestamp });
       }
 
-      // Mobile technician view: return only assignments for the logged-in employee
+      // Mobile technician view: return direct assignments plus team/department jobs for the user
       const { default: assignmentService } = await import('../deploy/assignment.service.js');
       const assignments = await assignmentService.listByEmployee(
         req.user._id,
         query.dateFrom,
         query.dateTo,
+        {
+          department: req.user.department,
+          preferences: req.user.preferences,
+          targetIds: buildUserTargetIds(req.user),
+        },
       );
       const syncTimestamp = new Date().toISOString();
       const data = await serializeMobileAssignments(assignments, { syncTimestamp });
@@ -162,7 +283,8 @@ class OrderController {
       const {
         orderType, assignmentType, title, description, scopeOfWork, specialInstructions,
         priority, scheduledStart, scheduledEnd,
-        employeeId,
+        employeeId, employeeIds,
+        projectId, customerId, siteId,
         customerName, customerPhone, customerEmail,
         siteAddress, accessInstructions, parkingInfo,
         status, overrideConflicts, overrideReason,
@@ -173,9 +295,33 @@ class OrderController {
       if (title !== undefined) updates.title = title || null;
       if (priority) updates.priority = priority;
       if (status) updates.status = status;
-      if (employeeId !== undefined) updates.employeeId = employeeId || null;
+      if (projectId !== undefined) updates.projectId = projectId || null;
+      if (customerId !== undefined) updates.customerId = customerId || null;
+      if (siteId !== undefined) updates.siteId = siteId || null;
       if (scheduledStart) updates.startDatetime = new Date(scheduledStart);
       if (scheduledEnd) updates.endDatetime = new Date(scheduledEnd);
+
+      const assignmentTargetChanged = employeeId !== undefined
+        || employeeIds !== undefined
+        || req.body.assignmentTargetType !== undefined
+        || req.body.assignmentTargetId !== undefined
+        || req.body.teamId !== undefined
+        || req.body.departmentId !== undefined;
+
+      if (assignmentTargetChanged) {
+        const target = await resolveAssignmentTarget(req.body);
+        if (target.type === 'EMPLOYEE') {
+          updates.employeeId = target.employeeIds[0] || null;
+          updates.assignmentTargetType = 'EMPLOYEE';
+          updates.assignmentTargetId = null;
+          updates.assignmentTargetLabel = null;
+        } else {
+          updates.employeeId = null;
+          updates.assignmentTargetType = target.type;
+          updates.assignmentTargetId = target.targetId || null;
+          updates.assignmentTargetLabel = target.targetLabel || null;
+        }
+      }
 
       const instructionsParts = [description, scopeOfWork, specialInstructions].filter(Boolean);
       if (instructionsParts.length) updates.instructions = instructionsParts.join('\n\n');
@@ -226,20 +372,22 @@ class OrderController {
       const currentStatus = assignment.status;
       const newStatus = req.body.status;
 
-      if (VALID_TRANSITIONS[currentStatus] !== newStatus) {
+      if (!VALID_TRANSITIONS[currentStatus]?.includes(newStatus)) {
         throw new ConflictError(
-          `Invalid status transition from ${currentStatus} to ${newStatus}. Allowed: ${VALID_TRANSITIONS[currentStatus] || 'none'}.`,
+          `Invalid status transition from ${currentStatus} to ${newStatus}. Allowed: ${(VALID_TRANSITIONS[currentStatus] || []).join(', ') || 'none'}.`,
         );
       }
 
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const updated = await assignmentService.update(req.params.id, { status: newStatus }, req.user._id, meta);
+      const recipients = await resolveAssignmentRecipients(assignment);
       eventBus.publish(EVENT_TYPES.MOBILE_ORDER_STATUS_UPDATED, {
         orderId: req.params.id,
         previousStatus: currentStatus,
         newStatus,
         orderTitle: assignment.title || '',
-        assignedTo: assignment.employeeId?._id || assignment.employeeId || null,
+        assignedTo: normalizeId(assignment.employeeId),
+        recipientIds: recipients,
         updatedBy: req.user._id,
         managerIds: assignment.createdBy ? [assignment.createdBy] : [],
       }, { source: 'mobile:orders' });
@@ -248,9 +396,91 @@ class OrderController {
     } catch (err) { next(err); }
   }
 
-  async getOrderHistory(_req, res, next) {
+  async getOrderHistory(req, res, next) {
     try {
-      return res.success({ data: [] });
+      const { default: assignmentService } = await import('../deploy/assignment.service.js');
+      const { default: auditService } = await import('../auth/audit.service.js');
+      const { default: workReportRepository } = await import('./workReport.repository.js');
+      const { default: timeEntryRepository } = await import('./timeEntry.repository.js');
+      const { default: mobilePhotoRepository } = await import('./mobilePhoto.repository.js');
+
+      const assignment = await assignmentService.getById(req.params.id);
+      const [auditEntries, reports, timeEntries, photos, serializedAssignment] = await Promise.all([
+        auditService.queryByEntity({
+          module: 'deploy',
+          detailsKey: 'assignmentId',
+          entityId: [req.params.id, normalizeId(assignment)],
+          eventTypePrefix: 'assignment.',
+          limit: 100,
+        }),
+        workReportRepository.findByOrderId(req.params.id),
+        timeEntryRepository.findByOrderId(req.params.id),
+        mobilePhotoRepository.findByOrderId(req.params.id),
+        serializeMobileAssignment(assignment),
+      ]);
+
+      const events = [
+        {
+          id: `assignment-created-${normalizeId(assignment)}`,
+          type: 'assignment.created',
+          title: assignment.title || assignment.assignmentNumber,
+          description: 'Assignment created',
+          date: toIso(assignment.createdAt),
+          status: assignment.status,
+          actor_id: normalizeId(assignment.createdBy),
+        },
+        ...auditEntries.map((entry) => ({
+          id: normalizeId(entry),
+          type: entry.eventType,
+          title: entry.eventType,
+          description: entry.details?.changedFields?.length
+            ? `Changed: ${entry.details.changedFields.join(', ')}`
+            : entry.eventType,
+          date: toIso(entry.timestamp),
+          actor_id: normalizeId(entry.userId),
+          notes: entry.details?.assignmentNumber || entry.details?.assignmentId || null,
+        })),
+        ...reports.map((report) => ({
+          id: normalizeId(report),
+          type: 'report',
+          title: `Report ${report.reportNumber || ''}`.trim(),
+          description: report.status,
+          date: toIso(report.reportDate || report.createdAt),
+          technician_name: report.technicianId
+            ? `${report.technicianId.firstName || ''} ${report.technicianId.lastName || ''}`.trim()
+            : null,
+          notes: report.workPerformed || report.findings || null,
+        })),
+        ...timeEntries.map((entry) => ({
+          id: normalizeId(entry),
+          type: 'time_entry',
+          title: entry.activityType || 'Time entry',
+          description: `${entry.netDurationMin || 0} min`,
+          date: toIso(entry.date || entry.createdAt),
+          technician_name: entry.technicianId
+            ? `${entry.technicianId.firstName || ''} ${entry.technicianId.lastName || ''}`.trim()
+            : null,
+        })),
+        ...photos.map((photo) => ({
+          id: normalizeId(photo),
+          type: 'photo',
+          title: photo.caption || photo.category || 'Photo',
+          description: photo.category || null,
+          date: toIso(photo.capturedAt || photo.createdAt),
+          notes: photo.notes || null,
+        })),
+        ...((serializedAssignment?.documents || []).map((document) => ({
+          id: document.id,
+          type: 'document',
+          title: document.name,
+          description: document.category || document.source || null,
+          date: document.updated_at,
+        }))),
+      ]
+        .filter((event) => event.date)
+        .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
+
+      return res.success({ data: events });
     } catch (err) { next(err); }
   }
 }

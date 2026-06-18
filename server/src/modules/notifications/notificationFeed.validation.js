@@ -6,6 +6,8 @@ export const getFeedSchema = {
     cursor: Joi.string().allow(''),
     limit: Joi.number().integer().min(1).max(100).default(50),
     category: Joi.string(),
+    isRead: Joi.boolean(),
+    search: Joi.string().trim().max(100).allow(''),
   }),
 };
 

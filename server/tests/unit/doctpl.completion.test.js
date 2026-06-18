@@ -5,8 +5,12 @@ import { connectTestDb, clearTestDb, disconnectTestDb } from '../setup.js';
 import documentGenerationBatchRepository from '../../src/modules/doctpl/documentGenerationBatch.repository.js';
 import documentTemplateRepository from '../../src/modules/doctpl/documentTemplate.repository.js';
 import ciService from '../../src/modules/doctpl/ci.service.js';
+import documentRoutes from '../../src/modules/doctpl/document.routes.js';
+import documentGenerationService from '../../src/modules/doctpl/documentGeneration.service.js';
 import emailWebhookSecurityService from '../../src/modules/doctpl/emailWebhookSecurity.service.js';
+import templateRoutes from '../../src/modules/doctpl/template.routes.js';
 import templateService from '../../src/modules/doctpl/template.service.js';
+import { createTemplateSchema } from '../../src/modules/doctpl/template.validation.js';
 import qopDocumentPayloadService from '../../src/modules/qop/documentPayload.service.js';
 import { ConflictError, ValidationError } from '../../src/shared/errors/AppError.js';
 import { satisfiesPermission } from '../../src/shared/middleware/authenticate.js';
@@ -179,6 +183,68 @@ describe('Module 09 completion invariants', () => {
     expect(satisfiesPermission(['invoicing:read'], 'documents:read')).toBe(true);
     expect(satisfiesPermission(['project:documents:read'], 'documents:read')).toBe(true);
     expect(satisfiesPermission(['templates:delete'], 'documents:delete')).toBe(true);
+  });
+
+  test('template creation validation accepts custom lowercase template type slugs', () => {
+    const { error, value } = createTemplateSchema.body.validate(validTemplate({
+      templateType: 'custom_service_notice',
+      name: 'Custom Service Notice',
+      sections: [
+        { id: 'header', name: 'Header', type: 'header', position: 1, isVisible: true },
+        { id: 'body', name: 'Body', type: 'body', position: 2, isVisible: true },
+        { id: 'footer', name: 'Footer', type: 'footer', position: 3, isVisible: true },
+      ],
+      tableColumns: [],
+    }), { abortEarly: false });
+
+    expect(error).toBeUndefined();
+    expect(value.templateType).toBe('custom_service_notice');
+  });
+
+  test('template creation validation rejects unsafe custom template type values', () => {
+    const { error } = createTemplateSchema.body.validate(validTemplate({
+      templateType: 'bad type!',
+      name: 'Unsafe Type',
+    }), { abortEarly: false });
+
+    expect(error).toBeDefined();
+    expect(error.details.some((detail) => detail.path.join('.') === 'templateType')).toBe(true);
+  });
+
+  test('document routes expose an authenticated generated-document preview endpoint', () => {
+    const hasPreviewRoute = documentRoutes.stack.some(
+      (layer) => layer.route?.path === '/:id/preview' && layer.route?.methods?.get,
+    );
+
+    expect(hasPreviewRoute).toBe(true);
+  });
+
+  test('template service exposes historical version preview support', () => {
+    const hasVersionPreviewRoute = templateRoutes.stack.some(
+      (layer) => layer.route?.path === '/:id/versions/:version/preview' && layer.route?.methods?.post,
+    );
+
+    expect(typeof templateService.previewVersion).toBe('function');
+    expect(hasVersionPreviewRoute).toBe(true);
+  });
+
+  test('custom template types do not inherit customer or line-item payload requirements', () => {
+    expect(() => documentGenerationService._validateRenderData(
+      'custom_service_notice',
+      { documentNumber: 'CUSTOM-2026-0001' },
+      {},
+    )).not.toThrow();
+  });
+
+  test('customer-bound template types still require customer context', () => {
+    expect(() => documentGenerationService._validateRenderData(
+      'quotation',
+      {
+        documentNumber: 'QUO-2026-0001',
+        lineItems: [{ description: 'Service', quantity: 1, unitPrice: 100, total: 100 }],
+      },
+      {},
+    )).toThrow(ValidationError);
   });
 });
 

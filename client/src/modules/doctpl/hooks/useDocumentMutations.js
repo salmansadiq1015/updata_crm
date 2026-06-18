@@ -20,3 +20,7 @@ export const useDeleteDocument = () => {
 export const useDownloadDocument = () => useMutation({
   mutationFn: (id) => documentService.download(id),
 });
+
+export const usePreviewDocument = () => useMutation({
+  mutationFn: (id) => documentService.preview(id),
+});

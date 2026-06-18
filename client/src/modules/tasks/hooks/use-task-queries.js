@@ -36,6 +36,16 @@ export function useTasks(filters = {}) {
   });
 }
 
+export function useOrderTasks(orderId, filters = {}) {
+  return useQuery({
+    queryKey: queryKeys.tasks.byOrder(orderId, filters),
+    queryFn: () => taskService.listByOrder(orderId, filters),
+    enabled: !!orderId,
+    staleTime: 30_000,
+    select: selectArray,
+  });
+}
+
 export function useTaskDetail(id) {
   return useQuery({
     queryKey: queryKeys.tasks.detail(id),

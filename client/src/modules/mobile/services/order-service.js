@@ -13,6 +13,17 @@ export const orderService = {
     return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
   },
 
+  async getAllOrdersPage(params = {}) {
+    const res = await apiClient.get(ENDPOINTS.MOBILE.ORDERS, { params: { ...params, all: true } });
+    const body = res.data || {};
+    return {
+      items: Array.isArray(body) ? body : (body.data ?? []),
+      pagination: body.pagination ?? null,
+      summary: body.summary ?? {},
+      syncTimestamp: body.syncTimestamp ?? null,
+    };
+  },
+
   async getOrderById(id) {
     const res = await apiClient.get(ENDPOINTS.MOBILE.ORDER_BY_ID(id));
     return res.data;

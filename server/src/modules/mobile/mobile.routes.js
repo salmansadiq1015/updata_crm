@@ -32,7 +32,8 @@ import { deviceRouter, notificationRouter } from './notification.routes.js';
  *   /api/v1/mobile/orders/:id/time-entries              — time entries (nested)
  *   /api/v1/mobile/orders/:id/documents                 — documents (nested)
  *   /api/v1/mobile/orders/:id/quotation                 — quotation (nested)
- *   /api/v1/mobile/reports/:reportId                    — report CRUD
+ *   /api/v1/mobile/reports                              — report listing, summary, export
+ *   /api/v1/mobile/reports/:reportId                    — report CRUD, workflow, history, invoicing
  *   /api/v1/mobile/time-entries                         — time entry listing / CRUD
  *   /api/v1/mobile/photos/:photoId                      — photo delete
  *   /api/v1/mobile/catalog                              — catalog search, sync, favorites

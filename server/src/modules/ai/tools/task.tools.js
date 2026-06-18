@@ -16,11 +16,16 @@ export const createTaskTool = createTool({
     dueDate: z.string().datetime({ offset: true }).optional().describe('ISO 8601 date string for due date'),
     priority: z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']).default('MEDIUM'),
     projectId: z.string().optional().describe('MongoDB ObjectId of the project'),
+    orderId: z.string().optional().describe('MongoDB ObjectId of the order/job'),
   }),
   requiredPermission: 'tasks:write',
   compensationAction: 'delete_task',
-  execute: async ({ title, description, assignedTo, dueDate, priority, projectId }, { userId }) => {
+  execute: async ({ title, description, assignedTo, dueDate, priority, projectId, orderId }, { userId }) => {
     const { default: taskService } = await import('../../tasks/task.service.js');
+
+    if (projectId && orderId) {
+      throw new Error('create_task accepts either projectId or orderId, not both');
+    }
 
     const data = {
       title,
@@ -29,6 +34,7 @@ export const createTaskTool = createTool({
       ...(dueDate !== undefined && { dueDate: new Date(dueDate) }),
       priority,
       ...(projectId !== undefined && { projectId }),
+      ...(orderId !== undefined && { orderId }),
     };
 
     const task = await taskService.create(data, userId, { source: 'ai-agent' });

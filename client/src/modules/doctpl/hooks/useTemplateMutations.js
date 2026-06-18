@@ -56,5 +56,9 @@ export const useRevertTemplate = () => {
 };
 
 export const usePreviewTemplate = () => useMutation({
-  mutationFn: ({ id, sampleData, language }) => templateService.preview(id, { sampleData, language }),
+  mutationFn: ({ id, sampleData, language, draftTemplate }) => templateService.preview(id, { sampleData, language, draftTemplate }),
+});
+
+export const usePreviewTemplateVersion = () => useMutation({
+  mutationFn: ({ id, version, sampleData, language }) => templateService.previewVersion(id, version, { sampleData, language }),
 });

@@ -1,6 +1,6 @@
-﻿'use client';
+'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,11 +12,20 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { ORDER_TYPE, ORDER_PRIORITY } from '@/modules/field-ops/constants/field-ops-constants';
+import { useDebounce } from '@/shared/hooks/use-debounce';
+import { ORDER_PRIORITY, ORDER_TYPE } from '@/modules/field-ops/constants/field-ops-constants';
+import { useDeployEmployees } from '@/modules/deploy/hooks/use-deploy-employees';
+import { useAssignmentProjectOptions } from '@/modules/deploy/hooks/use-assignment-work-options';
 import { stripEmptyHtml } from '@/lib/utils/html';
-import { ClipboardList, FileText, Building2, CalendarClock } from 'lucide-react';
-
-// ── Schemas ───────────────────────────────────────────────────────────────────
+import {
+  Building2,
+  CalendarClock,
+  ClipboardList,
+  FileText,
+  FolderKanban,
+  Search,
+  UsersRound,
+} from 'lucide-react';
 
 const step1Schema = z.object({
   orderType: z.string().min(1, 'Required'),
@@ -31,6 +40,9 @@ const step2Schema = z.object({
 });
 
 const step3Schema = z.object({
+  projectId: z.string().optional(),
+  customerId: z.string().optional(),
+  siteId: z.string().optional(),
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),
   customerEmail: z.string().optional(),
@@ -40,7 +52,10 @@ const step3Schema = z.object({
 });
 
 const step4Schema = z.object({
-  assignedTo: z.string().optional(),
+  assignmentTargetType: z.enum(['EMPLOYEE', 'TEAM', 'DEPARTMENT']).optional(),
+  employeeId: z.string().optional(),
+  assignmentTargetId: z.string().optional(),
+  assignmentTargetLabel: z.string().optional(),
   scheduledStart: z.string().optional(),
   scheduledEnd: z.string().optional(),
 });
@@ -50,38 +65,75 @@ const fullSchema = step1Schema.merge(step2Schema).merge(step3Schema).merge(step4
 const STEP_FIELDS = [
   ['orderType', 'title', 'priority', 'description'],
   ['scopeOfWork', 'specialInstructions'],
-  ['customerName', 'customerPhone', 'customerEmail', 'siteAddress', 'accessInstructions', 'parkingInfo'],
-  ['assignedTo', 'scheduledStart', 'scheduledEnd'],
+  ['projectId', 'customerId', 'siteId', 'customerName', 'customerPhone', 'customerEmail', 'siteAddress', 'accessInstructions', 'parkingInfo'],
+  ['assignmentTargetType', 'employeeId', 'assignmentTargetId', 'assignmentTargetLabel', 'scheduledStart', 'scheduledEnd'],
 ];
 
 const BLANK = {
-  orderType: '', priority: 'NORMAL', title: '', description: '',
-  scopeOfWork: '', specialInstructions: '',
-  customerName: '', customerPhone: '', customerEmail: '', siteAddress: '',
-  accessInstructions: '', parkingInfo: '',
-  assignedTo: '', scheduledStart: '', scheduledEnd: '',
+  orderType: '',
+  priority: ORDER_PRIORITY.NORMAL,
+  title: '',
+  description: '',
+  scopeOfWork: '',
+  specialInstructions: '',
+  projectId: '',
+  customerId: '',
+  siteId: '',
+  customerName: '',
+  customerPhone: '',
+  customerEmail: '',
+  siteAddress: '',
+  accessInstructions: '',
+  parkingInfo: '',
+  assignmentTargetType: 'EMPLOYEE',
+  employeeId: '',
+  assignmentTargetId: '',
+  assignmentTargetLabel: '',
+  scheduledStart: '',
+  scheduledEnd: '',
 };
 
 const slideVariants = {
-  enter: (dir) => ({ x: dir > 0 ? 60 : -60, opacity: 0 }),
+  enter: (direction) => ({ x: direction > 0 ? 60 : -60, opacity: 0 }),
   center: { x: 0, opacity: 1 },
-  exit: (dir) => ({ x: dir > 0 ? -60 : 60, opacity: 0 }),
+  exit: (direction) => ({ x: direction > 0 ? -60 : 60, opacity: 0 }),
 };
 
-// ── Step content components ───────────────────────────────────────────────────
+function normalizeId(value) {
+  return value?._id || value?.id || value || '';
+}
+
+function employeeLabel(employee) {
+  return `${employee?.firstName || ''} ${employee?.lastName || ''}`.trim() || employee?.email || employee?._id;
+}
+
+function uniqueDepartments(employees) {
+  return [...new Set(
+    employees
+      .map((employee) => String(employee?.department || '').trim())
+      .filter(Boolean),
+  )].sort((left, right) => left.localeCompare(right));
+}
+
+function toInputDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 16);
+}
 
 function Step1OrderDetails({ form, de }) {
   const { register, watch, setValue, formState: { errors } } = form;
   return (
     <FormSection
       title={de ? 'Auftragsdetails' : 'Order Details'}
-      description={de ? 'Typ, Priorität und Titel des Auftrags' : 'Order type, priority and title'}
+      description={de ? 'Typ, Prioritaet und Titel des Auftrags' : 'Order type, priority and title'}
     >
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label={de ? 'Auftragstyp' : 'Order Type'} required error={errors.orderType?.message}>
-          <Select value={watch('orderType')} onValueChange={(v) => setValue('orderType', v, { shouldValidate: true })}>
+          <Select value={watch('orderType')} onValueChange={(value) => setValue('orderType', value, { shouldValidate: true })}>
             <SelectTrigger className={errors.orderType ? 'border-destructive' : ''}>
-              <SelectValue placeholder={de ? 'Typ wählen…' : 'Select type…'} />
+              <SelectValue placeholder={de ? 'Typ waehlen...' : 'Select type...'} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ORDER_TYPE.SERVICE_CALL}>{de ? 'Serviceeinsatz' : 'Service Call'}</SelectItem>
@@ -93,8 +145,8 @@ function Step1OrderDetails({ form, de }) {
           </Select>
         </FormField>
 
-        <FormField label={de ? 'Priorität' : 'Priority'}>
-          <Select value={watch('priority')} onValueChange={(v) => setValue('priority', v)}>
+        <FormField label={de ? 'Prioritaet' : 'Priority'}>
+          <Select value={watch('priority')} onValueChange={(value) => setValue('priority', value)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ORDER_PRIORITY.NORMAL}>{de ? 'Normal' : 'Normal'}</SelectItem>
@@ -108,7 +160,7 @@ function Step1OrderDetails({ form, de }) {
       <FormField label={de ? 'Titel' : 'Title'} required error={errors.title?.message}>
         <Input
           {...register('title')}
-          placeholder={de ? 'Auftragstitel…' : 'Order title…'}
+          placeholder={de ? 'Auftragstitel...' : 'Order title...'}
           className={errors.title ? 'border-destructive' : ''}
         />
       </FormField>
@@ -120,7 +172,7 @@ function Step1OrderDetails({ form, de }) {
         <RichTextEditor
           value={watch('description')}
           onChange={(html) => setValue('description', html, { shouldDirty: true })}
-          placeholder={de ? 'Problembeschreibung…' : 'Problem description…'}
+          placeholder={de ? 'Problembeschreibung...' : 'Problem description...'}
           minHeight={160}
         />
       </FormField>
@@ -137,24 +189,24 @@ function Step2ScopeOfWork({ form, de }) {
     >
       <FormField
         label={de ? 'Leistungsumfang' : 'Scope of Work'}
-        description={de ? 'Geplante Arbeiten, Checklisten, Prüfpunkte' : 'Planned work, checklists, inspection points'}
+        description={de ? 'Geplante Arbeiten, Checklisten, Pruefpunkte' : 'Planned work, checklists, inspection points'}
       >
         <RichTextEditor
           value={watch('scopeOfWork')}
           onChange={(html) => setValue('scopeOfWork', html, { shouldDirty: true })}
-          placeholder={de ? 'Was soll gemacht werden…' : 'What needs to be done…'}
+          placeholder={de ? 'Was soll gemacht werden...' : 'What needs to be done...'}
           minHeight={200}
         />
       </FormField>
 
       <FormField
         label={de ? 'Sonderhinweise' : 'Special Instructions'}
-        description={de ? 'Sicherheitshinweise, Zugangscodes, Kundenwünsche' : 'Safety notes, access codes, customer requests'}
+        description={de ? 'Sicherheitshinweise, Zugangscodes, Kundenwuensche' : 'Safety notes, access codes, customer requests'}
       >
         <RichTextEditor
           value={watch('specialInstructions')}
           onChange={(html) => setValue('specialInstructions', html, { shouldDirty: true })}
-          placeholder={de ? 'Sicherheitshinweise, Zugangscodes…' : 'Safety notes, access codes…'}
+          placeholder={de ? 'Sicherheitshinweise, Zugangscodes...' : 'Safety notes, access codes...'}
           minHeight={120}
         />
       </FormField>
@@ -163,15 +215,63 @@ function Step2ScopeOfWork({ form, de }) {
 }
 
 function Step3CustomerSite({ form, de }) {
-  const { register } = form;
+  const { register, watch, setValue } = form;
+  const [projectSearch, setProjectSearch] = useState('');
+  const debouncedProjectSearch = useDebounce(projectSearch, 250);
+  const { data: projects = [], isFetching } = useAssignmentProjectOptions({
+    search: debouncedProjectSearch,
+    limit: 40,
+  });
+
+  const selectedProject = projects.find((project) => project._id === watch('projectId'));
+
+  const applyProject = (projectId) => {
+    if (projectId === 'none') {
+      setValue('projectId', '', { shouldValidate: true });
+      return;
+    }
+    const project = projects.find((item) => item._id === projectId);
+    setValue('projectId', projectId, { shouldValidate: true });
+    if (project?.customerId) setValue('customerId', project.customerId);
+    if (project?.siteId) setValue('siteId', project.siteId);
+    if (project?.customerName && !watch('customerName')) setValue('customerName', project.customerName);
+  };
+
   return (
     <FormSection
       title={de ? 'Kunde & Standort' : 'Customer & Site'}
-      description={de ? 'Kontaktdaten und Standortinformationen' : 'Contact details and site information'}
+      description={de ? 'Projektbezug, Kontaktdaten und Standortinformationen' : 'Project link, contact details and site information'}
     >
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label={de ? 'Projekt' : 'Project'}>
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={projectSearch}
+                onChange={(event) => setProjectSearch(event.target.value)}
+                placeholder={de ? 'Projekt suchen...' : 'Search project...'}
+                className="pl-9"
+              />
+            </div>
+            <Select value={watch('projectId') || 'none'} onValueChange={applyProject}>
+              <SelectTrigger>
+                <SelectValue placeholder={isFetching ? (de ? 'Laedt...' : 'Loading...') : (de ? 'Projekt waehlen' : 'Select project')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{de ? 'Kein Projekt' : 'No Project'}</SelectItem>
+                {projects.map((project) => (
+                  <SelectItem key={project._id} value={project._id}>{project.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedProject && (
+            <p className="mt-1 text-xs text-muted-foreground">{selectedProject.customerName || selectedProject.status}</p>
+          )}
+        </FormField>
         <FormField label={de ? 'Kundenname' : 'Customer Name'}>
-          <Input {...register('customerName')} placeholder={de ? 'Firma / Name…' : 'Company / Name…'} />
+          <Input {...register('customerName')} placeholder={de ? 'Firma / Name...' : 'Company / Name...'} />
         </FormField>
         <FormField label={de ? 'Telefon' : 'Phone'}>
           <Input {...register('customerPhone')} type="tel" placeholder="+41 79 000 00 00" />
@@ -180,13 +280,13 @@ function Step3CustomerSite({ form, de }) {
           <Input {...register('customerEmail')} type="email" placeholder="name@firma.ch" />
         </FormField>
         <FormField label={de ? 'Standortadresse' : 'Site Address'}>
-          <Input {...register('siteAddress')} placeholder={de ? 'Strasse, PLZ Ort…' : 'Street, ZIP City…'} />
+          <Input {...register('siteAddress')} placeholder={de ? 'Strasse, PLZ Ort...' : 'Street, ZIP City...'} />
         </FormField>
         <FormField label={de ? 'Zugangshinweise' : 'Access Instructions'}>
-          <Input {...register('accessInstructions')} placeholder={de ? 'Schlüssel bei…' : 'Key available at…'} />
+          <Input {...register('accessInstructions')} placeholder={de ? 'Schluessel bei...' : 'Key available at...'} />
         </FormField>
         <FormField label={de ? 'Parkinginfo' : 'Parking Info'}>
-          <Input {...register('parkingInfo')} placeholder={de ? 'Parkplatz vorne…' : 'Parking in front…'} />
+          <Input {...register('parkingInfo')} placeholder={de ? 'Parkplatz vorne...' : 'Parking in front...'} />
         </FormField>
       </div>
     </FormSection>
@@ -194,17 +294,79 @@ function Step3CustomerSite({ form, de }) {
 }
 
 function Step4Assignment({ form, de }) {
-  const { register } = form;
+  const { register, watch, setValue } = form;
+  const { data: employees = [] } = useDeployEmployees({ limit: 120 });
+  const departments = useMemo(() => uniqueDepartments(employees), [employees]);
+  const targetType = watch('assignmentTargetType') || 'EMPLOYEE';
+
+  const handleTargetType = (value) => {
+    setValue('assignmentTargetType', value, { shouldValidate: true });
+    setValue('employeeId', '', { shouldValidate: true });
+    setValue('assignmentTargetId', '', { shouldValidate: true });
+    setValue('assignmentTargetLabel', '');
+  };
+
+  const handleGroupTarget = (value) => {
+    if (value === 'none') {
+      setValue('assignmentTargetId', '', { shouldValidate: true });
+      setValue('assignmentTargetLabel', '');
+      return;
+    }
+    setValue('assignmentTargetId', value, { shouldValidate: true });
+    setValue('assignmentTargetLabel', value);
+  };
+
   return (
     <FormSection
       title={de ? 'Zuweisung & Termin' : 'Assignment & Schedule'}
-      description={de ? 'Techniker und geplante Einsatzzeiten' : 'Technician and planned service times'}
+      description={de ? 'Direkt an Mitarbeiter, Team oder Abteilung zuweisen' : 'Assign directly to an employee, team, or department'}
     >
-      <div className="grid grid-cols-2 gap-4">
-        <FormField label={de ? 'Zugewiesener Techniker' : 'Assigned Technician'}>
-          <Input {...register('assignedTo')} placeholder={de ? 'Name oder ID…' : 'Name or ID…'} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label={de ? 'Zuweisungstyp' : 'Assignment Type'}>
+          <Select value={targetType} onValueChange={handleTargetType}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EMPLOYEE">{de ? 'Mitarbeiter' : 'Employee'}</SelectItem>
+              <SelectItem value="TEAM">{de ? 'Team' : 'Team'}</SelectItem>
+              <SelectItem value="DEPARTMENT">{de ? 'Abteilung' : 'Department'}</SelectItem>
+            </SelectContent>
+          </Select>
         </FormField>
-        <div />
+
+        {targetType === 'EMPLOYEE' ? (
+          <FormField label={de ? 'Mitarbeiter' : 'Employee'}>
+            <Select value={watch('employeeId') || 'none'} onValueChange={(value) => setValue('employeeId', value === 'none' ? '' : value, { shouldValidate: true })}>
+              <SelectTrigger>
+                <SelectValue placeholder={de ? 'Mitarbeiter waehlen' : 'Select employee'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{de ? 'Nicht zugewiesen' : 'Unassigned'}</SelectItem>
+                {employees.map((employee) => (
+                  <SelectItem key={employee._id} value={employee._id}>
+                    {employeeLabel(employee)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+        ) : (
+          <FormField label={targetType === 'TEAM' ? (de ? 'Team' : 'Team') : (de ? 'Abteilung' : 'Department')}>
+            <Select value={watch('assignmentTargetId') || 'none'} onValueChange={handleGroupTarget}>
+              <SelectTrigger>
+                <SelectValue placeholder={de ? 'Ziel waehlen' : 'Select target'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{de ? 'Kein Ziel' : 'No target'}</SelectItem>
+                {departments.map((department) => (
+                  <SelectItem key={department} value={department}>{department}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+        )}
+
         <FormField label={de ? 'Geplanter Start' : 'Scheduled Start'}>
           <Input {...register('scheduledStart')} type="datetime-local" />
         </FormField>
@@ -212,43 +374,88 @@ function Step4Assignment({ form, de }) {
           <Input {...register('scheduledEnd')} type="datetime-local" />
         </FormField>
       </div>
+
+      <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <UsersRound className="h-4 w-4 shrink-0" />
+        <span>
+          {de
+            ? 'Team- und Abteilungsauftraege bleiben sichtbar fuer passende Mitarbeiter in der App.'
+            : 'Team and department jobs stay visible to matching employees in the app.'}
+        </span>
+      </div>
     </FormSection>
   );
 }
 
-// ── Main dialog ───────────────────────────────────────────────────────────────
-
 function mapOrderToForm(order) {
   if (!order) return BLANK;
+  const targetType = order.assignmentTargetType || order.assignment_target_type || 'EMPLOYEE';
+  const employee = order.employeeId || order.employee_id;
+  const project = order.projectId || order.project_id;
+  const customer = order.customerId || order.customer_id;
+  const site = order.siteId || order.site_id;
   return {
+    ...BLANK,
     orderType: order.assignmentType || order.orderType || '',
-    priority: order.priority || 'NORMAL',
+    priority: order.priority || ORDER_PRIORITY.NORMAL,
     title: order.title || '',
     description: order.instructions || order.description || '',
     scopeOfWork: order.scopeOfWork || '',
     specialInstructions: order.specialInstructions || '',
-    customerName: order.appointment?.customerContactName || order.customerName || '',
-    customerPhone: order.appointment?.customerContactPhone || order.customerPhone || '',
-    customerEmail: order.appointment?.customerEmail || order.customerEmail || '',
-    siteAddress: order.siteAddress || order.appointment?.siteAddress || '',
-    accessInstructions: order.accessInstructions || '',
-    parkingInfo: order.parkingInfo || '',
-    assignedTo: order.employeeId?.firstName
-      ? `${order.employeeId.firstName} ${order.employeeId.lastName}`.trim()
-      : (order.assignedTo || ''),
-    scheduledStart: order.startDatetime
-      ? new Date(order.startDatetime).toISOString().slice(0, 16)
-      : (order.scheduledStart ? new Date(order.scheduledStart).toISOString().slice(0, 16) : ''),
-    scheduledEnd: order.endDatetime
-      ? new Date(order.endDatetime).toISOString().slice(0, 16)
-      : (order.scheduledEnd ? new Date(order.scheduledEnd).toISOString().slice(0, 16) : ''),
+    projectId: normalizeId(project),
+    customerId: normalizeId(customer),
+    siteId: normalizeId(site),
+    customerName: order.appointment?.customerContactName || order.customerName || order.customer_name || '',
+    customerPhone: order.appointment?.customerContactPhone || order.customerPhone || order.customer_phone || '',
+    customerEmail: order.appointment?.customerContactEmail || order.customerEmail || order.customer_email || '',
+    siteAddress: order.siteAddress || order.site_address || order.appointment?.siteAddress || '',
+    accessInstructions: order.accessInstructions || order.access_instructions || '',
+    parkingInfo: order.parkingInfo || order.parking_info || '',
+    assignmentTargetType: targetType,
+    employeeId: targetType === 'EMPLOYEE' ? normalizeId(employee) : '',
+    assignmentTargetId: targetType === 'EMPLOYEE'
+      ? ''
+      : (order.assignmentTargetId || order.assignment_target_id || ''),
+    assignmentTargetLabel: targetType === 'EMPLOYEE'
+      ? ''
+      : (order.assignmentTargetLabel || order.assignment_target_label || ''),
+    scheduledStart: toInputDateTime(order.startDatetime || order.scheduledStart || order.scheduled_start),
+    scheduledEnd: toInputDateTime(order.endDatetime || order.scheduledEnd || order.scheduled_end),
   };
+}
+
+function cleanPayload(data) {
+  const payload = { ...data };
+  payload.description = stripEmptyHtml(payload.description) || undefined;
+  payload.scopeOfWork = stripEmptyHtml(payload.scopeOfWork) || undefined;
+  payload.specialInstructions = stripEmptyHtml(payload.specialInstructions) || undefined;
+
+  if (payload.assignmentTargetType === 'EMPLOYEE') {
+    delete payload.assignmentTargetId;
+    delete payload.assignmentTargetLabel;
+  } else {
+    if (!payload.assignmentTargetId) {
+      payload.assignmentTargetType = 'EMPLOYEE';
+      delete payload.assignmentTargetId;
+      delete payload.assignmentTargetLabel;
+    } else if (!payload.assignmentTargetLabel) {
+      payload.assignmentTargetLabel = payload.assignmentTargetId;
+    }
+    delete payload.employeeId;
+  }
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === '' || payload[key] === null || payload[key] === undefined) {
+      delete payload[key];
+    }
+  });
+  if (!payload.priority) payload.priority = ORDER_PRIORITY.NORMAL;
+  return payload;
 }
 
 export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoading, defaultValues }) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
-
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(1);
 
@@ -263,53 +470,48 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
   useEffect(() => {
     if (open) {
       reset(defaultValues ? mapOrderToForm(defaultValues) : BLANK);
-      setCurrentStep(0);
-      setDirection(1);
+      queueMicrotask(() => {
+        setCurrentStep(0);
+        setDirection(1);
+      });
     }
   }, [open, defaultValues, reset]);
 
-  const STEPS = [
-    { label: de ? 'Auftrag' : 'Order',   icon: ClipboardList },
-    { label: de ? 'Leistung' : 'Scope',  icon: FileText },
-    { label: de ? 'Kunde' : 'Customer',  icon: Building2 },
+  const steps = useMemo(() => [
+    { label: de ? 'Auftrag' : 'Order', icon: ClipboardList },
+    { label: de ? 'Leistung' : 'Scope', icon: FileText },
+    { label: de ? 'Kunde' : 'Customer', icon: Building2 },
     { label: de ? 'Termin' : 'Schedule', icon: CalendarClock },
-  ];
+  ], [de]);
 
   const stepContent = [
     <Step1OrderDetails key={0} form={form} de={de} />,
-    <Step2ScopeOfWork  key={1} form={form} de={de} />,
+    <Step2ScopeOfWork key={1} form={form} de={de} />,
     <Step3CustomerSite key={2} form={form} de={de} />,
-    <Step4Assignment   key={3} form={form} de={de} />,
+    <Step4Assignment key={3} form={form} de={de} />,
   ];
 
-  const isEditMode = !!defaultValues;
+  const isEditMode = Boolean(defaultValues);
 
-  const handleOpenChange = useCallback((v) => {
-    onOpenChange(v);
+  const handleOpenChange = useCallback((value) => {
+    onOpenChange(value);
   }, [onOpenChange]);
 
   const handleNext = useCallback(async () => {
     const valid = await trigger(STEP_FIELDS[currentStep]);
     if (!valid) return;
 
-    if (currentStep === STEPS.length - 1) {
-      const data = getValues();
-      const payload = { ...data };
-      payload.description        = stripEmptyHtml(payload.description) || undefined;
-      payload.scopeOfWork        = stripEmptyHtml(payload.scopeOfWork) || undefined;
-      payload.specialInstructions = stripEmptyHtml(payload.specialInstructions) || undefined;
-      Object.keys(payload).forEach((k) => { if (!payload[k]) delete payload[k]; });
-      if (!payload.priority) payload.priority = 'NORMAL';
-      onCreate(payload);
+    if (currentStep === steps.length - 1) {
+      onCreate(cleanPayload(getValues()));
       return;
     }
     setDirection(1);
-    setCurrentStep((s) => s + 1);
-  }, [currentStep, trigger, getValues, onCreate, STEPS.length]);
+    setCurrentStep((step) => step + 1);
+  }, [currentStep, getValues, onCreate, steps.length, trigger]);
 
   const handleBack = useCallback(() => {
     setDirection(-1);
-    setCurrentStep((s) => s - 1);
+    setCurrentStep((step) => step - 1);
   }, []);
 
   const handleStepClick = useCallback((idx) => {
@@ -319,10 +521,8 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-3xl p-0 gap-0 flex flex-col max-h-[90vh]">
-
-        {/* Header — fixed */}
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-3xl">
+        <DialogHeader className="shrink-0 border-b border-border px-6 pb-4 pt-5">
           <DialogTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-primary" />
@@ -331,18 +531,16 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
                 : (de ? 'Neuer Auftrag' : 'New Order')}
             </span>
             <span className="text-sm font-normal text-muted-foreground">
-              {de ? `Schritt ${currentStep + 1} von ${STEPS.length}` : `Step ${currentStep + 1} of ${STEPS.length}`}
+              {de ? `Schritt ${currentStep + 1} von ${steps.length}` : `Step ${currentStep + 1} of ${steps.length}`}
             </span>
           </DialogTitle>
         </DialogHeader>
 
-        {/* Step indicator — fixed */}
-        <div className="px-6 pt-5 pb-2 shrink-0">
-          <StepIndicator steps={STEPS} currentStep={currentStep} onStepClick={handleStepClick} />
+        <div className="shrink-0 px-6 pb-2 pt-5">
+          <StepIndicator steps={steps} currentStep={currentStep} onStepClick={handleStepClick} />
         </div>
 
-        {/* Scrollable content */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           <AnimatePresence mode="wait" custom={direction}>
             <motion.div
               key={currentStep}
@@ -358,24 +556,22 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
           </AnimatePresence>
         </div>
 
-        {/* Footer — fixed */}
-        <div className="px-6 pb-5 shrink-0">
+        <div className="shrink-0 px-6 pb-5">
           <StepFooter
             currentStep={currentStep}
-            totalSteps={STEPS.length}
+            totalSteps={steps.length}
             onBack={handleBack}
             onNext={handleNext}
             onCancel={() => handleOpenChange(false)}
             isLoading={isLoading}
             nextLabel={de ? 'Weiter' : 'Next'}
-            backLabel={de ? 'Zurück' : 'Back'}
+            backLabel={de ? 'Zurueck' : 'Back'}
             cancelLabel={de ? 'Abbrechen' : 'Cancel'}
             submitLabel={isEditMode
               ? (de ? 'Speichern' : 'Save Changes')
               : (de ? 'Auftrag erstellen' : 'Create Order')}
           />
         </div>
-
       </DialogContent>
     </Dialog>
   );

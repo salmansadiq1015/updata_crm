@@ -8,9 +8,10 @@ import { Separator } from '@/components/ui/separator';
 import { FieldOpsReportStatusBadge } from './field-ops-report-status-badge';
 import { FieldOpsRejectDialog } from './field-ops-report-action-dialog';
 import { useFieldOpsReportMutations } from '@/modules/field-ops/hooks/use-field-ops-report-mutations';
+import { useFieldOpsReportHistory } from '@/modules/field-ops/hooks/use-field-ops-queries';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate } from '@/lib/formatters';
-import { CheckCircle, XCircle, Pencil } from 'lucide-react';
+import { CheckCircle, Clock, History, ReceiptText, XCircle, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function Section({ title, children, className }) {
@@ -22,11 +23,28 @@ function Section({ title, children, className }) {
   );
 }
 
+function formatHours(minutes) {
+  const hours = Math.round((Number(minutes || 0) / 60) * 100) / 100;
+  return `${hours.toLocaleString(undefined, { maximumFractionDigits: 2 })} h`;
+}
+
+function deriveMinutes(report) {
+  const explicit = Number(report?.billableMinutes || 0) + Number(report?.nonBillableMinutes || 0);
+  if (explicit > 0) return explicit;
+  if (!report?.arrivalTime || !report?.departureTime) return 0;
+  const start = new Date(report.arrivalTime).getTime();
+  const end = new Date(report.departureTime).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return Math.round((end - start) / 60000);
+}
+
 export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange, onEdit }) {
   const { t, locale: language } = useLanguage();
   const [rejectOpen, setRejectOpen] = useState(false);
+  const reportId = report?._id || report?.id;
+  const { data: history = [] } = useFieldOpsReportHistory(reportId);
 
-  const { approve, reject } = useFieldOpsReportMutations({
+  const { approve, reject, createInvoice } = useFieldOpsReportMutations({
     onApprove: () => onOpenChange(false),
     onReject: () => { setRejectOpen(false); onOpenChange(false); },
   });
@@ -34,6 +52,7 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange,
   if (!report) return null;
 
   const canAct = report.status === 'SUBMITTED';
+  const canInvoice = report.status === 'APPROVED';
 
   return (
     <>
@@ -68,6 +87,29 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange,
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">{language === 'de' ? 'Ankunft / Abfahrt' : 'Arrival / Departure'}</p>
                   <p>{report.arrivalTime ? new Date(report.arrivalTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'} – {report.departureTime ? new Date(report.departureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</p>
+                </div>
+              </div>
+            </Section>
+
+            <Section title={language === 'de' ? 'Abrechnung' : 'Billing'}>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg border border-border/50 px-3 py-2">
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground mb-0.5">
+                    <Clock className="h-3 w-3" />
+                    {language === 'de' ? 'Gesamt' : 'Total'}
+                  </p>
+                  <p className="font-medium">{formatHours(deriveMinutes(report))}</p>
+                </div>
+                <div className="rounded-lg border border-border/50 px-3 py-2">
+                  <p className="text-xs text-muted-foreground mb-0.5">{language === 'de' ? 'Billable / Non-billable' : 'Billable / Non-billable'}</p>
+                  <p className="font-medium">{formatHours(report.billableMinutes)} / {formatHours(report.nonBillableMinutes)}</p>
+                </div>
+                <div className="rounded-lg border border-border/50 px-3 py-2 col-span-2">
+                  <p className="flex items-center gap-1 text-xs text-muted-foreground mb-0.5">
+                    <ReceiptText className="h-3 w-3" />
+                    {language === 'de' ? 'Rechnung' : 'Invoice'}
+                  </p>
+                  <p className="font-medium">{report.invoiceId?.invoiceNumber || report.invoiceReference || '—'}</p>
                 </div>
               </div>
             </Section>
@@ -137,37 +179,72 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange,
                 </Section>
               </>
             )}
+
+            {history.length > 0 && (
+              <>
+                <Separator />
+                <Section title={language === 'de' ? 'Historie' : 'History'}>
+                  <div className="space-y-2">
+                    {history.slice(0, 8).map((entry) => (
+                      <div key={entry._id || `${entry.eventType}-${entry.timestamp}`} className="flex items-start gap-2 text-sm">
+                        <History className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">{entry.eventType}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {entry.timestamp ? new Date(entry.timestamp).toLocaleString(language === 'de' ? 'de-CH' : 'en-GB') : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              </>
+            )}
           </div>
 
-          {canAct && (
+          {(canAct || canInvoice) && (
             <div className="border-t px-6 py-4 flex gap-2 justify-end bg-background">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setRejectOpen(true)}
-                disabled={reject.isPending || approve.isPending}
-                className="text-destructive border-destructive/30 hover:bg-destructive/5"
-              >
-                <XCircle className="h-4 w-4 mr-1.5" />
-                {t('fieldOps.reports.reject', 'Reject')}
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => approve.mutate({ reportId: report._id, orderId })}
-                disabled={approve.isPending || reject.isPending}
-              >
-                {approve.isPending ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    {language === 'de' ? 'Wird genehmigt...' : 'Approving...'}
-                  </span>
-                ) : (
-                  <>
-                    <CheckCircle className="h-4 w-4 mr-1.5" />
-                    {t('fieldOps.reports.approve', 'Approve')}
-                  </>
-                )}
-              </Button>
+              {canAct && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRejectOpen(true)}
+                    disabled={reject.isPending || approve.isPending}
+                    className="text-destructive border-destructive/30 hover:bg-destructive/5"
+                  >
+                    <XCircle className="h-4 w-4 mr-1.5" />
+                    {t('fieldOps.reports.reject', 'Reject')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => approve.mutate({ reportId, orderId })}
+                    disabled={approve.isPending || reject.isPending}
+                  >
+                    {approve.isPending ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        {language === 'de' ? 'Wird genehmigt...' : 'Approving...'}
+                      </span>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-1.5" />
+                        {t('fieldOps.reports.approve', 'Approve')}
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+              {canInvoice && (
+                <Button
+                  size="sm"
+                  onClick={() => createInvoice.mutate({ reportId, orderId })}
+                  disabled={createInvoice.isPending}
+                >
+                  <ReceiptText className="h-4 w-4 mr-1.5" />
+                  {language === 'de' ? 'Rechnung erstellen' : 'Create Invoice'}
+                </Button>
+              )}
             </div>
           )}
         </SheetContent>
@@ -176,7 +253,7 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange,
       <FieldOpsRejectDialog
         open={rejectOpen}
         onOpenChange={setRejectOpen}
-        onConfirm={(note) => reject.mutate({ reportId: report._id, orderId, rejectionNote: note })}
+        onConfirm={(note) => reject.mutate({ reportId, orderId, rejectionNote: note })}
         isLoading={reject.isPending}
       />
     </>

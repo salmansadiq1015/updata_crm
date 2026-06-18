@@ -13,7 +13,7 @@ import { notificationService } from '@/modules/mobile/services/notification-serv
 export function useFieldOpsOrders(filters = {}) {
   return useQuery({
     queryKey: ['field-ops', 'orders', 'all', filters],
-    queryFn: () => orderService.getAllOrders(filters),
+    queryFn: () => orderService.getAllOrdersPage(filters),
     staleTime: 30_000,
   });
 }
@@ -24,6 +24,16 @@ export function useFieldOpsOrderDetail(id) {
     queryFn: () => orderService.getOrderById(id),
     enabled: !!id,
     staleTime: 30_000,
+  });
+}
+
+export function useFieldOpsOrderHistory(id) {
+  return useQuery({
+    queryKey: queryKeys.mobile.orders.history(id),
+    queryFn: () => orderService.getOrderHistory(id),
+    enabled: !!id,
+    staleTime: 30_000,
+    select: (data) => (Array.isArray(data) ? data : (data?.data ?? [])),
   });
 }
 
@@ -44,10 +54,27 @@ export function useFieldOpsAllReports(filters = {}) {
   });
 }
 
+export function useFieldOpsReportSummary(filters = {}) {
+  return useQuery({
+    queryKey: ['mobile', 'reports', 'summary', filters],
+    queryFn: () => reportService.getReportSummary(filters),
+    staleTime: 30_000,
+  });
+}
+
 export function useFieldOpsReportDetail(reportId) {
   return useQuery({
     queryKey: queryKeys.mobile.reports.detail(reportId),
     queryFn: () => reportService.getReport(reportId),
+    enabled: !!reportId,
+    staleTime: 30_000,
+  });
+}
+
+export function useFieldOpsReportHistory(reportId) {
+  return useQuery({
+    queryKey: ['mobile', 'reports', 'history', reportId],
+    queryFn: () => reportService.getReportHistory(reportId),
     enabled: !!reportId,
     staleTime: 30_000,
   });

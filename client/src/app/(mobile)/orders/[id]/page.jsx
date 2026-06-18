@@ -14,6 +14,7 @@ import {
   ScrollText,
   ChevronRight,
   Play,
+  PauseCircle,
   CheckCircle2,
   History,
   Plus,
@@ -142,7 +143,9 @@ export default function OrderDetailPage() {
       toast.success(
         newStatus === ORDER_STATUS.IN_PROGRESS
           ? (lang === 'de' ? 'Arbeit gestartet' : 'Work started')
-          : (lang === 'de' ? 'Auftrag abgeschlossen' : 'Order completed')
+          : newStatus === ORDER_STATUS.PAUSED
+            ? (lang === 'de' ? 'Auftrag pausiert' : 'Order paused')
+            : (lang === 'de' ? 'Auftrag abgeschlossen' : 'Order completed')
       );
     } catch {
       toast.error(lang === 'de' ? 'Status konnte nicht geändert werden' : 'Could not change status');
@@ -158,7 +161,7 @@ export default function OrderDetailPage() {
 
       {/* Status action bar */}
       {canTransition.length > 0 && (
-        <div className="px-4 py-3 border-b border-border">
+        <div className="px-4 py-3 border-b border-border space-y-2">
           {canTransition.includes(ORDER_STATUS.IN_PROGRESS) && (
             <button
               onClick={() => handleStatusChange(ORDER_STATUS.IN_PROGRESS)}
@@ -166,6 +169,15 @@ export default function OrderDetailPage() {
             >
               <Play className="h-4 w-4" />
               {t('mobile.order.startWork', 'Arbeit starten')}
+            </button>
+          )}
+          {canTransition.includes(ORDER_STATUS.PAUSED) && (
+            <button
+              onClick={() => handleStatusChange(ORDER_STATUS.PAUSED)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-amber-600 text-white font-medium text-sm"
+            >
+              <PauseCircle className="h-4 w-4" />
+              {lang === 'de' ? 'Pausieren' : 'Pause'}
             </button>
           )}
           {canTransition.includes(ORDER_STATUS.COMPLETED) && (

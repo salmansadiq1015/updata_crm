@@ -11,8 +11,6 @@ const ALLOWED_FILTERS = {
   isActive: 'boolean',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'name', 'templateType', '_id'];
-
 class DocumentTemplateRepository {
   async create(data) {
     const template = new DocumentTemplate(data);

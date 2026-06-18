@@ -58,7 +58,12 @@ export default function TemplateDetailPage() {
   };
 
   const handlePreview = async () => {
-    const response = await preview.mutateAsync({ id, sampleData: {}, language: 'de' });
+    const response = await preview.mutateAsync({
+      id,
+      sampleData: {},
+      language: 'de',
+      draftTemplate: draft || undefined,
+    });
     setPreviewUrl(response?.data?.downloadUrl || null);
   };
 

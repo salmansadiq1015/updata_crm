@@ -12,9 +12,18 @@ function useInvalidate() {
     lists:       ()   => qc.invalidateQueries({ queryKey: queryKeys.tasks.lists() }),
     allTasks:    ()   => qc.invalidateQueries({ queryKey: queryKeys.tasks.all() }),
     task:        (id) => qc.invalidateQueries({ queryKey: queryKeys.tasks.detail(id) }),
+    orderTasks:  (orderId) => qc.invalidateQueries({ queryKey: ['tasks', 'byOrder', orderId] }),
     subtasks:    (parentId) => qc.invalidateQueries({ queryKey: queryKeys.tasks.subtasks(parentId) }),
     notes:       (taskId) => qc.invalidateQueries({ queryKey: queryKeys.tasks.notes(taskId) }),
   };
+}
+
+function normalizeId(value) {
+  return value?._id || value?.id || value || '';
+}
+
+function mutationData(payload) {
+  return payload?.data ?? payload;
 }
 
 // ── Task list mutations ───────────────────────────────────────────────────────
@@ -56,13 +65,22 @@ export function useTaskMutations() {
 
   const createTask = useMutation({
     mutationFn: (data) => taskService.create(data),
-    onSuccess: () => { inv.allTasks(); toast.success('Aufgabe erstellt'); },
+    onSuccess: (_, data) => {
+      inv.allTasks();
+      if (data?.orderId) inv.orderTasks(data.orderId);
+      toast.success('Aufgabe erstellt');
+    },
     onError: () => toast.error('Aufgabe konnte nicht erstellt werden'),
   });
 
   const updateTask = useMutation({
     mutationFn: ({ id, data }) => taskService.update(id, data),
-    onSuccess: (_, { id }) => { inv.allTasks(); inv.task(id); toast.success('Aufgabe aktualisiert'); },
+    onSuccess: (_, { id, data }) => {
+      inv.allTasks();
+      inv.task(id);
+      if (data?.orderId) inv.orderTasks(data.orderId);
+      toast.success('Aufgabe aktualisiert');
+    },
     onError: () => toast.error('Aktualisierung fehlgeschlagen'),
   });
 
@@ -74,19 +92,37 @@ export function useTaskMutations() {
 
   const changeStatus = useMutation({
     mutationFn: ({ id, status }) => taskService.changeStatus(id, status),
-    onSuccess: (_, { id }) => { inv.allTasks(); inv.task(id); },
+    onSuccess: (result, { id }) => {
+      const task = mutationData(result);
+      inv.allTasks();
+      inv.task(id);
+      if (task?.orderId) inv.orderTasks(normalizeId(task.orderId));
+    },
     onError: () => toast.error('Status konnte nicht geändert werden'),
   });
 
   const completeTask = useMutation({
     mutationFn: ({ id, completeSubtasks }) => taskService.complete(id, completeSubtasks),
-    onSuccess: (_, { id }) => { inv.allTasks(); inv.task(id); inv.subtasks(id); toast.success('Aufgabe abgeschlossen'); },
+    onSuccess: (result, { id }) => {
+      const task = mutationData(result);
+      inv.allTasks();
+      inv.task(id);
+      inv.subtasks(id);
+      if (task?.orderId) inv.orderTasks(normalizeId(task.orderId));
+      toast.success('Aufgabe abgeschlossen');
+    },
     onError: () => toast.error('Abschließen fehlgeschlagen'),
   });
 
   const reopenTask = useMutation({
     mutationFn: (id) => taskService.reopen(id),
-    onSuccess: (_, id) => { inv.allTasks(); inv.task(id); toast.success('Aufgabe wieder geöffnet'); },
+    onSuccess: (result, id) => {
+      const task = mutationData(result);
+      inv.allTasks();
+      inv.task(id);
+      if (task?.orderId) inv.orderTasks(normalizeId(task.orderId));
+      toast.success('Aufgabe wieder geöffnet');
+    },
     onError: () => toast.error('Wieder öffnen fehlgeschlagen'),
   });
 

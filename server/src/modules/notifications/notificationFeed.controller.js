@@ -5,7 +5,14 @@ class NotificationFeedController {
     try {
       const query = req._validatedQuery || req.query;
       const result = await notificationFeedService.getFeed(req.user._id, query);
-      return res.success({ data: result.data, pagination: result.pagination });
+      return res.success({
+        data: {
+          items: result.data,
+          summary: result.summary,
+          unreadCount: result.summary?.unread || 0,
+        },
+        pagination: result.pagination,
+      });
     } catch (err) { next(err); }
   }
 

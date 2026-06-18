@@ -17,6 +17,16 @@ const INVOICE_TEMPLATE_TYPES = new Set([
   'invoice_final',
 ]);
 
+const CUSTOMER_TEMPLATE_TYPES = new Set([
+  'quotation',
+  'order_confirmation',
+  'invoice_standard',
+  'invoice_advance',
+  'invoice_final',
+  'service_report',
+  'inspection_certificate',
+]);
+
 class DocumentGenerationService {
   async generate({ templateType, sourceModule, sourceRecordId, data, language = 'de', generatedBy, meta = {} }) {
     // 1. Find active template by type
@@ -159,7 +169,7 @@ class DocumentGenerationService {
 
     required('documentNumber', data.documentNumber);
 
-    if (templateType !== 'cover_letter') {
+    if (CUSTOMER_TEMPLATE_TYPES.has(templateType)) {
       required('customer.name', data.customer?.name || data.customerName);
     }
 

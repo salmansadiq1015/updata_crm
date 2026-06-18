@@ -151,6 +151,12 @@ const PERMISSIONS = Object.freeze({
   // Notifications
   NOTIFICATIONS_READ: 'notifications:read',
   NOTIFICATIONS_WRITE: 'notifications:write',
+  NOTIFICATIONS_FEED: 'notifications:feed',
+  NOTIFICATIONS_PREFERENCES: 'notifications:preferences',
+  NOTIFICATIONS_DISPATCH: 'notifications:dispatch',
+  NOTIFICATIONS_TEMPLATES_MANAGE: 'notifications:templates:manage',
+  NOTIFICATIONS_SCHEDULED_MANAGE: 'notifications:scheduled:manage',
+  NOTIFICATIONS_METRICS_READ: 'notifications:metrics:read',
 
   // System
   SYSTEM_CONFIG_VIEW: 'system:config:view',

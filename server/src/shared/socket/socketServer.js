@@ -50,6 +50,7 @@ async function deliverPendingNotifications(userId, io) {
   try {
     const deliveryRepo = (await import('../../modules/notifications/notificationDelivery.repository.js')).default;
     const notifRepo = (await import('../../modules/notifications/notification.repository.js')).default;
+    const { buildNotificationDeepLink } = await import('../../modules/notifications/notificationDeepLink.js');
 
     const pendingDeliveries = await deliveryRepo.findPendingPush(userId, 50);
     if (pendingDeliveries.length === 0) return;
@@ -67,6 +68,7 @@ async function deliverPendingNotifications(userId, io) {
         let title = delivery.renderedSubject || 'Notification';
         let body = delivery.renderedBody || '';
         let category = 'SYSTEM';
+        let priority = 'NORMAL';
         let deepLink = null;
         let icon = null;
         let relatedEntityType = null;
@@ -76,7 +78,9 @@ async function deliverPendingNotifications(userId, io) {
           const notification = await notifRepo.findById(delivery.notificationId);
           if (notification) {
             category = notification.category || 'SYSTEM';
-            deepLink = notification.payload?.deepLink || null;
+            priority = notification.priority || 'NORMAL';
+            deepLink = notification.payload?.deepLink
+              || buildNotificationDeepLink(notification.sourceEntityType, notification.sourceEntityId);
             icon = notification.payload?.icon || null;
             relatedEntityType = notification.sourceEntityType || null;
             relatedEntityId = notification.sourceEntityId || null;
@@ -87,6 +91,7 @@ async function deliverPendingNotifications(userId, io) {
           deliveryId: delivery._id.toString(),
           notificationId: delivery.notificationId?.toString(),
           category,
+          priority,
           title,
           body,
           icon,

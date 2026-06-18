@@ -96,7 +96,44 @@ class DocumentController {
 
       const { default: fileService } = await import('../files/file.service.js');
       const downloadUrl = await fileService.getDownloadUrl(doc.fileId);
-      return res.success({ data: { downloadUrl } });
+      auditService.logEvent({
+        eventType: 'document.downloaded',
+        userId: req.user._id,
+        ipAddress: req.ip || 'internal',
+        userAgent: req.get('user-agent'),
+        result: 'success',
+        details: { documentId: doc._id, fileName: doc.fileName },
+        module: 'doctpl',
+      });
+      return res.success({ data: { downloadUrl, fileName: doc.fileName } });
+    } catch (err) { next(err); }
+  }
+
+  async preview(req, res, next) {
+    try {
+      const doc = await generatedDocumentRepository.findById(req.params.id);
+      if (!doc) throw new NotFoundError('GeneratedDocument', req.params.id);
+      await documentAccessPolicyService.assertCanRead(doc, req.user);
+
+      const { default: fileService } = await import('../files/file.service.js');
+      const previewUrl = await fileService.getDownloadUrl(doc.fileId);
+      auditService.logEvent({
+        eventType: 'document.previewed',
+        userId: req.user._id,
+        ipAddress: req.ip || 'internal',
+        userAgent: req.get('user-agent'),
+        result: 'success',
+        details: { documentId: doc._id, fileName: doc.fileName },
+        module: 'doctpl',
+      });
+      return res.success({
+        data: {
+          previewUrl,
+          downloadUrl: previewUrl,
+          fileName: doc.fileName,
+          mimeType: 'application/pdf',
+        },
+      });
     } catch (err) { next(err); }
   }
 

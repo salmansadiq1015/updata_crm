@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { notificationService } from '../services/notification-service';
+import { useNotificationPreferences as usePlatformNotificationPreferences } from '@/modules/notifications/hooks/use-notification-preferences';
 import { db } from '../db/mobile-db';
 import { useOfflineQuery } from './use-offline-query';
 import { getExistingSocket } from '../lib/websocket-client';
@@ -18,7 +19,7 @@ export function useNotifications(params = {}) {
     queryFn: () => notificationService.getNotifications(params),
     offlineFn: () => db.notifications.orderBy('received_at').reverse().toArray(),
     onServerData: async (res) => {
-      const items = Array.isArray(res) ? res : res?.data || [];
+      const items = Array.isArray(res) ? res : res?.items || res?.notifications || res?.data || [];
       for (const n of items) {
         await db.notifications.put(n);
       }
@@ -87,21 +88,5 @@ export function useNotificationMutations() {
 }
 
 export function useNotificationPreferences() {
-  const queryClient = useQueryClient();
-
-  const { data, isLoading } = useOfflineQuery({
-    queryKey: queryKeys.mobile.notifications.preferences(),
-    queryFn: () => notificationService.getPreferences(),
-    offlineFn: () => null,
-    staleTime: 30 * 60 * 1000,
-  });
-
-  const updatePreferences = useMutation({
-    mutationFn: (prefs) => notificationService.updatePreferences(prefs),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.mobile.notifications.preferences() });
-    },
-  });
-
-  return { preferences: data, isLoading, updatePreferences };
+  return usePlatformNotificationPreferences();
 }

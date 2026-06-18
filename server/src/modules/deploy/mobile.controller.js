@@ -4,7 +4,7 @@ class MobileController {
       const assignmentService = (await import('./assignment.service.js')).default;
       const { serializeMobileAssignments } = await import('./mobileAssignment.serializer.js');
       const { dateFrom, dateTo } = req.query;
-      const assignments = await assignmentService.listByEmployee(req.user._id, dateFrom, dateTo);
+      const assignments = await assignmentService.listByEmployee(req.user._id, dateFrom, dateTo, req.user);
       const data = await serializeMobileAssignments(assignments);
       return res.success({ data });
     } catch (err) { next(err); }

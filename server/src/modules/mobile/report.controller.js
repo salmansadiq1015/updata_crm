@@ -11,17 +11,53 @@ class ReportController {
   async list(req, res, next) {
     try {
       const filters = req._validatedQuery || req.query;
-      const reports = await reportService.list({
+      const result = await reportService.list({
         status: filters.status,
         orderId: filters.orderId,
         projectId: filters.projectId,
+        customerId: filters.customerId,
+        technicianId: filters.technicianId,
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        search: filters.search,
+        includeArchived: filters.includeArchived === 'true' || filters.includeArchived === true,
+        page: filters.page,
+        pageSize: filters.pageSize,
+        sortBy: filters.sortBy,
+        sortOrder: filters.sortOrder,
+      });
+      return res.success({ data: result.items, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
+
+  async summary(req, res, next) {
+    try {
+      const filters = req._validatedQuery || req.query;
+      const summary = await reportService.getSummary({
+        status: filters.status,
+        orderId: filters.orderId,
+        projectId: filters.projectId,
+        customerId: filters.customerId,
         technicianId: filters.technicianId,
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
         search: filters.search,
         includeArchived: filters.includeArchived === 'true' || filters.includeArchived === true,
       });
-      return res.success({ data: reports });
+      return res.success({ data: summary });
+    } catch (err) { next(err); }
+  }
+
+  async exportCsv(req, res, next) {
+    try {
+      const filters = req._validatedQuery || req.query;
+      const { filename, csv } = await reportService.exportCsv({
+        ...filters,
+        includeArchived: filters.includeArchived === 'true' || filters.includeArchived === true,
+      });
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.status(200).send(csv);
     } catch (err) { next(err); }
   }
 
@@ -30,6 +66,14 @@ class ReportController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const report = await reportService.create(req.params.id, req.body, req.user._id, meta);
       return res.success({ data: report, message: 'Work report created successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  async generate(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const report = await reportService.generateFromSources(req.params.id, req.body, req.user._id, meta);
+      return res.success({ data: report, message: 'Work report generated successfully', statusCode: 201 });
     } catch (err) { next(err); }
   }
 
@@ -95,6 +139,46 @@ class ReportController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const report = await reportService.submit(req.params.reportId, req.user._id, meta);
       return res.success({ data: report, message: 'Work report submitted successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async approve(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const report = await reportService.approve(req.params.reportId, req.user._id, meta);
+      return res.success({ data: report, message: 'Work report approved successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async reject(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const report = await reportService.reject(req.params.reportId, req.body, req.user._id, meta);
+      return res.success({ data: report, message: 'Work report rejected successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async markInvoiced(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const report = await reportService.markInvoiced(req.params.reportId, req.body, req.user._id, meta);
+      return res.success({ data: report, message: 'Work report marked as invoiced' });
+    } catch (err) { next(err); }
+  }
+
+  async createInvoice(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const report = await reportService.createInvoiceFromReport(req.params.reportId, req.body, req.user._id, meta);
+      return res.success({ data: report, message: 'Invoice created from work report' });
+    } catch (err) { next(err); }
+  }
+
+  async history(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const entries = await reportService.getHistory(req.params.reportId, query.limit);
+      return res.success({ data: entries });
     } catch (err) { next(err); }
   }
 }

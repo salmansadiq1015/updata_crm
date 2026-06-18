@@ -24,6 +24,7 @@ export const queryKeys = {
   notifications: {
     feed: (filters) => ['notifications', 'feed', filters],
     unreadCount: () => ['notifications', 'unreadCount'],
+    preferences: () => ['notifications', 'preferences'],
   },
   documents: {
     all: () => ['documents'],
@@ -268,6 +269,7 @@ export const queryKeys = {
     listDetail: (id) => ['tasks', 'lists', 'detail', id],
     list: (filters) => ['tasks', 'list', filters],
     detail: (id) => ['tasks', 'detail', id],
+    byOrder: (orderId, filters) => ['tasks', 'byOrder', orderId, filters],
     subtasks: (parentId) => ['tasks', 'subtasks', parentId],
     notes: (taskId) => ['tasks', 'notes', taskId],
     dashboard: (filters) => ['tasks', 'dashboard', filters],

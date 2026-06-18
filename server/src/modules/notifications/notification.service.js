@@ -7,8 +7,8 @@ import auditService from '../auth/audit.service.js';
 import { AppError, NotFoundError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
-import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import { buildNotificationDeepLink } from './notificationDeepLink.js';
 
 const NOTIFICATION_TTL = { l1Ttl: 30, l2Ttl: 120 };
 const VALID_CHANNELS = ['PUSH', 'EMAIL', 'WHATSAPP', 'SMS', 'IN_APP'];
@@ -159,6 +159,7 @@ class NotificationService {
           recipient._id,
           notification.type,
           channel,
+          notification.priority,
         );
         if (!channelEnabled) {
           skippedCount++;
@@ -285,7 +286,9 @@ class NotificationService {
       const notification = await notificationRepository.findById(delivery.notificationId);
       if (notification) {
         content.category = notification.category || 'SYSTEM';
-        content.deepLink = notification.payload?.deepLink || null;
+        content.priority = notification.priority || 'NORMAL';
+        content.deepLink = notification.payload?.deepLink
+          || buildNotificationDeepLink(notification.sourceEntityType, notification.sourceEntityId);
         content.icon = notification.payload?.icon || null;
         content.whatsappTemplateId = notification.payload?.whatsappTemplateId || null;
         content.language = notification.payload?.language || 'de';
@@ -396,37 +399,59 @@ class NotificationService {
   }
 
   async handleWebhookUpdate(providerMessageId, status, metadata = {}) {
-    const delivery = await notificationDeliveryRepository.updateByProviderMessageId(providerMessageId, {
-      status,
-      ...(status === 'DELIVERED' ? { deliveredAt: new Date() } : {}),
-      ...(status === 'READ' ? { readAt: new Date() } : {}),
-      ...(status === 'BOUNCED' ? { failedAt: new Date(), errorMessage: metadata.reason || 'Bounced' } : {}),
-    });
+    let deliveryLookup = providerMessageId;
+    let nextStatus = status;
+    let nextMetadata = metadata;
+    let lookupByDeliveryId = false;
+
+    if (providerMessageId && typeof providerMessageId === 'object') {
+      const update = providerMessageId;
+      deliveryLookup = update.externalMessageId || update.messageId || update.providerMessageId || update.deliveryId;
+      nextStatus = update.status;
+      nextMetadata = {
+        ...update,
+        reason: update.bounceReason || update.errorMessage || update.reason,
+      };
+      lookupByDeliveryId = Boolean(update.deliveryId && !update.externalMessageId && !update.messageId && !update.providerMessageId);
+    }
+
+    const normalizedStatus = String(nextStatus || '').toUpperCase();
+    const updateData = {
+      status: normalizedStatus,
+      ...(normalizedStatus === 'DELIVERED' ? { deliveredAt: new Date() } : {}),
+      ...(normalizedStatus === 'READ' ? { readAt: new Date() } : {}),
+      ...(normalizedStatus === 'BOUNCED' ? { failedAt: new Date(), errorMessage: nextMetadata.reason || 'Bounced' } : {}),
+      ...(normalizedStatus === 'FAILED' ? { failedAt: new Date(), errorMessage: nextMetadata.errorMessage || nextMetadata.reason || 'Failed' } : {}),
+    };
+
+    const delivery = lookupByDeliveryId
+      ? await notificationDeliveryRepository.updateById(deliveryLookup, updateData)
+      : await notificationDeliveryRepository.updateByProviderMessageId(deliveryLookup, updateData);
 
     if (!delivery) {
       logger.warn('Webhook update for unknown providerMessageId', {
         module: 'notifications',
         action: 'handleWebhookUpdate',
-        providerMessageId,
-        status,
+        providerMessageId: deliveryLookup,
+        status: normalizedStatus,
       });
       return null;
     }
 
-    if (status === 'DELIVERED') {
+    if (normalizedStatus === 'DELIVERED') {
       eventBus.publish(EVENT_TYPES.NOTIFICATION_DELIVERED, {
         deliveryId: delivery._id,
         notificationId: delivery.notificationId,
         channel: delivery.channel,
-        providerMessageId,
+        providerMessageId: deliveryLookup,
       });
-    } else if (status === 'BOUNCED') {
+    } else if (normalizedStatus === 'BOUNCED') {
       eventBus.publish(EVENT_TYPES.NOTIFICATION_BOUNCED, {
         deliveryId: delivery._id,
         notificationId: delivery.notificationId,
         channel: delivery.channel,
-        providerMessageId,
-        reason: metadata.reason,
+        providerMessageId: deliveryLookup,
+        reason: nextMetadata.reason,
       });
     }
 
@@ -434,8 +459,8 @@ class NotificationService {
       module: 'notifications',
       action: 'handleWebhookUpdate',
       deliveryId: delivery._id,
-      providerMessageId,
-      status,
+      providerMessageId: deliveryLookup,
+      status: normalizedStatus,
     });
 
     return delivery;

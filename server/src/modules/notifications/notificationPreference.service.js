@@ -1,11 +1,10 @@
 import userNotificationPreferenceRepository from './userNotificationPreference.repository.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import auditService from '../auth/audit.service.js';
-import { AppError } from '../../shared/errors/AppError.js';
-import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
 
 const PREFERENCE_TTL = { l1Ttl: 60, l2Ttl: 300 };
+const MANDATORY_NOTIFICATION_TYPES = new Set(['maintenance_escalated']);
 
 const DEFAULT_PREFERENCES = {
   preferences: [],
@@ -42,7 +41,11 @@ class NotificationPreferenceService {
     const updateData = {};
 
     if (data.preferences !== undefined) {
-      updateData.preferences = data.preferences;
+      updateData.preferences = data.preferences.map((entry) => (
+        MANDATORY_NOTIFICATION_TYPES.has(entry.notificationType)
+          ? { ...entry, enabled: true }
+          : entry
+      ));
     }
 
     if (data.quietHours !== undefined) {
@@ -77,7 +80,11 @@ class NotificationPreferenceService {
     return updated;
   }
 
-  async isChannelEnabled(userId, notificationType, channel) {
+  async isChannelEnabled(userId, notificationType, channel, priority = 'NORMAL') {
+    if (priority === 'CRITICAL' || MANDATORY_NOTIFICATION_TYPES.has(notificationType)) {
+      return true;
+    }
+
     const prefs = await this.getPreferences(userId);
 
     if (!prefs.preferences || prefs.preferences.length === 0) {

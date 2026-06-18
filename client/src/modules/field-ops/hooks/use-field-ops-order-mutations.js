@@ -17,6 +17,7 @@ export function useFieldOpsOrderMutations() {
 
   const invalidateDetail = (id) => {
     queryClient.invalidateQueries({ queryKey: queryKeys.mobile.orders.detail(id) });
+    queryClient.invalidateQueries({ queryKey: queryKeys.mobile.orders.history(id) });
   };
 
   const createOrder = useMutation({

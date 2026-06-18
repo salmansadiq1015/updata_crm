@@ -7,12 +7,22 @@ const FEED_TTL = { l1Ttl: 15, l2Ttl: 60 };
 const UNREAD_TTL = { l1Ttl: 10, l2Ttl: 30 };
 
 class NotificationFeedService {
-  async getFeed(userId, { cursor, limit = 50, category } = {}) {
-    const cacheKey = `notif:feed:${userId}:${cursor || ''}:${limit}:${category || ''}`;
+  async getFeed(userId, { cursor, limit = 50, category, isRead, search } = {}) {
+    const cacheKey = `notif:feed:${userId}:${cursor || ''}:${limit}:${category || ''}:${isRead ?? ''}:${search || ''}`;
 
     return cacheManager.getOrSet(
       cacheKey,
-      () => inAppNotificationRepository.findByUserId(userId, { cursor, limit, category }),
+      async () => {
+        const [feed, summary] = await Promise.all([
+          inAppNotificationRepository.findByUserId(userId, { cursor, limit, category, isRead, search }),
+          inAppNotificationRepository.getSummary(userId),
+        ]);
+
+        return {
+          ...feed,
+          summary,
+        };
+      },
       FEED_TTL,
     );
   }

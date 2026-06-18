@@ -17,6 +17,7 @@ class SmsAdapter {
       logger.info('SMS notification sent', {
         module: 'notifications', channel: 'sms',
         recipientPhone: delivery.recipientPhone ? `***${delivery.recipientPhone.slice(-4)}` : null,
+        messageLength: message.length,
       });
 
       return { success: true, providerMessageId: `sms-${Date.now()}` };

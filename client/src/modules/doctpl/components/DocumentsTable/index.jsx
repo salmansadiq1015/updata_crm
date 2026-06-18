@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { DocumentPreviewDrawer } from '../DocumentPreviewDrawer';
-import { useDownloadDocument } from '../../hooks/useDocumentMutations';
+import { useDownloadDocument, usePreviewDocument } from '../../hooks/useDocumentMutations';
 import { formatSwissDate } from '../../utils/localization';
 
 export function DocumentsTable({
@@ -21,6 +21,7 @@ export function DocumentsTable({
   const { t, locale } = useLanguage();
   const [preview, setPreview] = useState(null);
   const download = useDownloadDocument();
+  const previewDocument = usePreviewDocument();
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allSelected = documents.length > 0 && documents.every((doc) => selectedSet.has(doc._id));
 
@@ -38,8 +39,8 @@ export function DocumentsTable({
 
   const handlePreview = async (doc) => {
     if (onPreview) { onPreview(doc); return; }
-    const r = await download.mutateAsync(doc._id);
-    setPreview({ url: r?.data?.downloadUrl, fileName: doc.fileName });
+    const r = await previewDocument.mutateAsync(doc._id);
+    setPreview({ url: r?.data?.previewUrl || r?.data?.downloadUrl, fileName: r?.data?.fileName || doc.fileName });
   };
 
   const handleDownload = async (doc) => {

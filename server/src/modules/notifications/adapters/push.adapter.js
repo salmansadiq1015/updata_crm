@@ -18,6 +18,7 @@ class PushAdapter {
         deliveryId: delivery._id?.toString(),
         notificationId: delivery.notificationId?.toString(),
         category: content.category || 'SYSTEM',
+        priority: content.priority || 'NORMAL',
         title: content.subject || content.title || 'Notification',
         body: content.body || '',
         icon: content.icon || null,

@@ -2,6 +2,10 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
 
+function uniqueRecipientIds(values = []) {
+  return [...new Set(values.map((value) => String(value || '')).filter(Boolean))];
+}
+
 /**
  * Register notification module event handlers.
  * Consumes events from ALL modules and dispatches notifications via the centralized pipeline.
@@ -351,7 +355,7 @@ export function registerNotificationsEvents() {
     if (payload.assignedTo?.length > 0) {
       await dispatch(payload, {
         type: 'website_service_request',
-        category: 'CUSTOMER',
+        category: 'CRM',
         priority: payload.isHighPriority || payload.requestType === 'heizungsstoerung' ? 'HIGH' : 'NORMAL',
         channels: ['IN_APP', 'PUSH', 'EMAIL'],
         recipientIds: payload.assignedTo,
@@ -416,7 +420,11 @@ export function registerNotificationsEvents() {
 
   eventBus.subscribe(EVENT_TYPES.MOBILE_ORDER_STATUS_UPDATED, async (data) => {
     const payload = data.payload || data;
-    const recipients = (payload.assignedTo ? [payload.assignedTo] : []).filter(
+    const recipients = uniqueRecipientIds([
+      ...(Array.isArray(payload.recipientIds) ? payload.recipientIds : []),
+      ...(Array.isArray(payload.managerIds) ? payload.managerIds : []),
+      payload.assignedTo,
+    ]).filter(
       (id) => String(id) !== String(payload.updatedBy),
     );
     if (recipients.length > 0) {

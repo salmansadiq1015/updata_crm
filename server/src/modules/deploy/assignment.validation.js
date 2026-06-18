@@ -2,7 +2,8 @@ import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 
 const ASSIGNMENT_TYPES = ['SERVICE_CALL', 'PROJECT_WORK', 'MAINTENANCE', 'INSTALLATION', 'INSPECTION', 'OTHER'];
-const ASSIGNMENT_STATUSES = ['PLANNED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+const ASSIGNMENT_STATUSES = ['PLANNED', 'CONFIRMED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED'];
+const ASSIGNMENT_TARGET_TYPES = ['EMPLOYEE', 'TEAM', 'DEPARTMENT'];
 const PRIORITIES = ['NORMAL', 'HIGH', 'URGENT'];
 const RECURRENCE_FREQUENCIES = ['DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'CUSTOM'];
 const RECURRENCE_END_TYPES = ['NEVER', 'AFTER_COUNT', 'UNTIL_DATE'];
@@ -21,6 +22,9 @@ const appointmentSchema = Joi.object({
 export const createAssignmentSchema = {
   body: Joi.object({
     employeeIds: Joi.array().items(objectId).min(1).max(20).required(),
+    assignmentTargetType: Joi.string().valid(...ASSIGNMENT_TARGET_TYPES),
+    assignmentTargetId: Joi.string().trim().max(100).allow('', null),
+    assignmentTargetLabel: Joi.string().trim().max(255).allow('', null),
     orderId: objectId.allow(null),
     projectId: objectId.allow(null),
     assignmentType: Joi.string().valid(...ASSIGNMENT_TYPES).required(),
@@ -65,6 +69,9 @@ export const updateAssignmentSchema = {
   body: Joi.object({
     version: Joi.number().integer().required(),
     employeeIds: Joi.array().items(objectId).min(1).max(1),
+    assignmentTargetType: Joi.string().valid(...ASSIGNMENT_TARGET_TYPES),
+    assignmentTargetId: Joi.string().trim().max(100).allow('', null),
+    assignmentTargetLabel: Joi.string().trim().max(255).allow('', null),
     orderId: objectId.allow(null),
     projectId: objectId.allow(null),
     assignmentType: Joi.string().valid(...ASSIGNMENT_TYPES),

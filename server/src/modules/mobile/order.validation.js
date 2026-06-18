@@ -1,9 +1,10 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 
-const ORDER_STATUSES = ['PLANNED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+const ORDER_STATUSES = ['PLANNED', 'CONFIRMED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED'];
 const ASSIGNMENT_TYPES = ['SERVICE_CALL', 'PROJECT_WORK', 'MAINTENANCE', 'INSTALLATION', 'INSPECTION', 'OTHER'];
 const PRIORITIES = ['NORMAL', 'HIGH', 'URGENT'];
+const ASSIGNMENT_TARGET_TYPES = ['EMPLOYEE', 'TEAM', 'DEPARTMENT'];
 
 export const listOrdersSchema = {
   query: Joi.object({
@@ -23,6 +24,11 @@ export const listOrdersSchema = {
     sortOrder: Joi.string().valid('asc', 'desc'),
     employeeId: objectId,
     projectId: objectId,
+    customerId: objectId,
+    siteId: objectId,
+    teamId: Joi.string().trim().max(100).allow(''),
+    assignmentTargetType: Joi.string().valid(...ASSIGNMENT_TARGET_TYPES),
+    assignmentTargetId: Joi.string().trim().max(100).allow(''),
   }),
 };
 
@@ -33,6 +39,6 @@ export const orderIdParamSchema = {
 export const updateStatusSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
-    status: Joi.string().valid('IN_PROGRESS', 'COMPLETED').required(),
+    status: Joi.string().valid('IN_PROGRESS', 'PAUSED', 'COMPLETED').required(),
   }),
 };

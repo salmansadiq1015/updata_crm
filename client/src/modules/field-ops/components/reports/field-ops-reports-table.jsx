@@ -1,8 +1,22 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { Archive, ArchiveRestore, CheckCircle2, FileCheck, Pencil, Plus, Trash2, XCircle, Eye } from 'lucide-react';
-import { useFieldOpsAllReports } from '@/modules/field-ops/hooks/use-field-ops-queries';
+import {
+  Archive,
+  ArchiveRestore,
+  BarChart3,
+  CheckCircle2,
+  Clock,
+  Download,
+  Eye,
+  FileCheck,
+  Pencil,
+  Plus,
+  ReceiptText,
+  Trash2,
+  XCircle,
+} from 'lucide-react';
+import { useFieldOpsAllReports, useFieldOpsReportSummary } from '@/modules/field-ops/hooks/use-field-ops-queries';
 import { useFieldOpsReportMutations } from '@/modules/field-ops/hooks/use-field-ops-report-mutations';
 import { FieldOpsReportStatusBadge } from './field-ops-report-status-badge';
 import { FieldOpsReportDetailPanel } from './field-ops-report-detail-panel';
@@ -15,6 +29,7 @@ import { RowActionsMenu } from '@/shared/components/data-table/row-actions-menu'
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate } from '@/lib/formatters';
@@ -58,6 +73,67 @@ function ArchivedBadge({ de }) {
 
 // ── Main table component ──────────────────────────────────────────────────────
 
+function SummaryMetric({ icon: Icon, label, value, sub }) {
+  return (
+    <div className="rounded-lg border border-border/40 bg-card px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
+        </div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+      {sub && <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function getReportId(report) {
+  return report?._id || report?.id;
+}
+
+function getOrderId(report) {
+  return report?.orderId?._id || report?.orderId || report?.order_id;
+}
+
+function isObjectIdLike(value) {
+  return /^[a-f\d]{24}$/i.test(`${value || ''}`);
+}
+
+function formatHours(minutes) {
+  const hours = Math.round((Number(minutes || 0) / 60) * 100) / 100;
+  return `${hours.toLocaleString(undefined, { maximumFractionDigits: 2 })} h`;
+}
+
+function deriveMinutes(report) {
+  const explicit = Number(report?.billableMinutes || 0) + Number(report?.nonBillableMinutes || 0);
+  if (explicit > 0) return explicit;
+  if (!report?.arrivalTime || !report?.departureTime) return 0;
+  const start = new Date(report.arrivalTime).getTime();
+  const end = new Date(report.departureTime).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  return Math.round((end - start) / 60000);
+}
+
+function getReportContext(report) {
+  const assignment = typeof report?.orderId === 'object' ? report.orderId : null;
+  const qopOrder = typeof assignment?.orderId === 'object' ? assignment.orderId : null;
+  const project = typeof report?.projectId === 'object'
+    ? report.projectId
+    : typeof assignment?.projectId === 'object'
+      ? assignment.projectId
+      : null;
+  const customer = typeof assignment?.customerId === 'object' ? assignment.customerId : null;
+  return {
+    assignmentLabel: assignment?.assignmentNumber ? `#${assignment.assignmentNumber}` : assignment?.title || '—',
+    projectName: project?.name || qopOrder?.title || '—',
+    customerName: customer?.name || qopOrder?.customerName || '—',
+    invoiceLabel: report?.invoiceId?.invoiceNumber || report?.invoiceReference || '—',
+  };
+}
+
 export function FieldOpsReportsTable() {
   const { t, locale: language } = useLanguage();
   const de = language === 'de';
@@ -65,6 +141,13 @@ export function FieldOpsReportsTable() {
   // Filters
   const [statusFilter, setStatusFilter] = useState('all');
   const [showArchived, setShowArchived] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [technicianFilter, setTechnicianFilter] = useState('all');
+  const [projectFilter, setProjectFilter] = useState('all');
+  const [customerFilter, setCustomerFilter] = useState('all');
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 });
 
   // UI state
   const [selectedReport, setSelectedReport] = useState(null);
@@ -78,15 +161,43 @@ export function FieldOpsReportsTable() {
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rowSelection, setRowSelection] = useState({});
 
-  // Queries
-  const filters = useMemo(() => {
+  const baseFilters = useMemo(() => {
     const f = {};
     if (statusFilter !== 'all') f.status = statusFilter;
     if (showArchived) f.includeArchived = true;
+    if (searchFilter.trim()) f.search = searchFilter.trim();
+    if (dateFrom) f.dateFrom = dateFrom;
+    if (dateTo) f.dateTo = dateTo;
+    if (isObjectIdLike(technicianFilter)) f.technicianId = technicianFilter;
+    if (isObjectIdLike(projectFilter)) f.projectId = projectFilter;
+    if (isObjectIdLike(customerFilter)) f.customerId = customerFilter;
     return f;
-  }, [statusFilter, showArchived]);
+  }, [statusFilter, showArchived, searchFilter, dateFrom, dateTo, technicianFilter, projectFilter, customerFilter]);
 
-  const { data: reports = [], isFetching } = useFieldOpsAllReports(filters);
+  const filters = useMemo(() => ({
+    ...baseFilters,
+    page: pagination.pageIndex + 1,
+    pageSize: pagination.pageSize,
+  }), [baseFilters, pagination]);
+
+  const { data: reportsResult, isFetching } = useFieldOpsAllReports(filters);
+  const { data: summary } = useFieldOpsReportSummary(baseFilters);
+  const reports = reportsResult?.data || [];
+  const paginationMeta = reportsResult?.pagination;
+  const totalReports = paginationMeta?.total ?? reports.length;
+
+  const employeeOptions = useMemo(
+    () => (summary?.byEmployee || []).filter((item) => isObjectIdLike(item.id)),
+    [summary],
+  );
+  const projectOptions = useMemo(
+    () => (summary?.byProject || []).filter((item) => isObjectIdLike(item.id)),
+    [summary],
+  );
+  const customerOptions = useMemo(
+    () => (summary?.byCustomer || []).filter((item) => isObjectIdLike(item.id)),
+    [summary],
+  );
 
   // Derived selection
   const selectedIds = useMemo(
@@ -97,7 +208,7 @@ export function FieldOpsReportsTable() {
   // Mutations
   const {
     createReport, approve, reject, updateReport, deleteReport, bulkDelete,
-    archiveReport, unarchiveReport, bulkArchive,
+    archiveReport, unarchiveReport, bulkArchive, createInvoice, exportReports,
   } = useFieldOpsReportMutations({
     onCreate: () => setShowCreate(false),
     onApprove: () => setApproveTarget(null),
@@ -115,14 +226,14 @@ export function FieldOpsReportsTable() {
   const handleUpdate = useCallback(({ payload }) => {
     if (!editTarget) return;
     updateReport.mutate(
-      { reportId: editTarget._id, data: payload, orderId: editTarget.orderId?._id || editTarget.orderId },
+      { reportId: getReportId(editTarget), data: payload, orderId: getOrderId(editTarget) },
       { onSuccess: () => setEditTarget(null) },
     );
   }, [editTarget, updateReport]);
 
   const handleDelete = useCallback(() => {
     if (!deleteTarget) return;
-    deleteReport.mutate({ reportId: deleteTarget._id, orderId: deleteTarget.orderId?._id || deleteTarget.orderId });
+    deleteReport.mutate({ reportId: getReportId(deleteTarget), orderId: getOrderId(deleteTarget) });
   }, [deleteTarget, deleteReport]);
 
   const handleBulkDelete = useCallback(() => {
@@ -132,6 +243,58 @@ export function FieldOpsReportsTable() {
   const handleBulkArchive = useCallback(() => {
     bulkArchive.mutate(selectedIds);
   }, [selectedIds, bulkArchive]);
+
+  const handleExport = useCallback((type) => {
+    exportReports.mutate({ filters: baseFilters, type });
+  }, [baseFilters, exportReports]);
+
+  const handlePaginationChange = useCallback((next) => {
+    setPagination((current) => (typeof next === 'function' ? next(current) : next));
+  }, []);
+
+  const resetPage = useCallback(() => {
+    setPagination((current) => (current.pageIndex === 0 ? current : { ...current, pageIndex: 0 }));
+  }, []);
+
+  const updateStatusFilter = useCallback((value) => {
+    setStatusFilter(value);
+    resetPage();
+  }, [resetPage]);
+
+  const toggleArchived = useCallback(() => {
+    setShowArchived((value) => !value);
+    resetPage();
+  }, [resetPage]);
+
+  const updateSearchFilter = useCallback((value) => {
+    setSearchFilter(value);
+    resetPage();
+  }, [resetPage]);
+
+  const updateDateFrom = useCallback((value) => {
+    setDateFrom(value);
+    resetPage();
+  }, [resetPage]);
+
+  const updateDateTo = useCallback((value) => {
+    setDateTo(value);
+    resetPage();
+  }, [resetPage]);
+
+  const updateTechnicianFilter = useCallback((value) => {
+    setTechnicianFilter(value);
+    resetPage();
+  }, [resetPage]);
+
+  const updateProjectFilter = useCallback((value) => {
+    setProjectFilter(value);
+    resetPage();
+  }, [resetPage]);
+
+  const updateCustomerFilter = useCallback((value) => {
+    setCustomerFilter(value);
+    resetPage();
+  }, [resetPage]);
 
   // Status filter options
   const STATUS_OPTS = [
@@ -159,15 +322,33 @@ export function FieldOpsReportsTable() {
       header: de ? 'Auftrag' : 'Order',
       size: 140,
       Cell: ({ row }) => {
-        const order = row.original.orderId;
+        const context = getReportContext(row.original);
         return (
           <span className="font-mono text-xs text-muted-foreground">
-            {typeof order === 'object'
-              ? (order?.assignmentNumber ? `#${order.assignmentNumber}` : order?.title || '—')
-              : '—'}
+            {context.assignmentLabel}
           </span>
         );
       },
+    },
+    {
+      id: 'customer',
+      header: de ? 'Kunde' : 'Customer',
+      size: 160,
+      Cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground truncate block max-w-[150px]">
+          {getReportContext(row.original).customerName}
+        </span>
+      ),
+    },
+    {
+      id: 'project',
+      header: de ? 'Projekt' : 'Project',
+      size: 160,
+      Cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground truncate block max-w-[150px]">
+          {getReportContext(row.original).projectName}
+        </span>
+      ),
     },
     {
       accessorKey: 'technicianId',
@@ -210,6 +391,22 @@ export function FieldOpsReportsTable() {
       Cell: ({ row }) => <FieldOpsReportStatusBadge status={row.original.status} size="sm" />,
     },
     {
+      id: 'hours',
+      header: de ? 'Stunden' : 'Hours',
+      size: 110,
+      Cell: ({ row }) => {
+        const report = row.original;
+        return (
+          <div className="text-xs leading-tight">
+            <div className="font-medium">{formatHours(deriveMinutes(report))}</div>
+            <div className="text-muted-foreground">
+              {formatHours(report.billableMinutes)} / {formatHours(report.nonBillableMinutes)}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: 'materialItems',
       header: de ? 'Material' : 'Materials',
       size: 80,
@@ -220,13 +417,25 @@ export function FieldOpsReportsTable() {
       ),
     },
     {
+      id: 'invoice',
+      header: de ? 'Rechnung' : 'Invoice',
+      size: 110,
+      Cell: ({ row }) => (
+        <span className="text-xs text-muted-foreground">
+          {getReportContext(row.original).invoiceLabel}
+        </span>
+      ),
+    },
+    {
       id: 'actions',
       header: '',
       size: 52,
       Cell: ({ row }) => {
         const report = row.original;
-        const orderId = report.orderId?._id || report.orderId;
+        const reportId = getReportId(report);
+        const orderId = getOrderId(report);
         const isSubmitted = report.status === 'SUBMITTED';
+        const isApproved = report.status === 'APPROVED';
         const isDraftOrSubmitted = report.status === 'DRAFT' || isSubmitted;
 
         return (
@@ -248,27 +457,35 @@ export function FieldOpsReportsTable() {
                 label: de ? 'Genehmigen' : 'Approve',
                 icon: CheckCircle2,
                 hidden: !isSubmitted,
-                onSelect: () => setApproveTarget({ reportId: report._id, orderId }),
+                onSelect: () => setApproveTarget({ reportId, orderId }),
               },
               {
                 label: de ? 'Ablehnen' : 'Reject',
                 icon: XCircle,
                 hidden: !isSubmitted,
                 destructive: true,
-                onSelect: () => setRejectTarget({ reportId: report._id, orderId }),
+                onSelect: () => setRejectTarget({ reportId, orderId }),
+              },
+              { type: 'separator', hidden: !isApproved },
+              {
+                label: de ? 'Rechnung erstellen' : 'Create Invoice',
+                icon: ReceiptText,
+                hidden: !isApproved,
+                onSelect: () => createInvoice.mutate({ reportId, orderId }),
               },
               { type: 'separator' },
               {
                 label: report.isArchived ? (de ? 'Aus Archiv holen' : 'Unarchive') : (de ? 'Archivieren' : 'Archive'),
                 icon: report.isArchived ? ArchiveRestore : Archive,
                 onSelect: () => report.isArchived
-                  ? unarchiveReport.mutate({ reportId: report._id, orderId })
-                  : archiveReport.mutate({ reportId: report._id, orderId }),
+                  ? unarchiveReport.mutate({ reportId, orderId })
+                  : archiveReport.mutate({ reportId, orderId }),
               },
               { type: 'separator' },
               {
                 label: de ? 'Löschen' : 'Delete',
                 icon: Trash2,
+                hidden: !isDraftOrSubmitted,
                 destructive: true,
                 onSelect: () => setDeleteTarget(report),
               },
@@ -277,14 +494,14 @@ export function FieldOpsReportsTable() {
         );
       },
     },
-  ], [de, archiveReport, unarchiveReport]);
+  ], [de, archiveReport, unarchiveReport, createInvoice]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title={t('fieldOps.reports.title', 'Work Reports')}
         description={t('fieldOps.reports.desc', 'Review and approve submitted reports.')}
-        count={reports.length}
+        count={totalReports}
       >
         <div className="flex items-center gap-2">
           {/* Archive toggle */}
@@ -292,14 +509,14 @@ export function FieldOpsReportsTable() {
             variant={showArchived ? 'secondary' : 'outline'}
             size="sm"
             className="h-8 gap-1.5 text-xs rounded-full"
-            onClick={() => setShowArchived((v) => !v)}
+            onClick={toggleArchived}
           >
             <Archive className="h-3.5 w-3.5" />
             {de ? 'Archiv' : 'Archive'}
           </Button>
 
           {/* Status filter */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={updateStatusFilter}>
             <SelectTrigger className="h-8 w-36 text-xs rounded-full border-dashed">
               <SelectValue />
             </SelectTrigger>
@@ -313,12 +530,109 @@ export function FieldOpsReportsTable() {
           </Select>
 
           {/* Create */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs rounded-full"
+            onClick={() => handleExport('payroll')}
+            disabled={exportReports.isPending}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Payroll
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs rounded-full"
+            onClick={() => handleExport('invoicing')}
+            disabled={exportReports.isPending}
+          >
+            <Download className="h-3.5 w-3.5" />
+            {de ? 'Fakturierung' : 'Invoicing'}
+          </Button>
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 mr-1.5" />
             {de ? 'Neuer Bericht' : 'New Report'}
           </Button>
         </div>
       </PageHeader>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryMetric
+          icon={BarChart3}
+          label={de ? 'Berichte' : 'Reports'}
+          value={summary?.totals?.reports ?? totalReports}
+          sub={`${de ? 'Genehmigt' : 'Approved'} ${summary?.totals?.approved ?? 0} · ${de ? 'Verrechnet' : 'Invoiced'} ${summary?.totals?.invoiced ?? 0}`}
+        />
+        <SummaryMetric
+          icon={Clock}
+          label={de ? 'Arbeitszeit' : 'Working Time'}
+          value={formatHours(summary?.totals?.totalMinutes)}
+          sub={`${de ? 'Billable' : 'Billable'} ${formatHours(summary?.totals?.billableMinutes)} · ${de ? 'Nicht billable' : 'Non-billable'} ${formatHours(summary?.totals?.nonBillableMinutes)}`}
+        />
+        <SummaryMetric
+          icon={FileCheck}
+          label={de ? 'Eingereicht' : 'Submitted'}
+          value={summary?.totals?.submitted ?? 0}
+          sub={`${de ? 'Entwurf' : 'Draft'} ${summary?.totals?.draft ?? 0} · ${de ? 'Abgelehnt' : 'Rejected'} ${summary?.totals?.rejected ?? 0}`}
+        />
+        <SummaryMetric
+          icon={ReceiptText}
+          label={de ? 'Materialpositionen' : 'Material Items'}
+          value={summary?.totals?.materialItems ?? 0}
+          sub={de ? 'Aus genehmigten und offenen Berichten' : 'From open and approved reports'}
+        />
+      </div>
+
+      <div className="grid gap-2 rounded-lg border border-border/40 bg-card p-3 md:grid-cols-2 xl:grid-cols-5">
+        <Input
+          type="date"
+          value={dateFrom}
+          onChange={(event) => updateDateFrom(event.target.value)}
+          className="h-9 text-xs"
+          aria-label={de ? 'Von Datum' : 'From date'}
+        />
+        <Input
+          type="date"
+          value={dateTo}
+          onChange={(event) => updateDateTo(event.target.value)}
+          className="h-9 text-xs"
+          aria-label={de ? 'Bis Datum' : 'To date'}
+        />
+        <Select value={technicianFilter} onValueChange={updateTechnicianFilter}>
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder={de ? 'Techniker' : 'Technician'} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{de ? 'Alle Techniker' : 'All Technicians'}</SelectItem>
+            {employeeOptions.map((option) => (
+              <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={projectFilter} onValueChange={updateProjectFilter}>
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder={de ? 'Projekt' : 'Project'} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{de ? 'Alle Projekte' : 'All Projects'}</SelectItem>
+            {projectOptions.map((option) => (
+              <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={customerFilter} onValueChange={updateCustomerFilter}>
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder={de ? 'Kunde' : 'Customer'} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{de ? 'Alle Kunden' : 'All Customers'}</SelectItem>
+            {customerOptions.map((option) => (
+              <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Create dialog */}
       <FieldOpsCreateReportDialog
@@ -403,9 +717,14 @@ export function FieldOpsReportsTable() {
         columns={columns}
         data={reports}
         isLoading={isFetching && reports.length === 0}
+        rowCount={totalReports}
+        pagination={pagination}
+        onPaginationChange={handlePaginationChange}
+        globalFilter={searchFilter}
+        onGlobalFilterChange={updateSearchFilter}
         onRowClick={(row) => { setSelectedReport(row); setPanelOpen(true); }}
         emptyState={<ReportsEmptyState de={de} />}
-        getRowId={(row) => row._id || row.id}
+        getRowId={(row) => getReportId(row)}
         enableRowSelection
         rowSelection={rowSelection}
         onRowSelectionChange={setRowSelection}
@@ -438,7 +757,7 @@ export function FieldOpsReportsTable() {
       {/* Detail panel */}
       <FieldOpsReportDetailPanel
         report={selectedReport}
-        orderId={selectedReport?.orderId?._id || selectedReport?.orderId}
+        orderId={getOrderId(selectedReport)}
         open={panelOpen}
         onOpenChange={(v) => { setPanelOpen(v); if (!v) setSelectedReport(null); }}
         onEdit={(report) => { setPanelOpen(false); setEditTarget(report); }}

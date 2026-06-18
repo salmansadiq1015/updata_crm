@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Loader2, RotateCcw } from 'lucide-react';
+import { Eye, Loader2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { DocumentPreviewDrawer } from '../DocumentPreviewDrawer';
 import { useTemplateVersionComparison, useTemplateVersions } from '../../hooks/useTemplateQueries';
-import { useRevertTemplate } from '../../hooks/useTemplateMutations';
+import { usePreviewTemplateVersion, useRevertTemplate } from '../../hooks/useTemplateMutations';
 import { formatSwissDate } from '../../utils/localization';
 
 function formatValue(value) {
@@ -18,7 +19,9 @@ export function TemplateVersionHistory({ templateId, expectedVersion }) {
   const { t, locale } = useLanguage();
   const { data, isLoading } = useTemplateVersions(templateId);
   const revert = useRevertTemplate();
+  const previewVersion = usePreviewTemplateVersion();
   const [selectedVersion, setSelectedVersion] = useState(null);
+  const [preview, setPreview] = useState(null);
   const items = useMemo(() => data?.items ?? [], [data?.items]);
   const currentVersion = useMemo(
     () => items.find((item) => item.isCurrent)?.version || Math.max(0, ...items.map((item) => Number(item.version || 0))),
@@ -30,6 +33,19 @@ export function TemplateVersionHistory({ templateId, expectedVersion }) {
       : null
   ), [currentVersion, selectedVersion]);
   const comparison = useTemplateVersionComparison(templateId, comparisonParams, !!comparisonParams);
+
+  const handlePreview = async (version) => {
+    const response = await previewVersion.mutateAsync({
+      id: templateId,
+      version,
+      sampleData: {},
+      language: locale || 'de',
+    });
+    setPreview({
+      url: response?.data?.downloadUrl,
+      fileName: `template_v${version}.pdf`,
+    });
+  };
 
   if (isLoading) {
     return (
@@ -45,8 +61,9 @@ export function TemplateVersionHistory({ templateId, expectedVersion }) {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-1.5 max-h-[42vh] overflow-y-auto pr-1">
+    <>
+      <div className="space-y-3">
+        <div className="space-y-1.5 max-h-[42vh] overflow-y-auto pr-1">
         {items.map((version) => {
           const isCurrent = version.isCurrent || Number(version.version) === Number(currentVersion);
           return (
@@ -74,6 +91,16 @@ export function TemplateVersionHistory({ templateId, expectedVersion }) {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    title={t('doctpl.version.preview', 'Preview v{value}', { value: version.version })}
+                    disabled={previewVersion.isPending}
+                    onClick={() => handlePreview(version.version)}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
                   {!isCurrent && (
                     <Button
                       size="sm"
@@ -99,10 +126,10 @@ export function TemplateVersionHistory({ templateId, expectedVersion }) {
             </div>
           );
         })}
-      </div>
+        </div>
 
-      {comparisonParams && (
-        <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+        {comparisonParams && (
+          <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-xs font-semibold">
               {t('doctpl.version.compareTitle', null, {
@@ -134,8 +161,15 @@ export function TemplateVersionHistory({ templateId, expectedVersion }) {
               )}
             </div>
           )}
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+      </div>
+      <DocumentPreviewDrawer
+        open={!!preview}
+        url={preview?.url}
+        fileName={preview?.fileName}
+        onClose={() => setPreview(null)}
+      />
+    </>
   );
 }

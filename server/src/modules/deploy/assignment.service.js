@@ -414,11 +414,17 @@ class AssignmentService {
     return updated;
   }
 
-  async listByEmployee(employeeId, startDate, endDate) {
+  async listByEmployee(employeeId, startDate, endDate, userContext = {}) {
     const now = Date.now();
     const start = startDate ? new Date(startDate) : new Date(now - 90 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date(now + 365 * 24 * 60 * 60 * 1000);
-    return assignmentRepository.findByEmployeeAndDateRange(employeeId, start, end);
+    const targetIds = uniqueIds([
+      ...(Array.isArray(userContext.targetIds) ? userContext.targetIds : []),
+      userContext.department,
+      userContext.preferences?.preferredDepartmentId,
+      userContext.preferredDepartmentId,
+    ]);
+    return assignmentRepository.findVisibleToEmployee(employeeId, start, end, { targetIds });
   }
 
   async syncSince(employeeId, since) {
@@ -538,6 +544,9 @@ class AssignmentService {
       employeeId,
       employeeIds: uniqueIds(employeeIds || [employeeId]),
       assignmentType: assignment.assignmentType,
+      assignmentTargetType: assignment.assignmentTargetType || 'EMPLOYEE',
+      assignmentTargetId: assignment.assignmentTargetId || null,
+      assignmentTargetLabel: assignment.assignmentTargetLabel || null,
       title: assignment.title,
       status: assignment.status,
       startDatetime: assignment.startDatetime,

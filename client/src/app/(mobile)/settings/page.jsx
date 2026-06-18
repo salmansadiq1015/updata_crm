@@ -24,6 +24,12 @@ import { checkStorageQuota } from '@/modules/mobile/db/cleanup';
 import { cleanupExpiredData } from '@/modules/mobile/db/cleanup';
 import { clearCachedTokens } from '@/modules/mobile/lib/auth-offline';
 import { cn } from '@/lib/utils';
+import {
+  NOTIFICATION_PREFERENCE_TYPES,
+  isPreferenceEnabled,
+  setPreferenceEnabled,
+  setQuietHoursValue,
+} from '@/modules/notifications/utils/notification-preferences';
 import toast from 'react-hot-toast';
 
 export default function SettingsPage() {
@@ -167,10 +173,10 @@ export default function SettingsPage() {
         </SettingsSection>
 
         {/* Notifications section */}
-        <SettingsSection title={lang === 'de' ? 'Benachrichtigungen' : 'Notifications'}>
-          <PushToggle lang={lang} />
-          <NotificationPreferences lang={lang} />
-          <QuietHoursSettings lang={lang} />
+        <SettingsSection title={t('mobile.settings.notificationPrefs', 'Notifications')}>
+          <PushToggle t={t} />
+          <NotificationPreferences t={t} />
+          <QuietHoursSettings t={t} />
         </SettingsSection>
 
         {/* About section */}
@@ -249,7 +255,7 @@ function SettingsItem({ icon: Icon, label, desc, onClick, disabled, trailing, ic
   );
 }
 
-function PushToggle({ lang }) {
+function PushToggle({ t }) {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const { register: registerDevice } = useDeviceRegistration();
@@ -280,16 +286,16 @@ function PushToggle({ lang }) {
             });
           }
           setPushEnabled(true);
-          toast.success(lang === 'de' ? 'Push aktiviert' : 'Push enabled');
+          toast.success(t('mobile.notifications.pushEnabled', 'Push enabled'));
         } else {
-          toast.error(lang === 'de' ? 'Berechtigung verweigert' : 'Permission denied');
+          toast.error(t('mobile.notifications.permissionDenied', 'Permission denied'));
         }
       } else {
         setPushEnabled(false);
-        toast.success(lang === 'de' ? 'Push deaktiviert' : 'Push disabled');
+        toast.success(t('mobile.notifications.pushDisabled', 'Push disabled'));
       }
     } catch {
-      toast.error(lang === 'de' ? 'Fehler beim Aktivieren' : 'Failed to enable');
+      toast.error(t('mobile.notifications.pushEnableFailed', 'Failed to enable'));
     } finally {
       setLoading(false);
     }
@@ -298,10 +304,10 @@ function PushToggle({ lang }) {
   return (
     <SettingsItem
       icon={Bell}
-      label={lang === 'de' ? 'Push-Benachrichtigungen' : 'Push Notifications'}
+      label={t('mobile.notifications.push', 'Push Notifications')}
       desc={pushEnabled
-        ? (lang === 'de' ? 'Aktiviert' : 'Enabled')
-        : (lang === 'de' ? 'Tippen zum Aktivieren' : 'Tap to enable')
+        ? t('mobile.notifications.pushStatusEnabled', 'Enabled')
+        : t('mobile.notifications.pushStatusDisabled', 'Tap to enable')
       }
       onClick={togglePush}
       disabled={loading}
@@ -320,39 +326,39 @@ function PushToggle({ lang }) {
   );
 }
 
-function NotificationPreferences({ lang }) {
+function NotificationPreferences({ t }) {
   const { preferences, updatePreferences } = useNotificationPreferences();
 
   const prefTypes = [
-    { key: 'new_assignment', de: 'Neue Aufträge', en: 'New Assignments' },
-    { key: 'order_changed', de: 'Auftragsänderungen', en: 'Order Changes' },
-    { key: 'chat_message', de: 'Chat-Nachrichten', en: 'Chat Messages' },
-    { key: 'daily_reminder', de: 'Tageserinnerung', en: 'Daily Reminder' },
-    { key: 'escalation', de: 'Eskalationen', en: 'Escalations' },
+    { key: 'new_assignment' },
+    { key: 'order_changed' },
+    { key: 'chat_message' },
+    { key: 'daily_reminder' },
+    { key: 'escalation' },
   ];
 
-  const currentPrefs = preferences?.preferences || {};
+  const currentPrefs = preferences?.preferences || [];
 
   const togglePref = async (key) => {
-    const updated = { ...currentPrefs, [key]: !currentPrefs[key] };
+    const updated = setPreferenceEnabled(currentPrefs, key, 'PUSH', !isPreferenceEnabled(currentPrefs, key, 'PUSH'));
     try {
-      await updatePreferences.mutateAsync({ preferences: updated });
+      await updatePreferences.mutateAsync({ ...preferences, preferences: updated });
     } catch {
-      toast.error(lang === 'de' ? 'Fehler' : 'Error');
+      toast.error(t('notifications.settings.saveFailed', 'Could not save notification settings.'));
     }
   };
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden divide-y divide-border">
       {prefTypes.map((pref) => {
-        const enabled = currentPrefs[pref.key] !== false;
+        const enabled = isPreferenceEnabled(currentPrefs, pref.key, 'PUSH');
         return (
           <button
             key={pref.key}
             onClick={() => togglePref(pref.key)}
             className="w-full flex items-center justify-between px-4 py-3 text-left active:bg-muted/50 transition-colors"
           >
-            <span className="text-sm">{lang === 'de' ? pref.de : pref.en}</span>
+            <span className="text-sm">{t(`notifications.type.${pref.key}`, pref.key)}</span>
             <div className={cn(
               'h-5 w-9 rounded-full transition-colors relative',
               enabled ? 'bg-primary' : 'bg-muted'
@@ -369,28 +375,30 @@ function NotificationPreferences({ lang }) {
   );
 }
 
-function QuietHoursSettings({ lang }) {
+function QuietHoursSettings({ t }) {
   const { preferences, updatePreferences } = useNotificationPreferences();
 
-  const quietHours = preferences?.quiet_hours || { enabled: false, start: '20:00', end: '07:00' };
+  const quietHours = preferences?.quietHours || { enabled: false, startTime: '20:00', endTime: '07:00', timezone: 'Europe/Zurich', bypassCritical: true };
 
   const toggleQuiet = async () => {
     try {
       await updatePreferences.mutateAsync({
-        quiet_hours: { ...quietHours, enabled: !quietHours.enabled },
+        ...preferences,
+        quietHours: setQuietHoursValue(quietHours, 'enabled', !quietHours.enabled),
       });
     } catch {
-      toast.error(lang === 'de' ? 'Fehler' : 'Error');
+      toast.error(t('notifications.settings.saveFailed', 'Could not save notification settings.'));
     }
   };
 
   const updateTime = async (field, value) => {
     try {
       await updatePreferences.mutateAsync({
-        quiet_hours: { ...quietHours, [field]: value },
+        ...preferences,
+        quietHours: setQuietHoursValue(quietHours, field, value),
       });
     } catch {
-      toast.error(lang === 'de' ? 'Fehler' : 'Error');
+      toast.error(t('notifications.settings.saveFailed', 'Could not save notification settings.'));
     }
   };
 
@@ -401,9 +409,9 @@ function QuietHoursSettings({ lang }) {
         className="w-full flex items-center justify-between"
       >
         <div>
-          <p className="text-sm font-medium">{lang === 'de' ? 'Ruhezeiten' : 'Quiet Hours'}</p>
+          <p className="text-sm font-medium">{t('notifications.settings.quietHoursTitle', 'Quiet hours')}</p>
           <p className="text-xs text-muted-foreground">
-            {lang === 'de' ? 'Keine Benachrichtigungen ausser dringend' : 'No notifications except urgent'}
+            {t('notifications.settings.quietHoursDescription', 'Pause non-critical alerts during configured hours.')}
           </p>
         </div>
         <div className={cn(
@@ -420,23 +428,23 @@ function QuietHoursSettings({ lang }) {
         <div className="flex items-center gap-3 pt-2 border-t border-border">
           <div className="flex-1">
             <label className="text-xs text-muted-foreground mb-1 block">
-              {lang === 'de' ? 'Von' : 'From'}
+              {t('notifications.settings.start', 'Start')}
             </label>
             <input
               type="time"
-              value={quietHours.start}
-              onChange={(e) => updateTime('start', e.target.value)}
+              value={quietHours.startTime}
+              onChange={(e) => updateTime('startTime', e.target.value)}
               className="w-full h-9 px-2 rounded-lg border border-border bg-background text-sm"
             />
           </div>
           <div className="flex-1">
             <label className="text-xs text-muted-foreground mb-1 block">
-              {lang === 'de' ? 'Bis' : 'Until'}
+              {t('notifications.settings.end', 'End')}
             </label>
             <input
               type="time"
-              value={quietHours.end}
-              onChange={(e) => updateTime('end', e.target.value)}
+              value={quietHours.endTime}
+              onChange={(e) => updateTime('endTime', e.target.value)}
               className="w-full h-9 px-2 rounded-lg border border-border bg-background text-sm"
             />
           </div>

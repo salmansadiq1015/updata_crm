@@ -335,10 +335,21 @@ class TemplateService {
     return updated;
   }
 
-  async preview(templateId, sampleData = {}, language = 'de') {
+  async preview(templateId, sampleData = {}, language = 'de', draftTemplate = null) {
     const template = await documentTemplateRepository.findById(templateId);
     if (!template) throw new NotFoundError('DocumentTemplate', templateId);
+    const renderTemplate = draftTemplate ? this._buildDraftPreviewTemplate(template, draftTemplate) : template;
 
+    return this._renderPreview(templateId, renderTemplate, sampleData, language, `preview_${templateId}_${language}.pdf`);
+  }
+
+  async previewVersion(templateId, version, sampleData = {}, language = 'de') {
+    const versionDoc = await this.getVersion(templateId, version);
+    const renderTemplate = versionDoc.templateSnapshot || versionDoc;
+    return this._renderPreview(templateId, renderTemplate, sampleData, language, `preview_${templateId}_v${version}_${language}.pdf`);
+  }
+
+  async _renderPreview(templateId, renderTemplate, sampleData = {}, language = 'de', originalName = `preview_${templateId}_${language}.pdf`) {
     const CIConfiguration = (await import('./ciConfiguration.model.js')).default;
     const ciConfig = await CIConfiguration.findOne({ isActive: true }).lean();
     const { default: ciRenderAssetsService } = await import('./ciRenderAssets.service.js');
@@ -346,13 +357,13 @@ class TemplateService {
 
     const { DocumentRenderer } = await import('./renderer/index.js');
     const renderer = new DocumentRenderer();
-    const previewData = this._buildPreviewData(template, sampleData, language);
-    const buffer = await renderer.render(template, renderCiConfig, previewData, language);
+    const previewData = this._buildPreviewData(renderTemplate, sampleData, language);
+    const buffer = await renderer.render(renderTemplate, renderCiConfig, previewData, language);
 
     const { default: fileService } = await import('../files/file.service.js');
     const fileMeta = await fileService.upload({
       buffer,
-      originalName: `preview_${templateId}_${language}.pdf`,
+      originalName,
       mimeType: 'application/pdf',
       sizeBytes: buffer.length,
       module: 'doctpl',
@@ -373,6 +384,29 @@ class TemplateService {
     });
 
     return { downloadUrl, sizeBytes: buffer.length };
+  }
+
+  _buildDraftPreviewTemplate(existing, draftTemplate) {
+    const draft = sanitizeObject(draftTemplate);
+    const previewTemplate = {
+      ...existing,
+      templateType: draft.templateType || existing.templateType,
+      name: draft.name || existing.name,
+      description: draft.description ?? existing.description,
+      isActive: draft.isActive ?? existing.isActive,
+      currentVersion: existing.currentVersion,
+      layout: draft.layout || existing.layout,
+      sections: draft.sections || existing.sections,
+      textBlocks: draft.textBlocks || existing.textBlocks,
+      tableColumns: draft.tableColumns || existing.tableColumns,
+    };
+
+    const details = [];
+    this._validateLayout(previewTemplate.layout, details);
+    this._validateColumns(previewTemplate.tableColumns || [], false, details);
+    if (details.length) throw new ValidationError('Document preview validation failed', details);
+
+    return previewTemplate;
   }
 
   _buildPreviewData(template, sampleData = {}, language = 'de') {

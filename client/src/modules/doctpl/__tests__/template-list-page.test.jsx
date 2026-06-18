@@ -2,12 +2,18 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const useTemplatesMock = vi.hoisted(() => vi.fn());
+const routerPushMock = vi.hoisted(() => vi.fn());
+const createMutateAsync = vi.hoisted(() => vi.fn());
 const updateMutateAsync = vi.hoisted(() => vi.fn());
 const duplicateMutateAsync = vi.hoisted(() => vi.fn());
 const deleteMutateAsync = vi.hoisted(() => vi.fn());
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>,
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPushMock }),
 }));
 
 vi.mock('@/lib/i18n/language-context', () => ({
@@ -27,6 +33,7 @@ vi.mock('@/modules/doctpl/hooks/useTemplateQueries', () => ({
 }));
 
 vi.mock('@/modules/doctpl/hooks/useTemplateMutations', () => ({
+  useCreateTemplate: () => ({ mutateAsync: createMutateAsync, isPending: false }),
   useUpdateTemplate: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
   useDuplicateTemplate: () => ({ mutateAsync: duplicateMutateAsync, isPending: false }),
   useDeleteTemplate: () => ({ mutateAsync: deleteMutateAsync, isPending: false }),
@@ -36,9 +43,12 @@ import AdminTemplatesPage, { buildTemplateFilters } from '../../../app/(platform
 
 describe('AdminTemplatesPage', () => {
   beforeEach(() => {
+    routerPushMock.mockReset();
+    createMutateAsync.mockReset();
     updateMutateAsync.mockReset();
     duplicateMutateAsync.mockReset();
     deleteMutateAsync.mockReset();
+    createMutateAsync.mockResolvedValue({ data: { _id: 'tpl-new' } });
     duplicateMutateAsync.mockResolvedValue({});
     useTemplatesMock.mockReset();
     useTemplatesMock.mockReturnValue({
@@ -89,5 +99,26 @@ describe('AdminTemplatesPage', () => {
     await waitFor(() => {
       expect(duplicateMutateAsync).toHaveBeenCalledWith({ id: 'tpl-1' });
     });
+  });
+
+  test('creates a template from the built-in profile dialog and opens the editor', async () => {
+    render(<AdminTemplatesPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create template' }));
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Custom Cover' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Create template' }).at(-1));
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
+        templateType: 'cover_letter',
+        name: 'Custom Cover',
+        isActive: true,
+      }));
+    });
+    const payload = createMutateAsync.mock.calls[0][0];
+    expect(Object.keys(payload.textBlocks)).toEqual(['de', 'fr', 'it', 'en']);
+    expect(payload.sections.map((section) => section.type)).toEqual(['header', 'body', 'footer']);
+    expect(payload.tableColumns).toEqual([]);
+    expect(routerPushMock).toHaveBeenCalledWith('/admin/templates/tpl-new');
   });
 });

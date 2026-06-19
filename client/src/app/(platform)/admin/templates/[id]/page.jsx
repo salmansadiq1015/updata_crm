@@ -3,18 +3,41 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Eye, History, Save, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, History, Save, Send, X, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { showError, showSuccess } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { PageHeader } from '@/shared/components/page-header';
 import { DocumentPreviewDrawer } from '@/modules/doctpl/components/DocumentPreviewDrawer';
 import { TemplateEditor } from '@/modules/doctpl/components/TemplateEditor';
 import { TemplateVersionHistory } from '@/modules/doctpl/components/TemplateVersionHistory';
 import { useTemplateDetail } from '@/modules/doctpl/hooks/useTemplateQueries';
-import { usePreviewTemplate, useUpdateTemplate } from '@/modules/doctpl/hooks/useTemplateMutations';
+import {
+  useApproveTemplate,
+  usePreviewTemplate,
+  useRejectTemplate,
+  useRequestTemplateApproval,
+  useUpdateTemplate,
+} from '@/modules/doctpl/hooks/useTemplateMutations';
+
+const APPROVAL_BADGE = {
+  draft: { key: 'doctpl.approval.draft', className: '' },
+  pending: { key: 'doctpl.approval.pending', className: 'border-amber-500 text-amber-600' },
+  approved: { key: 'doctpl.approval.approved', className: 'border-green-600 text-green-700' },
+  rejected: { key: 'doctpl.approval.rejected', className: 'border-destructive text-destructive' },
+};
 
 export default function TemplateDetailPage() {
   const { t } = useLanguage();
@@ -22,14 +45,52 @@ export default function TemplateDetailPage() {
   const { data: template, isLoading } = useTemplateDetail(id);
   const update = useUpdateTemplate();
   const preview = usePreviewTemplate();
+  const requestApproval = useRequestTemplateApproval();
+  const approve = useApproveTemplate();
+  const reject = useRejectTemplate();
 
   const [draft, setDraft] = useState(null);
   const [changeDesc, setChangeDesc] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [validationIssues, setValidationIssues] = useState([]);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
   const current = draft || template;
+  const status = current?.approvalStatus || 'draft';
+  const badge = APPROVAL_BADGE[status] || APPROVAL_BADGE.draft;
+  const approvalBusy = requestApproval.isPending || approve.isPending || reject.isPending;
+
+  const handleRequestApproval = async () => {
+    try {
+      await requestApproval.mutateAsync({ id });
+      showSuccess(t('doctpl.approval.requested'));
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const handleApprove = async () => {
+    try {
+      await approve.mutateAsync({ id });
+      showSuccess(t('doctpl.approval.approvedToast'));
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectReason.trim()) return;
+    try {
+      await reject.mutateAsync({ id, reason: rejectReason.trim() });
+      showSuccess(t('doctpl.approval.rejectedToast'));
+      setRejectOpen(false);
+      setRejectReason('');
+    } catch (error) {
+      showError(error);
+    }
+  };
 
   useEffect(() => {
     if (!draft) return undefined;
@@ -93,8 +154,43 @@ export default function TemplateDetailPage() {
             title={current.name}
             description={`v${current.currentVersion} - ${t(`doctpl.type.${current.templateType}`, current.templateType)}`}
           />
+          <Badge variant="outline" className={badge.className}>{t(badge.key)}</Badge>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {(status === 'draft' || status === 'rejected') && (
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              onClick={handleRequestApproval}
+              disabled={approvalBusy || !!draft}
+              title={draft ? t('doctpl.approval.saveFirst') : undefined}
+            >
+              <Send className="h-4 w-4" />
+              {t('doctpl.approval.request')}
+            </Button>
+          )}
+          {status === 'pending' && (
+            <>
+              <Button
+                className="gap-1.5"
+                onClick={handleApprove}
+                disabled={approvalBusy || !!draft}
+                title={draft ? t('doctpl.approval.saveFirst') : undefined}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                {t('doctpl.approval.approve')}
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-1.5 text-destructive hover:text-destructive"
+                onClick={() => setRejectOpen(true)}
+                disabled={approvalBusy}
+              >
+                <XCircle className="h-4 w-4" />
+                {t('doctpl.approval.reject')}
+              </Button>
+            </>
+          )}
           <Button variant="outline" className="gap-1.5" onClick={handlePreview} disabled={preview.isPending}>
             <Eye className="h-4 w-4" />
             {preview.isPending ? t('doctpl.templates.generating') : t('doctpl.templates.preview')}
@@ -105,6 +201,12 @@ export default function TemplateDetailPage() {
           </Button>
         </div>
       </div>
+
+      {status === 'rejected' && current.rejectionReason && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <span className="font-medium">{t('doctpl.approval.rejectionReasonLabel')}:</span> {current.rejectionReason}
+        </div>
+      )}
 
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 rounded-lg border bg-card p-5 shadow-sm">
@@ -154,6 +256,36 @@ export default function TemplateDetailPage() {
         url={previewUrl}
         onClose={() => setPreviewUrl(null)}
       />
+
+      <Dialog open={rejectOpen} onOpenChange={(open) => { setRejectOpen(open); if (!open) setRejectReason(''); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('doctpl.approval.rejectTitle')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            <Label>{t('doctpl.approval.rejectReason')} <span className="text-destructive">*</span></Label>
+            <Textarea
+              rows={4}
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              placeholder={t('doctpl.approval.rejectPlaceholder')}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setRejectOpen(false); setRejectReason(''); }}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              className="gap-1.5"
+              onClick={handleReject}
+              disabled={!rejectReason.trim() || reject.isPending}
+            >
+              <XCircle className="h-4 w-4" />
+              {t('doctpl.approval.reject')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

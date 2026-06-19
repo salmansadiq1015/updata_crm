@@ -12,6 +12,11 @@ export function LayoutTab({ layout = {}, onChange }) {
     margins: { ...margins, [side]: Number(val) },
   });
 
+  const setZoneHeight = (key, val) => onChange({
+    ...layout,
+    [key]: Number(val),
+  });
+
   return (
     <div className="space-y-5">
       <div>
@@ -30,6 +35,24 @@ export function LayoutTab({ layout = {}, onChange }) {
           ))}
         </div>
         <p className="text-xs text-muted-foreground mt-2">{t('doctpl.defaultMargins')}</p>
+      </div>
+
+      <div>
+        <p className="text-sm font-medium mb-3">{t('doctpl.zoneHeights')}</p>
+        <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
+          {([['headerHeight', 45], ['footerHeight', 30]]).map(([key, fallback]) => (
+            <div key={key}>
+              <Label className="text-xs text-muted-foreground">{t(`doctpl.${key}`)}</Label>
+              <Input
+                type="number" min={0} max={100} step={1}
+                value={layout[key] ?? fallback}
+                onChange={(e) => setZoneHeight(key, e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">{t('doctpl.defaultZoneHeights')}</p>
       </div>
     </div>
   );

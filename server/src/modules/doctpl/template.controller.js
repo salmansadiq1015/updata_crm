@@ -89,6 +89,30 @@ class TemplateController {
     } catch (err) { next(err); }
   }
 
+  async requestApproval(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const template = await templateService.requestApproval(req.params.id, req.user._id, req.body?.note, meta);
+      return res.success({ data: template, message: 'Approval requested' });
+    } catch (err) { next(err); }
+  }
+
+  async approve(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const template = await templateService.approve(req.params.id, req.user._id, req.body?.note, meta);
+      return res.success({ data: template, message: 'Template approved' });
+    } catch (err) { next(err); }
+  }
+
+  async reject(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const template = await templateService.reject(req.params.id, req.user._id, req.body.reason, meta);
+      return res.success({ data: template, message: 'Template rejected' });
+    } catch (err) { next(err); }
+  }
+
   async preview(req, res, next) {
     try {
       const result = await templateService.preview(

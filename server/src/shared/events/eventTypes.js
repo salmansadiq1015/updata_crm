@@ -180,6 +180,9 @@ const EVENT_TYPES = Object.freeze({
   DOCTPL_EMAIL_FAILED: 'doctpl.email.failed',
   DOCTPL_TEMPLATE_UPDATED: 'doctpl.template.updated',
   DOCTPL_TEMPLATE_REVERTED: 'doctpl.template.reverted',
+  DOCTPL_TEMPLATE_APPROVAL_REQUESTED: 'doctpl.template.approval_requested',
+  DOCTPL_TEMPLATE_APPROVED: 'doctpl.template.approved',
+  DOCTPL_TEMPLATE_REJECTED: 'doctpl.template.rejected',
   DOCTPL_CI_UPDATED: 'doctpl.ci.updated',
 
   // Material Catalogs (Module 10)

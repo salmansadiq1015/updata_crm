@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Activity, Database, HardDrive, Radio, CheckCircle2,
+  Activity, Database, HardDrive, Radio, Server, CheckCircle2,
   AlertTriangle, XCircle, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ export default function SystemPage() {
     { key: 'database', label: t('system.database') || 'Datenbank', icon: Database, desc: 'MongoDB Atlas' },
     { key: 'redis', label: t('system.cache') || 'Cache', icon: HardDrive, desc: 'Redis' },
     { key: 'queue', label: t('system.queue') || 'Job Queue', icon: Radio, desc: 'BullMQ' },
+    { key: 'storage', label: t('system.storage') || 'Speicher', icon: Server, desc: 'Object Storage' },
   ];
 
   const { data: health, isLoading, refetch, dataUpdatedAt } = useQuery({

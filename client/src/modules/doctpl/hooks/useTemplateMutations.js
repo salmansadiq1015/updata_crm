@@ -55,6 +55,29 @@ export const useRevertTemplate = () => {
   });
 };
 
+const useApprovalMutation = (action) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...payload }) => action(id, payload),
+    onSuccess: (_, v) => {
+      qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.detail(v.id) });
+      qc.invalidateQueries({ queryKey: ['doctpl', 'templates', 'list'] });
+    },
+  });
+};
+
+export const useRequestTemplateApproval = () => useApprovalMutation(
+  (id, { note } = {}) => templateService.requestApproval(id, note ? { note } : {}),
+);
+
+export const useApproveTemplate = () => useApprovalMutation(
+  (id, { note } = {}) => templateService.approve(id, note ? { note } : {}),
+);
+
+export const useRejectTemplate = () => useApprovalMutation(
+  (id, { reason } = {}) => templateService.reject(id, { reason }),
+);
+
 export const usePreviewTemplate = () => useMutation({
   mutationFn: ({ id, sampleData, language, draftTemplate }) => templateService.preview(id, { sampleData, language, draftTemplate }),
 });

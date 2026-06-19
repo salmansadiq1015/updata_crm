@@ -33,6 +33,12 @@ class DocumentGenerationService {
     const DocumentTemplate = (await import('./documentTemplate.model.js')).default;
     const template = await DocumentTemplate.findOne({ templateType, isActive: true, isDeleted: false }).lean();
     if (!template) throw new NotFoundError('DocumentTemplate', `type:${templateType}`);
+    if (template.approvalStatus !== 'approved') {
+      throw new ValidationError('Template is not approved for document generation', [{
+        field: 'approvalStatus',
+        message: `Template '${templateType}' must be approved before documents can be generated (current status: ${template.approvalStatus || 'draft'})`,
+      }]);
+    }
 
     // 2. Find active CI configuration
     const CIConfiguration = (await import('./ciConfiguration.model.js')).default;

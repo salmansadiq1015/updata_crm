@@ -46,11 +46,29 @@ export async function seedDoctplTemplates(adminUserId) {
   for (const tmpl of TEMPLATES) {
     const exists = await DocumentTemplate.findOne({ templateType: tmpl.templateType }).setOptions({ includeDeleted: true });
     if (!exists) {
-      await DocumentTemplate.create({ ...tmpl, createdBy: adminUserId, isActive: true });
+      await DocumentTemplate.create({
+        ...tmpl,
+        createdBy: adminUserId,
+        isActive: true,
+        approvalStatus: 'approved',
+        approvedBy: adminUserId,
+        approvedAt: new Date(),
+      });
       created++;
       logger.info(`Seeded template: ${tmpl.templateType}`, { module: 'seed', action: 'doctpl' });
     }
   }
+
+  // Backfill legacy templates that predate the approval workflow so existing
+  // document generation keeps working after upgrade.
+  const backfill = await DocumentTemplate.updateMany(
+    { approvalStatus: { $exists: false } },
+    { $set: { approvalStatus: 'approved', approvedBy: adminUserId, approvedAt: new Date() } },
+  );
+  if (backfill?.modifiedCount) {
+    logger.info(`DocTpl approval backfill: ${backfill.modifiedCount} legacy templates approved`, { module: 'seed', action: 'doctpl' });
+  }
+
   logger.info(`DocTpl seed complete: ${created} new templates created`, { module: 'seed', action: 'doctpl' });
   return created;
 }

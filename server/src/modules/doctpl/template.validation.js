@@ -127,6 +127,20 @@ export const updateTemplateSchema = {
   }).min(1),
 };
 
+export const approvalActionSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    note: Joi.string().max(1000).allow('', null),
+  }).default({}),
+};
+
+export const rejectTemplateSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    reason: Joi.string().trim().min(1).max(1000).required(),
+  }),
+};
+
 export const versionParamSchema = {
   params: Joi.object({
     id: objectId.required(),

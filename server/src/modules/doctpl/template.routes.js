@@ -6,6 +6,7 @@ import {
   listTemplatesSchema, templateIdParamSchema, updateTemplateSchema,
   versionParamSchema, previewSchema, createTemplateSchema,
   compareVersionsSchema, revertTemplateSchema, versionPreviewSchema,
+  approvalActionSchema, rejectTemplateSchema,
 } from './template.validation.js';
 
 const router = Router();
@@ -26,6 +27,11 @@ router.get('/:id/versions/compare', authenticate, requirePermission('templates:r
 router.get('/:id/versions/:version', authenticate, requirePermission('templates:read'), validate(versionParamSchema), (req, res, next) => templateController.getVersion(req, res, next));
 router.post('/:id/versions/:version/preview', authenticate, requirePermission('templates:read'), validate(versionPreviewSchema), (req, res, next) => templateController.previewVersion(req, res, next));
 router.post('/:id/versions/:version/revert', authenticate, requirePermission('templates:admin'), validate(revertTemplateSchema), (req, res, next) => templateController.revertToVersion(req, res, next));
+
+// Approval workflow
+router.post('/:id/approval/request', authenticate, requirePermission('templates:write'), validate(approvalActionSchema), (req, res, next) => templateController.requestApproval(req, res, next));
+router.post('/:id/approval/approve', authenticate, requirePermission('templates:admin'), validate(approvalActionSchema), (req, res, next) => templateController.approve(req, res, next));
+router.post('/:id/approval/reject', authenticate, requirePermission('templates:admin'), validate(rejectTemplateSchema), (req, res, next) => templateController.reject(req, res, next));
 
 // Preview
 router.post('/:id/preview', authenticate, requirePermission('templates:read'), validate(previewSchema), (req, res, next) => templateController.preview(req, res, next));

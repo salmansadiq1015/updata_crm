@@ -56,6 +56,14 @@ class DocumentTemplateRepository {
     ).lean();
   }
 
+  async updateApprovalState(id, data) {
+    return DocumentTemplate.findOneAndUpdate(
+      { _id: id, isDeleted: { $ne: true } },
+      { ...data },
+      { returnDocument: 'after', runValidators: true },
+    ).lean();
+  }
+
   async softDelete(id) {
     return DocumentTemplate.findOneAndUpdate(
       { _id: id, isDeleted: { $ne: true } },

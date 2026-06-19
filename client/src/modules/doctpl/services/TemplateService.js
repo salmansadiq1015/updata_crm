@@ -14,4 +14,7 @@ export const templateService = {
   compareVersions: (id, p) => apiClient.get(E.TEMPLATE_COMPARE(id), { params: p }),
   revert:       (id, v, d = {})  => apiClient.post(E.TEMPLATE_REVERT(id, v), d),
   preview:      (id, d)  => apiClient.post(E.TEMPLATE_PREVIEW(id), d),
+  requestApproval: (id, d = {}) => apiClient.post(E.TEMPLATE_APPROVAL_REQUEST(id), d),
+  approve:      (id, d = {}) => apiClient.post(E.TEMPLATE_APPROVAL_APPROVE(id), d),
+  reject:       (id, d)  => apiClient.post(E.TEMPLATE_APPROVAL_REJECT(id), d),
 };

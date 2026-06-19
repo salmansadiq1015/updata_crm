@@ -43,6 +43,7 @@ import {
   useUpdateTemplate,
 } from '@/modules/doctpl/hooks/useTemplateMutations';
 import { BUILT_IN_TEMPLATE_TYPES } from '@/modules/doctpl/utils/template-defaults';
+import { getSwissDateLocale } from '@/modules/doctpl/utils/localization';
 
 const TEMPLATE_TYPES = [
   ['all', 'doctpl.templates.allTypes'],
@@ -110,7 +111,7 @@ export default function AdminTemplatesPage() {
   const remove = useDeleteTemplate();
   const templates = data?.items ?? EMPTY_TEMPLATES;
   const pagination = data?.pagination ?? {};
-  const dateLocale = locale === 'de' ? 'de-CH' : 'en-CH';
+  const dateLocale = getSwissDateLocale(locale);
   const busy = create.isPending || update.isPending || duplicate.isPending || remove.isPending;
   const templateTypeOptions = useMemo(() => {
     const known = new Map(TEMPLATE_TYPES);

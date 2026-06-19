@@ -36,6 +36,14 @@ const COMPARABLE_TEMPLATE_FIELDS = [
   'tableColumns',
   'isActive',
 ];
+// Content fields whose change invalidates an existing approval (back to draft).
+const APPROVAL_RESETTING_FIELDS = [
+  'templateType',
+  'layout',
+  'sections',
+  'textBlocks',
+  'tableColumns',
+];
 
 class TemplateService {
   async list(queryParams) {
@@ -147,6 +155,22 @@ class TemplateService {
     const { changeDescription: _changeDescription, expectedVersion: _expectedVersion, ...updateData } = cleanData;
     this._validateTemplateForSave({ ...existing, ...updateData });
 
+    // Editing the content of an already-submitted/approved template resets it to
+    // draft so the changes must be re-approved before they can be used.
+    const contentChanged = APPROVAL_RESETTING_FIELDS.some((field) => field in updateData);
+    const approvalReset = (contentChanged && (existing.approvalStatus || 'draft') !== 'draft')
+      ? {
+        approvalStatus: 'draft',
+        approvalRequestedBy: null,
+        approvalRequestedAt: null,
+        approvedBy: null,
+        approvedAt: null,
+        rejectedBy: null,
+        rejectedAt: null,
+        rejectionReason: null,
+      }
+      : {};
+
     // Create version snapshot of current state before update.
     await templateVersionRepository.create({
       templateId: id,
@@ -158,7 +182,7 @@ class TemplateService {
 
     const updated = await documentTemplateRepository.updateById(
       id,
-      { ...updateData, updatedBy: userId },
+      { ...updateData, ...approvalReset, updatedBy: userId },
       expectedVersion,
     );
     if (!updated) {
@@ -184,6 +208,140 @@ class TemplateService {
       userAgent: meta.userAgent,
       result: 'success',
       details: { templateId: id, changedFields: Object.keys(updateData) },
+      module: 'doctpl',
+    });
+
+    return updated;
+  }
+
+  async requestApproval(id, userId, note = '', meta = {}) {
+    const existing = await documentTemplateRepository.findById(id);
+    if (!existing) throw new NotFoundError('DocumentTemplate', id);
+    const status = existing.approvalStatus || 'draft';
+    if (status === 'pending') {
+      throw new ValidationError('Template is already pending approval', [{ field: 'approvalStatus', message: 'Template is already pending approval' }]);
+    }
+    if (status === 'approved') {
+      throw new ValidationError('Template is already approved', [{ field: 'approvalStatus', message: 'Template is already approved' }]);
+    }
+    // A template must be complete (sections, four-language labels/footers) before it can be submitted.
+    this._validateTemplateForSave({ ...existing, isActive: true });
+
+    const updated = await documentTemplateRepository.updateApprovalState(id, {
+      approvalStatus: 'pending',
+      approvalRequestedBy: userId,
+      approvalRequestedAt: new Date(),
+      approvalNote: `${note || ''}`.slice(0, 1000),
+      approvedBy: null,
+      approvedAt: null,
+      rejectedBy: null,
+      rejectedAt: null,
+      rejectionReason: null,
+      updatedBy: userId,
+    });
+    if (!updated) throw new NotFoundError('DocumentTemplate', id);
+
+    await this._invalidateTemplateCache(id);
+    await this._invalidateListCache();
+
+    eventBus.publish(EVENT_TYPES.DOCTPL_TEMPLATE_APPROVAL_REQUESTED, {
+      templateId: id,
+      requestedBy: userId,
+    }, { source: 'doctpl:templates' });
+
+    auditService.logEvent({
+      eventType: 'doctpl.template.approval_requested',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { templateId: id },
+      module: 'doctpl',
+    });
+
+    return updated;
+  }
+
+  async approve(id, userId, note = '', meta = {}) {
+    const existing = await documentTemplateRepository.findById(id);
+    if (!existing) throw new NotFoundError('DocumentTemplate', id);
+    if ((existing.approvalStatus || 'draft') !== 'pending') {
+      throw new ValidationError('Only templates pending approval can be approved', [{ field: 'approvalStatus', message: 'Template is not pending approval' }]);
+    }
+
+    const updated = await documentTemplateRepository.updateApprovalState(id, {
+      approvalStatus: 'approved',
+      approvedBy: userId,
+      approvedAt: new Date(),
+      rejectedBy: null,
+      rejectedAt: null,
+      rejectionReason: null,
+      approvalNote: `${note || ''}`.slice(0, 1000) || existing.approvalNote || '',
+      updatedBy: userId,
+    });
+    if (!updated) throw new NotFoundError('DocumentTemplate', id);
+
+    await this._invalidateTemplateCache(id);
+    await this._invalidateListCache();
+
+    eventBus.publish(EVENT_TYPES.DOCTPL_TEMPLATE_APPROVED, {
+      templateId: id,
+      approvedBy: userId,
+    }, { source: 'doctpl:templates' });
+
+    auditService.logEvent({
+      eventType: 'doctpl.template.approved',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { templateId: id },
+      module: 'doctpl',
+    });
+
+    logger.info('Template approved', { module: 'doctpl', action: 'approve', templateId: id });
+
+    return updated;
+  }
+
+  async reject(id, userId, reason, meta = {}) {
+    const trimmedReason = `${reason || ''}`.trim();
+    if (!trimmedReason) {
+      throw new ValidationError('A rejection reason is required', [{ field: 'reason', message: 'A rejection reason is required' }]);
+    }
+    const existing = await documentTemplateRepository.findById(id);
+    if (!existing) throw new NotFoundError('DocumentTemplate', id);
+    if ((existing.approvalStatus || 'draft') !== 'pending') {
+      throw new ValidationError('Only templates pending approval can be rejected', [{ field: 'approvalStatus', message: 'Template is not pending approval' }]);
+    }
+
+    const updated = await documentTemplateRepository.updateApprovalState(id, {
+      approvalStatus: 'rejected',
+      rejectedBy: userId,
+      rejectedAt: new Date(),
+      rejectionReason: trimmedReason.slice(0, 1000),
+      approvedBy: null,
+      approvedAt: null,
+      updatedBy: userId,
+    });
+    if (!updated) throw new NotFoundError('DocumentTemplate', id);
+
+    await this._invalidateTemplateCache(id);
+    await this._invalidateListCache();
+
+    eventBus.publish(EVENT_TYPES.DOCTPL_TEMPLATE_REJECTED, {
+      templateId: id,
+      rejectedBy: userId,
+      reason: trimmedReason,
+    }, { source: 'doctpl:templates' });
+
+    auditService.logEvent({
+      eventType: 'doctpl.template.rejected',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { templateId: id, reason: trimmedReason },
       module: 'doctpl',
     });
 

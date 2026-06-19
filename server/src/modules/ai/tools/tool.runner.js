@@ -6,6 +6,7 @@ const MAX_OUTPUT_CHARS = 4096;
 const PERMISSION_ALIASES = Object.freeze({
   'tasks:write': ['tasks:create', 'tasks:update'],
   'notifications:write': ['notifications:send'],
+  'field-ticket:write': ['field-service:write', 'field-service:admin'],
 });
 
 function hasRequiredPermission(permissions, requiredPermission) {

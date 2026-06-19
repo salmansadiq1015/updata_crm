@@ -76,7 +76,7 @@ function fmtDuration(min) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function FieldOpsTimeTable() {
+export function FieldOpsTimeTable({ filters = {}, compact = false }) {
   const { t, locale: language } = useLanguage();
   const de = language === 'de';
 
@@ -96,7 +96,7 @@ export function FieldOpsTimeTable() {
   const [overrideTarget, setOverrideTarget] = useState(null);
 
   // Data
-  const { data: entries = [], isFetching } = useFieldOpsTimeEntries({});
+  const { data: entries = [], isFetching } = useFieldOpsTimeEntries(filters);
 
   // Stats (derived, no extra query)
   const stats = useMemo(() => ({
@@ -289,50 +289,82 @@ export function FieldOpsTimeTable() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t('fieldOps.time.title', 'Time Entries')}
-        description={t('fieldOps.time.desc', 'Release and manage time entries.')}
-        count={filtered.length}
-      >
-        <div className="flex items-center gap-2">
-          {/* Activity filter */}
-          <Select value={activityFilter} onValueChange={setActivityFilter}>
-            <SelectTrigger className="h-8 w-40 text-xs rounded-full border-dashed">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ACTIVITY_OPTS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{de ? o.de : o.en}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {!compact && (
+        <PageHeader
+          title={t('fieldOps.time.title', 'Time Entries')}
+          description={t('fieldOps.time.desc', 'Release and manage time entries.')}
+          count={filtered.length}
+        >
+          <div className="flex items-center gap-2">
+            <Select value={activityFilter} onValueChange={setActivityFilter}>
+              <SelectTrigger className="h-8 w-40 text-xs rounded-full border-dashed">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTIVITY_OPTS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{de ? o.de : o.en}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          {/* Status filter */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-8 w-36 text-xs rounded-full border-dashed">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>{de ? o.de : o.en}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 w-36 text-xs rounded-full border-dashed">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{de ? o.de : o.en}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4 mr-1.5" />
+              {de ? 'Neuer Eintrag' : 'New Entry'}
+            </Button>
+          </div>
+        </PageHeader>
+      )}
+
+      {compact && (
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="grid grid-cols-2 gap-2 md:flex">
+            <Select value={activityFilter} onValueChange={setActivityFilter}>
+              <SelectTrigger className="h-8 w-full text-xs md:w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACTIVITY_OPTS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{de ? o.de : o.en}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-8 w-full text-xs md:w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_OPTS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{de ? o.de : o.en}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="h-4 w-4 mr-1.5" />
             {de ? 'Neuer Eintrag' : 'New Entry'}
           </Button>
         </div>
-      </PageHeader>
+      )}
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-4 gap-3">
-        <StatCard label={de ? 'Gesamt' : 'Total'} value={stats.total} colorClass="text-foreground" />
-        <StatCard label={de ? 'Ausstehend' : 'Pending'} value={stats.pending} colorClass="text-amber-600" />
-        <StatCard label={de ? 'Freigegeben' : 'Released'} value={stats.released} colorClass="text-emerald-600" />
-        <StatCard label={de ? 'Gesperrt' : 'Locked'} value={stats.locked} colorClass="text-red-600" />
-      </div>
+      {!compact && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard label={de ? 'Gesamt' : 'Total'} value={stats.total} colorClass="text-foreground" />
+          <StatCard label={de ? 'Ausstehend' : 'Pending'} value={stats.pending} colorClass="text-amber-600" />
+          <StatCard label={de ? 'Freigegeben' : 'Released'} value={stats.released} colorClass="text-emerald-600" />
+          <StatCard label={de ? 'Gesperrt' : 'Locked'} value={stats.locked} colorClass="text-red-600" />
+        </div>
+      )}
 
       {/* Create dialog */}
       <FieldOpsTimeFormDialog

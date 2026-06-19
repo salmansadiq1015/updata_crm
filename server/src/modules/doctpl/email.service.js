@@ -17,6 +17,7 @@ class EmailService {
       ...(Array.isArray(documentIds) ? documentIds : []),
     ].map((id) => id.toString()))];
     const attachments = await this._resolveAttachments(requestedDocumentIds);
+    const sender = await this._resolveSender({ senderAddress, senderName });
 
     // Create EmailRecord with status QUEUED
     const emailRecord = await emailRecordRepository.create({
@@ -30,8 +31,8 @@ class EmailService {
       bodyHtml,
       bodyText: bodyText || '',
       attachments,
-      senderAddress,
-      senderName: senderName || 'MB Boiler',
+      senderAddress: sender.senderAddress,
+      senderName: sender.senderName,
       status: 'QUEUED',
       createdBy,
     });
@@ -60,6 +61,21 @@ class EmailService {
     });
 
     return emailRecord;
+  }
+
+  async _resolveSender({ senderAddress, senderName }) {
+    if (senderAddress && senderName) return { senderAddress, senderName };
+
+    const { default: CIConfiguration } = await import('./ciConfiguration.model.js');
+    const ciConfig = await CIConfiguration
+      .findOne({ isActive: true })
+      .select('companyName companyDetails.email')
+      .lean();
+
+    return {
+      senderAddress: senderAddress || ciConfig?.companyDetails?.email || process.env.COMPANY_EMAIL || process.env.SMTP_MAIL || undefined,
+      senderName: senderName || ciConfig?.companyName || 'MB Boiler',
+    };
   }
 
   async _resolveAttachments(documentIds = []) {

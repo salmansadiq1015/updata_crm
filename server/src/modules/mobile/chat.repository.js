@@ -7,7 +7,7 @@ class ChatRepository {
   }
 
   async findByProjectId(projectId, { limit = 50, before } = {}) {
-    const filter = { projectId };
+    const filter = { projectId, isDeleted: false };
 
     if (before) {
       filter.sentAt = { $lt: new Date(before) };
@@ -19,8 +19,15 @@ class ChatRepository {
       .lean();
   }
 
+  async findById(messageId) {
+    return ChatMessage.findOne({ _id: messageId, isDeleted: false }).lean();
+  }
+
   async markAsRead(messageId, userId) {
-    // No-op — read tracking deferred to Phase B
+    await ChatMessage.updateOne(
+      { _id: messageId, 'readBy.userId': { $ne: userId }, isDeleted: false },
+      { $push: { readBy: { userId, readAt: new Date() } } },
+    );
   }
 }
 

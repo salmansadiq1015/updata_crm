@@ -146,6 +146,113 @@ export function registerNotificationsEvents() {
     }
   });
 
+  // --- Field Ticket Events ---
+  const dispatchFieldTicket = async (data, config) => {
+    const payload = data.payload || data;
+    const recipientIds = uniqueRecipientIds(payload.recipientIds || []);
+    if (recipientIds.length === 0) return;
+
+    const priority = payload.priority === 'MEDIUM' ? 'NORMAL' : (payload.priority || 'NORMAL');
+    await dispatch(payload, {
+      type: config.type,
+      category: 'MAINTENANCE',
+      priority,
+      channels: config.channels || ['IN_APP', 'PUSH'],
+      recipientIds,
+      payload: {
+        title: config.title || payload.label || payload.title,
+        body: config.body || payload.description || payload.title,
+        ticketId: payload.ticketId,
+        ticketNumber: payload.ticketNumber,
+        status: payload.status,
+        priority: payload.priority,
+        dueAt: payload.dueAt,
+        deepLink: payload.deepLink,
+      },
+      sourceModule: 'fieldTickets',
+      sourceEvent: config.sourceEvent,
+      sourceEntityType: 'FieldTicket',
+      sourceEntityId: payload.ticketId,
+      idempotencyKey: config.idempotencyKey ? config.idempotencyKey(payload) : null,
+    });
+  };
+
+  eventBus.subscribe(EVENT_TYPES.FIELD_TICKET_CREATED, async (data) => {
+    const payload = data.payload || data;
+    await dispatchFieldTicket(data, {
+      type: 'field_ticket_created',
+      sourceEvent: 'FIELD_TICKET_CREATED',
+      channels: payload.priority === 'CRITICAL' ? ['IN_APP', 'PUSH', 'EMAIL'] : ['IN_APP', 'PUSH'],
+      title: `New ticket ${payload.ticketNumber}`,
+      body: payload.title,
+    });
+  });
+
+  eventBus.subscribe(EVENT_TYPES.FIELD_TICKET_UPDATED, async (data) => {
+    const payload = data.payload || data;
+    await dispatchFieldTicket(data, {
+      type: 'field_ticket_updated',
+      sourceEvent: 'FIELD_TICKET_UPDATED',
+      title: `Ticket updated ${payload.ticketNumber}`,
+      body: payload.changedFields?.length
+        ? `Changed: ${payload.changedFields.join(', ')}`
+        : payload.title,
+    });
+  });
+
+  eventBus.subscribe(EVENT_TYPES.FIELD_TICKET_ASSIGNED, async (data) => {
+    const payload = data.payload || data;
+    await dispatchFieldTicket(data, {
+      type: 'field_ticket_assigned',
+      sourceEvent: 'FIELD_TICKET_ASSIGNED',
+      channels: ['IN_APP', 'PUSH', 'EMAIL'],
+      title: `Ticket assigned ${payload.ticketNumber}`,
+      body: payload.title,
+    });
+  });
+
+  eventBus.subscribe(EVENT_TYPES.FIELD_TICKET_STATUS_CHANGED, async (data) => {
+    const payload = data.payload || data;
+    await dispatchFieldTicket(data, {
+      type: 'field_ticket_status_changed',
+      sourceEvent: 'FIELD_TICKET_STATUS_CHANGED',
+      title: `Ticket status ${payload.status}`,
+      body: payload.label || payload.title,
+    });
+  });
+
+  eventBus.subscribe(EVENT_TYPES.FIELD_TICKET_COMMENTED, async (data) => {
+    const payload = data.payload || data;
+    await dispatchFieldTicket(data, {
+      type: 'field_ticket_commented',
+      sourceEvent: 'FIELD_TICKET_COMMENTED',
+      title: `New ticket comment ${payload.ticketNumber}`,
+      body: payload.title,
+    });
+  });
+
+  eventBus.subscribe(EVENT_TYPES.FIELD_TICKET_ESCALATED, async (data) => {
+    const payload = data.payload || data;
+    await dispatchFieldTicket(data, {
+      type: 'field_ticket_escalated',
+      sourceEvent: 'FIELD_TICKET_ESCALATED',
+      channels: ['IN_APP', 'PUSH', 'EMAIL'],
+      title: `Escalated ticket ${payload.ticketNumber}`,
+      body: payload.title,
+      idempotencyKey: (ticket) => `field-ticket-escalated-${ticket.ticketId}-${new Date().toISOString().slice(0, 10)}`,
+    });
+  });
+
+  eventBus.subscribe(EVENT_TYPES.FIELD_TICKET_AI_ANALYZED, async (data) => {
+    const payload = data.payload || data;
+    await dispatchFieldTicket(data, {
+      type: 'field_ticket_ai_analyzed',
+      sourceEvent: 'FIELD_TICKET_AI_ANALYZED',
+      title: `AI recommendation ${payload.ticketNumber}`,
+      body: payload.title,
+    });
+  });
+
   // --- Scheduling / Deploy Events ---
   eventBus.subscribe(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CREATED, async (data) => {
     const payload = data.payload || data;

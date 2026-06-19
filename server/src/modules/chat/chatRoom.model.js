@@ -2,8 +2,12 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const chatRoomSchema = new Schema({
-  roomType:        { type: String, enum: ['PROJECT', 'DM', 'GROUP'], required: true },
+  roomType:        { type: String, enum: ['PROJECT', 'ORDER', 'DM', 'GROUP', 'TEAM', 'DEPARTMENT'], required: true },
   projectId:       { type: Schema.Types.ObjectId, ref: 'Project', default: null },
+  orderId:         { type: Schema.Types.ObjectId, ref: 'Order', default: null },
+  customerId:      { type: Schema.Types.ObjectId, ref: 'Customer', default: null },
+  teamId:          { type: Schema.Types.ObjectId, default: null },
+  departmentId:    { type: Schema.Types.ObjectId, default: null },
   members:         [{ userId: { type: Schema.Types.ObjectId, ref: 'User' }, joinedAt: { type: Date, default: Date.now } }],
   createdBy:       { type: Schema.Types.ObjectId, ref: 'User' },
   lastMessageId:   { type: Schema.Types.ObjectId, ref: 'ChatMessage', default: null },
@@ -19,6 +23,9 @@ const chatRoomSchema = new Schema({
 }, { timestamps: true });
 
 chatRoomSchema.index({ roomType: 1, projectId: 1 });
+chatRoomSchema.index({ roomType: 1, orderId: 1 });
+chatRoomSchema.index({ roomType: 1, teamId: 1 });
+chatRoomSchema.index({ roomType: 1, departmentId: 1 });
 chatRoomSchema.index({ 'members.userId': 1, lastMessageAt: -1 });
 chatRoomSchema.index({ joinCode: 1 }, { sparse: true });
 

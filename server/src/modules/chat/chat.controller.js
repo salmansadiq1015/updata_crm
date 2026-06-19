@@ -19,7 +19,7 @@ class ChatController {
 
   async getRoom(req, res, next) {
     try {
-      await chatRoomService.assertMembership(req.params.roomId, req.user._id);
+      await chatRoomService.assertMembership(req.params.roomId, req.user);
       const room = await chatRoomService.getRoomById(req.params.roomId);
       return res.success({ data: room });
     } catch (err) { next(err); }
@@ -30,9 +30,20 @@ class ChatController {
       const { limit, before } = req._validatedQuery || req.query;
       const messages = await chatMessageService.listMessages(
         req.params.roomId,
-        req.user._id,
+        req.user,
         { limit: Number(limit) || 50, before }
       );
+      return res.success({ data: messages });
+    } catch (err) { next(err); }
+  }
+
+  async searchMessages(req, res, next) {
+    try {
+      const filters = req._validatedQuery || req.query;
+      const messages = await chatMessageService.searchMessages(req.user, {
+        ...filters,
+        limit: Number(filters.limit) || 50,
+      });
       return res.success({ data: messages });
     } catch (err) { next(err); }
   }
@@ -50,7 +61,7 @@ class ChatController {
 
   async markRead(req, res, next) {
     try {
-      await chatMessageService.markRoomRead(req.params.roomId, req.user._id);
+      await chatMessageService.markRoomRead(req.params.roomId, req.user);
       return res.success({ message: 'Marked as read' });
     } catch (err) { next(err); }
   }
@@ -61,7 +72,7 @@ class ChatController {
         req.params.msgId,
         req.params.roomId,
         req.body.emoji,
-        req.user._id,
+        req.user,
         `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim()
       );
       return res.success({ data: reactions });
@@ -74,7 +85,7 @@ class ChatController {
         req.params.msgId,
         req.params.roomId,
         req.body.emoji,
-        req.user._id,
+        req.user,
         ''
       ); // addReaction toggles, so calling it again removes
       return res.success({ data: reactions });
@@ -83,7 +94,7 @@ class ChatController {
 
   async deleteMessage(req, res, next) {
     try {
-      await chatMessageService.deleteMessage(req.params.msgId, req.user._id);
+      await chatMessageService.deleteMessage(req.params.msgId, req.user);
       return res.success({ message: 'Deleted' });
     } catch (err) { next(err); }
   }
@@ -93,7 +104,7 @@ class ChatController {
       const message = await chatMessageService.editMessage(
         req.params.msgId,
         req.body.content,
-        req.user._id
+        req.user
       );
       return res.success({ data: message });
     } catch (err) { next(err); }
@@ -101,22 +112,29 @@ class ChatController {
 
   async blockUser(req, res, next) {
     try {
-      await chatRoomService.blockUser(req.params.roomId, req.user._id);
+      await chatRoomService.blockUser(req.params.roomId, req.user);
       return res.success({ message: 'Blocked' });
     } catch (err) { next(err); }
   }
 
   async unblockUser(req, res, next) {
     try {
-      await chatRoomService.unblockUser(req.params.roomId, req.user._id);
+      await chatRoomService.unblockUser(req.params.roomId, req.user);
       return res.success({ message: 'Unblocked' });
     } catch (err) { next(err); }
   }
 
   async createGroupRoom(req, res, next) {
     try {
-      const { name, memberIds = [], projectId } = req.body;
-      const room = await chatRoomService.createGroupRoom(name, req.user._id, memberIds, projectId);
+      const { name, memberIds = [], projectId, orderId, description } = req.body;
+      const room = await chatRoomService.createGroupRoom(
+        name,
+        req.user,
+        memberIds,
+        projectId,
+        orderId,
+        description,
+      );
       res.success({ data: room, statusCode: 201 });
     } catch (err) { next(err); }
   }
@@ -124,7 +142,7 @@ class ChatController {
   async joinByCode(req, res, next) {
     try {
       const { joinCode } = req.body;
-      const room = await chatRoomService.joinByCode(joinCode, req.user._id);
+      const room = await chatRoomService.joinByCode(joinCode, req.user);
       res.success({ data: room });
     } catch (err) { next(err); }
   }

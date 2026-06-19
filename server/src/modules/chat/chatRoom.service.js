@@ -1,14 +1,25 @@
 import ChatMessage from '../mobile/chatMessage.model.js';
 import chatRoomRepository from './chatRoom.repository.js';
 import ChatRoom from './chatRoom.model.js';
+import User from '../auth/user.model.js';
+import chatAccessService from './chatAccess.service.js';
 import { NotFoundError, AuthorizationError } from '../../shared/errors/AppError.js';
 
+function userIdOf(user) {
+  return String(user?._id ?? user);
+}
+
 const chatRoomService = {
-  async getOrCreateProjectRoom(projectId, userId) {
-    return chatRoomRepository.findOrCreateProjectRoom(projectId, userId);
+  async getOrCreateProjectRoom(projectId, user) {
+    const participantIds = await chatAccessService.assertContextAccess({ projectId }, user);
+    const room = await chatRoomRepository.findOrCreateProjectRoom(projectId, userIdOf(user), participantIds);
+    await chatAccessService.hydrateRoomMembers(room._id, participantIds);
+    return chatRoomRepository.findById(room._id);
   },
 
   async getOrCreateDmRoom(userIdA, userIdB) {
+    const target = await User.findOne({ _id: userIdB, isDeleted: false, status: 'active' }).select('_id').lean();
+    if (!target) throw new NotFoundError('User', userIdB);
     return chatRoomRepository.findOrCreateDmRoom(userIdA, userIdB);
   },
 
@@ -35,30 +46,47 @@ const chatRoomService = {
     return room;
   },
 
-  async assertMembership(roomId, userId) {
+  async assertMembership(roomId, user) {
     const room = await chatRoomRepository.findById(roomId);
     if (!room) throw new NotFoundError('Chat room');
-    const isMember = room.members.some((m) => String(m.userId?._id ?? m.userId) === String(userId));
+    const userId = userIdOf(user);
+    const isLinkedProjectRoom = room.roomType === 'PROJECT' || room.roomType === 'ORDER';
+    const participantIds = await chatAccessService.assertLinkedRoomAccess(room, user);
+
+    if (isLinkedProjectRoom && participantIds.includes(userId)) {
+      const isMember = room.members.some((m) => String(m.userId?._id ?? m.userId) === userId);
+      if (!isMember) {
+        await chatRoomRepository.addMember(roomId, userId);
+        return chatRoomRepository.findById(roomId);
+      }
+      return room;
+    }
+
+    const isMember = room.members.some((m) => String(m.userId?._id ?? m.userId) === userId);
     if (!isMember) throw new AuthorizationError('You are not a member of this chat room');
     return room;
   },
 
-  async blockUser(roomId, requesterId) {
-    await this.assertMembership(roomId, requesterId);
-    await chatRoomRepository.addBlock(roomId, requesterId);
+  async blockUser(roomId, requester) {
+    await this.assertMembership(roomId, requester);
+    await chatRoomRepository.addBlock(roomId, userIdOf(requester));
   },
 
-  async unblockUser(roomId, requesterId) {
-    await chatRoomRepository.removeBlock(roomId, requesterId);
+  async unblockUser(roomId, requester) {
+    await this.assertMembership(roomId, requester);
+    await chatRoomRepository.removeBlock(roomId, userIdOf(requester));
   },
 
-  async createGroupRoom(name, creatorId, memberIds = [], projectId = null) {
+  async createGroupRoom(name, creator, memberIds = [], projectId = null, orderId = null, description = null) {
+    const creatorId = userIdOf(creator);
+    const allowedMembers = await chatAccessService.assertRequestedMembersAllowed({ projectId, orderId }, memberIds, creator);
     const joinCode = String(Math.floor(1000 + Math.random() * 9000));
     const joinCodeExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const allMembers = [...new Set([String(creatorId), ...memberIds.map(String)])];
+    const allMembers = [...new Set([String(creatorId), ...allowedMembers.map(String)])];
     const room = await ChatRoom.create({
       roomType: 'GROUP',
       name,
+      description,
       createdBy: creatorId,
       admins: [creatorId],
       members: allMembers.map(id => ({ userId: id })),
@@ -66,11 +94,12 @@ const chatRoomService = {
       joinCodeExpiresAt,
       isActive: true,
       ...(projectId && { projectId }),
+      ...(orderId && { orderId }),
     });
     return chatRoomRepository.findById(room._id);
   },
 
-  async joinByCode(joinCode, userId) {
+  async joinByCode(joinCode, user) {
     const room = await chatRoomRepository.findByJoinCode(joinCode);
     if (!room) {
       const err = new Error('Invalid or expired join code');
@@ -87,6 +116,8 @@ const chatRoomService = {
       err.status = 410;
       throw err;
     }
+    await chatAccessService.assertLinkedRoomAccess(room, user);
+    const userId = userIdOf(user);
     const alreadyMember = room.members.some(m => String(m.userId?._id || m.userId) === String(userId));
     if (!alreadyMember) await chatRoomRepository.addMember(room._id, userId);
     return chatRoomRepository.findById(room._id);

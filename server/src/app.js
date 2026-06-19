@@ -28,6 +28,7 @@ import crmRoutes from './modules/crm/crm.routes.js';
 import pmRoutes from './modules/pm/pm.routes.js';
 import deployRoutes from './modules/deploy/deploy.routes.js';
 import mobileRoutes from './modules/mobile/mobile.routes.js';
+import timeTrackingRoutes from './modules/timeTracking/timeTracking.routes.js';
 import qopRoutes from './modules/qop/qop.routes.js';
 import departmentRoutes from './modules/qop/department.routes.js';
 import doctplRoutes from './modules/doctpl/doctpl.routes.js';
@@ -38,6 +39,7 @@ import accountingRoutes from './modules/accounting/accounting.routes.js';
 import tasksRoutes, { projectTaskRouter, orderTaskRouter, crossProjectRouter } from './modules/tasks/tasks.routes.js';
 import taskListRoutes from './modules/tasks/taskList.routes.js';
 import taskFolderRoutes from './modules/tasks/taskFolder.routes.js';
+import fieldTicketRoutes from './modules/fieldTickets/fieldTicket.routes.js';
 import notificationsRoutes, {
   notificationFeedRoutes,
   notificationPreferenceRoutes,
@@ -139,6 +141,7 @@ export function createApp() {
   app.use("/api/v1/pm", pmRoutes);
   app.use("/api/v1/scheduling", deployRoutes);
   app.use("/api/v1/mobile", mobileRoutes);
+  app.use("/api/v1/time-tracking", timeTrackingRoutes);
   app.use("/api/v1/qop", qopRoutes);
   app.use("/api/v1/admin/departments", departmentRoutes);
   app.use("/api/v1/doctpl", doctplRoutes);
@@ -148,6 +151,7 @@ export function createApp() {
   app.use("/api/v1/tasks", tasksRoutes);
   app.use("/api/v1/task-lists", taskListRoutes);
   app.use("/api/v1/task-folders", taskFolderRoutes);
+  app.use("/api/v1/field-tickets", fieldTicketRoutes);
   app.use("/api/v1/projects/:projectId/tasks", projectTaskRouter);
   app.use("/api/v1/orders/:orderId/tasks", orderTaskRouter);
   app.use("/api/v1/projects/tasks", crossProjectRouter);

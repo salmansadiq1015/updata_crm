@@ -31,6 +31,15 @@ export function emitTaskRealtimeEvent(eventName, payload) {
   return true;
 }
 
+export function emitTimeTrackingRealtimeEvent(payload = {}) {
+  if (!socketServer) return false;
+  socketServer.to('time-tracking:workspace').emit('time-tracking:updated', {
+    ...payload,
+    emittedAt: new Date().toISOString(),
+  });
+  return true;
+}
+
 // ─── Lazy-load models to avoid circular deps ──────────────
 let UserModel = null;
 async function getUserModel() {
@@ -233,6 +242,14 @@ export function initializeSocketServer(httpServer) {
     socket.on('tasks:unsubscribe', ({ listId } = {}) => {
       socket.leave('tasks:workspace');
       if (listId) socket.leave(`tasks:list:${listId}`);
+    });
+
+    socket.on('time-tracking:subscribe', () => {
+      socket.join('time-tracking:workspace');
+    });
+
+    socket.on('time-tracking:unsubscribe', () => {
+      socket.leave('time-tracking:workspace');
     });
 
     // ─── Chat Events (preserved from existing) ───────────

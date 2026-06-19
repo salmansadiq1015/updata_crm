@@ -5,6 +5,7 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
+import { emitTimeTrackingRealtimeEvent } from '../../shared/socket/socketServer.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 
@@ -35,6 +36,7 @@ class TimeEntryService {
       orderId,
       technicianId,
     }, { source: 'mobile:time-entries' });
+    emitTimeTrackingRealtimeEvent({ type: 'time-entry.created', entryId: entry._id, orderId, technicianId });
 
     auditService.logEvent({
       eventType: 'time-entry.created',
@@ -96,6 +98,7 @@ class TimeEntryService {
     await timeEntryRepository.softDelete(id);
 
     await cacheManager.del(`mobile:time-entries:order:${existing.orderId}`);
+    emitTimeTrackingRealtimeEvent({ type: 'time-entry.deleted', entryId: id, orderId: existing.orderId, technicianId: existing.technicianId });
 
     auditService.logEvent({
       eventType: 'time-entry.deleted',
@@ -148,6 +151,7 @@ class TimeEntryService {
       orderId: existing.orderId,
       technicianId: existing.technicianId,
     }, { source: 'mobile:time-entries' });
+    emitTimeTrackingRealtimeEvent({ type: 'time-entry.released', entryId: id, orderId: existing.orderId, technicianId: existing.technicianId });
 
     auditService.logEvent({
       eventType: 'time-entry.released',
@@ -160,6 +164,46 @@ class TimeEntryService {
     });
 
     return { released: true };
+  }
+
+  async override(id, justification, userId, meta = {}) {
+    const existing = await timeEntryRepository.findById(id);
+    if (!existing) throw new NotFoundError('TimeEntry', id);
+
+    if (!justification || justification.trim().length < 20) {
+      throw new ConflictError('A justification with at least 20 characters is required to override time release.');
+    }
+
+    const updated = await timeEntryRepository.updateById(id, {
+      releaseStatus: 'RELEASED',
+      overrideJustification: justification.trim(),
+      overriddenBy: userId,
+      overriddenAt: new Date(),
+      updatedBy: userId,
+    });
+
+    await cacheManager.del(`mobile:time-entries:order:${existing.orderId}`);
+    emitTimeTrackingRealtimeEvent({ type: 'time-entry.updated', entryId: id, orderId: existing.orderId, technicianId: existing.technicianId });
+
+    eventBus.publish(EVENT_TYPES.MOBILE_TIME_ENTRY_RELEASED, {
+      entryId: id,
+      orderId: existing.orderId,
+      technicianId: existing.technicianId,
+      overridden: true,
+    }, { source: 'mobile:time-entries' });
+    emitTimeTrackingRealtimeEvent({ type: 'time-entry.override_released', entryId: id, orderId: existing.orderId, technicianId: existing.technicianId });
+
+    auditService.logEvent({
+      eventType: 'time-entry.override_released',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { entryId: id, orderId: existing.orderId, justification: justification.trim() },
+      module: 'mobile',
+    });
+
+    return { released: true, overridden: true, entry: updated };
   }
 
   async autoReleaseByOrderId(orderId) {

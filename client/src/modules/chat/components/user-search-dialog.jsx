@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useStartDm } from '../hooks/use-start-dm';
-import apiClient from '@/lib/api/client';
+import { chatService } from '../services/chat-service';
 
 function useDebounce(value, delay) {
   const [debounced, setDebounced] = useState(value);
@@ -28,7 +28,7 @@ export function UserSearchDialog({ open, onClose }) {
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', 'active'],
-    queryFn: () => apiClient.get('/users?status=active&limit=100').then((r) => r.data?.data ?? r.data),
+    queryFn: () => chatService.listUsers(),
     enabled: open,
     staleTime: 60_000,
   });

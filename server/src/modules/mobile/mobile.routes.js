@@ -16,6 +16,7 @@ import receiptRoutes from './receipt.routes.js';
 import quotationRoute from './quotation.routes.js';
 import syncRoutes from './sync.routes.js';
 import noteRoutes from './note.routes.js';
+import ticketRoutes from './ticket.routes.js';
 import { deviceRouter, notificationRouter } from './notification.routes.js';
 
 /**
@@ -93,6 +94,7 @@ router.use('/sync', syncRoutes);
 
 // --- Notifications & Devices ---
 router.use('/notifications', notificationRouter);
+router.use('/tickets', ticketRoutes);
 router.use('/devices', deviceRouter);
 
 export default router;

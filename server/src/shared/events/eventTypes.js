@@ -145,6 +145,11 @@ const EVENT_TYPES = Object.freeze({
   MOBILE_SMALL_ORDER_CREATED: 'mobile.small_order.created',
   MOBILE_ORDER_STATUS_UPDATED: 'mobile.order.status_updated',
 
+  // Time & Absence Management
+  TIME_LEAVE_REQUEST_CREATED: 'time.leave_request.created',
+  TIME_LEAVE_REQUEST_APPROVED: 'time.leave_request.approved',
+  TIME_LEAVE_REQUEST_REJECTED: 'time.leave_request.rejected',
+
   // Quotations & Order Processing (Module 08)
   QUOTATION_CREATED: 'quotation.created',
   QUOTATION_STATUS_CHANGED: 'quotation.status_changed',
@@ -231,6 +236,15 @@ const EVENT_TYPES = Object.freeze({
   TASK_LIST_CREATED: 'task_list.created',
   TASK_LIST_MEMBER_ADDED: 'task_list.member.added',
   TASK_LIST_MEMBER_REMOVED: 'task_list.member.removed',
+
+  // Field tickets / technician incidents
+  FIELD_TICKET_CREATED: 'field_ticket.created',
+  FIELD_TICKET_UPDATED: 'field_ticket.updated',
+  FIELD_TICKET_ASSIGNED: 'field_ticket.assigned',
+  FIELD_TICKET_STATUS_CHANGED: 'field_ticket.status_changed',
+  FIELD_TICKET_COMMENTED: 'field_ticket.commented',
+  FIELD_TICKET_ESCALATED: 'field_ticket.escalated',
+  FIELD_TICKET_AI_ANALYZED: 'field_ticket.ai_analyzed',
 
   // AI Assistant (Module 07)
   AI_SESSION_STARTED: 'ai.session.started',

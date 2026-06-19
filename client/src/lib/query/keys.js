@@ -26,6 +26,12 @@ export const queryKeys = {
     unreadCount: () => ['notifications', 'unreadCount'],
     preferences: () => ['notifications', 'preferences'],
   },
+  fieldTickets: {
+    all: () => ['fieldTickets'],
+    list: (filters) => ['fieldTickets', 'list', filters],
+    detail: (id) => ['fieldTickets', 'detail', id],
+    activity: (id) => ['fieldTickets', 'activity', id],
+  },
   documents: {
     all: () => ['documents'],
     list: (filters) => ['documents', 'repository', 'list', filters],
@@ -237,9 +243,27 @@ export const queryKeys = {
       list: () => ['mobile', 'notifications', 'list'],
       preferences: () => ['mobile', 'notifications', 'preferences'],
     },
+    tickets: {
+      list: (filters) => ['mobile', 'tickets', 'list', filters],
+      detail: (id) => ['mobile', 'tickets', 'detail', id],
+    },
     sync: {
       status: () => ['mobile', 'sync', 'status'],
     },
+  },
+  timeTracking: {
+    all: () => ['timeTracking'],
+    overview: (filters) => ['timeTracking', 'overview', filters],
+    timeEntries: {
+      all: () => ['timeTracking', 'timeEntries'],
+      list: (filters) => ['timeTracking', 'timeEntries', 'list', filters],
+      byOrder: (orderId) => ['timeTracking', 'timeEntries', 'byOrder', orderId],
+    },
+    leaveRequests: (filters) => ['timeTracking', 'leaveRequests', filters],
+    balances: (filters) => ['timeTracking', 'balances', filters],
+    calendar: (filters) => ['timeTracking', 'calendar', filters],
+    analytics: (filters) => ['timeTracking', 'analytics', filters],
+    aiContext: (filters) => ['timeTracking', 'aiContext', filters],
   },
   qop: {
     quotations: (filters) => ['qop', 'quotations', filters],

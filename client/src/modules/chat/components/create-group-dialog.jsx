@@ -13,7 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, X, FolderOpen, Link } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
-import apiClient from '@/lib/api/client';
+import { chatService } from '../services/chat-service';
 
 function Checkbox({ checked, onCheckedChange }) {
   return (
@@ -57,7 +57,7 @@ export function CreateGroupDialog({ open, onClose }) {
   // Step 1: fetch projects
   const { data: projectsData, isLoading: projectsLoading } = useQuery({
     queryKey: ['pm', 'projects', 'list-for-chat'],
-    queryFn: () => apiClient.get('/pm/projects?limit=100').then(r => r.data?.data ?? r.data),
+    queryFn: () => chatService.listProjects(),
     enabled: open && step === 1,
     staleTime: 60_000,
   });
@@ -78,7 +78,7 @@ export function CreateGroupDialog({ open, onClose }) {
   // Step 3: fetch users
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['users', 'active'],
-    queryFn: () => apiClient.get('/users?status=active&limit=100').then(r => r.data?.data ?? r.data),
+    queryFn: () => chatService.listUsers(),
     enabled: open && step === 3,
     staleTime: 60_000,
   });

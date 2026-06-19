@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import {
   FileText,
@@ -182,11 +183,16 @@ function DocumentPreview({ doc, onClose }) {
       </div>
       <div className="flex-1 overflow-auto">
         {isImage ? (
-          <img
-            src={doc.url}
-            alt={doc.filename}
-            className="w-full h-auto"
-          />
+          <div className="relative min-h-full w-full">
+            <Image
+              src={doc.url}
+              alt={doc.filename || doc.name || 'Document preview'}
+              fill
+              sizes="100vw"
+              className="object-contain"
+              unoptimized
+            />
+          </div>
         ) : ext === 'pdf' && doc.url ? (
           <iframe
             src={doc.url}

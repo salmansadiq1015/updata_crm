@@ -15,6 +15,8 @@ const DEFAULT_FORM = {
   bcc: '',
   subject: '',
   bodyHtml: '',
+  senderName: '',
+  senderAddress: '',
   documentId: null,
   documentIds: [],
   sourceModule: null,
@@ -77,6 +79,16 @@ function EmailComposeForm({ initialValues, onClose }) {
         <div>
           <Label>{t('doctpl.bcc')}</Label>
           <Input value={form.bcc} onChange={set('bcc')} placeholder={t('common.optional')} className="text-sm" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label>{t('doctpl.senderName')}</Label>
+            <Input value={form.senderName} onChange={set('senderName')} placeholder={t('common.optional')} />
+          </div>
+          <div>
+            <Label>{t('doctpl.senderAddress')}</Label>
+            <Input value={form.senderAddress} onChange={set('senderAddress')} placeholder={t('common.optional')} />
+          </div>
         </div>
         <div>
           <Label>{t('doctpl.subject')}</Label>

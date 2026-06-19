@@ -59,6 +59,19 @@ class TimeEntryController {
       return res.success({ data: result, message: result.released ? 'Time entry released successfully' : result.message });
     } catch (err) { next(err); }
   }
+
+  async override(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await timeEntryService.override(
+        req.params.entryId,
+        req.body.justification,
+        req.user._id,
+        meta,
+      );
+      return res.success({ data: result, message: 'Time entry manually released successfully' });
+    } catch (err) { next(err); }
+  }
 }
 
 const timeEntryController = new TimeEntryController();

@@ -56,7 +56,7 @@ export function useChatMutations(roomId) {
   });
 
   const createGroupRoom = useMutation({
-    mutationFn: ({ name, memberIds, projectId }) => chatService.createGroupRoom(name, memberIds, projectId),
+    mutationFn: (payload) => chatService.createGroupRoom(payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() }),
   });
 

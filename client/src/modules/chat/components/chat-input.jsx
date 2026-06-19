@@ -52,14 +52,12 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
   const previewUrlRef = useRef(null);
   const { onKeystroke } = useChatTyping(roomId);
 
-  // Clean up object URL on unmount or attachment change
   useEffect(() => {
     return () => {
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     };
   }, []);
 
-  // Pre-fill text when editing
   const prevEditId = useRef(null);
   if (editTarget && editTarget._id !== prevEditId.current) {
     prevEditId.current = editTarget._id;
@@ -114,7 +112,6 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
 
     setUploadError('');
 
-    // Client-side size validation
     if (file.size > MAX_FILE_SIZE) {
       setUploadError(t('chat.fileTooLarge', 'File too large. Maximum size is 25 MB (your file: {size})', { size: formatBytes(file.size) }));
       return;
@@ -122,7 +119,6 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
 
     const type = getFileType(file);
 
-    // Generate local preview URL for images
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     const preview = type === 'PHOTO' ? URL.createObjectURL(file) : null;
     previewUrlRef.current = preview;
@@ -140,13 +136,16 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
 
       setAttachment({ url, fileId, messageType: type, name: file.name, size: file.size, preview });
     } catch (err) {
-      if (preview) { URL.revokeObjectURL(preview); previewUrlRef.current = null; }
+      if (preview) {
+        URL.revokeObjectURL(preview);
+        previewUrlRef.current = null;
+      }
       const msg = err?.response?.data?.message ?? t('chat.uploadFailed', 'Upload failed. Please try again.');
       setUploadError(msg);
     } finally {
       setUploadProgress(null);
     }
-  }, []);
+  }, [t]);
 
   const handleAudioComplete = useCallback(result => {
     setShowRecorder(false);
@@ -170,7 +169,6 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
 
   return (
     <div className="border-t border-border/40 bg-card">
-      {/* Edit indicator */}
       {editTarget && (
         <div className="flex items-center justify-between px-4 pt-2 pb-1 text-xs text-primary">
           <span className="font-medium">{t('chat.editingMessage', 'Editing message')}</span>
@@ -180,14 +178,12 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
         </div>
       )}
 
-      {/* Reply preview */}
       {!editTarget && replyTarget && (
         <div className="px-3 pt-2">
           <ChatReplyPreview message={replyTarget} onClear={onClearReply} />
         </div>
       )}
 
-      {/* Upload error */}
       {uploadError && (
         <div className="flex items-center gap-2 mx-3 mt-2 px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-xs">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -198,12 +194,11 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
         </div>
       )}
 
-      {/* Uploading progress */}
       {uploading && (
         <div className="mx-3 mt-2 rounded-xl bg-muted/60 px-3 py-2.5">
           <div className="flex items-center gap-2.5 mb-2">
             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
-            <span className="text-xs font-medium text-foreground flex-1">Uploading…</span>
+            <span className="text-xs font-medium text-foreground flex-1">{t('chat.uploading')}</span>
             <span className="text-xs text-muted-foreground tabular-nums">{uploadProgress}%</span>
           </div>
           <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
@@ -215,10 +210,8 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
         </div>
       )}
 
-      {/* Attachment preview (after upload complete) */}
       {attachment && !uploading && (
         <div className="mx-3 mt-2 flex items-center gap-2.5 rounded-xl bg-muted/60 px-2.5 py-2">
-          {/* Thumbnail for images */}
           {attachment.messageType === 'PHOTO' && attachment.preview ? (
             <img
               src={attachment.preview}
@@ -240,7 +233,6 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
         </div>
       )}
 
-      {/* Audio recorder mode */}
       {showRecorder ? (
         <div className="px-3 py-2">
           <ChatAudioRecorder
@@ -250,7 +242,6 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
         </div>
       ) : (
         <div className="flex items-end gap-2 px-3 py-2">
-          {/* Attach button */}
           <Button
             variant="ghost" size="icon"
             className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
@@ -271,14 +262,13 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
             onChange={handleFileChange}
           />
 
-          {/* Textarea */}
           <div className="relative flex-1">
             <Textarea
               ref={textareaRef}
               value={text}
               onChange={e => { setText(e.target.value); onKeystroke(); }}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message…"
+              placeholder={t('chat.typeMessage')}
               rows={1}
               className={cn(
                 'min-h-10 max-h-32 resize-none rounded-2xl border-0 bg-muted/60 py-2.5 pr-9 pl-3',
@@ -295,7 +285,6 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
             </Button>
           </div>
 
-          {/* Send / Mic */}
           {canSend ? (
             <Button
               size="icon"
@@ -318,11 +307,10 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
         </div>
       )}
 
-      {/* Emoji picker */}
       {showPicker && (
         <div className="px-3 pb-2">
           <ChatEmojiPicker
-            onSelect={emoji => { setText(t => t + emoji); setShowPicker(false); textareaRef.current?.focus(); }}
+            onSelect={emoji => { setText(current => current + emoji); setShowPicker(false); textareaRef.current?.focus(); }}
             onClose={() => setShowPicker(false)}
           />
         </div>

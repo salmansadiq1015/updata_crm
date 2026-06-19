@@ -1,5 +1,6 @@
 'use client';
-import { FieldOpsNotificationList } from '@/modules/field-ops/components/notifications/field-ops-notification-list';
+import { FieldTicketWorkspace } from '@/modules/field-ops/components/tickets/field-ticket-workspace';
+
 export default function FieldOpsNotificationsPage() {
-  return <FieldOpsNotificationList />;
+  return <FieldTicketWorkspace />;
 }

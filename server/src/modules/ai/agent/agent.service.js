@@ -26,6 +26,7 @@ const INTENT_TO_WORKFLOW = {
   create_note: 'FIELD_SERVICE_AGENT',
   send_chat_message: 'FIELD_SERVICE_AGENT',
   record_time: 'FIELD_SERVICE_AGENT',
+  analyze_workforce: 'FIELD_SERVICE_AGENT',
   search_customer: 'FIELD_SERVICE_AGENT',
   create_quotation: 'FIELD_SERVICE_AGENT',
   create_invoice: 'FIELD_SERVICE_AGENT',
@@ -56,7 +57,7 @@ class AgentService {
       const response = await llm.invoke([
         {
           role: 'system',
-          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_customer, create_task, update_task, send_notification, create_order, update_order, create_assignment, reschedule_assignment, create_report, update_project, create_note, send_chat_message, record_time, search_customer, create_quotation, create_invoice, general>", "confidence": 0.0-1.0}',
+          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_customer, create_task, update_task, send_notification, create_order, update_order, create_assignment, reschedule_assignment, create_report, update_project, create_note, send_chat_message, record_time, analyze_workforce, search_customer, create_quotation, create_invoice, general>", "confidence": 0.0-1.0}',
         },
         { role: 'user', content: input },
       ]);
@@ -74,6 +75,7 @@ class AgentService {
     if (has('invoice', 'rechnung')) return 'create_invoice';
     if (has('service report', 'work report', 'rapport', 'bericht')) return 'create_report';
     if (has('chat', 'message', 'nachricht', 'send to', 'schreib')) return 'send_chat_message';
+    if (has('workforce', 'absence', 'absences', 'leave', 'vacation', 'availability', 'overtime', 'deficit', 'kapazität', 'kapazitaet', 'abwesenheit', 'ferien', 'überzeit', 'ueberzeit')) return 'analyze_workforce';
     if (has('working hour', 'hours', 'time entry', 'zeit', 'stunden')) return 'record_time';
     if (has('reschedule', 'move appointment', 'verschieb')) return 'reschedule_assignment';
     if (has('schedule', 'appointment', 'assign', 'plan', 'termin', 'zuweisen')) return 'create_assignment';

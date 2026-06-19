@@ -135,10 +135,44 @@ async function processItem(item) {
 
     case 'CHAT_MESSAGE':
       if (item.operation === 'CREATE') {
+        const data = { ...(item.payload.data || {}) };
+        const localMessage = await db.chatMessages.get(item.entity_id);
+
+        if (localMessage?.local_file_blob) {
+          const formData = new FormData();
+          formData.append('file', localMessage.local_file_blob, localMessage.local_file_name || `chat-${item.entity_id}`);
+          formData.append('module', 'chat');
+          formData.append('entityType', 'project');
+          formData.append('entityId', item.payload.project_id);
+          formData.append('bucket', data.messageType === 'PHOTO' ? 'photos' : 'documents');
+          formData.append('category', 'chat');
+
+          const uploadResponse = await apiClient.post(
+            ENDPOINTS.FILES.UPLOAD,
+            formData,
+            {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              timeout: SYNC_CONFIG.UPLOAD_TIMEOUT,
+            }
+          );
+          const fileData = uploadResponse.data || {};
+          data.attachmentUrl = fileData.url || fileData.fileUrl || fileData.attachmentUrl || null;
+          data.attachmentFileId = fileData._id || fileData.id || fileData.attachmentFileId || null;
+          if (!data.content) data.content = localMessage.local_file_name || 'Attachment';
+        }
+
         await apiClient.post(
           ENDPOINTS.MOBILE.PROJECT_CHAT(item.payload.project_id),
-          item.payload.data
+          data
         );
+
+        if (localMessage) {
+          await db.chatMessages.update(item.entity_id, {
+            sync_status: SYNC_STATUS.SYNCED,
+            local_file_blob: null,
+            last_synced_at: new Date().toISOString(),
+          });
+        }
       }
       break;
 

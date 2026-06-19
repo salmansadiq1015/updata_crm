@@ -37,6 +37,16 @@ export const PERMISSIONS = {
   PROJECTS_WRITE: 'projects:write',
   PROJECTS_DELETE: 'projects:delete',
 
+  // Field service and technician tickets
+  FIELD_SERVICE_READ: 'field-service:read',
+  FIELD_SERVICE_WRITE: 'field-service:write',
+  FIELD_SERVICE_ADMIN: 'field-service:admin',
+  FIELD_TICKET_READ: 'field-ticket:read',
+  FIELD_TICKET_WRITE: 'field-ticket:write',
+  FIELD_TICKET_ASSIGN: 'field-ticket:assign',
+  FIELD_TICKET_COMMENT: 'field-ticket:comment',
+  FIELD_TICKET_ADMIN: 'field-ticket:admin',
+
   // Scheduling (future)
   SCHEDULING_READ: 'scheduling:read',
   SCHEDULING_WRITE: 'scheduling:write',
@@ -84,6 +94,17 @@ export const PERMISSIONS = {
   TASKS_READ: 'tasks:read',
   TASKS_WRITE: 'tasks:write',
 
+  // Internal communication / chat
+  CHAT_READ: 'chat:read',
+  CHAT_WRITE: 'chat:write',
+  CHAT_ADMIN: 'chat:admin',
+
+  // Files
+  FILES_UPLOAD: 'files:upload',
+  FILES_VIEW: 'files:view',
+  FILES_LIST: 'files:list',
+  FILES_DELETE: 'files:delete',
+
   // Catalog
   CATALOG_READ: 'catalog:read',
   CATALOG_WRITE: 'catalog:write',
@@ -101,6 +122,11 @@ export const PERMISSIONS = {
   NOTIFICATIONS_SCHEDULED_MANAGE: 'notifications:scheduled:manage',
   NOTIFICATIONS_METRICS_READ: 'notifications:metrics:read',
   NOTIFICATIONS_ADMIN: 'notifications:admin',
+
+  // Time & absence management
+  TIME_TRACKING_READ: 'time-tracking:read',
+  TIME_TRACKING_WRITE: 'time-tracking:write',
+  TIME_TRACKING_ADMIN: 'time-tracking:admin',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

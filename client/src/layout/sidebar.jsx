@@ -108,9 +108,9 @@ const navSectionDefs = [
     items: [
       { type: 'leaf', labelKey: 'sidebar.fieldOpsOrders', href: '/field-ops/orders', icon: ClipboardList, permission: 'mobile:read' },
       { type: 'leaf', labelKey: 'sidebar.fieldOpsReports', href: '/field-ops/reports', icon: FileCheck, permission: 'mobile:read' },
-      { type: 'leaf', labelKey: 'sidebar.fieldOpsTime', href: '/field-ops/time', icon: Clock4, permission: 'mobile:read' },
+      { type: 'leaf', labelKey: 'sidebar.fieldOpsTime', href: '/field-ops/time', icon: Clock4, permission: PERMISSIONS.TIME_TRACKING_READ },
       { type: 'leaf', labelKey: 'sidebar.fieldOpsChat', href: '/field-ops/chat', icon: MessageSquare, permission: 'mobile:read' },
-      { type: 'leaf', labelKey: 'sidebar.fieldOpsNotifications', href: '/field-ops/notifications', icon: Bell, permission: 'mobile:read' },
+      { type: 'leaf', labelKey: 'sidebar.fieldOpsNotifications', href: '/field-ops/notifications', icon: AlertTriangle, permission: 'mobile:read' },
     ],
   },
   {

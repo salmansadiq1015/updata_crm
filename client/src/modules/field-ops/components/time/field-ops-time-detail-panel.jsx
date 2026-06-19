@@ -222,7 +222,7 @@ export function FieldOpsTimeDetailPanel({
               </Button>
             )}
             {isLocked && (
-              <PermissionGate permission="time:release:override">
+              <PermissionGate permission="time-tracking:admin">
                 <Button
                   size="sm"
                   variant="outline"

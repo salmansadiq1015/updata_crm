@@ -48,3 +48,10 @@ export const listTimeEntriesSchema = {
 export const releaseTimeEntrySchema = {
   params: Joi.object({ entryId: objectId.required() }),
 };
+
+export const overrideTimeEntrySchema = {
+  params: Joi.object({ entryId: objectId.required() }),
+  body: Joi.object({
+    justification: Joi.string().trim().min(20).max(1000).required(),
+  }),
+};

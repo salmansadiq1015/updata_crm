@@ -1,14 +1,15 @@
 import ChatRoom from './chatRoom.model.js';
 
 const chatRoomRepository = {
-  async findOrCreateProjectRoom(projectId, createdByUserId) {
+  async findOrCreateProjectRoom(projectId, createdByUserId, memberIds = []) {
     let room = await ChatRoom.findOne({ roomType: 'PROJECT', projectId });
     if (!room) {
+      const members = [...new Set([String(createdByUserId), ...memberIds.map(String)])];
       room = await ChatRoom.create({
         roomType: 'PROJECT',
         projectId,
         createdBy: createdByUserId,
-        members: [{ userId: createdByUserId }],
+        members: members.map((userId) => ({ userId })),
       });
     }
     return room;
@@ -52,9 +53,17 @@ const chatRoomRepository = {
   },
 
   async addMember(roomId, userId) {
-    return ChatRoom.findByIdAndUpdate(roomId, {
-      $addToSet: { members: { userId } },
-    });
+    return ChatRoom.updateOne(
+      { _id: roomId, 'members.userId': { $ne: userId } },
+      { $push: { members: { userId } } },
+    );
+  },
+
+  async addMembers(roomId, userIds = []) {
+    for (const userId of [...new Set(userIds.map(String))]) {
+      await this.addMember(roomId, userId);
+    }
+    return this.findById(roomId);
   },
 
   async addBlock(roomId, userId) {

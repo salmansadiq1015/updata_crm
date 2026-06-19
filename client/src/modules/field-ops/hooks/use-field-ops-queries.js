@@ -4,7 +4,7 @@ import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { orderService } from '@/modules/mobile/services/order-service';
 import { reportService } from '@/modules/mobile/services/report-service';
-import { timeService } from '@/modules/mobile/services/time-service';
+import { timeTrackingService } from '@/modules/field-ops/services/time-tracking-service';
 import { photoService } from '@/modules/mobile/services/photo-service';
 import { installationService } from '@/modules/mobile/services/installation-service';
 import { catalogService } from '@/modules/mobile/services/catalog-service';
@@ -82,16 +82,16 @@ export function useFieldOpsReportHistory(reportId) {
 
 export function useFieldOpsTimeEntries(filters = {}) {
   return useQuery({
-    queryKey: queryKeys.mobile.timeEntries.list(filters),
-    queryFn: () => timeService.getTimeEntries(filters),
+    queryKey: queryKeys.timeTracking.timeEntries.list(filters),
+    queryFn: () => timeTrackingService.getTimeEntries(filters),
     staleTime: 30_000,
   });
 }
 
 export function useFieldOpsOrderTimeEntries(orderId) {
   return useQuery({
-    queryKey: queryKeys.mobile.timeEntries.byOrder(orderId),
-    queryFn: () => timeService.getTimeEntriesByOrder(orderId),
+    queryKey: queryKeys.timeTracking.timeEntries.byOrder(orderId),
+    queryFn: () => timeTrackingService.getTimeEntriesByOrder(orderId),
     enabled: !!orderId,
     staleTime: 30_000,
   });

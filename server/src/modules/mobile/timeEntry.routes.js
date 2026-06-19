@@ -8,6 +8,7 @@ import {
   deleteTimeEntrySchema,
   listTimeEntriesSchema,
   releaseTimeEntrySchema,
+  overrideTimeEntrySchema,
 } from './timeEntry.validation.js';
 
 // Nested router for routes under /orders/:id  (mounted at /orders/:id — not at /orders/:id/time-entries)
@@ -61,6 +62,14 @@ timeEntryRouter.post(
   requirePermission('mobile:write'),
   validate(releaseTimeEntrySchema),
   (req, res, next) => timeEntryController.release(req, res, next),
+);
+
+timeEntryRouter.post(
+  '/:entryId/override',
+  authenticate,
+  requirePermission('time-tracking:admin'),
+  validate(overrideTimeEntrySchema),
+  (req, res, next) => timeEntryController.override(req, res, next),
 );
 
 export { timeEntryOrderRouter, timeEntryRouter };

@@ -101,6 +101,23 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'field-service', action: 'write', description: 'Create and update field service data' },
   { module: 'field-service', action: 'admin', description: 'Full field service administration' },
 
+  // Field tickets / technician incidents
+  { module: 'field-ticket', action: 'read', description: 'View technician tickets and incident history' },
+  { module: 'field-ticket', action: 'write', description: 'Create and update technician tickets' },
+  { module: 'field-ticket', action: 'assign', description: 'Assign technician tickets to users or teams' },
+  { module: 'field-ticket', action: 'comment', description: 'Add internal ticket comments and status updates' },
+  { module: 'field-ticket', action: 'admin', description: 'Delete and administer technician tickets' },
+
+  // Mobile app
+  { module: 'mobile', action: 'read', description: 'Use mobile field-service read endpoints' },
+  { module: 'mobile', action: 'write', description: 'Create and sync mobile field-service records' },
+  { module: 'mobile', action: 'admin', description: 'Full mobile field-service administration' },
+
+  // Internal communication / chat
+  { module: 'chat', action: 'read', description: 'View internal chat rooms and message history' },
+  { module: 'chat', action: 'write', description: 'Send messages and manage own chat participation' },
+  { module: 'chat', action: 'admin', description: 'Administer internal chat rooms and linked channels' },
+
   // Scheduling
   { module: 'scheduling', action: 'read', description: 'View schedules' },
   { module: 'scheduling', action: 'write', description: 'Create and update schedules' },
@@ -133,6 +150,12 @@ export const PERMISSION_DEFINITIONS = [
   // Reports
   { module: 'reports', action: 'read', description: 'View reports' },
   { module: 'reports', action: 'write', description: 'Create and manage reports' },
+
+  // Files
+  { module: 'files', action: 'upload', description: 'Upload files to shared storage' },
+  { module: 'files', action: 'view', description: 'View and download shared files' },
+  { module: 'files', action: 'list', description: 'List shared file metadata' },
+  { module: 'files', action: 'delete', description: 'Delete shared files' },
 
   // Tasks
   { module: 'tasks', action: 'read', description: 'View tasks' },
@@ -201,6 +224,10 @@ export const ROLE_DEFINITIONS = [
       'templates:read', 'templates:write',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'field-service:read',
+      'field-ticket:read', 'field-ticket:write', 'field-ticket:assign', 'field-ticket:comment', 'field-ticket:admin',
+      'mobile:read', 'mobile:write', 'mobile:admin',
+      'chat:read', 'chat:write', 'chat:admin',
+      'files:upload', 'files:view', 'files:list', 'files:delete',
       'tasks:read', 'tasks:write', 'tasks:delete', 'tasks:admin',
       'notifications:read', 'notifications:write', 'notifications:feed', 'notifications:preferences',
       'notifications:dispatch', 'notifications:templates:manage', 'notifications:scheduled:manage',
@@ -220,6 +247,10 @@ export const ROLE_DEFINITIONS = [
       'project:read', 'project:documents:read',
       'documents:read',
       'field-service:read', 'field-service:write', 'field-service:admin',
+      'field-ticket:read', 'field-ticket:write', 'field-ticket:comment',
+      'mobile:read', 'mobile:write',
+      'chat:read', 'chat:write',
+      'files:upload', 'files:view',
       'tasks:read', 'tasks:write',
       'notifications:read', 'notifications:feed', 'notifications:preferences',
       'ai:sessions',
@@ -236,6 +267,7 @@ export const ROLE_DEFINITIONS = [
       'documents:read',
       'invoicing:read', 'invoicing:write', 'invoicing:delete', 'invoicing:admin',
       ...ACCOUNTING_PERMISSION_KEYS,
+      'files:upload', 'files:view', 'files:list',
       'reports:read', 'reports:write',
       'quotations:read',
       'tasks:read',
@@ -253,6 +285,10 @@ export const ROLE_DEFINITIONS = [
       'documents:read',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'field-service:read',
+      'field-ticket:read', 'field-ticket:write', 'field-ticket:assign', 'field-ticket:comment', 'field-ticket:admin',
+      'mobile:read', 'mobile:write',
+      'chat:read', 'chat:write',
+      'files:upload', 'files:view', 'files:list',
       'tasks:read', 'tasks:write',
       'notifications:read', 'notifications:write', 'notifications:feed', 'notifications:preferences',
       'notifications:dispatch', 'notifications:scheduled:manage',
@@ -269,6 +305,10 @@ export const ROLE_DEFINITIONS = [
       'project:read',
       'documents:read',
       'field-service:read',
+      'field-ticket:read', 'field-ticket:comment',
+      'mobile:read', 'mobile:write',
+      'chat:read', 'chat:write',
+      'files:upload', 'files:view',
       'tasks:read',
       'notifications:read', 'notifications:feed', 'notifications:preferences',
       'ai:sessions',
@@ -285,6 +325,8 @@ export const ROLE_DEFINITIONS = [
       'crm:read',
       'projects:read',
       'project:read',
+      'chat:read', 'chat:write',
+      'files:upload', 'files:view',
       'tasks:read', 'tasks:write',
       'notifications:read', 'notifications:feed', 'notifications:preferences',
       'ai:sessions',

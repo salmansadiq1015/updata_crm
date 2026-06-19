@@ -38,6 +38,17 @@ const timeEntrySchema = new mongoose.Schema(
       enum: RELEASE_STATUSES,
       default: 'PENDING',
     },
+    overrideJustification: {
+      type: String,
+      maxlength: 1000,
+      default: null,
+    },
+    overriddenBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    overriddenAt: { type: Date, default: null },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

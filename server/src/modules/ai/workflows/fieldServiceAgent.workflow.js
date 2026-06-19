@@ -11,6 +11,8 @@ import mongoose from 'mongoose';
 
 import { MAX_STEPS, MIN_AGENT_INPUT_LENGTH } from '../agent/agent.guardrails.js';
 import agentRunRepository from '../agent/agentRun.repository.js';
+import { fetchWorkforcePlanningContextTool } from '../tools/workforce.tools.js';
+import { analyzeFieldTicketTool } from '../tools/fieldTicket.tools.js';
 import { WorkflowState } from './workflow.state.js';
 import logger from '../../../shared/logger/index.js';
 import swissPlzService from '../../../shared/ai/swissPlz.service.js';
@@ -28,6 +30,8 @@ const ACTIONS = Object.freeze({
   CREATE_NOTE: 'CREATE_NOTE',
   SEND_CHAT: 'SEND_CHAT',
   RECORD_TIME: 'RECORD_TIME',
+  ANALYZE_WORKFORCE: 'ANALYZE_WORKFORCE',
+  ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   SEARCH_CUSTOMER: 'SEARCH_CUSTOMER',
   CREATE_QUOTATION: 'CREATE_QUOTATION',
   CREATE_INVOICE: 'CREATE_INVOICE',
@@ -47,6 +51,8 @@ const ACTION_LABELS = {
   [ACTIONS.CREATE_NOTE]: 'create a note',
   [ACTIONS.SEND_CHAT]: 'send a chat message',
   [ACTIONS.RECORD_TIME]: 'record working hours',
+  [ACTIONS.ANALYZE_WORKFORCE]: 'analyze workforce planning',
+  [ACTIONS.ANALYZE_FIELD_TICKET]: 'analyze a technician ticket',
   [ACTIONS.SEARCH_CUSTOMER]: 'find customer information',
   [ACTIONS.CREATE_QUOTATION]: 'create a quotation',
   [ACTIONS.CREATE_INVOICE]: 'create an invoice',
@@ -100,7 +106,7 @@ async function executeAction(state) {
   let output;
 
   try {
-    output = await performAction(action, effectiveInput, context, state.userId);
+    output = await performAction(action, effectiveInput, context, state.userId, state);
   } catch (err) {
     logger.warn('Field service agent action failed', {
       module: 'ai-workflows',
@@ -156,11 +162,14 @@ async function executeAction(state) {
 
 function classifyAction(input) {
   const text = input.toLowerCase();
+  if (hasAny(text, ['ticket', 'incident', 'technician report', 'technician ticket', 'stoerung', 'meldung'])
+    && hasAny(text, ['analyze', 'categorize', 'prioritize', 'recommend', 'analyse', 'kategorisier', 'priorisier'])) return ACTIONS.ANALYZE_FIELD_TICKET;
   if (hasAny(text, ['create customer', 'new customer', 'add customer', 'create company', 'new company', 'add company', 'kunde anlegen', 'kunden anlegen', 'neuer kunde', 'neuen kunden', 'firma erstellen', 'firma anlegen', 'neue firma'])) return ACTIONS.CREATE_CUSTOMER;
   if (hasAny(text, ['quotation', 'quote', 'offerte', 'angebot'])) return ACTIONS.CREATE_QUOTATION;
   if (hasAny(text, ['invoice', 'rechnung'])) return ACTIONS.CREATE_INVOICE;
   if (hasAny(text, ['service report', 'work report', 'rapport', 'bericht'])) return ACTIONS.CREATE_REPORT;
   if (hasAny(text, ['chat', 'message', 'nachricht', 'send to', 'schreib'])) return ACTIONS.SEND_CHAT;
+  if (hasAny(text, ['workforce', 'absence', 'absences', 'leave', 'vacation', 'availability', 'overtime', 'deficit', 'kapazitaet', 'kapazität', 'abwesenheit', 'ferien', 'ueberzeit', 'überzeit'])) return ACTIONS.ANALYZE_WORKFORCE;
   if (hasAny(text, ['working hour', 'hours', 'time entry', 'zeit', 'stunden'])) return ACTIONS.RECORD_TIME;
   if (hasAny(text, ['schedule', 'appointment', 'assign', 'plan', 'termin', 'zuweisen'])) return ACTIONS.CREATE_ASSIGNMENT;
   if (hasAny(text, ['reschedule', 'move appointment', 'verschieb'])) return ACTIONS.RESCHEDULE_ASSIGNMENT;
@@ -178,7 +187,7 @@ function classifyAction(input) {
   return ACTIONS.GENERAL;
 }
 
-async function performAction(action, input, context, userId) {
+async function performAction(action, input, context, userId, state = {}) {
   switch (action) {
     case ACTIONS.CREATE_CUSTOMER:
       return createCustomer(input, context, userId);
@@ -192,6 +201,10 @@ async function performAction(action, input, context, userId) {
       return createAssignment(input, context, userId);
     case ACTIONS.RECORD_TIME:
       return recordTime(input, context, userId);
+    case ACTIONS.ANALYZE_WORKFORCE:
+      return analyzeWorkforce(input, state);
+    case ACTIONS.ANALYZE_FIELD_TICKET:
+      return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
       return createNote(input, context, userId);
     case ACTIONS.SEND_CHAT:
@@ -385,6 +398,66 @@ async function recordTime(input, context, userId) {
     recordType: 'timeEntry',
     recordId: entry._id,
     record: { id: entry._id, orderId, netDurationMin: entry.netDurationMin },
+  };
+}
+
+async function analyzeFieldTicket(input, state) {
+  const ticketId = firstObjectId(input);
+  if (!ticketId) return needsFollowUp(ACTIONS.ANALYZE_FIELD_TICKET, ['ticket id'], {});
+
+  const toolConfig = {
+    configurable: {
+      userId: state.userId,
+      permissions: state.permissions || [],
+      agentRunId: state.agentRunId,
+    },
+  };
+
+  const rawResult = await analyzeFieldTicketTool.invoke({ ticketId }, toolConfig);
+  let result;
+  try {
+    result = JSON.parse(rawResult);
+  } catch {
+    result = { raw: rawResult };
+  }
+
+  return {
+    action: ACTIONS.ANALYZE_FIELD_TICKET,
+    status: 'completed',
+    message: `Ticket ${result.ticketNumber || ticketId} analyzed.`,
+    recordType: 'fieldTicket',
+    recordId: ticketId,
+    record: result,
+  };
+}
+
+async function analyzeWorkforce(input, state) {
+  const toolInput = {
+    ...extractDateRange(input),
+    ...(firstObjectId(input) ? { employeeId: firstObjectId(input) } : {}),
+  };
+  const toolConfig = {
+    configurable: {
+      userId: state.userId,
+      permissions: state.permissions || [],
+      agentRunId: state.agentRunId,
+    },
+  };
+
+  const rawResult = await fetchWorkforcePlanningContextTool.invoke(toolInput, toolConfig);
+  let result;
+  try {
+    result = JSON.parse(rawResult);
+  } catch {
+    result = { raw: rawResult };
+  }
+
+  return {
+    action: ACTIONS.ANALYZE_WORKFORCE,
+    status: 'completed',
+    message: 'Workforce planning context prepared.',
+    recordType: 'workforcePlanningContext',
+    record: result,
   };
 }
 
@@ -692,6 +765,33 @@ function extractDate(input) {
     return d;
   }
   return null;
+}
+
+function extractDateRange(input) {
+  const isoDates = [...String(input || '').matchAll(/\b\d{4}-\d{2}-\d{2}\b/g)].map((match) => match[0]);
+  if (isoDates.length >= 2) return { dateFrom: isoDates[0], dateTo: isoDates[1] };
+  if (isoDates.length === 1) return { dateFrom: isoDates[0], dateTo: isoDates[0] };
+
+  const text = String(input || '').toLowerCase();
+  const today = new Date();
+  if (hasAny(text, ['today', 'heute'])) {
+    const day = today.toISOString().slice(0, 10);
+    return { dateFrom: day, dateTo: day };
+  }
+  if (hasAny(text, ['week', 'woche'])) {
+    const start = new Date(today);
+    const day = start.getDay() || 7;
+    start.setDate(start.getDate() - day + 1);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { dateFrom: start.toISOString().slice(0, 10), dateTo: end.toISOString().slice(0, 10) };
+  }
+  if (hasAny(text, ['month', 'monat'])) {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { dateFrom: start.toISOString().slice(0, 10), dateTo: end.toISOString().slice(0, 10), year: today.getFullYear() };
+  }
+  return {};
 }
 
 function extractDateTime(input) {

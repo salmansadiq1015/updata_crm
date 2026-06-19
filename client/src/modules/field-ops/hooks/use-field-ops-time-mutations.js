@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { timeService } from '@/modules/mobile/services/time-service';
+import { timeTrackingService } from '@/modules/field-ops/services/time-tracking-service';
 import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -13,12 +13,13 @@ export function useFieldOpsTimeMutations({
   const { t } = useLanguage();
 
   const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.timeTracking.all() });
     queryClient.invalidateQueries({ queryKey: queryKeys.mobile.timeEntries.all() });
   };
 
   const createEntry = useMutation({
     retry: 0,
-    mutationFn: ({ orderId, payload }) => timeService.createTimeEntry(orderId, payload),
+    mutationFn: ({ orderId, payload }) => timeTrackingService.createTimeEntry(orderId, payload),
     onSuccess: (res) => {
       invalidate();
       showSuccess(t('fieldOps.time.created', 'Time entry created.'));
@@ -29,7 +30,7 @@ export function useFieldOpsTimeMutations({
 
   const updateEntry = useMutation({
     retry: 0,
-    mutationFn: ({ id, data }) => timeService.updateTimeEntry(id, data),
+    mutationFn: ({ id, data }) => timeTrackingService.updateTimeEntry(id, data),
     onSuccess: (res) => {
       invalidate();
       showSuccess(t('fieldOps.time.updated', 'Time entry updated.'));
@@ -39,7 +40,7 @@ export function useFieldOpsTimeMutations({
   });
 
   const deleteEntry = useMutation({
-    mutationFn: (entryId) => timeService.deleteTimeEntry(entryId),
+    mutationFn: (entryId) => timeTrackingService.deleteTimeEntry(entryId),
     onSuccess: (res) => {
       invalidate();
       showSuccess(t('fieldOps.time.deleted', 'Time entry deleted.'));
@@ -53,7 +54,7 @@ export function useFieldOpsTimeMutations({
       const results = [];
       for (const id of entryIds) {
         try {
-          await timeService.deleteTimeEntry(id);
+          await timeTrackingService.deleteTimeEntry(id);
           results.push({ id, ok: true });
         } catch (e) {
           results.push({ id, ok: false, error: e.message });
@@ -75,7 +76,7 @@ export function useFieldOpsTimeMutations({
   });
 
   const release = useMutation({
-    mutationFn: (entryId) => timeService.releaseTimeEntry(entryId),
+    mutationFn: (entryId) => timeTrackingService.releaseTimeEntry(entryId),
     onSuccess: (res, entryId) => {
       invalidate();
       if (res?.released === false) {
@@ -92,7 +93,7 @@ export function useFieldOpsTimeMutations({
     mutationFn: async (entryIds) => {
       const results = [];
       for (const id of entryIds) {
-        const res = await timeService.releaseTimeEntry(id);
+        const res = await timeTrackingService.releaseTimeEntry(id);
         results.push({ id, res });
       }
       return results;
@@ -111,7 +112,7 @@ export function useFieldOpsTimeMutations({
   });
 
   const override = useMutation({
-    mutationFn: ({ id, justification }) => timeService.overrideTimeEntry(id, justification),
+    mutationFn: ({ id, justification }) => timeTrackingService.overrideTimeEntry(id, justification),
     onSuccess: (res) => {
       invalidate();
       showSuccess(t('fieldOps.time.overrideSuccess', 'Time entry manually released.'));

@@ -55,6 +55,8 @@ export const MESSAGE_TYPE = Object.freeze({
   TEXT: 'TEXT',
   PHOTO: 'PHOTO',
   DOCUMENT: 'DOCUMENT',
+  AUDIO: 'AUDIO',
+  VIDEO: 'VIDEO',
   FILE: 'FILE',
 });
 
@@ -152,6 +154,7 @@ export const MOBILE_NAV_TABS = Object.freeze([
   { key: 'addressBook', labelKey: 'mobile.nav.addressBook', href: '/address-book', icon: 'BookOpen' },
   { key: 'chat', labelKey: 'mobile.nav.chat', href: '/chat', icon: 'MessageSquare' },
   { key: 'timer', labelKey: 'mobile.nav.timer', href: '/timer', icon: 'Timer' },
+  { key: 'tickets', labelKey: 'mobile.nav.tickets', href: '/m/tickets', icon: 'AlertTriangle' },
   { key: 'notifications', labelKey: 'mobile.nav.notifications', href: '/m/notifications', icon: 'Bell' },
   { key: 'settings', labelKey: 'mobile.nav.settings', href: '/settings', icon: 'Settings' },
 ]);

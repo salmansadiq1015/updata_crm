@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Send, Paperclip, Camera, X, FileText, ImageIcon, File } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 
 function formatMentions(text) {
   if (!text) return null;
-  const parts = text.split(/(@\w+)/g);
+  const parts = text.split(/(@[^\s@]+)/g);
   return parts.map((part, i) =>
     part.startsWith('@') ? (
       <span key={i} className="font-semibold text-primary">
@@ -24,6 +24,22 @@ function formatMentions(text) {
       part
     )
   );
+}
+
+function getMemberId(member) {
+  return member?._id || member?.id;
+}
+
+function getMemberName(member) {
+  return member?.name
+    || `${member?.firstName || member?.first_name || ''} ${member?.lastName || member?.last_name || ''}`.trim()
+    || member?.username
+    || member?.email
+    || 'User';
+}
+
+function getMentionToken(member) {
+  return member?.username || member?.firstName || member?.first_name || getMemberName(member).split(/\s+/)[0];
 }
 
 export default function ChatPage() {
@@ -37,6 +53,7 @@ export default function ChatPage() {
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentions, setShowMentions] = useState(false);
   const [caretPos, setCaretPos] = useState(0);
+  const [selectedMentionIds, setSelectedMentionIds] = useState([]);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -60,9 +77,8 @@ export default function ChatPage() {
     const pos = e.target.selectionStart;
     setCaretPos(pos);
 
-    // Detect @mention trigger
     const textBefore = val.slice(0, pos);
-    const mentionMatch = textBefore.match(/@(\w*)$/);
+    const mentionMatch = textBefore.match(/@([^\s@]*)$/);
     if (mentionMatch && memberList.length > 0) {
       setMentionQuery(mentionMatch[1].toLowerCase());
       setShowMentions(true);
@@ -72,19 +88,26 @@ export default function ChatPage() {
     }
   };
 
-  const insertMention = (memberName) => {
+  const insertMention = (member) => {
+    const memberId = getMemberId(member);
+    const token = getMentionToken(member);
     const textBefore = message.slice(0, caretPos);
     const textAfter = message.slice(caretPos);
-    const replaced = textBefore.replace(/@(\w*)$/, `@${memberName} `);
+    const replaced = textBefore.replace(/@([^\s@]*)$/, `@${token} `);
     setMessage(replaced + textAfter);
+    if (memberId) {
+      setSelectedMentionIds((prev) => (prev.includes(memberId) ? prev : [...prev, memberId]));
+    }
     setShowMentions(false);
     setMentionQuery('');
     textareaRef.current?.focus();
   };
 
   const filteredMembers = mentionQuery
-    ? memberList.filter((m) =>
-        (m.username || m.name || '').toLowerCase().startsWith(mentionQuery)
+    ? memberList.filter((member) =>
+        `${getMentionToken(member)} ${getMemberName(member)} ${member.email || ''}`
+          .toLowerCase()
+          .includes(mentionQuery)
       )
     : memberList;
 
@@ -93,29 +116,37 @@ export default function ChatPage() {
     if (!file) return;
     setAttachment(file);
     setAttachmentType(type || (file.type.startsWith('image/') ? MESSAGE_TYPE.PHOTO : MESSAGE_TYPE.DOCUMENT));
+    e.target.value = '';
   };
 
   const handleSend = async () => {
     const text = message.trim();
     if (!text && !attachment) return;
 
-    const mentions = [];
-    const mentionRegex = /@(\w+)/g;
-    let m;
-    while ((m = mentionRegex.exec(text)) !== null) {
-      mentions.push(m[1]);
+    const mentions = [...selectedMentionIds];
+    const mentionRegex = /@([^\s@]+)/g;
+    let match;
+    while ((match = mentionRegex.exec(text)) !== null) {
+      const token = match[1].toLowerCase();
+      const member = memberList.find((candidate) =>
+        getMentionToken(candidate).toLowerCase() === token
+        || getMemberName(candidate).toLowerCase().replace(/\s+/g, '') === token
+      );
+      const memberId = getMemberId(member);
+      if (memberId && !mentions.includes(memberId)) mentions.push(memberId);
     }
 
     setMessage('');
     setAttachment(null);
     setAttachmentType(null);
+    setSelectedMentionIds([]);
 
     const payload = {
       content: text || (attachment ? attachment.name : ''),
       messageType: attachment ? attachmentType : MESSAGE_TYPE.TEXT,
       message_type: attachment ? attachmentType : MESSAGE_TYPE.TEXT,
       is_own: true,
-      mentions: mentions.length > 0 ? JSON.stringify(mentions) : undefined,
+      mentions,
     };
     if (attachment) payload.attachment = attachment;
 
@@ -127,7 +158,7 @@ export default function ChatPage() {
   };
 
   const handleKeyDown = (e) => {
-    if (showMentions && (e.key === 'Escape')) {
+    if (showMentions && e.key === 'Escape') {
       setShowMentions(false);
       return;
     }
@@ -151,7 +182,6 @@ export default function ChatPage() {
         }
       />
 
-      {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {isLoading ? (
           <ChatSkeleton />
@@ -167,26 +197,26 @@ export default function ChatPage() {
           />
         ) : (
           allMessages.map((msg) => (
-            <ChatBubble key={msg.id} message={msg} lang={lang} />
+            <ChatBubble key={msg.id || msg._id} message={msg} lang={lang} />
           ))
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* @mention suggestions */}
       {showMentions && filteredMembers.length > 0 && (
         <div className="px-4 py-2 border-t border-border bg-background">
           <div className="flex gap-2 overflow-x-auto scrollbar-none">
             {filteredMembers.slice(0, 8).map((member) => {
-              const name = member.username || member.name || member.first_name;
+              const name = getMentionToken(member);
+              const label = getMemberName(member);
               return (
                 <button
-                  key={member.id || name}
-                  onClick={() => insertMention(name)}
+                  key={getMemberId(member) || name}
+                  onClick={() => insertMention(member)}
                   className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted text-sm font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
                 >
                   <span className="h-5 w-5 rounded-full bg-primary/20 text-primary text-[10px] flex items-center justify-center font-bold">
-                    {(name || 'U')[0].toUpperCase()}
+                    {(label || 'U')[0].toUpperCase()}
                   </span>
                   @{name}
                 </button>
@@ -196,7 +226,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Compose bar */}
       <div className="border-t border-border bg-background">
         {attachment && (
           <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 border-b border-border">
@@ -282,8 +311,11 @@ export default function ChatPage() {
 function ChatBubble({ message, lang }) {
   const isOwn = message.is_own || message.isOwn;
   const isPending = message.sync_status === SYNC_STATUS.PENDING_SYNC;
-  const sentAt = message.sent_at || message.created_at;
+  const sentAt = message.sent_at || message.sentAt || message.created_at || message.createdAt;
   const msgType = message.message_type || message.messageType || MESSAGE_TYPE.TEXT;
+  const content = message.content || '';
+  const senderName = message.sender_name || message.senderName;
+  const attachmentUrl = message.attachment_url || message.attachmentUrl || message.attachment_local_path;
 
   const mentions = (() => {
     try {
@@ -306,17 +338,16 @@ function ChatBubble({ message, lang }) {
             : 'bg-muted rounded-bl-md'
         )}
       >
-        {!isOwn && message.sender_name && (
+        {!isOwn && senderName && (
           <p className={cn('text-xs font-semibold px-4 pt-2.5 pb-0.5 opacity-70')}>
-            {message.sender_name}
+            {senderName}
           </p>
         )}
 
-        {/* Photo message */}
-        {msgType === MESSAGE_TYPE.PHOTO && (message.attachment_url || message.attachment_local_path) && (
+        {msgType === MESSAGE_TYPE.PHOTO && attachmentUrl && (
           <div className="relative">
             <img
-              src={message.attachment_url || message.attachment_local_path}
+              src={attachmentUrl}
               alt={lang === 'de' ? 'Foto' : 'Photo'}
               className="w-full max-w-[280px] object-cover max-h-48"
               loading="lazy"
@@ -324,7 +355,6 @@ function ChatBubble({ message, lang }) {
           </div>
         )}
 
-        {/* Document message */}
         {msgType === MESSAGE_TYPE.DOCUMENT && (
           <div className={cn(
             'flex items-center gap-3 px-4 py-3',
@@ -338,11 +368,11 @@ function ChatBubble({ message, lang }) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">
-                {message.content || (lang === 'de' ? 'Dokument' : 'Document')}
+                {content || (lang === 'de' ? 'Dokument' : 'Document')}
               </p>
-              {message.attachment_url && (
+              {attachmentUrl && (
                 <a
-                  href={message.attachment_url}
+                  href={attachmentUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
@@ -351,22 +381,21 @@ function ChatBubble({ message, lang }) {
                   )}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {lang === 'de' ? 'Öffnen' : 'Open'}
+                  {lang === 'de' ? 'Oeffnen' : 'Open'}
                 </a>
               )}
             </div>
           </div>
         )}
 
-        {/* Text content (shown for TEXT type and as caption for PHOTO/DOCUMENT) */}
-        {message.content && msgType === MESSAGE_TYPE.TEXT && (
+        {content && msgType === MESSAGE_TYPE.TEXT && (
           <p className="text-sm whitespace-pre-wrap break-words px-4 py-2.5">
-            {mentions.length > 0 ? formatMentions(message.content) : message.content}
+            {mentions.length > 0 ? formatMentions(content) : content}
           </p>
         )}
-        {message.content && msgType !== MESSAGE_TYPE.TEXT && msgType !== MESSAGE_TYPE.DOCUMENT && (
+        {content && msgType !== MESSAGE_TYPE.TEXT && msgType !== MESSAGE_TYPE.DOCUMENT && (
           <p className="text-xs opacity-80 px-4 pb-2">
-            {message.content}
+            {content}
           </p>
         )}
 
@@ -384,7 +413,7 @@ function ChatBubble({ message, lang }) {
           )}
           {isPending && (
             <span className={cn('text-[10px]', isOwn ? 'text-primary-foreground/50' : 'text-muted-foreground/50')}>
-              ●
+              ...
             </span>
           )}
         </div>

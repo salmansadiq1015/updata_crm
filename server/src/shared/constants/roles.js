@@ -60,6 +60,23 @@ const PERMISSIONS = Object.freeze({
   FIELD_SERVICE_WRITE: 'field-service:write',
   FIELD_SERVICE_ADMIN: 'field-service:admin',
 
+  // Field tickets
+  FIELD_TICKET_READ: 'field-ticket:read',
+  FIELD_TICKET_WRITE: 'field-ticket:write',
+  FIELD_TICKET_ASSIGN: 'field-ticket:assign',
+  FIELD_TICKET_COMMENT: 'field-ticket:comment',
+  FIELD_TICKET_ADMIN: 'field-ticket:admin',
+
+  // Mobile app
+  MOBILE_READ: 'mobile:read',
+  MOBILE_WRITE: 'mobile:write',
+  MOBILE_ADMIN: 'mobile:admin',
+
+  // Internal communication / chat
+  CHAT_READ: 'chat:read',
+  CHAT_WRITE: 'chat:write',
+  CHAT_ADMIN: 'chat:admin',
+
   // Scheduling
   SCHEDULING_READ: 'scheduling:read',
   SCHEDULING_WRITE: 'scheduling:write',

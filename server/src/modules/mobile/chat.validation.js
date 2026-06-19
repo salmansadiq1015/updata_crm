@@ -1,7 +1,7 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 
-const MESSAGE_TYPES = ['TEXT', 'PHOTO', 'DOCUMENT'];
+const MESSAGE_TYPES = ['TEXT', 'PHOTO', 'DOCUMENT', 'AUDIO', 'VIDEO'];
 
 export const listMessagesSchema = {
   params: Joi.object({ id: objectId.required() }),
@@ -15,9 +15,11 @@ export const sendMessageSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     messageType: Joi.string().valid(...MESSAGE_TYPES).default('TEXT'),
-    content: Joi.string().max(5000).required(),
+    content: Joi.string().max(5000).allow('').default(''),
     attachmentUrl: Joi.string().allow('', null),
-    mentions: Joi.array().items(objectId),
+    attachmentFileId: objectId.allow(null),
+    mentions: Joi.array().items(objectId).default([]),
+    orderId: objectId.allow(null),
   }),
 };
 

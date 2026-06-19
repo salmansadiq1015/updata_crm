@@ -28,6 +28,7 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
     'project:prep-actions:read',
     'project:schedule:read',
     'project:status:read',
+    'chat:read',
   ],
   'projects:write': [
     'project:create',
@@ -37,6 +38,7 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
     'project:schedule:manage',
     'project:documents:create',
     'project:documents:write',
+    'chat:write',
   ],
   'projects:admin': [
     'project:status:override',
@@ -50,6 +52,7 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
   ],
   'project:documents:write': [
     'documents:write',
+    'files:upload',
   ],
   'project:documents:delete': [
     'documents:delete',
@@ -59,6 +62,7 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
   ],
   'templates:write': [
     'documents:write',
+    'files:upload',
   ],
   'templates:delete': [
     'documents:delete',
@@ -74,9 +78,67 @@ export const PERMISSION_IMPLICATIONS = Object.freeze({
   ],
   'accounting:documents:manage': [
     'documents:write',
+    'files:upload',
   ],
   'crm:write': [
     'documents:write',
+    'files:upload',
+  ],
+  'field-service:read': [
+    'mobile:read',
+    'chat:read',
+    'field-ticket:read',
+    'field-ticket:comment',
+  ],
+  'field-service:write': [
+    'mobile:write',
+    'chat:write',
+    'files:upload',
+    'field-ticket:write',
+    'field-ticket:comment',
+  ],
+  'field-service:admin': [
+    'field-ticket:read',
+    'field-ticket:write',
+    'field-ticket:assign',
+    'field-ticket:comment',
+    'field-ticket:admin',
+  ],
+  'field-ticket:write': [
+    'field-ticket:read',
+    'field-ticket:comment',
+    'files:upload',
+  ],
+  'field-ticket:assign': [
+    'field-ticket:read',
+    'field-ticket:write',
+  ],
+  'field-ticket:admin': [
+    'field-ticket:read',
+    'field-ticket:write',
+    'field-ticket:assign',
+    'field-ticket:comment',
+  ],
+  'chat:write': [
+    'chat:read',
+  ],
+  'chat:admin': [
+    'chat:read',
+    'chat:write',
+  ],
+  'time-tracking:write': [
+    'time-tracking:read',
+  ],
+  'time-tracking:admin': [
+    'time-tracking:read',
+    'time-tracking:write',
+    'time:release:override',
+  ],
+  'files:upload': [
+    'files:view',
+  ],
+  'files:list': [
+    'files:view',
   ],
   'catalog:write': [
     'catalog:manage',

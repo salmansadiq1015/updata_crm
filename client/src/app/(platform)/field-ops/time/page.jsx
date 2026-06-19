@@ -1,5 +1,6 @@
 'use client';
-import { FieldOpsTimeTable } from '@/modules/field-ops/components/time/field-ops-time-table';
+import { TimeManagementWorkspace } from '@/modules/field-ops/components/time/time-management-workspace';
+
 export default function FieldOpsTimePage() {
-  return <FieldOpsTimeTable />;
+  return <TimeManagementWorkspace />;
 }

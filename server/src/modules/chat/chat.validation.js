@@ -19,6 +19,18 @@ export const listMessagesSchema = {
   }),
 };
 
+export const searchMessagesSchema = {
+  query: Joi.object({
+    q: Joi.string().trim().min(1).max(120).required(),
+    roomId: Joi.string().hex().length(24).optional(),
+    projectId: Joi.string().hex().length(24).optional(),
+    orderId: Joi.string().hex().length(24).optional(),
+    messageType: Joi.string().valid('TEXT', 'PHOTO', 'DOCUMENT', 'AUDIO', 'VIDEO', 'VIEW_ONCE').optional(),
+    limit: Joi.number().integer().min(1).max(50).default(50),
+    before: Joi.string().isoDate().optional(),
+  }).oxor('roomId', 'projectId', 'orderId'),
+};
+
 export const sendMessageSchema = {
   params: Joi.object({ roomId: Joi.string().hex().length(24).required() }),
   body: Joi.object({
@@ -55,8 +67,10 @@ export const editMessageSchema = {
 export const createGroupRoomSchema = {
   body: Joi.object({
     name: Joi.string().max(100).required(),
+    description: Joi.string().max(500).allow('', null).optional(),
     memberIds: Joi.array().items(Joi.string().hex().length(24)).default([]),
     projectId: Joi.string().hex().length(24).optional().allow(null),
+    orderId: Joi.string().hex().length(24).optional().allow(null),
   }),
 };
 

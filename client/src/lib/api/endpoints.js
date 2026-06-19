@@ -29,6 +29,7 @@ export const ENDPOINTS = Object.freeze({
     ME: '/users/me',
     ACTIVATE: (id) => `/users/${id}/activate`,
     DEACTIVATE: (id) => `/users/${id}/deactivate`,
+    PROJECTS: (id) => `/users/${id}/projects`,
     AVATAR: (id) => `/users/${id}/avatar`,
     BULK_UPDATE: '/users/bulk-update',
     BULK_DELETE: '/users/bulk-delete',
@@ -135,8 +136,10 @@ export const ENDPOINTS = Object.freeze({
     NEWSLETTER_COUNT_RECIPIENTS: '/crm/newsletters/count-recipients',
   },
   FILES: {
+    LIST: '/files',
     UPLOAD: '/files/upload',
     DOWNLOAD: (fileId) => `/files/${fileId}/download`,
+    BY_ID: (fileId) => `/files/${fileId}`,
   },
   DOCUMENTS: {
     LIST: '/documents',
@@ -234,6 +237,17 @@ export const ENDPOINTS = Object.freeze({
     DASHBOARD: '/tasks/dashboard',
     DASHBOARD_STATS: '/tasks/dashboard/stats',
     ORDER_TASKS: (orderId) => `/orders/${orderId}/tasks`,
+  },
+  MEETINGS: {
+    LIST: '/meetings',
+    BY_ID: (id) => `/meetings/${id}`,
+    CANCEL: (id) => `/meetings/${id}/cancel`,
+    RSVP: (id) => `/meetings/${id}/rsvp`,
+    ATTENDANCE: (id) => `/meetings/${id}/attendance`,
+    NOTES: (id) => `/meetings/${id}/notes`,
+    MINUTES: (id) => `/meetings/${id}/minutes`,
+    DECISIONS: (id) => `/meetings/${id}/decisions`,
+    TASKS: (id) => `/meetings/${id}/tasks`,
   },
   TASK_LISTS: {
     LIST: '/task-lists',

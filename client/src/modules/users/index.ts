@@ -2,5 +2,6 @@
 export { UsersTable } from './components/users-table';
 export { UserForm } from './components/user-form';
 export { AdminSessionsPanel } from './components/admin-sessions-panel';
+export { UserProjectsPanel } from './components/user-projects-panel';
 export { userService } from './services/user-service';
 export { useUserDirectory } from './hooks/use-user-directory';

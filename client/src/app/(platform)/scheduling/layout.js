@@ -6,10 +6,11 @@ import { usePathname } from 'next/navigation';
 import { ErrorBoundary } from '@/shared/components/error-boundary';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
-import { CalendarDays, LayoutDashboard, Grid3X3, AlertTriangle } from 'lucide-react';
+import { CalendarDays, LayoutDashboard, Grid3X3, AlertTriangle, Video } from 'lucide-react';
 
 const TABS = [
   { href: '/scheduling/calendar', labelKey: 'deploy.tabs.calendar', fallback: 'Kalender', icon: CalendarDays },
+  { href: '/scheduling/meetings', labelKey: 'deploy.tabs.meetings', fallback: 'Meetings', icon: Video },
   { href: '/scheduling/dashboard', labelKey: 'deploy.tabs.dashboard', fallback: 'Dashboard', icon: LayoutDashboard },
   { href: '/scheduling/coarse', labelKey: 'deploy.tabs.coarse', fallback: 'Grobplanung', icon: Grid3X3 },
   { href: '/scheduling/conflicts', labelKey: 'deploy.tabs.conflicts', fallback: 'Konflikte', icon: AlertTriangle },

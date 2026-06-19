@@ -16,6 +16,8 @@ import {
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 import fileService from '../files/file.service.js';
+import projectRepository from '../pm/project.repository.js';
+import projectService from '../pm/project.service.js';
 
 const USER_CACHE_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_CACHE_TTL = { l1Ttl: 30, l2Ttl: 120 };
@@ -222,11 +224,15 @@ class UserService {
   }
 
   /**
-   * Deactivate (soft delete) a user.
+   * Deactivate a user without hiding them from administration lists.
    */
   async deactivateUser(id, deactivatedBy, meta = {}) {
     const user = await userRepository.findById(id);
     if (!user) throw new NotFoundError('User', id);
+
+    if (user.status === 'deactivated') {
+      return user;
+    }
 
     // Prevent self-deactivation for admins
     if (id.toString() === deactivatedBy?.toString() && user.role?.name === 'Admin') {
@@ -244,7 +250,7 @@ class UserService {
       }
     }
 
-    await userRepository.softDelete(id);
+    const updated = await userRepository.deactivate(id);
 
     // Revoke all sessions
     await sessionService.revokeAllUserSessions(id);
@@ -274,6 +280,54 @@ class UserService {
       userId: id,
       deactivatedBy,
     });
+
+    return updated;
+  }
+
+  /**
+   * Reactivate a previously deactivated/locked user. Pending invitations must
+   * still use the account activation flow so password setup is not bypassed.
+   */
+  async activateUser(id, activatedBy, meta = {}) {
+    const user = await userRepository.findById(id, { includeDeleted: true });
+    if (!user) throw new NotFoundError('User', id);
+
+    if (user.status === 'active' && !user.isDeleted) {
+      return user;
+    }
+
+    if (user.status === 'pending_activation' && !user.isDeleted) {
+      throw new ConflictError('Pending users must complete invitation activation before admin reactivation');
+    }
+
+    const updated = await userRepository.activate(id);
+    await this._invalidateUserCache(id);
+    await this._invalidateListCache();
+    await cacheManager.del(`auth:permissions:${id}`);
+
+    eventBus.publish(EVENT_TYPES.USER_UPDATED, {
+      userId: id,
+      updatedFields: ['status', 'isDeleted', 'deletedAt'],
+      updatedBy: activatedBy,
+    }, { source: 'auth:users' });
+
+    auditService.logEvent({
+      eventType: 'user.activated',
+      userId: activatedBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { targetUserId: id, email: user.email },
+    });
+
+    logger.info('User activated', {
+      module: 'auth',
+      action: 'activateUser',
+      userId: id,
+      activatedBy,
+    });
+
+    return updated;
   }
 
   /**
@@ -360,7 +414,7 @@ class UserService {
   }
 
   /**
-   * Bulk deactivate (soft delete) multiple users.
+   * Bulk deactivate multiple users without removing them from admin visibility.
    */
   async bulkDeactivateUsers(ids, deactivatedBy, meta = {}) {
     if (!ids || ids.length === 0) {
@@ -393,7 +447,7 @@ class UserService {
       throw new ConflictError('Cannot deactivate your own account in a bulk operation');
     }
 
-    const deactivatedCount = await userRepository.bulkSoftDelete(ids);
+    const deactivatedCount = await userRepository.bulkDeactivate(ids);
 
     // Revoke sessions and invalidate caches for all affected users
     for (const id of ids) {
@@ -426,6 +480,61 @@ class UserService {
     });
 
     return { deactivatedCount };
+  }
+
+  async listAssignedProjects(id, queryParams = {}) {
+    const user = await userRepository.findById(id, { includeDeleted: true });
+    if (!user) throw new NotFoundError('User', id);
+
+    const teamIds = [user.preferences?.preferredDepartmentId]
+      .filter(Boolean)
+      .map((value) => value.toString());
+
+    const result = await projectRepository.findAssignmentsForUser({
+      userId: id,
+      teamIds,
+      assignmentType: queryParams.assignmentType || 'all',
+      cursor: queryParams.cursor,
+      limit: queryParams.limit,
+      sortBy: queryParams.sortBy,
+      sortOrder: queryParams.sortOrder,
+      search: queryParams.search,
+    });
+
+    const teamSet = new Set(teamIds);
+    const data = (result.data || []).map((project) => ({
+      ...project,
+      assignmentRoles: [
+        project.projectManagerId?._id?.toString?.() === id.toString()
+          || project.projectManagerId?.toString?.() === id.toString()
+          ? 'manager'
+          : null,
+        project.teamId && teamSet.has(project.teamId.toString()) ? 'team' : null,
+      ].filter(Boolean),
+    }));
+
+    return { ...result, data };
+  }
+
+  async assignProject(id, { projectId, assignmentType = 'manager' }, assignedBy, meta = {}) {
+    const user = await userRepository.findById(id, { includeDeleted: true });
+    if (!user) throw new NotFoundError('User', id);
+    if (user.isDeleted || ['deactivated', 'locked'].includes(user.status)) {
+      throw new ConflictError('Cannot assign projects to an inactive user');
+    }
+
+    const patch = {};
+    if (assignmentType === 'team') {
+      const teamId = user.preferences?.preferredDepartmentId;
+      if (!teamId) {
+        throw new ConflictError('User has no preferred department/team assignment target');
+      }
+      patch.teamId = teamId;
+    } else {
+      patch.projectManagerId = id;
+    }
+
+    return projectService.update(projectId, patch, assignedBy, meta);
   }
 
   /**

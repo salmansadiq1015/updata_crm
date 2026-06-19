@@ -23,7 +23,7 @@ import {
   BookOpen, ClipboardList, MessageSquare, Bell, Smartphone,
   FileCheck, Clock4, Files, LayoutTemplate,
   Type, TrendingUp, Ruler, RefreshCw, CalendarDays, Grid3X3, AlertTriangle,
-  ShoppingCart, PlugZap, Percent,
+  ShoppingCart, PlugZap, Percent, Video,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import {
@@ -65,6 +65,7 @@ const navSectionDefs = [
         basePath: '/scheduling', permission: 'scheduling:read',
         children: [
           { type: 'leaf', labelKey: 'deploy.tabs.calendar', href: '/scheduling/calendar', icon: CalendarDays, permission: 'scheduling:read' },
+          { type: 'leaf', labelKey: 'deploy.tabs.meetings', href: '/scheduling/meetings', icon: Video, permission: PERMISSIONS.MEETINGS_READ },
           { type: 'leaf', labelKey: 'deploy.tabs.dashboard', href: '/scheduling/dashboard', icon: LayoutDashboard, permission: 'scheduling:read' },
           { type: 'leaf', labelKey: 'deploy.tabs.coarse', href: '/scheduling/coarse', icon: Grid3X3, permission: 'scheduling:read' },
           { type: 'leaf', labelKey: 'deploy.tabs.conflicts', href: '/scheduling/conflicts', icon: AlertTriangle, permission: 'scheduling:read' },

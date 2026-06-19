@@ -13,6 +13,7 @@ import {
   sendAppointmentRescheduledEmail,
   sendQuotationEmail,
   sendQopAppointmentReminderEmail,
+  sendMeetingNotificationEmail,
 } from '../shared/mail/mail.js';
 import logger from '../shared/logger/index.js';
 
@@ -392,6 +393,12 @@ async function sendQopAppointmentReminderJob(data) {
   return { sent: true, jobType: 'send-qop-appointment-reminder', email: context.email };
 }
 
+async function sendMeetingNotificationJob(data) {
+  if (!data.email) return { skipped: true, reason: 'no_recipient_email' };
+  const info = await sendMeetingNotificationEmail(data.email, data);
+  return { sent: true, jobType: 'send-meeting-notification', email: data.email, messageId: info?.messageId || null };
+}
+
 /**
  * Auth email worker.
  *
@@ -453,6 +460,9 @@ export class AuthEmailWorker extends BaseWorker {
 
       case 'send-qop-appointment-reminder':
         return sendQopAppointmentReminderJob(data);
+
+      case 'send-meeting-notification':
+        return sendMeetingNotificationJob(data);
 
       default:
         logger.warn('Unknown auth email job type', {

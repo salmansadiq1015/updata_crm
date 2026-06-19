@@ -595,6 +595,35 @@ export const sendTaskAssignedEmail = async (email, data) => {
 };
 
 /**
+ * Send meeting invitation, update, cancellation, or reminder email.
+ */
+export const sendMeetingNotificationEmail = async (email, data) => {
+  const title = data.title || 'Meeting';
+  const startAt = data.startAt ? new Date(data.startAt).toLocaleString('de-CH') : '';
+  const endAt = data.endAt ? new Date(data.endAt).toLocaleString('de-CH') : '';
+  const body = [
+    `<p>${escapeHtml(data.subjectPrefix || 'Meeting update')}: <strong>${escapeHtml(title)}</strong></p>`,
+    startAt ? `<p><strong>Start:</strong> ${escapeHtml(startAt)}</p>` : '',
+    endAt ? `<p><strong>Ende:</strong> ${escapeHtml(endAt)}</p>` : '',
+    data.agenda ? `<p><strong>Agenda:</strong><br>${escapeHtml(data.agenda).replace(/\n/g, '<br>')}</p>` : '',
+    data.joinUrl ? `<p><a href="${escapeHtml(data.joinUrl)}">Online meeting beitreten</a></p>` : '',
+    data.deepLink ? `<p><a href="${escapeHtml(`${process.env.CLIENT_URI || 'http://localhost:3000'}${data.deepLink}`)}">Meeting im System oeffnen</a></p>` : '',
+  ].filter(Boolean).join('');
+
+  return sendMail({
+    email,
+    subject: `${data.subjectPrefix || 'Meeting'}: ${title} - MB Boiler`,
+    template: 'notificationGeneric.ejs',
+    data: {
+      recipientName: data.recipientName || email,
+      title,
+      body,
+      deepLink: data.joinUrl || (data.deepLink ? `${process.env.CLIENT_URI || 'http://localhost:3000'}${data.deepLink}` : ''),
+    },
+  });
+};
+
+/**
  * Send a generated project document to a recipient with a PDF attachment.
  * Used by the PM "Email document" action (PROJ-005 AC-5).
  *

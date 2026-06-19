@@ -107,6 +107,60 @@ class ProjectRepository {
     return buildCursorResponse(docs, limit, resolvedSortBy);
   }
 
+  async findAssignmentsForUser({
+    userId,
+    teamIds = [],
+    assignmentType = 'all',
+    cursor,
+    limit = 25,
+    sortBy = 'projectNumber',
+    sortOrder = 'asc',
+    search,
+  }) {
+    const clauses = [];
+    if (assignmentType === 'all' || assignmentType === 'manager') {
+      clauses.push({ projectManagerId: userId });
+    }
+    if ((assignmentType === 'all' || assignmentType === 'team') && teamIds.length > 0) {
+      clauses.push({ teamId: { $in: teamIds } });
+    }
+
+    if (clauses.length === 0) {
+      return buildCursorResponse([], limit, sortBy);
+    }
+
+    const resolvedSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'projectNumber';
+    const filter = {
+      isDeleted: { $ne: true },
+      $and: [{ $or: clauses }],
+    };
+
+    const cursorClause = buildCursorQuery(cursor, resolvedSortBy, sortOrder);
+    if (Object.keys(cursorClause).length > 0) {
+      filter.$and.push(cursorClause);
+    }
+
+    if (search) {
+      filter.$and.push({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { projectNumber: { $regex: search, $options: 'i' } },
+          { customerName: { $regex: search, $options: 'i' } },
+        ],
+      });
+    }
+
+    const sort = buildCursorSort(resolvedSortBy, sortOrder);
+    const docs = await Project.find(filter)
+      .sort(sort)
+      .limit(limit + 1)
+      .populate(POPULATE_FIELDS)
+      .select('-__v')
+      .lean();
+
+    return buildCursorResponse(docs, limit, resolvedSortBy);
+  }
+
   async textSearch(searchTerm, limit = 25) {
     return Project.find(
       { $text: { $search: searchTerm } },

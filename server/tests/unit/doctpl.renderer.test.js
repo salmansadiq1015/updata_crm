@@ -32,6 +32,46 @@ describe('i18n t()', () => {
       expect(LABELS[lang].grossTotal).toBeTruthy();
     }
   });
+  test('all 4 languages cover Module 09 document label requirements', () => {
+    const requiredKeys = [
+      'position',
+      'description',
+      'quantity',
+      'unitPrice',
+      'total',
+      'subtotal',
+      'vat',
+      'grandTotal',
+      'paymentTerms',
+      'validUntil',
+      'date',
+      'page',
+      'documentNumber',
+      'reference',
+    ];
+    const templateTypes = [
+      'quotation',
+      'order_confirmation',
+      'invoice_standard',
+      'invoice_advance',
+      'invoice_final',
+      'cover_letter',
+      'service_report',
+      'inspection_certificate',
+      'project_appointment_confirmation',
+      'project_status_report',
+      'project_completion_certificate',
+    ];
+
+    for (const lang of ['de','fr','it','en']) {
+      for (const key of requiredKeys) {
+        expect(LABELS[lang][key]).toBeTruthy();
+      }
+      for (const templateType of templateTypes) {
+        expect(LABELS[lang][`title.${templateType}`]).toBeTruthy();
+      }
+    }
+  });
 });
 
 // --- PageManager tests ---

@@ -27,6 +27,10 @@ class UserRepository {
   async findById(id, options = {}) {
     let query = User.findById(id);
 
+    if (options.includeDeleted) {
+      query = query.setOptions({ includeDeleted: true });
+    }
+
     if (options.includeSecrets) {
       query = query.select(
         '+passwordHash +passwordChangedAt +failedLoginAttempts +lockedUntil ' +
@@ -65,9 +69,10 @@ class UserRepository {
    * Cursor-paginated list with search and filters.
    */
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+    const resolvedSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
     const filter = {
       ...buildFilter(filters, ALLOWED_FILTERS),
-      ...buildCursorQuery(cursor, sortBy, sortOrder),
+      ...buildCursorQuery(cursor, resolvedSortBy, sortOrder),
     };
 
     // Text search
@@ -79,7 +84,7 @@ class UserRepository {
       ];
     }
 
-    const sort = buildCursorSort(sortBy, sortOrder);
+    const sort = buildCursorSort(resolvedSortBy, sortOrder);
 
     const docs = await User.find(filter)
       .sort(sort)
@@ -88,7 +93,7 @@ class UserRepository {
       .select('-__v')
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    return buildCursorResponse(docs, limit, resolvedSortBy);
   }
 
   async updateById(id, data) {
@@ -106,6 +111,36 @@ class UserRepository {
       { isDeleted: true, deletedAt: new Date(), status: 'deactivated' },
       { returnDocument: 'after' },
     );
+  }
+
+  async deactivate(id) {
+    return User.findByIdAndUpdate(
+      id,
+      { status: 'deactivated', isDeleted: false, deletedAt: null },
+      { returnDocument: 'after', runValidators: true },
+    )
+      .populate('role', 'name')
+      .lean();
+  }
+
+  async activate(id) {
+    return User.findByIdAndUpdate(
+      id,
+      {
+        status: 'active',
+        isDeleted: false,
+        deletedAt: null,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+      {
+        returnDocument: 'after',
+        runValidators: true,
+      },
+    )
+      .setOptions({ includeDeleted: true })
+      .populate('role', 'name')
+      .lean();
   }
 
   async countByRole(roleId) {
@@ -149,6 +184,15 @@ class UserRepository {
     const result = await User.updateMany(
       { _id: { $in: ids }, isDeleted: false },
       { $set: { isDeleted: true, deletedAt: new Date(), status: 'deactivated' } },
+    );
+    return result.modifiedCount;
+  }
+
+  async bulkDeactivate(ids) {
+    const result = await User.updateMany(
+      { _id: { $in: ids }, isDeleted: false },
+      { $set: { status: 'deactivated', isDeleted: false, deletedAt: null } },
+      { runValidators: true },
     );
     return result.modifiedCount;
   }

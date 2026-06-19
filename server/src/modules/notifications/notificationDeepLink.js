@@ -5,6 +5,8 @@ export function buildNotificationDeepLink(entityType, entityId) {
   switch (entityType) {
     case 'Task':
       return `/tasks?taskId=${id}`;
+    case 'Meeting':
+      return `/scheduling/meetings?meetingId=${id}`;
     case 'Assignment':
       return `/scheduling/calendar?assignmentId=${id}`;
     case 'Project':

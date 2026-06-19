@@ -7,6 +7,7 @@ export const queryKeys = {
     list: (filters) => ['users', 'list', filters],
     directory: (params) => ['users', 'directory', params],
     detail: (id) => ['users', 'detail', id],
+    projects: (id, params) => ['users', id, 'projects', params],
     sessions: (id) => ['users', id, 'sessions'],
   },
   roles: {
@@ -298,6 +299,12 @@ export const queryKeys = {
     notes: (taskId) => ['tasks', 'notes', taskId],
     dashboard: (filters) => ['tasks', 'dashboard', filters],
     stats: (filters) => ['tasks', 'stats', filters],
+  },
+  meetings: {
+    all: () => ['meetings'],
+    list: (filters) => ['meetings', 'list', filters],
+    detail: (id) => ['meetings', 'detail', id],
+    files: (id) => ['meetings', id, 'files'],
   },
   chat: {
     rooms:    ()       => ['chat', 'rooms'],

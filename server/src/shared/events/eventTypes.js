@@ -240,6 +240,13 @@ const EVENT_TYPES = Object.freeze({
   TASK_LIST_MEMBER_ADDED: 'task_list.member.added',
   TASK_LIST_MEMBER_REMOVED: 'task_list.member.removed',
 
+  // Meetings
+  MEETING_CREATED: 'meeting.created',
+  MEETING_UPDATED: 'meeting.updated',
+  MEETING_CANCELLED: 'meeting.cancelled',
+  MEETING_RSVP_UPDATED: 'meeting.rsvp_updated',
+  MEETING_TASK_CREATED: 'meeting.task_created',
+
   // Field tickets / technician incidents
   FIELD_TICKET_CREATED: 'field_ticket.created',
   FIELD_TICKET_UPDATED: 'field_ticket.updated',

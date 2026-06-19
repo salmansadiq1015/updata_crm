@@ -21,6 +21,7 @@ import { registerDoctplEvents } from './modules/doctpl/doctpl.events.js';
 import { registerCatalogEvents } from './modules/catalog/catalog.events.js';
 import { registerAccountingEvents } from './modules/accounting/accounting.events.js';
 import { registerTasksEvents } from './modules/tasks/tasks.events.js';
+import { registerMeetingEvents } from './modules/meetings/meeting.events.js';
 import { registerNotificationsEvents } from './modules/notifications/notifications.events.js';
 import { registerIntegrationsEvents } from './modules/integrations/integrations.events.js';
 import { registerAiEvents } from './modules/ai/ai.events.js';
@@ -112,6 +113,7 @@ async function start() {
     registerCatalogEvents();
     registerAccountingEvents();
     registerTasksEvents();
+    registerMeetingEvents();
     registerNotificationsEvents();
     registerIntegrationsEvents();
     registerAiEvents();

@@ -11,6 +11,8 @@ import {
   listUsersSchema,
   directoryUsersSchema,
   userIdParamSchema,
+  listUserProjectsSchema,
+  assignUserProjectSchema,
   bulkUpdateSchema,
   bulkDeleteSchema,
 } from './user.validation.js';
@@ -211,7 +213,7 @@ router.post(
  *         description: User not found
  *   delete:
  *     tags: [Users]
- *     summary: Deactivate a user (soft delete)
+ *     summary: Deactivate a user
  *     parameters:
  *       - in: path
  *         name: id
@@ -238,6 +240,38 @@ router.patch(
   requirePermission('users:write'),
   validate(updateUserSchema),
   (req, res, next) => userController.update(req, res, next),
+);
+
+router.patch(
+  '/:id/deactivate',
+  authenticate,
+  requirePermission('users:admin'),
+  validate(userIdParamSchema),
+  (req, res, next) => userController.deactivate(req, res, next),
+);
+
+router.patch(
+  '/:id/activate',
+  authenticate,
+  requirePermission('users:admin'),
+  validate(userIdParamSchema),
+  (req, res, next) => userController.activate(req, res, next),
+);
+
+router.get(
+  '/:id/projects',
+  authenticate,
+  requirePermission('users:read'),
+  validate(listUserProjectsSchema),
+  (req, res, next) => userController.listAssignedProjects(req, res, next),
+);
+
+router.post(
+  '/:id/projects',
+  authenticate,
+  requirePermission('users:write'),
+  validate(assignUserProjectSchema),
+  (req, res, next) => userController.assignProject(req, res, next),
 );
 
 router.delete(

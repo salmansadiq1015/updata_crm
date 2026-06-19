@@ -75,18 +75,22 @@ export default class HeaderRenderer {
 
     // Document title + meta (right column)
     const templateType = data.templateType || config.templateType || 'quotation';
-    const title = DOC_TITLES[templateType]?.[language] || DOC_TITLES[templateType]?.de || templateType;
+    const titleKey = `title.${templateType}`;
+    const translatedTitle = t(language, titleKey);
+    const title = translatedTitle === titleKey
+      ? DOC_TITLES[templateType]?.[language] || DOC_TITLES[templateType]?.de || templateType
+      : translatedTitle;
     doc.save().font(fonts.bold).fontSize(14).fillColor(colors.primary);
     doc.text(title, left + width * 0.55, addrY, { width: width * 0.45, align: 'right' });
     doc.restore();
 
     doc.save().font(fonts.body).fontSize(9).fillColor(colors.text);
     let metaY = addrY + 22;
-    if (data.documentNumber) { doc.text(`Nr: ${data.documentNumber}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
-    if (data.documentDate)   { doc.text(`Datum: ${data.documentDate}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
+    if (data.documentNumber) { doc.text(`${t(language, 'documentNumber')}: ${data.documentNumber}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
+    if (data.documentDate)   { doc.text(`${t(language, 'date')}: ${data.documentDate}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     if (data.validUntil)     { doc.text(`${t(language,'validUntil')}: ${data.validUntil}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     if (data.dueDate)        { doc.text(`${t(language,'dueDate')}: ${data.dueDate}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
-    if (data.reference)      { doc.text(`Ref: ${data.reference}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
+    if (data.reference)      { doc.text(`${t(language, 'reference')}: ${data.reference}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     doc.restore();
 
     const newY = Math.max(addrY + 60, metaY) + 10;

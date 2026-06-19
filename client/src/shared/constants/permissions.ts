@@ -50,6 +50,10 @@ export const PERMISSIONS = {
   // Scheduling (future)
   SCHEDULING_READ: 'scheduling:read',
   SCHEDULING_WRITE: 'scheduling:write',
+  MEETINGS_READ: 'meetings:read',
+  MEETINGS_WRITE: 'meetings:write',
+  MEETINGS_DELETE: 'meetings:delete',
+  MEETINGS_ADMIN: 'meetings:admin',
 
   // Quotations (future)
   QOP_READ: 'qop:read',

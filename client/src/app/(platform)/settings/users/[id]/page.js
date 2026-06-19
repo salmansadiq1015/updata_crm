@@ -12,6 +12,7 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import { UserForm } from '@/modules/users/components/user-form';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { AdminSessionsPanel } from '@/modules/users/components/admin-sessions-panel';
+import { UserProjectsPanel } from '@/modules/users/components/user-projects-panel';
 import { EmptyState } from '@/shared/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -153,7 +154,7 @@ export default function UserDetailPage() {
                   <Switch
                     checked={isActive}
                     onCheckedChange={() => setConfirmOpen(true)}
-                    disabled={toggleActiveMutation.isPending}
+                    disabled={toggleActiveMutation.isPending || user.status === 'pending_activation'}
                   />
                   <span className={cn('text-xs font-medium', isActive ? 'text-emerald-600' : 'text-muted-foreground')}>Aktiv</span>
                 </div>
@@ -230,6 +231,10 @@ export default function UserDetailPage() {
                 <Activity className="h-3.5 w-3.5" />
                 Übersicht
               </TabsTrigger>
+              <TabsTrigger value="projects" className="gap-1.5">
+                <Briefcase className="h-3.5 w-3.5" />
+                {t('users.projects.title', 'Projekte')}
+              </TabsTrigger>
               {canAdmin && (
                 <TabsTrigger value="sessions" className="gap-1.5">
                   <Monitor className="h-3.5 w-3.5" />
@@ -254,6 +259,10 @@ export default function UserDetailPage() {
                   <OverviewInfoCard icon={MapPin} iconBg="bg-rose-500/10" iconColor="text-rose-500" label={t('users.address') || 'Adresse'} value={fullAddress} className="sm:col-span-2" />
                 )}
               </div>
+            </TabsContent>
+
+            <TabsContent value="projects">
+              <UserProjectsPanel userId={id} canWrite={canWrite} />
             </TabsContent>
 
             {canAdmin && (

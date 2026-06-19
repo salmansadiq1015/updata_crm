@@ -43,7 +43,7 @@ export const userService = {
   },
 
   async updateUser(id, data) {
-    const res = await apiClient.put(ENDPOINTS.USERS.BY_ID(id), data);
+    const res = await apiClient.patch(ENDPOINTS.USERS.BY_ID(id), data);
     return res.data;
   },
 
@@ -91,6 +91,16 @@ export const userService = {
 
   async revokeUserSessions(userId) {
     const res = await apiClient.delete(ENDPOINTS.USERS.SESSIONS(userId));
+    return res.data;
+  },
+
+  async getAssignedProjects(userId, params = {}) {
+    const res = await apiClient.get(ENDPOINTS.USERS.PROJECTS(userId), { params });
+    return res;
+  },
+
+  async assignProject(userId, data) {
+    const res = await apiClient.post(ENDPOINTS.USERS.PROJECTS(userId), data);
     return res.data;
   },
 };

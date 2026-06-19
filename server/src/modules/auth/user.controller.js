@@ -49,8 +49,18 @@ class UserController {
   async deactivate(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      await userService.deactivateUser(req.params.id, req.user._id, meta);
-      return res.success({ message: 'User deactivated successfully' });
+      const user = await userService.deactivateUser(req.params.id, req.user._id, meta);
+      return res.success({ data: user, message: 'User deactivated successfully' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async activate(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const user = await userService.activateUser(req.params.id, req.user._id, meta);
+      return res.success({ data: user, message: 'User activated successfully' });
     } catch (err) {
       next(err);
     }
@@ -244,6 +254,26 @@ class UserController {
         data: result,
         message: `${result.deactivatedCount} user(s) deactivated successfully`,
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listAssignedProjects(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await userService.listAssignedProjects(req.params.id, query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async assignProject(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const project = await userService.assignProject(req.params.id, req.body, req.user._id, meta);
+      return res.success({ data: project, message: 'Project assigned successfully' });
     } catch (err) {
       next(err);
     }

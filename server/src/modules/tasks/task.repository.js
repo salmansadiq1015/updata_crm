@@ -14,6 +14,7 @@ const ALLOWED_FILTERS = {
   priority: 'exact',
   projectId: 'objectId',
   orderId: 'objectId',
+  meetingId: 'objectId',
   parentTaskId: 'objectId',
   dueFrom: 'dateFrom',
   dueTo: 'dateTo',
@@ -26,6 +27,7 @@ const POPULATE_FIELDS = [
   { path: 'createdBy', select: 'firstName lastName email' },
   { path: 'projectId', select: 'name projectNumber customerName status' },
   { path: 'orderId', select: 'assignmentNumber title status priority' },
+  { path: 'meetingId', select: 'title startAt status' },
 ];
 
 function combineFilters(...filters) {

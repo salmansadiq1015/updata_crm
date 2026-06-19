@@ -2,6 +2,7 @@ import Joi from 'joi';
 import { objectId, cursorPagination, idParam } from '../../shared/validation/commonSchemas.js';
 
 const schedulingCapabilitySchema = Joi.array().items(Joi.string().trim().max(80)).max(50);
+const assignmentTypes = ['manager', 'team'];
 
 export const createUserSchema = {
   body: Joi.object({
@@ -13,6 +14,10 @@ export const createUserSchema = {
     phone: Joi.string().trim().max(30).allow('', null),
     department: Joi.string().trim().max(100).allow('', null),
     position: Joi.string().trim().max(100).allow('', null),
+    street: Joi.string().trim().max(200).allow('', null),
+    city: Joi.string().trim().max(100).allow('', null),
+    zip: Joi.string().trim().max(20).allow('', null),
+    country: Joi.string().trim().max(100).allow('', null),
     schedulingSkills: schedulingCapabilitySchema,
     schedulingCertifications: schedulingCapabilitySchema,
   }),
@@ -31,6 +36,10 @@ export const updateUserSchema = {
     phone: Joi.string().trim().max(30).allow('', null),
     department: Joi.string().trim().max(100).allow('', null),
     position: Joi.string().trim().max(100).allow('', null),
+    street: Joi.string().trim().max(200).allow('', null),
+    city: Joi.string().trim().max(100).allow('', null),
+    zip: Joi.string().trim().max(20).allow('', null),
+    country: Joi.string().trim().max(100).allow('', null),
     status: Joi.string().valid('active', 'deactivated', 'locked'),
     schedulingSkills: schedulingCapabilitySchema,
     schedulingCertifications: schedulingCapabilitySchema,
@@ -43,6 +52,12 @@ export const updateMeSchema = {
     lastName: Joi.string().trim().max(100),
     language: Joi.string().valid('de', 'en', 'fr', 'it'),
     phone: Joi.string().trim().max(30).allow('', null),
+    department: Joi.string().trim().max(100).allow('', null),
+    position: Joi.string().trim().max(100).allow('', null),
+    street: Joi.string().trim().max(200).allow('', null),
+    city: Joi.string().trim().max(100).allow('', null),
+    zip: Joi.string().trim().max(20).allow('', null),
+    country: Joi.string().trim().max(100).allow('', null),
   }),
 };
 
@@ -65,6 +80,26 @@ export const directoryUsersSchema = {
 export const userIdParamSchema = {
   params: Joi.object({
     id: objectId.required(),
+  }),
+};
+
+export const listUserProjectsSchema = {
+  params: Joi.object({
+    id: objectId.required(),
+  }),
+  query: cursorPagination.keys({
+    assignmentType: Joi.string().valid('all', ...assignmentTypes).default('all'),
+    search: Joi.string().trim().max(100),
+  }),
+};
+
+export const assignUserProjectSchema = {
+  params: Joi.object({
+    id: objectId.required(),
+  }),
+  body: Joi.object({
+    projectId: objectId.required(),
+    assignmentType: Joi.string().valid(...assignmentTypes).default('manager'),
   }),
 };
 

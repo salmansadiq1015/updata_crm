@@ -1,5 +1,6 @@
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
+import queueManager from '../../shared/queue/QueueManager.js';
 import logger from '../../shared/logger/index.js';
 
 function uniqueRecipientIds(values = []) {
@@ -177,6 +178,33 @@ export function registerNotificationsEvents() {
     });
   };
 
+  const dispatchExternalMeetingEmail = async (payload, actionLabel) => {
+    const recipients = Array.isArray(payload.externalRecipients) ? payload.externalRecipients : [];
+    for (const recipient of recipients) {
+      try {
+        await queueManager.addJob('auth-email', 'send-meeting-notification', {
+          email: recipient.email,
+          recipientName: recipient.displayName || recipient.email,
+          title: payload.title,
+          subjectPrefix: actionLabel,
+          startAt: payload.startAt,
+          endAt: payload.endAt,
+          agenda: payload.agenda,
+          joinUrl: payload.joinUrl,
+          deepLink: payload.deepLink,
+        });
+      } catch (err) {
+        logger.warn('Failed to queue external meeting email', {
+          module: 'notifications',
+          action: 'meeting.external_email',
+          meetingId: payload.meetingId,
+          email: recipient.email,
+          error: err.message,
+        });
+      }
+    }
+  };
+
   eventBus.subscribe(EVENT_TYPES.FIELD_TICKET_CREATED, async (data) => {
     const payload = data.payload || data;
     await dispatchFieldTicket(data, {
@@ -323,6 +351,114 @@ export function registerNotificationsEvents() {
         sourceEvent: 'SCHEDULE_ASSIGNMENT_CANCELLED',
         sourceEntityType: 'Assignment',
         sourceEntityId: payload.assignmentId,
+      });
+    }
+  });
+
+  // --- Meeting Events ---
+  eventBus.subscribe(EVENT_TYPES.MEETING_CREATED, async (data) => {
+    const payload = data.payload || data;
+    const recipients = uniqueRecipientIds(payload.recipientIds || []);
+    if (recipients.length > 0) {
+      await dispatch(payload, {
+        type: 'meeting_invitation',
+        category: 'SCHEDULING',
+        channels: ['IN_APP', 'PUSH', 'EMAIL'],
+        recipientIds: recipients,
+        payload: {
+          title: payload.title,
+          meetingId: payload.meetingId,
+          startAt: payload.startAt,
+          endAt: payload.endAt,
+          agenda: payload.agenda,
+          joinUrl: payload.joinUrl,
+          deepLink: payload.deepLink,
+        },
+        sourceModule: 'meetings',
+        sourceEvent: 'MEETING_CREATED',
+        sourceEntityType: 'Meeting',
+        sourceEntityId: payload.meetingId,
+        idempotencyKey: `meeting-invite-${payload.meetingId}`,
+      });
+    }
+    await dispatchExternalMeetingEmail(payload, 'Meeting invitation');
+  });
+
+  eventBus.subscribe(EVENT_TYPES.MEETING_UPDATED, async (data) => {
+    const payload = data.payload || data;
+    const recipients = uniqueRecipientIds(payload.recipientIds || []);
+    if (recipients.length > 0) {
+      await dispatch(payload, {
+        type: 'meeting_updated',
+        category: 'SCHEDULING',
+        channels: ['IN_APP', 'PUSH', 'EMAIL'],
+        recipientIds: recipients,
+        payload: {
+          title: payload.title,
+          meetingId: payload.meetingId,
+          startAt: payload.startAt,
+          endAt: payload.endAt,
+          agenda: payload.agenda,
+          joinUrl: payload.joinUrl,
+          deepLink: payload.deepLink,
+          changedFields: payload.changedFields || [],
+        },
+        sourceModule: 'meetings',
+        sourceEvent: 'MEETING_UPDATED',
+        sourceEntityType: 'Meeting',
+        sourceEntityId: payload.meetingId,
+        idempotencyKey: `meeting-updated-${payload.meetingId}-${Date.now()}`,
+      });
+    }
+    await dispatchExternalMeetingEmail(payload, 'Meeting updated');
+  });
+
+  eventBus.subscribe(EVENT_TYPES.MEETING_CANCELLED, async (data) => {
+    const payload = data.payload || data;
+    const recipients = uniqueRecipientIds(payload.recipientIds || []);
+    if (recipients.length > 0) {
+      await dispatch(payload, {
+        type: 'meeting_cancelled',
+        category: 'SCHEDULING',
+        priority: 'HIGH',
+        channels: ['IN_APP', 'PUSH', 'EMAIL'],
+        recipientIds: recipients,
+        payload: {
+          title: payload.title,
+          meetingId: payload.meetingId,
+          startAt: payload.startAt,
+          reason: payload.reason,
+          deepLink: payload.deepLink,
+        },
+        sourceModule: 'meetings',
+        sourceEvent: 'MEETING_CANCELLED',
+        sourceEntityType: 'Meeting',
+        sourceEntityId: payload.meetingId,
+        idempotencyKey: `meeting-cancelled-${payload.meetingId}`,
+      });
+    }
+    await dispatchExternalMeetingEmail(payload, 'Meeting cancelled');
+  });
+
+  eventBus.subscribe(EVENT_TYPES.MEETING_TASK_CREATED, async (data) => {
+    const payload = data.payload || data;
+    if (payload.assigneeId && String(payload.assigneeId) !== String(payload.actorId)) {
+      await dispatch(payload, {
+        type: 'meeting_followup_task',
+        category: 'TASK',
+        channels: ['IN_APP', 'PUSH'],
+        recipientIds: [payload.assigneeId],
+        payload: {
+          meetingId: payload.meetingId,
+          meetingTitle: payload.title,
+          taskId: payload.taskId,
+          taskTitle: payload.taskTitle,
+          deepLink: `/tasks?taskId=${payload.taskId}`,
+        },
+        sourceModule: 'meetings',
+        sourceEvent: 'MEETING_TASK_CREATED',
+        sourceEntityType: 'Meeting',
+        sourceEntityId: payload.meetingId,
       });
     }
   });
@@ -562,6 +698,7 @@ export function registerNotificationsEvents() {
       'TASK_ASSIGNED', 'TASK_COMPLETED', 'TASK_OVERDUE', 'TASK_NOTE_ADDED', 'TASK_REMINDER_FIRED',
       'TASK_LIST_MEMBER_ADDED', 'SCHEDULE_ASSIGNMENT_CREATED', 'SCHEDULE_ASSIGNMENT_UPDATED',
       'SCHEDULE_ASSIGNMENT_MOVED', 'SCHEDULE_ASSIGNMENT_CANCELLED', 'MOBILE_CHAT_MESSAGE_SENT', 'QUOTATION_EXPIRED',
+      'MEETING_CREATED', 'MEETING_UPDATED', 'MEETING_CANCELLED', 'MEETING_TASK_CREATED',
       'INVOICE_OVERDUE', 'DOCUMENT_TPL_GENERATED', 'MAINTENANCE_OVERDUE', 'MAINTENANCE_DUE', 'MAINTENANCE_ESCALATED', 'ACCOUNTING_AP_INVOICE_RECORDED',
       'MOBILE_REPORT_SUBMITTED', 'MOBILE_ORDER_STATUS_UPDATED',
     ],

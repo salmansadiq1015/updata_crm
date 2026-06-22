@@ -3,7 +3,7 @@ import taskAttachmentService from './taskAttachment.service.js';
 class TaskAttachmentController {
   async list(req, res, next) {
     try {
-      const attachments = await taskAttachmentService.getByTaskId(req.params.taskId);
+      const attachments = await taskAttachmentService.getByTaskId(req.params.taskId, req.user._id);
       return res.success({ data: attachments });
     } catch (err) { next(err); }
   }
@@ -26,7 +26,7 @@ class TaskAttachmentController {
 
   async download(req, res, next) {
     try {
-      const result = await taskAttachmentService.download(req.params.taskId, req.params.attachmentId);
+      const result = await taskAttachmentService.download(req.params.taskId, req.params.attachmentId, req.user._id);
       return res.success({ data: result });
     } catch (err) { next(err); }
   }

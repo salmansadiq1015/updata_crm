@@ -4,6 +4,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { taskFolderService } from '../services/task-folder-service';
 import { folderQueryKeys } from './use-folder-queries';
+import type { TaskFolderCreate, TaskFolderPatch, TaskFolderWithLists } from '../types/task-types';
+
+type FolderQueryData = Awaited<ReturnType<typeof taskFolderService.list>>;
+type FolderMutationContext = {
+  previous?: FolderQueryData;
+};
+
+const isFolder = (folder: TaskFolderWithLists | null): folder is TaskFolderWithLists => folder !== null;
 
 export function useFolderMutations() {
   const queryClient = useQueryClient();
@@ -12,10 +20,9 @@ export function useFolderMutations() {
     queryClient.invalidateQueries({ queryKey: folderQueryKeys.all() });
 
   const createFolder = useMutation({
-    mutationFn: (data: { name: string; color?: string | null; icon?: string | null }) =>
-      taskFolderService.create(data),
+    mutationFn: (data: TaskFolderCreate) => taskFolderService.create(data),
     onSuccess: (folder) => {
-      queryClient.setQueryData(folderQueryKeys.all(), (old: any) => {
+      queryClient.setQueryData<FolderQueryData>(folderQueryKeys.all(), (old) => {
         if (!old) return { folders: [folder], unfoldered: [] };
         return { ...old, folders: [...(old.folders ?? []), folder] };
       });
@@ -28,31 +35,31 @@ export function useFolderMutations() {
   });
 
   const updateFolder = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Record<string, unknown> }) =>
+    mutationFn: ({ id, patch }: { id: string; patch: TaskFolderPatch }) =>
       taskFolderService.update(id, patch),
     onMutate: async ({ id, patch }) => {
       await queryClient.cancelQueries({ queryKey: folderQueryKeys.all() });
-      const previous = queryClient.getQueryData(folderQueryKeys.all());
-      queryClient.setQueryData(folderQueryKeys.all(), (old: any) => {
+      const previous = queryClient.getQueryData<FolderQueryData>(folderQueryKeys.all());
+      queryClient.setQueryData<FolderQueryData>(folderQueryKeys.all(), (old) => {
         if (!old?.folders) return old;
         return {
           ...old,
-          folders: old.folders.map((f: any) => (f.id === id ? { ...f, ...patch } : f)),
+          folders: old.folders.map((f) => (f.id === id ? { ...f, ...patch } : f)),
         };
       });
       return { previous };
     },
-    onError: (error, _variables, ctx: any) => {
+    onError: (error, _variables, ctx?: FolderMutationContext) => {
       if (ctx?.previous) queryClient.setQueryData(folderQueryKeys.all(), ctx.previous);
       const message = error instanceof Error ? error.message : 'Failed to update folder';
       toast.error(message);
     },
     onSuccess: (folder) => {
-      queryClient.setQueryData(folderQueryKeys.all(), (old: any) => {
+      queryClient.setQueryData<FolderQueryData>(folderQueryKeys.all(), (old) => {
         if (!old?.folders) return old;
         return {
           ...old,
-          folders: old.folders.map((f: any) => (f.id === folder.id ? folder : f)),
+          folders: old.folders.map((f) => (f.id === folder.id ? folder : f)),
         };
       });
     },
@@ -62,14 +69,14 @@ export function useFolderMutations() {
     mutationFn: (id: string) => taskFolderService.remove(id),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: folderQueryKeys.all() });
-      const previous = queryClient.getQueryData(folderQueryKeys.all());
-      queryClient.setQueryData(folderQueryKeys.all(), (old: any) => {
+      const previous = queryClient.getQueryData<FolderQueryData>(folderQueryKeys.all());
+      queryClient.setQueryData<FolderQueryData>(folderQueryKeys.all(), (old) => {
         if (!old?.folders) return old;
-        return { ...old, folders: old.folders.filter((f: any) => f.id !== id) };
+        return { ...old, folders: old.folders.filter((f) => f.id !== id) };
       });
       return { previous };
     },
-    onError: (error, _id, ctx: any) => {
+    onError: (error, _id, ctx?: FolderMutationContext) => {
       if (ctx?.previous) queryClient.setQueryData(folderQueryKeys.all(), ctx.previous);
       const message = error instanceof Error ? error.message : 'Failed to delete folder';
       toast.error(message);
@@ -83,21 +90,21 @@ export function useFolderMutations() {
     mutationFn: (orderedIds: string[]) => taskFolderService.reorder(orderedIds),
     onMutate: async (orderedIds) => {
       await queryClient.cancelQueries({ queryKey: folderQueryKeys.all() });
-      const previous = queryClient.getQueryData(folderQueryKeys.all());
-      queryClient.setQueryData(folderQueryKeys.all(), (old: any) => {
+      const previous = queryClient.getQueryData<FolderQueryData>(folderQueryKeys.all());
+      queryClient.setQueryData<FolderQueryData>(folderQueryKeys.all(), (old) => {
         if (!old?.folders) return old;
-        const map = new Map(old.folders.map((f: any) => [f.id, f]));
+        const map = new Map(old.folders.map((f) => [f.id, f]));
         const reordered = orderedIds
           .map((id, i) => {
             const f = map.get(id);
             return f ? { ...f, sortOrder: i } : null;
           })
-          .filter(Boolean);
+          .filter(isFolder);
         return { ...old, folders: reordered };
       });
       return { previous };
     },
-    onError: (error, _orderedIds, ctx: any) => {
+    onError: (error, _orderedIds, ctx?: FolderMutationContext) => {
       if (ctx?.previous) queryClient.setQueryData(folderQueryKeys.all(), ctx.previous);
       const message = error instanceof Error ? error.message : 'Failed to reorder folders';
       toast.error(message);

@@ -30,6 +30,23 @@ jest.unstable_mockModule('../../../shared/logger/index.js', () => ({
 const mockScheduleRepo = { findByProjectId: jest.fn().mockResolvedValue([]), create: jest.fn() };
 jest.unstable_mockModule('../schedule.repository.js', () => ({ default: mockScheduleRepo }));
 
+jest.unstable_mockModule('../../tasks/task.model.js', () => ({
+  default: {
+    find: jest.fn(() => ({
+      sort: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([]),
+      }),
+    })),
+  },
+}));
+
+jest.unstable_mockModule('../../tasks/task.service.js', () => ({
+  default: {
+    create: jest.fn(),
+    createSubtask: jest.fn(),
+  },
+}));
+
 const mockPrepCreate = jest.fn();
 const mockPrepFindByProjectId = jest.fn();
 jest.unstable_mockModule('../prepAction.repository.js', () => ({

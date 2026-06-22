@@ -1,7 +1,16 @@
 import { http, HttpResponse } from 'msw';
 import { makeTask, makeTaskPage } from './data';
+import type { Task, TaskPriority, TaskStatus } from '../../types/task-types';
 
 const BASE = 'http://localhost:9097/api/v1';
+const TASK_STATUSES = new Set<TaskStatus>(['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED']);
+const TASK_PRIORITIES = new Set<TaskPriority>(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']);
+
+const readTaskStatus = (value: unknown): TaskStatus | undefined =>
+  typeof value === 'string' && TASK_STATUSES.has(value as TaskStatus) ? value as TaskStatus : undefined;
+
+const readTaskPriority = (value: unknown): TaskPriority | undefined =>
+  typeof value === 'string' && TASK_PRIORITIES.has(value as TaskPriority) ? value as TaskPriority : undefined;
 
 export const handlers = [
   // Tasks
@@ -11,12 +20,14 @@ export const handlers = [
 
   http.post(`${BASE}/tasks`, async ({ request }) => {
     const body = (await request.json()) as Record<string, unknown>;
+    const status = readTaskStatus(body.status);
+    const priority = readTaskPriority(body.priority);
     return HttpResponse.json({
       success: true,
       data: makeTask({
         title: (body.title as string) ?? 'New Task',
-        ...(body.status ? { status: body.status as any } : {}),
-        ...(body.priority ? { priority: body.priority as any } : {}),
+        ...(status ? { status } : {}),
+        ...(priority ? { priority } : {}),
         ...(body.listId ? { listId: body.listId as string } : {}),
         ...(body.assigneeId ? { assigneeId: body.assigneeId as string } : {}),
         ...(body.description ? { description: body.description as string } : {}),
@@ -34,17 +45,29 @@ export const handlers = [
 
   http.put(`${BASE}/tasks/:id`, async ({ params, request }) => {
     const body = (await request.json()) as Record<string, unknown>;
+    const taskPatch: Partial<Task> = {
+      id: params.id as string,
+      ...(typeof body.title === 'string' ? { title: body.title } : {}),
+      ...(typeof body.description === 'string' || body.description === null ? { description: body.description } : {}),
+      ...(readTaskStatus(body.status) ? { status: readTaskStatus(body.status) } : {}),
+      ...(readTaskPriority(body.priority) ? { priority: readTaskPriority(body.priority) } : {}),
+      ...(typeof body.listId === 'string' || body.listId === null ? { listId: body.listId } : {}),
+      ...(typeof body.assigneeId === 'string' || body.assigneeId === null ? { assigneeId: body.assigneeId } : {}),
+      ...(typeof body.startDate === 'string' || body.startDate === null ? { startDate: body.startDate } : {}),
+      ...(typeof body.dueDate === 'string' || body.dueDate === null ? { dueDate: body.dueDate } : {}),
+    };
     return HttpResponse.json({
       success: true,
-      data: makeTask({ id: params.id as string, ...body } as any),
+      data: makeTask(taskPatch),
     });
   }),
 
   http.patch(`${BASE}/tasks/:id/status`, async ({ params, request }) => {
     const body = (await request.json()) as Record<string, unknown>;
+    const status = readTaskStatus(body.status) ?? 'OPEN';
     return HttpResponse.json({
       success: true,
-      data: makeTask({ id: params.id as string, status: body.status as any }),
+      data: makeTask({ id: params.id as string, status }),
     });
   }),
 

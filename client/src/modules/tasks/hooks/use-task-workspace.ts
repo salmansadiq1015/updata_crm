@@ -169,11 +169,11 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
 
   const createTask = useMutation({
     mutationFn: (title: string) => {
-      const params: Record<string, unknown> = { title };
+      const params: Pick<Task, 'title'> & Partial<TaskPatch> = { title };
       if (activeParams.listId) params.listId = activeParams.listId;
       if (activeParams.priority) params.priority = activeParams.priority;
       if (activeParams.status && activeParams.status !== 'ALL') params.status = activeParams.status;
-      return taskApi.create(params as any);
+      return taskApi.create(params);
     },
     onSuccess: (task) => {
       const matchesActiveWindow =
@@ -220,7 +220,7 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
 
   const duplicateTask = useMutation({
     mutationFn: async (id: string) => {
-      const cached = queryClient.getQueryData<any>(taskWorkspaceKeys.detail(id));
+      const cached = queryClient.getQueryData<Task>(taskWorkspaceKeys.detail(id));
       const source = cached ?? await taskApi.detail(id);
       return taskApi.create({
         title: `Copy of ${source.title}`,
@@ -232,7 +232,7 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
         ...(source.assigneeId ? { assigneeId: source.assigneeId } : {}),
       });
     },
-    onSuccess: (task: any) => {
+    onSuccess: (task) => {
       queryClient.invalidateQueries({ queryKey: taskWorkspaceKeys.root });
       setSelectedTaskId(task.id);
       toast.success('Task duplicated');

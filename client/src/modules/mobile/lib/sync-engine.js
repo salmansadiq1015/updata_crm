@@ -357,6 +357,41 @@ async function processItem(item) {
       }
       break;
 
+    case 'TASK': {
+      const {
+        normalizeMobileTaskRecord,
+        upsertMobileTasks,
+      } = await import('../services/task-service');
+      const now = new Date().toISOString();
+      if (item.operation === 'CREATE') {
+        const response = await apiClient.post(ENDPOINTS.TASKS.LIST, item.payload.data);
+        const task = normalizeMobileTaskRecord(response.data || response, {
+          syncStatus: SYNC_STATUS.SYNCED,
+          lastSyncedAt: now,
+        });
+        await db.transaction('rw', db.tasks, async () => {
+          if (task.id !== item.entity_id) await db.tasks.delete(item.entity_id);
+          await db.tasks.put(task);
+        });
+      } else if (item.operation === 'UPDATE') {
+        const payload = { ...(item.payload.data || {}) };
+        let response = null;
+        if (payload.status) {
+          response = await apiClient.patch(ENDPOINTS.TASKS.STATUS(item.entity_id), { status: payload.status });
+          delete payload.status;
+        }
+        if (Object.keys(payload).length > 0) {
+          response = await apiClient.put(ENDPOINTS.TASKS.BY_ID(item.entity_id), payload);
+        }
+        if (!response) response = await apiClient.get(ENDPOINTS.TASKS.BY_ID(item.entity_id));
+        await upsertMobileTasks([response.data || response], now);
+      } else if (item.operation === 'DELETE') {
+        await apiClient.delete(ENDPOINTS.TASKS.BY_ID(item.entity_id));
+        await db.tasks.delete(item.entity_id);
+      }
+      break;
+    }
+
     default:
       console.warn('Unknown sync entity type:', item.entity_type);
   }
@@ -412,7 +447,27 @@ async function pullInboundChanges() {
     await upsertCrmAddressBook(inbound.crmAddressBook, syncTimestamp);
   }
 
+  await pullTaskChanges(apiClient, ENDPOINTS);
+
   await setSyncMeta('last_sync_timestamp', syncTimestamp);
+}
+
+async function pullTaskChanges(apiClient, ENDPOINTS) {
+  const {
+    mobileTaskService,
+    upsertMobileTaskLists,
+    upsertMobileTasks,
+  } = await import('../services/task-service');
+  const lastTaskSync = await getSyncMeta('last_task_sync_timestamp') || mobileTaskService.getSyncEpoch();
+  const response = await apiClient.get(ENDPOINTS.TASKS.SYNC, {
+    params: { since: lastTaskSync },
+  });
+  const data = response.data || response || {};
+  const syncTimestamp = data.timestamp || new Date().toISOString();
+
+  await upsertMobileTaskLists(data.taskLists || [], syncTimestamp);
+  await upsertMobileTasks(data.tasks || [], syncTimestamp);
+  await setSyncMeta('last_task_sync_timestamp', syncTimestamp);
 }
 
 function getRetryDelay(retryCount) {

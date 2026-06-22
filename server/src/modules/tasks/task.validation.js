@@ -6,6 +6,7 @@ export const createTaskSchema = {
   body: Joi.object({
     title: Joi.string().required().trim().max(500),
     description: Joi.string().allow('', null),
+    status: Joi.string().valid(...TASK_STATUSES),
     priority: Joi.string().valid(...TASK_PRIORITIES),
     listId: objectId.allow(null),
     assigneeId: objectId.allow(null),
@@ -14,6 +15,7 @@ export const createTaskSchema = {
     projectId: objectId.allow(null),
     orderId: objectId.allow(null),
     meetingId: objectId.allow(null),
+    sortOrder: Joi.number().integer().min(0),
   }),
 };
 
@@ -62,6 +64,8 @@ export const changeStatusSchema = {
   body: Joi.object({
     status: Joi.string().valid(...TASK_STATUSES).required(),
     expectedVersion: Joi.number().integer().min(0),
+    completeSubtasks: Joi.boolean(),
+    completeParentOnly: Joi.boolean(),
   }),
 };
 
@@ -90,6 +94,7 @@ export const completeTaskSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     completeSubtasks: Joi.boolean(),
+    completeParentOnly: Joi.boolean(),
   }),
 };
 

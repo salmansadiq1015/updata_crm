@@ -64,3 +64,10 @@ export const memberParamsSchema = {
     userId: objectId.required(),
   }),
 };
+
+export const transferOwnershipSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    newOwnerId: objectId.required(),
+  }),
+};

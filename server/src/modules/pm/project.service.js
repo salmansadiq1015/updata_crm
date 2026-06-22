@@ -586,6 +586,8 @@ class ProjectService {
       await prepActionRepository.create(cloned);
     }
 
+    await this._cloneTemplateTasks(templateId, newProject._id, createdBy, meta);
+
     await this._invalidateListCache();
     await this._invalidateDashboardCache();
 
@@ -608,6 +610,36 @@ class ProjectService {
     });
 
     return projectRepository.findById(newProject._id);
+  }
+
+  async _cloneTemplateTasks(templateId, newProjectId, createdBy, meta = {}) {
+    const Task = (await import('../tasks/task.model.js')).default;
+    const taskService = (await import('../tasks/task.service.js')).default;
+    const templateTasks = await Task.find({ projectId: templateId, isDeleted: false })
+      .sort({ depth: 1, sortOrder: 1, createdAt: 1 })
+      .lean();
+
+    if (templateTasks.length === 0) return;
+
+    const idMap = new Map();
+    for (const task of templateTasks) {
+      const parentId = task.parentTaskId ? idMap.get(String(task.parentTaskId)) : null;
+      const payload = {
+        title: task.title,
+        description: task.description || null,
+        status: 'OPEN',
+        priority: task.priority || 'NONE',
+        projectId: newProjectId,
+        assigneeId: task.assigneeId || null,
+        sortOrder: task.sortOrder || 0,
+      };
+
+      const cloned = parentId
+        ? await taskService.createSubtask(parentId, payload, createdBy, meta)
+        : await taskService.create(payload, createdBy, meta);
+
+      idMap.set(String(task._id), cloned._id || cloned.id);
+    }
   }
 
   async exportCsv(queryParams) {

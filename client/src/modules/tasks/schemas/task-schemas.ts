@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const taskStatusSchema = z.enum(['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']);
+export const taskStatusSchema = z.enum(['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED']);
 export const taskPrioritySchema = z.enum(['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 
 const nullableId = z
@@ -148,11 +148,10 @@ export const rawTaskFolderSchema = z
       icon: raw.icon ?? null,
       sortOrder: raw.sortOrder ?? 0,
       ownerId: raw.ownerId ?? null,
-      lists: (raw.lists ?? []).map((l: unknown) => {
-        try { return rawTaskListSchema.parse(l); } catch { return l; }
+      lists: (raw.lists ?? []).flatMap((l: unknown) => {
+        try { return [rawTaskListSchema.parse(l)]; } catch { return []; }
       }),
       createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
       updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
     };
   });
-

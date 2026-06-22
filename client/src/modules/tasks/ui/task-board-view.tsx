@@ -15,11 +15,17 @@ type TaskBoardViewProps = {
   selectedTaskId: string | null;
   onSelectTask: (taskId: string) => void;
   onPatchTask: (id: string, patch: TaskPatch) => void;
-  users?: any[];
+  users?: WorkspaceUser[];
 };
 
-function AssigneeCell({ assigneeId, users = [] }: { assigneeId: string | null; users: any[] }) {
-  const user = (users as any[])?.find((u: any) => u.id === assigneeId);
+type WorkspaceUser = {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+};
+
+function AssigneeCell({ assigneeId, users = [] }: { assigneeId: string | null; users: WorkspaceUser[] }) {
+  const user = users.find((u) => u.id === assigneeId);
   if (!user) return null;
   const inits = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
   return (
@@ -45,7 +51,7 @@ const TaskCard = memo(function TaskCard({
 }: {
   task: Task;
   selected: boolean;
-  users: any[];
+  users: WorkspaceUser[];
   onSelectTask: (taskId: string) => void;
 }) {
   const { t } = useLanguage();
@@ -118,7 +124,7 @@ function TaskBoardColumn({
   status: TaskStatus;
   tasks: Task[];
   selectedTaskId: string | null;
-  users: any[];
+  users: WorkspaceUser[];
   onSelectTask: (taskId: string) => void;
 }) {
   const { t } = useLanguage();
@@ -185,6 +191,7 @@ export function TaskBoardView({ tasks, selectedTaskId, onSelectTask, onPatchTask
     const map: Record<TaskStatus, Task[]> = {
       OPEN: [],
       IN_PROGRESS: [],
+      ON_HOLD: [],
       COMPLETED: [],
       CANCELLED: [],
     };

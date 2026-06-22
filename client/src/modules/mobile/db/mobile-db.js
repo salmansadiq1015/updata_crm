@@ -70,6 +70,28 @@ db.version(4).stores({
   syncMeta: '&key',
 });
 
+db.version(5).stores({
+  orders: '&id, order_number, status, priority, scheduled_start, last_synced_at',
+  workReports: '&id, order_id, status, sync_status, updated_at',
+  materialItems: '&id, work_report_id, sync_status',
+  photos: '&id, order_id, work_report_id, category, sync_status',
+  documents: '&id, order_id, document_type, sync_status, created_at',
+  accountingDocuments: '&id, document_type, sync_status, created_at, project_reference',
+  timeEntries: '&id, order_id, date, activity_type, release_status, sync_status',
+  chatMessages: '&id, project_id, sent_at, sync_status',
+  catalogItems: '&id, catalog_source, description',
+  notifications: '&id, notification_type, is_read, received_at',
+  crmCustomers: '&id, customer_number, name, city, postal_code, updated_at, last_synced_at',
+  crmContacts: '&id, customer_id, last_name, email, updated_at, last_synced_at',
+  crmSites: '&id, customer_id, site_number, city, updated_at, last_synced_at',
+  crmInstallations: '&id, site_id, customer_id, installation_number, status, updated_at, last_synced_at',
+  crmNotes: '&id, entity_type, entity_id, [entity_type+entity_id], category, is_warning, is_pinned, sync_status, updated_at, last_synced_at',
+  taskLists: '&id, type, owner_id, is_archived, updated_at, last_synced_at',
+  tasks: '&id, list_id, status, priority, due_date, project_id, order_id, sync_status, updated_at, last_synced_at',
+  syncQueue: '&id, entity_type, entity_id, [status+priority], created_at',
+  syncMeta: '&key',
+});
+
 export async function getSyncMeta(key) {
   const record = await db.syncMeta.get(key);
   return record?.value ?? null;

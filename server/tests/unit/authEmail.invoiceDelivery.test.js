@@ -38,6 +38,7 @@ async function loadWorker({
     sendAppointmentRescheduledEmail: jest.fn(),
     sendQuotationEmail: jest.fn(),
     sendQopAppointmentReminderEmail: jest.fn(),
+    sendMeetingNotificationEmail: jest.fn(),
   }));
   jest.unstable_mockModule('../../src/modules/qop/invoice.model.js', () => ({
     default: Invoice,

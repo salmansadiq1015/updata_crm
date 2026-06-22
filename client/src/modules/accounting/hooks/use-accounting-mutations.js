@@ -228,5 +228,9 @@ export function useAccDocumentMutations() {
     mutationFn: ({ id, data }) => accDocService.assign(id, data),
     onSuccess: () => { invalidate(); success(t, 'documentAssigned', 'Document assigned'); },
   });
-  return { uploadDocument, triggerOcr, confirmOcr, rejectOcr, assignDocument };
+  const bulkAssignDocuments = useMutation({
+    mutationFn: accDocService.bulkAssign,
+    onSuccess: () => { invalidate(); success(t, 'documentAssigned', 'Document assigned'); },
+  });
+  return { uploadDocument, triggerOcr, confirmOcr, rejectOcr, assignDocument, bulkAssignDocuments };
 }

@@ -23,7 +23,7 @@ import {
   useTaskWorkspaceStore,
   useTaskWorkspaceViewState,
 } from '../state/task-workspace-store';
-import type { TaskFilters, TaskPatch } from '../types/task-types';
+import type { TaskFilters, TaskFolderWithLists, TaskList, TaskPatch } from '../types/task-types';
 import { TaskBoardSkeleton, TaskListSkeleton } from './task-skeletons';
 import { TaskBoardView } from './task-board-view';
 import { TaskCalendarView } from './task-calendar-view';
@@ -111,7 +111,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   };
 
   // Folder action handlers
-  const handleFolderAction = (action: string, folder: any) => {
+  const handleFolderAction = (action: string, folder: TaskFolderWithLists) => {
     if (action === 'delete') {
       deleteFolder.mutate(folder.id);
     } else if (action === 'rename') {
@@ -119,7 +119,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     }
   };
 
-  const handleListAction = (action: string, list: any, _folderId: string | null) => {
+  const handleListAction = (action: string, list: TaskList, _folderId: string | null) => {
     if (action === 'archive') {
       archiveList.mutate(list.id);
     } else if (action === 'delete') {
@@ -148,9 +148,9 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   // Compute standalone lists (not in any folder, not archived)
   const standaloneLists = useMemo(() => {
     const folderListIds = new Set(
-      (foldersQuery.data?.folders ?? []).flatMap((f: any) => (f.lists ?? []).map((l: any) => l.id))
+      (foldersQuery.data?.folders ?? []).flatMap((folder) => (folder.lists ?? []).map((list) => list.id))
     );
-    return (listsQuery.data ?? []).filter((l: any) => !folderListIds.has(l.id) && !l.isArchived);
+    return (listsQuery.data ?? []).filter((list) => !folderListIds.has(list.id) && !list.isArchived);
   }, [foldersQuery.data, listsQuery.data]);
   const tasks = useFlattenedTasks(tasksQuery.data);
   const mutations = useTaskWorkspaceMutations(taskParams);

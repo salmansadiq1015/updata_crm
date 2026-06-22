@@ -23,7 +23,9 @@ export function useStatusMutations(projectId, { onTransition } = {}) {
     onError: (err) => {
       // Only show toast for errors that don't carry outstanding actions — those are
       // rendered inline in the dialog so the user sees exactly what's blocking.
-      const hasOutstanding = Array.isArray(err?.data?.outstanding) && err.data.outstanding.length > 0;
+      const hasOutstanding =
+        (Array.isArray(err?.data?.outstanding) && err.data.outstanding.length > 0) ||
+        (Array.isArray(err?.data?.outstandingTasks) && err.data.outstandingTasks.length > 0);
       if (!hasOutstanding) showError(err.message);
     },
   });

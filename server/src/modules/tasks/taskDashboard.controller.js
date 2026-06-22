@@ -3,14 +3,16 @@ import taskDashboardService from './taskDashboard.service.js';
 class TaskDashboardController {
   async getDashboard(req, res, next) {
     try {
-      const data = await taskDashboardService.getDashboard(req.user._id);
+      const query = req._validatedQuery || req.query;
+      const data = await taskDashboardService.getDashboard(req.user._id, query);
       return res.success({ data });
     } catch (err) { next(err); }
   }
 
   async getStats(req, res, next) {
     try {
-      const data = await taskDashboardService.getStats(req.user._id);
+      const query = req._validatedQuery || req.query;
+      const data = await taskDashboardService.getStats(req.user._id, query);
       return res.success({ data });
     } catch (err) { next(err); }
   }

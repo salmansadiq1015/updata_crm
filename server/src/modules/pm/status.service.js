@@ -77,6 +77,7 @@ class StatusService {
     // COMPLETED — check milestones
     if (targetStatus === 'COMPLETED') {
       const ScheduleEntry = (await import('./scheduleEntry.model.js')).default;
+      const Task = (await import('../tasks/task.model.js')).default;
       const incompleteMilestones = await ScheduleEntry.countDocuments({
         projectId,
         entryType: 'MILESTONE',
@@ -87,6 +88,27 @@ class StatusService {
       if (incompleteMilestones > 0 && !override) {
         throw new ConflictError(
           `Cannot complete project: ${incompleteMilestones} milestone(s) are not completed, waived, or cancelled`,
+        );
+      }
+
+      const openTasks = await Task.find({
+        projectId,
+        status: { $in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
+        isDeleted: false,
+      }).select('title status assigneeId dueDate').limit(100).lean();
+
+      if (openTasks.length > 0 && !override) {
+        throw new ConflictError(
+          `Cannot complete project: ${openTasks.length} task(s) are still open`,
+          {
+            outstandingTasks: openTasks.map((task) => ({
+              id: String(task._id),
+              title: task.title,
+              status: task.status,
+              assigneeId: task.assigneeId ? String(task.assigneeId) : null,
+              dueDate: task.dueDate,
+            })),
+          },
         );
       }
 

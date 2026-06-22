@@ -2,10 +2,11 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CircleX, Copy, Flag, Loader2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, Loader2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
@@ -20,8 +21,18 @@ import { TaskSubtasksPanel } from './task-subtasks-panel';
 import { TaskChatPanel } from './task-chat-panel';
 import { TaskFileViewer } from './task-file-viewer';
 import { TaskInlineField } from './task-inline-field';
+import { TaskRemindersPanel } from './task-reminders-panel';
+import { TaskContextSelector } from './task-context-selector';
+import { TaskCompletionDialog } from './task-completion-dialog';
 import { AssigneeSelector } from './assignee-selector';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { parseTaskDueInput } from '../utils/task-date-parser';
+import {
+  useCreateTaskReminder,
+  useDeleteTaskReminder,
+  useSnoozeTaskReminder,
+  useTaskReminders,
+} from '../hooks/use-task-reminders';
 import type { Task, TaskPatch } from '../types/task-types';
 import {
   TASK_STATUSES, TASK_PRIORITIES,
@@ -35,6 +46,7 @@ import {
 const STATUS_ICON = {
   OPEN: Circle,
   IN_PROGRESS: CircleDashed,
+  ON_HOLD: CirclePause,
   COMPLETED: CircleCheck,
   CANCELLED: CircleX,
 } as const;
@@ -54,13 +66,26 @@ type TaskDetailPageProps = {
   listId: string;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const getIncompleteSubtaskCount = (error: unknown): number | null => {
+  if (!isRecord(error)) return null;
+  const response = isRecord(error.response) ? error.response : null;
+  const data = response && isRecord(response.data) ? response.data : error;
+  if (!isRecord(data) || data.code !== 'TASK_INCOMPLETE_SUBTASKS') return null;
+  return Array.isArray(data.details) ? data.details.length : 1;
+};
+
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   const { t } = useLanguage();
   const router = useRouter();
   const qc = useQueryClient();
-  const currentUserId = useAuthStore((s: any) => s.user?._id ?? s.user?.id ?? null);
+  const currentUserId = useAuthStore((state: { user?: { _id?: string; id?: string } | null }) =>
+    state.user?._id ?? state.user?.id ?? null,
+  );
 
   // Data
   const taskQuery = useTaskDetailV2(taskId);
@@ -68,6 +93,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   const subtasksQuery = useTaskSubtasks(taskId);
   const notesQuery = useTaskNotes(taskId);
   const attachmentsQuery = useTaskAttachments(taskId);
+  const remindersQuery = useTaskReminders(taskId);
 
   const task = taskQuery.data;
   const users = usersQuery.data ?? [];
@@ -75,6 +101,8 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   // Description local edit state
   const [descEditMode, setDescEditMode] = useState(false);
   const [descDraft, setDescDraft] = useState('');
+  const [dueText, setDueText] = useState('');
+  const [completionPrompt, setCompletionPrompt] = useState<{ patch: TaskPatch; count: number } | null>(null);
   const startInputRef = useRef<HTMLInputElement>(null);
   const dueInputRef = useRef<HTMLInputElement>(null);
 
@@ -84,7 +112,14 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
     onSuccess: (updated) => {
       qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
     },
-    onError: () => toast.error(t('tasks.updateFailed')),
+    onError: (error, variables) => {
+      const incompleteCount = getIncompleteSubtaskCount(error);
+      if (variables.patch.status === 'COMPLETED' && incompleteCount !== null) {
+        setCompletionPrompt({ patch: variables.patch, count: incompleteCount });
+        return;
+      }
+      toast.error(t('tasks.updateFailed'));
+    },
   });
 
   const patch = (p: TaskPatch) => {
@@ -107,6 +142,9 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   // Attachment mutations
   const uploadAttachment = useUploadAttachment(taskId);
   const deleteAttachment = useDeleteAttachment(taskId);
+  const createReminder = useCreateTaskReminder(taskId);
+  const deleteReminder = useDeleteTaskReminder(taskId);
+  const snoozeReminder = useSnoozeTaskReminder(taskId);
 
   const handleDuplicate = async () => {
     if (!task) return;
@@ -119,6 +157,16 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   const saveDesc = () => {
     patch({ description: descDraft });
     setDescEditMode(false);
+  };
+
+  const applyDueText = () => {
+    const dueDate = parseTaskDueInput(dueText);
+    if (!dueDate) {
+      toast.error(t('tasks.invalidDueDate', 'Invalid due date'));
+      return;
+    }
+    patch({ dueDate });
+    setDueText('');
   };
 
   if (taskQuery.isLoading) {
@@ -355,8 +403,48 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                   onChange={(e) => patch({ dueDate: e.target.value || null })}
                 />
               </button>
+              <div className="flex gap-1.5">
+                <Input
+                  value={dueText}
+                  onChange={(event) => setDueText(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') applyDueText();
+                  }}
+                  placeholder="tomorrow, +3d, next Friday"
+                  className="h-8 text-xs"
+                />
+                <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={applyDueText}>
+                  Set
+                </Button>
+              </div>
             </div>
           </div>
+
+          <div className="my-5 border-t border-border" />
+
+          <TaskContextSelector
+            task={task}
+            onSelect={(option) => {
+              if (option.type === 'project') {
+                patch({ projectId: option.id, orderId: null });
+              } else {
+                patch({ orderId: option.id, projectId: null });
+              }
+            }}
+            onClear={() => patch({ projectId: null, orderId: null })}
+          />
+
+          <div className="my-5 border-t border-border" />
+
+          <TaskRemindersPanel
+            reminders={remindersQuery.data ?? []}
+            isLoading={remindersQuery.isLoading}
+            dueDate={task.dueDate}
+            isSaving={createReminder.isPending || deleteReminder.isPending || snoozeReminder.isPending}
+            onCreateReminder={(input) => createReminder.mutate(input)}
+            onDeleteReminder={(reminderId) => deleteReminder.mutate(reminderId)}
+            onSnoozeReminder={(reminderId, snoozeMinutes) => snoozeReminder.mutate({ reminderId, snoozeMinutes })}
+          />
 
           {/* Divider */}
           <div className="my-5 border-t border-border" />
@@ -371,6 +459,35 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           />
         </aside>
       </div>
+      <TaskCompletionDialog
+        open={Boolean(completionPrompt)}
+        incompleteCount={completionPrompt?.count ?? 0}
+        onCancel={() => setCompletionPrompt(null)}
+        onParentOnly={() => {
+          if (!task || !completionPrompt) return;
+          patchMutation.mutate({
+            id: task.id,
+            patch: {
+              ...completionPrompt.patch,
+              expectedVersion: task.version,
+              completeParentOnly: true,
+            },
+          });
+          setCompletionPrompt(null);
+        }}
+        onCompleteAll={() => {
+          if (!task || !completionPrompt) return;
+          patchMutation.mutate({
+            id: task.id,
+            patch: {
+              ...completionPrompt.patch,
+              expectedVersion: task.version,
+              completeSubtasks: true,
+            },
+          });
+          setCompletionPrompt(null);
+        }}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { CSSProperties, ElementType } from 'react';
 import {
   AlertCircle,
   Calendar,
@@ -29,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { FOLDER_COLOR_OPTIONS } from './task-ui-constants';
 import { ListColorDialog, FolderColorDialog } from './color-picker-dialog';
+import type { TaskFolderWithLists, TaskList } from '../types/task-types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,8 +38,8 @@ type FolderAction = 'rename' | 'changeColor' | 'delete' | 'addList';
 type ListAction = 'rename' | 'changeColor' | 'moveToFolder' | 'archive' | 'delete';
 
 type TaskSidebarProps = {
-  folders: any[];           // TaskFolderWithLists[]
-  standaloneLists: any[];   // TaskList[] not in any folder
+  folders: TaskFolderWithLists[];
+  standaloneLists: TaskList[];
   activeListId: string | undefined;
   activeSavedView: string;  // 'none' | 'dueToday' | 'overdue'
   collapsed: boolean;
@@ -48,8 +50,8 @@ type TaskSidebarProps = {
   onSelectSavedView: (view: string) => void;
   onCreateFolder: () => void;
   onCreateList: (folderId?: string) => void;
-  onFolderAction: (action: FolderAction, folder: any) => void;
-  onListAction: (action: ListAction, list: any, folderId: string | null) => void;
+  onFolderAction: (action: FolderAction, folder: TaskFolderWithLists) => void;
+  onListAction: (action: ListAction, list: TaskList, folderId: string | null) => void;
   onListColorChange?: (listId: string, folderId: string | null, color: string | null) => void;
   onFolderColorChange?: (folderId: string, color: string | null) => void;
 };
@@ -60,7 +62,7 @@ const FOLDER_COLOR_CLASS_MAP: Record<string, string> = Object.fromEntries(
   FOLDER_COLOR_OPTIONS.map((opt) => [opt.value, opt.class])
 );
 
-function getFolderColorStyle(color: string | null | undefined): { className?: string; style?: React.CSSProperties } {
+function getFolderColorStyle(color: string | null | undefined): { className?: string; style?: CSSProperties } {
   if (!color) return {};
   if (color.startsWith('#') || color.startsWith('rgb')) {
     return { style: { color } };
@@ -78,11 +80,11 @@ function ListItem({
   onListAction,
   onChangeColor,
 }: {
-  list: any;
+  list: TaskList;
   folderId: string | null;
   activeListId: string | undefined;
   onSelectList: (listId: string | undefined) => void;
-  onListAction: (action: ListAction, list: any, folderId: string | null) => void;
+  onListAction: (action: ListAction, list: TaskList, folderId: string | null) => void;
   onChangeColor?: () => void;
 }) {
   const { t } = useLanguage();
@@ -172,16 +174,16 @@ function FolderItem({
   onChangeFolderColor,
   onChangeListColor,
 }: {
-  folder: any;
+  folder: TaskFolderWithLists;
   isCollapsed: boolean;
   activeListId: string | undefined;
   onToggle: () => void;
   onSelectList: (listId: string | undefined) => void;
-  onListAction: (action: ListAction, list: any, folderId: string | null) => void;
-  onFolderAction: (action: FolderAction, folder: any) => void;
+  onListAction: (action: ListAction, list: TaskList, folderId: string | null) => void;
+  onFolderAction: (action: FolderAction, folder: TaskFolderWithLists) => void;
   onCreateList: (folderId?: string) => void;
   onChangeFolderColor?: () => void;
-  onChangeListColor?: (list: any) => void;
+  onChangeListColor?: (list: TaskList) => void;
 }) {
   const { t } = useLanguage();
   const colorProps = getFolderColorStyle(folder.color);
@@ -253,7 +255,7 @@ function FolderItem({
 
       {!isFolderCollapsed && (
         <div className="ml-5 space-y-0.5 mt-0.5">
-          {(folder.lists ?? []).map((list: any) => (
+          {(folder.lists ?? []).map((list) => (
             <ListItem
               key={list.id}
               list={list}
@@ -291,7 +293,7 @@ function SavedViewButton({
 }: {
   view: string;
   label: string;
-  icon: React.ElementType;
+  icon: ElementType;
   activeSavedView: string;
   onSelectSavedView: (view: string) => void;
 }) {
@@ -339,8 +341,8 @@ export function TaskSidebar({
   const isAllTasksActive = !activeListId && activeSavedView === 'none';
 
   // Color picker state
-  const [listColorTarget, setListColorTarget] = useState<{ list: any; folderId: string | null } | null>(null);
-  const [folderColorTarget, setFolderColorTarget] = useState<any | null>(null);
+  const [listColorTarget, setListColorTarget] = useState<{ list: TaskList; folderId: string | null } | null>(null);
+  const [folderColorTarget, setFolderColorTarget] = useState<TaskFolderWithLists | null>(null);
 
   return (
     <aside

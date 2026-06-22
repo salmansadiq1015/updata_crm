@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import taskReminderRepository from './taskReminder.repository.js';
+import taskAccessService from './taskAccess.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
@@ -10,6 +11,12 @@ import logger from '../../shared/logger/index.js';
 
 const REMINDER_CACHE_TTL = { l1Ttl: 30, l2Ttl: 120 };
 const MAX_REMINDERS_PER_TASK = 5;
+
+function toId(value) {
+  if (!value) return null;
+  if (value._id) return value._id;
+  return value;
+}
 
 // Inline model for user reminder defaults
 const userReminderDefaultsSchema = new mongoose.Schema(
@@ -35,6 +42,7 @@ class TaskReminderService {
 
   async create(taskId, data, userId, meta = {}) {
     const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
     const count = await taskReminderRepository.countByTaskId(taskId);
     if (count >= MAX_REMINDERS_PER_TASK) {
@@ -100,13 +108,17 @@ class TaskReminderService {
     return reminder;
   }
 
-  async getByTaskId(taskId) {
-    const cacheKey = `tasks:reminders:${taskId}`;
-    return cacheManager.getOrSet(
+  async getByTaskId(taskId, userId) {
+    const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER');
+
+    const cacheKey = `tasks:reminders:${taskId}:${userId}`;
+    const reminders = await cacheManager.getOrSet(
       cacheKey,
       () => taskReminderRepository.findByTaskId(taskId),
       REMINDER_CACHE_TTL,
     );
+    return reminders.filter((reminder) => String(reminder.userId) === String(userId));
   }
 
   async remove(taskId, reminderId, userId, meta = {}) {
@@ -115,6 +127,10 @@ class TaskReminderService {
 
     if (String(reminder.taskId) !== String(taskId)) {
       throw new NotFoundError('TaskReminder', reminderId);
+    }
+
+    if (String(reminder.userId) !== String(userId)) {
+      throw new AppError('Access denied to this reminder', 403, ERROR_CODES.TASK_ACCESS_DENIED);
     }
 
     await taskReminderRepository.deleteById(reminderId);
@@ -152,37 +168,17 @@ class TaskReminderService {
       firedAt: now,
     });
 
+    const task = await this._ensureTaskExists(reminder.taskId);
+
     eventBus.publish(EVENT_TYPES.TASK_REMINDER_FIRED, {
       reminderId,
       taskId: reminder.taskId,
       userId: reminder.userId,
       channels: reminder.channels,
+      taskTitle: task.title,
+      dueDate: task.dueDate,
+      isOverdue: task.dueDate ? new Date(task.dueDate) < now : false,
     }, { source: 'tasks' });
-
-    if (reminder.channels.includes('EMAIL')) {
-      try {
-        const { default: sendMail } = await import('../../shared/mail/mail.js');
-        const { default: taskRepository } = await import('./task.repository.js');
-        const task = await taskRepository.findById(reminder.taskId);
-        const User = (await import('mongoose')).default.model('User');
-        const user = await User.findById(reminder.userId).select('email firstName').lean();
-
-        if (user && task) {
-          await sendMail({
-            to: user.email,
-            subject: `Reminder: ${task.title}`,
-            html: `<p>Hi ${user.firstName},</p><p>This is a reminder for your task: <strong>${task.title}</strong>.</p>`,
-          });
-        }
-      } catch (err) {
-        logger.error('Failed to send reminder email', {
-          module: 'tasks',
-          action: 'fireReminder',
-          reminderId,
-          error: err.message,
-        });
-      }
-    }
 
     logger.info('Task reminder fired', {
       module: 'tasks',
@@ -198,6 +194,10 @@ class TaskReminderService {
   async snoozeReminder(reminderId, snoozeDuration, userId) {
     const reminder = await taskReminderRepository.findById(reminderId);
     if (!reminder) throw new NotFoundError('TaskReminder', reminderId);
+
+    if (String(reminder.userId) !== String(userId)) {
+      throw new AppError('Access denied to this reminder', 403, ERROR_CODES.TASK_ACCESS_DENIED);
+    }
 
     const snoozedUntil = new Date(Date.now() + snoozeDuration * 60 * 1000);
 
@@ -217,6 +217,23 @@ class TaskReminderService {
     });
 
     return updated;
+  }
+
+  async applyDefaultForTask(task, fallbackUserId, meta = {}) {
+    if (!task?.dueDate) return null;
+
+    const userId = toId(task.assigneeId) || fallbackUserId;
+    const defaults = await this.getUserDefaults(userId);
+    if (!defaults.enabled) return null;
+
+    const fireAt = new Date(new Date(task.dueDate).getTime() + defaults.defaultOffsetMinutes * 60 * 1000);
+    if (fireAt <= new Date()) return null;
+
+    return this.create(task._id, {
+      type: 'RELATIVE',
+      offsetMinutes: defaults.defaultOffsetMinutes,
+      channels: defaults.defaultChannels?.length ? defaults.defaultChannels : ['PUSH', 'IN_APP'],
+    }, userId, meta);
   }
 
   async recalculateReminders(taskId, newDueDate) {
@@ -296,7 +313,7 @@ class TaskReminderService {
   }
 
   async _invalidateCache(taskId) {
-    await cacheManager.del(`tasks:reminders:${taskId}`);
+    await cacheManager.invalidatePattern(`tasks:reminders:${taskId}:*`);
   }
 }
 

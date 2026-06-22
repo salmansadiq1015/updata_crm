@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import { Circle, CircleCheck, CircleDashed, CircleX, Flag, Plus, Trash2 } from 'lucide-react';
+import { Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Flag, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ import { taskPriorityIconColor } from './task-ui-constants';
 const STATUS_ICON = {
   OPEN: Circle,
   IN_PROGRESS: CircleDashed,
+  ON_HOLD: CirclePause,
   COMPLETED: CircleCheck,
   CANCELLED: CircleX,
 } as const;
@@ -18,6 +19,7 @@ const STATUS_ICON = {
 const STATUS_CYCLE: Record<TaskStatus, TaskStatus> = {
   OPEN: 'IN_PROGRESS',
   IN_PROGRESS: 'COMPLETED',
+  ON_HOLD: 'IN_PROGRESS',
   COMPLETED: 'OPEN',
   CANCELLED: 'OPEN',
 };
@@ -25,6 +27,7 @@ const STATUS_CYCLE: Record<TaskStatus, TaskStatus> = {
 const STATUS_COLOR: Record<TaskStatus, string> = {
   OPEN: 'text-muted-foreground',
   IN_PROGRESS: 'text-primary',
+  ON_HOLD: 'text-amber-500',
   COMPLETED: 'text-emerald-500',
   CANCELLED: 'text-red-500',
 };

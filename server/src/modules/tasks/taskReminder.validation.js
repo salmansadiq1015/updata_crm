@@ -37,6 +37,16 @@ export const deleteReminderSchema = {
   }),
 };
 
+export const snoozeReminderSchema = {
+  params: Joi.object({
+    taskId: objectId.required(),
+    reminderId: objectId.required(),
+  }),
+  body: Joi.object({
+    snoozeMinutes: Joi.number().integer().min(1).max(10080).required(),
+  }),
+};
+
 export const setUserDefaultsSchema = {
   body: Joi.object({
     enabled: Joi.boolean(),

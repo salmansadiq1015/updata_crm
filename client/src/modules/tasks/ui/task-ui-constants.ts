@@ -1,11 +1,12 @@
 import type { TaskPriority, TaskStatus } from '../types/task-types';
 
-export const TASK_STATUSES: TaskStatus[] = ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+export const TASK_STATUSES: TaskStatus[] = ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CANCELLED'];
 export const TASK_PRIORITIES: TaskPriority[] = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 
 export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   OPEN:       'To do',
   IN_PROGRESS:'In progress',
+  ON_HOLD:    'On hold',
   COMPLETED:  'Complete',
   CANCELLED:  'Cancelled',
 };
@@ -34,6 +35,7 @@ export function getTaskPriorityLabel(t: TranslateFn, priority: TaskPriority): st
 export const taskStatusIconColor: Record<TaskStatus, string> = {
   OPEN:        'text-muted-foreground',
   IN_PROGRESS: 'text-primary',
+  ON_HOLD:      'text-amber-500',
   COMPLETED:   'text-emerald-500',
   CANCELLED:   'text-danger',
 };
@@ -62,6 +64,7 @@ export const taskPriorityBorderClass: Record<string, string> = {
 export const taskStatusClass: Record<TaskStatus, string> = {
   OPEN:        'border-border bg-muted text-foreground',
   IN_PROGRESS: 'border-primary/30 bg-primary/15 text-primary',
+  ON_HOLD:      'border-amber-500/30 bg-amber-500/15 text-amber-500',
   COMPLETED:   'border-emerald-500/30 bg-emerald-500/15 text-emerald-500',
   CANCELLED:   'border-danger/30 bg-danger/15 text-danger',
 };

@@ -10,6 +10,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import {
+  useApInvoices,
   useAccounts,
   useBankAccounts,
   useReconciliationSuggestions,
@@ -44,7 +45,8 @@ export default function ReconciliationPage() {
   const { data: postingAccounts = [] } = useAccounts({ isActive: true });
   const { data: { items = [], pagination } = {}, isLoading } = useReconciliationUnmatched(params);
   const { data: suggestions = [], isLoading: suggestionsLoading } = useReconciliationSuggestions(selectedTx?._id);
-  const { runReconciliation, matchAr, categorize } = useReconciliationMutations();
+  const { data: { items: apCandidates = [] } = {} } = useApInvoices({ limit: 10, status: 'APPROVED' });
+  const { runReconciliation, matchAr, matchAp, categorize } = useReconciliationMutations();
 
   const handleRun = () => {
     if (bankAccountId === 'ALL') return;
@@ -63,6 +65,12 @@ export default function ReconciliationPage() {
   const handleMatchAr = (invoiceId) => {
     if (!selectedTx?._id) return;
     matchAr.mutate({ transactionId: selectedTx._id, invoiceId });
+    setSelectedTx(null);
+  };
+
+  const handleMatchAp = (apInvoiceId) => {
+    if (!selectedTx?._id) return;
+    matchAp.mutate({ transactionId: selectedTx._id, apInvoiceId });
     setSelectedTx(null);
   };
 
@@ -186,6 +194,36 @@ export default function ReconciliationPage() {
                   ))}
                   {!suggestionsLoading && suggestions.length === 0 && (
                     <p className="text-xs text-muted-foreground">{de ? 'Keine Rechnungsvorschlaege.' : 'No invoice suggestions.'}</p>
+                  )}
+                </div>
+              )}
+
+              {Number(selectedTx.amount || 0) < 0 && (
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? 'Kreditoren' : 'Payables'}</h3>
+                  {apCandidates
+                    .filter((invoice) => Number(invoice.outstandingAmount || 0) > 0)
+                    .slice()
+                    .sort((a, b) => Math.abs(Number(a.outstandingAmount || 0) - Math.abs(Number(selectedTx.amount || 0))) - Math.abs(Number(b.outstandingAmount || 0) - Math.abs(Number(selectedTx.amount || 0))))
+                    .slice(0, 5)
+                    .map((invoice) => (
+                      <button
+                        key={invoice._id}
+                        type="button"
+                        onClick={() => handleMatchAp(invoice._id)}
+                        className="flex items-center justify-between rounded-lg border border-border p-3 text-left hover:border-primary/40"
+                      >
+                        <span>
+                          <span className="block text-sm font-medium">{invoice.apInvoiceNumber}</span>
+                          <span className="block text-xs text-muted-foreground">{invoice.supplierName}</span>
+                        </span>
+                        <span className="text-right text-sm font-semibold">
+                          {formatMoney(invoice.outstandingAmount, invoice.currency)}
+                        </span>
+                      </button>
+                    ))}
+                  {apCandidates.length === 0 && (
+                    <p className="text-xs text-muted-foreground">{de ? 'Keine offenen Kreditoren gefunden.' : 'No open payables found.'}</p>
                   )}
                 </div>
               )}

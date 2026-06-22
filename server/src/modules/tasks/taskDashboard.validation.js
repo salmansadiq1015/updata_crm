@@ -1,9 +1,20 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
-export const dashboardSchema = {};
+export const dashboardSchema = {
+  query: Joi.object({
+    projectId: objectId,
+    orderId: objectId,
+    upcomingDays: Joi.number().integer().min(1).max(30).default(7),
+  }),
+};
 
-export const statsSchema = {};
+export const statsSchema = {
+  query: Joi.object({
+    projectId: objectId,
+    orderId: objectId,
+  }),
+};
 
 export const projectTasksSchema = {
   params: Joi.object({ projectId: objectId.required() }),
@@ -47,7 +58,7 @@ export const syncPushSchema = {
 export const userDefaultsSchema = {
   body: Joi.object({
     enabled: Joi.boolean(),
-    defaultOffsetMinutes: Joi.number().integer().min(0),
-    defaultChannels: Joi.array().items(Joi.string()),
+    defaultOffsetMinutes: Joi.number().integer().min(-10080).max(10080),
+    defaultChannels: Joi.array().items(Joi.string().valid('PUSH', 'IN_APP', 'EMAIL')).min(1),
   }),
 };

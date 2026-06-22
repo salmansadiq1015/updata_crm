@@ -55,6 +55,8 @@ class TaskController {
       const task = await taskService.changeStatus(req.params.id, req.body.status, req.user._id, {
         ...meta,
         expectedVersion: req.body.expectedVersion,
+        completeSubtasks: req.body.completeSubtasks === true,
+        completeParentOnly: req.body.completeParentOnly === true,
       });
       return res.success({ data: task, message: 'Task status updated successfully' });
     } catch (err) { next(err); }
@@ -63,7 +65,10 @@ class TaskController {
   async complete(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      const options = { completeSubtasks: req.body.completeSubtasks || false };
+      const options = {
+        completeSubtasks: req.body.completeSubtasks === true,
+        completeParentOnly: req.body.completeParentOnly === true,
+      };
       const task = await taskService.complete(req.params.id, req.user._id, meta, options);
       return res.success({ data: task, message: 'Task completed successfully' });
     } catch (err) { next(err); }
@@ -103,7 +108,7 @@ class TaskController {
 
   async getSubtasks(req, res, next) {
     try {
-      const subtasks = await taskService.getSubtasks(req.params.parentId);
+      const subtasks = await taskService.getSubtasks(req.params.parentId, req.user._id);
       return res.success({ data: subtasks });
     } catch (err) { next(err); }
   }

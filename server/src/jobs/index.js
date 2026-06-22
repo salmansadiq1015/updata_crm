@@ -404,7 +404,7 @@ export function registerJobs() {
     });
   });
 
-  // Task reminder dispatch — every 5 minutes: fire due reminders
+  // Task reminder dispatch — every minute: fire due reminders
   const taskReminderDispatch = new TaskReminderDispatchWorker();
   queueManager.registerQueue('task-reminder-dispatch', taskReminderDispatch.getHandler(), {
     concurrency: 1,
@@ -414,14 +414,14 @@ export function registerJobs() {
     },
   });
 
-  queueManager.addScheduledJob('task-reminder-dispatch', 'periodic-task-reminders', {}, '*/5 * * * *').catch((err) => {
+  queueManager.addScheduledJob('task-reminder-dispatch', 'periodic-task-reminders', {}, '* * * * *').catch((err) => {
     logger.warn('Failed to schedule task reminder dispatch', {
       module: 'jobs',
       error: { message: err.message },
     });
   });
 
-  // Task overdue check — daily at 07:00: scan for overdue tasks
+  // Task overdue check — every minute: scan for overdue tasks
   const taskOverdueCheck = new TaskOverdueCheckWorker();
   queueManager.registerQueue('task-overdue-check', taskOverdueCheck.getHandler(), {
     concurrency: 1,
@@ -431,7 +431,7 @@ export function registerJobs() {
     },
   });
 
-  queueManager.addScheduledJob('task-overdue-check', 'daily-task-overdue-scan', {}, '0 7 * * *').catch((err) => {
+  queueManager.addScheduledJob('task-overdue-check', 'periodic-task-overdue-scan', {}, '* * * * *').catch((err) => {
     logger.warn('Failed to schedule task overdue check', {
       module: 'jobs',
       error: { message: err.message },

@@ -3,7 +3,7 @@ import taskNoteService from './taskNote.service.js';
 class TaskNoteController {
   async list(req, res, next) {
     try {
-      const notes = await taskNoteService.getByTaskId(req.params.taskId);
+      const notes = await taskNoteService.getByTaskId(req.params.taskId, req.user._id);
       return res.success({ data: notes });
     } catch (err) { next(err); }
   }

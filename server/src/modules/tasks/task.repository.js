@@ -190,7 +190,7 @@ class TaskRepository {
   async findOverdue() {
     return Task.find({
       dueDate: { $lt: new Date() },
-      status: { $in: ['OPEN', 'IN_PROGRESS'] },
+      status: { $in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
     })
       .sort({ dueDate: 1 })
       .lean();
@@ -222,14 +222,18 @@ class TaskRepository {
       .lean();
   }
 
-  async findChangedSince(userId, since) {
+  async findChangedSince(userId, since, { accessibleListIds = [] } = {}) {
     return Task.find({
       $or: [
         { assigneeId: userId },
         { createdBy: userId },
+        ...(Array.isArray(accessibleListIds) && accessibleListIds.length > 0
+          ? [{ listId: { $in: accessibleListIds } }]
+          : []),
       ],
       updatedAt: { $gt: new Date(since) },
     })
+      .setOptions({ includeDeleted: true })
       .sort({ updatedAt: 1 })
       .lean();
   }

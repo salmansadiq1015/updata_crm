@@ -1,5 +1,6 @@
 import taskAttachmentRepository from './taskAttachment.repository.js';
 import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from './taskAttachment.model.js';
+import taskAccessService from './taskAccess.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
@@ -25,7 +26,8 @@ class TaskAttachmentService {
   }
 
   async upload(taskId, file, userId, meta = {}) {
-    await this._ensureTaskExists(taskId);
+    const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
     const count = await taskAttachmentRepository.countByTaskId(taskId);
     if (count >= MAX_ATTACHMENTS_PER_TASK) {
@@ -108,7 +110,10 @@ class TaskAttachmentService {
     return attachment;
   }
 
-  async getByTaskId(taskId) {
+  async getByTaskId(taskId, userId) {
+    const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER');
+
     const cacheKey = `tasks:attachments:${taskId}`;
     return cacheManager.getOrSet(
       cacheKey,
@@ -117,7 +122,10 @@ class TaskAttachmentService {
     );
   }
 
-  async download(taskId, attachmentId) {
+  async download(taskId, attachmentId, userId) {
+    const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER');
+
     const attachment = await taskAttachmentRepository.findById(attachmentId);
     if (!attachment) throw new NotFoundError('TaskAttachment', attachmentId);
 
@@ -137,6 +145,9 @@ class TaskAttachmentService {
   }
 
   async remove(taskId, attachmentId, userId, meta = {}) {
+    const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
+
     const attachment = await taskAttachmentRepository.findById(attachmentId);
     if (!attachment) throw new NotFoundError('TaskAttachment', attachmentId);
 

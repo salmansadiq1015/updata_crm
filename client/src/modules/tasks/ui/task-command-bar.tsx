@@ -8,6 +8,7 @@ import {
   Circle,
   CircleCheck,
   CircleDashed,
+  CirclePause,
   CircleX,
   Columns3,
   Flag,
@@ -36,6 +37,7 @@ import {
 const STATUS_ICON = {
   OPEN:        Circle,
   IN_PROGRESS: CircleDashed,
+  ON_HOLD:      CirclePause,
   COMPLETED:   CircleCheck,
   CANCELLED:   CircleX,
 } as const satisfies Record<TaskStatus, React.ComponentType<{ className?: string }>>;

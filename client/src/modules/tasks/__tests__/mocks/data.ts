@@ -19,6 +19,7 @@ export function makeTask(overrides: Partial<Task> = {}): Task {
     parentTaskId: null,
     projectId: null,
     orderId: null,
+    startDate: null,
     dueDate: null,
     sortOrder: 0,
     depth: 0,

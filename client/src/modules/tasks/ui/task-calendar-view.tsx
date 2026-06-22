@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Circle, CircleCheck, CircleDashed, CircleX } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Circle, CircleCheck, CircleDashed, CirclePause, CircleX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -14,6 +14,7 @@ import { taskPriorityIconColor, taskStatusIconColor } from './task-ui-constants'
 const STATUS_ICON: Record<TaskStatus, React.ComponentType<{ className?: string }>> = {
   OPEN:        Circle,
   IN_PROGRESS: CircleDashed,
+  ON_HOLD:      CirclePause,
   COMPLETED:   CircleCheck,
   CANCELLED:   CircleX,
 };

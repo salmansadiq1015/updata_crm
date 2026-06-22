@@ -98,10 +98,17 @@ export default function CashManagementPage() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
   const [manualOpen, setManualOpen] = useState(false);
+  const [selectedDays, setSelectedDays] = useState(30);
+  const [scenario, setScenario] = useState({ delayAmount: '', delayBeyondDays: '30' });
   const { data: balances = [], isLoading: balancesLoading } = useCashBalances();
   const { data: forecast, isLoading: forecastLoading } = useCashForecast({ days: 90 });
   const { data: accounts = [] } = useBankAccounts();
   const periods = useMemo(() => aggregatePeriods(forecast?.projections || []), [forecast?.projections]);
+  const selectedRows = (forecast?.projections || [])
+    .slice(0, selectedDays)
+    .filter((row) => Number(row.inflows || 0) !== 0 || Number(row.outflows || 0) !== 0);
+  const delayAmount = Math.max(0, Number(scenario.delayAmount || 0));
+  const delayBeyondDays = Number(scenario.delayBeyondDays || 0);
   const totalBalance = balances.reduce((total, account) => total + Number(account.balance || 0), 0);
 
   return (
@@ -178,22 +185,89 @@ export default function CashManagementPage() {
         </div>
 
         <div className="rounded-xl border border-border p-4">
-          <h2 className="text-sm font-semibold mb-4">{de ? 'Cashflow-Projektion' : 'Cash Flow Projection'}</h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">{de ? 'Cashflow-Projektion' : 'Cash Flow Projection'}</h2>
+            <div className="flex items-center gap-2 text-xs">
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                className="h-8 w-28"
+                value={scenario.delayAmount}
+                onChange={(event) => setScenario((current) => ({ ...current, delayAmount: event.target.value }))}
+                placeholder={de ? 'Betrag' : 'Amount'}
+              />
+              <Select value={scenario.delayBeyondDays} onValueChange={(value) => setScenario((current) => ({ ...current, delayBeyondDays: value }))}>
+                <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">+7d</SelectItem>
+                  <SelectItem value="14">+14d</SelectItem>
+                  <SelectItem value="30">+30d</SelectItem>
+                  <SelectItem value="60">+60d</SelectItem>
+                  <SelectItem value="90">+90d</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="flex flex-col gap-3">
             {periods.map((period) => {
               const inflowWidth = Math.min(100, Math.abs(period.inflows) / Math.max(1, Math.abs(period.inflows) + Math.abs(period.outflows)) * 100);
+              const scenarioNet = delayAmount && period.days <= delayBeyondDays
+                ? period.netPosition + delayAmount
+                : period.netPosition;
               return (
-                <div key={period.days} className="grid grid-cols-[4rem_1fr_8rem] items-center gap-3 text-sm">
+                <button
+                  key={period.days}
+                  type="button"
+                  onClick={() => setSelectedDays(period.days)}
+                  className={`grid grid-cols-[4rem_1fr_8rem] items-center gap-3 rounded-lg p-2 text-left text-sm hover:bg-muted/40 ${selectedDays === period.days ? 'bg-muted/50' : ''}`}
+                >
                   <span className="text-xs text-muted-foreground">{period.days}d</span>
                   <div className="h-3 rounded-full bg-red-500/20 overflow-hidden">
                     <div className="h-full bg-emerald-500" style={{ width: `${inflowWidth}%` }} />
                   </div>
-                  <span className="text-right font-semibold tabular-nums">{formatMoney(period.netPosition)}</span>
-                </div>
+                  <span className="text-right font-semibold tabular-nums">
+                    {formatMoney(scenarioNet)}
+                    {delayAmount > 0 && scenarioNet !== period.netPosition && (
+                      <span className="block text-[10px] font-normal text-emerald-600">+{formatMoney(delayAmount)}</span>
+                    )}
+                  </span>
+                </button>
               );
             })}
           </div>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-border overflow-hidden">
+        <div className="border-b border-border bg-muted/30 px-3 py-2.5">
+          <h2 className="text-sm font-semibold">
+            {de ? `Details ${selectedDays} Tage` : `${selectedDays}-Day Detail`}
+          </h2>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-muted/20 text-xs text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 text-left">{de ? 'Datum' : 'Date'}</th>
+              <th className="px-3 py-2 text-right">{de ? 'Eingang' : 'Inflows'}</th>
+              <th className="px-3 py-2 text-right">{de ? 'Ausgang' : 'Outflows'}</th>
+              <th className="px-3 py-2 text-right">{de ? 'Netto' : 'Net Position'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {selectedRows.slice(0, 20).map((row) => (
+              <tr key={row.date} className="border-t border-border/50">
+                <td className="px-3 py-2">{formatDate(row.date)}</td>
+                <td className="px-3 py-2 text-right text-emerald-600 tabular-nums">{formatMoney(row.inflows)}</td>
+                <td className="px-3 py-2 text-right text-red-600 tabular-nums">{formatMoney(row.outflows)}</td>
+                <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatMoney(row.netPosition)}</td>
+              </tr>
+            ))}
+            {selectedRows.length === 0 && (
+              <tr><td colSpan={4} className="px-3 py-8 text-center text-sm text-muted-foreground">{de ? 'Keine Bewegungen in diesem Zeitraum.' : 'No movements in this period.'}</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <ManualBalanceDialog open={manualOpen} onClose={() => setManualOpen(false)} accounts={accounts} de={de} />

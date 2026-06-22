@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
   ClipboardList,
+  ListTodo,
   MessageSquare,
   Timer,
   Bell,
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils';
 
 const ICON_MAP = {
   ClipboardList,
+  ListTodo,
   MessageSquare,
   Timer,
   Bell,
@@ -28,6 +30,7 @@ const ICON_MAP = {
 };
 
 const NAV_ITEMS = [
+  { key: 'tasks', href: '/m/tasks', icon: 'ListTodo', labelKey: 'mobile.nav.tasks', labelFallback: 'Aufgaben' },
   { key: 'orders', href: '/orders', icon: 'ClipboardList', labelKey: 'mobile.nav.orders', labelFallback: 'Aufträge' },
   { key: 'addressBook', href: '/address-book', icon: 'BookOpen', labelKey: 'mobile.nav.addressBook', labelFallback: 'Adressen' },
   { key: 'chat', href: '/chat', icon: 'MessageSquare', labelKey: 'mobile.nav.chat', labelFallback: 'Chat' },

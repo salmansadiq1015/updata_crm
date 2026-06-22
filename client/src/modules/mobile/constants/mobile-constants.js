@@ -99,6 +99,7 @@ export const SYNC_ENTITY_TYPE = Object.freeze({
   ACCOUNTING_DOCUMENT: 'ACCOUNTING_DOCUMENT',
   INSTALLATION_CAPTURE: 'INSTALLATION_CAPTURE',
   NOTE: 'NOTE',
+  TASK: 'TASK',
 });
 
 export const SYNC_OPERATION = Object.freeze({
@@ -126,6 +127,7 @@ export const SYNC_PRIORITY = Object.freeze({
   [SYNC_ENTITY_TYPE.ACCOUNTING_DOCUMENT]: 35,
   [SYNC_ENTITY_TYPE.INSTALLATION_CAPTURE]: 25,
   [SYNC_ENTITY_TYPE.NOTE]: 15,
+  [SYNC_ENTITY_TYPE.TASK]: 12,
 });
 
 export const SYNC_CONFIG = Object.freeze({
@@ -151,6 +153,7 @@ export const PHOTO_CONFIG = Object.freeze({
 
 export const MOBILE_NAV_TABS = Object.freeze([
   { key: 'orders', labelKey: 'mobile.nav.orders', href: '/orders', icon: 'ClipboardList' },
+  { key: 'tasks', labelKey: 'mobile.nav.tasks', href: '/m/tasks', icon: 'ListTodo' },
   { key: 'addressBook', labelKey: 'mobile.nav.addressBook', href: '/address-book', icon: 'BookOpen' },
   { key: 'chat', labelKey: 'mobile.nav.chat', href: '/chat', icon: 'MessageSquare' },
   { key: 'timer', labelKey: 'mobile.nav.timer', href: '/timer', icon: 'Timer' },

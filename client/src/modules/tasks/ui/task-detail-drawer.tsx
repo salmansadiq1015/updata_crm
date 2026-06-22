@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import {
-  CalendarDays, Circle, CircleCheck, CircleDashed, CircleX,
+  CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX,
   Copy, ExternalLink, Flag, Paperclip, Plus, Send, Trash2,
   Upload, UserRound, X,
 } from 'lucide-react';
@@ -30,9 +30,10 @@ import { useTaskSubtasks, useTaskNotes } from '../hooks/use-task-queries';
 const STATUS_ICON = {
   OPEN:        Circle,
   IN_PROGRESS: CircleDashed,
+  ON_HOLD:      CirclePause,
   COMPLETED:   CircleCheck,
   CANCELLED:   CircleX,
-} as const;
+} as const satisfies Record<TaskStatus, React.ElementType>;
 
 const PRIORITY_ACCENT: Record<string, string> = {
   URGENT: 'from-red-500/20 via-transparent',
@@ -57,8 +58,14 @@ type TaskDetailDrawerProps = {
   onOpenChange: (open: boolean) => void;
   onPatchTask: (id: string, patch: TaskPatch) => void;
   onTaskRefresh?: (id: string) => void;
-  users?: any[];
+  users?: WorkspaceUser[];
   onDuplicateTask?: (id: string) => void;
+};
+
+type WorkspaceUser = {
+  id: string;
+  firstName?: string;
+  lastName?: string;
 };
 
 const toDateValue = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : '');
@@ -107,10 +114,10 @@ function FieldRow({
   );
 }
 
-function ActivityNote({ note, users }: { note: TaskNote; users?: any[] }) {
+function ActivityNote({ note, users }: { note: TaskNote; users?: WorkspaceUser[] }) {
   const { t } = useLanguage();
-  const author = (users ?? []).find((u: any) => u.id === note.authorId);
-  const name = author ? `${author.firstName} ${author.lastName}` : t('tasks.teamMember');
+  const author = (users ?? []).find((u) => u.id === note.authorId);
+  const name = author ? `${author.firstName ?? ''} ${author.lastName ?? ''}`.trim() : t('tasks.teamMember');
   const initials = author
     ? `${author.firstName?.[0] ?? ''}${author.lastName?.[0] ?? ''}`.toUpperCase()
     : '?';

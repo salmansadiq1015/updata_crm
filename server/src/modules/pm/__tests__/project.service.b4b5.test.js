@@ -88,6 +88,24 @@ const mockScheduleEntryModel = {
 };
 jest.unstable_mockModule('../scheduleEntry.model.js', () => ({ default: mockScheduleEntryModel }));
 
+const mockTaskFind = jest.fn(() => ({
+  sort: jest.fn().mockReturnValue({
+    lean: jest.fn().mockResolvedValue([]),
+  }),
+}));
+jest.unstable_mockModule('../../tasks/task.model.js', () => ({
+  default: { find: mockTaskFind },
+}));
+
+const mockTaskCreate = jest.fn();
+const mockTaskCreateSubtask = jest.fn();
+jest.unstable_mockModule('../../tasks/task.service.js', () => ({
+  default: {
+    create: mockTaskCreate,
+    createSubtask: mockTaskCreateSubtask,
+  },
+}));
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 let projectService;
@@ -194,6 +212,64 @@ describe('B4 — createFromTemplate: prep-action field mapping', () => {
     const calls = mockPrepActionRepo.create.mock.calls;
     expect(calls[0][0].projectId).toBe(fakeNewProject._id);
     expect(calls[1][0].projectId).toBe(fakeNewProject._id);
+  });
+
+  it('clones template tasks into the new project and preserves hierarchy', async () => {
+    mockTaskFind.mockReturnValueOnce({
+      sort: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue([
+          {
+            _id: 'task-root',
+            title: 'Root task',
+            description: 'Prepare',
+            priority: 'HIGH',
+            assigneeId: 'user-7',
+            sortOrder: 0,
+            parentTaskId: null,
+          },
+          {
+            _id: 'task-child',
+            title: 'Child task',
+            description: null,
+            priority: 'LOW',
+            assigneeId: null,
+            sortOrder: 1,
+            parentTaskId: 'task-root',
+          },
+        ]),
+      }),
+    });
+    mockTaskCreate.mockResolvedValueOnce({ _id: 'cloned-root' });
+    mockTaskCreateSubtask.mockResolvedValueOnce({ _id: 'cloned-child' });
+
+    await projectService.createFromTemplate(templateId, { name: 'New Project' }, createdBy);
+
+    expect(mockTaskCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Root task',
+        description: 'Prepare',
+        status: 'OPEN',
+        priority: 'HIGH',
+        projectId: fakeNewProject._id,
+        assigneeId: 'user-7',
+        sortOrder: 0,
+      }),
+      createdBy,
+      expect.any(Object),
+    );
+    expect(mockTaskCreateSubtask).toHaveBeenCalledWith(
+      'cloned-root',
+      expect.objectContaining({
+        title: 'Child task',
+        status: 'OPEN',
+        priority: 'LOW',
+        projectId: fakeNewProject._id,
+        assigneeId: null,
+        sortOrder: 1,
+      }),
+      createdBy,
+      expect.any(Object),
+    );
   });
 });
 

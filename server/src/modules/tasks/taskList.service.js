@@ -12,6 +12,7 @@ import logger from '../../shared/logger/index.js';
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 const MAX_LISTS_PER_USER = 50;
+const MAX_GROUP_MEMBERS = 50;
 
 class TaskListService {
   async ensureDefaultList(userId) {
@@ -252,6 +253,15 @@ class TaskListService {
     const existing = await TaskListMember.findOne({ listId, userId: targetUserId }).lean();
     if (existing) {
       throw new AppError('User is already a member of this list', 409, ERROR_CODES.TASK_LIST_MEMBER_EXISTS);
+    }
+
+    const memberCount = await TaskListMember.countDocuments({ listId });
+    if (memberCount >= MAX_GROUP_MEMBERS) {
+      throw new AppError(
+        `Group task lists support a maximum of ${MAX_GROUP_MEMBERS} members`,
+        400,
+        ERROR_CODES.TASK_LIST_LIMIT_EXCEEDED,
+      );
     }
 
     const member = await TaskListMember.create({

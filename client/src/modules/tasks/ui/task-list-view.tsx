@@ -7,6 +7,7 @@ import {
   Circle,
   CircleCheck,
   CircleDashed,
+  CirclePause,
   CircleX,
   Copy,
   Flag,
@@ -40,6 +41,7 @@ import { TaskInlineField } from './task-inline-field';
 const STATUS_ICON = {
   OPEN:        Circle,
   IN_PROGRESS: CircleDashed,
+  ON_HOLD:      CirclePause,
   COMPLETED:   CircleCheck,
   CANCELLED:   CircleX,
 } as const satisfies Record<TaskStatus, React.ComponentType<{ className?: string }>>;
@@ -58,8 +60,14 @@ function PriorityFlag({ priority, className }: { priority: TaskPriority; classNa
   return <Flag className={cn('h-3.5 w-3.5 shrink-0 fill-current', taskPriorityIconColor[priority], className)} />;
 }
 
-function AssigneeCell({ assigneeId, users = [] }: { assigneeId: string | null; users: any[] }) {
-  const user = users?.find((u: any) => u.id === assigneeId);
+type WorkspaceUser = {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+};
+
+function AssigneeCell({ assigneeId, users = [] }: { assigneeId: string | null; users: WorkspaceUser[] }) {
+  const user = users?.find((item) => item.id === assigneeId);
   if (!user) return <span className="text-muted-foreground text-xs">—</span>;
   const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
   return (
@@ -97,7 +105,7 @@ const TaskRow = memo(function TaskRow({
   task: Task;
   selected: boolean;
   rowSelection?: Record<string, boolean>;
-  users?: any[];
+  users?: WorkspaceUser[];
   onSelectTask: (taskId: string) => void;
   onPatchTask: (id: string, patch: TaskPatch) => void;
   onDeleteTask: (id: string) => void;
@@ -262,7 +270,7 @@ type TaskListViewProps = {
   onDeleteTask: (id: string) => void;
   rowSelection?: Record<string, boolean>;
   onRowSelectionChange?: (selection: Record<string, boolean>) => void;
-  users?: any[];
+  users?: WorkspaceUser[];
   onDuplicateTask?: (id: string) => void;
 };
 

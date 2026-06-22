@@ -17,9 +17,11 @@ type ApiEnvelope<T> = {
 };
 
 const toApiResponse = <T>(value: unknown): ApiEnvelope<T> => value as ApiEnvelope<T>;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 function normalizeUser(raw: unknown): WorkspaceUser {
-  const r = raw as Record<string, unknown>;
+  const r = isRecord(raw) ? raw : {};
   return {
     id: String((r._id ?? r.id) ?? ''),
     firstName: String(r.firstName ?? ''),
@@ -40,8 +42,8 @@ export function useWorkspaceUsers() {
       const payload = response.data;
       const items = Array.isArray(payload)
         ? payload
-        : Array.isArray((payload as any)?.users)
-          ? (payload as any).users
+        : isRecord(payload) && Array.isArray(payload.users)
+          ? payload.users
           : [];
       return (items as unknown[]).map(normalizeUser).filter((u) => u.id);
     },

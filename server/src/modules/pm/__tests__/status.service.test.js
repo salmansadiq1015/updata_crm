@@ -22,6 +22,19 @@ jest.unstable_mockModule('../scheduleEntry.model.js', () => ({
   default: { countDocuments: jest.fn().mockResolvedValue(0) },
 }));
 
+const taskFindResult = (tasks = []) => ({
+  select: jest.fn().mockReturnValue({
+    limit: jest.fn().mockReturnValue({
+      lean: jest.fn().mockResolvedValue(tasks),
+    }),
+  }),
+});
+
+const mockTaskFind = jest.fn(() => taskFindResult([]));
+jest.unstable_mockModule('../../tasks/task.model.js', () => ({
+  default: { find: mockTaskFind },
+}));
+
 // Mock projectStatusHistory.model
 const mockHistoryCreate = jest.fn().mockResolvedValue({ changedAt: new Date() });
 jest.unstable_mockModule('../projectStatusHistory.model.js', () => ({
@@ -80,6 +93,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   jest.clearAllMocks();
+  mockTaskFind.mockImplementation(() => taskFindResult([]));
 });
 
 // ─── AC-2: outstanding mandatory prep actions listed on blocked transition ────
@@ -219,6 +233,46 @@ describe('AC-2 — transitionStatus ON_HOLD→IN_PROGRESS with incomplete mandat
       data: {
         outstanding: [
           expect.objectContaining({ id: 'act-5', title: 'Pump replacement', status: 'PENDING' }),
+        ],
+      },
+    });
+  });
+});
+
+describe('TASK-013 - project completion is guarded by open project tasks', () => {
+  const projectId = 'proj-with-tasks';
+  const userId = 'user-abc';
+
+  it('throws ConflictError with outstanding task details when active tasks remain open', async () => {
+    const dueDate = new Date('2026-06-30T08:00:00Z');
+    mockProjectFindById.mockResolvedValue({
+      _id: projectId,
+      status: 'IN_PROGRESS',
+      save: mockProjectSave,
+    });
+    mockTaskFind.mockImplementation(() => taskFindResult([
+      {
+        _id: { toString: () => 'task-1' },
+        title: 'Finish commissioning checklist',
+        status: 'ON_HOLD',
+        assigneeId: { toString: () => 'assignee-1' },
+        dueDate,
+      },
+    ]));
+
+    await expect(
+      statusService.transitionStatus(projectId, 'COMPLETED', {}, userId),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('1 task(s) are still open'),
+      data: {
+        outstandingTasks: [
+          {
+            id: 'task-1',
+            title: 'Finish commissioning checklist',
+            status: 'ON_HOLD',
+            assigneeId: 'assignee-1',
+            dueDate,
+          },
         ],
       },
     });

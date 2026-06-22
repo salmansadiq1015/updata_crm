@@ -3,7 +3,7 @@ import taskReminderService from './taskReminder.service.js';
 class TaskReminderController {
   async list(req, res, next) {
     try {
-      const reminders = await taskReminderService.getByTaskId(req.params.taskId);
+      const reminders = await taskReminderService.getByTaskId(req.params.taskId, req.user._id);
       return res.success({ data: reminders });
     } catch (err) { next(err); }
   }
@@ -21,6 +21,13 @@ class TaskReminderController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const result = await taskReminderService.remove(req.params.taskId, req.params.reminderId, req.user._id, meta);
       return res.success({ data: result, message: 'Reminder deleted successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async snooze(req, res, next) {
+    try {
+      const reminder = await taskReminderService.snoozeReminder(req.params.reminderId, req.body.snoozeMinutes, req.user._id);
+      return res.success({ data: reminder, message: 'Reminder snoozed successfully' });
     } catch (err) { next(err); }
   }
 

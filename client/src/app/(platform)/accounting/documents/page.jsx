@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { Download, FileSearch, Upload } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import { Download, FileSearch, Upload, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -19,6 +20,7 @@ import {
 import { useAccDocumentMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
 import { accDocService } from '@/modules/accounting/services/accounting-service';
 import { cursorPageLabel, downloadResponse, formatDate, formatMoney, toDateInput } from '@/modules/accounting/utils/accounting-ui';
+import { useUserDirectory } from '@/modules/users/hooks/use-user-directory';
 
 const DOCUMENT_TYPES = [
   'SUPPLIER_INVOICE',
@@ -57,8 +59,34 @@ function buildOcrCorrections(result) {
 function OcrReviewDialog({ document, open, onClose, de, t }) {
   const { data: result, isLoading } = useAccDocumentOcrResult(document?._id);
   const { confirmOcr, rejectOcr } = useAccDocumentMutations();
+  const [previewUrl, setPreviewUrl] = useState('');
   const corrections = result ? buildOcrCorrections(result) : {};
   const canConfirm = Object.keys(corrections).length > 0;
+
+  useEffect(() => {
+    let objectUrl = '';
+    let active = true;
+
+    async function loadPreview() {
+      if (!open || !document?._id) return;
+      try {
+        const response = await accDocService.download(document._id);
+        if (!active) return;
+        objectUrl = URL.createObjectURL(response.data);
+        setPreviewUrl(objectUrl);
+      } catch {
+        if (active) setPreviewUrl('');
+      }
+    }
+
+    loadPreview();
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      setPreviewUrl('');
+    };
+  }, [document?._id, open]);
 
   const handleConfirm = async () => {
     if (!document?._id || !canConfirm) return;
@@ -88,6 +116,19 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
           <Skeleton className="h-64 rounded-xl" />
         ) : result ? (
           <div className="grid gap-4 md:grid-cols-2">
+            <div className="min-h-96 overflow-hidden rounded-xl border border-border bg-muted/20">
+              {previewUrl && document?.mimeType === 'application/pdf' ? (
+                <iframe src={`${previewUrl}#toolbar=1&view=FitH`} title={document.fileName} className="h-96 w-full border-0" />
+              ) : previewUrl && document?.mimeType?.startsWith('image/') ? (
+                <div className="relative h-96 w-full">
+                  <Image src={previewUrl} alt={document.fileName || 'Document'} fill unoptimized className="object-contain" />
+                </div>
+              ) : (
+                <div className="flex h-96 items-center justify-center p-6 text-center text-sm text-muted-foreground">
+                  {de ? 'Keine Vorschau verfuegbar. Download zum Pruefen verwenden.' : 'No preview available. Use download to inspect the source document.'}
+                </div>
+              )}
+            </div>
             <div className="rounded-xl border border-border p-3">
               <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-3">{de ? 'Extraktion' : 'Extraction'}</h3>
               <dl className="grid grid-cols-[8rem_1fr] gap-2 text-sm">
@@ -105,7 +146,7 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
                 <dd>{formatMoney(result.extractedVat)}</dd>
               </dl>
             </div>
-            <div className="rounded-xl border border-border p-3">
+            <div className="rounded-xl border border-border p-3 md:col-start-2">
               <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-3">{de ? 'Qualitaet' : 'Quality'}</h3>
               <p className="text-sm">
                 {de ? 'Status' : 'Status'}: <span className="font-semibold">{result.status}</span>
@@ -132,6 +173,71 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
   );
 }
 
+function AssignDocumentDialog({ document, documentIds, open, onClose, de }) {
+  const { assignDocument, bulkAssignDocuments } = useAccDocumentMutations();
+  const { data: users = [], isLoading } = useUserDirectory({ limit: 80, enabled: open });
+  const [userId, setUserId] = useState('');
+  const [note, setNote] = useState('');
+  const ids = document?._id ? [document._id] : [...documentIds];
+  const isBulk = ids.length > 1;
+  const isPending = assignDocument.isPending || bulkAssignDocuments.isPending;
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!userId || ids.length === 0) return;
+    const payload = { userId, note };
+    if (isBulk) {
+      await bulkAssignDocuments.mutateAsync({ documentIds: ids, ...payload });
+    } else {
+      await assignDocument.mutateAsync({ id: ids[0], data: payload });
+    }
+    setUserId('');
+    setNote('');
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{de ? 'Beleg zuweisen' : 'Assign Document'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            {isBulk
+              ? `${ids.length} ${de ? 'Belege' : 'documents'}`
+              : document?.fileName}
+          </p>
+          <Select value={userId} onValueChange={setUserId}>
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue placeholder={isLoading ? (de ? 'Laedt...' : 'Loading...') : (de ? 'Mitarbeiter auswaehlen' : 'Select employee')} />
+            </SelectTrigger>
+            <SelectContent>
+              {users.map((user) => (
+                <SelectItem key={user._id} value={user._id}>
+                  {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || user._id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            className="h-9"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder={de ? 'Notiz optional' : 'Optional note'}
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>{de ? 'Abbrechen' : 'Cancel'}</Button>
+            <Button type="submit" disabled={isPending || !userId || ids.length === 0}>
+              {isPending ? '...' : (de ? 'Zuweisen' : 'Assign')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function AccountingDocumentsPage() {
   const { locale: language, t } = useLanguage();
   const de = language === 'de';
@@ -141,6 +247,7 @@ export default function AccountingDocumentsPage() {
   const [cursorStack, setCursorStack] = useState([null]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [reviewDoc, setReviewDoc] = useState(null);
+  const [assignTarget, setAssignTarget] = useState(null);
   const cursor = cursorStack[cursorStack.length - 1];
   const params = {
     limit: 50,
@@ -160,10 +267,12 @@ export default function AccountingDocumentsPage() {
   };
 
   const handleUpload = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
     const effectiveType = documentType === 'ALL' ? 'SUPPLIER_INVOICE' : documentType;
-    await uploadDocument.mutateAsync({ file, meta: { documentType: effectiveType } });
+    for (const file of files) {
+      await uploadDocument.mutateAsync({ file, meta: { documentType: effectiveType } });
+    }
     event.target.value = '';
   };
 
@@ -200,17 +309,23 @@ export default function AccountingDocumentsPage() {
             <Upload className="h-4 w-4 mr-1.5" />
             {de ? 'Upload' : 'Upload'}
           </Button>
-          <input ref={fileRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.txt" onChange={handleUpload} />
+          <input ref={fileRef} type="file" className="hidden" multiple accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.txt" onChange={handleUpload} />
         </div>
       </div>
 
       {selectedIds.size > 0 && (
         <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
           <span className="text-sm font-medium">{selectedIds.size} {de ? 'Belege ausgewaehlt' : 'documents selected'}</span>
-          <Button size="sm" variant="outline" onClick={handleBulkDownload}>
-            <Download className="h-4 w-4 mr-1.5" />
-            ZIP
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setAssignTarget({ bulk: true })}>
+              <UserPlus className="h-4 w-4 mr-1.5" />
+              {de ? 'Zuweisen' : 'Assign'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleBulkDownload}>
+              <Download className="h-4 w-4 mr-1.5" />
+              ZIP
+            </Button>
+          </div>
         </div>
       )}
 
@@ -265,6 +380,9 @@ export default function AccountingDocumentsPage() {
                     <Button size="sm" className="h-7 px-2 text-xs" onClick={() => setReviewDoc(document)}>
                       <FileSearch className="h-3.5 w-3.5" />
                     </Button>
+                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setAssignTarget(document)}>
+                      <UserPlus className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </td>
               </tr>
@@ -283,6 +401,13 @@ export default function AccountingDocumentsPage() {
       </div>
 
       <OcrReviewDialog document={reviewDoc} open={!!reviewDoc} onClose={() => setReviewDoc(null)} de={de} t={t} />
+      <AssignDocumentDialog
+        document={assignTarget?.bulk ? null : assignTarget}
+        documentIds={selectedIds}
+        open={!!assignTarget}
+        onClose={() => setAssignTarget(null)}
+        de={de}
+      />
     </div>
   );
 }

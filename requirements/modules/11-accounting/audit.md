@@ -1,5 +1,68 @@
 # Module 11 Accounting - Implementation Audit
 
+## 2026-06-21 Current Completion Addendum
+
+Scope: requirements-backed re-audit and local remediation against `requirements/modules/11-accounting/requirements.md`, covering server and client accounting surfaces.
+
+### Local Development Completed In This Pass
+
+- Fixed the stale invoice delivery worker test mock so `AuthEmailWorker` can be imported with the current mail module contract, including `sendMeetingNotificationEmail`.
+- Added client accounting service tests for AR receivable normalization, grouped dunning normalization, AR payment record-and-allocate API calls, bank statement multipart imports, and accounting document multipart uploads.
+- Added client accounting mutation tests for AR payment invalidation, dunning invalidation, bank retrieval invalidation, OCR confirmation invalidation, and bulk document assignment invalidation.
+- Added AP invoice recording UI to `/accounting/payables` with multi-line entry, Swiss VAT rates, posting account allocation, supplier bank fields, project/order references, and existing payment-batch export flow preserved.
+- Added multi-file accounting document upload to `/accounting/documents`.
+- Added single and bulk document employee assignment UI to `/accounting/documents`.
+- Reworked OCR review in `/accounting/documents` into a side-by-side source document preview and extracted-field review using the existing archive download and OCR result APIs.
+- Added AP-side manual reconciliation UI for outgoing bank transactions by ranking approved open payables against transaction amount and posting through the existing `match-ap` endpoint.
+- Added cash-management period drilldown and local payment-delay what-if controls to `/accounting/cash` using the existing 90-day forecast response.
+
+### Current Local Verification Evidence
+
+- Server accounting regression set: `23` suites passed, `94` tests passed.
+- Client accounting regression tests: `2` suites passed, `10` tests passed.
+- Focused server accounting lint: passed.
+- Focused client accounting lint: passed.
+- Client production build: passed and rendered all accounting routes plus `/m/accounting/scan`.
+
+### Current Requirement Verdict
+
+Local code-owned server/client surfaces are now implemented and verified for the main Module 11 workflows that can be proven inside this repository. The module still cannot be honestly certified as externally 100% complete without live third-party/hardware validation for the requirements that depend on banks, OCR providers, SMTP infrastructure, scanner hardware, camera devices, object-storage durability guarantees, and production-size datasets.
+
+| Requirement | Local status | Remaining non-local / certification gates |
+| --- | --- | --- |
+| ACC-001 AR invoices | Locally implemented and regression-tested through QOP invoice lifecycle, invoice PDF/QR archive, credit notes, send worker, and receivables/payment UI. | Real SMTP delivery acceptance and print/template visual sign-off. |
+| ACC-002 Open receivables | Locally implemented with cursor queries, aggregation summaries, CSV export, write-off, dunning generation, and UI actions. | Seeded 10,000-row load timing in production-like infrastructure. |
+| ACC-003 Incoming payments | Locally implemented with transactional payment/allocation, customer credit balances, bank-import reconciliation path, and UI payment action. | Real monthly bank-import auto-match rate validation. |
+| ACC-004 AP invoices | Locally implemented server-side and now exposed in the client with multi-line recording and allocation. | Supplier inline creation/directory UX remains dependent on a supplier master-data product decision. |
+| ACC-005 Open payables | Locally implemented with list/aging/summary, dispute/approval, payment-batch reservation, pain.001 export, and UI batch flow. | Acceptance of generated pain.001 files by target Swiss banks. |
+| ACC-006 Upload/scan | Locally implemented for multi-file web upload, validation, archive storage, and OCR queueing. | TWAIN/WIA desktop scanner integration and real upload-progress UX for very large files. |
+| ACC-007 OCR | Locally implemented with provider abstraction, extraction, low-confidence fields, confirmation/rejection, and side-by-side client review. | External OCR accuracy benchmark for German, French, and Italian invoices. |
+| ACC-008 Chart/allocation | Locally implemented with chart APIs, account mappings, split-allocation support server-side, AP approval guards, and AP client allocation entry. | Broader admin UX for supplier/category default mapping management. |
+| ACC-009 Document archive | Locally implemented with SHA-256 metadata, retention guard, search metadata, linked records, ZIP download, and assignment workflow. | 99.99% durability proof requires configured production object storage/SLA evidence and 100,000-document load test. |
+| ACC-010 Bank interface | Locally implemented for camt.053/054, pain.001, pain.002, manual imports, and gateway folder retrieval. | Native EBICS certification or bank-approved SFTP/EBICS gateway validation; target-bank pain.001 acceptance. |
+| ACC-011 Reconciliation | Locally implemented for AR/AP manual and auto reconciliation, learning rules, audit events, and client AR/AP matching. | Real transaction-set accuracy benchmark for 70% overall / 95% QR matching claims. |
+| ACC-012 Cash management | Locally implemented with balances, 90-day forecast, manual balance update, client period drilldown, and local what-if scenario. | Drilldown to exact underlying invoice documents needs API expansion beyond current aggregate forecast rows. |
+| ACC-013 Mobile scanning | Locally implemented for camera/file capture, validation, compression, offline queue, and archive upload. | Real edge detection, perspective correction, 300-DPI-equivalent validation, and device/4G/offline field testing. |
+| ACC-014 Document allocation | Locally implemented server-side and now exposed client-side for single/bulk assignment. | Live push/email delivery timing validation against notification infrastructure. |
+| ACC-015 Journal | Locally implemented with immutable model guards, sequential counters, reversals, exports, transaction tests, and journal UI. | Sage 50 import acceptance test with customer's actual import profile. |
+| ACC-016 Account overviews | Locally implemented with account overview API/export and client chart-of-accounts overview. | PDF export and period comparison remain product gaps; production 10,000-transaction timing still requires seeded load test. |
+| ACC-017 Open-item management | Locally implemented with combined AR/AP view, aging, statements, netting, summaries, and client actions. | External statement email delivery validation and production 15,000-item timing. |
+
+### Remaining Missing Features / Gates
+
+1. Supplier inline creation/directory workflow for AP invoice recording.
+2. Desktop TWAIN/WIA scanner integration.
+3. Real mobile document edge detection, perspective correction, and 300-DPI-equivalent validation.
+4. Native EBICS certification or bank-approved SFTP/EBICS gateway validation.
+5. Target-bank acceptance testing for pain.001.
+6. OCR provider accuracy benchmark for DE/FR/IT invoices.
+7. External SMTP delivery validation for invoices, statements, and dunning letters.
+8. Production object-storage durability/SLA evidence and 100,000-document archive performance test.
+9. Seeded production-like performance tests for 10,000 receivables, 5,000 payables, 15,000 open items, 100,000 journal entries, and 1,000-transaction bank imports.
+10. Sage 50 CSV import acceptance with the customer's actual profile.
+11. Cash forecast API expansion if the business requires drilldown to exact invoice rows instead of current aggregate daily movements.
+12. Account overview PDF export and period-comparison UI.
+
 Date: 2026-05-13
 Scope: server-first implementation review against `requirements/modules/11-accounting/requirements.md`
 

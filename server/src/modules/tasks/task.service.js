@@ -1,6 +1,6 @@
 import taskRepository from './task.repository.js';
 import taskListRepository from './taskList.repository.js';
-import TaskListMember from './taskListMember.model.js';
+import taskAccessService from './taskAccess.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
@@ -27,7 +27,7 @@ class TaskService {
       // Validate list exists and user has access
       const list = await taskListRepository.findById(listId);
       if (!list) throw new NotFoundError('TaskList', listId);
-      await this._checkListAccess(list, userId);
+      await taskAccessService.assertListAccess(list, userId, 'EDITOR');
     }
 
     // Default assignee to creator
@@ -51,6 +51,7 @@ class TaskService {
     const createdTask = await taskRepository.findById(task._id);
 
     await this._invalidateListTasksCache(listId);
+    await this._applyDefaultReminder(createdTask, userId, meta);
 
     eventBus.publish(EVENT_TYPES.TASK_CREATED, {
       taskId: task._id,
@@ -116,7 +117,7 @@ class TaskService {
 
     if (!task) throw new NotFoundError('Task', id);
 
-    await this._checkTaskAccess(task, userId);
+    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER');
 
     return task;
   }
@@ -140,11 +141,7 @@ class TaskService {
     }
 
     // Non-admins: only tasks they created or are assigned to
-    const [ownedLists, groupLists] = await Promise.all([
-      taskListRepository.findByOwnerId(userId, { includeArchived: true }),
-      taskListRepository.findGroupListsByUserId(userId),
-    ]);
-    const accessibleListIds = [...ownedLists, ...groupLists].map((list) => list._id);
+    const accessibleListIds = await taskAccessService.getAccessibleListIds(userId, { includeArchived: true });
 
     if (filters.listId && !accessibleListIds.some((id) => String(id) === String(filters.listId))) {
       throw new AppError('Access denied to this task list', 403, ERROR_CODES.TASK_ACCESS_DENIED);
@@ -153,7 +150,7 @@ class TaskService {
     const scopedFilters = {
       ...filters,
       accessUserId: userId,
-      // Do NOT pass accessibleListIds — non-admins see only their own tasks, not all list tasks
+      accessibleListIds,
     };
     const filterKey = Object.entries(filters)
       .filter(([, v]) => v !== undefined)
@@ -173,7 +170,7 @@ class TaskService {
     const existing = await taskRepository.findById(id);
     if (!existing) throw new NotFoundError('Task', id);
 
-    await this._checkTaskAccess(existing, userId);
+    await taskAccessService.assertTaskAccess(existing, userId, 'EDITOR');
     const { expectedVersion, ...patch } = data;
 
     const updated = await taskRepository.updateById(id, { ...patch, updatedBy: userId }, { expectedVersion });
@@ -197,7 +194,9 @@ class TaskService {
       });
     }
 
-    if (patch.dueDate && String(patch.dueDate) !== String(existing.dueDate)) {
+    if (Object.prototype.hasOwnProperty.call(patch, 'dueDate') && String(patch.dueDate) !== String(existing.dueDate)) {
+      const taskReminderService = (await import('./taskReminder.service.js')).default;
+      await taskReminderService.recalculateReminders(id, patch.dueDate);
       eventBus.publish(EVENT_TYPES.TASK_DUE_DATE_CHANGED, {
         taskId: id,
         previousDueDate: existing.dueDate,
@@ -235,7 +234,7 @@ class TaskService {
     const task = await taskRepository.findById(id);
     if (!task) throw new NotFoundError('Task', id);
 
-    await this._checkTaskAccess(task, userId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
     // Soft delete the task
     await taskRepository.softDelete(id);
@@ -276,13 +275,17 @@ class TaskService {
     const task = await taskRepository.findById(id);
     if (!task) throw new NotFoundError('Task', id);
 
-    await this._checkTaskAccess(task, userId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
     const previousStatus = task.status;
     const updateData = { status, updatedBy: userId };
 
     // Handle completion
     if (status === 'COMPLETED') {
+      await this._guardIncompleteSubtasks(id, {
+        completeSubtasks: meta.completeSubtasks === true,
+        completeParentOnly: meta.completeParentOnly === true,
+      });
       updateData.completedAt = new Date();
       updateData.completedBy = userId;
     }
@@ -301,6 +304,10 @@ class TaskService {
     const updated = await taskRepository.updateById(id, updateData, { expectedVersion: meta.expectedVersion });
     if (!updated) {
       throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
+
+    if (status === 'COMPLETED' && meta.completeSubtasks === true) {
+      await this._completeSubtaskTree(id, userId, updateData.completedAt);
     }
 
     await this._invalidateTaskCache(id);
@@ -365,15 +372,17 @@ class TaskService {
     return updated;
   }
 
-  async complete(id, userId, meta = {}, { completeSubtasks = false } = {}) {
+  async complete(id, userId, meta = {}, { completeSubtasks = false, completeParentOnly = false } = {}) {
     const task = await taskRepository.findById(id);
     if (!task) throw new NotFoundError('Task', id);
 
-    await this._checkTaskAccess(task, userId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
     if (task.status === 'COMPLETED') {
       throw new AppError('Task is already completed', 400, ERROR_CODES.TASK_ALREADY_COMPLETED);
     }
+
+    await this._guardIncompleteSubtasks(id, { completeSubtasks, completeParentOnly });
 
     const now = new Date();
     const updated = await taskRepository.updateById(id, {
@@ -383,21 +392,7 @@ class TaskService {
       updatedBy: userId,
     });
 
-    // Optionally complete all subtasks
-    if (completeSubtasks) {
-      const subtasks = await taskRepository.findByParentId(id);
-      for (const subtask of subtasks) {
-        if (subtask.status !== 'COMPLETED') {
-          await taskRepository.updateById(subtask._id, {
-            status: 'COMPLETED',
-            completedAt: now,
-            completedBy: userId,
-            updatedBy: userId,
-          });
-          await this._invalidateTaskCache(subtask._id);
-        }
-      }
-    }
+    if (completeSubtasks) await this._completeSubtaskTree(id, userId, now);
 
     await this._invalidateTaskCache(id);
     await this._invalidateListTasksCache(task.listId);
@@ -441,7 +436,7 @@ class TaskService {
     const task = await taskRepository.findById(id);
     if (!task) throw new NotFoundError('Task', id);
 
-    await this._checkTaskAccess(task, userId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
     if (task.status !== 'COMPLETED') {
       throw new AppError('Only completed tasks can be reopened', 400, ERROR_CODES.TASK_NOT_COMPLETED);
@@ -495,12 +490,12 @@ class TaskService {
     const task = await taskRepository.findById(id);
     if (!task) throw new NotFoundError('Task', id);
 
-    await this._checkTaskAccess(task, userId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
     // Validate target list access
     const targetList = await taskListRepository.findById(listId);
     if (!targetList) throw new NotFoundError('TaskList', listId);
-    await this._checkListAccess(targetList, userId);
+    await taskAccessService.assertListAccess(targetList, userId, 'EDITOR');
 
     const previousListId = task.listId;
     const updated = await taskRepository.updateById(id, { listId, updatedBy: userId });
@@ -541,6 +536,8 @@ class TaskService {
       throw new AppError('Bulk operation limited to 100 tasks', 400, ERROR_CODES.TASK_BULK_LIMIT_EXCEEDED);
     }
 
+    await this._assertBulkWriteAccess(taskIds, userId);
+
     let result;
 
     switch (action) {
@@ -559,7 +556,7 @@ class TaskService {
       case 'moveToList': {
         const targetList = await taskListRepository.findById(data.listId);
         if (!targetList) throw new NotFoundError('TaskList', data.listId);
-        await this._checkListAccess(targetList, userId);
+        await taskAccessService.assertListAccess(targetList, userId, 'EDITOR');
         result = await taskRepository.bulkUpdate(taskIds, { listId: data.listId, updatedBy: userId });
         break;
       }
@@ -598,7 +595,7 @@ class TaskService {
     for (const update of updates) {
       const task = await taskRepository.findById(update.id);
       if (!task) throw new NotFoundError('Task', update.id);
-      await this._checkTaskAccess(task, userId);
+      await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
       const { expectedVersion, ...data } = update.patch;
       if (expectedVersion !== undefined && task.version !== expectedVersion) {
@@ -649,7 +646,7 @@ class TaskService {
     const parent = await taskRepository.findById(parentId);
     if (!parent) throw new NotFoundError('Task', parentId);
 
-    await this._checkTaskAccess(parent, userId);
+    await taskAccessService.assertTaskAccess(parent, userId, 'EDITOR');
 
     if (parent.depth >= MAX_SUBTASK_DEPTH) {
       throw new AppError(
@@ -698,9 +695,11 @@ class TaskService {
     return taskRepository.findById(subtask._id);
   }
 
-  async getSubtasks(parentId) {
+  async getSubtasks(parentId, userId) {
     const parent = await taskRepository.findById(parentId);
     if (!parent) throw new NotFoundError('Task', parentId);
+
+    await taskAccessService.assertTaskAccess(parent, userId, 'VIEWER');
 
     return taskRepository.findByParentId(parentId);
   }
@@ -709,7 +708,7 @@ class TaskService {
     const task = await taskRepository.findById(id);
     if (!task) throw new NotFoundError('Task', id);
 
-    await this._checkTaskAccess(task, userId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
     const updated = await taskRepository.updateById(id, {
       parentTaskId: null,
@@ -742,7 +741,19 @@ class TaskService {
     const parent = await taskRepository.findById(parentId);
     if (!parent) throw new NotFoundError('Task', parentId);
 
-    await this._checkTaskAccess(parent, userId);
+    await taskAccessService.assertTaskAccess(parent, userId, 'EDITOR');
+
+    const subtasks = await taskRepository.findByParentId(parentId);
+    const childIds = new Set(subtasks.map((task) => String(task._id)));
+    const invalidIds = orderedIds.filter((id) => !childIds.has(String(id)));
+    if (invalidIds.length > 0 || orderedIds.length !== childIds.size) {
+      throw new AppError(
+        'Subtask reorder payload must contain exactly the parent task child IDs',
+        400,
+        ERROR_CODES.VALIDATION_ERROR,
+        { invalidIds },
+      );
+    }
 
     for (let i = 0; i < orderedIds.length; i++) {
       await taskRepository.updateById(orderedIds[i], { sortOrder: i });
@@ -756,40 +767,82 @@ class TaskService {
     return { reordered: true };
   }
 
-  async _checkTaskAccess(task, userId) {
-    const uid = String(userId);
+  async _assertBulkWriteAccess(taskIds, userId) {
+    const tasks = await Promise.all(taskIds.map((taskId) => taskRepository.findById(taskId)));
+    if (tasks.some((task) => !task)) {
+      throw new AppError('One or more tasks were not found', 404, ERROR_CODES.TASK_NOT_FOUND);
+    }
 
-    // Creator or assignee has access
-    if (String(task.createdBy) === uid) return;
-    if (task.assigneeId && String(task.assigneeId) === uid) return;
-
-    // Check list-level access (ownership or membership with EDITOR/ADMIN role)
-    const list = await taskListRepository.findById(task.listId);
-    if (list && String(list.ownerId) === uid) return;
-
-    const membership = await TaskListMember.findOne({ listId: task.listId, userId }).lean();
-    if (membership && (membership.role === 'EDITOR' || membership.role === 'ADMIN')) return;
-
-    throw new AppError('Access denied to this task', 403, ERROR_CODES.TASK_ACCESS_DENIED);
+    for (const task of tasks) {
+      await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
+    }
   }
 
-  async _checkListAccess(list, userId) {
-    const uid = String(userId);
+  async _findIncompleteSubtasks(parentId) {
+    const queue = await taskRepository.findByParentId(parentId);
+    const incomplete = [];
 
-    if (String(list.ownerId) === uid) return;
-
-    if (list.type === 'PERSONAL') {
-      throw new AppError('Access denied to this task list', 403, ERROR_CODES.TASK_ACCESS_DENIED);
+    while (queue.length > 0) {
+      const subtask = queue.shift();
+      if (subtask.status !== 'COMPLETED') {
+        incomplete.push({
+          id: String(subtask._id),
+          title: subtask.title,
+          status: subtask.status,
+          parentTaskId: subtask.parentTaskId ? String(subtask.parentTaskId) : null,
+        });
+      }
+      const children = await taskRepository.findByParentId(subtask._id);
+      queue.push(...children);
     }
 
-    const membership = await TaskListMember.findOne({ listId: list._id, userId }).lean();
-    if (!membership) {
-      throw new AppError('Access denied to this task list', 403, ERROR_CODES.TASK_ACCESS_DENIED);
-    }
+    return incomplete;
+  }
 
-    const roleHierarchy = { VIEWER: 0, EDITOR: 1, ADMIN: 2 };
-    if (roleHierarchy[membership.role] < roleHierarchy['EDITOR']) {
-      throw new AppError('Insufficient role for this action', 403, ERROR_CODES.TASK_ACCESS_DENIED);
+  async _guardIncompleteSubtasks(parentId, { completeSubtasks = false, completeParentOnly = false } = {}) {
+    if (completeSubtasks || completeParentOnly) return;
+
+    const incomplete = await this._findIncompleteSubtasks(parentId);
+    if (incomplete.length === 0) return;
+
+    throw new AppError(
+      `Task has ${incomplete.length} incomplete subtask(s)`,
+      409,
+      ERROR_CODES.TASK_INCOMPLETE_SUBTASKS,
+      incomplete,
+    );
+  }
+
+  async _completeSubtaskTree(parentId, userId, completedAt) {
+    const subtasks = await taskRepository.findByParentId(parentId);
+    for (const subtask of subtasks) {
+      if (subtask.status !== 'COMPLETED') {
+        await taskRepository.updateById(subtask._id, {
+          status: 'COMPLETED',
+          completedAt,
+          completedBy: userId,
+          updatedBy: userId,
+        });
+        await this._invalidateTaskCache(subtask._id);
+      }
+      await this._completeSubtaskTree(subtask._id, userId, completedAt);
+    }
+  }
+
+  async _applyDefaultReminder(task, userId, meta = {}) {
+    if (!task?.dueDate) return;
+
+    try {
+      const taskReminderService = (await import('./taskReminder.service.js')).default;
+      await taskReminderService.applyDefaultForTask(task, userId, meta);
+    } catch (err) {
+      logger.warn('Failed to apply default task reminder', {
+        module: 'tasks',
+        action: 'applyDefaultReminder',
+        taskId: task._id,
+        userId,
+        error: err.message,
+      });
     }
   }
 

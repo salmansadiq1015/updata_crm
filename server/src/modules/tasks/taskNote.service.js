@@ -1,4 +1,5 @@
 import taskNoteRepository from './taskNote.repository.js';
+import taskAccessService from './taskAccess.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
@@ -9,6 +10,12 @@ import logger from '../../shared/logger/index.js';
 
 const NOTE_CACHE_TTL = { l1Ttl: 30, l2Ttl: 120 };
 const EDIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+function toId(value) {
+  if (!value) return null;
+  if (value._id) return value._id;
+  return value;
+}
 
 class TaskNoteService {
   /**
@@ -35,7 +42,8 @@ class TaskNoteService {
   }
 
   async create(taskId, data, userId, meta = {}) {
-    await this._ensureTaskExists(taskId);
+    const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
     const mentions = this._extractMentions(data.bodyHtml);
 
@@ -51,6 +59,7 @@ class TaskNoteService {
       noteId: note._id,
       authorId: userId,
       mentions,
+      taskTitle: task.title,
     }, { source: 'tasks' });
 
     await this._invalidateCache(taskId);
@@ -76,7 +85,10 @@ class TaskNoteService {
     return note;
   }
 
-  async getByTaskId(taskId) {
+  async getByTaskId(taskId, userId) {
+    const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER');
+
     const cacheKey = `tasks:notes:${taskId}`;
     return cacheManager.getOrSet(
       cacheKey,
@@ -92,6 +104,9 @@ class TaskNoteService {
   }
 
   async update(taskId, noteId, data, userId, meta = {}) {
+    const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
+
     const note = await taskNoteRepository.findById(noteId);
     if (!note) throw new NotFoundError('TaskNote', noteId);
 
@@ -144,6 +159,9 @@ class TaskNoteService {
   }
 
   async remove(taskId, noteId, userId, meta = {}) {
+    const task = await this._ensureTaskExists(taskId);
+    await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
+
     const note = await taskNoteRepository.findById(noteId);
     if (!note) throw new NotFoundError('TaskNote', noteId);
 
@@ -154,12 +172,7 @@ class TaskNoteService {
     // Allow author or admin (check via role on req is handled upstream;
     // here we allow if user is the author)
     if (String(note.authorId) !== String(userId)) {
-      // Lazy-check if user has admin privileges via task access
-      const { default: taskRepository } = await import('./task.repository.js');
-      const task = await taskRepository.findById(taskId);
-      if (!task) throw new NotFoundError('Task', taskId);
-      // If the user is not the task creator either, deny
-      if (String(task.createdBy) !== String(userId)) {
+      if (String(toId(task.createdBy)) !== String(userId)) {
         throw new AppError('Only the author or task owner can delete this note', 403, ERROR_CODES.TASK_ACCESS_DENIED);
       }
     }

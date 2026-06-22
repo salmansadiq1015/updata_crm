@@ -3,6 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement } from 'react';
 import { http, HttpResponse } from 'msw';
+import type { AxiosResponse } from 'axios';
 import { server } from './mocks/server';
 import { useTaskWorkspaceMutations } from '../hooks/use-task-workspace';
 
@@ -23,7 +24,7 @@ vi.mock('@/lib/api/client', async () => {
   instance.interceptors.response.use((response) => {
     const body = response.data;
     if (body && typeof body === 'object' && 'success' in body) {
-      return { data: body.data, meta: body.meta || {}, pagination: body.pagination || null } as any;
+      return { data: body.data, meta: body.meta || {}, pagination: body.pagination || null } as unknown as AxiosResponse;
     }
     return response;
   });
@@ -74,6 +75,7 @@ describe('useTaskWorkspaceMutations', () => {
               parentTaskId: null,
               projectId: null,
               orderId: null,
+              startDate: null,
               dueDate: null,
               sortOrder: 0,
               depth: 0,
@@ -127,6 +129,7 @@ describe('useTaskWorkspaceMutations', () => {
               parentTaskId: null,
               projectId: null,
               orderId: null,
+              startDate: null,
               dueDate: null,
               sortOrder: 0,
               depth: 0,
@@ -179,6 +182,7 @@ describe('useTaskWorkspaceMutations', () => {
               parentTaskId: null,
               projectId: null,
               orderId: null,
+              startDate: null,
               dueDate: null,
               sortOrder: 0,
               depth: 0,

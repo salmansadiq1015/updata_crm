@@ -248,6 +248,10 @@ export const queryKeys = {
       list: (filters) => ['mobile', 'tickets', 'list', filters],
       detail: (id) => ['mobile', 'tickets', 'detail', id],
     },
+    tasks: {
+      list: (filters) => ['mobile', 'tasks', 'list', filters],
+      detail: (id) => ['mobile', 'tasks', 'detail', id],
+    },
     sync: {
       status: () => ['mobile', 'sync', 'status'],
     },

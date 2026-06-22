@@ -1,12 +1,20 @@
 import taskRepository from './task.repository.js';
+import taskAccessService from './taskAccess.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import logger from '../../shared/logger/index.js';
 
 const DASHBOARD_TTL = { l1Ttl: 30, l2Ttl: 60 };
+const ACTIVE_TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'ON_HOLD'];
+
+function countStatus(statuses = [], status) {
+  const entry = statuses.find((item) => item.status === status);
+  return entry ? entry.count : 0;
+}
 
 class TaskDashboardService {
-  async getDashboard(userId) {
-    const cacheKey = `tasks:dashboard:${userId}`;
+  async getDashboard(userId, { projectId, orderId, upcomingDays = 7 } = {}) {
+    const contextKey = [projectId || 'all-projects', orderId || 'all-orders', upcomingDays].join(':');
+    const cacheKey = `tasks:dashboard:${userId}:${contextKey}`;
 
     return cacheManager.getOrSet(
       cacheKey,
@@ -14,15 +22,21 @@ class TaskDashboardService {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-        const in7Days = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+        const upcomingLimit = Math.min(Number(upcomingDays) || 7, 30);
+        const upcomingEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + upcomingLimit);
 
         const Task = (await import('./task.model.js')).default;
+        const contextFilter = {
+          ...(projectId ? { projectId } : {}),
+          ...(orderId ? { orderId } : {}),
+        };
 
         const [overdue, dueToday, upcoming, recentlyCompleted] = await Promise.all([
           Task.find({
             assigneeId: userId,
+            ...contextFilter,
             dueDate: { $lt: now },
-            status: { $in: ['OPEN', 'IN_PROGRESS'] },
+            status: { $in: ACTIVE_TASK_STATUSES },
             isDeleted: false,
           })
             .sort({ dueDate: 1 })
@@ -31,8 +45,9 @@ class TaskDashboardService {
 
           Task.find({
             assigneeId: userId,
+            ...contextFilter,
             dueDate: { $gte: startOfDay, $lt: endOfDay },
-            status: { $in: ['OPEN', 'IN_PROGRESS'] },
+            status: { $in: ACTIVE_TASK_STATUSES },
             isDeleted: false,
           })
             .sort({ dueDate: 1 })
@@ -40,8 +55,9 @@ class TaskDashboardService {
 
           Task.find({
             assigneeId: userId,
-            dueDate: { $gte: endOfDay, $lte: in7Days },
-            status: { $in: ['OPEN', 'IN_PROGRESS'] },
+            ...contextFilter,
+            dueDate: { $gte: endOfDay, $lte: upcomingEnd },
+            status: { $in: ACTIVE_TASK_STATUSES },
             isDeleted: false,
           })
             .sort({ dueDate: 1 })
@@ -50,6 +66,7 @@ class TaskDashboardService {
 
           Task.find({
             completedBy: userId,
+            ...contextFilter,
             status: 'COMPLETED',
             completedAt: { $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) },
             isDeleted: false,
@@ -65,14 +82,19 @@ class TaskDashboardService {
     );
   }
 
-  async getStats(userId) {
-    const cacheKey = `tasks:stats:${userId}`;
+  async getStats(userId, { projectId, orderId } = {}) {
+    const contextKey = [projectId || 'all-projects', orderId || 'all-orders'].join(':');
+    const cacheKey = `tasks:stats:${userId}:${contextKey}`;
 
     return cacheManager.getOrSet(
       cacheKey,
       async () => {
         const Task = (await import('./task.model.js')).default;
         const now = new Date();
+        const contextFilter = {
+          ...(projectId ? { projectId } : {}),
+          ...(orderId ? { orderId } : {}),
+        };
 
         // Calculate Monday of current week
         const dayOfWeek = now.getDay();
@@ -82,12 +104,14 @@ class TaskDashboardService {
         const [totalOpen, completedThisWeek, overdueCount, totalTasks] = await Promise.all([
           Task.countDocuments({
             assigneeId: userId,
-            status: { $in: ['OPEN', 'IN_PROGRESS'] },
+            ...contextFilter,
+            status: { $in: ACTIVE_TASK_STATUSES },
             isDeleted: false,
           }),
 
           Task.countDocuments({
             assigneeId: userId,
+            ...contextFilter,
             status: 'COMPLETED',
             completedAt: { $gte: monday },
             isDeleted: false,
@@ -95,13 +119,15 @@ class TaskDashboardService {
 
           Task.countDocuments({
             assigneeId: userId,
+            ...contextFilter,
             dueDate: { $lt: now },
-            status: { $in: ['OPEN', 'IN_PROGRESS'] },
+            status: { $in: ACTIVE_TASK_STATUSES },
             isDeleted: false,
           }),
 
           Task.countDocuments({
             assigneeId: userId,
+            ...contextFilter,
             isDeleted: false,
           }),
         ]);
@@ -126,7 +152,7 @@ class TaskDashboardService {
   async getProjectTaskSummary(projectId) {
     const statusAgg = await taskRepository.getProjectTaskSummary(projectId);
 
-    const counts = { OPEN: 0, IN_PROGRESS: 0, COMPLETED: 0, CANCELLED: 0 };
+    const counts = { OPEN: 0, IN_PROGRESS: 0, ON_HOLD: 0, COMPLETED: 0, CANCELLED: 0 };
     let total = 0;
 
     for (const item of statusAgg) {
@@ -142,6 +168,7 @@ class TaskDashboardService {
       total,
       open: counts.OPEN,
       inProgress: counts.IN_PROGRESS,
+      onHold: counts.ON_HOLD,
       completed: counts.COMPLETED,
       cancelled: counts.CANCELLED,
       completionRate,
@@ -186,14 +213,19 @@ class TaskDashboardService {
         projectId: item.projectId,
         projectName: projectMap.get(item.projectId.toString()) || null,
         total: item.total,
+        open: countStatus(item.statuses, 'OPEN'),
+        inProgress: countStatus(item.statuses, 'IN_PROGRESS'),
+        onHold: countStatus(item.statuses, 'ON_HOLD'),
         completed,
+        cancelled: countStatus(item.statuses, 'CANCELLED'),
         completionRate: item.completionRate,
       };
     });
   }
 
   async getSyncChanges(userId, since) {
-    const tasks = await taskRepository.findChangedSince(userId, since);
+    const accessibleListIds = await taskAccessService.getAccessibleListIds(userId, { includeArchived: true });
+    const tasks = await taskRepository.findChangedSince(userId, since, { accessibleListIds });
 
     const TaskList = (await import('./taskList.model.js')).default;
     const TaskListMember = (await import('./taskListMember.model.js')).default;

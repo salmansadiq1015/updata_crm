@@ -5,7 +5,7 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import {
   createTaskListSchema, updateTaskListSchema, listIdParamSchema,
   archiveSchema, reorderSchema, addMemberSchema, updateMemberRoleSchema,
-  memberParamsSchema,
+  memberParamsSchema, transferOwnershipSchema,
 } from './taskList.validation.js';
 
 const router = Router();
@@ -23,6 +23,6 @@ router.post('/:id/members', authenticate, requirePermission('tasks:write'), vali
 router.put('/:id/members/:userId', authenticate, requirePermission('tasks:write'), validate(updateMemberRoleSchema), (req, res, next) => taskListController.updateMemberRole(req, res, next));
 router.delete('/:id/members/:userId', authenticate, requirePermission('tasks:delete'), validate(memberParamsSchema), (req, res, next) => taskListController.removeMember(req, res, next));
 router.post('/:id/leave', authenticate, requirePermission('tasks:write'), validate(listIdParamSchema), (req, res, next) => taskListController.leave(req, res, next));
-router.post('/:id/transfer-ownership', authenticate, requirePermission('tasks:write'), validate(listIdParamSchema), (req, res, next) => taskListController.transferOwnership(req, res, next));
+router.post('/:id/transfer-ownership', authenticate, requirePermission('tasks:write'), validate(transferOwnershipSchema), (req, res, next) => taskListController.transferOwnership(req, res, next));
 
 export default router;

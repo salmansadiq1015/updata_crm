@@ -19,6 +19,7 @@ import { PrepActionsTab } from './prep-actions-tab';
 import { ScheduleTab } from './schedule-tab';
 import { DocumentsTab } from './documents-tab';
 import { ProjectActivityTab } from './project-activity-tab';
+import { ProjectTasksTab, ProjectTaskSummaryPanel } from './project-tasks-tab';
 import { RichTextContent } from '@/components/ui/rich-text-content';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
@@ -32,7 +33,7 @@ import { cn } from '@/lib/utils';
 import {
   Pencil, Copy, Archive, ArrowRight, ChevronRight, Trash2,
   FolderKanban, Building2, User, Calendar, Wallet, FileText,
-  ClipboardList, Clock, ListChecks, CalendarClock, Activity,
+  ClipboardList, Clock, ListChecks, CalendarClock, Activity, ListTodo,
 } from 'lucide-react';
 
 function DetailSkeleton() {
@@ -277,6 +278,10 @@ export function ProjectDetail() {
                 <FileText className="h-3.5 w-3.5 mr-1.5" />
                 {t('pm.documents', 'Documents')}
               </TabsTrigger>
+              <TabsTrigger value="tasks" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
+                <ListTodo className="h-3.5 w-3.5 mr-1.5" />
+                {t('pm.tasks', 'Tasks')}
+              </TabsTrigger>
               <TabsTrigger value="activity" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
                 <Activity className="h-3.5 w-3.5 mr-1.5" />
                 {t('pm.activity', 'Activity')}
@@ -318,6 +323,8 @@ export function ProjectDetail() {
                     <RichTextContent html={project.notes} className="text-sm text-muted-foreground mt-1" />
                   </div>
                 )}
+                <Separator />
+                <ProjectTaskSummaryPanel projectId={id} />
               </div>
             </TabsContent>
 
@@ -335,6 +342,10 @@ export function ProjectDetail() {
 
             <TabsContent value="documents" className="mt-6">
               <DocumentsTab projectId={id} />
+            </TabsContent>
+
+            <TabsContent value="tasks" className="mt-6">
+              <ProjectTasksTab projectId={id} />
             </TabsContent>
 
             <TabsContent value="activity" className="mt-6">

@@ -1,4 +1,4 @@
-export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+export type TaskStatus = 'OPEN' | 'IN_PROGRESS' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 
 export type TaskPriority = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
@@ -80,9 +80,11 @@ export type TaskPage = {
 };
 
 export type TaskPatch = Partial<
-  Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'assigneeId' | 'startDate' | 'dueDate' | 'listId' | 'sortOrder'>
+  Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'assigneeId' | 'startDate' | 'dueDate' | 'listId' | 'sortOrder' | 'projectId' | 'orderId'>
 > & {
   expectedVersion?: number;
+  completeSubtasks?: boolean;
+  completeParentOnly?: boolean;
 };
 
 export type TaskRealtimeEvent =
@@ -151,3 +153,96 @@ export type TaskAttachment = {
   downloadUrl: string;
 };
 
+export type TaskReminderChannel = 'PUSH' | 'IN_APP' | 'EMAIL';
+
+export type TaskReminder = {
+  id: string;
+  taskId: string;
+  userId: string;
+  type: 'RELATIVE' | 'ABSOLUTE';
+  offsetMinutes: number | null;
+  fireAt: string;
+  channels: TaskReminderChannel[];
+  status: 'PENDING' | 'FIRED' | 'SNOOZED' | 'CANCELLED';
+  snoozedUntil: string | null;
+  firedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TaskReminderInput =
+  | {
+      type: 'RELATIVE';
+      offsetMinutes: number;
+      channels: TaskReminderChannel[];
+    }
+  | {
+      type: 'ABSOLUTE';
+      fireAt: string;
+      channels: TaskReminderChannel[];
+    };
+
+export type ReminderDefaults = {
+  enabled: boolean;
+  defaultOffsetMinutes: number;
+  defaultChannels: TaskReminderChannel[];
+};
+
+export type TaskDashboardStats = {
+  totalOpen: number;
+  completedThisWeek: number;
+  overdueCount: number;
+  totalTasks: number;
+};
+
+export type TaskDashboard = {
+  overdue: Task[];
+  dueToday: Task[];
+  upcoming: Task[];
+  recentlyCompleted: Task[];
+  stats?: TaskDashboardStats;
+};
+
+export type TaskProjectSummary = {
+  projectId?: string;
+  projectName?: string;
+  total: number;
+  open: number;
+  inProgress: number;
+  onHold: number;
+  completed: number;
+  cancelled: number;
+  completionRate: number;
+};
+
+export type TaskContextOption = {
+  id: string;
+  type: 'project' | 'order';
+  label: string;
+  number: string;
+  status: string;
+};
+
+export type TaskListMember = {
+  id: string;
+  listId: string;
+  userId: string;
+  role: 'VIEWER' | 'EDITOR' | 'ADMIN';
+  invitedBy: string;
+  joinedAt: string;
+};
+
+export type TaskSyncChange = {
+  type: 'create' | 'update' | 'delete';
+  entity: 'task' | 'taskNote';
+  data: Record<string, unknown>;
+  clientTimestamp: string;
+};
+
+export type TaskSyncResult = {
+  applied: number;
+  conflicts: Array<{
+    reason: string;
+    change: TaskSyncChange;
+  }>;
+};

@@ -22,6 +22,7 @@ export function StatusTransitionDialog({ open, onOpenChange, currentStatus, onSu
   const { t, language } = useLanguage();
   const validTargets = STATUS_TRANSITIONS[currentStatus] || [];
   const outstandingActions = conflictError?.data?.outstanding ?? null;
+  const outstandingTasks = conflictError?.data?.outstandingTasks ?? null;
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
     resolver: zodResolver(transitionStatusSchema),
@@ -111,6 +112,25 @@ export function StatusTransitionDialog({ open, onOpenChange, currentStatus, onSu
                       <li key={action.id} className="text-sm">
                         <span className="font-medium">{action.title}</span>
                         <span className="ml-1.5 text-xs text-muted-foreground uppercase">({action.status})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {outstandingTasks && outstandingTasks.length > 0 && (
+              <Alert variant="destructive" className="border-destructive/50 bg-destructive/5">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <p className="font-medium mb-2">
+                    {t('pm.outstandingTasksTitle', 'Open project tasks:')}
+                  </p>
+                  <ul className="space-y-1 list-disc list-inside">
+                    {outstandingTasks.map((task) => (
+                      <li key={task.id} className="text-sm">
+                        <span className="font-medium">{task.title}</span>
+                        <span className="ml-1.5 text-xs text-muted-foreground uppercase">({task.status})</span>
                       </li>
                     ))}
                   </ul>

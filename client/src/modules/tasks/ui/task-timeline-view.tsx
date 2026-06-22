@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Circle, CircleCheck, CircleDashed, CircleX, Flag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Flag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,7 @@ const LABEL_WIDTH = 280; // px for left task label column
 const STATUS_ICON: Record<TaskStatus, React.ComponentType<{ className?: string }>> = {
   OPEN:        Circle,
   IN_PROGRESS: CircleDashed,
+  ON_HOLD:      CirclePause,
   COMPLETED:   CircleCheck,
   CANCELLED:   CircleX,
 };
@@ -25,6 +26,7 @@ const STATUS_ICON: Record<TaskStatus, React.ComponentType<{ className?: string }
 const STATUS_BAR_COLOR: Record<TaskStatus, string> = {
   OPEN:        'bg-muted-foreground/40',
   IN_PROGRESS: 'bg-primary/70',
+  ON_HOLD:      'bg-amber-500/70',
   COMPLETED:   'bg-emerald-500/80',
   CANCELLED:   'bg-red-500/50',
 };

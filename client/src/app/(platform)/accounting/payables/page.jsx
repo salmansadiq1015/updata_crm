@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CreditCard, Download, Search } from 'lucide-react';
+import { CreditCard, Download, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,7 +13,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { useApInvoices, useApSummary, useBankAccounts } from '@/modules/accounting/hooks/use-accounting-queries';
+import { useAccounts, useApInvoices, useApSummary, useBankAccounts } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useApMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
 import { apService } from '@/modules/accounting/services/accounting-service';
 import { cursorPageLabel, downloadResponse } from '@/modules/accounting/utils/accounting-ui';
@@ -39,6 +39,230 @@ function StatusBadge({ status, de }) {
 
 function isBatchEligible(invoice) {
   return invoice.status === 'APPROVED' && Number(invoice.outstandingAmount || 0) > 0 && !invoice.paymentBatchId;
+}
+
+const emptyLine = () => ({
+  description: '',
+  quantity: '1',
+  unit: 'pcs',
+  unitPrice: '',
+  vatRate: '8.1',
+  accountId: '',
+  costCenter: '',
+  projectReference: '',
+  orderReference: '',
+});
+
+function buildApPayload(form, lines) {
+  const lineItems = lines.map((line, index) => {
+    const quantity = Number(line.quantity || 0);
+    const unitPrice = Number(line.unitPrice || 0);
+    const lineTotal = Math.round(quantity * unitPrice * 100) / 100;
+    return {
+      position: index + 1,
+      description: line.description.trim(),
+      quantity,
+      unit: line.unit.trim() || 'pcs',
+      unitPrice,
+      vatRate: Number(line.vatRate || 0),
+      accountId: line.accountId,
+      costCenter: line.costCenter.trim() || null,
+      allocations: [{
+        accountId: line.accountId,
+        amount: lineTotal,
+        costCenter: line.costCenter.trim() || null,
+        projectReference: line.projectReference.trim() || form.projectReference.trim() || null,
+        orderReference: line.orderReference.trim() || form.orderReference.trim() || null,
+      }],
+    };
+  });
+
+  return {
+    supplierId: form.supplierId.trim(),
+    supplierName: form.supplierName.trim(),
+    supplierIban: form.supplierIban.trim() || null,
+    supplierBic: form.supplierBic.trim() || null,
+    supplierInvoiceNumber: form.supplierInvoiceNumber.trim(),
+    invoiceDate: form.invoiceDate,
+    dueDate: form.dueDate,
+    paymentTermsDays: Number(form.paymentTermsDays || 0),
+    currency: form.currency,
+    projectReference: form.projectReference.trim() || null,
+    orderReference: form.orderReference.trim() || null,
+    lineItems,
+  };
+}
+
+function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
+  const { createApInvoice } = useApMutations();
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    supplierId: '',
+    supplierName: '',
+    supplierIban: '',
+    supplierBic: '',
+    supplierInvoiceNumber: '',
+    invoiceDate: today,
+    dueDate: today,
+    paymentTermsDays: '30',
+    currency: 'CHF',
+    projectReference: '',
+    orderReference: '',
+  });
+  const [lines, setLines] = useState([emptyLine()]);
+
+  const postingAccounts = accounts.filter((account) => !account.isGroup && account.isActive !== false);
+  const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const setLine = (index, key, value) => setLines((current) => current.map((line, i) => (i === index ? { ...line, [key]: value } : line)));
+  const subtotal = lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0);
+  const vatTotal = lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0) * (Number(line.vatRate || 0) / 100), 0);
+  const canSubmit = form.supplierId.trim()
+    && form.supplierName.trim()
+    && form.supplierInvoiceNumber.trim()
+    && lines.every((line) => line.description.trim() && Number(line.quantity) > 0 && Number(line.unitPrice) >= 0 && line.accountId);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    await createApInvoice.mutateAsync(buildApPayload(form, lines));
+    setLines([emptyLine()]);
+    setForm((current) => ({
+      ...current,
+      supplierId: '',
+      supplierName: '',
+      supplierIban: '',
+      supplierBic: '',
+      supplierInvoiceNumber: '',
+      projectReference: '',
+      orderReference: '',
+    }));
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>{de ? 'Lieferantenrechnung erfassen' : 'Record Supplier Invoice'}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Supplier ID' : 'Supplier ID'}</Label>
+              <Input className="h-9 font-mono text-xs" value={form.supplierId} onChange={(event) => set('supplierId', event.target.value)} required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Lieferant' : 'Supplier'}</Label>
+              <Input className="h-9" value={form.supplierName} onChange={(event) => set('supplierName', event.target.value)} required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Rechnungsnr.' : 'Invoice No.'}</Label>
+              <Input className="h-9 font-mono text-xs" value={form.supplierInvoiceNumber} onChange={(event) => set('supplierInvoiceNumber', event.target.value)} required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Waehrung' : 'Currency'}</Label>
+              <Select value={form.currency} onValueChange={(value) => set('currency', value)}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CHF">CHF</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Rechnungsdatum' : 'Invoice Date'}</Label>
+              <Input type="date" className="h-9" value={form.invoiceDate} onChange={(event) => set('invoiceDate', event.target.value)} required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Faellig' : 'Due Date'}</Label>
+              <Input type="date" className="h-9" value={form.dueDate} onChange={(event) => set('dueDate', event.target.value)} required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Projekt' : 'Project'}</Label>
+              <Input className="h-9" value={form.projectReference} onChange={(event) => set('projectReference', event.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Auftrag' : 'Order'}</Label>
+              <Input className="h-9" value={form.orderReference} onChange={(event) => set('orderReference', event.target.value)} />
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">IBAN</Label>
+              <Input className="h-9 font-mono text-xs" value={form.supplierIban} onChange={(event) => set('supplierIban', event.target.value.toUpperCase())} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">BIC</Label>
+              <Input className="h-9 font-mono text-xs" value={form.supplierBic} onChange={(event) => set('supplierBic', event.target.value.toUpperCase())} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Zahlungsziel Tage' : 'Payment Terms Days'}</Label>
+              <Input type="number" min="0" className="h-9" value={form.paymentTermsDays} onChange={(event) => set('paymentTermsDays', event.target.value)} />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border">
+            <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
+              <span className="text-sm font-medium">{de ? 'Positionen' : 'Line Items'}</span>
+              <Button type="button" size="sm" variant="outline" onClick={() => setLines((current) => [...current, emptyLine()])} disabled={lines.length >= 20}>
+                <Plus className="h-4 w-4 mr-1.5" />
+                {de ? 'Position' : 'Line'}
+              </Button>
+            </div>
+            <div className="divide-y divide-border">
+              {lines.map((line, index) => {
+                const lineTotal = Number(line.quantity || 0) * Number(line.unitPrice || 0);
+                return (
+                  <div key={index} className="grid gap-2 p-3 md:grid-cols-[1.5fr_0.5fr_0.5fr_0.7fr_0.6fr_1fr_2rem]">
+                    <Input className="h-9" value={line.description} onChange={(event) => setLine(index, 'description', event.target.value)} placeholder={de ? 'Beschreibung' : 'Description'} required />
+                    <Input type="number" min="0" step="0.001" className="h-9" value={line.quantity} onChange={(event) => setLine(index, 'quantity', event.target.value)} required />
+                    <Input className="h-9" value={line.unit} onChange={(event) => setLine(index, 'unit', event.target.value)} />
+                    <Input type="number" min="0" step="0.01" className="h-9" value={line.unitPrice} onChange={(event) => setLine(index, 'unitPrice', event.target.value)} required />
+                    <Select value={line.vatRate} onValueChange={(value) => setLine(index, 'vatRate', value)}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="8.1">8.1%</SelectItem>
+                        <SelectItem value="2.6">2.6%</SelectItem>
+                        <SelectItem value="0">0%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={line.accountId} onValueChange={(value) => setLine(index, 'accountId', value)}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder={de ? 'Konto' : 'Account'} /></SelectTrigger>
+                      <SelectContent>
+                        {postingAccounts.map((account) => (
+                          <SelectItem key={account._id} value={account._id}>{account.accountNumber} {account.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button type="button" variant="ghost" size="icon" className="h-9 w-9" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} disabled={lines.length === 1}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <p className="md:col-span-7 text-right text-xs text-muted-foreground">
+                      {de ? 'Zeilensumme' : 'Line total'}: {fmt(lineTotal, form.currency)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-6 text-sm">
+            <span>{de ? 'Netto' : 'Net'}: <strong>{fmt(subtotal, form.currency)}</strong></span>
+            <span>MWST: <strong>{fmt(vatTotal, form.currency)}</strong></span>
+            <span>Total: <strong>{fmt(subtotal + vatTotal, form.currency)}</strong></span>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={createApInvoice.isPending}>{de ? 'Abbrechen' : 'Cancel'}</Button>
+            <Button type="submit" disabled={createApInvoice.isPending || !canSubmit}>
+              {createApInvoice.isPending ? '...' : (de ? 'Speichern' : 'Save')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function ApproveDialog({ invoice, open, onClose, de }) {
@@ -107,6 +331,7 @@ export default function PayablesPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
   const [approveTarget, setApproveTarget] = useState(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [cursorStack, setCursorStack] = useState([null]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bankAccountId, setBankAccountId] = useState('');
@@ -122,6 +347,7 @@ export default function PayablesPage() {
   const { data: { items = [], pagination } = {}, isLoading } = useApInvoices(filters);
   const { data: summary } = useApSummary();
   const { data: bankAccounts = [] } = useBankAccounts();
+  const { data: accounts = [] } = useAccounts({ limit: 500 });
   const { createPaymentBatch } = useApMutations();
   const activeBankAccountId = bankAccountId || bankAccounts[0]?._id || '';
 
@@ -181,6 +407,10 @@ export default function PayablesPage() {
             {de ? 'Lieferantenrechnungen und Zahlungen' : 'Supplier invoices and payments'}
           </p>
         </div>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          {de ? 'Rechnung erfassen' : 'Record Invoice'}
+        </Button>
       </div>
 
       {/* Summary cards */}
@@ -360,6 +590,7 @@ export default function PayablesPage() {
           de={de}
         />
       )}
+      <CreateApInvoiceDialog open={createOpen} onClose={() => setCreateOpen(false)} accounts={accounts} de={de} />
     </div>
   );
 }

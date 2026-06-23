@@ -6,7 +6,14 @@ const labels = { de: 'Text', fr: 'Texte', it: 'Testo', en: 'Text' };
 
 function template(overrides = {}) {
   return {
+    templateType: 'cover_letter',
     isActive: true,
+    layout: { pageSize: 'A4', margins: { top: 25, bottom: 20, left: 20, right: 15 } },
+    sections: [
+      { id: 'header', type: 'header', isVisible: true },
+      { id: 'body', type: 'body', isVisible: true },
+      { id: 'footer', type: 'footer', isVisible: true },
+    ],
     textBlocks: {
       de: { footer: 'DE Footer' },
       fr: { footer: 'FR Footer' },
@@ -46,5 +53,27 @@ describe('TemplateEditor validation', () => {
 
     expect(issues).toContain('doctpl.editor.issueFooter:it');
     expect(issues).toContain('doctpl.editor.issueColumnLabel:1:fr');
+  });
+
+  test('flags server-required sections before save', () => {
+    const issues = getTemplateEditorIssues(template({
+      templateType: 'quotation',
+      sections: [
+        { id: 'header', type: 'header', isVisible: true },
+        { id: 'body', type: 'body', isVisible: true },
+        { id: 'footer', type: 'footer', isVisible: true },
+      ],
+    }));
+
+    expect(issues).toContain('doctpl.editor.issueRequiredSection:table');
+    expect(issues).toContain('doctpl.editor.issueRequiredSection:totals');
+  });
+
+  test('flags margins outside the allowed range', () => {
+    const issues = getTemplateEditorIssues(template({
+      layout: { pageSize: 'A4', margins: { top: 60, bottom: 20, left: 20, right: 15 } },
+    }));
+
+    expect(issues).toContain('doctpl.editor.issueMarginRange');
   });
 });

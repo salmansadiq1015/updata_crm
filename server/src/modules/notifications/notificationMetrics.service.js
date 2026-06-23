@@ -41,6 +41,7 @@ class NotificationMetricsService {
             to,
             stats: {
               ...channelStats,
+              reviewRequired: await notificationDeliveryRepository.countReviewRequired({ channel }),
               avgLatencyMs: latencyCount > 0 ? Math.round((totalLatency / latencyCount) * 100) / 100 : null,
             },
           };
@@ -85,6 +86,7 @@ class NotificationMetricsService {
           const { _totalLatency, _latencyCount, ...rest } = stats;
           channels[ch] = {
             ...rest,
+            reviewRequired: await notificationDeliveryRepository.countReviewRequired({ channel: ch }),
             avgLatencyMs: _latencyCount > 0
               ? Math.round((_totalLatency / _latencyCount) * 100) / 100
               : null,

@@ -10,6 +10,13 @@ function formatVatRate(rate) {
   return percent.toFixed(1);
 }
 
+function formatPercent(value) {
+  const num = Number(value || 0);
+  // Accept either a fraction (0.3) or a whole percentage (30).
+  const percent = num > 0 && num <= 1 ? num * 100 : num;
+  return Number.isInteger(percent) ? String(percent) : percent.toFixed(1);
+}
+
 export default class TotalsRenderer {
   draw(doc, pm, ciConfig, data, language, _config = {}) {
     const left = pm.margins.left;
@@ -41,6 +48,13 @@ export default class TotalsRenderer {
     }
     for (const vat of (data.vatBreakdown || [])) {
       row(`${t(language, 'vat')} ${formatVatRate(vat.rate)}%`, `${currency} ${vat.amount.toFixed(2)}`);
+    }
+
+    // Advance amount (advance / Akonto invoices) — milestone percentage and amount
+    if (data.advanceAmount != null || data.advancePercentage != null) {
+      const pct = data.advancePercentage != null ? ` (${formatPercent(data.advancePercentage)}%)` : '';
+      const amount = Number(data.advanceAmount ?? data.grandTotalRounded ?? data.grandTotal ?? 0);
+      row(`${t(language, 'advanceAmount')}${pct}`, `${currency} ${amount.toFixed(2)}`, true);
     }
 
     // Advance deductions (final invoices)

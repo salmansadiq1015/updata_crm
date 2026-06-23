@@ -9,10 +9,67 @@ import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
 import logger from '../../shared/logger/index.js';
 import { buildNotificationDeepLink } from './notificationDeepLink.js';
+import { toCsv } from '../../shared/utils/csv.js';
 
 const NOTIFICATION_TTL = { l1Ttl: 30, l2Ttl: 120 };
 const VALID_CHANNELS = ['PUSH', 'EMAIL', 'WHATSAPP', 'SMS', 'IN_APP'];
 const IDEMPOTENCY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const CHANNEL_RETRY_DELAYS_MS = Object.freeze({
+  PUSH: [10000, 30000, 90000],
+  IN_APP: [5000, 15000, 45000],
+  EMAIL: [30000, 60000, 300000, 900000, 3600000],
+  WHATSAPP: [10000, 60000, 300000],
+  SMS: [10000, 60000, 300000],
+});
+const HISTORY_EXPORT_HEADERS = [
+  'notificationId',
+  'deliveryId',
+  'type',
+  'category',
+  'channel',
+  'recipient',
+  'status',
+  'subject',
+  'createdAt',
+  'sentAt',
+  'deliveredAt',
+  'readAt',
+  'failedAt',
+  'reviewRequiredAt',
+  'failureReason',
+];
+
+function maskEmail(value) {
+  if (!value) return null;
+  const [local, domain] = String(value).split('@');
+  if (!domain) return '***';
+  return `${local.slice(0, 1)}***@${domain}`;
+}
+
+function maskPhone(value) {
+  if (!value) return null;
+  const text = String(value);
+  const digits = text.replace(/\D/g, '');
+  const suffix = digits.slice(-2);
+  const prefix = text.trim().startsWith('+') ? text.trim().slice(0, 3) : '';
+  return `${prefix || '+'}** *** ** ${suffix || '**'}`;
+}
+
+function preview(value, length = 200) {
+  if (!value) return '';
+  const text = String(value).replace(/\s+/g, ' ').trim();
+  return text.length > length ? `${text.slice(0, length - 1)}...` : text;
+}
+
+function statusTimeline(delivery) {
+  return [
+    { status: 'PENDING', at: delivery.createdAt },
+    delivery.sentAt ? { status: 'SENT', at: delivery.sentAt } : null,
+    delivery.deliveredAt ? { status: 'DELIVERED', at: delivery.deliveredAt } : null,
+    delivery.readAt ? { status: 'READ', at: delivery.readAt } : null,
+    delivery.failedAt ? { status: delivery.status || 'FAILED', at: delivery.failedAt, reason: delivery.errorMessage } : null,
+  ].filter(Boolean);
+}
 
 class NotificationService {
   async create(data, userId, meta = {}) {
@@ -230,8 +287,12 @@ class NotificationService {
           recipientPhone: recipient.phone || null,
           channel,
           status: 'QUEUED',
+          maxRetries: this._getMaxRetries(channel),
           renderedSubject: renderedContent.subject || null,
           renderedBody: renderedContent.body || null,
+          renderedBodyHtml: renderedContent.bodyHtml || null,
+          templateId: renderedContent.templateId || null,
+          templateVersion: renderedContent.templateVersion || null,
         });
 
         // Enqueue to channel-specific queue
@@ -276,7 +337,7 @@ class NotificationService {
     const content = {
       subject: delivery.renderedSubject,
       body: delivery.renderedBody,
-      bodyHtml: delivery.renderedBody,
+      bodyHtml: delivery.renderedBodyHtml || delivery.renderedBody,
       recipientName: '',
       category: 'SYSTEM',
     };
@@ -294,6 +355,8 @@ class NotificationService {
         content.language = notification.payload?.language || 'de';
         content.relatedEntityType = notification.sourceEntityType || null;
         content.relatedEntityId = notification.sourceEntityId || null;
+        content.attachments = notification.payload?.attachments || [];
+        content.downloadLinks = notification.payload?.downloadLinks || [];
       }
     } catch (err) {
       logger.warn('Failed to enrich delivery content from notification', {
@@ -306,13 +369,41 @@ class NotificationService {
 
     const result = await adapter.send(delivery, content);
 
-    if (result.success) {
+    if (result.skipped) {
+      await notificationDeliveryRepository.updateById(deliveryId, {
+        status: 'CANCELLED',
+        errorMessage: result.reason || 'Delivery skipped',
+        failedAt: null,
+        metadata: {
+          ...(delivery.metadata || {}),
+          skipped: true,
+          skipReason: result.reason || 'Delivery skipped',
+        },
+      });
+
+      logger.info('Notification channel skipped', {
+        module: 'notifications',
+        action: 'processChannelDelivery',
+        deliveryId,
+        channel,
+        reason: result.reason,
+      });
+    } else if (result.success) {
       const isPending = result.pending === true;
+      const delivered = result.delivered === true;
 
       await notificationDeliveryRepository.updateById(deliveryId, {
-        status: isPending ? 'PENDING' : 'SENT',
+        status: isPending ? 'PENDING' : delivered ? 'DELIVERED' : 'SENT',
         providerMessageId: result.providerMessageId || null,
         sentAt: isPending ? null : new Date(),
+        deliveredAt: delivered ? new Date() : delivery.deliveredAt || null,
+        metadata: {
+          ...(delivery.metadata || {}),
+          provider: result.provider || null,
+          targetCount: result.targetCount,
+          invalidTokenCount: result.invalidTokenCount,
+          mock: result.mock === true,
+        },
       });
 
       if (!isPending) {
@@ -342,7 +433,8 @@ class NotificationService {
       }
     } else {
       const newRetryCount = (delivery.retryCount || 0) + 1;
-      const maxRetries = delivery.maxRetries || 3;
+      const maxRetries = delivery.maxRetries || this._getMaxRetries(channel);
+      const permanent = result.permanent === true;
 
       const updateData = {
         status: 'FAILED',
@@ -351,21 +443,20 @@ class NotificationService {
         retryCount: newRetryCount,
       };
 
-      if (newRetryCount < maxRetries) {
-        // Exponential backoff: 30s, 120s, 480s ...
-        const delayMs = 30000 * Math.pow(4, newRetryCount - 1);
+      if (!permanent && newRetryCount < maxRetries) {
+        const delayMs = this._getRetryDelay(channel, newRetryCount);
         updateData.nextRetryAt = new Date(Date.now() + delayMs);
         updateData.status = 'FAILED';
       }
 
       await notificationDeliveryRepository.updateById(deliveryId, updateData);
 
-      if (newRetryCount < maxRetries) {
+      if (!permanent && newRetryCount < maxRetries) {
         const queueName = `notification-${channel.toLowerCase().replace('_', '-')}`;
         await queueManager.addJob(queueName, 'deliver', {
           deliveryId,
           channel,
-        }, { delay: 30000 * Math.pow(4, newRetryCount - 1) });
+        }, { delay: this._getRetryDelay(channel, newRetryCount) });
 
         logger.warn('Notification delivery failed, scheduled retry', {
           module: 'notifications',
@@ -466,6 +557,81 @@ class NotificationService {
     return delivery;
   }
 
+  async searchHistory(queryParams = {}) {
+    const { cursor, limit, ...filters } = queryParams;
+    const result = await notificationDeliveryRepository.searchHistory({
+      cursor,
+      limit,
+      filters,
+    });
+
+    return {
+      data: result.data.map((row) => this._serializeHistoryRow(row)),
+      pagination: result.pagination,
+    };
+  }
+
+  async exportHistory(queryParams = {}) {
+    const rows = await notificationDeliveryRepository.findHistoryForExport(queryParams);
+    const csvRows = rows.map((row) => {
+      const serialized = this._serializeHistoryRow(row);
+      return {
+        notificationId: serialized.notificationId,
+        deliveryId: serialized.deliveryId,
+        type: serialized.type,
+        category: serialized.category,
+        channel: serialized.channel,
+        recipient: serialized.recipient.email || serialized.recipient.phone || serialized.recipient.userId || '',
+        status: serialized.status,
+        subject: serialized.content.subject,
+        createdAt: serialized.createdAt,
+        sentAt: serialized.sentAt,
+        deliveredAt: serialized.deliveredAt,
+        readAt: serialized.readAt,
+        failedAt: serialized.failedAt,
+        reviewRequiredAt: serialized.reviewRequiredAt,
+        failureReason: serialized.failureReason,
+      };
+    });
+
+    return toCsv(HISTORY_EXPORT_HEADERS, csvRows);
+  }
+
+  async anonymizeRecipientHistory(data, userId, meta = {}) {
+    const result = await notificationDeliveryRepository.anonymizeRecipientHistory(data);
+
+    auditService.logEvent({
+      eventType: 'notification_history.anonymized',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: {
+        recipientId: data.recipientId || null,
+        emailProvided: Boolean(data.email),
+        phoneProvided: Boolean(data.phone),
+        modifiedCount: result.modifiedCount,
+      },
+      module: 'notifications',
+    });
+
+    logger.info('Notification recipient history anonymized', {
+      module: 'notifications',
+      action: 'anonymizeRecipientHistory',
+      modifiedCount: result.modifiedCount,
+      userId,
+    });
+
+    return result;
+  }
+
+  async flagStaleDeliveryCallbacks({ olderThanMinutes = 60, channels } = {}) {
+    const cutoffDate = new Date(Date.now() - Number(olderThanMinutes) * 60 * 1000);
+    const channelList = Array.isArray(channels) && channels.length > 0 ? channels : undefined;
+    const modifiedCount = await notificationDeliveryRepository.markStaleSentForReview(cutoffDate, channelList);
+    return { modifiedCount, cutoffDate };
+  }
+
   async _getAdapter(channel) {
     switch (channel) {
       case 'PUSH':
@@ -481,6 +647,57 @@ class NotificationService {
       default:
         throw new AppError(`Unsupported notification channel: ${channel}`, 400, ERROR_CODES.NOTIF_INVALID_CHANNEL);
     }
+  }
+
+  _getMaxRetries(channel) {
+    return CHANNEL_RETRY_DELAYS_MS[channel]?.length || 3;
+  }
+
+  _getRetryDelay(channel, retryCount) {
+    const delays = CHANNEL_RETRY_DELAYS_MS[channel] || CHANNEL_RETRY_DELAYS_MS.PUSH;
+    return delays[Math.min(Math.max(retryCount - 1, 0), delays.length - 1)];
+  }
+
+  _serializeHistoryRow(row) {
+    const notification = row.notification || {};
+    return {
+      deliveryId: row._id?.toString(),
+      notificationId: row.notificationId?.toString(),
+      type: notification.type || null,
+      category: notification.category || null,
+      channel: row.channel,
+      status: row.status,
+      aggregateStatus: notification.status || null,
+      recipient: {
+        userId: row.recipientId?.toString() || null,
+        email: maskEmail(row.recipientEmail),
+        phone: maskPhone(row.recipientPhone),
+      },
+      content: {
+        subject: preview(row.renderedSubject, 120),
+        bodyPreview: preview(row.renderedBody),
+        templateId: row.templateId?.toString() || null,
+        templateVersion: row.templateVersion || null,
+      },
+      source: {
+        module: notification.sourceModule || null,
+        event: notification.sourceEvent || null,
+        entityType: notification.sourceEntityType || null,
+        entityId: notification.sourceEntityId?.toString() || null,
+      },
+      statusTimeline: statusTimeline(row),
+      retryCount: row.retryCount || 0,
+      maxRetries: row.maxRetries || this._getMaxRetries(row.channel),
+      nextRetryAt: row.nextRetryAt || null,
+      reviewRequiredAt: row.reviewRequiredAt || null,
+      reviewReason: row.reviewReason || null,
+      failureReason: row.errorMessage || null,
+      createdAt: row.createdAt,
+      sentAt: row.sentAt || null,
+      deliveredAt: row.deliveredAt || null,
+      readAt: row.readAt || null,
+      failedAt: row.failedAt || null,
+    };
   }
 
   async _resolveRecipients(recipientIds) {

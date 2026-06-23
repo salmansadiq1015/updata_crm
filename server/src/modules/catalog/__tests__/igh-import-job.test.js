@@ -1,9 +1,10 @@
 import { jest, describe, it, beforeAll, afterEach, expect } from '@jest/globals';
 
 const mockBulkWrite = jest.fn();
+const mockUpdateMany = jest.fn();
 
 jest.unstable_mockModule('../article.model.js', () => ({
-  default: { bulkWrite: mockBulkWrite },
+  default: { bulkWrite: mockBulkWrite, updateMany: mockUpdateMany },
 }));
 
 let parseIghCsv, parseIghJson, parseIghXml, batchUpsertArticles;
@@ -16,12 +17,12 @@ beforeAll(async () => {
   batchUpsertArticles = mod.batchUpsertArticles;
 });
 
-describe('IGH import adapters', () => {
+  describe('IGH import adapters', () => {
   afterEach(() => jest.clearAllMocks());
 
   describe('parseIghCsv()', () => {
     it('parses valid CSV rows into article objects', async () => {
-      const csv = `IGH_NR;BEZEICHNUNG;EINHEIT;PREIS_CHF\n12345;Rohr 28mm;m;15.50\n67890;Winkel 90;Stk;3.20`;
+      const csv = `IGH_NR;BEZEICHNUNG;EINHEIT;PREIS_CHF;STATUS\n12345;Rohr 28mm;m;15.50;active\n67890;Winkel 90;Stk;3.20;discontinued`;
       const articles = await parseIghCsv(csv);
       expect(articles).toHaveLength(2);
       expect(articles[0]).toMatchObject({
@@ -30,6 +31,11 @@ describe('IGH import adapters', () => {
         unitOfMeasure: 'M',
         basePrice: 15.5,
         source: 'IGH',
+        status: 'ACTIVE',
+      });
+      expect(articles[1]).toMatchObject({
+        status: 'INACTIVE',
+        availabilityStatus: 'DISCONTINUED',
       });
     });
 
@@ -87,6 +93,32 @@ describe('IGH import adapters', () => {
       expect(ops[0].updateOne.filter).toMatchObject({ ighArticleNumber: 'A001' });
       expect(ops[0].updateOne.upsert).toBe(true);
       expect(result).toMatchObject({ upsertedCount: 2, modifiedCount: 0 });
+    });
+
+    it('deactivates missing IGH articles during full imports', async () => {
+      mockBulkWrite.mockResolvedValue({ upsertedCount: 1, modifiedCount: 0 });
+      mockUpdateMany.mockResolvedValue({ modifiedCount: 3 });
+      const result = await batchUpsertArticles(
+        [{ ighArticleNumber: 'A001', name: 'Fitting', unitOfMeasure: 'STK', basePrice: 4.8 }],
+        'admin-user-id',
+        null,
+        { deactivateMissing: true },
+      );
+
+      expect(mockUpdateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'IGH',
+          status: 'ACTIVE',
+          ighArticleNumber: { $nin: ['A001'] },
+        }),
+        expect.objectContaining({
+          $set: expect.objectContaining({
+            status: 'INACTIVE',
+            availabilityStatus: 'DISCONTINUED',
+          }),
+        }),
+      );
+      expect(result.deactivatedCount).toBe(3);
     });
 
     it('splits into batches of 500', async () => {

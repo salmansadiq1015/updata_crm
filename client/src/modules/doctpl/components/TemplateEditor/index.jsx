@@ -6,6 +6,7 @@ import { TEMPLATE_LANGUAGES, TextBlocksTab } from './TextBlocksTab';
 import { ColumnsTab }    from './ColumnsTab';
 import { SectionsTab }   from './SectionsTab';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { getRequiredVisibleSections } from '../../utils/template-defaults';
 
 const TABS = [
   ['layout', 'doctpl.editor.layout'],
@@ -13,11 +14,42 @@ const TABS = [
   ['columns', 'doctpl.editor.columns'],
   ['sections', 'doctpl.editor.sections'],
 ];
+const PAGE_SIZES_MM = {
+  A4: { width: 210, height: 297 },
+  Letter: { width: 216, height: 279 },
+};
+
+function validateLayout(layout = {}, issues) {
+  const page = PAGE_SIZES_MM[layout.pageSize || 'A4'] || PAGE_SIZES_MM.A4;
+  const margins = layout.margins || {};
+  const top = Number(margins.top ?? 25);
+  const bottom = Number(margins.bottom ?? 20);
+  const left = Number(margins.left ?? 20);
+  const right = Number(margins.right ?? 15);
+  const values = [top, bottom, left, right];
+
+  if (values.some((value) => !Number.isFinite(value) || value < 0 || value > 50)) {
+    issues.push('doctpl.editor.issueMarginRange');
+    return;
+  }
+  if (top + bottom > page.height - 80 || left + right > page.width - 80) {
+    issues.push('doctpl.editor.issuePrintableArea');
+  }
+}
 
 export function getTemplateEditorIssues(template) {
   if (!template || template.isActive === false) return [];
   const issues = [];
   const languages = TEMPLATE_LANGUAGES.map(([code]) => code);
+  validateLayout(template.layout, issues);
+  const visibleTypes = new Set((template.sections || [])
+    .filter((section) => section.isVisible !== false)
+    .map((section) => section.type));
+  for (const sectionType of getRequiredVisibleSections(template.templateType)) {
+    if (!visibleTypes.has(sectionType)) {
+      issues.push(`doctpl.editor.issueRequiredSection:${sectionType}`);
+    }
+  }
   const columns = template.tableColumns || [];
   const totalWidth = columns.reduce((sum, column) => sum + Number(column.widthPercent || 0), 0);
   if (columns.length > 0 && Math.abs(totalWidth - 100) > 1) {
@@ -43,7 +75,7 @@ function formatIssue(t, issue) {
   return t(key, null, { value: a, lang: b });
 }
 
-export function TemplateEditor({ template, onChange, onValidationChange }) {
+export function TemplateEditor({ template, onChange = () => {}, onValidationChange }) {
   const { t } = useLanguage();
   const [tab, setTab] = useState('layout');
   const issues = useMemo(() => getTemplateEditorIssues(template), [template]);

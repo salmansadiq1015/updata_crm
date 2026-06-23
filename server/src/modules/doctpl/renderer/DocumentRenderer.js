@@ -6,13 +6,15 @@ import BodyRenderer from './renderers/BodyRenderer.js';
 import TableRenderer from './renderers/TableRenderer.js';
 import TotalsRenderer from './renderers/TotalsRenderer.js';
 import QrBillRenderer from './renderers/QrBillRenderer.js';
+import TermsRenderer from './renderers/TermsRenderer.js';
+import ReportRenderer from './renderers/ReportRenderer.js';
 import { registerCiFonts } from './renderers/fonts.js';
 
 const MM_TO_PT = 2.83465;
 
 const DEFAULT_SECTIONS = [
   { id:'header',  name:'Header',     type:'header',  position:0,  isVisible:true, isConditional:false },
-  { id:'body',    name:'Body',       type:'body',    position:1,  isVisible:true, isConditional:true, conditionField:'introduction' },
+  { id:'body',    name:'Body',       type:'body',    position:1,  isVisible:true, isConditional:false },
   { id:'table',   name:'Line Items', type:'table',   position:2,  isVisible:true, isConditional:false },
   { id:'totals',  name:'Totals',     type:'totals',  position:3,  isVisible:true, isConditional:false },
   { id:'footer',  name:'Footer',     type:'footer',  position:99, isVisible:true, isConditional:false },
@@ -25,11 +27,13 @@ export default class DocumentRenderer {
   }
 
   async renderWithMetadata(template, ciConfig, data, language = 'de') {
-    const margins = template.layout?.margins || { top:25, bottom:20, left:20, right:15 };
+    const layout = template.layout || {};
+    const margins = layout.margins || { top:25, bottom:20, left:20, right:15 };
     const templateType = data.templateType || template.templateType || 'quotation';
 
     const doc = new PDFDocument({
-      size: 'A4',
+      size: layout.pageSize || 'A4',
+      layout: layout.orientation || 'portrait',
       margins: {
         top:    margins.top    * MM_TO_PT,
         bottom: margins.bottom * MM_TO_PT,
@@ -46,8 +50,8 @@ export default class DocumentRenderer {
     doc.info.CreationDate = new Date();
     registerCiFonts(doc, ciConfig);
 
-    const pm = new PageManager(doc, margins);
-    const footer = new FooterRenderer(doc, pm, ciConfig, language);
+    const pm = new PageManager(doc, margins, layout);
+    const footer = new FooterRenderer(doc, pm, ciConfig, language, template, data);
 
     const rendererMap = {
       header:  new HeaderRenderer(),
@@ -55,6 +59,8 @@ export default class DocumentRenderer {
       table:   new TableRenderer(),
       totals:  new TotalsRenderer(),
       deductions: new TotalsRenderer(), // handled inside TotalsRenderer via data.advanceDeductions
+      terms: new TermsRenderer(),
+      report: new ReportRenderer(),
       qr_bill: new QrBillRenderer(),
     };
 
@@ -81,7 +87,13 @@ export default class DocumentRenderer {
         this._assertQrBillData(data.qrBill);
       }
 
-      const sectionConfig = { ...(section.config || {}), templateType };
+      const sectionConfig = {
+        ...(section.config || {}),
+        template,
+        templateType,
+        layout,
+        tableColumns: template.tableColumns || [],
+      };
       if (renderer.draw.constructor.name === 'AsyncFunction') {
         await renderer.draw(doc, pm, ciConfig, data, language, sectionConfig);
       } else {

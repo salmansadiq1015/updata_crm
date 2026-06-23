@@ -15,6 +15,14 @@ import {
 const deviceRouter = Router();
 
 deviceRouter.post(
+  '/',
+  authenticate,
+  requirePermission('mobile:write'),
+  validate(registerDeviceSchema),
+  (req, res, next) => notificationController.registerDevice(req, res, next),
+);
+
+deviceRouter.post(
   '/register',
   authenticate,
   requirePermission('mobile:write'),

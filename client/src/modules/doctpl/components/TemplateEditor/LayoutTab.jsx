@@ -7,9 +7,10 @@ export function LayoutTab({ layout = {}, onChange }) {
   const { t } = useLanguage();
   const margins = layout.margins || { top: 25, bottom: 20, left: 20, right: 15 };
 
+  // Margins are whole millimetres (1mm increments) — round to keep the value valid server-side.
   const setMargin = (side, val) => onChange({
     ...layout,
-    margins: { ...margins, [side]: Number(val) },
+    margins: { ...margins, [side]: Math.round(Number(val) || 0) },
   });
 
   const setZoneHeight = (key, val) => onChange({

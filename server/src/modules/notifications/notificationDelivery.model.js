@@ -16,11 +16,15 @@ const notificationDeliverySchema = new mongoose.Schema(
     templateVersion: { type: Number, default: null },
     renderedSubject: { type: String, default: null },
     renderedBody: { type: String, default: null },
+    renderedBodyHtml: { type: String, default: null },
     errorCode: { type: String, default: null },
     errorMessage: { type: String, default: null },
     retryCount: { type: Number, default: 0 },
     maxRetries: { type: Number, default: 3 },
     nextRetryAt: { type: Date, default: null },
+    reviewRequiredAt: { type: Date, default: null },
+    reviewReason: { type: String, default: null },
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     sentAt: { type: Date, default: null },
     deliveredAt: { type: Date, default: null },
     readAt: { type: Date, default: null },
@@ -32,6 +36,7 @@ const notificationDeliverySchema = new mongoose.Schema(
 notificationDeliverySchema.index({ notificationId: 1 });
 notificationDeliverySchema.index({ recipientId: 1, channel: 1, createdAt: -1 });
 notificationDeliverySchema.index({ status: 1, nextRetryAt: 1 });
+notificationDeliverySchema.index({ status: 1, reviewRequiredAt: 1, sentAt: 1 });
 notificationDeliverySchema.index({ channel: 1, status: 1, createdAt: -1 });
 notificationDeliverySchema.index({ providerMessageId: 1 }, { sparse: true });
 notificationDeliverySchema.index({ recipientId: 1, channel: 1, status: 1, createdAt: 1 });

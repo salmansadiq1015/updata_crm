@@ -16,8 +16,9 @@ import { InvoiceOverdueWorker } from './invoiceOverdue.job.js';
 import { QopAppointmentReminderDispatchWorker } from './qopAppointmentReminderDispatch.job.js';
 import { NumberSequenceResetWorker } from './numberSequenceReset.job.js';
 import { DocumentGenerationWorker } from './documentGeneration.job.js';
-import { EmailDispatchWorker } from './emailDispatch.job.js';
+import { EmailDispatchWorker, EMAIL_DISPATCH_MAX_ATTEMPTS } from './emailDispatch.job.js';
 import { IghImportWorker } from './ighImport.job.js';
+import { IghScheduledSyncWorker } from './ighScheduledSync.job.js';
 import { CatalogSyncWorker } from './catalogSync.job.js';
 import { ScheduledPriceUpdateWorker } from './scheduledPriceUpdate.job.js';
 import { ArticleImportWorker } from './articleImport.job.js';
@@ -292,7 +293,7 @@ export function registerJobs() {
   queueManager.registerQueue('email-dispatch', emailDispatch.getHandler(), {
     concurrency: 3,
     jobOptions: {
-      attempts: 3,
+      attempts: EMAIL_DISPATCH_MAX_ATTEMPTS,
       backoff: { type: 'exponential', delay: 30000 },
     },
   });
@@ -315,6 +316,22 @@ export function registerJobs() {
       attempts: 3,
       backoff: { type: 'exponential', delay: 60000 },
     },
+  });
+
+  const ighScheduledSync = new IghScheduledSyncWorker();
+  queueManager.registerQueue('igh-scheduled-sync', ighScheduledSync.getHandler(), {
+    concurrency: 1,
+    jobOptions: {
+      attempts: 1,
+      removeOnComplete: true,
+    },
+  });
+
+  queueManager.addScheduledJob('igh-scheduled-sync', 'periodic-igh-scheduled-sync', { scanDue: true }, '*/15 * * * *').catch((err) => {
+    logger.warn('Failed to schedule IGH catalog sync scan', {
+      module: 'jobs',
+      error: { message: err.message },
+    });
   });
 
   queueManager.addScheduledJob('catalog-sync', 'periodic-catalog-sync-scan', { scanDue: true }, '*/15 * * * *').catch((err) => {

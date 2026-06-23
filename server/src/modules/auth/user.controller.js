@@ -95,6 +95,15 @@ class UserController {
     }
   }
 
+  async assignmentTargets(req, res, next) {
+    try {
+      const targets = await userService.listAssignmentTargets();
+      return res.success({ data: targets });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getMe(req, res, next) {
     try {
       const user = await userService.getMe(req.user._id);

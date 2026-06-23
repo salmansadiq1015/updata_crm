@@ -12,12 +12,26 @@ class IntegrationHealthCheckRepository {
       .lean();
   }
 
+  async findLatestByKey(integrationKey) {
+    return this.findLatest(integrationKey);
+  }
+
   async findHistory(integrationKey, { limit = 100, period } = {}) {
     const filter = { integrationKey };
     if (period) {
       filter.checkedAt = { $gte: new Date(Date.now() - period) };
     }
     return IntegrationHealthCheck.find(filter)
+      .sort({ checkedAt: -1 })
+      .limit(limit)
+      .lean();
+  }
+
+  async findByKeySince(integrationKey, sinceDate, limit = 1000) {
+    return IntegrationHealthCheck.find({
+      integrationKey,
+      checkedAt: { $gte: sinceDate },
+    })
       .sort({ checkedAt: -1 })
       .limit(limit)
       .lean();

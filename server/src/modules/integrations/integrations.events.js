@@ -54,7 +54,10 @@ export function registerIntegrationsEvents() {
   eventBus.subscribe(EVENT_TYPES.INTEGRATION_STATUS_CHANGED, async (data) => {
     try {
       const payload = data.payload || data;
-      if (payload.newStatus === 'down' || payload.newStatus === 'degraded') {
+      const newStatus = payload.newStatus || payload.currentStatus;
+      const oldStatus = payload.oldStatus || payload.previousStatus;
+
+      if (newStatus === 'down' || newStatus === 'degraded') {
         // Notify admins via Module 13 notification service
         const notificationService = (await import('../notifications/notification.service.js')).default;
         // Get admin users
@@ -69,14 +72,14 @@ export function registerIntegrationsEvents() {
           await notificationService.create({
             type: 'integration_status_alert',
             category: 'SYSTEM',
-            priority: payload.newStatus === 'down' ? 'CRITICAL' : 'HIGH',
+            priority: newStatus === 'down' ? 'CRITICAL' : 'HIGH',
             channels: ['IN_APP', 'EMAIL'],
             recipientIds: adminIds,
             payload: {
               integrationKey: payload.integrationKey,
               displayName: payload.displayName || payload.integrationKey,
-              oldStatus: payload.oldStatus,
-              newStatus: payload.newStatus,
+              oldStatus,
+              newStatus,
               errorMessage: payload.errorMessage || null,
             },
             sourceModule: 'integrations',

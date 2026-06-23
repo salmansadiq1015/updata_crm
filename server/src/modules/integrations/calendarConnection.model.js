@@ -14,6 +14,7 @@ const calendarConnectionSchema = new mongoose.Schema(
     calendarId: { type: String, default: null },
     externalCalendarId: { type: String, default: null },
     scope: { type: String, default: null },
+    connectedAt: { type: Date, default: null },
     lastSyncAt: { type: Date, default: null },
     lastErrorAt: { type: Date, default: null },
     lastErrorMessage: { type: String, default: null },

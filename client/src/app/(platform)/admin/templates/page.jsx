@@ -34,6 +34,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { showError, showSuccess } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { PageHeader } from '@/shared/components/page-header';
+import { usePermissions } from '@/shared/hooks/use-permissions';
 import { CreateTemplateDialog } from '@/modules/doctpl/components/CreateTemplateDialog';
 import { useTemplates } from '@/modules/doctpl/hooks/useTemplateQueries';
 import {
@@ -86,6 +87,7 @@ export function buildTemplateFilters({
 
 export default function AdminTemplatesPage() {
   const { t, locale } = useLanguage();
+  const { hasPermission } = usePermissions();
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -112,7 +114,12 @@ export default function AdminTemplatesPage() {
   const templates = data?.items ?? EMPTY_TEMPLATES;
   const pagination = data?.pagination ?? {};
   const dateLocale = getSwissDateLocale(locale);
+  const canWrite = hasPermission('templates:write');
+  const canDelete = hasPermission('templates:delete');
   const busy = create.isPending || update.isPending || duplicate.isPending || remove.isPending;
+  const hasActiveFilters = Boolean(
+    search.trim() || typeFilter !== 'all' || statusFilter !== 'all',
+  );
   const templateTypeOptions = useMemo(() => {
     const known = new Map(TEMPLATE_TYPES);
     for (const template of templates) {
@@ -127,7 +134,16 @@ export default function AdminTemplatesPage() {
     setCursorStack([]);
   };
 
+  const clearFilters = () => {
+    setSearch('');
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setSortValue('createdAt:desc');
+    resetPaging();
+  };
+
   const toggleActive = async (template) => {
+    if (!canWrite) return;
     try {
       await update.mutateAsync({
         id: template._id,
@@ -144,6 +160,7 @@ export default function AdminTemplatesPage() {
   };
 
   const duplicateTemplate = async (template) => {
+    if (!canWrite) return;
     try {
       await duplicate.mutateAsync({ id: template._id });
       showSuccess(t('doctpl.templates.duplicated', 'Template duplicated'));
@@ -154,6 +171,7 @@ export default function AdminTemplatesPage() {
   };
 
   const createTemplate = async (payload) => {
+    if (!canWrite) return;
     try {
       const response = await create.mutateAsync(payload);
       const created = response?.data || response;
@@ -167,7 +185,7 @@ export default function AdminTemplatesPage() {
   };
 
   const deleteTemplate = async () => {
-    if (!templateToDelete?._id) return;
+    if (!canDelete || !templateToDelete?._id) return;
     try {
       await remove.mutateAsync({ id: templateToDelete._id });
       showSuccess(t('doctpl.templates.deleted', 'Template archived'));
@@ -186,10 +204,12 @@ export default function AdminTemplatesPage() {
           description={t('doctpl.templates.description')}
         />
         <div className="flex shrink-0 gap-2">
-          <Button className="gap-2" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
-            {t('doctpl.templates.create', 'Create template')}
-          </Button>
+          {canWrite && (
+            <Button className="gap-2" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {t('doctpl.templates.create', 'Create template')}
+            </Button>
+          )}
           <Link href="/admin/templates/ci">
             <Button variant="outline" className="gap-2">
               <Settings2 className="h-4 w-4" />
@@ -268,7 +288,24 @@ export default function AdminTemplatesPage() {
       ) : templates.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <FileText className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">{t('doctpl.templates.empty')}</p>
+          <p className="text-sm text-muted-foreground">
+            {hasActiveFilters
+              ? t('doctpl.templates.noResults', 'No templates match the current filters.')
+              : t('doctpl.templates.empty')}
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                {t('doctpl.templates.clearFilters', 'Clear filters')}
+              </Button>
+            )}
+            {canWrite && !hasActiveFilters && (
+              <Button size="sm" className="gap-2" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                {t('doctpl.templates.createFirst', 'Create first template')}
+              </Button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -302,38 +339,44 @@ export default function AdminTemplatesPage() {
                     {t('doctpl.templates.edit')}
                   </Button>
                 </Link>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8"
-                  title={t('doctpl.templates.duplicate', 'Duplicate')}
-                  onClick={() => duplicateTemplate(template)}
-                  disabled={busy}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8"
-                  title={template.isActive ? t('doctpl.templates.deactivate') : t('doctpl.templates.activate')}
-                  onClick={() => toggleActive(template)}
-                  disabled={busy}
-                >
-                  {template.isActive
-                    ? <ToggleRight className="h-4 w-4 text-green-600" />
-                    : <ToggleLeft className="h-4 w-4 text-muted-foreground" />}
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  title={t('doctpl.templates.delete', 'Archive')}
-                  onClick={() => setTemplateToDelete(template)}
-                  disabled={busy}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {canWrite && (
+                  <>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      title={t('doctpl.templates.duplicate', 'Duplicate')}
+                      onClick={() => duplicateTemplate(template)}
+                      disabled={busy}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      title={template.isActive ? t('doctpl.templates.deactivate') : t('doctpl.templates.activate')}
+                      onClick={() => toggleActive(template)}
+                      disabled={busy}
+                    >
+                      {template.isActive
+                        ? <ToggleRight className="h-4 w-4 text-green-600" />
+                        : <ToggleLeft className="h-4 w-4 text-muted-foreground" />}
+                    </Button>
+                  </>
+                )}
+                {canDelete && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    title={t('doctpl.templates.delete', 'Archive')}
+                    onClick={() => setTemplateToDelete(template)}
+                    disabled={busy}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           ))}

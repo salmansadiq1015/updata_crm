@@ -22,7 +22,7 @@ const sectionSchema = new mongoose.Schema(
     name: { type: String, required: true },
     type: {
       type: String,
-      enum: ['header', 'body', 'table', 'totals', 'deductions', 'qr_bill', 'footer', 'custom'],
+      enum: ['header', 'body', 'table', 'totals', 'deductions', 'terms', 'qr_bill', 'report', 'footer', 'custom'],
       required: true,
     },
     position: { type: Number, required: true },

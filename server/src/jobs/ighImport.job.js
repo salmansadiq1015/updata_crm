@@ -112,7 +112,9 @@ export class IghImportWorker extends BaseWorker {
 
       await job.updateProgress(30);
 
-      const result = await batchUpsertArticles(articles, importedBy, defaultCategoryId);
+      const result = await batchUpsertArticles(articles, importedBy, defaultCategoryId, {
+        deactivateMissing: type === 'FULL',
+      });
 
       // Update last sync timestamp using the specific document to avoid phantom updates
       await IghConfig.findOneAndUpdate({ _id: cfg._id }, { lastSyncAt: new Date() });
@@ -120,7 +122,8 @@ export class IghImportWorker extends BaseWorker {
       const counts = {
         articlesCreated: result.upsertedCount,
         articlesUpdated: result.modifiedCount,
-        articlesSkipped: 0,
+        articlesSkipped: result.deactivatedCount || 0,
+        articlesDeactivated: result.deactivatedCount || 0,
         errorsCount: result.errors.length,
       };
 
@@ -129,7 +132,7 @@ export class IghImportWorker extends BaseWorker {
         status: 'COMPLETED',
         completedAt: new Date(),
         ...counts,
-        log: `${type} import completed. Created: ${result.upsertedCount}, Updated: ${result.modifiedCount}, Errors: ${result.errors.length}`,
+        log: `${type} import completed. Created: ${result.upsertedCount}, Updated: ${result.modifiedCount}, Deactivated: ${result.deactivatedCount || 0}, Errors: ${result.errors.length}`,
       });
 
       // Invalidate caches

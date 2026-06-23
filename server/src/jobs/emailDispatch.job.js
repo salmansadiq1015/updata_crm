@@ -3,6 +3,18 @@ import eventBus from '../shared/events/EventBus.js';
 import EVENT_TYPES from '../shared/events/eventTypes.js';
 import logger from '../shared/logger/index.js';
 
+export const EMAIL_DISPATCH_MAX_ATTEMPTS = 2;
+
+function getAttemptState(job) {
+  const maxAttempts = Math.max(1, Number(job?.opts?.attempts || EMAIL_DISPATCH_MAX_ATTEMPTS));
+  const currentAttempt = Math.min(Number(job?.attemptsMade || 0) + 1, maxAttempts);
+  return {
+    currentAttempt,
+    maxAttempts,
+    hasRetryRemaining: currentAttempt < maxAttempts,
+  };
+}
+
 /**
  * Email dispatch job.
  *
@@ -108,7 +120,29 @@ export class EmailDispatchWorker extends BaseWorker {
 
       return { sent: true, messageId: info?.messageId };
     } catch (err) {
-      // Update record to FAILED
+      const attemptState = getAttemptState(job);
+
+      if (attemptState.hasRetryRemaining) {
+        await EmailRecord.findByIdAndUpdate(emailRecordId, {
+          $set: {
+            status: 'QUEUED',
+            errorMessage: err.message,
+          },
+          $inc: { retryCount: 1 },
+        });
+
+        logger.warn('Email dispatch failed; retry scheduled', {
+          module: 'jobs',
+          action: 'email-dispatch',
+          emailRecordId,
+          attempt: attemptState.currentAttempt,
+          maxAttempts: attemptState.maxAttempts,
+          error: { message: err.message },
+        });
+
+        throw err;
+      }
+
       await EmailRecord.findByIdAndUpdate(emailRecordId, {
         $set: {
           status: 'FAILED',
@@ -128,7 +162,7 @@ export class EmailDispatchWorker extends BaseWorker {
         error: { message: err.message, stack: err.stack },
       });
 
-      return { sent: false, error: err.message };
+      throw err;
     }
   }
 }

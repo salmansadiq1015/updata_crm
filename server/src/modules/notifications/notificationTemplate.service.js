@@ -77,7 +77,11 @@ class NotificationTemplateService {
   }
 
   async list(filters = {}) {
-    return notificationTemplateRepository.findAll(filters);
+    const data = await notificationTemplateRepository.findAll(filters);
+    return {
+      data,
+      pagination: { hasNext: false, nextCursor: null, limit: data.length },
+    };
   }
 
   async update(id, data, userId, meta = {}) {
@@ -213,7 +217,13 @@ class NotificationTemplateService {
         ? this._renderTemplate(template.bodyHtmlTemplate, variables)
         : null;
 
-      return { subject, body, bodyHtml };
+      return {
+        subject,
+        body,
+        bodyHtml,
+        templateId: template._id,
+        templateVersion: template.version,
+      };
     } catch (err) {
       logger.error('Template rendering failed', {
         module: 'notifications',

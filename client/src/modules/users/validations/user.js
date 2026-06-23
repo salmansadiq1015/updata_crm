@@ -11,6 +11,7 @@ export const createUserSchema = z.object({
   city: z.string().max(100).optional().or(z.literal('')),
   zip: z.string().max(20).optional().or(z.literal('')),
   country: z.string().max(100).optional().or(z.literal('')),
+  preferredDepartmentId: z.string().nullable().optional().or(z.literal('')),
   roleId: z.string().min(1, 'Rolle ist erforderlich'),
   language: z.string().default('de'),
 });

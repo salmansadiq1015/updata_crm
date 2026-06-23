@@ -40,6 +40,10 @@ const ighImportJobSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    articlesDeactivated: {
+      type: Number,
+      default: 0,
+    },
     errorsCount: {
       type: Number,
       default: 0,

@@ -23,6 +23,10 @@ class IntegrationConfigRepository {
     ).lean();
   }
 
+  async upsertByKey(integrationKey, data) {
+    return this.upsert(integrationKey, data);
+  }
+
   async updateStatus(integrationKey, status, errorMessage = null) {
     const update = { status };
     if (errorMessage) {

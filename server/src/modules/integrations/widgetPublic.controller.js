@@ -9,6 +9,7 @@ class WidgetPublicController {
         data: {
           submissionId: result.submissionId,
           referenceNumber: result.referenceNumber,
+          isDuplicate: result.isDuplicate,
           confirmationMessage: result.confirmationMessage,
         },
         message: 'Submission received successfully',

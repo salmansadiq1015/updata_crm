@@ -18,7 +18,9 @@ const TYPE_COLORS = {
   table:      'bg-green-100 text-green-700',
   totals:     'bg-yellow-100 text-yellow-700',
   deductions: 'bg-orange-100 text-orange-700',
+  terms:      'bg-cyan-100 text-cyan-700',
   qr_bill:    'bg-pink-100 text-pink-700',
+  report:     'bg-teal-100 text-teal-700',
   footer:     'bg-gray-100 text-gray-600',
   custom:     'bg-muted text-muted-foreground',
 };

@@ -9,6 +9,9 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const TRANSPORTER_TTL_MS = 5 * 60 * 1000;
+let cachedTransporter = null;
+let cachedTransporterCreatedAt = 0;
 
 // ─── Create Transporter ──────────────────────────────────────
 const createTransporter = () => {
@@ -19,6 +22,9 @@ const createTransporter = () => {
   }
 
   const config = {
+    pool: true,
+    maxConnections: Number(process.env.SMTP_MAX_CONNECTIONS || 5),
+    maxMessages: Number(process.env.SMTP_MAX_MESSAGES || 100),
     auth: {
       user: process.env.SMTP_MAIL,
       pass: process.env.SMTP_PASSWORD,
@@ -36,6 +42,16 @@ const createTransporter = () => {
   }
 
   return nodemailer.createTransport(config);
+};
+
+const getTransporter = () => {
+  const now = Date.now();
+  if (cachedTransporter && now - cachedTransporterCreatedAt < TRANSPORTER_TTL_MS) {
+    return cachedTransporter;
+  }
+  cachedTransporter = createTransporter();
+  cachedTransporterCreatedAt = now;
+  return cachedTransporter;
 };
 
 // ─── Core Send Mail ──────────────────────────────────────────
@@ -110,7 +126,7 @@ const sendMail = async (options) => {
       });
     }
 
-    const transporter = createTransporter();
+    const transporter = getTransporter();
 
     const message = {
       from: `${fromName} <${fromAddress || process.env.SMTP_MAIL}>`,

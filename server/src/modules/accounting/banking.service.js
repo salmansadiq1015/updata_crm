@@ -217,6 +217,21 @@ class BankingService {
       await bankAccountRepository.updateBalance(bankAccountId, parsed.balance, new Date());
     }
 
+    let reconciliation = null;
+    try {
+      const { default: reconciliationService } = await import('./reconciliation.service.js');
+      reconciliation = await reconciliationService.runAutoReconciliation(bankAccountId);
+    } catch (err) {
+      reconciliation = { status: 'failed', error: err.message };
+      logger.warn('Auto-reconciliation failed after bank statement import', {
+        module: 'accounting',
+        action: 'bank_statement.import.reconcile',
+        bankAccountId,
+        statementId: parsed.statementId,
+        error: { message: err.message },
+      });
+    }
+
     await this._invalidateAccountsCache();
 
     eventBus.publish(EVENT_TYPES.ACCOUNTING_BANK_STATEMENT_IMPORTED, {
@@ -247,6 +262,7 @@ class BankingService {
       status: 'imported',
       statementId: parsed.statementId,
       transactionCount: created.length,
+      reconciliation,
       balance: parsed.balance,
     };
   }

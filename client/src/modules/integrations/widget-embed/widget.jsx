@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-import { API_URL } from '@/lib/api/config';
+import { widgetPublicService } from '@/modules/integrations/services/widget-service';
 
 // CRM-014 AC-4: Sanitär category added (value 'sanitaer'). Existing kept.
 const REQUEST_TYPES = [
@@ -34,7 +34,13 @@ const UI_STRINGS = {
     email: 'E-Mail',
     phone: 'Telefon',
     company: 'Firma',
+    address: 'Adresse',
+    street: 'Strasse',
+    zip: 'PLZ',
+    city: 'Ort',
     requestType: 'Anliegen',
+    preferredWindow: 'Wunschtermin',
+    photoUpload: 'Foto',
     priority: 'Priorität',
     description: 'Nachricht',
     selectPlaceholder: 'Bitte wählen...',
@@ -42,7 +48,12 @@ const UI_STRINGS = {
     emailPlaceholder: 'max@beispiel.ch',
     phonePlaceholder: '+41 79 123 45 67',
     companyPlaceholder: 'Firmenname (optional)',
+    streetPlaceholder: 'Bahnhofstrasse 1',
+    zipPlaceholder: '8001',
+    cityPlaceholder: 'Zuerich',
+    preferredWindowPlaceholder: 'z.B. Montag Vormittag',
     descriptionPlaceholder: 'Beschreiben Sie Ihr Anliegen...',
+    photoHelp: 'JPEG oder PNG bis 10 MB',
     submit: 'Anfrage senden',
     submitting: 'Wird gesendet...',
     required: 'Pflichtfeld',
@@ -52,6 +63,9 @@ const UI_STRINGS = {
     thankYou: 'Vielen Dank!',
     confirmation: 'Vielen Dank! Wir melden uns bei Ihnen.',
     submitError: 'Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.',
+    invalidFileType: 'Bitte JPEG oder PNG hochladen',
+    fileTooLarge: 'Die Datei ist zu gross',
+    photoUploadFailed: 'Die Anfrage wurde gespeichert, aber das Foto konnte nicht hochgeladen werden.',
     retry: 'Erneut versuchen',
   },
   fr: {
@@ -60,7 +74,13 @@ const UI_STRINGS = {
     email: 'E-mail',
     phone: 'Téléphone',
     company: 'Entreprise',
+    address: 'Adresse',
+    street: 'Rue',
+    zip: 'NPA',
+    city: 'Lieu',
     requestType: 'Demande',
+    preferredWindow: 'Creneau souhaite',
+    photoUpload: 'Photo',
     priority: 'Priorité',
     description: 'Message',
     selectPlaceholder: 'Veuillez choisir...',
@@ -68,6 +88,10 @@ const UI_STRINGS = {
     emailPlaceholder: 'jean@exemple.ch',
     phonePlaceholder: '+41 79 123 45 67',
     companyPlaceholder: "Nom de l'entreprise (facultatif)",
+    streetPlaceholder: 'Rue 1',
+    zipPlaceholder: '8001',
+    cityPlaceholder: 'Zurich',
+    preferredWindowPlaceholder: 'p.ex. lundi matin',
     descriptionPlaceholder: 'Décrivez votre demande...',
     submit: 'Envoyer la demande',
     submitting: 'Envoi en cours...',
@@ -86,7 +110,13 @@ const UI_STRINGS = {
     email: 'E-mail',
     phone: 'Telefono',
     company: 'Azienda',
+    address: 'Indirizzo',
+    street: 'Via',
+    zip: 'CAP',
+    city: 'Luogo',
     requestType: 'Richiesta',
+    preferredWindow: 'Finestra preferita',
+    photoUpload: 'Foto',
     priority: 'Priorità',
     description: 'Messaggio',
     selectPlaceholder: 'Si prega di scegliere...',
@@ -94,6 +124,10 @@ const UI_STRINGS = {
     emailPlaceholder: 'mario@esempio.ch',
     phonePlaceholder: '+41 79 123 45 67',
     companyPlaceholder: "Nome dell'azienda (facoltativo)",
+    streetPlaceholder: 'Via 1',
+    zipPlaceholder: '8001',
+    cityPlaceholder: 'Zurigo',
+    preferredWindowPlaceholder: 'es. lunedi mattina',
     descriptionPlaceholder: 'Descriva la sua richiesta...',
     submit: 'Invia richiesta',
     submitting: 'Invio in corso...',
@@ -112,7 +146,13 @@ const UI_STRINGS = {
     email: 'Email',
     phone: 'Phone',
     company: 'Company',
+    address: 'Address',
+    street: 'Street',
+    zip: 'Postal code',
+    city: 'City',
     requestType: 'Request',
+    preferredWindow: 'Preferred time',
+    photoUpload: 'Photo',
     priority: 'Priority',
     description: 'Message',
     selectPlaceholder: 'Please select...',
@@ -120,6 +160,10 @@ const UI_STRINGS = {
     emailPlaceholder: 'john@example.ch',
     phonePlaceholder: '+41 79 123 45 67',
     companyPlaceholder: 'Company name (optional)',
+    streetPlaceholder: 'Main Street 1',
+    zipPlaceholder: '8001',
+    cityPlaceholder: 'Zurich',
+    preferredWindowPlaceholder: 'e.g. Monday morning',
     descriptionPlaceholder: 'Describe your request...',
     submit: 'Send request',
     submitting: 'Sending...',
@@ -139,10 +183,18 @@ const INITIAL_FORM = {
   email: '',
   phone: '',
   company: '',
+  addressStreet: '',
+  addressZip: '',
+  addressCity: '',
   requestType: '',
   priority: 'mittel',
+  preferredWindow: '',
   description: '',
+  photoFile: null,
 };
+
+const DEFAULT_MAX_FILE_SIZE_MB = 10;
+const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png'];
 
 export default function WidgetEmbed({ widgetId }) {
   const [config, setConfig] = useState(null);
@@ -151,11 +203,14 @@ export default function WidgetEmbed({ widgetId }) {
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState('idle'); // idle | submitting | success | error
   const [locale, setLocale] = useState('de'); // CRM-014 AC-15
+  const [confirmationMessage, setConfirmationMessage] = useState('');
+  const [uploadWarning, setUploadWarning] = useState('');
 
   // Derive branding from config
   const primaryColor = config?.branding?.primaryColor || '#0056b3';
   const companyName = config?.branding?.companyName || '';
   const logoUrl = config?.branding?.logoUrl || ''; // CRM-014 AC-14
+  const maxFileSizeMb = Number(config?.maxFileSizeMb || DEFAULT_MAX_FILE_SIZE_MB);
 
   // CRM-014 AC-15: restrict the locale selector to configured languages when provided.
   const availableLocales = (() => {
@@ -169,6 +224,10 @@ export default function WidgetEmbed({ widgetId }) {
 
   // Active UI string table (falls back to German per-key).
   const t = (key) => UI_STRINGS[locale]?.[key] ?? UI_STRINGS.de[key];
+
+  const isFieldVisible = (key) => config?.fields?.[key]?.visible !== false;
+  const isFieldRequired = (key, fallback = false) =>
+    isFieldVisible(key) && (config?.fields?.[key]?.required ?? fallback) === true;
 
   // CRM-014 AC-15: per-category translated label from config when available.
   const localizedRequestLabel = (rt) => {
@@ -184,6 +243,7 @@ export default function WidgetEmbed({ widgetId }) {
 
   // CRM-014 AC-15: per-locale confirmation message from config when available.
   const localizedConfirmation = () => {
+    if (confirmationMessage) return confirmationMessage;
     const byLocale = {
       de: config?.confirmationMessageDe,
       fr: config?.confirmationMessageFr,
@@ -199,12 +259,8 @@ export default function WidgetEmbed({ widgetId }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `${API_URL}/public/widget/config?widgetId=${encodeURIComponent(widgetId)}`
-        );
-        if (!res.ok) throw new Error('Config fetch failed');
-        const json = await res.json();
-        if (!cancelled) setConfig(json.data || json);
+        const data = await widgetPublicService.getConfig(widgetId);
+        if (!cancelled) setConfig(data);
       } catch {
         if (!cancelled) setConfigError(true);
       }
@@ -226,9 +282,14 @@ export default function WidgetEmbed({ widgetId }) {
 
   const setField = useCallback((key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setUploadWarning('');
     setErrors((prev) => {
       // Email/phone share the combined "contact" error (CRM-014 AC-3).
-      const clearKey = key === 'email' || key === 'phone' ? 'contact' : key;
+      const clearKey = key === 'email' || key === 'phone'
+        ? 'contact'
+        : key.startsWith('address')
+          ? 'address'
+          : key;
       if (!prev[key] && !prev[clearKey]) return prev;
       const next = { ...prev };
       delete next[key];
@@ -237,14 +298,24 @@ export default function WidgetEmbed({ widgetId }) {
     });
   }, []);
 
+  const handleFileChange = useCallback((event) => {
+    setField('photoFile', event.target.files?.[0] || null);
+  }, [setField]);
+
   const validate = useCallback(() => {
     const errs = {};
-    if (!form.name.trim()) errs.name = t('required');
+    if (isFieldRequired('contactName', true) && !form.name.trim()) errs.name = t('required');
 
     // CRM-014 AC-3: require at least one of email/phone. Only error if BOTH empty.
+    const emailVisible = isFieldVisible('contactEmail');
+    const phoneVisible = isFieldVisible('contactPhone');
+    const emailRequired = isFieldRequired('contactEmail');
+    const phoneRequired = isFieldRequired('contactPhone');
     const hasEmail = !!form.email.trim();
     const hasPhone = !!form.phone.trim();
-    if (!hasEmail && !hasPhone) {
+    if (emailRequired && !hasEmail) errs.email = t('required');
+    if (phoneRequired && !hasPhone) errs.phone = t('required');
+    if (!emailRequired && !phoneRequired && (emailVisible || phoneVisible) && !hasEmail && !hasPhone) {
       errs.contact = t('contactRequired');
     } else if (hasEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
       // Validate email format only when an email was actually entered.
@@ -252,10 +323,26 @@ export default function WidgetEmbed({ widgetId }) {
     }
 
     if (!form.requestType) errs.requestType = t('required');
+    if (isFieldRequired('contactAddress')) {
+      const hasAddress = [form.addressStreet, form.addressZip, form.addressCity].some((value) => value.trim());
+      if (!hasAddress) errs.address = t('required');
+    }
+    if (isFieldRequired('preferredWindow') && !form.preferredWindow.trim()) {
+      errs.preferredWindow = t('required');
+    }
+    if (isFieldRequired('photoUpload') && !form.photoFile) {
+      errs.photoFile = t('required');
+    } else if (form.photoFile) {
+      if (!ALLOWED_PHOTO_TYPES.includes(form.photoFile.type)) {
+        errs.photoFile = t('invalidFileType');
+      } else if (form.photoFile.size > maxFileSizeMb * 1024 * 1024) {
+        errs.photoFile = `${t('fileTooLarge')} (${maxFileSizeMb} MB)`;
+      }
+    }
     if (!form.description.trim()) errs.description = t('required');
     return errs;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, locale]);
+  }, [form, locale, config, maxFileSizeMb]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -267,6 +354,8 @@ export default function WidgetEmbed({ widgetId }) {
 
     setStatus('submitting');
     setErrors({});
+    setUploadWarning('');
+    setConfirmationMessage('');
 
     try {
       const body = {
@@ -276,28 +365,37 @@ export default function WidgetEmbed({ widgetId }) {
           // CRM-014 AC-3: send whichever of email/phone are filled.
           email: form.email.trim() || undefined,
           phone: form.phone.trim() || undefined,
-          address: form.company.trim()
-            ? { street: form.company.trim() }
+          address: [form.addressStreet, form.addressZip, form.addressCity].some((value) => value.trim())
+            ? {
+                street: form.addressStreet.trim() || undefined,
+                zip: form.addressZip.trim() || undefined,
+                city: form.addressCity.trim() || undefined,
+              }
             : undefined,
         },
         requestType: form.requestType,
         priority: form.priority, // CRM-014 AC-5
+        preferredWindow: form.preferredWindow.trim() || undefined,
         description: form.description.trim(),
-        locale, // CRM-014 AC-15
+        language: locale, // CRM-014 AC-15
       };
 
-      const res = await fetch(`${API_URL}/public/widget/submissions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const result = await widgetPublicService.submit(body);
+      setConfirmationMessage(result?.confirmationMessage || '');
 
-      if (!res.ok) throw new Error('Submission failed');
+      if (form.photoFile && result?.submissionId) {
+        try {
+          await widgetPublicService.uploadAttachment(result.submissionId, form.photoFile);
+        } catch {
+          setUploadWarning(t('photoUploadFailed'));
+        }
+      }
+
       setStatus('success');
     } catch {
       setStatus('error');
     }
-  }, [form, widgetId, validate, locale]);
+  }, [form, widgetId, validate, locale, t]);
 
   // --- CSS custom properties for theming ---
   const cssVars = {
@@ -368,17 +466,24 @@ export default function WidgetEmbed({ widgetId }) {
 
         {/* Success state */}
         {status === 'success' && (
-          <div style={styles.alertSuccess}>
-            <svg style={styles.alertIcon} viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <div>
-              <p style={styles.alertTitle}>{t('thankYou')}</p>
-              <p style={styles.alertText}>
-                {localizedConfirmation()}
-              </p>
+          <>
+            <div style={styles.alertSuccess}>
+              <svg style={styles.alertIcon} viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <div>
+                <p style={styles.alertTitle}>{t('thankYou')}</p>
+                <p style={styles.alertText}>
+                  {localizedConfirmation()}
+                </p>
+              </div>
             </div>
-          </div>
+            {uploadWarning && (
+              <div style={styles.alertError}>
+                {uploadWarning}
+              </div>
+            )}
+          </>
         )}
 
         {/* Error state */}
@@ -399,57 +504,92 @@ export default function WidgetEmbed({ widgetId }) {
         {status !== 'success' && (
           <form onSubmit={handleSubmit} noValidate style={styles.form}>
             {/* Name */}
-            <FieldGroup label={t('name')} required error={errors.name}>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setField('name', e.target.value)}
-                placeholder={t('namePlaceholder')}
-                style={{
-                  ...styles.input,
-                  ...(errors.name ? styles.inputError : {}),
-                }}
-              />
-            </FieldGroup>
+            {isFieldVisible('contactName') && (
+              <FieldGroup label={t('name')} required={isFieldRequired('contactName', true)} error={errors.name}>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setField('name', e.target.value)}
+                  placeholder={t('namePlaceholder')}
+                  style={{
+                    ...styles.input,
+                    ...(errors.name ? styles.inputError : {}),
+                  }}
+                />
+              </FieldGroup>
+            )}
 
             {/* Email — CRM-014 AC-3: no longer required on its own */}
-            <FieldGroup label={t('email')} error={errors.email}>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setField('email', e.target.value)}
-                placeholder={t('emailPlaceholder')}
-                style={{
-                  ...styles.input,
-                  ...(errors.email || errors.contact ? styles.inputError : {}),
-                }}
-              />
-            </FieldGroup>
+            {isFieldVisible('contactEmail') && (
+              <FieldGroup label={t('email')} required={isFieldRequired('contactEmail')} error={errors.email}>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setField('email', e.target.value)}
+                  placeholder={t('emailPlaceholder')}
+                  style={{
+                    ...styles.input,
+                    ...(errors.email || errors.contact ? styles.inputError : {}),
+                  }}
+                />
+              </FieldGroup>
+            )}
 
             {/* Phone — CRM-014 AC-3: either email or phone required */}
-            <FieldGroup label={t('phone')} error={errors.contact}>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={(e) => setField('phone', e.target.value)}
-                placeholder={t('phonePlaceholder')}
-                style={{
-                  ...styles.input,
-                  ...(errors.contact ? styles.inputError : {}),
-                }}
-              />
-            </FieldGroup>
+            {isFieldVisible('contactPhone') && (
+              <FieldGroup label={t('phone')} required={isFieldRequired('contactPhone')} error={errors.phone || errors.contact}>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={(e) => setField('phone', e.target.value)}
+                  placeholder={t('phonePlaceholder')}
+                  style={{
+                    ...styles.input,
+                    ...(errors.phone || errors.contact ? styles.inputError : {}),
+                  }}
+                />
+              </FieldGroup>
+            )}
 
-            {/* Company */}
-            <FieldGroup label={t('company')}>
-              <input
-                type="text"
-                value={form.company}
-                onChange={(e) => setField('company', e.target.value)}
-                placeholder={t('companyPlaceholder')}
-                style={styles.input}
-              />
-            </FieldGroup>
+            {/* Address */}
+            {isFieldVisible('contactAddress') && (
+              <FieldGroup label={t('address')} required={isFieldRequired('contactAddress')} error={errors.address}>
+                <div style={styles.addressGrid}>
+                  <input
+                    type="text"
+                    value={form.addressStreet}
+                    onChange={(e) => setField('addressStreet', e.target.value)}
+                    placeholder={t('streetPlaceholder')}
+                    style={{
+                      ...styles.input,
+                      ...(errors.address ? styles.inputError : {}),
+                    }}
+                  />
+                  <div style={styles.addressRow}>
+                    <input
+                      type="text"
+                      value={form.addressZip}
+                      onChange={(e) => setField('addressZip', e.target.value)}
+                      placeholder={t('zipPlaceholder')}
+                      style={{
+                        ...styles.input,
+                        ...(errors.address ? styles.inputError : {}),
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={form.addressCity}
+                      onChange={(e) => setField('addressCity', e.target.value)}
+                      placeholder={t('cityPlaceholder')}
+                      style={{
+                        ...styles.input,
+                        ...(errors.address ? styles.inputError : {}),
+                      }}
+                    />
+                  </div>
+                </div>
+              </FieldGroup>
+            )}
 
             {/* Request Type */}
             <FieldGroup label={t('requestType')} required error={errors.requestType}>
@@ -495,6 +635,22 @@ export default function WidgetEmbed({ widgetId }) {
               </select>
             </FieldGroup>
 
+            {/* Preferred window */}
+            {isFieldVisible('preferredWindow') && (
+              <FieldGroup label={t('preferredWindow')} required={isFieldRequired('preferredWindow')} error={errors.preferredWindow}>
+                <input
+                  type="text"
+                  value={form.preferredWindow}
+                  onChange={(e) => setField('preferredWindow', e.target.value)}
+                  placeholder={t('preferredWindowPlaceholder')}
+                  style={{
+                    ...styles.input,
+                    ...(errors.preferredWindow ? styles.inputError : {}),
+                  }}
+                />
+              </FieldGroup>
+            )}
+
             {/* Description */}
             <FieldGroup label={t('description')} required error={errors.description}>
               <textarea
@@ -509,6 +665,23 @@ export default function WidgetEmbed({ widgetId }) {
                 }}
               />
             </FieldGroup>
+
+            {/* Photo */}
+            {isFieldVisible('photoUpload') && (
+              <FieldGroup label={t('photoUpload')} required={isFieldRequired('photoUpload')} error={errors.photoFile}>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  onChange={handleFileChange}
+                  style={{
+                    ...styles.input,
+                    ...styles.fileInput,
+                    ...(errors.photoFile ? styles.inputError : {}),
+                  }}
+                />
+                <p style={styles.helpText}>{t('photoHelp')}</p>
+              </FieldGroup>
+            )}
 
             {/* Submit */}
             <button
@@ -660,6 +833,15 @@ const styles = {
     flexDirection: 'column',
     gap: 4,
   },
+  addressGrid: {
+    display: 'grid',
+    gap: 8,
+  },
+  addressRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(72px, 0.35fr) minmax(0, 1fr)',
+    gap: 8,
+  },
   label: {
     fontSize: 13,
     fontWeight: 600,
@@ -692,6 +874,14 @@ const styles = {
   textarea: {
     resize: 'vertical',
     minHeight: 100,
+  },
+  fileInput: {
+    padding: '8px 10px',
+  },
+  helpText: {
+    fontSize: 12,
+    color: 'var(--widget-muted)',
+    margin: 0,
   },
   errorText: {
     fontSize: 12,

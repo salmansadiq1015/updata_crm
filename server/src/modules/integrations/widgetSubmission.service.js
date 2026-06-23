@@ -11,12 +11,13 @@ const WIDGET_CONFIG_TTL = { l1Ttl: 120, l2Ttl: 600 };
 const RECAPTCHA_VERIFY_URL = 'https://www.google.com/recaptcha/api/siteverify';
 const DEFAULT_WIDGET_ID = 'default';
 const DEFAULT_WIDGET_RATE_LIMIT_PER_HOUR = 20;
-const DUPLICATE_WINDOW_HOURS = 1;
+const DUPLICATE_WINDOW_HOURS = 24;
 const DUPLICATE_DESCRIPTION_PREFIX_LENGTH = 160;
 const SYSTEM_USER_ID = new mongoose.Types.ObjectId('000000000000000000000000');
 
 const MAX_ATTACHMENTS = 1;
-const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_MIME_TYPES = new Set(['image/jpeg', 'image/png']);
 
 let widgetSubmissionRepository;
 let widgetConfigRepository;
@@ -51,6 +52,7 @@ class WidgetSubmissionService {
     const normalized = this._normalizeSubmissionPayload(data);
     const configRepo = await getConfigRepo();
     const widgetConfig = await configRepo.findByWidgetId(normalized.widgetId);
+    this._validateConfiguredFields(normalized, widgetConfig);
 
     let captchaScore = null;
     const captchaConfig = widgetConfig?.captcha;
@@ -75,22 +77,15 @@ class WidgetSubmissionService {
       );
     }
 
-    const recentByEmail = await submissionRepo.findRecentByEmail(
-      normalized.contactEmail,
-      normalized.requestType,
-      DUPLICATE_WINDOW_HOURS,
-    );
-    const duplicate = recentByEmail.find((submission) =>
+    const recentByContact = await submissionRepo.findRecentByContact({
+      email: normalized.contactEmail,
+      phone: normalized.contactPhone,
+      requestType: normalized.requestType,
+      hoursBack: DUPLICATE_WINDOW_HOURS,
+    });
+    const duplicate = recentByContact.find((submission) =>
       this._isSimilarDescription(submission.description, normalized.description),
     );
-    if (duplicate) {
-      throw new AppError(
-        'A similar request has already been received from this email address',
-        409,
-        ERROR_CODES.WIDGET_SUBMISSION_DUPLICATE,
-        [{ field: 'contact.email', duplicateSubmissionId: duplicate._id }],
-      );
-    }
 
     const referenceNumber = await submissionRepo.generateReferenceNumber();
 
@@ -110,11 +105,12 @@ class WidgetSubmissionService {
       ipAddress: meta.ipAddress || null,
       userAgent: meta.userAgent || null,
       language: normalized.language,
-      processingStatus: 'pending',
+      processingStatus: duplicate ? 'duplicate' : 'pending',
+      duplicateOf: duplicate?._id || null,
     });
 
     const [crmLink, assignedTo] = await Promise.all([
-      this._createCrmServiceRequest(submission, normalized, meta),
+      duplicate ? Promise.resolve(null) : this._createCrmServiceRequest(submission, normalized, meta),
       this._getDispatcherRecipientIds(),
     ]);
     if (crmLink?.contactId) {
@@ -141,7 +137,8 @@ class WidgetSubmissionService {
         crmCustomerId: crmLink?.customerId || null,
         crmContactId: crmLink?.contactId || null,
         assignedTo,
-        isDuplicate: false,
+        isDuplicate: Boolean(duplicate),
+        duplicateOf: duplicate?._id || null,
       },
       { source: 'integrations:widget' },
     );
@@ -163,11 +160,14 @@ class WidgetSubmissionService {
       submissionId: submission._id,
       referenceNumber,
       processingStatus: submission.processingStatus,
+      duplicateOf: duplicate?._id || null,
     });
 
     return {
       submissionId: submission._id,
       referenceNumber,
+      isDuplicate: Boolean(duplicate),
+      duplicateOf: duplicate?._id || null,
       confirmationMessage: widgetConfig?.confirmationMessageDe
         || 'Ihre Anfrage wurde erfolgreich uebermittelt. Wir melden uns innerhalb von 24 Stunden.',
     };
@@ -216,7 +216,7 @@ class WidgetSubmissionService {
    * Upload a single photo attachment for a widget submission.
    * Accepts a multer file object ({ buffer, originalname, mimetype, size })
    * or the normalized shape ({ buffer, originalName, mimeType, sizeBytes, uploadedBy }).
-   * Spec limits: max 1 attachment, max 5 MB.
+   * Spec limits: max 1 attachment, max 10 MB, JPEG/PNG only.
    */
   async uploadAttachment(submissionId, file = {}) {
     const buffer = file.buffer;
@@ -231,7 +231,15 @@ class WidgetSubmissionService {
 
     if (sizeBytes > MAX_ATTACHMENT_SIZE_BYTES) {
       throw new AppError(
-        'Attachment exceeds the maximum allowed size of 5 MB',
+        'Attachment exceeds the maximum allowed size of 10 MB',
+        400,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+
+    if (!ALLOWED_ATTACHMENT_MIME_TYPES.has(mimeType)) {
+      throw new AppError(
+        'Only JPEG and PNG image uploads are accepted',
         400,
         ERROR_CODES.VALIDATION_ERROR,
       );
@@ -362,7 +370,11 @@ class WidgetSubmissionService {
       fields: config.fields || {},
       requestTypes: (config.requestTypes || []).filter((rt) => rt.isActive !== false),
       confirmationMessageDe: config.confirmationMessageDe || null,
+      confirmationMessageFr: config.confirmationMessageFr || null,
+      confirmationMessageIt: config.confirmationMessageIt || null,
       languages: config.languages || [],
+      maxFilesPerSubmission: config.maxFilesPerSubmission || MAX_ATTACHMENTS,
+      maxFileSizeMb: config.maxFileSizeMb || 10,
     };
   }
 
@@ -401,7 +413,7 @@ class WidgetSubmissionService {
     return {
       widgetId: data.widgetId || DEFAULT_WIDGET_ID,
       contactName: contact.name || data.contactName || [data.firstName, data.lastName].filter(Boolean).join(' '),
-      contactEmail: String(contact.email || data.contactEmail || data.email || '').trim().toLowerCase(),
+      contactEmail: String(contact.email || data.contactEmail || data.email || '').trim().toLowerCase() || null,
       contactPhone: contact.phone || data.contactPhone || data.phone || null,
       contactAddress: {
         street: contactAddress.street || null,
@@ -413,8 +425,46 @@ class WidgetSubmissionService {
       description: data.description || data.message,
       preferredWindow: data.preferredWindow || null,
       captchaToken: data.captchaToken || null,
-      language: data.language || 'de',
+      language: data.language || data.locale || 'de',
     };
+  }
+
+  _validateConfiguredFields(normalized, widgetConfig) {
+    const fields = widgetConfig?.fields || {};
+    const requiredVisible = (key, fallback = false) => {
+      const cfg = fields[key];
+      if (!cfg) return fallback;
+      return cfg.visible !== false && cfg.required === true;
+    };
+
+    const errors = [];
+    if (requiredVisible('contactName', true) && !normalized.contactName) {
+      errors.push({ field: 'contact.name', message: 'Contact name is required' });
+    }
+    if (requiredVisible('contactEmail') && !normalized.contactEmail) {
+      errors.push({ field: 'contact.email', message: 'Contact email is required' });
+    }
+    if (requiredVisible('contactPhone') && !normalized.contactPhone) {
+      errors.push({ field: 'contact.phone', message: 'Contact phone is required' });
+    }
+    if (requiredVisible('contactAddress')) {
+      const address = normalized.contactAddress || {};
+      if (!address.street && !address.zip && !address.city) {
+        errors.push({ field: 'contact.address', message: 'Contact address is required' });
+      }
+    }
+    if (requiredVisible('preferredWindow') && !normalized.preferredWindow) {
+      errors.push({ field: 'preferredWindow', message: 'Preferred appointment window is required' });
+    }
+
+    if (errors.length > 0) {
+      throw new AppError(
+        'Widget submission is missing required configured fields',
+        400,
+        ERROR_CODES.VALIDATION_ERROR,
+        errors,
+      );
+    }
   }
 
   _isSimilarDescription(existingDescription, newDescription) {

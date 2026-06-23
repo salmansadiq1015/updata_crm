@@ -16,6 +16,14 @@ class ReconciliationController {
     } catch (err) { next(err); }
   }
 
+  async getReport(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const report = await reconciliationService.getReport(query);
+      return res.success({ data: report });
+    } catch (err) { next(err); }
+  }
+
   async getSuggestions(req, res, next) {
     try {
       const suggestions = await reconciliationService.getSuggestions(req.params.txId);

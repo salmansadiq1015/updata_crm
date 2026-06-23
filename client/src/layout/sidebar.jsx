@@ -111,7 +111,6 @@ const navSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.fieldOpsReports', href: '/field-ops/reports', icon: FileCheck, permission: 'mobile:read' },
       { type: 'leaf', labelKey: 'sidebar.fieldOpsTime', href: '/field-ops/time', icon: Clock4, permission: PERMISSIONS.TIME_TRACKING_READ },
       { type: 'leaf', labelKey: 'sidebar.fieldOpsChat', href: '/field-ops/chat', icon: MessageSquare, permission: 'mobile:read' },
-      { type: 'leaf', labelKey: 'sidebar.fieldOpsNotifications', href: '/field-ops/notifications', icon: AlertTriangle, permission: 'mobile:read' },
     ],
   },
   {
@@ -125,6 +124,7 @@ const navSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.jobs', href: '/admin/jobs', icon: Cog, permission: 'system:admin' },
       { type: 'leaf', labelKey: 'sidebar.numbering', href: '/admin/numbering', icon: Hash, permission: 'quotations:admin' },
       { type: 'leaf', labelKey: 'sidebar.reminders', href: '/admin/reminders', icon: BellRing, permission: 'quotations:admin' },
+      { type: 'leaf', labelKey: 'sidebar.notificationOperations', href: '/admin/notifications', icon: BellRing, permission: PERMISSIONS.NOTIFICATIONS_METRICS_READ },
       {
         type: 'group', key: 'ai-admin', labelKey: 'sidebar.aiAdmin', icon: Sparkles,
         basePath: '/admin/ai', permission: 'ai:analytics:read',

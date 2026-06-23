@@ -29,10 +29,11 @@ function verifySignature(req, secretEnvKey) {
     .update(rawBody, 'utf8')
     .digest('hex');
 
-  return crypto.timingSafeEqual(
-    Buffer.from(signature, 'utf8'),
-    Buffer.from(expectedSignature, 'utf8'),
-  );
+  const received = Buffer.from(String(signature).replace(/^sha256=/, ''), 'utf8');
+  const expected = Buffer.from(expectedSignature, 'utf8');
+
+  if (received.length !== expected.length) return false;
+  return crypto.timingSafeEqual(received, expected);
 }
 
 router.post('/email-delivery', async (req, res) => {

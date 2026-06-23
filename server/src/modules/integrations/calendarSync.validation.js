@@ -12,8 +12,8 @@ export const callbackSchema = {
   query: Joi.object({
     code: Joi.string().required(),
     state: Joi.string(),
-    provider: Joi.string().valid(...CALENDAR_PROVIDERS).required(),
-  }),
+    provider: Joi.string().valid(...CALENDAR_PROVIDERS),
+  }).or('provider', 'state'),
 };
 
 export const disconnectSchema = {

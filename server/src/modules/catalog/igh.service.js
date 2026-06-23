@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import ighConfigRepository from './ighConfig.repository.js';
 import ighImportJobRepository from './ighImportJob.repository.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
@@ -13,6 +14,7 @@ import logger from '../../shared/logger/index.js';
 const CONFIG_TTL = { l1Ttl: 300, l2Ttl: 900 };
 const CONFIG_KEY = 'catalog:igh:config';
 const PREVIEW_SAMPLE_LIMIT = 25;
+const SYSTEM_USER_ID = new mongoose.Types.ObjectId('000000000000000000000000');
 
 class IghService {
   async getConfig() {
@@ -115,6 +117,28 @@ class IghService {
 
   async triggerDeltaImport(userId, meta = {}) {
     return this._triggerImport('DELTA', userId, meta);
+  }
+
+  async runScheduledSync(now = new Date()) {
+    const cfg = await ighConfigRepository.getConfig();
+    if (!cfg || !cfg.isEnabled) {
+      return { status: 'skipped', reason: 'disabled' };
+    }
+
+    const running = await ighImportJobRepository.findRunning();
+    if (running) {
+      return { status: 'skipped', reason: 'import_running', jobId: running._id };
+    }
+
+    if (!this._isScheduleDue(cfg.syncSchedule, cfg.lastSyncAt, now)) {
+      return { status: 'skipped', reason: 'not_due', lastSyncAt: cfg.lastSyncAt || null };
+    }
+
+    const job = await this._triggerImport('DELTA', SYSTEM_USER_ID, {
+      ipAddress: 'scheduler',
+      userAgent: 'igh-scheduled-sync',
+    });
+    return { status: 'queued', type: 'DELTA', jobId: job._id };
   }
 
   async getImportJob(jobId) {
@@ -291,6 +315,36 @@ class IghService {
         }
         : undefined,
     };
+  }
+
+  _isScheduleDue(schedule, lastSyncAt, now = new Date()) {
+    const cron = String(schedule || '0 2 * * *').trim();
+    const parts = cron.split(/\s+/);
+    const lastSync = lastSyncAt ? new Date(lastSyncAt) : null;
+    if (!lastSync || Number.isNaN(lastSync.getTime())) return true;
+
+    if (parts.length !== 5) {
+      return now.getTime() - lastSync.getTime() >= 24 * 60 * 60 * 1000;
+    }
+
+    const [minutePart, hourPart] = parts;
+    if (/^\*\/\d+$/.test(minutePart) && hourPart === '*') {
+      const minutes = Number(minutePart.slice(2));
+      return minutes > 0 && now.getTime() - lastSync.getTime() >= minutes * 60 * 1000;
+    }
+
+    if (/^\d+$/.test(minutePart) && /^\*\/\d+$/.test(hourPart)) {
+      const hours = Number(hourPart.slice(2));
+      return hours > 0 && now.getTime() - lastSync.getTime() >= hours * 60 * 60 * 1000;
+    }
+
+    if (/^\d+$/.test(minutePart) && /^\d+$/.test(hourPart)) {
+      const scheduled = new Date(now);
+      scheduled.setHours(Number(hourPart), Number(minutePart), 0, 0);
+      return now >= scheduled && lastSync < scheduled;
+    }
+
+    return now.getTime() - lastSync.getTime() >= 24 * 60 * 60 * 1000;
   }
 }
 

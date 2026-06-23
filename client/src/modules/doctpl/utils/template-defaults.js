@@ -15,6 +15,18 @@ export const BUILT_IN_TEMPLATE_TYPES = [
 export const TEMPLATE_TYPE_PATTERN = /^[a-z][a-z0-9_-]{1,79}$/;
 
 const LANGUAGES = ['de', 'fr', 'it', 'en'];
+const DEFAULT_REQUIRED_SECTIONS = ['header', 'body', 'footer'];
+
+export const REQUIRED_VISIBLE_TEMPLATE_SECTIONS = {
+  quotation: ['header', 'body', 'table', 'totals', 'footer'],
+  order_confirmation: ['header', 'body', 'table', 'totals', 'footer'],
+  invoice_standard: ['header', 'body', 'table', 'totals', 'qr_bill', 'footer'],
+  invoice_advance: ['header', 'body', 'totals', 'qr_bill', 'footer'],
+  invoice_final: ['header', 'body', 'table', 'deductions', 'totals', 'qr_bill', 'footer'],
+  cover_letter: DEFAULT_REQUIRED_SECTIONS,
+  service_report: DEFAULT_REQUIRED_SECTIONS,
+  inspection_certificate: DEFAULT_REQUIRED_SECTIONS,
+};
 
 const DEFAULT_FOOTERS = {
   de: 'MB Boiler & Heizung AG | CHE-000.000.000 MWST',
@@ -26,6 +38,7 @@ const DEFAULT_FOOTERS = {
 const DEFAULT_LABELS = {
   position: { de: 'Pos.', fr: 'Pos.', it: 'Pos.', en: 'Pos.' },
   description: { de: 'Beschreibung', fr: 'Description', it: 'Descrizione', en: 'Description' },
+  unit: { de: 'Einheit', fr: 'Unite', it: 'Unita', en: 'Unit' },
   quantity: { de: 'Menge', fr: 'Quantite', it: 'Quantita', en: 'Qty' },
   unitPrice: { de: 'Einzelpreis', fr: 'Prix unitaire', it: 'Prezzo unitario', en: 'Unit Price' },
   discount: { de: 'Rabatt', fr: 'Remise', it: 'Sconto', en: 'Discount' },
@@ -37,6 +50,14 @@ const LINE_ITEM_TEMPLATE_TYPES = new Set([
   'order_confirmation',
   'service_report',
   'inspection_certificate',
+]);
+
+const TERMS_TEMPLATE_TYPES = new Set([
+  'quotation',
+  'order_confirmation',
+  'invoice_standard',
+  'invoice_advance',
+  'invoice_final',
 ]);
 
 export function normalizeTemplateType(value) {
@@ -66,34 +87,52 @@ function textBlocks() {
 function lineItemColumns() {
   return [
     { field: 'position', label: DEFAULT_LABELS.position, widthPercent: 5, alignment: 'left', format: 'text' },
-    { field: 'description', label: DEFAULT_LABELS.description, widthPercent: 40, alignment: 'left', format: 'text' },
-    { field: 'quantity', label: DEFAULT_LABELS.quantity, widthPercent: 10, alignment: 'right', format: 'number' },
+    { field: 'description', label: DEFAULT_LABELS.description, widthPercent: 37, alignment: 'left', format: 'text' },
+    { field: 'unit', label: DEFAULT_LABELS.unit, widthPercent: 8, alignment: 'left', format: 'text' },
+    { field: 'quantity', label: DEFAULT_LABELS.quantity, widthPercent: 8, alignment: 'right', format: 'number' },
     { field: 'unitPrice', label: DEFAULT_LABELS.unitPrice, widthPercent: 15, alignment: 'right', format: 'currency' },
-    { field: 'discount', label: DEFAULT_LABELS.discount, widthPercent: 10, alignment: 'right', format: 'percent' },
-    { field: 'total', label: DEFAULT_LABELS.total, widthPercent: 20, alignment: 'right', format: 'currency' },
+    { field: 'discount', label: DEFAULT_LABELS.discount, widthPercent: 9, alignment: 'right', format: 'percent' },
+    { field: 'total', label: DEFAULT_LABELS.total, widthPercent: 18, alignment: 'right', format: 'currency' },
   ];
 }
 
-function sections({ table = false, qrBill = false, deductions = false } = {}) {
+export function getRequiredVisibleSections(templateType) {
+  return REQUIRED_VISIBLE_TEMPLATE_SECTIONS[templateType] || DEFAULT_REQUIRED_SECTIONS;
+}
+
+function sections({
+  table = false,
+  totals = table,
+  qrBill = false,
+  deductions = false,
+  terms = false,
+  report = false,
+} = {}) {
   return [
     { id: 'header', name: 'Header', type: 'header', position: 0, isVisible: true, isConditional: false, config: {} },
     { id: 'body', name: 'Body', type: 'body', position: 1, isVisible: true, isConditional: false, config: {} },
-    ...(table ? [{ id: 'table', name: 'Line Items', type: 'table', position: 2, isVisible: true, isConditional: false, config: {} }] : []),
-    ...(deductions ? [{ id: 'deductions', name: 'Advance Deductions', type: 'deductions', position: 3, isVisible: true, isConditional: true, conditionField: 'advanceDeductions', config: {} }] : []),
-    ...(table ? [{ id: 'totals', name: 'Totals', type: 'totals', position: 4, isVisible: true, isConditional: false, config: {} }] : []),
-    ...(qrBill ? [{ id: 'qr_bill', name: 'QR Bill', type: 'qr_bill', position: 5, isVisible: true, isConditional: true, conditionField: 'qrBill', config: {} }] : []),
+    ...(report ? [{ id: 'report', name: 'Report Content', type: 'report', position: 2, isVisible: true, isConditional: false, config: {} }] : []),
+    ...(table ? [{ id: 'table', name: 'Line Items', type: 'table', position: 3, isVisible: true, isConditional: false, config: {} }] : []),
+    ...(deductions ? [{ id: 'deductions', name: 'Advance Deductions', type: 'deductions', position: 4, isVisible: true, isConditional: true, conditionField: 'advanceDeductions', config: {} }] : []),
+    ...(totals ? [{ id: 'totals', name: 'Totals', type: 'totals', position: 5, isVisible: true, isConditional: false, config: {} }] : []),
+    ...(terms ? [{ id: 'terms', name: 'Terms', type: 'terms', position: 6, isVisible: true, isConditional: false, config: {} }] : []),
+    ...(qrBill ? [{ id: 'qr_bill', name: 'QR Bill', type: 'qr_bill', position: 7, isVisible: true, isConditional: true, conditionField: 'qrBill', config: {} }] : []),
     { id: 'footer', name: 'Footer', type: 'footer', position: 99, isVisible: true, isConditional: false, config: {} },
   ];
 }
 
 function profile(templateType) {
-  if (templateType === 'invoice_advance') return { table: false, qrBill: true, deductions: false };
-  if (templateType === 'invoice_final') return { table: true, qrBill: true, deductions: true };
-  if (templateType === 'invoice_standard') return { table: true, qrBill: true, deductions: false };
-  if (LINE_ITEM_TEMPLATE_TYPES.has(templateType)) {
-    return { table: true, qrBill: false, deductions: false };
+  const terms = TERMS_TEMPLATE_TYPES.has(templateType);
+  if (templateType === 'invoice_advance') return { table: false, totals: true, qrBill: true, deductions: false, terms };
+  if (templateType === 'invoice_final') return { table: true, qrBill: true, deductions: true, terms };
+  if (templateType === 'invoice_standard') return { table: true, qrBill: true, deductions: false, terms };
+  if (templateType === 'service_report' || templateType === 'inspection_certificate') {
+    return { table: false, qrBill: false, deductions: false, terms: false, report: true };
   }
-  return { table: false, qrBill: false, deductions: false };
+  if (LINE_ITEM_TEMPLATE_TYPES.has(templateType)) {
+    return { table: true, qrBill: false, deductions: false, terms };
+  }
+  return { table: false, qrBill: false, deductions: false, terms };
 }
 
 export function buildTemplateCreatePayload({ name, description, templateType }) {

@@ -18,20 +18,23 @@ import {
   getPositionPresets,
   getRoleByPresetName,
 } from '@/modules/users/constants/department-position-presets';
+import { getPreferredDepartmentId } from '@/modules/users/utils/project-assignment';
 import {
   Loader2, User, Mail, Shield, MapPin, Briefcase,
   ChevronLeft, Check, ArrowRight, AlertTriangle, ShieldCheck,
 } from 'lucide-react';
 
+const EMPTY_TEAM_VALUE = '__none';
+
 const STEPS = [
   { id: 'personal', label: 'Persoenlich', icon: User, fields: ['firstName', 'lastName'] },
   { id: 'contact', label: 'Kontakt', icon: Mail, fields: ['email', 'phone'] },
-  { id: 'work', label: 'Arbeit', icon: Briefcase, fields: ['department', 'position'] },
+  { id: 'work', label: 'Arbeit', icon: Briefcase, fields: ['department', 'position', 'preferredDepartmentId'] },
   { id: 'address', label: 'Adresse', icon: MapPin, fields: ['street', 'zip', 'city', 'country'] },
   { id: 'access', label: 'Zugang', icon: Shield, fields: ['roleId', 'language'] },
 ];
 
-export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = [], isLoading }) {
+export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = [], assignmentTargets = [], isLoading }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
   const defaultRoleId = roles.find((r) => r.name === 'User')?._id || '';
@@ -44,7 +47,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       firstName: '', lastName: '', email: '', phone: '',
       department: '', position: '',
       street: '', city: '', zip: '', country: 'Schweiz',
-      roleId: defaultRoleId, language: 'de',
+      roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
       ...defaultValues,
     },
   });
@@ -63,6 +66,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
         zip: defaultValues.zip || '',
         country: defaultValues.country || 'Schweiz',
         roleId: defaultValues.role?._id || defaultValues.roleId || '',
+        preferredDepartmentId: getPreferredDepartmentId(defaultValues),
         language: defaultValues.language || 'de',
       });
     } else {
@@ -70,7 +74,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
         firstName: '', lastName: '', email: '', phone: '',
         department: '', position: '',
         street: '', city: '', zip: '', country: 'Schweiz',
-        roleId: defaultRoleId, language: 'de',
+        roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
       });
     }
   }, [defaultValues, reset, defaultRoleId, open]);
@@ -79,6 +83,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   const selectedPosition = useWatch({ control, name: 'position' });
   const selectedRoleId = useWatch({ control, name: 'roleId' });
   const selectedLanguage = useWatch({ control, name: 'language' });
+  const selectedPreferredDepartmentId = useWatch({ control, name: 'preferredDepartmentId' });
 
   const departmentOptions = useMemo(() => {
     if (
@@ -257,7 +262,10 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     if (currentStep < STEPS.length - 1) {
       return;
     }
-    onSubmit(data);
+    onSubmit({
+      ...data,
+      preferredDepartmentId: data.preferredDepartmentId || null,
+    });
     handleDialogOpenChange(false);
     reset();
   };
@@ -381,7 +389,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
 
             {/* Step 3: Work */}
             {currentStep === 2 && (
-              <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-right-4 duration-300 sm:grid-cols-2">
                 <FormField label={t('users.department') || 'Abteilung'}>
                   <Select value={selectedDepartment || ''} onValueChange={handleDepartmentChange}>
                     <SelectTrigger autoFocus>
@@ -415,8 +423,42 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                   </Select>
                 </FormField>
                 {rolePresetNotice && (
-                  <RolePresetNotice notice={rolePresetNotice} className="col-span-2" />
+                  <RolePresetNotice notice={rolePresetNotice} className="sm:col-span-2" />
                 )}
+                <FormField
+                  label={t('users.preferredTeam') || 'Bevorzugtes Team'}
+                  className="sm:col-span-2"
+                >
+                  <Select
+                    value={selectedPreferredDepartmentId || EMPTY_TEAM_VALUE}
+                    onValueChange={(value) => {
+                      setValue('preferredDepartmentId', value === EMPTY_TEAM_VALUE ? null : value, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }}
+                    disabled={assignmentTargets.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('users.preferredTeamPlaceholder') || 'Team fuer Projektzuweisungen waehlen'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={EMPTY_TEAM_VALUE}>
+                        {t('users.noPreferredTeam') || 'Kein Team'}
+                      </SelectItem>
+                      {assignmentTargets.map((target) => (
+                        <SelectItem key={target._id || target.id} value={target._id || target.id}>
+                          {[target.name, target.code ? `(${target.code})` : null].filter(Boolean).join(' ')}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {assignmentTargets.length === 0
+                      ? (t('users.preferredTeamUnavailable') || 'Keine aktiven Teams verfuegbar.')
+                      : (t('users.preferredTeamHint') || 'Dieses Team wird verwendet, wenn der Benutzer einem Projekt als Team zugewiesen wird.')}
+                  </p>
+                </FormField>
               </div>
             )}
 

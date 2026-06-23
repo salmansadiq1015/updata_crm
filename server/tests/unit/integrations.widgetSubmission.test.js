@@ -146,21 +146,29 @@ describe('widgetSubmissionService', () => {
     expect(note.text).toContain(result.referenceNumber);
   });
 
-  test('blocks duplicate submissions from the same email and request type within one hour', async () => {
-    await widgetSubmissionService.submit(validPayload, {
+  test('flags duplicate submissions from the same contact and request type within 24 hours', async () => {
+    const first = await widgetSubmissionService.submit(validPayload, {
       ipAddress: '203.0.113.11',
       userAgent: 'jest',
     });
 
-    await expect(widgetSubmissionService.submit(validPayload, {
+    const second = await widgetSubmissionService.submit(validPayload, {
       ipAddress: '203.0.113.11',
       userAgent: 'jest',
-    })).rejects.toMatchObject({
-      statusCode: 409,
-      code: ERROR_CODES.WIDGET_SUBMISSION_DUPLICATE,
     });
 
-    await expect(WidgetSubmission.countDocuments()).resolves.toBe(1);
+    expect(second).toMatchObject({
+      isDuplicate: true,
+      confirmationMessage: expect.any(String),
+    });
+
+    const duplicate = await WidgetSubmission.findById(second.submissionId).lean();
+    expect(duplicate).toMatchObject({
+      processingStatus: 'duplicate',
+      duplicateOf: expect.anything(),
+    });
+    expect(String(duplicate.duplicateOf)).toBe(String(first.submissionId));
+    await expect(WidgetSubmission.countDocuments()).resolves.toBe(2);
   });
 
   test('enforces configured per-IP submission rate limit', async () => {
@@ -211,5 +219,26 @@ describe('widgetSubmissionService', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const saved = await WidgetSubmission.findById(result.submissionId).lean();
     expect(saved.captchaScore).toBe(0.91);
+  });
+
+  test('enforces attachment MIME type and 10 MB size limits', async () => {
+    const result = await widgetSubmissionService.submit(validPayload, {
+      ipAddress: '203.0.113.14',
+      userAgent: 'jest',
+    });
+
+    await expect(widgetSubmissionService.uploadAttachment(result.submissionId, {
+      buffer: Buffer.from('not an image'),
+      originalname: 'notes.txt',
+      mimetype: 'text/plain',
+      size: 12,
+    })).rejects.toMatchObject({ statusCode: 400 });
+
+    await expect(widgetSubmissionService.uploadAttachment(result.submissionId, {
+      buffer: Buffer.alloc(1),
+      originalname: 'large.jpg',
+      mimetype: 'image/jpeg',
+      size: (10 * 1024 * 1024) + 1,
+    })).rejects.toMatchObject({ statusCode: 400 });
   });
 });

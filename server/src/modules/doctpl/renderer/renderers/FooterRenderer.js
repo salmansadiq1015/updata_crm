@@ -1,15 +1,19 @@
 import { t } from '../i18n.js';
 import { pdfColors } from './colors.js';
 import { pdfFonts } from './fonts.js';
+import RichTextRenderer from './RichTextRenderer.js';
 
 export default class FooterRenderer {
-  constructor(doc, pageManager, ciConfig, language) {
+  constructor(doc, pageManager, ciConfig, language, template = {}, data = {}) {
     this.doc = doc;
     this.pm = pageManager;
     this.ci = ciConfig;
+    this.template = template || {};
+    this.data = data || {};
     this.colors = pdfColors(ciConfig);
     this.fonts = pdfFonts(ciConfig);
     this.lang = language;
+    this.richText = new RichTextRenderer();
     this.footerYPositions = [];
     doc.on('pageAdded', () => this._drawFooterLayout());
     this._drawFooterLayout();
@@ -23,11 +27,26 @@ export default class FooterRenderer {
     const width = this.pm.contentWidth;
     doc.save();
     doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.5).strokeColor(this.colors.border).stroke();
-    doc.font(this.fonts.body).fontSize(7).fillColor(this.colors.muted);
-    const company = this.ci?.companyName || 'MB Boiler & Heizung AG';
-    const vat = this.ci?.companyDetails?.vatNumber || '';
-    const bank = this.ci?.companyDetails?.bankDetails?.bankName || '';
-    doc.text(`${company} | ${vat} | ${bank}`, left, y + 6, { width, align: 'center' });
+    const footerText = this._footerText();
+    if (footerText) {
+      this.richText.drawAt(doc, footerText, {
+        x: left,
+        y: y + 6,
+        width: width - 64,
+        maxHeight: Math.max(12, this.pm.footerHeight - 8),
+        colors: this.colors,
+        fonts: this.fonts,
+        fontSize: 7,
+        lineGap: 2,
+        color: this.colors.muted,
+      });
+    } else {
+      doc.font(this.fonts.body).fontSize(7).fillColor(this.colors.muted);
+      const company = this.ci?.companyName || 'MB Boiler & Heizung AG';
+      const vat = this.ci?.companyDetails?.vatNumber || '';
+      const bank = this.ci?.companyDetails?.bankDetails?.bankName || '';
+      doc.text(`${company} | ${vat} | ${bank}`, left, y + 6, { width: width - 64, align: 'center' });
+    }
     doc.restore();
   }
 
@@ -46,5 +65,10 @@ export default class FooterRenderer {
       );
       this.doc.restore();
     }
+  }
+
+  _footerText() {
+    const textBlocks = this.data.textBlocks || this.template.textBlocks || {};
+    return this.data.footerText || textBlocks?.[this.lang]?.footer || '';
   }
 }

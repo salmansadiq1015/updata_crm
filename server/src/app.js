@@ -28,6 +28,7 @@ import crmRoutes from './modules/crm/crm.routes.js';
 import pmRoutes from './modules/pm/pm.routes.js';
 import deployRoutes from './modules/deploy/deploy.routes.js';
 import mobileRoutes from './modules/mobile/mobile.routes.js';
+import { deviceRouter as userDeviceRoutes } from './modules/mobile/notification.routes.js';
 import timeTrackingRoutes from './modules/timeTracking/timeTracking.routes.js';
 import qopRoutes from './modules/qop/qop.routes.js';
 import departmentRoutes from './modules/qop/department.routes.js';
@@ -163,10 +164,12 @@ export function createApp() {
     "/api/v1/users/me/notification-preferences",
     notificationPreferenceRoutes,
   );
+  app.use("/api/v1/users/me/devices", userDeviceRoutes);
   app.use("/api/v1/admin/notification-templates", notificationTemplateRoutes);
   app.use("/api/v1/scheduled-notifications", scheduledNotificationRoutes);
   app.use("/api/v1/admin/notification-metrics", notificationMetricsRoutes);
   app.use("/api/v1/webhooks/notification", notificationWebhookRoutes);
+  app.use("/api/v1/webhooks", notificationWebhookRoutes);
   app.use("/api/v1/ai", aiRoutes);
   app.use("/api/v1/admin/integrations", integrationsRoutes);
   app.use("/api/v1/public/widget", widgetPublicRoutes);

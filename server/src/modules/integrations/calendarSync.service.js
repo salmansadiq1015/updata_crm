@@ -93,6 +93,14 @@ class CalendarSyncService {
   }
 
   async handleCallback(userId, provider, code) {
+    if (!userId || !provider || !code) {
+      throw new AppError(
+        'Calendar OAuth callback is missing user, provider, or authorization code',
+        400,
+        ERROR_CODES.CALENDAR_OAUTH_FAILED,
+      );
+    }
+
     let tokens;
 
     if (provider === 'google') {
@@ -108,14 +116,14 @@ class CalendarSyncService {
     }
 
     const repo = await getRepository();
-    await repo.upsertConnection(userId, provider, {
-      userId,
-      provider,
+    await repo.upsert(userId, provider, {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token || null,
       tokenExpiresAt: new Date(Date.now() + (tokens.expires_in || 3600) * 1000),
-      isConnected: true,
+      status: 'connected',
       connectedAt: new Date(),
+      lastErrorAt: null,
+      lastErrorMessage: null,
     });
 
     logger.info('Calendar connected', {
@@ -136,9 +144,12 @@ class CalendarSyncService {
     for (const provider of ['google', 'outlook']) {
       const conn = connections.find((c) => c.provider === provider);
       statusMap[provider] = {
-        isConnected: conn ? conn.isConnected : false,
+        isConnected: conn ? conn.status === 'connected' : false,
+        status: conn ? conn.status : 'disconnected',
         connectedAt: conn ? conn.connectedAt : null,
         tokenExpiresAt: conn ? conn.tokenExpiresAt : null,
+        lastSyncAt: conn ? conn.lastSyncAt : null,
+        lastErrorMessage: conn ? conn.lastErrorMessage : null,
       };
     }
 
@@ -147,10 +158,10 @@ class CalendarSyncService {
 
   async disconnect(userId, provider, meta = {}) {
     const repo = await getRepository();
-    const connection = await repo.findByUserAndProvider(userId, provider);
+    const connection = await repo.findByUserIdAndProvider(userId, provider);
     if (!connection) throw new NotFoundError('CalendarConnection', `${userId}:${provider}`);
 
-    await repo.removeConnection(userId, provider);
+    await repo.deleteByUserId(userId, provider);
 
     auditService.logEvent({
       eventType: 'calendar.disconnected',
@@ -175,9 +186,9 @@ class CalendarSyncService {
   async syncAppointmentToCalendar(userId, appointmentData) {
     const repo = await getRepository();
     const provider = appointmentData.calendarProvider || 'google';
-    const connection = await repo.findByUserAndProvider(userId, provider);
+    const connection = await repo.findByUserIdAndProvider(userId, provider);
 
-    if (!connection || !connection.isConnected) {
+    if (!connection || connection.status !== 'connected') {
       throw new AppError(
         `Calendar not connected for provider '${provider}'`,
         400,
@@ -186,7 +197,14 @@ class CalendarSyncService {
     }
 
     await this.refreshTokenIfNeeded(userId, provider);
-    const refreshedConnection = await repo.findByUserAndProvider(userId, provider);
+    const refreshedConnection = await repo.findByUserIdAndProvider(userId, provider);
+    if (!refreshedConnection || refreshedConnection.status !== 'connected') {
+      throw new AppError(
+        `Calendar token requires re-authorization for provider '${provider}'`,
+        400,
+        ERROR_CODES.CALENDAR_NOT_CONNECTED,
+      );
+    }
 
     let result;
     if (provider === 'google') {
@@ -209,13 +227,15 @@ class CalendarSyncService {
       externalEventId: result.externalEventId,
     });
 
+    await repo.upsert(userId, provider, { lastSyncAt: new Date(), lastErrorAt: null, lastErrorMessage: null });
+
     return result;
   }
 
   async deleteCalendarEvent(userId, externalEventId) {
     const repo = await getRepository();
     const connections = await repo.findByUserId(userId);
-    const activeConnection = connections.find((c) => c.isConnected);
+    const activeConnection = connections.find((c) => c.status === 'connected');
 
     if (!activeConnection) {
       throw new AppError(
@@ -226,7 +246,7 @@ class CalendarSyncService {
     }
 
     await this.refreshTokenIfNeeded(userId, activeConnection.provider);
-    const refreshedConnection = await repo.findByUserAndProvider(userId, activeConnection.provider);
+    const refreshedConnection = await repo.findByUserIdAndProvider(userId, activeConnection.provider);
 
     let deleted = false;
     if (activeConnection.provider === 'google') {
@@ -249,8 +269,8 @@ class CalendarSyncService {
 
   async refreshTokenIfNeeded(userId, provider) {
     const repo = await getRepository();
-    const connection = await repo.findByUserAndProvider(userId, provider);
-    if (!connection || !connection.isConnected) return;
+    const connection = await repo.findByUserIdAndProvider(userId, provider);
+    if (!connection || connection.status !== 'connected') return;
 
     const expiresAt = new Date(connection.tokenExpiresAt).getTime();
     const now = Date.now();
@@ -264,7 +284,11 @@ class CalendarSyncService {
         provider,
         userId,
       });
-      await repo.upsertConnection(userId, provider, { isConnected: false });
+      await repo.upsert(userId, provider, {
+        status: 'expired',
+        lastErrorAt: new Date(),
+        lastErrorMessage: 'Refresh token is missing',
+      });
       return;
     }
 
@@ -285,14 +309,21 @@ class CalendarSyncService {
         userId,
         error: err.message,
       });
-      await repo.upsertConnection(userId, provider, { isConnected: false });
+      await repo.upsert(userId, provider, {
+        status: 'expired',
+        lastErrorAt: new Date(),
+        lastErrorMessage: err.message,
+      });
       return;
     }
 
-    await repo.upsertConnection(userId, provider, {
+    await repo.upsert(userId, provider, {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token || connection.refreshToken,
       tokenExpiresAt: new Date(Date.now() + (tokens.expires_in || 3600) * 1000),
+      status: 'connected',
+      lastErrorAt: null,
+      lastErrorMessage: null,
     });
 
     logger.info('Calendar token refreshed', {

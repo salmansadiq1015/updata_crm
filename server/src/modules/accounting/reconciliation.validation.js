@@ -13,6 +13,14 @@ export const unmatchedSchema = {
   }),
 };
 
+export const reportSchema = {
+  query: Joi.object({
+    bankAccountId: objectId,
+    dateFrom: Joi.date().iso(),
+    dateTo: Joi.date().iso(),
+  }),
+};
+
 export const suggestionsSchema = {
   params: Joi.object({
     txId: objectId.required(),

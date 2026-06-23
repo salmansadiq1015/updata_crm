@@ -76,6 +76,25 @@ class WidgetSubmissionRepository {
       .lean();
   }
 
+  async findRecentByContact({ email, phone, requestType, hoursBack = 24 } = {}) {
+    const contactClauses = [];
+    if (email) contactClauses.push({ contactEmail: String(email).trim().toLowerCase() });
+    if (phone) contactClauses.push({ contactPhone: String(phone).trim() });
+    if (contactClauses.length === 0) return [];
+
+    const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
+    const query = {
+      $or: contactClauses,
+      createdAt: { $gte: since },
+      processingStatus: { $ne: 'duplicate' },
+    };
+    if (requestType) query.requestType = requestType;
+
+    return WidgetSubmission.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+  }
+
   async countByIpInLastHour(ipAddress) {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     return WidgetSubmission.countDocuments({

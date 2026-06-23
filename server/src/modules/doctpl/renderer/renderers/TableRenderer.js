@@ -36,11 +36,12 @@ export default class TableRenderer {
     }
     const defs = [
       { field:'position',  pct:0.05, align:'left',  label:t(language,'position') },
-      { field:'description',pct:0.40, align:'left',  label:t(language,'description') },
-      { field:'quantity',  pct:0.10, align:'right', label:t(language,'quantity') },
+      { field:'description',pct:0.37, align:'left',  label:t(language,'description') },
+      { field:'unit',      pct:0.08, align:'left',  label:t(language,'unit') },
+      { field:'quantity',  pct:0.08, align:'right', label:t(language,'quantity') },
       { field:'unitPrice', pct:0.15, align:'right', label:t(language,'unitPrice') },
-      { field:'discount',  pct:0.10, align:'right', label:t(language,'discount') },
-      { field:'total',     pct:0.20, align:'right', label:t(language,'total') },
+      { field:'discount',  pct:0.09, align:'right', label:t(language,'discount') },
+      { field:'total',     pct:0.18, align:'right', label:t(language,'total') },
     ];
     let x = 0;
     return defs.map((d) => { const col = { ...d, width: width * d.pct, x }; x += col.width; return col; });
@@ -81,6 +82,7 @@ export default class TableRenderer {
     const vals = {
       position:    item.position != null ? String(item.position) : '',
       description: (isOptional ? `${t(language, 'optional')} ` : '') + (item.description || ''),
+      unit:        item.unit != null ? String(item.unit) : '',
       quantity:    item.quantity != null ? String(item.quantity) : '',
       unitPrice:   item.unitPrice != null ? item.unitPrice.toFixed(2) : '',
       discount:    item.discountPercent ? `${item.discountPercent}%` : '',
@@ -107,6 +109,7 @@ export default class TableRenderer {
     const vals = {
       position:    item.position != null ? String(item.position) : '',
       description: (isOptional ? `${t(language, 'optional')} ` : '') + (item.description || ''),
+      unit:        item.unit != null ? String(item.unit) : '',
       quantity:    item.quantity != null ? String(item.quantity) : '',
       unitPrice:   item.unitPrice != null ? item.unitPrice.toFixed(2) : '',
       discount:    item.discountPercent ? `${item.discountPercent}%` : '',

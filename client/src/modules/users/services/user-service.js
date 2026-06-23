@@ -21,6 +21,22 @@ function normalizeUserList(payload) {
   return items.map(normalizeUser).filter((user) => user?._id);
 }
 
+function normalizeAssignmentTargets(payload) {
+  const items = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+    ? payload.data
+    : [];
+
+  return items
+    .map((target) => {
+      if (!target || typeof target !== 'object') return null;
+      const id = target._id || target.id;
+      return { ...target, _id: id, id };
+    })
+    .filter((target) => target?._id);
+}
+
 export const userService = {
   async getUsers(params = {}) {
     const res = await apiClient.get(ENDPOINTS.USERS.LIST, { params });
@@ -30,6 +46,11 @@ export const userService = {
   async getDirectory(params = {}) {
     const res = await apiClient.get(ENDPOINTS.USERS.DIRECTORY, { params });
     return normalizeUserList(res?.data);
+  },
+
+  async getAssignmentTargets() {
+    const res = await apiClient.get(ENDPOINTS.USERS.ASSIGNMENT_TARGETS);
+    return normalizeAssignmentTargets(res?.data);
   },
 
   async getUserById(id) {

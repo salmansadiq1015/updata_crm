@@ -15,11 +15,11 @@ const layoutSchema = Joi.object({
   pageSize: Joi.string().valid('A4', 'Letter'),
   orientation: Joi.string().valid('portrait', 'landscape'),
   margins: Joi.object({
-    top:    Joi.number().min(0).max(50),
-    bottom: Joi.number().min(0).max(50),
-    left:   Joi.number().min(0).max(50),
-    right:  Joi.number().min(0).max(50),
-  }),
+    top:    Joi.number().integer().min(0).max(50),
+    bottom: Joi.number().integer().min(0).max(50),
+    left:   Joi.number().integer().min(0).max(50),
+    right:  Joi.number().integer().min(0).max(50),
+  }).messages({ 'number.integer': 'Margins must be set in whole millimetres (1mm increments)' }),
   headerHeight: Joi.number().min(0),
   footerHeight: Joi.number().min(0),
 });
@@ -27,7 +27,7 @@ const layoutSchema = Joi.object({
 const sectionSchema = Joi.object({
   id: Joi.string().required(),
   name: Joi.string().required(),
-  type: Joi.string().valid('header', 'body', 'table', 'totals', 'deductions', 'qr_bill', 'footer', 'custom').required(),
+  type: Joi.string().valid('header', 'body', 'table', 'totals', 'deductions', 'terms', 'qr_bill', 'report', 'footer', 'custom').required(),
   position: Joi.number().required(),
   isVisible: Joi.boolean(),
   isConditional: Joi.boolean(),
@@ -195,7 +195,7 @@ export const createTemplateSchema = {
     layout: Joi.object({
       pageSize: Joi.string().valid('A4', 'Letter').default('A4'),
       orientation: Joi.string().valid('portrait', 'landscape').default('portrait'),
-      margins: Joi.object({ top: Joi.number().min(0).max(50).default(25), bottom: Joi.number().min(0).max(50).default(20), left: Joi.number().min(0).max(50).default(20), right: Joi.number().min(0).max(50).default(15) }),
+      margins: Joi.object({ top: Joi.number().integer().min(0).max(50).default(25), bottom: Joi.number().integer().min(0).max(50).default(20), left: Joi.number().integer().min(0).max(50).default(20), right: Joi.number().integer().min(0).max(50).default(15) }).messages({ 'number.integer': 'Margins must be set in whole millimetres (1mm increments)' }),
       headerHeight: Joi.number().default(45),
       footerHeight: Joi.number().default(30),
     }),

@@ -192,6 +192,14 @@ export function useReconciliationUnmatched(params = {}) {
   });
 }
 
+export function useReconciliationReport(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'reconciliation-report', params],
+    queryFn: () => reconciliationService.report(params),
+    select: (r) => r.data,
+  });
+}
+
 export function useReconciliationSuggestions(txId) {
   return useQuery({
     queryKey: ['accounting', 'reconciliation-suggestions', txId],

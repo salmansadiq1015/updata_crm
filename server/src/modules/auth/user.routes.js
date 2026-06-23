@@ -87,6 +87,13 @@ router.get(
   (req, res, next) => userController.directory(req, res, next),
 );
 
+router.get(
+  '/assignment-targets',
+  authenticate,
+  requirePermission('users:read'),
+  (req, res, next) => userController.assignmentTargets(req, res, next),
+);
+
 // --- Bulk operations (MUST be before /:id to prevent matching) ---
 
 router.patch(

@@ -15,7 +15,7 @@ function formatValue(value) {
   return JSON.stringify(value).slice(0, 120);
 }
 
-export function TemplateVersionHistory({ templateId, expectedVersion }) {
+export function TemplateVersionHistory({ templateId, expectedVersion, canRevert = true }) {
   const { t, locale } = useLanguage();
   const { data, isLoading } = useTemplateVersions(templateId);
   const revert = useRevertTemplate();
@@ -111,16 +111,18 @@ export function TemplateVersionHistory({ templateId, expectedVersion }) {
                       {t('doctpl.version.compare')}
                     </Button>
                   )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    title={t('doctpl.version.revertTo', null, { value: version.version })}
-                    disabled={isCurrent || revert.isPending}
-                    onClick={() => revert.mutate({ id: templateId, version: version.version, expectedVersion })}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </Button>
+                  {canRevert && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      title={t('doctpl.version.revertTo', null, { value: version.version })}
+                      disabled={isCurrent || revert.isPending}
+                      onClick={() => revert.mutate({ id: templateId, version: version.version, expectedVersion })}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

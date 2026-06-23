@@ -126,9 +126,29 @@ class EmailService {
       }
     }
 
-    const to = data.customerEmail ? [data.customerEmail] : [];
+    const recipient = await this._resolveRecipient(data);
+    const to = recipient ? [recipient] : [];
 
     return { to, subject, bodyHtml, bodyText, documentId };
+  }
+
+  // Resolves the recipient address, preferring an explicit customerEmail and
+  // falling back to a CRM customer lookup so the compose form can be pre-filled
+  // from system data (DOC-008).
+  async _resolveRecipient(data = {}) {
+    const explicit = data.customerEmail || data.customer?.email;
+    if (explicit) return explicit;
+
+    const customerId = data.customerId || data.customer?._id || data.customer?.id;
+    if (!customerId) return null;
+
+    try {
+      const { default: Customer } = await import('../crm/customer.model.js');
+      const customer = await Customer.findById(customerId).select('email').lean();
+      return customer?.email || null;
+    } catch {
+      return null;
+    }
   }
 
   async getById(id) {

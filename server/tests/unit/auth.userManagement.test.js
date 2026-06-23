@@ -26,15 +26,18 @@ jest.unstable_mockModule('../../src/modules/pm/project.repository.js', () => ({
   },
 }));
 
-let User, Role, userService, createUserSchema, updateUserSchema, updateMeSchema;
+let User, Role, Department, userService, createUserSchema, updateUserSchema, updateMeSchema;
 
 beforeAll(async () => {
   await connectTestDb();
   await import('../../src/modules/auth/user.model.js');
   await import('../../src/modules/auth/role.model.js');
+  await import('../../src/modules/auth/permission.model.js');
+  await import('../../src/modules/qop/department.model.js');
   await import('../../src/modules/auth/auditLog.model.js');
   User = mongoose.model('User');
   Role = mongoose.model('Role');
+  Department = mongoose.model('Department');
   userService = (await import('../../src/modules/auth/user.service.js')).default;
   ({ createUserSchema, updateUserSchema, updateMeSchema } = await import('../../src/modules/auth/user.validation.js'));
 });
@@ -69,11 +72,13 @@ async function seedUser(overrides = {}) {
 describe('admin user management validation', () => {
   test('create and update schemas accept editable address fields', () => {
     const roleId = new mongoose.Types.ObjectId().toString();
+    const preferredDepartmentId = new mongoose.Types.ObjectId().toString();
     const payload = {
       email: 'max.muster@example.ch',
       firstName: 'Max',
       lastName: 'Muster',
       roleId,
+      preferredDepartmentId,
       street: 'Musterstrasse 1',
       zip: '8000',
       city: 'Zuerich',
@@ -82,6 +87,7 @@ describe('admin user management validation', () => {
 
     expect(createUserSchema.body.validate(payload, { abortEarly: false }).error).toBeUndefined();
     expect(updateUserSchema.body.validate({
+      preferredDepartmentId,
       street: 'Neue Strasse 2',
       zip: '3000',
       city: 'Bern',
@@ -138,6 +144,20 @@ describe('admin activation lifecycle', () => {
       userService.activateUser(target._id.toString(), actor._id),
     ).rejects.toBeInstanceOf(ConflictError);
   });
+
+  test('role changes cannot remove the last active admin', async () => {
+    const adminRole = await seedRole('Admin');
+    const userRole = await seedRole('User');
+    const target = await seedUser({ role: adminRole._id });
+
+    await expect(
+      userService.updateUser(
+        target._id.toString(),
+        { roleId: userRole._id.toString() },
+        target._id,
+      ),
+    ).rejects.toBeInstanceOf(ConflictError);
+  });
 });
 
 describe('admin user project assignment', () => {
@@ -170,6 +190,58 @@ describe('admin user project assignment', () => {
       { projectId: new mongoose.Types.ObjectId().toString(), assignmentType: 'manager' },
       actor._id,
     )).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  test('assignProject delegates team assignment through the user preferred department', async () => {
+    const actor = await seedUser({ role: (await seedRole('Admin'))._id });
+    const departmentId = new mongoose.Types.ObjectId();
+    const target = await seedUser({
+      preferences: { preferredDepartmentId: departmentId },
+    });
+    const projectId = new mongoose.Types.ObjectId().toString();
+
+    await userService.assignProject(
+      target._id.toString(),
+      { projectId, assignmentType: 'team' },
+      actor._id,
+    );
+
+    expect(updateProject).toHaveBeenCalledWith(
+      projectId,
+      { teamId: departmentId },
+      actor._id,
+      {},
+    );
+  });
+
+  test('updateUser persists the preferred department target for team assignment', async () => {
+    const actor = await seedUser({ role: (await seedRole('Admin'))._id });
+    const target = await seedUser();
+    const department = await Department.create({ name: 'Service', code: 'SVC' });
+
+    const updated = await userService.updateUser(
+      target._id.toString(),
+      { preferredDepartmentId: department._id.toString() },
+      actor._id,
+    );
+
+    expect(updated.preferences.preferredDepartmentId.toString()).toBe(department._id.toString());
+  });
+
+  test('listAssignmentTargets returns active departments only', async () => {
+    const active = await Department.create({ name: 'Service', code: 'SVC' });
+    await Department.create({ name: 'Inactive', code: 'OLD', isActive: false });
+
+    const targets = await userService.listAssignmentTargets();
+
+    expect(targets).toEqual([
+      expect.objectContaining({
+        _id: active._id,
+        id: active._id.toString(),
+        name: 'Service',
+        code: 'SVC',
+      }),
+    ]);
   });
 
   test('listAssignedProjects marks manager and team assignment roles', async () => {

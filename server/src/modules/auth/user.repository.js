@@ -16,7 +16,7 @@ const ALLOWED_FILTERS = {
   language: 'exact',
 };
 
-const ALLOWED_SORT_FIELDS = ['createdAt', 'firstName', 'lastName', 'email', '_id'];
+const ALLOWED_SORT_FIELDS = ['createdAt', 'firstName', 'lastName', 'email', 'department', 'position', 'status', 'lastLoginAt', '_id'];
 
 class UserRepository {
   async create(data) {

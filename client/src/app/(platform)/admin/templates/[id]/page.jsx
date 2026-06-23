@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { showError, showSuccess } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { PageHeader } from '@/shared/components/page-header';
+import { usePermissions } from '@/shared/hooks/use-permissions';
 import { DocumentPreviewDrawer } from '@/modules/doctpl/components/DocumentPreviewDrawer';
 import { TemplateEditor } from '@/modules/doctpl/components/TemplateEditor';
 import { TemplateVersionHistory } from '@/modules/doctpl/components/TemplateVersionHistory';
@@ -41,6 +42,7 @@ const APPROVAL_BADGE = {
 
 export default function TemplateDetailPage() {
   const { t } = useLanguage();
+  const { hasPermission } = usePermissions();
   const { id } = useParams();
   const { data: template, isLoading } = useTemplateDetail(id);
   const update = useUpdateTemplate();
@@ -61,8 +63,11 @@ export default function TemplateDetailPage() {
   const status = current?.approvalStatus || 'draft';
   const badge = APPROVAL_BADGE[status] || APPROVAL_BADGE.draft;
   const approvalBusy = requestApproval.isPending || approve.isPending || reject.isPending;
+  const canWrite = hasPermission('templates:write');
+  const canAdmin = hasPermission('templates:admin');
 
   const handleRequestApproval = async () => {
+    if (!canWrite) return;
     try {
       await requestApproval.mutateAsync({ id });
       showSuccess(t('doctpl.approval.requested'));
@@ -72,6 +77,7 @@ export default function TemplateDetailPage() {
   };
 
   const handleApprove = async () => {
+    if (!canAdmin) return;
     try {
       await approve.mutateAsync({ id });
       showSuccess(t('doctpl.approval.approvedToast'));
@@ -81,7 +87,7 @@ export default function TemplateDetailPage() {
   };
 
   const handleReject = async () => {
-    if (!rejectReason.trim()) return;
+    if (!canAdmin || !rejectReason.trim()) return;
     try {
       await reject.mutateAsync({ id, reason: rejectReason.trim() });
       showSuccess(t('doctpl.approval.rejectedToast'));
@@ -107,7 +113,7 @@ export default function TemplateDetailPage() {
   }, []);
 
   const handleSave = async () => {
-    if (!draft || !changeDesc.trim() || validationIssues.length) return;
+    if (!canWrite || !draft || !changeDesc.trim() || validationIssues.length) return;
     await update.mutateAsync({
       id,
       ...draft,
@@ -157,7 +163,7 @@ export default function TemplateDetailPage() {
           <Badge variant="outline" className={badge.className}>{t(badge.key)}</Badge>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {(status === 'draft' || status === 'rejected') && (
+          {canWrite && (status === 'draft' || status === 'rejected') && (
             <Button
               variant="outline"
               className="gap-1.5"
@@ -169,7 +175,7 @@ export default function TemplateDetailPage() {
               {t('doctpl.approval.request')}
             </Button>
           )}
-          {status === 'pending' && (
+          {canAdmin && status === 'pending' && (
             <>
               <Button
                 className="gap-1.5"
@@ -210,9 +216,9 @@ export default function TemplateDetailPage() {
 
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 rounded-lg border bg-card p-5 shadow-sm">
-          <TemplateEditor template={current} onChange={setDraft} onValidationChange={handleEditorValidation} />
+          <TemplateEditor template={current} onChange={canWrite ? setDraft : undefined} onValidationChange={handleEditorValidation} />
 
-          {draft && (
+          {canWrite && draft && (
             <div className="mt-5 space-y-3 border-t pt-4">
               <div>
                 <Label>{t('doctpl.templates.changeDescription')} <span className="text-destructive">*</span></Label>
@@ -246,7 +252,7 @@ export default function TemplateDetailPage() {
         {showHistory && (
           <aside className="w-full shrink-0 rounded-lg border bg-card p-5 shadow-sm xl:w-96">
             <h3 className="mb-3 text-sm font-semibold">{t('doctpl.templates.history')}</h3>
-            <TemplateVersionHistory templateId={id} expectedVersion={current.currentVersion} />
+            <TemplateVersionHistory templateId={id} expectedVersion={current.currentVersion} canRevert={canAdmin} />
           </aside>
         )}
       </div>
@@ -278,7 +284,7 @@ export default function TemplateDetailPage() {
             <Button
               className="gap-1.5"
               onClick={handleReject}
-              disabled={!rejectReason.trim() || reject.isPending}
+              disabled={!canAdmin || !rejectReason.trim() || reject.isPending}
             >
               <XCircle className="h-4 w-4" />
               {t('doctpl.approval.reject')}

@@ -232,6 +232,66 @@ class ReconciliationService {
     });
   }
 
+  async getReport(params = {}) {
+    const bankTransactionRepository = (await import('./bankTransaction.repository.js')).default;
+    const summary = await bankTransactionRepository.getReconciliationSummary(params);
+
+    const byStatus = new Map(summary.map((row) => [row._id, row]));
+    const readStatus = (status) => {
+      const row = byStatus.get(status) || {};
+      return {
+        count: row.count || 0,
+        total: roundMoney(row.total || 0),
+        incomingTotal: roundMoney(row.incomingTotal || 0),
+        outgoingTotal: roundMoney(row.outgoingTotal || 0),
+      };
+    };
+
+    let partial = { count: 0, total: 0 };
+    try {
+      const matched = await bankTransactionRepository.findMatchedInvoiceTransactions(params);
+      const incomingMatches = matched.filter((txn) => txn.amount > 0 && txn.matchedInvoiceId);
+      if (incomingMatches.length > 0) {
+        const Invoice = (await import('../qop/invoice.model.js')).default;
+        const invoiceIds = incomingMatches.map((txn) => txn.matchedInvoiceId);
+        const invoices = await Invoice.find({
+          _id: { $in: invoiceIds },
+          isDeleted: false,
+          amountDue: { $gt: 0 },
+        }).select('_id amountDue status').lean();
+        const partialInvoiceIds = new Set(invoices.map((invoice) => String(invoice._id)));
+        const partialTransactions = incomingMatches.filter((txn) => partialInvoiceIds.has(String(txn.matchedInvoiceId)));
+        partial = {
+          count: partialTransactions.length,
+          total: roundMoney(partialTransactions.reduce((sum, txn) => sum + txn.amount, 0)),
+        };
+      }
+    } catch (err) {
+      logger.warn('Failed to enrich reconciliation report with partial payment data', {
+        module: 'accounting',
+        action: 'reconciliation.report',
+        error: { message: err.message },
+      });
+    }
+
+    const report = {
+      bankAccountId: params.bankAccountId || null,
+      generatedAt: new Date(),
+      autoMatched: readStatus('AUTO_MATCHED'),
+      manuallyMatched: readStatus('MANUALLY_MATCHED'),
+      categorized: readStatus('CATEGORIZED'),
+      unmatched: readStatus('UNMATCHED'),
+      partiallyMatched: partial,
+    };
+
+    report.matched = {
+      count: report.autoMatched.count + report.manuallyMatched.count,
+      total: roundMoney(report.autoMatched.total + report.manuallyMatched.total),
+    };
+
+    return report;
+  }
+
   /**
    * Get match suggestions for a specific transaction.
    * Returns ranked candidate invoices.

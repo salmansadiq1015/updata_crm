@@ -6,14 +6,18 @@ import logger from '../../shared/logger/index.js';
 
 class NotificationService {
   async registerDevice(userId, data) {
+    const deviceToken = data.deviceToken || data.token;
+    const deviceId = data.deviceId || data.device_id || null;
+    const appVersion = data.appVersion || data.app_version || null;
+
     const device = await DeviceToken.findOneAndUpdate(
-      { deviceToken: data.deviceToken },
+      { deviceToken },
       {
         userId,
-        deviceToken: data.deviceToken,
+        deviceToken,
         platform: data.platform,
-        deviceId: data.deviceId || null,
-        appVersion: data.appVersion || null,
+        deviceId,
+        appVersion,
         isActive: true,
         lastUsedAt: new Date(),
       },

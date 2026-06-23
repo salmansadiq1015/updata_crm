@@ -570,6 +570,9 @@ class TemplateService {
   _buildPreviewData(template, sampleData = {}, language = 'de') {
     const templateType = sampleData.templateType || template.templateType || 'quotation';
     const hasInvoiceDeductions = templateType === 'invoice_final';
+    const isAdvanceInvoice = templateType === 'invoice_advance';
+    const isServiceReport = templateType === 'service_report';
+    const isInspection = templateType === 'inspection_certificate';
     const base = {
       templateType,
       documentNumber: 'PREVIEW-2026-0001',
@@ -619,6 +622,30 @@ class TemplateService {
         },
       ] : [],
       netBalance: hasInvoiceDeductions ? 1081 : undefined,
+      ...(isAdvanceInvoice ? {
+        milestoneDescription: 'Akontozahlung bei Auftragsbestaetigung gemaess Zahlungsplan.',
+        advancePercentage: 30,
+        advanceAmount: 486.45,
+      } : {}),
+      ...(isServiceReport ? {
+        equipment: { name: 'Viessmann Vitodens 200', model: 'B2HF', serialNumber: 'SN-0012345', location: 'UG / Heizraum' },
+        findings: 'Leichte Kalkablagerungen im Waermetauscher, Brennerdruck im Normbereich.',
+        workPerformed: 'Waermetauscher gereinigt, Duese geprueft, Funktionstest durchgefuehrt.',
+        materialsUsed: [{ description: 'Reinigungsmittel', quantity: 1, unit: 'Stk' }],
+        recommendations: 'Naechste Wartung in 12 Monaten empfohlen.',
+        timeSpent: '2.0 h',
+        technician: { name: 'Hans Muster' },
+      } : {}),
+      ...(isInspection ? {
+        checklist: [
+          { label: 'Dichtheitspruefung', status: 'pass' },
+          { label: 'Abgaswerte', status: 'pass' },
+          { label: 'Sicherheitsventil', status: 'pass' },
+        ],
+        overallResult: 'pass',
+        inspector: { name: 'Anna Beispiel' },
+        nextInspectionDate: '2027-06-15',
+      } : {}),
     };
 
     return {
@@ -713,6 +740,11 @@ class TemplateService {
     const bottom = Number(margins.bottom ?? 20);
     const left = Number(margins.left ?? 20);
     const right = Number(margins.right ?? 15);
+    for (const [side, value] of [['top', top], ['bottom', bottom], ['left', left], ['right', right]]) {
+      if (!Number.isInteger(value)) {
+        details.push({ field: `layout.margins.${side}`, message: 'Margins must be set in whole millimetres (1mm increments)' });
+      }
+    }
     if (top + bottom > page.height - 80) {
       details.push({ field: 'layout.margins', message: 'Vertical margins leave too little printable space' });
     }

@@ -54,7 +54,7 @@ const configSchema = Joi.object({
 
   // File Storage
   STORAGE_BACKEND: Joi.string().valid('local', 'minio', 's3').default('s3'),
-  STORAGE_MAX_FILE_SIZE: Joi.number().default(50 * 1024 * 1024), // 50MB
+  STORAGE_MAX_FILE_SIZE: Joi.number().default(100 * 1024 * 1024), // 100MB
   STORAGE_PRESIGN_EXPIRY: Joi.number().default(900), // 15 minutes
 
   // Email

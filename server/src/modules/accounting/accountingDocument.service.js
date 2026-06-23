@@ -31,6 +31,21 @@ function safeArchiveName(doc, index) {
   return `${String(index + 1).padStart(3, '0')}_${safeName}`;
 }
 
+function asDate(value, fallback = new Date()) {
+  const date = value ? new Date(value) : fallback;
+  return Number.isNaN(date.getTime()) ? fallback : date;
+}
+
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
 class AccountingDocumentService {
   async upload(fileData, metadata, userId, meta = {}) {
     if (!fileData?.buffer) {
@@ -185,6 +200,9 @@ class AccountingDocumentService {
   }
 
   async confirmOcrResult(documentId, corrections, userId, meta = {}) {
+    const doc = await accountingDocumentRepository.findById(documentId);
+    if (!doc) throw new NotFoundError('AccountingDocument', documentId);
+
     const result = await ocrResultRepository.findByDocumentId(documentId);
     if (!result) throw new NotFoundError('OcrResult', documentId);
 
@@ -199,10 +217,24 @@ class AccountingDocumentService {
       confirmedAt: new Date(),
     });
 
+    let apInvoice = null;
+    if (doc.documentType === 'SUPPLIER_INVOICE') {
+      apInvoice = await this._createSupplierInvoiceFromOcr(doc, normalized, corrections, userId, meta);
+    }
+
     await accountingDocumentRepository.updateById(documentId, {
-      processingStatus: 'PROCESSED',
-      ocrStatus: 'COMPLETED',
-      fullText: result.rawText || '',
+      $set: {
+        processingStatus: 'PROCESSED',
+        ocrStatus: 'COMPLETED',
+        fullText: result.rawText || '',
+        supplierName: normalized.extractedSupplierName || doc.supplierName || '',
+        receiptDate: normalized.extractedInvoiceDate || doc.receiptDate || null,
+        amount: normalized.extractedTotal ?? doc.amount ?? null,
+        vat: normalized.extractedVat ?? doc.vat ?? null,
+      },
+      ...(apInvoice?._id
+        ? { $addToSet: { linkedRecords: { recordType: 'AP_INVOICE', recordId: apInvoice._id } } }
+        : {}),
     });
 
     auditService.logEvent({
@@ -215,7 +247,11 @@ class AccountingDocumentService {
       module: 'accounting',
     });
 
-    return updated;
+    return {
+      ...updated,
+      apInvoiceId: apInvoice?._id || null,
+      apInvoiceNumber: apInvoice?.apInvoiceNumber || null,
+    };
   }
 
   async rejectOcrResult(documentId, reason, userId, meta = {}) {
@@ -276,6 +312,110 @@ class AccountingDocumentService {
       extractedLineItems: corrections.lineItems ?? corrections.extractedLineItems,
       matchedSupplierId: corrections.matchedSupplierId ?? null,
     };
+  }
+
+  async _createSupplierInvoiceFromOcr(doc, normalized, corrections = {}, userId, meta = {}) {
+    const supplierName = String(normalized.extractedSupplierName || '').trim();
+    const supplierInvoiceNumber = String(normalized.extractedInvoiceNumber || '').trim();
+    if (!supplierName || !supplierInvoiceNumber) {
+      throw new AppError(
+        'Supplier name and invoice number are required to create a supplier invoice from OCR',
+        400,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+
+    const supplier = await this._resolveOcrSupplier({
+      supplierId: normalized.matchedSupplierId,
+      supplierName,
+      supplierAddress: normalized.extractedSupplierAddress,
+      userId,
+      meta,
+    });
+
+    const invoiceDate = asDate(normalized.extractedInvoiceDate, doc.receiptDate ? new Date(doc.receiptDate) : new Date());
+    const dueDate = asDate(normalized.extractedDueDate, addDays(invoiceDate, 30));
+    const apInvoiceService = (await import('./apInvoice.service.js')).default;
+
+    return apInvoiceService.create({
+      supplierId: supplier.supplierId,
+      supplierName: supplier.supplierName,
+      supplierIban: corrections.supplierIban || null,
+      supplierBic: corrections.supplierBic || null,
+      supplierInvoiceNumber,
+      invoiceDate,
+      dueDate,
+      paymentTermsDays: Math.max(0, Math.round((dueDate.getTime() - invoiceDate.getTime()) / (24 * 60 * 60 * 1000))),
+      lineItems: this._buildApLineItemsFromOcr(normalized),
+      currency: corrections.currency || 'CHF',
+      projectReference: doc.projectReference || null,
+      documentId: doc._id,
+    }, userId, meta);
+  }
+
+  async _resolveOcrSupplier({ supplierId, supplierName, supplierAddress, userId, meta }) {
+    const Customer = (await import('../crm/customer.model.js')).default;
+    if (supplierId) {
+      const supplier = await Customer.findOne({
+        _id: supplierId,
+        type: 'business',
+        isDeleted: false,
+      }).select('_id name').lean();
+      if (!supplier) throw new NotFoundError('Supplier', supplierId);
+      return { supplierId: supplier._id, supplierName: supplier.name };
+    }
+
+    const exactSupplier = await Customer.findOne({
+      type: 'business',
+      isDeleted: false,
+      name: { $regex: `^${supplierName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+    }).select('_id name').lean();
+    if (exactSupplier) {
+      return { supplierId: exactSupplier._id, supplierName: exactSupplier.name };
+    }
+
+    const procurementService = (await import('../crm/procurement.service.js')).default;
+    const created = await procurementService.createSupplier({
+      name: supplierName,
+      street: supplierAddress || '',
+      notes: 'Created from OCR supplier invoice review',
+    }, userId, meta);
+    return { supplierId: created._id, supplierName: created.name };
+  }
+
+  _buildApLineItemsFromOcr(normalized) {
+    const items = Array.isArray(normalized.extractedLineItems) ? normalized.extractedLineItems : [];
+    const mapped = items
+      .map((item, index) => {
+        const quantity = Number(item.quantity || 1);
+        const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+        const lineTotal = item.lineTotal ?? item.total;
+        const amount = item.unitPrice ?? (lineTotal !== undefined ? Number(lineTotal) / safeQuantity : 0);
+        return {
+          position: item.position || index + 1,
+          description: String(item.description || `OCR line ${index + 1}`).trim(),
+          quantity: safeQuantity,
+          unit: item.unit || 'pcs',
+          unitPrice: roundMoney(amount),
+          vatRate: Number(item.vatRate || 0),
+        };
+      })
+      .filter((item) => item.description && item.unitPrice >= 0);
+
+    if (mapped.length > 0) return mapped;
+
+    const total = roundMoney(normalized.extractedTotal);
+    const vat = roundMoney(normalized.extractedVat);
+    const net = Math.max(0, roundMoney(total - vat));
+    const vatRate = net > 0 ? roundMoney((vat / net) * 100) : 0;
+    return [{
+      position: 1,
+      description: 'OCR supplier invoice total',
+      quantity: 1,
+      unit: 'pcs',
+      unitPrice: net || total,
+      vatRate,
+    }];
   }
 
   async assignDocument(documentId, userId, assignedBy, meta = {}, note = '') {

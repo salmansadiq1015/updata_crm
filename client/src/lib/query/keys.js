@@ -6,6 +6,7 @@ export const queryKeys = {
     all: () => ['users'],
     list: (filters) => ['users', 'list', filters],
     directory: (params) => ['users', 'directory', params],
+    assignmentTargets: () => ['users', 'assignmentTargets'],
     detail: (id) => ['users', 'detail', id],
     projects: (id, params) => ['users', id, 'projects', params],
     sessions: (id) => ['users', id, 'sessions'],
@@ -26,6 +27,10 @@ export const queryKeys = {
     feed: (filters) => ['notifications', 'feed', filters],
     unreadCount: () => ['notifications', 'unreadCount'],
     preferences: () => ['notifications', 'preferences'],
+    history: (filters) => ['notifications', 'history', filters],
+    metrics: (filters) => ['notifications', 'metrics', filters],
+    templates: (filters) => ['notifications', 'templates', filters],
+    scheduled: (filters) => ['notifications', 'scheduled', filters],
   },
   fieldTickets: {
     all: () => ['fieldTickets'],
@@ -75,6 +80,9 @@ export const queryKeys = {
   },
   integrations: {
     all: () => ['integrations'],
+    calendar: {
+      status: () => ['integrations', 'calendar', 'status'],
+    },
     widget: {
       submissions: (filters) => ['integrations', 'widget', 'submissions', filters],
       submissionDetail: (id) => ['integrations', 'widget', 'submission', id],

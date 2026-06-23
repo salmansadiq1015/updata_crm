@@ -4,12 +4,13 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   runReconciliationSchema, unmatchedSchema, suggestionsSchema,
-  matchSchema, matchApSchema, categorizeSchema,
+  matchSchema, matchApSchema, categorizeSchema, reportSchema,
 } from './reconciliation.validation.js';
 
 const router = Router();
 
 router.post('/run', authenticate, requirePermission('accounting:reconciliation:manage'), validate(runReconciliationSchema), (req, res, next) => reconciliationController.run(req, res, next));
+router.get('/report', authenticate, requirePermission('accounting:reconciliation:manage'), validate(reportSchema), (req, res, next) => reconciliationController.getReport(req, res, next));
 router.get('/unmatched', authenticate, requirePermission('accounting:reconciliation:manage'), validate(unmatchedSchema), (req, res, next) => reconciliationController.getUnmatched(req, res, next));
 router.get('/suggestions/:txId', authenticate, requirePermission('accounting:reconciliation:manage'), validate(suggestionsSchema), (req, res, next) => reconciliationController.getSuggestions(req, res, next));
 router.post('/match', authenticate, requirePermission('accounting:reconciliation:manage'), validate(matchSchema), (req, res, next) => reconciliationController.match(req, res, next));

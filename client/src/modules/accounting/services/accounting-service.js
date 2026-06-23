@@ -146,6 +146,7 @@ export const bankService = {
 
 export const reconciliationService = {
   run:          (data)        => apiClient.post(E.RECONCILIATION_RUN, data),
+  report:       (params = {}) => apiClient.get(E.RECONCILIATION_REPORT, { params }),
   unmatched:    (params = {}) => apiClient.get(E.RECONCILIATION_UNMATCHED, { params }).then((r) => mapEnvelope(r, normalizeBankTransaction)),
   suggestions:  (txId)        => apiClient.get(E.RECONCILIATION_SUGGESTIONS(txId)),
   matchAr:      (data)        => apiClient.post(E.RECONCILIATION_MATCH_AR, data),

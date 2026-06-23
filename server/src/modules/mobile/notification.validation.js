@@ -6,11 +6,14 @@ const NOTIFICATION_CHANNELS = ['PUSH', 'EMAIL', 'WHATSAPP', 'SMS', 'IN_APP'];
 
 export const registerDeviceSchema = {
   body: Joi.object({
-    deviceToken: Joi.string().required(),
-    platform: Joi.string().valid(...PLATFORMS).required(),
+    token: Joi.string(),
+    deviceToken: Joi.string(),
+    platform: Joi.string().uppercase().valid(...PLATFORMS).required(),
     deviceId: Joi.string().allow('', null),
+    device_id: Joi.string().allow('', null),
     appVersion: Joi.string().allow('', null),
-  }),
+    app_version: Joi.string().allow('', null),
+  }).or('token', 'deviceToken'),
 };
 
 export const removeDeviceSchema = {

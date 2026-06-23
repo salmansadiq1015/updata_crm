@@ -161,6 +161,7 @@ export function useReconciliationMutations() {
   const invalidate = () => inv(
     qc,
     ['accounting', 'reconciliation-unmatched'],
+    ['accounting', 'reconciliation-report'],
     ['accounting', 'bank-transactions'],
     ['accounting', 'ar-receivables'],
     ['accounting', 'ap-invoices'],
@@ -218,7 +219,11 @@ export function useAccDocumentMutations() {
   });
   const confirmOcr = useMutation({
     mutationFn: ({ id, data }) => accDocService.confirmOcr(id, data),
-    onSuccess: () => { invalidate(); inv(qc, ['accounting', 'document-ocr-result']); success(t, 'ocrConfirmed', 'OCR confirmed'); },
+    onSuccess: () => {
+      invalidate();
+      inv(qc, ['accounting', 'document-ocr-result'], ['accounting', 'ap-invoices']);
+      success(t, 'ocrConfirmed', 'OCR confirmed');
+    },
   });
   const rejectOcr = useMutation({
     mutationFn: ({ id, data }) => accDocService.rejectOcr(id, data),

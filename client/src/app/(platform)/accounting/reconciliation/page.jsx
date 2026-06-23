@@ -13,6 +13,7 @@ import {
   useApInvoices,
   useAccounts,
   useBankAccounts,
+  useReconciliationReport,
   useReconciliationSuggestions,
   useReconciliationUnmatched,
 } from '@/modules/accounting/hooks/use-accounting-queries';
@@ -25,6 +26,22 @@ function ReconciliationStatus({ transaction, de }) {
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${incoming ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
       {incoming ? (de ? 'Eingang' : 'Incoming') : (de ? 'Ausgang' : 'Outgoing')}
     </span>
+  );
+}
+
+function ReportTile({ label, value, amount, loading }) {
+  return (
+    <div className="rounded-lg border border-border bg-background p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      {loading ? (
+        <Skeleton className="mt-2 h-7 w-24" />
+      ) : (
+        <>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+          <p className="text-xs text-muted-foreground tabular-nums">{amount}</p>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -41,8 +58,10 @@ export default function ReconciliationPage() {
     ...(cursor && { cursor }),
     ...(bankAccountId !== 'ALL' && { bankAccountId }),
   };
+  const reportParams = bankAccountId !== 'ALL' ? { bankAccountId } : {};
   const { data: accounts = [] } = useBankAccounts();
   const { data: postingAccounts = [] } = useAccounts({ isActive: true });
+  const { data: report, isLoading: reportLoading } = useReconciliationReport(reportParams);
   const { data: { items = [], pagination } = {}, isLoading } = useReconciliationUnmatched(params);
   const { data: suggestions = [], isLoading: suggestionsLoading } = useReconciliationSuggestions(selectedTx?._id);
   const { data: { items: apCandidates = [] } = {} } = useApInvoices({ limit: 10, status: 'APPROVED' });
@@ -105,6 +124,39 @@ export default function ReconciliationPage() {
             {de ? 'Auto-Abgleich' : 'Auto Match'}
           </Button>
         </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <ReportTile
+          label={de ? 'Auto abgeglichen' : 'Auto matched'}
+          value={report?.autoMatched?.count ?? 0}
+          amount={formatMoney(report?.autoMatched?.incomingTotal || report?.autoMatched?.total || 0)}
+          loading={reportLoading}
+        />
+        <ReportTile
+          label={de ? 'Teilzahlungen' : 'Partial payments'}
+          value={report?.partiallyMatched?.count ?? 0}
+          amount={formatMoney(report?.partiallyMatched?.total || 0)}
+          loading={reportLoading}
+        />
+        <ReportTile
+          label={de ? 'Manuell' : 'Manual'}
+          value={report?.manuallyMatched?.count ?? 0}
+          amount={formatMoney(report?.manuallyMatched?.incomingTotal || report?.manuallyMatched?.total || 0)}
+          loading={reportLoading}
+        />
+        <ReportTile
+          label={de ? 'Kategorisiert' : 'Categorized'}
+          value={report?.categorized?.count ?? 0}
+          amount={formatMoney(report?.categorized?.total || 0)}
+          loading={reportLoading}
+        />
+        <ReportTile
+          label={de ? 'Offen' : 'Unmatched'}
+          value={report?.unmatched?.count ?? 0}
+          amount={formatMoney(report?.unmatched?.total || 0)}
+          loading={reportLoading}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">

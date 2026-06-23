@@ -34,6 +34,23 @@ async function loadDocumentService({
   const autoAllocationRuleRepository = {
     findMatchingRule: jest.fn(async () => null),
   };
+  const apInvoiceService = {
+    create: jest.fn(async (data) => ({
+      _id: 'ap-1',
+      apInvoiceNumber: 'AP-2026-00001',
+      ...data,
+    })),
+  };
+  const customerModel = {
+    findOne: jest.fn(() => ({
+      select: jest.fn(() => ({
+        lean: jest.fn(async () => ({ _id: 'supplier-1', name: 'Heiztechnik AG' })),
+      })),
+    })),
+  };
+  const procurementService = {
+    createSupplier: jest.fn(async (data) => ({ _id: 'supplier-1', ...data })),
+  };
 
   jest.unstable_mockModule('../../src/modules/accounting/accountingDocument.repository.js', () => ({
     default: accountingDocumentRepository,
@@ -43,6 +60,15 @@ async function loadDocumentService({
   }));
   jest.unstable_mockModule('../../src/modules/accounting/accountingDocumentAutoAllocationRule.repository.js', () => ({
     default: autoAllocationRuleRepository,
+  }));
+  jest.unstable_mockModule('../../src/modules/accounting/apInvoice.service.js', () => ({
+    default: apInvoiceService,
+  }));
+  jest.unstable_mockModule('../../src/modules/crm/customer.model.js', () => ({
+    default: customerModel,
+  }));
+  jest.unstable_mockModule('../../src/modules/crm/procurement.service.js', () => ({
+    default: procurementService,
   }));
   jest.unstable_mockModule('../../src/modules/files/file.service.js', () => ({
     default: fileService,
@@ -77,6 +103,7 @@ async function loadDocumentService({
     fileService,
     queueManager,
     auditService,
+    apInvoiceService,
   };
 }
 
@@ -168,8 +195,14 @@ describe('accounting OCR workflow', () => {
     expect(accountingDocumentRepository.updateById).toHaveBeenCalledWith('doc-1', { ocrStatus: 'PENDING' });
   });
 
-  test('confirms extracted OCR result and marks document processed', async () => {
-    const { service, ocrResultRepository, accountingDocumentRepository } = await loadDocumentService({
+  test('confirms extracted OCR result, creates AP invoice, and marks document processed', async () => {
+    const { service, ocrResultRepository, accountingDocumentRepository, apInvoiceService } = await loadDocumentService({
+      document: {
+        _id: 'doc-1',
+        documentType: 'SUPPLIER_INVOICE',
+        receiptDate: '2026-05-12',
+        projectReference: 'PRJ-1',
+      },
       ocrResult: {
         documentId: 'doc-1',
         status: 'EXTRACTED',
@@ -180,9 +213,15 @@ describe('accounting OCR workflow', () => {
       'doc-1',
       {
         supplierName: 'Heiztechnik AG',
+        matchedSupplierId: 'supplier-1',
         invoiceNumber: 'SUP-2026-100',
+        invoiceDate: '2026-05-12',
+        dueDate: '2026-06-11',
         total: 291.9,
         vat: 21.9,
+        lineItems: [
+          { description: 'Wartung', quantity: 2, unitPrice: 100, vatRate: 8.1 },
+        ],
       },
       'user-1',
     );
@@ -194,9 +233,20 @@ describe('accounting OCR workflow', () => {
       extractedVat: 21.9,
       confirmedBy: 'user-1',
     }));
+    expect(apInvoiceService.create).toHaveBeenCalledWith(expect.objectContaining({
+      supplierId: 'supplier-1',
+      supplierInvoiceNumber: 'SUP-2026-100',
+      documentId: 'doc-1',
+      lineItems: [expect.objectContaining({ description: 'Wartung', quantity: 2 })],
+    }), 'user-1', {});
     expect(accountingDocumentRepository.updateById).toHaveBeenCalledWith('doc-1', expect.objectContaining({
-      processingStatus: 'PROCESSED',
-      ocrStatus: 'COMPLETED',
+      $set: expect.objectContaining({
+        processingStatus: 'PROCESSED',
+        ocrStatus: 'COMPLETED',
+      }),
+      $addToSet: {
+        linkedRecords: { recordType: 'AP_INVOICE', recordId: 'ap-1' },
+      },
     }));
   });
 });

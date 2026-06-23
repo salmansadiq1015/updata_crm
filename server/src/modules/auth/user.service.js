@@ -25,6 +25,18 @@ const LIST_CACHE_TTL = { l1Ttl: 30, l2Ttl: 120 };
 // Fields users can edit on their own profile
 const SELF_EDITABLE_FIELDS = ['firstName', 'lastName', 'language', 'phone', 'department', 'position', 'street', 'city', 'zip', 'country'];
 
+function applyPreferredDepartmentPatch(updateData) {
+  if (!Object.prototype.hasOwnProperty.call(updateData, 'preferredDepartmentId')) {
+    return updateData;
+  }
+
+  const { preferredDepartmentId, ...rest } = updateData;
+  return {
+    ...rest,
+    'preferences.preferredDepartmentId': preferredDepartmentId || null,
+  };
+}
+
 class UserService {
   /**
    * Admin creates a new user.
@@ -62,6 +74,9 @@ class UserService {
       zip: data.zip || null,
       country: data.country || 'Schweiz',
       language: data.language || 'de',
+      preferences: {
+        preferredDepartmentId: data.preferredDepartmentId || null,
+      },
       schedulingSkills: data.schedulingSkills || [],
       schedulingCertifications: data.schedulingCertifications || [],
       role: data.roleId,
@@ -178,11 +193,12 @@ class UserService {
     if (updateData.roleId) {
       const role = await roleRepository.findById(updateData.roleId);
       if (!role) throw new NotFoundError('Role', updateData.roleId);
+      await this._assertCanChangeAdminRole(existing, role);
       updateData.role = updateData.roleId;
       delete updateData.roleId;
     }
 
-    const updated = await userRepository.updateById(id, updateData);
+    const updated = await userRepository.updateById(id, applyPreferredDepartmentPatch(updateData));
     await this._invalidateUserCache(id);
     await this._invalidateListCache();
 
@@ -369,14 +385,16 @@ class UserService {
     const updateData = { ...data };
 
     // If roleId is provided, validate it and map to role field
+    let newRole = null;
     if (updateData.roleId) {
-      const role = await roleRepository.findById(updateData.roleId);
-      if (!role) throw new NotFoundError('Role', updateData.roleId);
+      newRole = await roleRepository.findById(updateData.roleId);
+      if (!newRole) throw new NotFoundError('Role', updateData.roleId);
+      await this._assertCanBulkChangeAdminRole(users, newRole);
       updateData.role = updateData.roleId;
       delete updateData.roleId;
     }
 
-    const modifiedCount = await userRepository.bulkUpdate(ids, updateData);
+    const modifiedCount = await userRepository.bulkUpdate(ids, applyPreferredDepartmentPatch(updateData));
 
     // Invalidate caches for all affected users
     for (const id of ids) {
@@ -537,6 +555,19 @@ class UserService {
     return projectService.update(projectId, patch, assignedBy, meta);
   }
 
+  async listAssignmentTargets() {
+    const { default: Department } = await import('../qop/department.model.js');
+    const departments = await Department.find({ isActive: true })
+      .select('name code isActive')
+      .sort({ name: 1 })
+      .lean();
+
+    return departments.map((department) => ({
+      ...department,
+      id: department._id?.toString(),
+    }));
+  }
+
   /**
    * Enrich a user object with avatarUrl (presigned S3 URL) if avatarFileId is set.
    * Returns the user as-is if no avatar exists.
@@ -570,6 +601,44 @@ class UserService {
 
   async _invalidateListCache() {
     await cacheManager.invalidatePattern(`${config.redis.keyPrefix}auth:users:list:*`);
+  }
+
+  async _assertCanChangeAdminRole(existingUser, newRole) {
+    const existingRoleName = existingUser?.role?.name;
+    const isActiveAdmin = existingRoleName === 'Admin'
+      && existingUser.status === 'active'
+      && !existingUser.isDeleted;
+    const roleIsChangingAwayFromAdmin = newRole?.name !== 'Admin'
+      && newRole?._id?.toString?.() !== existingUser?.role?._id?.toString?.();
+
+    if (!isActiveAdmin || !roleIsChangingAwayFromAdmin) return;
+
+    const adminRole = await roleRepository.findByName('Admin');
+    if (!adminRole) return;
+
+    const adminCount = await userRepository.countActiveAdmins(adminRole._id);
+    if (adminCount <= 1) {
+      throw new ConflictError('Cannot remove the last active admin user from the Admin role');
+    }
+  }
+
+  async _assertCanBulkChangeAdminRole(users, newRole) {
+    if (newRole?.name === 'Admin') return;
+
+    const activeAdmins = users.filter((user) =>
+      user.role?.name === 'Admin'
+      && user.status === 'active'
+      && !user.isDeleted);
+
+    if (activeAdmins.length === 0) return;
+
+    const adminRole = await roleRepository.findByName('Admin');
+    if (!adminRole) return;
+
+    const adminCount = await userRepository.countActiveAdmins(adminRole._id);
+    if (adminCount - activeAdmins.length < 1) {
+      throw new ConflictError('Cannot remove the last active admin user from the Admin role');
+    }
   }
 }
 

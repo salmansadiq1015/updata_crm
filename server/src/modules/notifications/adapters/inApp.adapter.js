@@ -51,7 +51,12 @@ class InAppAdapter {
         inAppId: inApp._id?.toString(),
       });
 
-      return { success: true, providerMessageId: inApp._id?.toString() };
+      return {
+        success: true,
+        delivered: true,
+        provider: 'in_app',
+        providerMessageId: inApp._id?.toString(),
+      };
     } catch (err) {
       logger.error('In-app delivery failed', { module: 'notifications', channel: 'in_app', error: { message: err.message } });
       return { success: false, error: err.message };

@@ -193,6 +193,8 @@ class IntegrationConfigService {
           integrationKey,
           previousStatus,
           currentStatus: status,
+          oldStatus: previousStatus,
+          newStatus: status,
           errorMessage,
         },
         { source: 'integrations:config' },

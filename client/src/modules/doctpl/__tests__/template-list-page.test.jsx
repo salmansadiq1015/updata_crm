@@ -7,6 +7,7 @@ const createMutateAsync = vi.hoisted(() => vi.fn());
 const updateMutateAsync = vi.hoisted(() => vi.fn());
 const duplicateMutateAsync = vi.hoisted(() => vi.fn());
 const deleteMutateAsync = vi.hoisted(() => vi.fn());
+const hasPermissionMock = vi.hoisted(() => vi.fn(() => true));
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }) => <a href={href} {...props}>{children}</a>,
@@ -26,6 +27,10 @@ vi.mock('@/lib/i18n/language-context', () => ({
 vi.mock('@/lib/toast', () => ({
   showError: vi.fn(),
   showSuccess: vi.fn(),
+}));
+
+vi.mock('@/shared/hooks/use-permissions', () => ({
+  usePermissions: () => ({ hasPermission: hasPermissionMock }),
 }));
 
 vi.mock('@/modules/doctpl/hooks/useTemplateQueries', () => ({
@@ -48,6 +53,8 @@ describe('AdminTemplatesPage', () => {
     updateMutateAsync.mockReset();
     duplicateMutateAsync.mockReset();
     deleteMutateAsync.mockReset();
+    hasPermissionMock.mockReset();
+    hasPermissionMock.mockReturnValue(true);
     createMutateAsync.mockResolvedValue({ data: { _id: 'tpl-new' } });
     duplicateMutateAsync.mockResolvedValue({});
     useTemplatesMock.mockReset();
@@ -120,5 +127,31 @@ describe('AdminTemplatesPage', () => {
     expect(payload.sections.map((section) => section.type)).toEqual(['header', 'body', 'footer']);
     expect(payload.tableColumns).toEqual([]);
     expect(routerPushMock).toHaveBeenCalledWith('/admin/templates/tpl-new');
+  });
+
+  test('opens template creation from the empty-state call to action', async () => {
+    useTemplatesMock.mockReturnValue({
+      data: { items: [], pagination: { hasNext: false } },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    render(<AdminTemplatesPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create first template' }));
+
+    expect(await screen.findByLabelText('Name')).toBeInTheDocument();
+  });
+
+  test('hides write and delete actions for read-only users', () => {
+    hasPermissionMock.mockImplementation((permission) => permission === 'templates:read');
+
+    render(<AdminTemplatesPage />);
+
+    expect(screen.queryByRole('button', { name: 'Create template' })).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Duplicate')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Archive')).not.toBeInTheDocument();
   });
 });

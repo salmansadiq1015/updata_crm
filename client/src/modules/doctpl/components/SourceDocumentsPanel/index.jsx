@@ -19,6 +19,7 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailInit, setEmailInit] = useState({});
   const [preview, setPreview]     = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const { data: docs = [], refetch, isLoading } = useDocumentsBySource(sourceModule, sourceRecordId);
   const emailFilters = useMemo(
@@ -37,7 +38,12 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
   };
 
   const handleEmailOpen = async () => {
-    const firstDoc = docs[0];
+    // Attach the selected documents, or fall back to the most recent one.
+    const chosen = selectedIds.length
+      ? docs.filter((doc) => selectedIds.includes(doc._id))
+      : (docs[0] ? [docs[0]] : []);
+    const attachments = chosen.map((doc) => ({ id: doc._id, fileName: doc.fileName }));
+    const firstDoc = chosen[0];
     const r = await compose.mutateAsync({
       templateType, language,
       data: documentData,
@@ -48,6 +54,8 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
       subject:         r?.data?.subject || '',
       bodyHtml:        r?.data?.bodyHtml || '',
       documentId:      firstDoc?._id,
+      documentIds:     attachments.map((a) => a.id),
+      attachments,
       sourceModule,
       sourceRecordId,
     });
@@ -88,6 +96,8 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
       <DocumentsTable
         documents={docs}
         loading={isLoading}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
         onPreview={handlePreview}
         onDownload={handleDownload}
       />

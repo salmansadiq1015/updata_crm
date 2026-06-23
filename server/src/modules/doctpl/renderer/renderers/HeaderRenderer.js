@@ -90,10 +90,20 @@ export default class HeaderRenderer {
     if (data.documentDate)   { doc.text(`${t(language, 'date')}: ${data.documentDate}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     if (data.validUntil)     { doc.text(`${t(language,'validUntil')}: ${data.validUntil}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     if (data.dueDate)        { doc.text(`${t(language,'dueDate')}: ${data.dueDate}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
+    if (data.sourceQuotationRef) { doc.text(`${t(language, 'sourceQuotation')}: ${data.sourceQuotationRef}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     if (data.reference)      { doc.text(`${t(language, 'reference')}: ${data.reference}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     doc.restore();
 
-    const newY = Math.max(addrY + 60, metaY) + 10;
+    // Requested delivery date is shown prominently (bold, primary colour) for order confirmations.
+    if (data.requestedDeliveryDate) {
+      doc.save().font(fonts.bold).fontSize(10).fillColor(colors.primary);
+      doc.text(`${t(language, 'requestedDeliveryDate')}: ${data.requestedDeliveryDate}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' });
+      doc.restore();
+      metaY += 14;
+    }
+
+    const headerHeight = Number(config.layout?.headerHeight ?? 45) * MM_TO_PT;
+    const newY = Math.max(addrY + 60, metaY, pm.margins.top + headerHeight) + 10;
     pm.setY(newY);
   }
 }

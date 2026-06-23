@@ -53,4 +53,15 @@ describe('userService', () => {
     expect(apiClient.post).toHaveBeenCalledWith('/users/user-1/projects', assignment);
     expect(assigned).toEqual({ _id: 'project-1', projectManagerId: 'user-1' });
   });
+
+  it('normalizes assignment targets from the user-management endpoint', async () => {
+    apiClient.get.mockResolvedValue({
+      data: [{ _id: 'team-1', name: 'Service', code: 'SVC' }],
+    });
+
+    const result = await userService.getAssignmentTargets();
+
+    expect(apiClient.get).toHaveBeenCalledWith('/users/assignment-targets');
+    expect(result).toEqual([{ _id: 'team-1', id: 'team-1', name: 'Service', code: 'SVC' }]);
+  });
 });

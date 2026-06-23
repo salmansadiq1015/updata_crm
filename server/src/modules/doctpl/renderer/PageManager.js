@@ -1,8 +1,9 @@
 const MM_TO_PT = 2.83465;
 
 export default class PageManager {
-  constructor(doc, margins) {
+  constructor(doc, margins, layout = {}) {
     this.doc = doc;
+    this.footerHeight = Number(layout.footerHeight ?? 30) * MM_TO_PT;
     this.margins = {
       top: (margins.top || 25) * MM_TO_PT,
       bottom: (margins.bottom || 20) * MM_TO_PT,
@@ -13,7 +14,7 @@ export default class PageManager {
     this.pageWidth = doc.page.width;
     this.currentY = this.margins.top;
     this.pageCount = 1;
-    this.footerY = this.pageHeight - this.margins.bottom - 20;
+    this.footerY = this.pageHeight - this.margins.bottom - this.footerHeight;
   }
 
   get contentWidth() {

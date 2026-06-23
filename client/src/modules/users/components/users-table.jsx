@@ -87,6 +87,11 @@ export function UsersTable() {
     queryFn: () => roleService.getRoles(),
   });
 
+  const { data: assignmentTargets = [] } = useQuery({
+    queryKey: queryKeys.users.assignmentTargets(),
+    queryFn: () => userService.getAssignmentTargets(),
+  });
+
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.users.all() });
   };
@@ -581,6 +586,7 @@ export function UsersTable() {
         onSubmit={handleSubmit}
         defaultValues={editUser}
         roles={roles}
+        assignmentTargets={assignmentTargets}
         isLoading={createMutation.isPending || updateMutation.isPending}
       />
 

@@ -66,6 +66,11 @@ export default function UserDetailPage() {
     queryFn: () => roleService.getRoles(),
   });
 
+  const { data: assignmentTargets = [] } = useQuery({
+    queryKey: queryKeys.users.assignmentTargets(),
+    queryFn: () => userService.getAssignmentTargets(),
+  });
+
   const updateMutation = useMutation({
     mutationFn: (data) => userService.updateUser(id, data),
     onSuccess: () => {
@@ -262,7 +267,12 @@ export default function UserDetailPage() {
             </TabsContent>
 
             <TabsContent value="projects">
-              <UserProjectsPanel userId={id} canWrite={canWrite} />
+              <UserProjectsPanel
+                userId={id}
+                user={user}
+                canWrite={canWrite}
+                assignmentTargets={assignmentTargets}
+              />
             </TabsContent>
 
             {canAdmin && (
@@ -307,6 +317,7 @@ export default function UserDetailPage() {
         onSubmit={handleFormSubmit}
         defaultValues={user}
         roles={rolesData?.data || []}
+        assignmentTargets={assignmentTargets}
         isLoading={updateMutation.isPending}
       />
 

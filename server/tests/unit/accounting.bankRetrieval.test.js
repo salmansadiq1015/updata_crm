@@ -62,6 +62,14 @@ async function loadBankingService({ account, existsStatement = false } = {}) {
     findByBatchNumber: jest.fn(),
     updateStatus: jest.fn(),
   };
+  const reconciliationService = {
+    runAutoReconciliation: jest.fn(async () => ({
+      bankAccountId: account?._id,
+      matched: 1,
+      partial: 0,
+      unmatched: 0,
+    })),
+  };
   const auditService = { logEvent: jest.fn() };
 
   jest.unstable_mockModule('../../src/modules/accounting/bankAccount.repository.js', () => ({
@@ -72,6 +80,9 @@ async function loadBankingService({ account, existsStatement = false } = {}) {
   }));
   jest.unstable_mockModule('../../src/modules/accounting/paymentBatch.repository.js', () => ({
     default: paymentBatchRepository,
+  }));
+  jest.unstable_mockModule('../../src/modules/accounting/reconciliation.service.js', () => ({
+    default: reconciliationService,
   }));
   jest.unstable_mockModule('../../src/shared/cache/CacheManager.js', () => ({
     default: { del: jest.fn(), getOrSet: jest.fn() },
@@ -90,7 +101,13 @@ async function loadBankingService({ account, existsStatement = false } = {}) {
   }));
 
   const bankingService = (await import('../../src/modules/accounting/banking.service.js')).default;
-  return { bankingService, bankAccountRepository, bankTransactionRepository, auditService };
+  return {
+    bankingService,
+    bankAccountRepository,
+    bankTransactionRepository,
+    reconciliationService,
+    auditService,
+  };
 }
 
 describe('bank statement automated retrieval', () => {
@@ -99,7 +116,7 @@ describe('bank statement automated retrieval', () => {
     await fs.writeFile(path.join(folders.statementDirectory, 'statement.053.xml'), camt053Xml);
     await fs.writeFile(path.join(folders.statementDirectory, 'ignored.txt'), 'not xml');
 
-    const { bankingService, bankTransactionRepository } = await loadBankingService({
+    const { bankingService, bankTransactionRepository, reconciliationService } = await loadBankingService({
       account: {
         _id: 'bank-1',
         iban: 'CH9300762011623852957',
@@ -127,6 +144,7 @@ describe('bank statement automated retrieval', () => {
         amount: 250.1,
       }),
     ]);
+    expect(reconciliationService.runAutoReconciliation).toHaveBeenCalledWith('bank-1');
     const processed = await fs.readdir(folders.processedDirectory);
     expect(processed).toHaveLength(1);
     await expect(fs.access(path.join(folders.statementDirectory, 'statement.053.xml'))).rejects.toThrow();

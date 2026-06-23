@@ -59,7 +59,7 @@ describe('CatalogArticleFormDialog', () => {
       <CatalogArticleFormDialog open={true} onClose={() => {}} article={null} />,
       { wrapper },
     );
-    expect(screen.getByLabelText(/supplier/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/supplier reference/i)).toBeInTheDocument();
   });
 
   it('renders IGH article number field', () => {

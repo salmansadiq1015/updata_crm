@@ -138,13 +138,14 @@ class FileService {
   }
 
   /**
-   * Soft-delete a file.
+   * Permanently delete a file from storage and metadata.
    */
   async delete(id) {
     const file = await fileRepository.findById(id);
     if (!file) throw new NotFoundError('File', id);
 
-    await fileRepository.softDelete(id);
+    await storageService.delete(file.key);
+    await fileRepository.hardDelete(id);
 
     // Invalidate caches
     await cacheManager.del(`core:file:${id}`);
@@ -157,13 +158,14 @@ class FileService {
       key: file.key,
     }, { source: 'core:files' });
 
-    logger.info('File soft-deleted', {
+    logger.info('File permanently deleted', {
       module: 'files',
       action: 'delete',
       fileId: id,
+      key: file.key,
     });
 
-    return { deleted: true };
+    return { deleted: true, permanent: true };
   }
 
   async organize(id, changes) {

@@ -9,7 +9,7 @@ const widgetSubmissionSchema = new mongoose.Schema(
     widgetId: { type: String, required: true, default: 'mb-boiler-main-site' },
     referenceNumber: { type: String, unique: true },
     contactName: { type: String, required: true, trim: true, maxlength: 200 },
-    contactEmail: { type: String, required: true, trim: true, maxlength: 200 },
+    contactEmail: { type: String, trim: true, maxlength: 200, default: null },
     contactPhone: { type: String, trim: true, maxlength: 30, default: null },
     contactAddress: {
       street: { type: String, maxlength: 200, default: null },
@@ -35,6 +35,7 @@ const widgetSubmissionSchema = new mongoose.Schema(
     userAgent: { type: String, default: null },
     language: { type: String, default: 'de', maxlength: 5 },
     processingStatus: { type: String, enum: PROCESSING_STATUSES, default: 'pending' },
+    duplicateOf: { type: mongoose.Schema.Types.ObjectId, ref: 'WidgetSubmission', default: null },
     crmContactId: { type: mongoose.Schema.Types.ObjectId, default: null },
     orderId: { type: mongoose.Schema.Types.ObjectId, default: null },
     processedAt: { type: Date, default: null },
@@ -47,6 +48,7 @@ const widgetSubmissionSchema = new mongoose.Schema(
 
 widgetSubmissionSchema.index({ processingStatus: 1, createdAt: -1 });
 widgetSubmissionSchema.index({ contactEmail: 1, requestType: 1, createdAt: -1 });
+widgetSubmissionSchema.index({ contactPhone: 1, requestType: 1, createdAt: -1 });
 widgetSubmissionSchema.index({ createdAt: -1 });
 
 widgetSubmissionSchema.pre(/^find/, function () {

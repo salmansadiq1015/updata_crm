@@ -63,10 +63,26 @@ const healthCheckFunctions = {
   async smtp_email() {
     const host = process.env.SMTP_HOST;
     const port = process.env.SMTP_PORT;
-    if (!host || !port) {
-      return { status: 'down', details: { reason: 'SMTP_HOST or SMTP_PORT env vars not set' } };
+    const user = process.env.SMTP_MAIL;
+    const pass = process.env.SMTP_PASSWORD;
+    if ((!process.env.SMTP_SERVICE && (!host || !port)) || !user || !pass) {
+      return { status: 'down', details: { reason: 'SMTP connection credentials are incomplete' } };
     }
-    return { status: 'healthy', details: { host, port } };
+    try {
+      const { default: nodemailer } = await import('nodemailer');
+      const transporter = nodemailer.createTransport({
+        ...(process.env.SMTP_SERVICE
+          ? { service: process.env.SMTP_SERVICE }
+          : { host, port: Number(port), secure: Number(port) === 465 }),
+        auth: { user, pass },
+        tls: { rejectUnauthorized: false },
+      });
+      await transporter.verify();
+      transporter.close();
+      return { status: 'healthy', details: { host: process.env.SMTP_SERVICE || host, port } };
+    } catch (err) {
+      return { status: 'down', details: { reason: err.message } };
+    }
   },
 
   async ocr_service() {
@@ -83,12 +99,15 @@ const healthCheckFunctions = {
   },
 
   async cloud_storage() {
-    const accessKey = process.env.AWS_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY;
-    const secretKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.S3_SECRET_KEY;
-    if (!accessKey || !secretKey) {
-      return { status: 'down', details: { reason: 'Cloud storage credentials (AWS_ACCESS_KEY_ID / S3_ACCESS_KEY) not set' } };
+    try {
+      const { default: storageService } = await import('../../shared/storage/StorageService.js');
+      const healthy = await storageService.healthCheck();
+      return healthy
+        ? { status: 'healthy', details: { bucketReachable: true } }
+        : { status: 'down', details: { reason: 'Storage bucket is not reachable' } };
+    } catch (err) {
+      return { status: 'down', details: { reason: err.message } };
     }
-    return { status: 'healthy', details: { credentialsConfigured: true } };
   },
 
   async calendar_google() {
@@ -178,6 +197,8 @@ class IntegrationHealthService {
           integrationKey,
           previousStatus,
           currentStatus: result.status,
+          oldStatus: previousStatus,
+          newStatus: result.status,
           responseTimeMs,
           errorMessage: result.details?.reason || null,
         },

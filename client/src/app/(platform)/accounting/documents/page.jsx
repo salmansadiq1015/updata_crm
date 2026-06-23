@@ -19,7 +19,7 @@ import {
 } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useAccDocumentMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
 import { accDocService } from '@/modules/accounting/services/accounting-service';
-import { cursorPageLabel, downloadResponse, formatDate, formatMoney, toDateInput } from '@/modules/accounting/utils/accounting-ui';
+import { cursorPageLabel, downloadResponse, formatDate, toDateInput } from '@/modules/accounting/utils/accounting-ui';
 import { useUserDirectory } from '@/modules/users/hooks/use-user-directory';
 
 const DOCUMENT_TYPES = [
@@ -60,8 +60,13 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
   const { data: result, isLoading } = useAccDocumentOcrResult(document?._id);
   const { confirmOcr, rejectOcr } = useAccDocumentMutations();
   const [previewUrl, setPreviewUrl] = useState('');
-  const corrections = result ? buildOcrCorrections(result) : {};
-  const canConfirm = Object.keys(corrections).length > 0;
+  const [form, setForm] = useState({});
+  const lowConfidence = new Set(result?.lowConfidenceFields || []);
+  const canConfirm = Boolean(form.supplierName && form.invoiceNumber && form.invoiceDate && form.dueDate && Number(form.total || 0) > 0);
+
+  useEffect(() => {
+    setForm(result ? buildOcrCorrections(result) : {});
+  }, [result]);
 
   useEffect(() => {
     let objectUrl = '';
@@ -92,10 +97,24 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
     if (!document?._id || !canConfirm) return;
     await confirmOcr.mutateAsync({
       id: document._id,
-      data: { corrections },
+      data: {
+        corrections: {
+          ...form,
+          total: Number(form.total || 0),
+          vat: Number(form.vat || 0),
+          currency: form.currency || 'CHF',
+        },
+      },
     });
     onClose();
   };
+
+  const setOcrField = (key, value) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const inputClass = (field) =>
+    `h-9 text-sm ${lowConfidence.has(field) ? 'border-yellow-500 bg-yellow-50 focus-visible:ring-yellow-500' : ''}`;
 
   const handleReject = async () => {
     if (!document?._id) return;
@@ -131,20 +150,50 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
             </div>
             <div className="rounded-xl border border-border p-3">
               <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-3">{de ? 'Extraktion' : 'Extraction'}</h3>
-              <dl className="grid grid-cols-[8rem_1fr] gap-2 text-sm">
-                <dt className="text-muted-foreground">{de ? 'Lieferant' : 'Supplier'}</dt>
-                <dd className="font-medium">{result.extractedSupplierName || '-'}</dd>
-                <dt className="text-muted-foreground">{de ? 'Rechnung' : 'Invoice'}</dt>
-                <dd className="font-mono text-xs">{result.extractedInvoiceNumber || '-'}</dd>
-                <dt className="text-muted-foreground">{de ? 'Datum' : 'Date'}</dt>
-                <dd>{formatDate(result.extractedInvoiceDate)}</dd>
-                <dt className="text-muted-foreground">{de ? 'Faellig' : 'Due'}</dt>
-                <dd>{formatDate(result.extractedDueDate)}</dd>
-                <dt className="text-muted-foreground">Total</dt>
-                <dd className="font-semibold">{formatMoney(result.extractedTotal)}</dd>
-                <dt className="text-muted-foreground">MWST</dt>
-                <dd>{formatMoney(result.extractedVat)}</dd>
-              </dl>
+              <div className="grid gap-3">
+                <label className="grid gap-1 text-xs font-medium">
+                  {de ? 'Lieferant' : 'Supplier'}
+                  <Input className={inputClass('supplierName')} value={form.supplierName || ''} onChange={(event) => setOcrField('supplierName', event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-xs font-medium">
+                  {de ? 'Adresse' : 'Address'}
+                  <Input className={inputClass('supplierAddress')} value={form.supplierAddress || ''} onChange={(event) => setOcrField('supplierAddress', event.target.value)} />
+                </label>
+                <label className="grid gap-1 text-xs font-medium">
+                  {de ? 'Rechnung' : 'Invoice'}
+                  <Input className={inputClass('invoiceNumber')} value={form.invoiceNumber || ''} onChange={(event) => setOcrField('invoiceNumber', event.target.value)} />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="grid gap-1 text-xs font-medium">
+                    {de ? 'Datum' : 'Date'}
+                    <Input type="date" className={inputClass('invoiceDate')} value={form.invoiceDate || ''} onChange={(event) => setOcrField('invoiceDate', event.target.value)} />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium">
+                    {de ? 'Faellig' : 'Due'}
+                    <Input type="date" className={inputClass('dueDate')} value={form.dueDate || ''} onChange={(event) => setOcrField('dueDate', event.target.value)} />
+                  </label>
+                </div>
+                <div className="grid grid-cols-[1fr_1fr_5rem] gap-2">
+                  <label className="grid gap-1 text-xs font-medium">
+                    Total
+                    <Input type="number" min="0" step="0.01" className={inputClass('total')} value={form.total ?? ''} onChange={(event) => setOcrField('total', event.target.value)} />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium">
+                    MWST
+                    <Input type="number" min="0" step="0.01" className={inputClass('vat')} value={form.vat ?? ''} onChange={(event) => setOcrField('vat', event.target.value)} />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium">
+                    {de ? 'Waehr.' : 'Curr.'}
+                    <Select value={form.currency || 'CHF'} onValueChange={(value) => setOcrField('currency', value)}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="CHF">CHF</SelectItem>
+                        <SelectItem value="EUR">EUR</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                </div>
+              </div>
             </div>
             <div className="rounded-xl border border-border p-3 md:col-start-2">
               <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-3">{de ? 'Qualitaet' : 'Quality'}</h3>

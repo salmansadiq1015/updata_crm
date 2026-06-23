@@ -1,4 +1,5 @@
 import BankTransaction from './bankTransaction.model.js';
+import mongoose from 'mongoose';
 import {
   buildCursorQuery,
   buildCursorSort,
@@ -15,6 +16,10 @@ const ALLOWED_FILTERS = {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function toObjectId(value) {
+  return mongoose.Types.ObjectId.isValid(value) ? new mongoose.Types.ObjectId(value) : value;
 }
 
 class BankTransactionRepository {
@@ -100,6 +105,50 @@ class BankTransactionRepository {
       bankAccountId,
       reconciliationStatus: 'UNMATCHED',
     }).lean();
+  }
+
+  async getReconciliationSummary({ bankAccountId, dateFrom, dateTo } = {}) {
+    const match = {};
+    if (bankAccountId) match.bankAccountId = toObjectId(bankAccountId);
+    if (dateFrom || dateTo) {
+      match.transactionDate = {};
+      if (dateFrom) match.transactionDate.$gte = new Date(dateFrom);
+      if (dateTo) match.transactionDate.$lte = new Date(dateTo);
+    }
+
+    return BankTransaction.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$reconciliationStatus',
+          count: { $sum: 1 },
+          total: { $sum: '$amount' },
+          incomingTotal: {
+            $sum: { $cond: [{ $gt: ['$amount', 0] }, '$amount', 0] },
+          },
+          outgoingTotal: {
+            $sum: { $cond: [{ $lt: ['$amount', 0] }, { $abs: '$amount' }, 0] },
+          },
+        },
+      },
+    ]);
+  }
+
+  async findMatchedInvoiceTransactions({ bankAccountId, dateFrom, dateTo } = {}) {
+    const filter = {
+      reconciliationStatus: { $in: ['AUTO_MATCHED', 'MANUALLY_MATCHED'] },
+      matchedInvoiceId: { $ne: null },
+    };
+    if (bankAccountId) filter.bankAccountId = bankAccountId;
+    if (dateFrom || dateTo) {
+      filter.transactionDate = {};
+      if (dateFrom) filter.transactionDate.$gte = new Date(dateFrom);
+      if (dateTo) filter.transactionDate.$lte = new Date(dateTo);
+    }
+
+    return BankTransaction.find(filter)
+      .select('_id amount currency reconciliationStatus matchedInvoiceId transactionDate')
+      .lean();
   }
 
   async updateReconciliation(id, status, matchData = {}, options = {}) {

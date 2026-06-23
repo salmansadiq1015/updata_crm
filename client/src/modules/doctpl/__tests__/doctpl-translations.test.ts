@@ -25,4 +25,24 @@ describe('DocTpl translations', () => {
       }
     }
   });
+
+  test('every DocTpl key exists in every locale (bidirectional completeness)', () => {
+    // Union of doctpl.* keys across ALL locales — catches a key missing in any
+    // single language, including German (the previous test only anchored on de).
+    const unionKeys = new Set<string>();
+    for (const locale of allLocales) {
+      for (const key of Object.keys(translations[locale])) {
+        if (key.startsWith('doctpl.')) unionKeys.add(key);
+      }
+    }
+
+    const missing: string[] = [];
+    for (const locale of allLocales) {
+      for (const key of unionKeys) {
+        if (!translations[locale][key]) missing.push(`${locale}:${key}`);
+      }
+    }
+
+    expect(missing, `Missing/empty DocTpl translations: ${missing.join(', ')}`).toEqual([]);
+  });
 });

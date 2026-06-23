@@ -79,7 +79,7 @@ function uniqueIds(values = []) {
 }
 
 function ticketDeepLink(ticket) {
-  return `/field-ops/notifications?ticketId=${ticket._id}`;
+  return `/notifications?ticketId=${ticket._id}`;
 }
 
 function ticketLabel(ticket) {

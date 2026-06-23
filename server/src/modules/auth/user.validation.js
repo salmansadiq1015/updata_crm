@@ -3,6 +3,7 @@ import { objectId, cursorPagination, idParam } from '../../shared/validation/com
 
 const schedulingCapabilitySchema = Joi.array().items(Joi.string().trim().max(80)).max(50);
 const assignmentTypes = ['manager', 'team'];
+const preferredDepartmentId = objectId.allow(null);
 
 export const createUserSchema = {
   body: Joi.object({
@@ -18,6 +19,7 @@ export const createUserSchema = {
     city: Joi.string().trim().max(100).allow('', null),
     zip: Joi.string().trim().max(20).allow('', null),
     country: Joi.string().trim().max(100).allow('', null),
+    preferredDepartmentId,
     schedulingSkills: schedulingCapabilitySchema,
     schedulingCertifications: schedulingCapabilitySchema,
   }),
@@ -40,6 +42,7 @@ export const updateUserSchema = {
     city: Joi.string().trim().max(100).allow('', null),
     zip: Joi.string().trim().max(20).allow('', null),
     country: Joi.string().trim().max(100).allow('', null),
+    preferredDepartmentId,
     status: Joi.string().valid('active', 'deactivated', 'locked'),
     schedulingSkills: schedulingCapabilitySchema,
     schedulingCertifications: schedulingCapabilitySchema,
@@ -110,6 +113,7 @@ export const bulkUpdateSchema = {
       roleId: objectId,
       language: Joi.string().valid('de', 'en', 'fr', 'it'),
       status: Joi.string().valid('active', 'deactivated', 'locked'),
+      preferredDepartmentId,
     }).min(1).required(),
   }),
 };

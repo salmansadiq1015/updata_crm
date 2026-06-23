@@ -19,7 +19,14 @@ const widgetLimiter = createLimiter({
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (['image/jpeg', 'image/png'].includes(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Only JPEG and PNG image uploads are accepted'));
+  },
 });
 
 router.get('/config', widgetLimiter, validate(widgetIdQuerySchema), (req, res, next) => widgetPublicController.getConfig(req, res, next));

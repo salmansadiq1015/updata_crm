@@ -1,5 +1,11 @@
 'use client';
 
+// Side-effect import: hardens Node.prototype.removeChild/insertBefore against
+// NotFoundError crashes from external DOM mutation (auto-translation, extensions).
+// Must run before React's first client commit, so it lives at the top of this
+// top-level client boundary.
+import '@/lib/dom/install-dom-guards';
+
 import { useEffect, useRef } from 'react';
 import { ThemeProvider } from './theme-provider';
 import { QueryProvider } from './query-provider';

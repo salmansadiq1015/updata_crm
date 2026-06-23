@@ -13,6 +13,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { showSuccess, showError } from '@/lib/toast';
 import { AvatarUpload } from '@/shared/components/avatar-upload';
 import { ChangePasswordForm } from '@/modules/auth/components/change-password-form';
+import { CalendarSyncCard } from '@/modules/integrations/components/calendar-sync-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -156,6 +157,10 @@ export default function ProfilePage() {
             <Lock className="h-3.5 w-3.5" />
             {t('profile.tab.password') || 'Passwort'}
           </TabsTrigger>
+          <TabsTrigger value="calendar" className="gap-1.5">
+            <Calendar className="h-3.5 w-3.5" />
+            Kalender
+          </TabsTrigger>
         </TabsList>
 
         {/* Profile Tab */}
@@ -285,6 +290,12 @@ export default function ProfilePage() {
         <TabsContent value="password">
           <div className="max-w-lg">
             <ChangePasswordForm />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="calendar">
+          <div className="max-w-3xl">
+            <CalendarSyncCard />
           </div>
         </TabsContent>
       </Tabs>

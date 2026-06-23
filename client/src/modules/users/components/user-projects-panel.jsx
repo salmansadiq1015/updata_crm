@@ -10,6 +10,13 @@ import { queryKeys } from '@/lib/query/keys';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { showError, showSuccess } from '@/lib/toast';
+import {
+  USER_PROJECT_ASSIGNMENT_TYPES,
+  buildUserProjectAssignment,
+  canAssignUserAsTeam,
+  findAssignmentTargetName,
+  getPreferredDepartmentId,
+} from '@/modules/users/utils/project-assignment';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -31,12 +38,16 @@ function customerName(project) {
   return project.customerId?.name || project.customerName || null;
 }
 
-export function UserProjectsPanel({ userId, canWrite }) {
+export function UserProjectsPanel({ userId, user, canWrite, assignmentTargets = [] }) {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
   const [projectSearch, setProjectSearch] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [assignmentType, setAssignmentType] = useState(USER_PROJECT_ASSIGNMENT_TYPES.MANAGER);
   const debouncedSearch = useDebounce(projectSearch, 300);
+  const preferredDepartmentId = getPreferredDepartmentId(user);
+  const preferredTeamName = findAssignmentTargetName(assignmentTargets, preferredDepartmentId);
+  const teamAssignmentEnabled = canAssignUserAsTeam(user);
 
   const assignedQuery = useQuery({
     queryKey: queryKeys.users.projects(userId, ASSIGNED_PROJECT_PARAMS),
@@ -75,10 +86,10 @@ export function UserProjectsPanel({ userId, canWrite }) {
   );
 
   const assignMutation = useMutation({
-    mutationFn: () => userService.assignProject(userId, {
-      projectId: selectedProjectId,
-      assignmentType: 'manager',
-    }),
+    mutationFn: () => userService.assignProject(
+      userId,
+      buildUserProjectAssignment(selectedProjectId, assignmentType),
+    ),
     onSuccess: () => {
       setSelectedProjectId('');
       queryClient.invalidateQueries({ queryKey: queryKeys.users.projects(userId, ASSIGNED_PROJECT_PARAMS) });
@@ -116,7 +127,7 @@ export function UserProjectsPanel({ userId, canWrite }) {
     <div className="space-y-4">
       {canWrite && (
         <div className="rounded-lg border border-border/40 bg-muted/20 p-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(180px,1fr)_minmax(240px,2fr)_auto]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(180px,1fr)_minmax(140px,0.7fr)_minmax(240px,2fr)_auto]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -126,6 +137,19 @@ export function UserProjectsPanel({ userId, canWrite }) {
                 className="pl-9"
               />
             </div>
+            <Select value={assignmentType} onValueChange={setAssignmentType}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('users.projects.assignmentType', 'Assignment type')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={USER_PROJECT_ASSIGNMENT_TYPES.MANAGER}>
+                  {t('users.projects.manager', 'Manager')}
+                </SelectItem>
+                <SelectItem value={USER_PROJECT_ASSIGNMENT_TYPES.TEAM}>
+                  {t('users.projects.team', 'Team')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
               <SelectTrigger>
                 <SelectValue placeholder={t('users.projects.selectProject', 'Select project')} />
@@ -145,13 +169,25 @@ export function UserProjectsPanel({ userId, canWrite }) {
             </Select>
             <Button
               className="gap-2"
-              disabled={!selectedProjectId || selectedProjectId === '__empty' || assignMutation.isPending}
+              disabled={
+                !selectedProjectId
+                || selectedProjectId === '__empty'
+                || assignMutation.isPending
+                || (assignmentType === USER_PROJECT_ASSIGNMENT_TYPES.TEAM && !teamAssignmentEnabled)
+              }
               onClick={() => assignMutation.mutate()}
             >
               {assignMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               {t('users.projects.assign', 'Assign')}
             </Button>
           </div>
+          {assignmentType === USER_PROJECT_ASSIGNMENT_TYPES.TEAM && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {teamAssignmentEnabled
+                ? t('users.projects.teamTargetHint', 'Team target: {team}').replace('{team}', preferredTeamName || preferredDepartmentId)
+                : t('users.projects.teamTargetMissing', 'Set a preferred team on the user profile before assigning projects as team work.')}
+            </p>
+          )}
         </div>
       )}
 

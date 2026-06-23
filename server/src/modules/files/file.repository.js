@@ -89,7 +89,8 @@ class FileRepository {
 
   /**
    * Soft delete: set isDeleted flag.
-   * Actual S3 deletion happens via cleanup job.
+   * Retained for legal-retention workflows. The public delete route performs
+   * permanent storage deletion through file.service.delete().
    */
   async softDelete(id) {
     return FileMetadata.findByIdAndUpdate(

@@ -4,6 +4,7 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { useWheelScroll } from "@/shared/hooks/use-wheel-scroll"
 
 function Popover({
   ...props
@@ -23,9 +24,14 @@ function PopoverContent({
   sideOffset = 4,
   ...props
 }) {
+  // Keeps wheel scrolling alive inside scrollable popover content even when the
+  // popover is portaled over a modal Dialog (whose scroll-lock would otherwise
+  // swallow the wheel). No-op when nothing inside is scrollable.
+  const wheelRef = useWheelScroll();
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
+        ref={wheelRef}
         data-slot="popover-content"
         align={align}
         sideOffset={sideOffset}

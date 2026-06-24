@@ -141,7 +141,6 @@ const articleSchema = new mongoose.Schema(
       type: String,
       enum: ARTICLE_AVAILABILITY_STATUSES,
       default: 'UNKNOWN',
-      index: true,
     },
     availableQuantity: {
       type: Number,
@@ -167,7 +166,6 @@ const articleSchema = new mongoose.Schema(
     searchTokens: {
       type: [String],
       default: [],
-      index: true,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

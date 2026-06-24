@@ -52,31 +52,31 @@ export const PAYMENT_METHODS = [
 ];
 
 export const QUOTATION_STATUS_COLORS = {
-  DRAFT:     'bg-slate-100 text-slate-700 border-slate-200',
-  SENT:      'bg-blue-50 text-blue-700 border-blue-200',
-  VIEWED:    'bg-purple-50 text-purple-700 border-purple-200',
-  ACCEPTED:  'bg-emerald-50 text-emerald-700 border-emerald-200',
-  DECLINED:  'bg-red-50 text-red-700 border-red-200',
-  EXPIRED:   'bg-amber-50 text-amber-700 border-amber-200',
-  CANCELLED: 'bg-slate-50 text-slate-500 border-slate-200',
-  CONVERTED: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  DRAFT:     'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-200 dark:border-slate-400/20',
+  SENT:      'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-200 dark:border-blue-400/20',
+  VIEWED:    'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-200 dark:border-purple-400/20',
+  ACCEPTED:  'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:border-emerald-400/20',
+  DECLINED:  'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-200 dark:border-red-400/20',
+  EXPIRED:   'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:border-amber-400/20',
+  CANCELLED: 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-500/10 dark:text-slate-300 dark:border-slate-400/20',
+  CONVERTED: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-200 dark:border-indigo-400/20',
 };
 
 export const ORDER_STATUS_COLORS = {
-  CONFIRMED:   'bg-blue-50 text-blue-700 border-blue-200',
-  IN_PROGRESS: 'bg-amber-50 text-amber-700 border-amber-200',
-  COMPLETED:   'bg-emerald-50 text-emerald-700 border-emerald-200',
-  CANCELLED:   'bg-slate-50 text-slate-500 border-slate-200',
+  CONFIRMED:   'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-200 dark:border-blue-400/20',
+  IN_PROGRESS: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:border-amber-400/20',
+  COMPLETED:   'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:border-emerald-400/20',
+  CANCELLED:   'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-500/10 dark:text-slate-300 dark:border-slate-400/20',
 };
 
 export const INVOICE_STATUS_COLORS = {
-  DRAFT:          'bg-slate-100 text-slate-700 border-slate-200',
-  SENT:           'bg-blue-50 text-blue-700 border-blue-200',
-  PARTIALLY_PAID: 'bg-amber-50 text-amber-700 border-amber-200',
-  PAID:           'bg-emerald-50 text-emerald-700 border-emerald-200',
-  OVERDUE:        'bg-red-50 text-red-700 border-red-200',
-  CANCELLED:      'bg-slate-50 text-slate-500 border-slate-200',
-  WRITTEN_OFF:    'bg-zinc-100 text-zinc-700 border-zinc-200',
+  DRAFT:          'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-200 dark:border-slate-400/20',
+  SENT:           'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-200 dark:border-blue-400/20',
+  PARTIALLY_PAID: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:border-amber-400/20',
+  PAID:           'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:border-emerald-400/20',
+  OVERDUE:        'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-200 dark:border-red-400/20',
+  CANCELLED:      'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-500/10 dark:text-slate-300 dark:border-slate-400/20',
+  WRITTEN_OFF:    'bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-500/10 dark:text-zinc-200 dark:border-zinc-400/20',
 };
 
 export const QUOTATION_STATUS_LABELS = {
@@ -131,4 +131,21 @@ export const VALID_QUOTATION_TRANSITIONS = {
   DECLINED:  [],
   CANCELLED: [],
   CONVERTED: [],
+};
+
+export const VALID_ORDER_TRANSITIONS = {
+  CONFIRMED: ['IN_PROGRESS', 'CANCELLED'],
+  IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
+export const VALID_INVOICE_TRANSITIONS = {
+  DRAFT: ['SENT', 'CANCELLED'],
+  SENT: ['PARTIALLY_PAID', 'PAID', 'OVERDUE', 'WRITTEN_OFF'],
+  PARTIALLY_PAID: ['PAID', 'OVERDUE', 'WRITTEN_OFF'],
+  PAID: [],
+  OVERDUE: ['PARTIALLY_PAID', 'PAID', 'WRITTEN_OFF'],
+  CANCELLED: [],
+  WRITTEN_OFF: [],
 };

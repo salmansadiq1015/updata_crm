@@ -32,6 +32,25 @@ import {
 } from 'lucide-react';
 import { pickCustomerAccent } from '@/modules/crm/constants/customer-constants';
 
+function getCustomerAddressLine(customer) {
+  const locality = [customer?.postalCode, customer?.city].filter(Boolean).join(' ');
+  return [
+    customer?.street,
+    locality,
+    customer?.canton,
+    customer?.country,
+  ].filter(Boolean).join(', ');
+}
+
+function getCustomerPhoneValue(customer) {
+  return customer?.phone
+    || customer?.mobile
+    || customer?.primaryContactPhone
+    || customer?.primaryContact?.phone
+    || customer?.primaryContact?.mobile
+    || '';
+}
+
 export function CustomersTable() {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
@@ -143,17 +162,17 @@ export function CustomersTable() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-[13px] text-white/80 truncate group-hover:text-white/90 transition-colors">
+                <span className="font-medium text-[13px] text-foreground truncate transition-colors group-hover:text-primary">
                   {c.name}
                 </span>
                 {c.customerNumber && (
-                  <span className="text-[10px] font-mono text-white/35 shrink-0">
+                  <span className="text-[10px] font-mono text-muted-foreground shrink-0">
                     {c.customerNumber}
                   </span>
                 )}
               </div>
               {c.email && (
-                <p className="text-xs text-white/40 truncate">{c.email}</p>
+                <p className="text-xs text-muted-foreground truncate">{c.email}</p>
               )}
             </div>
           </Link>
@@ -171,8 +190,8 @@ export function CustomersTable() {
           <span className={cn(
             'inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full',
             isBiz
-              ? 'bg-emerald-500/10 text-emerald-400'
-              : 'bg-blue-500/10 text-blue-400',
+              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+              : 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
           )}>
             <span className={cn('h-1.5 w-1.5 rounded-full', isBiz ? 'bg-emerald-500' : 'bg-blue-500')} />
             {isBiz ? t('crm.typeBusiness', 'Business') : t('crm.typePrivate', 'Private')}
@@ -186,14 +205,9 @@ export function CustomersTable() {
       size: 220,
       Cell: ({ row }) => {
         const c = row.original;
-        const line = [c.postalCode, c.city].filter(Boolean).join(' ');
-        if (!line) return <span className="text-[13px] text-white/25">—</span>;
-        return (
-          <span className="text-[13px] text-white/80">
-            {line}
-            {c.canton && <span className="text-white/40"> · {c.canton}</span>}
-          </span>
-        );
+        const line = getCustomerAddressLine(c);
+        if (!line) return <span className="text-[13px] text-muted-foreground/60">-</span>;
+        return <span className="text-[13px] text-foreground">{line}</span>;
       },
     },
     {
@@ -202,8 +216,8 @@ export function CustomersTable() {
       size: 150,
       Cell: ({ row }) => {
         const c = row.original;
-        const phone = c.phone || c.mobile;
-        if (!phone) return <span className="text-[13px] text-white/25">—</span>;
+        const phone = getCustomerPhoneValue(c);
+        if (!phone) return <span className="text-[13px] text-muted-foreground/60">-</span>;
         const display = formatPhone(phone);
         return (
           <button
@@ -213,7 +227,7 @@ export function CustomersTable() {
               navigator.clipboard.writeText(phone);
               showSuccess(t('crm.copyPhone', 'Phone copied'));
             }}
-            className="text-[13px] text-white/80 hover:text-white/90 transition-colors"
+            className="text-[13px] text-foreground transition-colors hover:text-primary"
           >
             {display}
           </button>
@@ -225,11 +239,11 @@ export function CustomersTable() {
       header: t('crm.newsletter', 'Newsletter'),
       size: 110,
       Cell: ({ row }) => (row.original.newsletterOptIn
-        ? <span className="inline-flex items-center gap-1 text-[13px] text-amber-400">
+        ? <span className="inline-flex items-center gap-1 text-[13px] text-amber-700 dark:text-amber-400">
             <BellRing className="h-3.5 w-3.5" />
             {t('crm.optedIn', 'Opted in')}
           </span>
-        : <span className="text-[13px] text-white/25">—</span>
+        : <span className="text-[13px] text-muted-foreground/60">-</span>
       ),
     },
     {
@@ -242,10 +256,10 @@ export function CustomersTable() {
           <span className={cn(
             'inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full',
             isArchived
-              ? 'bg-white/5 text-white/40'
-              : 'bg-emerald-500/10 text-emerald-400',
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
           )}>
-            <span className={cn('h-1.5 w-1.5 rounded-full', isArchived ? 'bg-white/20' : 'bg-emerald-500')} />
+            <span className={cn('h-1.5 w-1.5 rounded-full', isArchived ? 'bg-muted-foreground/40' : 'bg-emerald-500')} />
             {isArchived ? t('crm.statusArchived', 'Archived') : t('crm.statusActive', 'Active')}
           </span>
         );
@@ -271,10 +285,10 @@ export function CustomersTable() {
             <Building2 className="h-5 w-5 text-blue-400" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-[18px] font-semibold text-white/90 leading-tight">
+            <h1 className="text-[18px] font-semibold text-foreground leading-tight">
               {t('crm.customersTitle', 'Customer management')}
             </h1>
-            <p className="text-[13px] text-white/40 mt-0.5">
+            <p className="text-[13px] text-muted-foreground mt-0.5">
               {customers.length} {t('crm.customersDesc', 'customers in portfolio')}
             </p>
           </div>
@@ -282,12 +296,12 @@ export function CustomersTable() {
 
         <div className="flex items-center gap-2">
           {/* View toggle */}
-          <div className="flex items-center rounded-lg border border-white/8 bg-white/4 p-0.5">
+          <div className="flex items-center rounded-lg border border-border bg-muted/50 p-0.5">
             <button
               onClick={() => setViewMode('table')}
               className={cn(
                 'flex items-center justify-center h-8 w-8 rounded-md transition-all',
-                viewMode === 'table' ? 'bg-white/10 text-white/90' : 'text-white/35 hover:text-white/65',
+                viewMode === 'table' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
               aria-label={t('common.viewTable', 'Table view')}
             >
@@ -297,7 +311,7 @@ export function CustomersTable() {
               onClick={() => setViewMode('grid')}
               className={cn(
                 'flex items-center justify-center h-8 w-8 rounded-md transition-all',
-                viewMode === 'grid' ? 'bg-white/10 text-white/90' : 'text-white/35 hover:text-white/65',
+                viewMode === 'grid' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
               )}
               aria-label={t('common.viewGrid', 'Grid view')}
             >
@@ -310,7 +324,7 @@ export function CustomersTable() {
               variant="outline"
               onClick={() => exportCsv.mutate(apiParams)}
               disabled={exportCsv.isPending}
-              className="gap-2 h-9 border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white/80"
+              className="gap-2 h-9 border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
             >
               <Download className="h-4 w-4" />
               {exportCsv.isPending ? t('common.exporting', 'Exporting...') : t('crm.exportCsv', 'Export CSV')}
@@ -438,11 +452,11 @@ export function CustomersTable() {
           {isFetching && customers.length === 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-white/6 bg-white/2 p-5 animate-pulse h-[220px]" />
+                <div key={i} className="rounded-xl border border-border bg-muted/30 p-5 animate-pulse h-[220px]" />
               ))}
             </div>
           ) : customers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-white/35 rounded-xl border border-dashed border-white/8 bg-white/2">
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground rounded-xl border border-dashed border-border bg-muted/30">
               <UsersIcon className="h-10 w-10 opacity-30 mb-3" />
               <p className="text-sm font-medium">{t('crm.noCustomers', 'No customers')}</p>
             </div>
@@ -461,14 +475,14 @@ export function CustomersTable() {
               </div>
 
               <div className="flex items-center justify-between px-2 py-2.5 text-xs">
-                <div className="text-white/40">
+                <div className="text-muted-foreground">
                   {t('crm.customerCount', '{count} customers', { count: customers.length })}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-md text-xs text-white/55 hover:text-white/80" onClick={onPrev} disabled={!hasPrev || isFetching}>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-md text-xs text-muted-foreground hover:text-foreground" onClick={onPrev} disabled={!hasPrev || isFetching}>
                     {t('common.prev', 'Previous')}
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-md text-xs text-white/55 hover:text-white/80" onClick={onNext} disabled={!hasNext || isFetching}>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-md text-xs text-muted-foreground hover:text-foreground" onClick={onNext} disabled={!hasNext || isFetching}>
                     {t('common.next', 'Next')}
                   </Button>
                 </div>

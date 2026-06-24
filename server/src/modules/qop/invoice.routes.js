@@ -33,6 +33,7 @@ router.get('/', authenticate, requirePermission('invoicing:read'), validate(list
 // /:id routes
 router.get('/:id', authenticate, requirePermission('invoicing:read'), validate(invoiceIdParamSchema), (req, res, next) => invoiceController.getById(req, res, next));
 router.put('/:id', authenticate, requirePermission('invoicing:write'), validate(updateInvoiceSchema), (req, res, next) => invoiceController.update(req, res, next));
+router.delete('/:id', authenticate, requirePermission('invoicing:delete'), validate(invoiceIdParamSchema), (req, res, next) => invoiceController.delete(req, res, next));
 router.patch('/:id/status', authenticate, requirePermission('invoicing:write'), validate(transitionStatusSchema), (req, res, next) => invoiceController.transitionStatus(req, res, next));
 router.post('/:id/finalize', authenticate, requirePermission('invoicing:write'), validate(finalizeSchema), (req, res, next) => invoiceController.finalize(req, res, next));
 router.post('/:id/send', authenticate, requirePermission('invoicing:write'), validate(sendSchema), (req, res, next) => invoiceController.send(req, res, next));

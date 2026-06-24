@@ -89,26 +89,26 @@ export function InstallationDetail() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-white/35 flex-wrap">
-        <Link href="/crm/customers" className="hover:text-white/65 transition-colors">CRM</Link>
+      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground flex-wrap">
+        <Link href="/crm/customers" className="hover:text-foreground transition-colors">CRM</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         {customerId ? (
-          <Link href={`/crm/customers/${customerId}`} className="hover:text-white/65 transition-colors truncate max-w-[150px]">
+          <Link href={`/crm/customers/${customerId}`} className="hover:text-foreground transition-colors truncate max-w-[150px]">
             {customerName || t('crm.customer', 'Kunde')}
           </Link>
         ) : <span>{t('crm.customer', 'Kunde')}</span>}
         <ChevronRight className="h-3.5 w-3.5" />
         {siteId ? (
-          <Link href={`/crm/sites/${siteId}`} className="hover:text-white/65 transition-colors truncate max-w-[150px]">
+          <Link href={`/crm/sites/${siteId}`} className="hover:text-foreground transition-colors truncate max-w-[150px]">
             {siteName || t('crm.sites.title', 'Objekt')}
           </Link>
         ) : <span>{t('crm.sites.title', 'Objekt')}</span>}
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-white/70 font-medium truncate">{t(`crm.installations.type.${installation.type}`, meta.label)}</span>
+        <span className="text-foreground font-medium truncate">{t(`crm.installations.type.${installation.type}`, meta.label)}</span>
       </nav>
 
       {/* Hero Header card */}
-      <div className="rounded-2xl border border-white/7 bg-[#0D1117] overflow-hidden mb-6">
+      <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6">
         {/* Emerald accent stripe for installations */}
         <div className="h-1 w-full bg-linear-to-r from-emerald-500 via-emerald-400 to-transparent" />
         <div className="p-6 flex items-start gap-4 flex-wrap">
@@ -118,27 +118,27 @@ export function InstallationDetail() {
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h1 className="text-[22px] font-bold text-white/90 tracking-tight">{t(`crm.installations.type.${installation.type}`, meta.label)}</h1>
+              <h1 className="text-[22px] font-bold text-foreground tracking-tight">{t(`crm.installations.type.${installation.type}`, meta.label)}</h1>
               {fuelMeta && (
-                <span className={cn('inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-white/5', fuelMeta.color)}>
+                <span className={cn('inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted/60', fuelMeta.color)}>
                   <Thermometer className="h-3 w-3 mr-1" /> {t(`crm.installations.fuel.${installation.fuelType}`, fuelMeta.label)}
                 </span>
               )}
               {warrantyValid && (
-                <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
                   <ShieldCheck className="h-3 w-3" /> {t('crm.installations.warrantyActive', 'Garantie aktiv')}
                 </span>
               )}
               {!isActive && (
-                <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-white/5 text-white/40">
+                <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
                   {t('crm.installations.decommissioned', 'Ausser Betrieb')}
                 </span>
               )}
             </div>
 
             {(installation.manufacturer || installation.model) && (
-              <p className="text-[13px] text-white/45">
-                {[installation.manufacturer, installation.model].filter(Boolean).join(' · ')}
+              <p className="text-[13px] text-muted-foreground">
+                {[installation.manufacturer, installation.model].filter(Boolean).join(' - ')}
               </p>
             )}
           </div>
@@ -148,7 +148,7 @@ export function InstallationDetail() {
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white/80"
+                className="gap-1.5 border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                 onClick={() => setFormOpen(true)}
               >
                 <Pencil className="h-3.5 w-3.5" /> {t('common.edit', 'Bearbeiten')}
@@ -158,7 +158,7 @@ export function InstallationDetail() {
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 border-white/10 bg-white/4 text-white/60 hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
+                className="gap-1.5 border-border bg-muted/50 text-muted-foreground hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
                 onClick={() => setDecommOpen(true)}
               >
                 <PowerOff className="h-3.5 w-3.5" /> {t('crm.installations.decommissionAction', 'Ausser Betrieb')}
@@ -167,7 +167,7 @@ export function InstallationDetail() {
           </div>
         </div>
 
-        <Separator className="mx-6 bg-white/6" />
+        <Separator className="mx-6 bg-border" />
 
         {/* Info grid */}
         <div className="p-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -183,15 +183,15 @@ export function InstallationDetail() {
             icon={ShieldCheck}
             label={t('crm.installations.warrantyEndDate', 'Garantie bis')}
             value={installation.warrantyEndDate ? new Date(installation.warrantyEndDate).toLocaleDateString('de-CH') : null}
-            className={warrantyValid ? 'text-emerald-400' : ''}
+            className={warrantyValid ? 'text-emerald-700 dark:text-emerald-400' : ''}
           />
         </div>
 
         {installation.technicalNotes && (
           <div className="px-6 pb-6">
-            <div className="rounded-lg border border-white/6 bg-white/2 p-4">
-              <p className="text-[11px] font-semibold mb-2 text-white/30 uppercase tracking-wider">{t('crm.installations.technicalNotes', 'Technische Notizen')}</p>
-              <RichTextContent html={installation.technicalNotes} className="text-[13px] text-white/70" />
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-[11px] font-semibold mb-2 text-muted-foreground/80 uppercase tracking-wider">{t('crm.installations.technicalNotes', 'Technische Notizen')}</p>
+              <RichTextContent html={installation.technicalNotes} className="text-[13px] text-foreground" />
             </div>
           </div>
         )}
@@ -244,21 +244,21 @@ export function InstallationDetail() {
 
       {/* Decommission dialog */}
       <Dialog open={decommOpen} onOpenChange={setDecommOpen}>
-        <DialogContent className="sm:max-w-md p-0 gap-0 flex flex-col rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
-          <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+        <DialogContent className="sm:max-w-md p-0 gap-0 flex flex-col rounded-2xl border border-border bg-card shadow-2xl">
+          <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-red-500/10 ring-1 ring-red-500/20 shrink-0">
                 <PowerOff className="h-5 w-5 text-red-400" />
               </div>
-              <DialogTitle className="text-[16px] font-semibold text-white/90">
+              <DialogTitle className="text-[16px] font-semibold text-foreground">
                 {t('crm.installations.decommissionTitle', 'Installation ausser Betrieb nehmen')}
               </DialogTitle>
             </div>
           </DialogHeader>
           <div className="px-6 py-5 space-y-4">
-            <p className="text-[13px] text-white/55">{t('crm.installations.decommissionDesc', 'Die Installation wird als ausser Betrieb markiert.')}</p>
+            <p className="text-[13px] text-muted-foreground">{t('crm.installations.decommissionDesc', 'Die Installation wird als ausser Betrieb markiert.')}</p>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-medium text-white/60 block">
+              <Label className="text-[12px] font-medium text-muted-foreground block">
                 {t('crm.installations.decommissionReason', 'Grund')} <span className="text-red-400">*</span>
               </Label>
               <Input
@@ -266,16 +266,16 @@ export function InstallationDetail() {
                 onChange={(e) => setReason(e.target.value)}
                 placeholder={t('crm.installations.decommissionReasonPlaceholder', 'z.B. Ersatzinvestition')}
                 autoFocus
-                className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-red-500/50 focus-visible:ring-red-500/20"
+                className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-red-500/50 focus-visible:ring-red-500/20"
               />
             </div>
           </div>
-          <div className="px-6 py-4 border-t border-white/6 flex items-center justify-between gap-3">
+          <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-3">
             <Button
               variant="ghost"
               onClick={() => setDecommOpen(false)}
               disabled={decommMut.isPending}
-              className="text-white/55 hover:text-white/80 hover:bg-white/5"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/60"
             >
               {t('common.cancel', 'Abbrechen')}
             </Button>
@@ -297,12 +297,12 @@ export function InstallationDetail() {
 
 function InfoTile({ icon: Icon, label, value, mono, className }) {
   return (
-    <div className="rounded-lg border border-white/6 bg-white/2 p-3 flex items-start gap-2.5">
-      <Icon className="h-3.5 w-3.5 text-white/30 mt-0.5 shrink-0" />
+    <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-start gap-2.5">
+      <Icon className="h-3.5 w-3.5 text-muted-foreground/80 mt-0.5 shrink-0" />
       <div className="min-w-0">
-        <p className="text-[10px] font-medium text-white/30 uppercase tracking-wider">{label}</p>
-        <p className={cn('text-[13px] font-semibold text-white/80 truncate', mono && 'font-mono', className)}>
-          {value || <span className="text-white/25">—</span>}
+        <p className="text-[10px] font-medium text-muted-foreground/80 uppercase tracking-wider">{label}</p>
+        <p className={cn('text-[13px] font-semibold text-foreground truncate', mono && 'font-mono', className)}>
+          {value || <span className="text-muted-foreground/60">—</span>}
         </p>
       </div>
     </div>
@@ -313,7 +313,7 @@ function InstallationDetailSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-5 w-72" />
-      <div className="rounded-2xl border border-white/7 bg-[#0D1117] overflow-hidden">
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
         <div className="h-1 bg-emerald-500/40 w-full" />
         <div className="p-6 flex gap-4">
           <Skeleton className="h-14 w-14 rounded-2xl" />

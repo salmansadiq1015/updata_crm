@@ -72,6 +72,14 @@ class InvoiceController {
     } catch (err) { next(err); }
   }
 
+  async delete(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      await invoiceService.softDelete(req.params.id, req.user._id, meta);
+      return res.success({ message: 'Invoice deleted successfully' });
+    } catch (err) { next(err); }
+  }
+
   async transitionStatus(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

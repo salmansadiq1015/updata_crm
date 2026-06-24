@@ -1,29 +1,43 @@
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 
+const EMPTY_SUMMARY = Object.freeze({ total: 0, private: 0, business: 0 });
+
+function listFromPayload(payload, key) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.[key])) return payload[key];
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+function paginationFromResponse(res, params = {}) {
+  return res?.pagination || res?.data?.pagination || {
+    page: params.page || 1,
+    limit: params.limit || 25,
+    total: 0,
+    pageCount: 1,
+    hasNext: false,
+    hasPrev: false,
+  };
+}
+
 export const contactService = {
   async getOverview(params = {}) {
     const res = await apiClient.get(ENDPOINTS.CRM.CONTACTS_OVERVIEW, { params });
+    const payload = res?.data ?? res;
     return {
-      data: Array.isArray(res.data?.contacts) ? res.data.contacts : [],
-      summary: res.data?.summary || { total: 0, private: 0, business: 0 },
-      pagination: res.pagination || {
-        page: params.page || 1,
-        limit: params.limit || 25,
-        total: 0,
-        pageCount: 1,
-        hasNext: false,
-        hasPrev: false,
-      },
+      data: listFromPayload(payload, 'contacts'),
+      summary: payload?.summary || EMPTY_SUMMARY,
+      pagination: paginationFromResponse(res, params),
     };
   },
   async listAll(limit = 500) {
     const res = await apiClient.get(ENDPOINTS.CRM.CONTACTS, { params: { limit } });
-    return res.data;
+    return listFromPayload(res?.data ?? res, 'contacts');
   },
   async listByCustomer(customerId) {
     const res = await apiClient.get(ENDPOINTS.CRM.CUSTOMER_CONTACTS(customerId));
-    return res.data;
+    return listFromPayload(res?.data ?? res, 'contacts');
   },
   async createForCustomer(customerId, data) {
     const res = await apiClient.post(ENDPOINTS.CRM.CUSTOMER_CONTACTS(customerId), data);

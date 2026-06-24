@@ -11,41 +11,46 @@ export const DEPARTMENT_POSITION_PRESETS = Object.freeze([
   {
     value: 'Projektleitung',
     label: 'Projektleitung',
+    labelKey: 'users.department.projectManagement',
     positions: [
-      { value: 'Projektleiter', label: 'Projektleiter', roleName: ROLE_NAMES.PROJECT_LEAD },
+      { value: 'Projektleiter', label: 'Projektleiter', labelKey: 'users.position.projectLead', roleName: ROLE_NAMES.PROJECT_LEAD },
     ],
   },
   {
     value: 'Technik',
     label: 'Technik',
+    labelKey: 'users.department.technical',
     positions: [
-      { value: 'Servicetechniker', label: 'Servicetechniker', roleName: ROLE_NAMES.TECHNICIAN },
-      { value: 'Monteur', label: 'Monteur', roleName: ROLE_NAMES.TECHNICIAN },
-      { value: 'Lehrling', label: 'Lehrling', roleName: ROLE_NAMES.APPRENTICE },
+      { value: 'Servicetechniker', label: 'Servicetechniker', labelKey: 'users.position.serviceTechnician', roleName: ROLE_NAMES.TECHNICIAN },
+      { value: 'Monteur', label: 'Monteur', labelKey: 'users.position.installer', roleName: ROLE_NAMES.TECHNICIAN },
+      { value: 'Lehrling', label: 'Lehrling', labelKey: 'users.position.apprentice', roleName: ROLE_NAMES.APPRENTICE },
     ],
   },
   {
     value: 'Disposition',
     label: 'Disposition',
+    labelKey: 'users.department.dispatch',
     positions: [
-      { value: 'Disponent', label: 'Disponent', roleName: ROLE_NAMES.DISPATCHER },
-      { value: 'Einsatzplaner', label: 'Einsatzplaner', roleName: ROLE_NAMES.DISPATCHER },
+      { value: 'Disponent', label: 'Disponent', labelKey: 'users.position.dispatcher', roleName: ROLE_NAMES.DISPATCHER },
+      { value: 'Einsatzplaner', label: 'Einsatzplaner', labelKey: 'users.position.scheduler', roleName: ROLE_NAMES.DISPATCHER },
     ],
   },
   {
     value: 'Finanzen',
     label: 'Finanzen',
+    labelKey: 'users.department.finance',
     positions: [
-      { value: 'Buchhalter', label: 'Buchhalter', roleName: ROLE_NAMES.ACCOUNTANT },
-      { value: 'Sachbearbeiter Finanzen', label: 'Sachbearbeiter Finanzen', roleName: ROLE_NAMES.ACCOUNTANT },
+      { value: 'Buchhalter', label: 'Buchhalter', labelKey: 'users.position.accountant', roleName: ROLE_NAMES.ACCOUNTANT },
+      { value: 'Sachbearbeiter Finanzen', label: 'Sachbearbeiter Finanzen', labelKey: 'users.position.financeClerk', roleName: ROLE_NAMES.ACCOUNTANT },
     ],
   },
   {
     value: 'Administration',
     label: 'Administration',
+    labelKey: 'users.department.administration',
     positions: [
-      { value: 'Mitarbeiter Administration', label: 'Mitarbeiter Administration', roleName: ROLE_NAMES.USER },
-      { value: 'Backoffice', label: 'Backoffice', roleName: ROLE_NAMES.USER },
+      { value: 'Mitarbeiter Administration', label: 'Mitarbeiter Administration', labelKey: 'users.position.adminEmployee', roleName: ROLE_NAMES.USER },
+      { value: 'Backoffice', label: 'Backoffice', labelKey: 'users.position.backoffice', roleName: ROLE_NAMES.USER },
     ],
   },
 ]);

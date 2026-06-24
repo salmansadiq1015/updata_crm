@@ -58,6 +58,16 @@ function getContactName(contact) {
   return [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || '-';
 }
 
+function getCustomerAddressLine(customer) {
+  const locality = [customer?.postalCode, customer?.city].filter(Boolean).join(' ');
+  return [
+    customer?.street,
+    locality,
+    customer?.canton,
+    customer?.country,
+  ].filter(Boolean).join(', ');
+}
+
 function getCustomerId(contact) {
   const customer = getCustomer(contact);
   return customer?._id || (typeof contact?.customerId === 'string' ? contact.customerId : null);
@@ -72,8 +82,8 @@ function getContactTypeMeta(contact, t) {
       : t('crm.contacts.companyContact', 'Company Contact'),
     icon: isPrivate ? UserRound : Building2,
     className: isPrivate
-      ? 'bg-sky-500/10 text-sky-400 ring-sky-500/20'
-      : 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20',
+      ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400 ring-sky-500/20'
+      : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-emerald-500/20',
   };
 }
 
@@ -179,11 +189,11 @@ export function ContactOverview() {
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-[13px] font-semibold text-white/85">
+                <span className="truncate text-[13px] font-semibold text-foreground">
                   {getContactName(contact)}
                 </span>
                 {contact.isPrimary && (
-                  <Badge className="h-5 shrink-0 bg-amber-500/10 px-1.5 text-[10px] text-amber-400 ring-1 ring-amber-500/20">
+                  <Badge className="h-5 shrink-0 bg-amber-500/10 px-1.5 text-[10px] text-amber-700 ring-1 ring-amber-500/20 dark:text-amber-400">
                     <Star className="mr-1 h-2.5 w-2.5 fill-current" />
                     {t('crm.contacts.primaryBadge', 'Primaer')}
                   </Badge>
@@ -204,8 +214,8 @@ export function ContactOverview() {
       enableSorting: false,
       Cell: ({ row }) => (
         row.original.functionTitle
-          ? <span className="text-[13px] text-white/75">{row.original.functionTitle}</span>
-          : <span className="text-[13px] text-white/25">-</span>
+          ? <span className="text-[13px] text-foreground">{row.original.functionTitle}</span>
+          : <span className="text-[13px] text-muted-foreground/60">-</span>
       ),
     },
     {
@@ -249,7 +259,7 @@ export function ContactOverview() {
 
       <ContactSummary summary={summary} typeFilter={typeFilter} t={t} />
 
-      <div className="flex flex-col gap-3 rounded-xl border border-white/8 bg-white/[0.03] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1 sm:max-w-md">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -413,19 +423,19 @@ function ContactSummary({ summary, typeFilter, t }) {
       key: 'total',
       label: t('crm.contacts.summaryTotal', 'All contacts'),
       value: summary.total,
-      className: 'bg-violet-500/10 text-violet-400 ring-violet-500/20',
+      className: 'bg-violet-500/10 text-violet-700 dark:text-violet-400 ring-violet-500/20',
     },
     {
       key: 'private',
       label: t('crm.contacts.privateContact', 'Private Contact'),
       value: summary.private,
-      className: 'bg-sky-500/10 text-sky-400 ring-sky-500/20',
+      className: 'bg-sky-500/10 text-sky-700 dark:text-sky-400 ring-sky-500/20',
     },
     {
       key: 'business',
       label: t('crm.contacts.companyContact', 'Company Contact'),
       value: summary.business,
-      className: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20',
+      className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-emerald-500/20',
     },
   ];
 
@@ -435,13 +445,13 @@ function ContactSummary({ summary, typeFilter, t }) {
         <div
           key={stat.key}
           className={cn(
-            'flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.03] px-4 py-3 ring-1 ring-transparent',
+            'flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 ring-1 ring-transparent',
             typeFilter === stat.key && stat.className,
             typeFilter === 'all' && stat.key === 'total' && stat.className,
           )}
         >
-          <span className="text-xs font-medium text-white/45">{stat.label}</span>
-          <span className="text-lg font-semibold text-white/85">{stat.value || 0}</span>
+          <span className="text-xs font-medium text-muted-foreground">{stat.label}</span>
+          <span className="text-lg font-semibold text-foreground">{stat.value || 0}</span>
         </div>
       ))}
     </div>
@@ -455,22 +465,22 @@ function ContactMethods({ contact }) {
       {phone ? (
         <a
           href={`tel:${phone}`}
-          className="flex min-w-0 items-center gap-1.5 text-[13px] text-white/75 hover:text-white"
+          className="flex min-w-0 items-center gap-1.5 text-[13px] text-foreground hover:text-foreground"
           onClick={(event) => event.stopPropagation()}
         >
-          <Phone className="h-3.5 w-3.5 shrink-0 text-white/35" />
+          <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">{formatPhone(phone)}</span>
         </a>
       ) : (
-        <span className="block text-[13px] text-white/25">-</span>
+        <span className="block text-[13px] text-muted-foreground/60">-</span>
       )}
       {contact.email && (
         <a
           href={`mailto:${contact.email}`}
-          className="flex min-w-0 items-center gap-1.5 text-[13px] text-white/55 hover:text-white"
+          className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
           onClick={(event) => event.stopPropagation()}
         >
-          <Mail className="h-3.5 w-3.5 shrink-0 text-white/35" />
+          <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">{contact.email}</span>
         </a>
       )}
@@ -480,21 +490,21 @@ function ContactMethods({ contact }) {
 
 function CustomerLink({ contact }) {
   const customer = getCustomer(contact);
-  if (!customer?._id) return <span className="text-[13px] text-white/25">-</span>;
+  if (!customer?._id) return <span className="text-[13px] text-muted-foreground/60">-</span>;
 
-  const address = [customer.postalCode, customer.city].filter(Boolean).join(' ');
+  const address = getCustomerAddressLine(customer);
   return (
     <Link
       href={`/crm/customers/${customer._id}`}
       className="group flex min-w-0 items-center gap-2"
       onClick={(event) => event.stopPropagation()}
     >
-      <Building2 className="h-3.5 w-3.5 shrink-0 text-white/35 group-hover:text-white/60" />
+      <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-muted-foreground" />
       <span className="min-w-0">
-        <span className="block truncate text-[13px] font-medium text-white/75 group-hover:text-white">
+        <span className="block truncate text-[13px] font-medium text-foreground group-hover:text-foreground">
           {customer.name}
         </span>
-        <span className="block truncate text-[11px] text-white/35">
+        <span className="block truncate text-[11px] text-muted-foreground">
           {[customer.customerNumber, address].filter(Boolean).join(' - ')}
         </span>
       </span>
@@ -549,7 +559,7 @@ function RelatedChip({ href, icon: Icon, label, count }) {
 
   if (!count) {
     return (
-      <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-white/6 px-2 text-[11px] text-white/28">
+      <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-[11px] text-muted-foreground/70">
         {content}
       </span>
     );
@@ -558,7 +568,7 @@ function RelatedChip({ href, icon: Icon, label, count }) {
   return (
     <Link
       href={href}
-      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-white/8 bg-white/4 px-2 text-[11px] text-white/65 transition-colors hover:bg-white/8 hover:text-white"
+      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 text-[11px] text-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
       onClick={(event) => event.stopPropagation()}
     >
       {content}

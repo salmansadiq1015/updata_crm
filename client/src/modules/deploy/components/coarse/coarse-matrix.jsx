@@ -1,40 +1,94 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query/keys';
+import { projectService } from '@/modules/pm/services/project-service';
 import { useCoarseMatrix, useCoarseMutations } from '../../hooks/use-coarse-mutations';
+import { useCoarseDragFill } from '../../hooks/use-coarse-drag-fill';
+import { useDeployEmployees } from '../../hooks/use-deploy-employees';
 import { CoarseHeader } from './coarse-header';
-import { CoarseCell } from './coarse-cell';
-import { CoarseLegend } from './coarse-legend';
+import { CoarseSummary } from './coarse-summary';
+import { CoarseGrid } from './coarse-grid';
 import { CoarseBulkDialog } from './coarse-bulk-dialog';
 import { CoarseCreateDialog } from './coarse-create-dialog';
-import { EmployeeAvatarRow } from '../shared/employee-avatar-row';
-import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Skeleton as BoneSkeleton } from 'boneyard-js/react';
 import { DeployEmptyState } from '../shared/deploy-empty-state';
-import { Layers, Grid3X3 } from 'lucide-react';
+import { columnAverages, computeKpis, isRowOverAllocated } from '../../utils/coarse-totals';
+import { Grid3X3 } from 'lucide-react';
 import { getISOWeek } from 'date-fns';
 
 const VISIBLE_WEEKS = 12;
+const ROW_SOURCE_LIMIT = 80;
+const PROJECT_ROW_PARAMS = Object.freeze({
+  limit: ROW_SOURCE_LIMIT,
+  sortBy: 'projectNumber',
+  sortOrder: 'desc',
+});
+
+function normalizeProjectList(value) {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.data)) return value.data;
+  if (Array.isArray(value?.data?.data)) return value.data.data;
+  return [];
+}
+
+function getProjectId(project) {
+  return project?._id || project?.id || '';
+}
+
+function getProjectName(project) {
+  return [project?.projectNumber, project?.name].filter(Boolean).join(' - ') || getProjectId(project);
+}
+
+function getEmployeeId(employee) {
+  return employee?._id || employee?.id || '';
+}
+
+function getEmployeeName(employee) {
+  return employee?.fullName || [employee?.firstName, employee?.lastName].filter(Boolean).join(' ') || getEmployeeId(employee);
+}
 
 export function CoarseMatrix() {
   const { t } = useLanguage();
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [weekFrom, setWeekFrom] = useState(getISOWeek(now));
-  const [weekTo, setWeekTo] = useState(Math.min(53, getISOWeek(now) + VISIBLE_WEEKS - 1));
+  const nowYear = now.getFullYear();
+  const nowWeek = getISOWeek(now);
+
+  const [year, setYear] = useState(nowYear);
+  const [weekFrom, setWeekFrom] = useState(nowWeek);
+  const [weekTo, setWeekTo] = useState(Math.min(53, nowWeek + VISIBLE_WEEKS - 1));
   const [viewMode, setViewMode] = useState('EMPLOYEE_CENTRIC');
+  const [search, setSearch] = useState('');
+  const [overAllocatedOnly, setOverAllocatedOnly] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkEmployeeId, setBulkEmployeeId] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createDefaults, setCreateDefaults] = useState({ employeeId: '', projectId: '', week: getISOWeek(now) });
+  const [createDefaults, setCreateDefaults] = useState({ employeeId: '', projectId: '', week: nowWeek });
 
-  const params = useMemo(() => ({
-    year, weekFrom, weekTo, view: viewMode,
-  }), [year, weekFrom, weekTo, viewMode]);
+  const params = useMemo(() => ({ year, weekFrom, weekTo, view: viewMode }), [year, weekFrom, weekTo, viewMode]);
 
   const { data: matrixData, isLoading } = useCoarseMatrix(params);
-  const { update, remove } = useCoarseMutations();
+  const { update, remove, bulkUpsert } = useCoarseMutations();
+  const isProjectView = viewMode === 'PROJECT_CENTRIC';
+
+  const { data: employees = [], isLoading: employeesLoading } = useDeployEmployees({
+    enabled: !isProjectView,
+    limit: ROW_SOURCE_LIMIT,
+  });
+
+  const { data: projectRowsResponse, isLoading: projectsLoading } = useQuery({
+    queryKey: queryKeys.pm.projects.list(PROJECT_ROW_PARAMS),
+    queryFn: () => projectService.getProjects(PROJECT_ROW_PARAMS),
+    enabled: isProjectView,
+    staleTime: 60_000,
+  });
+
+  const projectRows = useMemo(
+    () => normalizeProjectList(projectRowsResponse),
+    [projectRowsResponse],
+  );
 
   const allocations = useMemo(() => {
     const raw = Array.isArray(matrixData) ? matrixData : matrixData?.data || [];
@@ -47,31 +101,51 @@ export function CoarseMatrix() {
     return arr;
   }, [weekFrom, weekTo]);
 
-  const groupedRows = useMemo(() => {
+  const currentWeek = year === nowYear ? nowWeek : null;
+
+  const allRows = useMemo(() => {
     const map = new Map();
-    if (viewMode === 'PROJECT_CENTRIC') {
-      allocations.forEach((a) => {
-        const projId = a.projectId?._id || a.projectId;
-        const projName = a.projectId?.name || projId;
-        if (!map.has(projId)) map.set(projId, { id: projId, name: projName, weekMap: {} });
-        const entry = map.get(projId);
-        if (!entry.weekMap[a.calendarWeek]) entry.weekMap[a.calendarWeek] = [];
-        entry.weekMap[a.calendarWeek].push(a);
-      });
+    const ensureRow = (id, name) => {
+      if (!id) return null;
+      if (!map.has(id)) map.set(id, { id, name: name || id, weekMap: {} });
+      return map.get(id);
+    };
+
+    if (isProjectView) {
+      projectRows.forEach((project) => ensureRow(getProjectId(project), getProjectName(project)));
     } else {
-      allocations.forEach((a) => {
-        const empId = a.employeeId?._id || a.employeeId;
-        const empName = a.employeeId?.firstName
-          ? `${a.employeeId.firstName} ${a.employeeId.lastName}`
-          : empId;
-        if (!map.has(empId)) map.set(empId, { id: empId, name: empName, weekMap: {} });
-        const entry = map.get(empId);
-        if (!entry.weekMap[a.calendarWeek]) entry.weekMap[a.calendarWeek] = [];
-        entry.weekMap[a.calendarWeek].push(a);
-      });
+      employees.forEach((employee) => ensureRow(getEmployeeId(employee), getEmployeeName(employee)));
     }
+
+    allocations.forEach((a) => {
+      const id = isProjectView ? (a.projectId?._id || a.projectId) : (a.employeeId?._id || a.employeeId);
+      const name = isProjectView
+        ? (a.projectId?.name || a.projectId)
+        : (a.employeeId?.firstName ? `${a.employeeId.firstName} ${a.employeeId.lastName}` : a.employeeId);
+      const entry = ensureRow(id, name);
+      if (!entry) return;
+      if (!entry.weekMap[a.calendarWeek]) entry.weekMap[a.calendarWeek] = [];
+      entry.weekMap[a.calendarWeek].push(a);
+    });
     return Array.from(map.values());
-  }, [allocations, viewMode]);
+  }, [allocations, employees, isProjectView, projectRows]);
+
+  const rows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return allRows.filter((row) => {
+      if (term && !String(row.name || '').toLowerCase().includes(term)) return false;
+      if (overAllocatedOnly && !isRowOverAllocated(row, weeks)) return false;
+      return true;
+    });
+  }, [allRows, search, overAllocatedOnly, weeks]);
+
+  const columnAvgs = useMemo(() => columnAverages(rows, weeks), [rows, weeks]);
+  const kpis = useMemo(() => computeKpis(allRows, weeks), [allRows, weeks]);
+
+  const dragFill = useCoarseDragFill({
+    year,
+    onCommit: (alloc) => bulkUpsert.mutate({ allocations: alloc }),
+  });
 
   const handlePrevRange = useCallback(() => {
     const newFrom = weekFrom - VISIBLE_WEEKS;
@@ -83,7 +157,7 @@ export function CoarseMatrix() {
       setWeekFrom(newFrom);
       setWeekTo(weekFrom - 1);
     }
-  }, [setWeekFrom, setWeekTo, setYear, weekFrom]);
+  }, [weekFrom]);
 
   const handleNextRange = useCallback(() => {
     const newTo = weekTo + VISIBLE_WEEKS;
@@ -95,40 +169,59 @@ export function CoarseMatrix() {
       setWeekFrom(weekTo + 1);
       setWeekTo(newTo);
     }
-  }, [setWeekFrom, setWeekTo, setYear, weekTo]);
+  }, [weekTo]);
 
   const handleCellClick = useCallback((rowId, week, existing) => {
-    const existingAllocations = Array.isArray(existing) ? existing : [existing].filter(Boolean);
-    if (existingAllocations.length === 1) {
-      const current = existingAllocations[0];
+    const list = Array.isArray(existing) ? existing : [existing].filter(Boolean);
+    if (list.length === 1) {
+      const current = list[0];
       const nextMap = { 25: 50, 50: 75, 75: 100 };
       const nextPercent = nextMap[current.allocationPercent];
       if (nextPercent) {
-        update.mutate({
-          id: current._id,
-          data: { allocationPercent: nextPercent },
-        });
+        update.mutate({ id: current._id, data: { allocationPercent: nextPercent } });
       } else {
         remove.mutate(current._id);
       }
       return;
     }
-
-    if (existingAllocations.length > 1) return;
+    if (list.length > 1) return;
 
     setCreateDefaults(viewMode === 'PROJECT_CENTRIC'
       ? { employeeId: '', projectId: rowId, week }
       : { employeeId: rowId, projectId: '', week });
     setCreateOpen(true);
-  }, [remove, setCreateDefaults, setCreateOpen, update, viewMode]);
+  }, [remove, update, viewMode]);
+
+  const handleSetPercent = useCallback((existing, percent) => {
+    const list = Array.isArray(existing) ? existing : [existing].filter(Boolean);
+    if (list.length === 1) {
+      update.mutate({ id: list[0]._id, data: { allocationPercent: percent } });
+    }
+  }, [update]);
+
+  const handleClear = useCallback((existing) => {
+    const list = Array.isArray(existing) ? existing : [existing].filter(Boolean);
+    if (list.length === 1) remove.mutate(list[0]._id);
+  }, [remove]);
+
+  const openBulk = useCallback((employeeId) => {
+    setBulkEmployeeId(employeeId);
+    setBulkOpen(true);
+  }, []);
+
+  const hasFilters = !!search.trim() || overAllocatedOnly;
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="space-y-4 p-4">
       <CoarseHeader
         year={year}
         weekFrom={weekFrom}
         weekTo={weekTo}
         viewMode={viewMode}
+        search={search}
+        overAllocatedOnly={overAllocatedOnly}
+        onSearchChange={setSearch}
+        onOverAllocatedOnlyChange={setOverAllocatedOnly}
         onYearChange={setYear}
         onWeekFromChange={setWeekFrom}
         onWeekToChange={setWeekTo}
@@ -137,71 +230,46 @@ export function CoarseMatrix() {
         onNextRange={handleNextRange}
       />
 
-      <CoarseLegend />
+      <CoarseSummary kpis={kpis} viewMode={viewMode} weekCount={weeks.length} />
 
-      <BoneSkeleton name="deploy-coarse-matrix" loading={isLoading}>
-        <div className="border rounded-lg overflow-auto bg-background">
-          {/* Header row */}
-          <div className="flex sticky top-0 z-10 bg-muted/30 border-b">
-            <div className="w-[200px] shrink-0 px-3 py-2 text-xs font-semibold border-r sticky left-0 bg-muted/30">
-              {viewMode === 'PROJECT_CENTRIC' ? t('deploy.coarse.project', 'Projekt') : t('deploy.coarse.employee', 'Mitarbeiter')}
-            </div>
-            {weeks.map((w) => (
-              <div key={w} className="min-w-[60px] flex-1 text-center py-2 text-xs font-medium border-r last:border-r-0">
-                KW {w}
-              </div>
-            ))}
-          </div>
-
-          {/* Employee rows */}
-          {groupedRows.length === 0 ? (
-            <DeployEmptyState
-              icon={Grid3X3}
-              title={t('deploy.empty.coarseTitle', 'Keine Zuteilungen')}
-              description={t('deploy.empty.coarseDesc', 'Weisen Sie Mitarbeitern Projekte zu, um die Grobplanung zu starten.')}
-              actionLabel={t('deploy.coarse.createAllocation', 'Zuteilung erstellen')}
-              onAction={() => {
-                setCreateDefaults({ employeeId: '', projectId: '', week: weekFrom });
-                setCreateOpen(true);
-              }}
-              compact
-            />
-          ) : (
-            groupedRows.map((row) => (
-              <div key={row.id} className="flex border-b last:border-b-0 hover:bg-muted/10 group">
-                <div className="w-[200px] shrink-0 px-3 py-2 border-r flex items-center justify-between sticky left-0 bg-background">
-                  <div className="min-w-0">
-                    {viewMode === 'PROJECT_CENTRIC'
-                      ? <span className="text-xs font-medium truncate">{row.name}</span>
-                      : <EmployeeAvatarRow name={row.name} />}
-                  </div>
-                  {viewMode === 'EMPLOYEE_CENTRIC' && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
-                      onClick={() => { setBulkEmployeeId(row.id); setBulkOpen(true); }}
-                    >
-                      <Layers className="h-3 w-3" />
-                    </Button>
-                  )}
-                </div>
-                {weeks.map((w) => {
-                  const alloc = row.weekMap[w] || [];
-                  return (
-                    <div key={w} className="min-w-[60px] flex-1">
-                      <CoarseCell
-                        allocation={alloc}
-                        projectName={viewMode === 'PROJECT_CENTRIC' ? row.name : undefined}
-                        onClick={() => handleCellClick(row.id, w, alloc)}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            ))
-          )}
-        </div>
+      <BoneSkeleton name="deploy-coarse-matrix" loading={isLoading || employeesLoading || projectsLoading}>
+        {allRows.length === 0 ? (
+          <DeployEmptyState
+            icon={Grid3X3}
+            title={t('deploy.empty.coarseTitle', 'Keine Zuteilungen')}
+            description={t('deploy.empty.coarseDesc', 'Weisen Sie Mitarbeitern Projekte zu, um die Grobplanung zu starten.')}
+            actionLabel={t('deploy.coarse.createAllocation', 'Zuteilung erstellen')}
+            onAction={() => {
+              setCreateDefaults({ employeeId: '', projectId: '', week: weekFrom });
+              setCreateOpen(true);
+            }}
+            compact
+          />
+        ) : rows.length === 0 ? (
+          <DeployEmptyState
+            icon={Grid3X3}
+            title={t('deploy.coarse.noMatches', 'Keine Treffer')}
+            description={hasFilters
+              ? t('deploy.coarse.noMatchesDesc', 'Keine Zeilen entsprechen den aktuellen Filtern.')
+              : t('deploy.empty.coarseDesc', 'Weisen Sie Mitarbeitern Projekte zu, um die Grobplanung zu starten.')}
+            actionLabel={t('deploy.coarse.clearFilters', 'Filter zuruecksetzen')}
+            onAction={() => { setSearch(''); setOverAllocatedOnly(false); }}
+            compact
+          />
+        ) : (
+          <CoarseGrid
+            viewMode={viewMode}
+            weeks={weeks}
+            rows={rows}
+            columnAvgs={columnAvgs}
+            currentWeek={currentWeek}
+            dragFill={dragFill}
+            onCellClick={handleCellClick}
+            onSetPercent={handleSetPercent}
+            onClear={handleClear}
+            onBulkRow={openBulk}
+          />
+        )}
       </BoneSkeleton>
 
       <CoarseBulkDialog

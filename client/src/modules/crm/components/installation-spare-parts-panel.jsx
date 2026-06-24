@@ -46,7 +46,7 @@ export function InstallationSparePartsPanel({ installationId }) {
 
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-white/6 bg-[#0D1117] p-8">
+      <div className="rounded-xl border border-border bg-card p-8">
         <EmptyState
           title={t('crm.spareParts.empty', 'Keine Ersatzteile verknüpft')}
           description={t('crm.spareParts.emptyDesc', 'Dieser Installation sind keine Ersatzteile zugeordnet.')}
@@ -57,7 +57,7 @@ export function InstallationSparePartsPanel({ installationId }) {
   }
 
   return (
-    <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-2">
+    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
       {items.map((item) => (
         <SparePartRow
           key={item._id}
@@ -87,15 +87,15 @@ function SparePartRow({ item, canWrite, onFlag, t }) {
   const isOpenOrder = item.orderStatus === 'requested' || item.orderStatus === 'ordered';
 
   return (
-    <div className="rounded-xl border border-white/5 bg-white/2 p-3.5 hover:border-white/10 hover:bg-white/4 transition-all">
+    <div className="rounded-xl border border-border bg-muted/30 p-3.5 hover:border-border hover:bg-muted/50 transition-all">
       <div className="flex items-start gap-3">
-        <div className={cn('h-10 w-10 shrink-0 rounded-lg flex items-center justify-center', catMeta?.bg || 'bg-white/5')}>
-          <Package className={cn('h-4 w-4', catMeta?.color || 'text-white/40')} />
+        <div className={cn('h-10 w-10 shrink-0 rounded-lg flex items-center justify-center', catMeta?.bg || 'bg-muted/60')}>
+          <Package className={cn('h-4 w-4', catMeta?.color || 'text-muted-foreground')} />
         </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <p className="text-[13px] font-semibold text-white/80 truncate">
+            <p className="text-[13px] font-semibold text-foreground truncate">
               {part.name || t('crm.spareParts.unknownPart', 'Unbekanntes Teil')}
             </p>
             {catMeta && (
@@ -116,7 +116,7 @@ function SparePartRow({ item, canWrite, onFlag, t }) {
             )}
           </div>
 
-          <div className="flex items-center gap-2.5 text-xs text-white/40 flex-wrap">
+          <div className="flex items-center gap-2.5 text-xs text-muted-foreground flex-wrap">
             {part.partNumber && (
               <span className="inline-flex items-center gap-1 font-mono">
                 <Hash className="h-2.5 w-2.5" /> {part.partNumber}
@@ -128,7 +128,7 @@ function SparePartRow({ item, canWrite, onFlag, t }) {
               </span>
             )}
             <span className="inline-flex items-center gap-1">
-              {t('crm.spareParts.quantity', 'Menge')}: <span className="text-white/60 font-medium">{item.quantity ?? 1}</span>
+              {t('crm.spareParts.quantity', 'Menge')}: <span className="text-muted-foreground font-medium">{item.quantity ?? 1}</span>
             </span>
           </div>
         </div>
@@ -137,7 +137,7 @@ function SparePartRow({ item, canWrite, onFlag, t }) {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 shrink-0 border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white/80"
+            className="gap-1.5 shrink-0 border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
             onClick={onFlag}
           >
             <ShoppingCart className="h-3.5 w-3.5" /> {t('crm.spareParts.flagOrder', 'Bestellen')}
@@ -180,26 +180,26 @@ function FlagOrderDialog({ item, installationId, onOpenChange, flagMutation, t }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 flex flex-col rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+      <DialogContent className="sm:max-w-md p-0 gap-0 flex flex-col rounded-2xl border border-border bg-card shadow-2xl">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-amber-500/10 ring-1 ring-amber-500/20 shrink-0">
               <ShoppingCart className="h-5 w-5 text-amber-400" />
             </div>
-            <DialogTitle className="text-[16px] font-semibold text-white/90">
+            <DialogTitle className="text-[16px] font-semibold text-foreground">
               {t('crm.spareParts.flagOrderTitle', 'Ersatzteil bestellen')}
             </DialogTitle>
           </div>
         </DialogHeader>
 
         <div className="px-6 py-5 space-y-4">
-          <p className="text-[13px] text-white/55">
+          <p className="text-[13px] text-muted-foreground">
             {part.name}{part.partNumber ? ` · ${part.partNumber}` : ''}
           </p>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-medium text-white/60 block">
+              <Label className="text-[12px] font-medium text-muted-foreground block">
                 {t('crm.spareParts.orderQuantity', 'Menge')}
               </Label>
               <Input
@@ -208,15 +208,15 @@ function FlagOrderDialog({ item, installationId, onOpenChange, flagMutation, t }
                 max={999}
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20"
+                className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-medium text-white/60 block">
+              <Label className="text-[12px] font-medium text-muted-foreground block">
                 {t('crm.spareParts.orderUrgency', 'Dringlichkeit')}
               </Label>
               <Select value={urgency} onValueChange={setUrgency}>
-                <SelectTrigger className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90">
+                <SelectTrigger className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -231,7 +231,7 @@ function FlagOrderDialog({ item, installationId, onOpenChange, flagMutation, t }
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[12px] font-medium text-white/60 block">
+            <Label className="text-[12px] font-medium text-muted-foreground block">
               {t('crm.spareParts.orderNotes', 'Notizen')}
             </Label>
             <Textarea
@@ -239,17 +239,17 @@ function FlagOrderDialog({ item, installationId, onOpenChange, flagMutation, t }
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t('crm.spareParts.orderNotesPlaceholder', 'Optionale Bestellnotiz')}
               rows={3}
-              className="bg-white/4 border-white/10 rounded-lg text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20"
+              className="bg-muted/50 border-border rounded-lg text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20"
             />
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-white/6 flex items-center justify-between gap-3">
+        <div className="px-6 py-4 border-t border-border flex items-center justify-between gap-3">
           <Button
             variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={flagMutation.isPending}
-            className="text-white/55 hover:text-white/80 hover:bg-white/5"
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/60"
           >
             {t('common.cancel', 'Abbrechen')}
           </Button>
@@ -269,9 +269,9 @@ function FlagOrderDialog({ item, installationId, onOpenChange, flagMutation, t }
 
 function SparePartsSkeleton() {
   return (
-    <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-2">
+    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
       {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-white/5 bg-white/2 p-3.5 flex gap-3">
+        <div key={i} className="rounded-xl border border-border bg-muted/30 p-3.5 flex gap-3">
           <Skeleton className="h-10 w-10 rounded-lg" />
           <div className="flex-1 space-y-2">
             <Skeleton className="h-4 w-56" />

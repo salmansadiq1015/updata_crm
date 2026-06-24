@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { usePermissions } from '@/shared/hooks/use-permissions';
+import { getUserDateLocale, getUserRoleLabel } from '@/modules/users/utils/user-display';
 import { cn } from '@/lib/utils';
 import {
   Plus, Pencil, UserX, UserCheck, Eye, Download,
@@ -35,14 +36,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const statusConfig = {
-  active: { label: 'Aktiv', variant: 'default', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-700 dark:text-emerald-400' },
-  pending_activation: { label: 'Ausstehend', variant: 'secondary', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-700 dark:text-amber-400' },
-  deactivated: { label: 'Deaktiviert', variant: 'outline', dotColor: 'bg-muted-foreground/40', bgColor: 'bg-muted', textColor: 'text-muted-foreground' },
-  locked: { label: 'Gesperrt', variant: 'destructive', dotColor: 'bg-red-500', bgColor: 'bg-red-500/10', textColor: 'text-red-700 dark:text-red-400' },
+  active: { labelKey: 'users.active', fallback: 'Aktiv', variant: 'default', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-700 dark:text-emerald-400' },
+  pending_activation: { labelKey: 'users.pending', fallback: 'Ausstehend', variant: 'secondary', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-700 dark:text-amber-400' },
+  deactivated: { labelKey: 'users.deactivated', fallback: 'Deaktiviert', variant: 'outline', dotColor: 'bg-muted-foreground/40', bgColor: 'bg-muted', textColor: 'text-muted-foreground' },
+  locked: { labelKey: 'users.locked', fallback: 'Gesperrt', variant: 'destructive', dotColor: 'bg-red-500', bgColor: 'bg-red-500/10', textColor: 'text-red-700 dark:text-red-400' },
 };
 
 export function UsersTable() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState('table');
   const [sorting, setSorting] = useState([]);
@@ -98,25 +99,25 @@ export function UsersTable() {
 
   const createMutation = useMutation({
     mutationFn: (data) => userService.createUser(data),
-    onSuccess: () => { invalidateAll(); showSuccess('Benutzer erstellt'); },
+    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastCreated', 'Benutzer erstellt')); },
     onError: (err) => showError(err.message),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => userService.updateUser(id, data),
-    onSuccess: () => { invalidateAll(); showSuccess('Benutzer aktualisiert'); },
+    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastUpdated', 'Benutzer aktualisiert')); },
     onError: (err) => showError(err.message),
   });
 
   const deactivateMutation = useMutation({
     mutationFn: (id) => userService.deactivateUser(id),
-    onSuccess: () => { invalidateAll(); showSuccess('Benutzer deaktiviert'); setConfirmOpen(false); },
+    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastDeactivated', 'Benutzer deaktiviert')); setConfirmOpen(false); },
     onError: (err) => showError(err.message),
   });
 
   const activateMutation = useMutation({
     mutationFn: (id) => userService.activateUser(id),
-    onSuccess: () => { invalidateAll(); showSuccess('Benutzer aktiviert'); setConfirmOpen(false); },
+    onSuccess: () => { invalidateAll(); showSuccess(t('users.toastActivated', 'Benutzer aktiviert')); setConfirmOpen(false); },
     onError: (err) => showError(err.message),
   });
 
@@ -124,7 +125,9 @@ export function UsersTable() {
     mutationFn: ({ ids, data }) => userService.bulkUpdate(ids, data),
     onSuccess: (res) => {
       invalidateAll();
-      showSuccess(`${res?.modifiedCount || 'Alle'} Benutzer aktualisiert`);
+      showSuccess(t('users.toastBulkUpdated', '{count} Benutzer aktualisiert', {
+        count: res?.modifiedCount || t('users.bulkAll', 'Alle'),
+      }));
       setRowSelection({});
     },
     onError: (err) => showError(err.message),
@@ -134,7 +137,9 @@ export function UsersTable() {
     mutationFn: (ids) => userService.bulkDelete(ids),
     onSuccess: (res) => {
       invalidateAll();
-      showSuccess(`${res?.deactivatedCount || 'Alle'} Benutzer deaktiviert`);
+      showSuccess(t('users.toastBulkDeactivated', '{count} Benutzer deaktiviert', {
+        count: res?.deactivatedCount || t('users.bulkAll', 'Alle'),
+      }));
       setRowSelection({});
       setBulkDeactivateOpen(false);
     },
@@ -153,6 +158,7 @@ export function UsersTable() {
   const inactiveCount = users.filter((u) => u.status === 'deactivated' || (!u.isActive && u.status !== 'active' && u.status !== 'pending_activation' && u.status !== 'locked')).length;
   const selectedIds = Object.keys(rowSelection);
   const hasActiveFilters = statusFilter !== 'all' || roleFilter !== 'all';
+  const dateLocale = getUserDateLocale(locale);
 
   const columns = useMemo(() => [
     {
@@ -202,7 +208,7 @@ export function UsersTable() {
           <div className="h-5 w-5 rounded bg-violet-500/10 flex items-center justify-center">
             <Shield className="h-3 w-3 text-violet-500" />
           </div>
-          <span className="text-sm font-medium">{row.original.role?.name || '\u2014'}</span>
+          <span className="text-sm font-medium">{getUserRoleLabel(row.original.role?.name, t) || '\u2014'}</span>
         </div>
       ),
     },
@@ -226,7 +232,7 @@ export function UsersTable() {
               disabled={u.status === 'pending_activation' || u.status === 'locked'}
             />
             <span className={cn('text-xs font-medium', s.textColor)}>
-              {s.label}
+              {t(s.labelKey, s.fallback)}
             </span>
           </div>
         );
@@ -241,12 +247,12 @@ export function UsersTable() {
         if (!d) return <span className="text-xs text-muted-foreground/60 italic">{t('common.never')}</span>;
         return (
           <span className="text-xs text-muted-foreground">
-            {new Date(d).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+            {new Date(d).toLocaleString(dateLocale, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
           </span>
         );
       },
     },
-  ], [t]);
+  ], [dateLocale, t]);
 
   const handleSubmit = (data) => {
     if (editUser) {
@@ -279,6 +285,10 @@ export function UsersTable() {
     setGlobalFilter('');
     resetCursor();
   };
+
+  const targetIsActive = targetUser?.isActive || targetUser?.status === 'active';
+  const targetUserName = [targetUser?.firstName, targetUser?.lastName].filter(Boolean).join(' ')
+    || t('users.thisUser', 'dieser Benutzer');
 
   return (
     <div className="space-y-6">
@@ -380,7 +390,7 @@ export function UsersTable() {
             'w-[170px] text-xs rounded-full border-dashed',
             statusFilter !== 'all' && 'border-primary/40 bg-primary/5 text-primary'
           )}>
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t('users.status')} />
           </SelectTrigger>
           <SelectContent position="popper" sideOffset={4}>
             <SelectItem value="all">
@@ -421,7 +431,7 @@ export function UsersTable() {
             'w-[170px] text-xs rounded-full border-dashed',
             roleFilter !== 'all' && 'border-primary/40 bg-primary/5 text-primary'
           )}>
-            <SelectValue placeholder="Rolle" />
+            <SelectValue placeholder={t('users.role')} />
           </SelectTrigger>
           <SelectContent position="popper" sideOffset={4}>
             <SelectItem value="all">
@@ -436,7 +446,7 @@ export function UsersTable() {
                 <SelectItem key={r._id} value={r._id}>
                   <span className="flex items-center gap-2">
                     <span className={cn('h-2 w-2 rounded-full', roleColors[i % roleColors.length])} />
-                    {r.name}
+                    {getUserRoleLabel(r.name, t)}
                   </span>
                 </SelectItem>
               );
@@ -466,11 +476,11 @@ export function UsersTable() {
           <PermissionGate permission="users:write">
             <Select onValueChange={handleBulkRoleChange}>
               <SelectTrigger className="w-[160px] text-xs">
-                <SelectValue placeholder="Rolle ändern" />
+                <SelectValue placeholder={t('users.changeRole')} />
               </SelectTrigger>
               <SelectContent position="popper" sideOffset={4}>
                 {roles.map((r) => (
-                  <SelectItem key={r._id} value={r._id}>{r.name}</SelectItem>
+                  <SelectItem key={r._id} value={r._id}>{getUserRoleLabel(r.name, t)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -593,22 +603,26 @@ export function UsersTable() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={targetUser?.isActive || targetUser?.status === 'active' ? 'Benutzer deaktivieren?' : 'Benutzer aktivieren?'}
-        description={`Möchten Sie ${targetUser?.firstName} ${targetUser?.lastName} wirklich ${targetUser?.isActive || targetUser?.status === 'active' ? 'deaktivieren' : 'aktivieren'}?`}
+        title={targetIsActive ? t('users.confirmDeactivate') : t('users.confirmActivate')}
+        description={
+          targetIsActive
+            ? t('users.confirmDeactivateDesc', 'Moechten Sie {name} wirklich deaktivieren?', { name: targetUserName })
+            : t('users.confirmActivateDesc', 'Moechten Sie {name} wirklich aktivieren?', { name: targetUserName })
+        }
         onConfirm={handleToggleActive}
         loading={deactivateMutation.isPending || activateMutation.isPending}
-        confirmText={targetUser?.isActive || targetUser?.status === 'active' ? 'Deaktivieren' : 'Aktivieren'}
-        variant={targetUser?.isActive || targetUser?.status === 'active' ? 'destructive' : 'default'}
+        confirmText={targetIsActive ? t('users.deactivate') : t('users.activate')}
+        variant={targetIsActive ? 'destructive' : 'default'}
       />
 
       <ConfirmDialog
         open={bulkDeactivateOpen}
         onOpenChange={setBulkDeactivateOpen}
-        title={`${selectedIds.length} Benutzer deaktivieren?`}
-        description="Die ausgewählten Benutzer werden deaktiviert und können sich nicht mehr anmelden."
+        title={t('users.bulkConfirmDeactivateTitle', '{count} Benutzer deaktivieren?', { count: selectedIds.length })}
+        description={t('users.bulkConfirmDeactivateDesc', 'Die ausgewaehlten Benutzer werden deaktiviert und koennen sich nicht mehr anmelden.')}
         onConfirm={() => bulkDeleteMutation.mutate(selectedIds)}
         loading={bulkDeleteMutation.isPending}
-        confirmText="Alle deaktivieren"
+        confirmText={t('users.deactivateAll')}
         variant="destructive"
       />
     </div>
@@ -686,11 +700,12 @@ function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlob
 }
 
 function UserCard({ user, onEdit, onToggle }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const initials = `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase();
   const status = statusConfig[user.status] || statusConfig.active;
   const isActive = user.status === 'active' || user.isActive;
   const lastLogin = user.lastLoginAt || user.lastLogin;
+  const dateLocale = getUserDateLocale(locale);
 
   return (
     <div className="rounded-xl border border-border/40 bg-card overflow-hidden group hover:border-border/70 hover:shadow-md transition-all duration-200">
@@ -737,7 +752,7 @@ function UserCard({ user, onEdit, onToggle }) {
                   {t('common.edit')}
                 </DropdownMenuItem>
               </PermissionGate>
-              <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(user.email); showSuccess('E-Mail kopiert'); }} className="gap-2">
+              <DropdownMenuItem onClick={() => { navigator.clipboard.writeText(user.email); showSuccess(t('users.toastEmailCopied', 'E-Mail kopiert')); }} className="gap-2">
                 <Copy className="h-3.5 w-3.5" />
                 {t('users.copyEmail')}
               </DropdownMenuItem>
@@ -762,7 +777,7 @@ function UserCard({ user, onEdit, onToggle }) {
             <div className="h-5 w-5 rounded bg-violet-500/10 flex items-center justify-center shrink-0">
               <Shield className="h-3 w-3 text-violet-500" />
             </div>
-            <span className="text-xs font-medium">{user.role?.name || '\u2014'}</span>
+              <span className="text-xs font-medium">{getUserRoleLabel(user.role?.name, t) || '\u2014'}</span>
           </div>
           {/* Department */}
           {user.department && (
@@ -777,11 +792,11 @@ function UserCard({ user, onEdit, onToggle }) {
           <div className="flex items-center justify-between pt-1">
             <span className={cn('inline-flex items-center gap-1.5 text-[0.65rem] font-medium px-2 py-0.5 rounded-full', status.bgColor, status.textColor)}>
               <span className={cn('h-1.5 w-1.5 rounded-full', status.dotColor)} />
-              {status.label}
+              {t(status.labelKey, status.fallback)}
             </span>
             {lastLogin && (
               <span className="text-[0.65rem] text-muted-foreground/60">
-                {new Date(lastLogin).toLocaleDateString('de-CH')}
+                {new Date(lastLogin).toLocaleDateString(dateLocale)}
               </span>
             )}
           </div>

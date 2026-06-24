@@ -5,24 +5,31 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
+  Building2,
+  Check,
   CalendarPlus,
   CheckCircle2,
   CheckSquare,
   Clock3,
+  Link2,
   ExternalLink,
   ListChecks,
   Loader2,
+  MapPin,
   Mic,
   MicOff,
   Paperclip,
+  Plus,
   PhoneOff,
   RefreshCw,
   Search,
   Trash2,
   UserCheck,
+  UserPlus,
   UsersRound,
   Video,
   VideoOff,
+  X,
 } from 'lucide-react';
 import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -30,6 +37,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -63,6 +71,25 @@ function getUserName(user) {
   if (!user) return '';
   if (typeof user !== 'object') return user;
   return [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || user._id;
+}
+
+function getInitials(value) {
+  return String(value || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'M';
+}
+
+function normalizeOptionResults(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.data)) return payload.data.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
 }
 
 function formatDateTime(value, locale = 'de') {
@@ -156,41 +183,101 @@ function RsvpBadge({ status, locale }) {
 }
 
 function OptionSearch({ type, value, label, onSelect, onClear }) {
-  const { t, locale } = useLanguage();
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
-  const debounced = useDebounce(search, 250);
+  const [open, setOpen] = useState(false);
+  const debounced = useDebounce(search.trim(), 250);
   const isProject = type === 'project';
+  const isSearching = debounced.trim().length >= 2;
+  const recentParams = isProject
+    ? { limit: 12, sortBy: 'updatedAt', sortOrder: 'desc' }
+    : { limit: 12, sortBy: 'name', sortOrder: 'asc' };
 
   const query = useQuery({
-    queryKey: isProject ? queryKeys.pm.projects.search(debounced) : queryKeys.crm.customers.search(debounced),
-    queryFn: () => (isProject
-      ? projectService.searchProjects(debounced, 8)
-      : customerService.searchCustomers(debounced, 8)),
-    enabled: debounced.trim().length >= 2,
+    queryKey: isProject
+      ? isSearching
+        ? queryKeys.pm.projects.search(debounced)
+        : queryKeys.pm.projects.list(recentParams)
+      : isSearching
+        ? queryKeys.crm.customers.search(debounced)
+        : queryKeys.crm.customers.list(recentParams),
+    queryFn: async () => {
+      if (isProject) {
+        return isSearching
+          ? projectService.searchProjects(debounced, 12)
+          : projectService.getProjects(recentParams);
+      }
+      return isSearching
+        ? customerService.searchCustomers(debounced, 12)
+        : customerService.getCustomers(recentParams);
+    },
+    enabled: open,
     staleTime: 60_000,
   });
 
-  const items = Array.isArray(query.data) ? query.data : [];
+  const items = useMemo(
+    () => normalizeOptionResults(query.data).filter((item) => getId(item)),
+    [query.data],
+  );
   const placeholder = isProject
     ? t('meetings.form.searchProject', 'Projekt suchen...')
     : t('meetings.form.searchCustomer', 'Kunde suchen...');
+  const EntityIcon = isProject ? CheckSquare : Building2;
+  const getTitle = (item) => (
+    isProject
+      ? item.name || item.projectNumber || getId(item)
+      : item.name || item.ownerName || item.customerNumber || getId(item)
+  );
+  const getSubtitle = (item) => (
+    isProject
+      ? [item.projectNumber, item.status].filter(Boolean).join(' · ')
+      : [item.customerNumber, item.email].filter(Boolean).join(' · ')
+  );
+  const handleSelect = (item) => {
+    const id = getId(item);
+    if (!id) return;
+    onSelect(id, getTitle(item));
+    setSearch('');
+    setOpen(false);
+  };
 
   return (
     <div className="space-y-2">
-      <Label>{isProject ? t('meetings.form.project', 'Projekt') : t('meetings.form.customer', 'Kunde')}</Label>
+      <Label className="text-sm font-semibold">{isProject ? t('meetings.form.project', 'Projekt') : t('meetings.form.customer', 'Kunde')}</Label>
       {value ? (
-        <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
-          <span className="truncate text-sm">{label || value}</span>
-          <Button type="button" size="sm" variant="ghost" onClick={onClear}>{t('common.clear', 'Entfernen')}</Button>
+        <div className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-border/70 bg-background/70 px-3.5 py-2">
+          <span className="flex min-w-0 items-center gap-2">
+            <EntityIcon className="h-4 w-4 shrink-0 text-primary" />
+            <span className="truncate text-sm font-medium">{label || value}</span>
+          </span>
+          <Button type="button" size="icon-sm" variant="ghost" className="rounded-full" onClick={onClear} aria-label={t('common.clear', 'Clear')}>
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       ) : (
         <>
-          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={placeholder} />
-          {items.length > 0 && (
-            <div className="max-h-40 overflow-y-auto rounded-lg border bg-popover p-1">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onFocus={() => setOpen(true)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setOpen(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setOpen(false);
+              }}
+              onBlur={() => setTimeout(() => setOpen(false), 150)}
+              className="h-11 rounded-xl bg-background/70 pl-9"
+              placeholder={placeholder}
+            />
+          </div>
+          {open && items.length > 0 && (
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-border/70 bg-popover p-1.5 shadow-lg">
               {items.map((item) => {
                 const id = getId(item);
-                const title = item.name || item.projectNumber || item.customerNumber || id;
+                const title = getTitle(item);
                 const subtitle = isProject
                   ? [item.projectNumber, item.status].filter(Boolean).join(' · ')
                   : [item.customerNumber, item.email].filter(Boolean).join(' · ');
@@ -198,15 +285,29 @@ function OptionSearch({ type, value, label, onSelect, onClear }) {
                   <button
                     type="button"
                     key={id}
-                    onClick={() => onSelect(id, title)}
-                    className="flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      handleSelect(item);
+                    }}
+                    onClick={() => handleSelect(item)}
+                    className="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
                   >
-                    <span className="truncate text-sm font-medium">{title}</span>
-                    {subtitle && <span className="truncate text-xs text-muted-foreground">{subtitle}</span>}
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+                      {getInitials(title)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{title}</span>
+                      {(getSubtitle(item) || subtitle) && <span className="block truncate text-xs text-muted-foreground">{getSubtitle(item) || subtitle}</span>}
+                    </span>
                   </button>
                 );
               })}
             </div>
+          )}
+          {open && !query.isFetching && items.length === 0 && (
+            <p className="rounded-xl border border-dashed border-border/70 px-3 py-4 text-center text-sm text-muted-foreground">
+              {t('common.noResults', 'No records found')}
+            </p>
           )}
           {query.isFetching && <p className="text-xs text-muted-foreground">{t('common.searching', 'Suche laeuft...')}</p>}
         </>
@@ -218,15 +319,24 @@ function OptionSearch({ type, value, label, onSelect, onClear }) {
 function ParticipantPicker({ participants, onChange }) {
   const { t } = useLanguage();
   const [search, setSearch] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [externalEmail, setExternalEmail] = useState('');
   const debounced = useDebounce(search, 250);
 
   const usersQuery = useQuery({
-    queryKey: queryKeys.users.directory({ search: debounced, limit: 10 }),
-    queryFn: () => userService.getDirectory({ search: debounced, limit: 10 }),
-    enabled: debounced.trim().length >= 2,
+    queryKey: queryKeys.users.directory({ search: debounced, limit: 12 }),
+    queryFn: () => userService.getDirectory({ search: debounced, limit: 12 }),
+    enabled: pickerOpen,
     staleTime: 60_000,
   });
+  const selectedUserIds = useMemo(
+    () => new Set(participants.map((participant) => participant.userId).filter(Boolean)),
+    [participants],
+  );
+  const availableUsers = useMemo(
+    () => (Array.isArray(usersQuery.data) ? usersQuery.data : []).filter((user) => !selectedUserIds.has(getId(user))),
+    [selectedUserIds, usersQuery.data],
+  );
 
   const addUser = (user) => {
     const id = getId(user);
@@ -243,6 +353,7 @@ function ParticipantPicker({ participants, onChange }) {
       },
     ]);
     setSearch('');
+    setPickerOpen(false);
   };
 
   const addExternal = () => {
@@ -274,60 +385,116 @@ function ParticipantPicker({ participants, onChange }) {
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-2">
         <div>
-          <Label>{t('meetings.form.participants', 'Teilnehmer')}</Label>
-          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('meetings.form.searchUsers', 'Benutzer suchen...')} />
-          {Array.isArray(usersQuery.data) && usersQuery.data.length > 0 && (
-            <div className="mt-1 max-h-36 overflow-y-auto rounded-lg border bg-popover p-1">
-              {usersQuery.data.map((user) => (
-                <button
-                  key={getId(user)}
-                  type="button"
-                  onClick={() => addUser(user)}
-                  className="flex w-full flex-col rounded-md px-2 py-1.5 text-left hover:bg-muted"
-                >
-                  <span className="text-sm font-medium">{getUserName(user)}</span>
-                  <span className="text-xs text-muted-foreground">{user.email}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <Label className="text-sm font-semibold">{t('meetings.form.participants', 'Teilnehmer')}</Label>
+          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" className="mt-2 h-11 w-full justify-start gap-2 rounded-xl bg-background/70 px-3.5 text-left font-normal text-muted-foreground">
+                <UserPlus className="h-4 w-4 text-primary" />
+                <span className="min-w-0 flex-1 truncate">{t('meetings.form.searchUsers', 'Benutzer suchen...')}</span>
+                <Search className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="z-[70] w-[--radix-popover-trigger-width] gap-2 rounded-xl p-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={t('meetings.form.searchUsers', 'Benutzer suchen...')}
+                  className="h-10 rounded-lg pl-9 text-sm"
+                />
+              </div>
+              <div className="max-h-64 overflow-y-auto pr-1">
+                {availableUsers.length > 0 ? (
+                  availableUsers.map((user) => {
+                    const name = getUserName(user);
+                    return (
+                      <button
+                        key={getId(user)}
+                        type="button"
+                        onClick={() => addUser(user)}
+                        className="flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                      >
+                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                          {getInitials(name)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{name}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{user.email}</span>
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="px-2 py-6 text-center text-sm text-muted-foreground">
+                    {usersQuery.isFetching ? t('common.searching', 'Searching...') : t('common.noResults', 'No records found')}
+                  </p>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
         <div>
-          <Label>{t('meetings.form.externalParticipant', 'Externe E-Mail')}</Label>
-          <div className="flex gap-2">
-            <Input value={externalEmail} onChange={(event) => setExternalEmail(event.target.value)} placeholder="partner@example.com" />
-            <Button type="button" variant="outline" onClick={addExternal}>{t('common.add', 'Hinzufuegen')}</Button>
+          <Label className="text-sm font-semibold">{t('meetings.form.externalParticipant', 'Externe E-Mail')}</Label>
+          <div className="mt-2 flex gap-2">
+            <Input
+              value={externalEmail}
+              onChange={(event) => setExternalEmail(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  addExternal();
+                }
+              }}
+              className="h-11 rounded-xl bg-background/70"
+              placeholder="partner@example.com"
+            />
+            <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={addExternal}>
+              <Plus className="h-4 w-4" />
+              {t('common.add', 'Add')}
+            </Button>
           </div>
         </div>
       </div>
 
       <div className="space-y-2">
         {participants.map((participant, index) => (
-          <div key={`${participant.userId || participant.email}-${index}`} className="grid gap-2 rounded-lg border bg-muted/20 p-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{participant.displayName || participant.email || participant.userId}</p>
-              <p className="truncate text-xs text-muted-foreground">{participant.email || participant.userId}</p>
+          <div key={`${participant.userId || participant.email}-${index}`} className="grid gap-3 rounded-xl border border-border/70 bg-background/70 p-3 sm:grid-cols-[minmax(0,1fr)_170px_auto]">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                {getInitials(participant.displayName || participant.email || participant.userId)}
+              </span>
+              <span className="min-w-0">
+                <p className="truncate text-sm font-semibold">{participant.displayName || participant.email || participant.userId}</p>
+                <p className="truncate text-xs text-muted-foreground">{participant.email || participant.userId}</p>
+              </span>
             </div>
             <Select value={participant.role} onValueChange={(role) => updateParticipant(index, { role })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectTrigger className="h-10 rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectContent className="z-[80]">
                 {PARTICIPANT_ROLES.map((role) => (
                   <SelectItem key={role} value={role}>{t(`meetings.roles.${role}`, role)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button type="button" size="icon" variant="ghost" onClick={() => removeParticipant(index)}>
+            <Button type="button" size="icon" variant="ghost" className="rounded-xl text-muted-foreground hover:text-destructive" onClick={() => removeParticipant(index)}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         ))}
+        {participants.length === 0 && (
+          <p className="rounded-xl border border-dashed border-border/70 px-3 py-4 text-center text-sm text-muted-foreground">
+            {t('common.noResults', 'No records found')}
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
 function MeetingFormDialog({ open, onOpenChange, meeting, onSubmit, isPending }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const [form, setForm] = useState(defaultFormState);
 
   useEffect(() => {
@@ -336,6 +503,7 @@ function MeetingFormDialog({ open, onOpenChange, meeting, onSubmit, isPending })
 
   const patch = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const isEdit = Boolean(meeting?._id);
+  const providerLabel = t(`meetings.providers.${form.onlineProvider}`, form.onlineProvider.replaceAll('_', ' '));
 
   const submit = (event) => {
     event.preventDefault();
@@ -368,48 +536,74 @@ function MeetingFormDialog({ open, onOpenChange, meeting, onSubmit, isPending })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl">
+      <DialogContent className="sm:max-w-6xl">
         <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
-          <DialogHeader>
-            <DialogTitle>{isEdit ? t('meetings.form.editTitle', 'Meeting bearbeiten') : t('meetings.form.createTitle', 'Meeting planen')}</DialogTitle>
+          <DialogHeader className="bg-card/95 pr-16">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+                <CalendarPlus className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-xl">
+                  {isEdit ? t('meetings.form.editTitle', 'Meeting bearbeiten') : t('meetings.form.createTitle', 'Meeting planen')}
+                </DialogTitle>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Badge variant="secondary" className="gap-1.5 rounded-lg px-2.5 py-1">
+                    <Clock3 className="h-3.5 w-3.5 text-primary" />
+                    {form.startAt ? formatDateTime(fromDatetimeLocal(form.startAt), locale) : t('meetings.form.start', 'Start')}
+                  </Badge>
+                  <Badge variant="outline" className="gap-1.5 rounded-lg px-2.5 py-1">
+                    <Video className="h-3.5 w-3.5 text-primary" />
+                    {providerLabel}
+                  </Badge>
+                  <Badge variant="outline" className="gap-1.5 rounded-lg px-2.5 py-1">
+                    <UsersRound className="h-3.5 w-3.5 text-primary" />
+                    {form.participants.length}
+                  </Badge>
+                </div>
+              </div>
+            </div>
           </DialogHeader>
-          <DialogBody className="space-y-5">
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-              <div className="space-y-4">
+          <DialogBody className="space-y-6 bg-muted/10 px-4 py-5 sm:px-7">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+              <div className="space-y-5">
                 <div className="space-y-2">
                   <Label>{t('meetings.form.title', 'Titel')}</Label>
-                  <Input required value={form.title} onChange={(event) => patch('title', event.target.value)} />
+                  <Input required className="h-11 rounded-xl bg-background/70" value={form.title} onChange={(event) => patch('title', event.target.value)} />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>{t('meetings.form.start', 'Start')}</Label>
-                    <Input required type="datetime-local" value={form.startAt} onChange={(event) => patch('startAt', event.target.value)} />
+                    <Input required type="datetime-local" className="h-11 rounded-xl bg-background/70" value={form.startAt} onChange={(event) => patch('startAt', event.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>{t('meetings.form.end', 'Ende')}</Label>
-                    <Input required type="datetime-local" value={form.endAt} onChange={(event) => patch('endAt', event.target.value)} />
+                    <Input required type="datetime-local" className="h-11 rounded-xl bg-background/70" value={form.endAt} onChange={(event) => patch('endAt', event.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>{t('meetings.form.agenda', 'Agenda')}</Label>
-                  <Textarea value={form.agenda} onChange={(event) => patch('agenda', event.target.value)} rows={5} />
+                  <Textarea className="min-h-28 rounded-xl bg-background/70" value={form.agenda} onChange={(event) => patch('agenda', event.target.value)} rows={5} />
                 </div>
                 <div className="space-y-2">
                   <Label>{t('meetings.form.description', 'Beschreibung')}</Label>
-                  <Textarea value={form.description} onChange={(event) => patch('description', event.target.value)} rows={3} />
+                  <Textarea className="min-h-24 rounded-xl bg-background/70" value={form.description} onChange={(event) => patch('description', event.target.value)} rows={3} />
                 </div>
                 <ParticipantPicker participants={form.participants} onChange={(participants) => patch('participants', participants)} />
               </div>
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>{t('meetings.form.location', 'Ort')}</Label>
-                  <Input value={form.location} onChange={(event) => patch('location', event.target.value)} />
+                  <div className="relative">
+                    <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input className="h-11 rounded-xl bg-background/70 pl-9" value={form.location} onChange={(event) => patch('location', event.target.value)} />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>{t('meetings.form.onlineProvider', 'Online Meeting')}</Label>
                   <Select value={form.onlineProvider} onValueChange={(provider) => patch('onlineProvider', provider)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
+                    <SelectTrigger className="h-11 rounded-xl bg-background/70"><SelectValue /></SelectTrigger>
+                    <SelectContent className="z-[80]">
                       {ONLINE_PROVIDERS.map((provider) => (
                         <SelectItem key={provider} value={provider}>{t(`meetings.providers.${provider}`, provider.replaceAll('_', ' '))}</SelectItem>
                       ))}
@@ -419,7 +613,10 @@ function MeetingFormDialog({ open, onOpenChange, meeting, onSubmit, isPending })
                 {form.onlineProvider !== 'NONE' && form.onlineProvider !== 'INTERNAL' && (
                   <div className="space-y-2">
                     <Label>{t('meetings.form.joinUrl', 'Join-Link')}</Label>
-                    <Input value={form.joinUrl} onChange={(event) => patch('joinUrl', event.target.value)} placeholder="https://..." />
+                    <div className="relative">
+                      <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input className="h-11 rounded-xl bg-background/70 pl-9" value={form.joinUrl} onChange={(event) => patch('joinUrl', event.target.value)} placeholder="https://..." />
+                    </div>
                   </div>
                 )}
                 <OptionSearch

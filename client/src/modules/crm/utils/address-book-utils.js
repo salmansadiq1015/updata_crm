@@ -37,14 +37,14 @@ export function getAddressTypeMeta(entry, t) {
     return {
       icon: Home,
       label: t('crm.addressBook.billingAddress', 'Rechnungsadresse'),
-      className: 'bg-sky-500/10 text-sky-400 ring-sky-500/20',
+      className: 'bg-sky-500/10 text-sky-700 ring-sky-500/20 dark:text-sky-300',
     };
   }
 
   return {
     icon: MapPinned,
     label: t('crm.addressBook.siteDeliveryAddress', 'Liefer-/Objektadresse'),
-    className: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/20',
+    className: 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-300',
   };
 }
 
@@ -56,8 +56,8 @@ export function getCustomerTypeMeta(customer, t) {
       ? t('crm.addressBook.privateAddress', 'Privatadresse')
       : t('crm.addressBook.companyAddress', 'Firmenadresse'),
     className: isPrivate
-      ? 'bg-violet-500/10 text-violet-300 ring-violet-500/20'
-      : 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
+      ? 'bg-violet-500/10 text-violet-700 ring-violet-500/20 dark:text-violet-300'
+      : 'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-300',
   };
 }
 

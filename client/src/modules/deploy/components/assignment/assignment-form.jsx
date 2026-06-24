@@ -10,6 +10,7 @@ import { useAssignmentMutations } from '../../hooks/use-assignment-mutations';
 import { useDeployEmployees } from '../../hooks/use-deploy-employees';
 import { AssignmentRecurrenceForm } from './assignment-recurrence-form';
 import { AssignmentWorkContextFields } from './assignment-work-context-fields';
+import { AppointmentTimeWindowField } from './appointment-time-window-field';
 import { ConflictDialog } from '../conflict/conflict-dialog';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -229,6 +230,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const requiredCertifications = useWatch({ control, name: 'requiredCertifications' });
   const recommendedCertifications = useWatch({ control, name: 'recommendedCertifications' });
   const confirmationMethod = useWatch({ control, name: 'appointment.confirmationMethod' });
+  const appointmentWindow = useWatch({ control, name: 'appointment.appointmentWindow' }) || '';
   const showRecurrence = Boolean(recurrenceValue);
   const assignmentMeta = ASSIGNMENT_TYPE_META[assignmentType];
   const AssignmentIcon = assignmentMeta?.icon || CalendarClock;
@@ -740,9 +742,17 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
                   <FormField label={t('deploy.form.email', 'E-Mail')} error={errors?.appointment?.customerContactEmail?.message}>
                     <Input className="h-11 rounded-xl text-sm" type="email" {...register('appointment.customerContactEmail')} />
                   </FormField>
-                  <FormField label={t('deploy.form.timeWindow', 'Zeitfenster')} error={errors?.appointment?.appointmentWindow?.message}>
-                    <Input className="h-11 rounded-xl text-sm" placeholder={t('deploy.form.timeWindowPlaceholder', 'z.B. 08:00-12:00')} {...register('appointment.appointmentWindow')} />
-                  </FormField>
+                  <div className="sm:col-span-2">
+                    <AppointmentTimeWindowField
+                      key={appointmentWindow || 'empty-appointment-window'}
+                      value={appointmentWindow}
+                      error={errors?.appointment?.appointmentWindow?.message}
+                      register={register}
+                      setValue={setValue}
+                      t={t}
+                      disabled={isPending}
+                    />
+                  </div>
                 </div>
                 <FormField label={t('deploy.form.confirmationMethod', 'Bestätigungsmethode')} error={errors?.appointment?.confirmationMethod?.message}>
                   <Select

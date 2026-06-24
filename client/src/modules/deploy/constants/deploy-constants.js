@@ -61,12 +61,31 @@ export const AVAILABILITY_TYPE_META = Object.freeze({
   OTHER_ABSENCE: { labelKey: 'deploy.availability.otherAbsence', label: 'Andere Abwesenheit', color: 'bg-orange-100 dark:bg-orange-900/20' },
 });
 
+// Allocation heat ramp. Opacity-based so the same classes read as a smooth
+// gradient on both light and dark surfaces. Over-allocation (> 100%) is styled
+// separately in red by the cell — see ALLOCATION_OVER_COLOR.
 export const ALLOCATION_PERCENT_COLORS = Object.freeze({
-  25: { bg: 'bg-blue-200 dark:bg-blue-800', text: 'text-blue-800 dark:text-blue-200', label: '25%' },
-  50: { bg: 'bg-blue-400 dark:bg-blue-600', text: 'text-white', label: '50%' },
-  75: { bg: 'bg-blue-600 dark:bg-blue-400', text: 'text-white', label: '75%' },
-  100: { bg: 'bg-blue-800 dark:bg-blue-200', text: 'text-white dark:text-blue-900', label: '100%' },
+  25: { bg: 'bg-blue-500/25', text: 'text-blue-700 dark:text-blue-100', label: '25%' },
+  50: { bg: 'bg-blue-500/45', text: 'text-blue-900 dark:text-white', label: '50%' },
+  75: { bg: 'bg-blue-600/70', text: 'text-white', label: '75%' },
+  100: { bg: 'bg-blue-600', text: 'text-white', label: '100%' },
 });
+
+export const ALLOCATION_OVER_COLOR = Object.freeze({
+  bg: 'bg-red-500/85',
+  text: 'text-white',
+  label: '>100%',
+});
+
+// Maps an arbitrary summed percentage to the nearest heat tier.
+export function getAllocationTier(percent) {
+  if (percent <= 0) return null;
+  if (percent > 100) return ALLOCATION_OVER_COLOR;
+  if (percent <= 25) return ALLOCATION_PERCENT_COLORS[25];
+  if (percent <= 50) return ALLOCATION_PERCENT_COLORS[50];
+  if (percent <= 75) return ALLOCATION_PERCENT_COLORS[75];
+  return ALLOCATION_PERCENT_COLORS[100];
+}
 
 // Read-only project work sourced from PM construction schedules
 // (responsibleType: INTERNAL_TEAM). Surfaced in the deploy calendar so

@@ -9,16 +9,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
+import { Combobox } from '@/components/ui/combobox';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+  ReceiptText, ClipboardList, Coins, Clock, CalendarDays, Building2, FolderKanban, Languages, SearchX,
+} from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useInvoiceMutations } from '../hooks/use-qop-mutations';
-import { useBillingPlan, useOrders } from '../hooks/use-qop-queries';
+import { useBillingPlan, useOrders, useQopCustomerProjects, useQopDepartments } from '../hooks/use-qop-queries';
 import { LineItemsEditor } from './line-items-editor';
 import { CURRENCIES } from '../constants/qop-constants';
+import {
+  LANGUAGE_OPTIONS, buildDepartmentOptions, buildOrderOptions, buildPaymentTermOptions, buildProjectOptions,
+  getEntityId, mapLineItemsForPayload, toDateInputValue, withEditableLineIds,
+} from '../utils/document-form-utils';
 
 const PAYMENT_TERMS = [7, 10, 14, 20, 30, 45, 60];
+const ORDER_PICKER_LIMIT = 25;
+const ORDER_SEARCH_DEBOUNCE_MS = 250;
 
 function addDays(days) {
   const d = new Date();
@@ -28,9 +36,23 @@ function addDays(days) {
 
 const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
 
+function getOrderDisplayLabel(order) {
+  const orderNumber = order?.orderNumber || order?._id || order?.id;
+  const customerName = order?.customerName ?? order?.customerId?.name;
+  return [orderNumber, customerName].filter(Boolean).join(' - ');
+}
+
 const EMPTY_FORM = () => ({
+  customerId: '',
+  customerName: '',
+  departmentId: '',
+  projectId: '',
+  language: 'de',
+  title: '',
   currency: 'CHF',
+  globalDiscountPercent: 0,
   paymentTermsDays: 30,
+  paymentTermsText: '',
   dueDate: addDays(30),
   sourceOrderId: '',
   lineItems: [],
@@ -50,34 +72,103 @@ export function InvoiceFormDialog({
   sourceQuotationId,
   sourceOrder = null,
   sourceQuotation = null,
+  invoice = null,
 }) {
   const { t } = useLanguage();
+  const isEdit = Boolean(invoice);
   const {
     createInvoiceFromOrder, createInvoiceFromQuotation,
-    createAdvanceInvoice, createFinalInvoice,
+    createAdvanceInvoice, createFinalInvoice, updateInvoice,
   } = useInvoiceMutations();
 
   const isPending = createInvoiceFromOrder.isPending
     || createInvoiceFromQuotation.isPending
     || createAdvanceInvoice.isPending
-    || createFinalInvoice.isPending;
+    || createFinalInvoice.isPending
+    || updateInvoice.isPending;
 
   const [form, setForm] = useState(EMPTY_FORM);
-  const { data: orderData, isLoading: ordersLoading } = useOrders({ limit: 50, sortBy: 'createdAt', sortOrder: 'desc' });
+  const [orderSearch, setOrderSearch] = useState('');
+  const [selectedOrderSnapshot, setSelectedOrderSnapshot] = useState(null);
+  const debouncedOrderSearch = useDebounce(orderSearch.trim(), ORDER_SEARCH_DEBOUNCE_MS);
+  const shouldLoadOrderOptions = open && !isEdit && !sourceOrderId && !sourceQuotationId;
+  const orderFilters = useMemo(() => ({
+    limit: ORDER_PICKER_LIMIT,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+    ...(debouncedOrderSearch ? { search: debouncedOrderSearch } : {}),
+  }), [debouncedOrderSearch]);
+  const { data: departments = [] } = useQopDepartments();
+  const { data: projects = [] } = useQopCustomerProjects(form.customerId);
+  const {
+    data: orderData,
+    isLoading: ordersLoading,
+    isFetching: ordersFetching,
+    isError: ordersError,
+  } = useOrders(orderFilters, { enabled: shouldLoadOrderOptions });
   const orders = useMemo(() => orderData?.items ?? [], [orderData?.items]);
-  const selectedOrder = useMemo(
-    () => sourceOrder || orders.find((order) => String(order._id ?? order.id) === String(form.sourceOrderId)),
-    [form.sourceOrderId, orders, sourceOrder],
+
+  const orderOptions = useMemo(() => buildOrderOptions(orders), [orders]);
+  const departmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
+  const projectOptions = useMemo(() => buildProjectOptions(projects), [projects]);
+  const paymentTermOptions = useMemo(
+    () => buildPaymentTermOptions(PAYMENT_TERMS, t('qop.invoices.daysNet', 'days net')),
+    [t],
   );
+
+  const selectedOrder = useMemo(
+    () => sourceOrder
+      || selectedOrderSnapshot
+      || orders.find((order) => String(order._id ?? order.id) === String(form.sourceOrderId)),
+    [form.sourceOrderId, orders, selectedOrderSnapshot, sourceOrder],
+  );
+  const selectedOrderLabel = selectedOrder ? getOrderDisplayLabel(selectedOrder) : undefined;
+  const trimmedOrderSearch = orderSearch.trim();
+  const orderPickerLoading = ordersLoading || ordersFetching || trimmedOrderSearch !== debouncedOrderSearch;
   const effectiveSourceOrderId = sourceOrderId || form.sourceOrderId || '';
   const effectiveSourceOrder = sourceOrder || selectedOrder || null;
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (open) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOrderSearch('');
+      setSelectedOrderSnapshot(sourceOrder || null);
+      if (invoice) {
+        const customerId = getEntityId(invoice.customerId ?? invoice.customer);
+        setForm({
+          customerId,
+          customerName: invoice.customerName ?? invoice.customerId?.name ?? '',
+          departmentId: getEntityId(invoice.departmentId),
+          projectId: getEntityId(invoice.projectId),
+          language: invoice.language ?? 'de',
+          title: invoice.title ?? '',
+          currency: invoice.currency || 'CHF',
+          globalDiscountPercent: invoice.globalDiscountPercent ?? 0,
+          paymentTermsDays: invoice.paymentTermsDays ?? 30,
+          paymentTermsText: invoice.paymentTermsText ?? '',
+          dueDate: toDateInputValue(invoice.dueDate) || addDays(invoice.paymentTermsDays ?? 30),
+          sourceOrderId: getEntityId(invoice.sourceOrderId),
+          lineItems: withEditableLineIds(invoice.lineItems ?? []),
+          notes: '',
+          milestonePercent: invoice.milestonePercent ?? 30,
+          milestoneAmount: '',
+          milestoneAmountMode: 'percent',
+          milestoneDescription: invoice.milestoneDescription ?? '',
+          version: invoice.version,
+        });
+        return;
+      }
       setForm({
+        customerId: '',
+        customerName: '',
+        departmentId: '',
+        projectId: '',
+        language: 'de',
+        title: '',
         currency: sourceOrder?.currency || 'CHF',
+        globalDiscountPercent: 0,
         paymentTermsDays: 30,
+        paymentTermsText: '',
         dueDate: addDays(30),
         sourceOrderId: sourceOrderId || '',
         lineItems: type === 'STANDARD'
@@ -90,19 +181,22 @@ export function InvoiceFormDialog({
         milestoneDescription: '',
       });
     }
-  }, [open, sourceOrder, sourceOrderId, type]);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [invoice, open, sourceOrder, sourceOrderId, type]);
 
   useEffect(() => {
-    if (!open || type !== 'STANDARD' || !effectiveSourceOrder) return;
+    if (isEdit || !open || !effectiveSourceOrder) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm((current) => ({
       ...current,
       currency: effectiveSourceOrder.currency || current.currency,
-      lineItems: (effectiveSourceOrder.lineItems ?? []).map((li, i) => ({ ...li, _uid: i })),
+      ...(type === 'STANDARD'
+        ? { lineItems: (effectiveSourceOrder.lineItems ?? []).map((li, i) => ({ ...li, _uid: i })) }
+        : {}),
     }));
-  }, [effectiveSourceOrder, open, type]);
+  }, [effectiveSourceOrder, isEdit, open, type]);
 
-  const { data: billingPlan } = useBillingPlan(type === 'FINAL' ? effectiveSourceOrderId : null);
+  const { data: billingPlan } = useBillingPlan(!isEdit && type === 'FINAL' ? effectiveSourceOrderId : null);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
@@ -113,6 +207,29 @@ export function InvoiceFormDialog({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (isEdit) {
+      await updateInvoice.mutateAsync({
+        id: invoice._id ?? invoice.id,
+        data: {
+          customerName: form.customerName,
+          departmentId: form.departmentId || undefined,
+          projectId: form.projectId || undefined,
+          language: form.language,
+          title: form.title || undefined,
+          currency: form.currency,
+          globalDiscountPercent: Number(form.globalDiscountPercent) || 0,
+          dueDate: form.dueDate,
+          paymentTermsDays: Number(form.paymentTermsDays),
+          paymentTermsText: form.paymentTermsText || undefined,
+          lineItems: mapLineItemsForPayload(form.lineItems),
+          version: form.version,
+          sourceOrderId: form.sourceOrderId || undefined,
+        },
+      });
+      onClose();
+      return;
+    }
 
     const base = {
       sourceOrderId: effectiveSourceOrderId || undefined,
@@ -162,137 +279,278 @@ export function InvoiceFormDialog({
   };
 
   const titleMap = {
-    STANDARD: t('qop.invoices.formTitleStandard', 'Neue Rechnung'),
-    ADVANCE:  t('qop.invoices.formTitleAdvance', 'Akontorechnung'),
-    FINAL:    t('qop.invoices.formTitleFinal', 'Schlussrechnung'),
+    STANDARD: t('qop.invoices.formTitleStandard', 'New Invoice'),
+    ADVANCE:  t('qop.invoices.formTitleAdvance', 'Advance Invoice'),
+    FINAL:    t('qop.invoices.formTitleFinal', 'Final Invoice'),
   };
 
-  const canSubmit = type === 'STANDARD'
-    ? Boolean(effectiveSourceOrderId || sourceQuotationId)
-    : Boolean(effectiveSourceOrderId);
+  const canSubmit = isEdit
+    ? invoice?.status === 'DRAFT' && Boolean(form.customerName && form.dueDate && form.version)
+    : (type === 'STANDARD'
+      ? Boolean(effectiveSourceOrderId || sourceQuotationId)
+      : Boolean(effectiveSourceOrderId));
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">
-            {titleMap[type]}
-          </DialogTitle>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto border-border/70 bg-popover/95 p-0 shadow-2xl supports-backdrop-filter:backdrop-blur-xl">
+        <DialogHeader className="border-b border-border/70 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+              <ReceiptText className="h-5 w-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-xl font-semibold tracking-tight">
+                {isEdit ? t('qop.invoices.editTitle', 'Edit invoice') : titleMap[type]}
+              </DialogTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t('qop.invoices.formSubtitle', 'Issue an invoice from an order or quotation.')}
+              </p>
+            </div>
+          </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5 mt-2">
-          {!sourceOrderId && !sourceQuotationId && (
-            <div className="rounded-lg border border-border bg-muted/20 p-4">
-              <div className="flex flex-col gap-1.5">
-                <Label>{t('qop.invoices.orderField', 'Auftrag')}</Label>
-                <Select value={form.sourceOrderId || undefined} onValueChange={(v) => set('sourceOrderId', v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={ordersLoading ? t('common.loading', 'Laden...') : t('qop.invoices.selectOrder', 'Auftrag waehlen')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {orders.map((order) => {
-                      const id = String(order._id ?? order.id);
-                      return (
-                        <SelectItem key={id} value={id}>
-                          {order.orderNumber} · {order.customerName ?? order.customerId?.name ?? '—'}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 py-5">
+          {isEdit && (
+            <div className="rounded-2xl border border-border/70 bg-card/60 p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex flex-col gap-1.5 md:col-span-2">
+                  <Label>{t('qop.form.customer', 'Customer')}</Label>
+                  <Input
+                    value={form.customerName}
+                    onChange={(event) => set('customerName', event.target.value)}
+                    className="h-11 rounded-xl"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5 md:col-span-2">
+                  <Label>{t('qop.orders.title', 'Title')}</Label>
+                  <Input
+                    value={form.title}
+                    onChange={(event) => set('title', event.target.value)}
+                    className="h-11 rounded-xl"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.form.department', 'Department')}</Label>
+                  <Combobox
+                    triggerIcon={Building2}
+                    options={departmentOptions}
+                    value={form.departmentId}
+                    allowClear
+                    onChange={(value) => set('departmentId', value || '')}
+                    placeholder={t('qop.form.selectDepartment', 'Select department...')}
+                    emptyIcon={Building2}
+                    emptyMessage={t('qop.form.noDepartments', 'No departments found')}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.form.project', 'Project')}</Label>
+                  <Combobox
+                    triggerIcon={FolderKanban}
+                    options={projectOptions}
+                    value={form.projectId}
+                    allowClear
+                    onChange={(value) => set('projectId', value || '')}
+                    placeholder={t('qop.form.noProject', 'No project')}
+                    emptyIcon={FolderKanban}
+                    emptyMessage={form.customerId
+                      ? t('qop.form.noProjects', 'No projects for this customer')
+                      : t('qop.form.selectCustomerFirst', 'Select a customer first')}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.form.language', 'Document Language')}</Label>
+                  <Combobox
+                    searchable={false}
+                    triggerIcon={Languages}
+                    options={LANGUAGE_OPTIONS}
+                    value={form.language}
+                    onChange={(value) => set('language', value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.form.currency', 'Currency')}</Label>
+                  <Combobox
+                    searchable={false}
+                    triggerIcon={Coins}
+                    options={CURRENCIES}
+                    value={form.currency}
+                    onChange={(value) => set('currency', value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.form.globalDiscount', 'Global Discount %')}</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={form.globalDiscountPercent}
+                    onChange={(event) => set('globalDiscountPercent', event.target.value)}
+                    className="h-11 rounded-xl"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.invoices.paymentTerms', 'Payment Terms')}</Label>
+                  <Combobox
+                    searchable={false}
+                    triggerIcon={Clock}
+                    options={paymentTermOptions}
+                    value={String(form.paymentTermsDays)}
+                    onChange={handleTermChange}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.invoices.dueDate', 'Due Date')}</Label>
+                  <div className="relative">
+                    <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      type="date"
+                      value={form.dueDate}
+                      onChange={(event) => set('dueDate', event.target.value)}
+                      className="h-11 rounded-xl pl-9"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {sourceQuotationId && sourceQuotation && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm">
-              <span className="font-medium text-emerald-900">{sourceQuotation.quotationNumber}</span>
-              <span className="text-emerald-800"> · {sourceQuotation.customerName}</span>
+          {!isEdit && !sourceOrderId && !sourceQuotationId && (
+            <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
+              <div className="flex flex-col gap-1.5">
+                <Label>{t('qop.invoices.orderField', 'Order')}</Label>
+                <Combobox
+                  async
+                  triggerIcon={ClipboardList}
+                  options={orderOptions}
+                  value={form.sourceOrderId}
+                  selectedLabel={selectedOrderLabel}
+                  loading={orderPickerLoading}
+                  onSearchChange={setOrderSearch}
+                  onChange={(value) => {
+                    setSelectedOrderSnapshot(
+                      orders.find((order) => String(order._id ?? order.id) === String(value)) || null,
+                    );
+                    set('sourceOrderId', value);
+                  }}
+                  placeholder={t('qop.invoices.selectOrder', 'Select order')}
+                  searchPlaceholder={t('qop.invoices.searchOrder', 'Search by number, title, or customer...')}
+                  emptyIcon={ordersError || trimmedOrderSearch ? SearchX : ClipboardList}
+                  emptyMessage={ordersError
+                    ? t('qop.invoices.ordersLoadError', 'Orders could not be loaded')
+                    : trimmedOrderSearch
+                      ? t('qop.invoices.orderNoResults', 'No matching orders found')
+                      : t('qop.invoices.noOrders', 'No billable orders')}
+                  emptyHint={ordersError
+                    ? t('qop.invoices.ordersLoadErrorHint', 'Check the connection and try again.')
+                    : trimmedOrderSearch
+                      ? t('qop.invoices.orderNoResultsHint', 'Try another order number, title, or customer.')
+                      : t('qop.invoices.noOrdersHint', 'Create or confirm an order first.')}
+                  contentClassName="z-[70]"
+                  ariaLabel={t('qop.invoices.orderField', 'Order')}
+                />
+              </div>
+            </div>
+          )}
+
+          {!isEdit && sourceQuotationId && sourceQuotation && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm">
+              <span className="font-medium text-emerald-600 dark:text-emerald-300">{sourceQuotation.quotationNumber}</span>
+              <span className="text-emerald-700 dark:text-emerald-200"> - {sourceQuotation.customerName}</span>
             </div>
           )}
 
           {/* Header fields */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label>{t('qop.form.currency', 'Waehrung')}</Label>
-              <Select value={form.currency} onValueChange={(v) => set('currency', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          {!isEdit && (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label>{t('qop.form.currency', 'Currency')}</Label>
+                <Combobox
+                  searchable={false}
+                  triggerIcon={Coins}
+                  options={CURRENCIES}
+                  value={form.currency}
+                  onChange={(value) => set('currency', value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>{t('qop.invoices.paymentTerms', 'Payment Terms')}</Label>
+                <Combobox
+                  searchable={false}
+                  triggerIcon={Clock}
+                  options={paymentTermOptions}
+                  value={String(form.paymentTermsDays)}
+                  onChange={handleTermChange}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>{t('qop.invoices.dueDate', 'Due Date')}</Label>
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(e) => set('dueDate', e.target.value)}
+                    className="h-11 rounded-xl pl-9"
+                    required
+                  />
+                </div>
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>{t('qop.invoices.paymentTerms', 'Zahlungsfrist')}</Label>
-              <Select value={String(form.paymentTermsDays)} onValueChange={handleTermChange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_TERMS.map((d) => (
-                    <SelectItem key={d} value={String(d)}>
-                      {d} {t('qop.invoices.daysNet', 'Tage netto')}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>{t('qop.invoices.dueDate', 'Faelligkeitsdatum')}</Label>
-              <Input
-                type="date"
-                value={form.dueDate}
-                onChange={(e) => set('dueDate', e.target.value)}
-                required
-              />
-            </div>
-          </div>
+          )}
 
           {/* Advance invoice fields */}
-          {type === 'ADVANCE' && (
-            <div className="flex flex-col gap-4 p-4 rounded-lg bg-orange-50 border border-orange-200">
+          {!isEdit && type === 'ADVANCE' && (
+            <div className="flex flex-col gap-4 rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4">
               <div className="flex gap-2">
                 <Button
                   type="button" size="sm"
                   variant={form.milestoneAmountMode === 'percent' ? 'default' : 'outline'}
                   onClick={() => set('milestoneAmountMode', 'percent')}
                 >
-                  {t('qop.invoices.modePercent', 'Prozent %')}
+                  {t('qop.invoices.modePercent', 'Percent %')}
                 </Button>
                 <Button
                   type="button" size="sm"
                   variant={form.milestoneAmountMode === 'fixed' ? 'default' : 'outline'}
                   onClick={() => set('milestoneAmountMode', 'fixed')}
                 >
-                  {t('qop.invoices.modeFixed', 'Fixbetrag CHF')}
+                  {t('qop.invoices.modeFixed', 'Fixed CHF')}
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {form.milestoneAmountMode === 'percent' ? (
                   <div className="flex flex-col gap-1.5">
-                    <Label>{t('qop.invoices.advancePercent', 'Anzahlung %')}</Label>
+                    <Label>{t('qop.invoices.advancePercent', 'Advance %')}</Label>
                     <Input
                       type="number" min="1" max="100" step="0.1"
                       value={form.milestonePercent}
                       onChange={(e) => set('milestonePercent', e.target.value)}
+                      className="h-11 rounded-xl"
                       required
                     />
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1.5">
-                    <Label>{t('qop.invoices.advanceAmount', 'Betrag (CHF)')}</Label>
+                    <Label>{t('qop.invoices.advanceAmount', 'Amount (CHF)')}</Label>
                     <Input
                       type="number" min="0.05" step="0.05"
                       value={form.milestoneAmount}
                       onChange={(e) => set('milestoneAmount', e.target.value)}
+                      className="h-11 rounded-xl"
                       required
                     />
                   </div>
                 )}
                 <div className="flex flex-col gap-1.5">
-                  <Label>{t('qop.invoices.milestoneDesc', 'Meilenstein-Beschreibung')}</Label>
+                  <Label>{t('qop.invoices.milestoneDesc', 'Milestone description')}</Label>
                   <Input
                     value={form.milestoneDescription}
                     onChange={(e) => set('milestoneDescription', e.target.value)}
-                    placeholder={t('qop.invoices.milestoneDescPlaceholder', 'z.B. Anzahlung Auftragsbeginn')}
+                    placeholder={t('qop.invoices.milestoneDescPlaceholder', 'e.g. Advance at order start')}
+                    className="h-11 rounded-xl"
                   />
                 </div>
               </div>
@@ -300,46 +558,46 @@ export function InvoiceFormDialog({
           )}
 
           {/* Final invoice — advance deduction preview */}
-          {type === 'FINAL' && billingPlan && (
-            <div className="flex flex-col gap-3 p-4 rounded-lg bg-violet-50 border border-violet-200">
-              <p className="text-sm font-medium text-violet-800">
-                {t('qop.invoices.finalPreviewTitle', 'Vorschau: Abzuege Akontozahlungen')}
+          {!isEdit && type === 'FINAL' && billingPlan && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4">
+              <p className="text-sm font-medium text-violet-700 dark:text-violet-200">
+                {t('qop.invoices.finalPreviewTitle', 'Preview: advance payment deductions')}
               </p>
-              <div className="rounded border border-violet-200 overflow-hidden text-sm bg-white">
-                <div className="grid grid-cols-[1fr_5rem_5rem_6rem] bg-violet-50 border-b text-xs font-medium text-muted-foreground px-3 py-2">
-                  <div>{t('qop.orders.billingAdvInvoice', 'Akontorechnung')}</div>
-                  <div className="text-right">{t('qop.orders.billingDate', 'Datum')}</div>
+              <div className="overflow-hidden rounded-xl border border-violet-500/20 bg-card text-sm">
+                <div className="grid grid-cols-[1fr_5rem_5rem_6rem] border-b bg-violet-500/10 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  <div>{t('qop.orders.billingAdvInvoice', 'Advance invoice')}</div>
+                  <div className="text-right">{t('qop.orders.billingDate', 'Date')}</div>
                   <div className="text-right">%</div>
-                  <div className="text-right">{t('qop.orders.colAmount', 'Betrag')}</div>
+                  <div className="text-right">{t('qop.orders.colAmount', 'Amount')}</div>
                 </div>
                 {(billingPlan.advances ?? []).map((adv) => (
-                  <div key={adv._id} className="grid grid-cols-[1fr_5rem_5rem_6rem] border-b last:border-0 px-3 py-2">
+                  <div key={adv._id} className="grid grid-cols-[1fr_5rem_5rem_6rem] border-b px-3 py-2 last:border-0">
                     <div className="font-mono text-muted-foreground">{adv.invoiceNumber}</div>
                     <div className="text-right text-muted-foreground">{adv.invoiceDate?.slice(0, 10) ?? '—'}</div>
                     <div className="text-right">{adv.milestonePercent ?? '—'}%</div>
-                    <div className="text-right font-medium text-red-600">− {fmt(adv.grandTotalRounded)}</div>
+                    <div className="text-right font-medium text-red-500">− {fmt(adv.grandTotalRounded)}</div>
                   </div>
                 ))}
-                <div className="grid grid-cols-[1fr_6rem] border-t bg-violet-50 px-3 py-2.5 font-semibold">
-                  <div>{t('qop.invoices.finalBalanceDue', 'Restbetrag faellig')}</div>
+                <div className="grid grid-cols-[1fr_6rem] border-t bg-violet-500/10 px-3 py-2.5 font-semibold">
+                  <div>{t('qop.invoices.finalBalanceDue', 'Balance due')}</div>
                   <div className="text-right">{fmt(billingPlan.remainingForFinal)} {sourceOrder?.currency ?? 'CHF'}</div>
                 </div>
               </div>
             </div>
           )}
 
-          {type === 'FINAL' && !billingPlan && (
-            <div className="p-4 rounded-lg bg-violet-50 border border-violet-200 text-sm text-violet-700">
-              {t('qop.invoices.finalHint', 'Die Schlussrechnung zeigt den Gesamtbetrag abzueglich aller bisherigen Akontozahlungen.')}
+          {!isEdit && type === 'FINAL' && !billingPlan && (
+            <div className="rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4 text-sm text-violet-700 dark:text-violet-200">
+              {t('qop.invoices.finalHint', 'The final invoice shows the total amount minus all previous advance payments.')}
             </div>
           )}
 
           {/* Line items for Standard invoices */}
-          {type === 'STANDARD' && effectiveSourceOrderId && (
+          {(isEdit || (type === 'STANDARD' && effectiveSourceOrderId)) && (
             <>
               <Separator />
               <div className="flex flex-col gap-2">
-                <Label className="text-sm font-medium">{t('qop.form.positions', 'Positionen')}</Label>
+                <Label className="text-sm font-medium">{t('qop.form.positions', 'Line Items')}</Label>
                 <LineItemsEditor value={form.lineItems} onChange={(items) => set('lineItems', items)} />
               </div>
             </>
@@ -349,24 +607,24 @@ export function InvoiceFormDialog({
 
           {/* Notes */}
           <div className="flex flex-col gap-1.5">
-            <Label>{t('qop.form.notes', 'Bemerkungen')}</Label>
+            <Label>{isEdit ? t('qop.invoices.paymentTermsText', 'Payment terms text') : t('qop.form.notes', 'Notes')}</Label>
             <Textarea
-              rows={3}
-              value={form.notes}
-              onChange={(e) => set('notes', e.target.value)}
-              placeholder={t('qop.invoices.notesPlaceholder', 'Optionale Anmerkungen auf der Rechnung...')}
-              className="resize-none text-sm"
+              rows={isEdit ? 5 : 3}
+              value={isEdit ? form.paymentTermsText : form.notes}
+              onChange={(e) => set(isEdit ? 'paymentTermsText' : 'notes', e.target.value)}
+              placeholder={t('qop.invoices.notesPlaceholder', 'Optional notes on invoice...')}
+              className="resize-y rounded-xl text-sm"
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 -mx-6 -mb-5 border-t border-border/70 bg-popover/95 px-6 py-4 supports-backdrop-filter:backdrop-blur-xl">
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
-              {t('common.cancel', 'Abbrechen')}
+              {t('common.cancel', 'Cancel')}
             </Button>
             <Button type="submit" disabled={isPending || !canSubmit}>
               {isPending
-                ? t('common.creating', 'Wird erstellt...')
-                : t('qop.invoices.createBtn', 'Rechnung erstellen')}
+                ? t('common.saving', 'Saving...')
+                : isEdit ? t('common.save', 'Save') : t('qop.invoices.createBtn', 'Create Invoice')}
             </Button>
           </DialogFooter>
         </form>

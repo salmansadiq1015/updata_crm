@@ -1,0 +1,157 @@
+'use client';
+
+import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { CoarseCell } from './coarse-cell';
+import { EmployeeAvatarRow } from '../shared/employee-avatar-row';
+import { rowAverage, isRowOverAllocated } from '../../utils/coarse-totals';
+import { getAllocationTier } from '../../constants/deploy-constants';
+import { Layers } from 'lucide-react';
+
+const NAME_COL = 'w-[210px] shrink-0';
+const SUM_COL = 'w-[84px] shrink-0';
+
+function HeatBar({ percent }) {
+  const tier = getAllocationTier(percent) || { bg: 'bg-muted-foreground/20' };
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={cn('h-full rounded-full transition-all', tier.bg)}
+        style={{ width: `${Math.min(100, percent)}%` }}
+      />
+    </div>
+  );
+}
+
+export function CoarseGrid({
+  viewMode, weeks, rows, columnAvgs, currentWeek,
+  dragFill, onCellClick, onSetPercent, onClear, onBulkRow,
+}) {
+  const { t } = useLanguage();
+  const isProjectView = viewMode === 'PROJECT_CENTRIC';
+
+  return (
+    <div className="overflow-auto rounded-2xl border border-border/60 bg-card/40 shadow-sm">
+      <div className="min-w-max">
+        {/* Header row */}
+        <div className="sticky top-0 z-20 flex border-b border-border/60 bg-muted/50 backdrop-blur-sm">
+          <div className={cn(NAME_COL, 'sticky left-0 z-10 border-r border-border/60 bg-muted/50 px-3 py-2.5 text-xs font-semibold')}>
+            {isProjectView ? t('deploy.coarse.project', 'Projekt') : t('deploy.coarse.employee', 'Mitarbeiter')}
+          </div>
+          {weeks.map((week) => (
+            <div
+              key={week}
+              className={cn(
+                'min-w-[58px] flex-1 border-r border-border/40 py-2.5 text-center text-[11px] font-semibold last:border-r-0',
+                week === currentWeek ? 'bg-primary/10 text-primary' : 'text-muted-foreground',
+              )}
+            >
+              KW {week}
+            </div>
+          ))}
+          <div className={cn(SUM_COL, 'border-l border-border/60 py-2.5 text-center text-[11px] font-semibold text-muted-foreground')}>
+            Ø
+          </div>
+        </div>
+
+        {/* Body rows */}
+        {rows.map((row) => {
+          const avg = rowAverage(row, weeks);
+          const over = isRowOverAllocated(row, weeks);
+          return (
+            <div key={row.id} className="group flex border-b border-border/40 last:border-b-0 hover:bg-muted/20">
+              <div className={cn(
+                NAME_COL,
+                'sticky left-0 z-10 flex items-center justify-between gap-2 border-r border-border/60 bg-card px-3 py-2 transition-colors group-hover:bg-muted/30',
+              )}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  {over && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="h-2 w-2 shrink-0 rounded-full bg-red-500 ring-2 ring-red-500/20" />
+                      </TooltipTrigger>
+                      <TooltipContent>{t('deploy.coarse.overAllocated', 'Überbelegt')}</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {isProjectView
+                    ? <span className="truncate text-xs font-medium">{row.name}</span>
+                    : <EmployeeAvatarRow name={row.name} />}
+                </div>
+                {!isProjectView && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
+                    onClick={() => onBulkRow(row.id)}
+                    aria-label={t('deploy.coarse.bulkTitle', 'Mehrwochen-Zuteilung')}
+                  >
+                    <Layers className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+
+              {weeks.map((week) => (
+                <div key={week} className={cn('min-w-[58px] flex-1', week === currentWeek && 'bg-primary/[0.04]')}>
+                  <CoarseCell
+                    allocation={row.weekMap[week] || []}
+                    projectName={isProjectView ? row.name : undefined}
+                    isCurrentWeek={week === currentWeek}
+                    inDragRange={dragFill.isInRange(row.id, week)}
+                    onMouseDown={() => dragFill.start(row.id, week, row.weekMap[week] || [])}
+                    onMouseEnter={() => dragFill.extend(row.id, week)}
+                    onClick={() => {
+                      if (dragFill.consumeClickSuppression()) return;
+                      onCellClick(row.id, week, row.weekMap[week] || []);
+                    }}
+                    onSetPercent={(percent) => onSetPercent(row.weekMap[week] || [], percent)}
+                    onClear={() => onClear(row.weekMap[week] || [])}
+                  />
+                </div>
+              ))}
+
+              <div className={cn(SUM_COL, 'flex flex-col justify-center gap-1 border-l border-border/60 px-2.5 py-2')}>
+                <span className={cn(
+                  'text-center text-xs font-bold tabular-nums',
+                  over ? 'text-red-500' : 'text-foreground',
+                )}
+                >
+                  {avg}%
+                </span>
+                <HeatBar percent={avg} />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Footer: team load per week */}
+        <div className="sticky bottom-0 z-10 flex border-t border-border/60 bg-muted/40 backdrop-blur-sm">
+          <div className={cn(NAME_COL, 'sticky left-0 z-10 border-r border-border/60 bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground')}>
+            {t('deploy.coarse.teamLoad', 'Team-Auslastung')}
+          </div>
+          {weeks.map((week) => {
+            const value = columnAvgs[week] || 0;
+            const tier = getAllocationTier(value);
+            return (
+              <div
+                key={week}
+                className={cn(
+                  'min-w-[58px] flex-1 border-r border-border/40 py-2 text-center text-[11px] font-bold tabular-nums last:border-r-0',
+                  value > 100 ? 'text-red-500' : value > 0 ? 'text-foreground' : 'text-muted-foreground/50',
+                  week === currentWeek && 'bg-primary/10',
+                )}
+              >
+                <span className={cn('inline-block rounded-md px-1.5 py-0.5', tier?.bg, tier?.text)}>
+                  {value}%
+                </span>
+              </div>
+            );
+          })}
+          <div className={cn(SUM_COL, 'border-l border-border/60')} />
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -746,6 +746,10 @@ class InvoiceService {
       );
     }
 
+    if (data.version !== undefined && data.version !== existing.version) {
+      throw new ConflictError('Invoice version mismatch - another user may have updated this invoice');
+    }
+
     let totals = {};
     if (data.lineItems?.length) {
       totals = calculateTotals(
@@ -773,6 +777,40 @@ class InvoiceService {
     });
 
     return updated;
+  }
+
+  async softDelete(id, deletedBy, meta = {}) {
+    const invoice = await invoiceRepository.findById(id);
+    if (!invoice) throw new NotFoundError('Invoice', id);
+
+    if (invoice.status !== 'DRAFT' || isFinalizedInvoice(invoice)) {
+      throw new AppError(
+        'Only unfinalized DRAFT invoices can be deleted',
+        400,
+        ERROR_CODES.INVOICE_NOT_EDITABLE,
+      );
+    }
+
+    await invoiceRepository.softDelete(id);
+    await this._invalidateInvoiceCache(id);
+    await this._invalidateListCache();
+
+    auditService.logEvent({
+      eventType: 'invoice.deleted',
+      userId: deletedBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { invoiceId: id, invoiceNumber: invoice.invoiceNumber },
+      module: 'qop',
+    });
+
+    logger.info('Invoice deleted', {
+      module: 'qop',
+      action: 'softDelete',
+      invoiceId: id,
+      invoiceNumber: invoice.invoiceNumber,
+    });
   }
 
   async transitionStatus(id, targetStatus, { reason = null } = {}, userId, meta = {}) {

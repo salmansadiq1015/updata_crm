@@ -52,8 +52,5 @@ const reminderSettingsSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
-reminderSettingsSchema.index({ key: 1 }, { unique: true });
-
 const ReminderSettings = mongoose.model('QopReminderSettings', reminderSettingsSchema);
 export default ReminderSettings;

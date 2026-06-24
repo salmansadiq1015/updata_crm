@@ -82,20 +82,20 @@ export function ContactForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
+      <DialogContent className="sm:max-w-2xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-border bg-card shadow-2xl">
         {/* Fixed Header */}
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-violet-500/10 ring-1 ring-violet-500/20 shrink-0">
               <UserRound className="h-5 w-5 text-violet-400" />
             </div>
             <div>
-              <DialogTitle className="text-[16px] font-semibold text-white/90">
+              <DialogTitle className="text-[16px] font-semibold text-foreground">
                 {isEdit
                   ? t('crm.contacts.editContact', 'Kontakt bearbeiten')
                   : t('crm.contacts.newContact', 'Neuer Kontakt')}
               </DialogTitle>
-              <DialogDescription className="text-[13px] text-white/45 mt-0.5">
+              <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
                 {t('crm.contacts.formDesc', 'Kontakt wie Ansprechpartner oder Hausverwaltung hinzufügen.')}
               </DialogDescription>
             </div>
@@ -111,7 +111,7 @@ export function ContactForm({
               </div>
             )}
 
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.contacts.sectionName', 'Name')}
             </p>
             <div className="grid grid-cols-2 gap-4">
@@ -119,13 +119,13 @@ export function ContactForm({
                 <Input
                   {...register('firstName')}
                   autoFocus
-                  className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
                 />
               </DarkField>
               <DarkField label={t('crm.contacts.lastName', 'Nachname')} required error={errors.lastName}>
                 <Input
                   {...register('lastName')}
-                  className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
                 />
               </DarkField>
             </div>
@@ -134,12 +134,12 @@ export function ContactForm({
               <Input
                 {...register('functionTitle')}
                 placeholder={t('crm.contacts.functionPlaceholder', 'z.B. Hausverwaltung')}
-                className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
               />
             </DarkField>
 
-            <Separator className="my-5 bg-white/6" />
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+            <Separator className="my-5 bg-border" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.contacts.sectionContact', 'Kontaktdaten')}
             </p>
 
@@ -147,13 +147,13 @@ export function ContactForm({
               <DarkField label={t('crm.phone', 'Telefon')} error={errors.phone}>
                 <Input
                   {...register('phone')}
-                  className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
                 />
               </DarkField>
               <DarkField label={t('crm.mobile', 'Mobil')} error={errors.mobile}>
                 <Input
                   {...register('mobile')}
-                  className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
                 />
               </DarkField>
             </div>
@@ -162,7 +162,7 @@ export function ContactForm({
               <Input
                 type="email"
                 {...register('email')}
-                className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
               />
             </DarkField>
 
@@ -170,27 +170,27 @@ export function ContactForm({
               <Textarea
                 rows={2}
                 {...register('notes')}
-                className="bg-white/4 border-white/10 rounded-lg text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 resize-none"
+                className="bg-muted/50 border-border rounded-lg text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 resize-none"
               />
             </DarkField>
 
-            <div className="flex items-center justify-between rounded-xl border border-white/6 bg-white/2 px-4 py-3">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-3">
               <div>
-                <Label className="text-[13px] font-medium text-white/80">{t('crm.contacts.isPrimary', 'Primärkontakt')}</Label>
-                <p className="text-xs text-white/40 mt-0.5">{t('crm.contacts.isPrimaryHint', 'Als Hauptansprechpartner markieren')}</p>
+                <Label className="text-[13px] font-medium text-foreground">{t('crm.contacts.isPrimary', 'Primärkontakt')}</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('crm.contacts.isPrimaryHint', 'Als Hauptansprechpartner markieren')}</p>
               </div>
               <Switch checked={isPrimary} onCheckedChange={(v) => setValue('isPrimary', v, { shouldDirty: true })} />
             </div>
           </div>
 
           {/* Fixed Footer */}
-          <div className="px-6 py-4 border-t border-white/6 shrink-0 flex items-center justify-between gap-3">
+          <div className="px-6 py-4 border-t border-border shrink-0 flex items-center justify-between gap-3">
             <Button
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
-              className="text-white/55 hover:text-white/80 hover:bg-white/5"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/60"
             >
               {t('common.cancel', 'Abbrechen')}
             </Button>
@@ -212,7 +212,7 @@ export function ContactForm({
 function DarkField({ label, required, error, children }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+      <Label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">
         {label}{required && <span className="text-red-400 ml-1">*</span>}
       </Label>
       {children}

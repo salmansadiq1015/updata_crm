@@ -64,12 +64,12 @@ function fmtBytes(n) {
 }
 
 function fileTypeIcon(mimeType) {
-  if (!mimeType) return { Icon: File, color: 'text-white/30' };
+  if (!mimeType) return { Icon: File, color: 'text-muted-foreground/80' };
   if (mimeType.startsWith('image/')) return { Icon: ImageIcon, color: 'text-blue-400' };
   if (mimeType === 'application/pdf') return { Icon: FileText, color: 'text-red-400' };
   if (mimeType.includes('document') || mimeType.includes('word')) return { Icon: FileText, color: 'text-blue-400' };
   if (mimeType.includes('sheet') || mimeType.includes('excel') || mimeType === 'text/csv') return { Icon: FileText, color: 'text-green-400' };
-  return { Icon: File, color: 'text-white/40' };
+  return { Icon: File, color: 'text-muted-foreground' };
 }
 
 function uploaderInitials(uploadedBy) {
@@ -89,12 +89,12 @@ function AttachmentUploadButton({ onClick, isPending, de, compact = false }) {
       disabled={isPending}
       className={cn(
         'group relative inline-flex items-center gap-2 rounded-lg font-medium transition-all duration-200',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F18]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none',
         compact ? 'h-8 px-2.5 text-[12px]' : 'h-9 px-4 text-[12px]',
         'bg-gradient-to-r from-violet-600/25 via-violet-500/15 to-teal-500/10',
         'border border-violet-500/30 hover:border-violet-400/45',
-        'text-violet-200 hover:text-white',
+        'text-violet-700 hover:text-foreground dark:text-violet-200',
         'shadow-[0_0_14px_-4px_rgba(139,92,246,0.35)]',
         'hover:shadow-[0_0_22px_-4px_rgba(139,92,246,0.55)]',
         'hover:from-violet-600/35 hover:to-teal-500/15',
@@ -131,7 +131,7 @@ function DocumentsAnimatedEmpty({ customerId, de, canWrite }) {
   return (
     <div className="flex flex-col items-center justify-center py-14 gap-3">
       <style>{`@keyframes doc-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}`}</style>
-      <div style={{ animation: 'doc-float 3s ease-in-out infinite' }} className="text-white/20">
+      <div style={{ animation: 'doc-float 3s ease-in-out infinite' }} className="text-muted-foreground/50">
         <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="5" y="14" width="42" height="32" rx="4" fill="currentColor" fillOpacity="0.12" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1.5" />
           <path d="M5 22h42" stroke="currentColor" strokeOpacity="0.35" strokeWidth="1.5" />
@@ -140,10 +140,10 @@ function DocumentsAnimatedEmpty({ customerId, de, canWrite }) {
         </svg>
       </div>
       <div className="text-center space-y-1">
-        <p className="text-[13px] font-medium text-white/50">
+        <p className="text-[13px] font-medium text-muted-foreground">
           {de ? 'Keine Dokumente vorhanden' : 'No documents yet'}
         </p>
-        <p className="text-[12px] text-white/25">
+        <p className="text-[12px] text-muted-foreground/60">
           {de
             ? 'Dateien hochladen oder Offerte erstellen.'
             : 'Upload files or create a quotation to get started.'}
@@ -184,8 +184,8 @@ function CustomerBusinessDocsSection({ docs, de }) {
   }
 
   return (
-    <div className="rounded-xl border border-white/6 overflow-hidden bg-[#0B0F18] text-sm">
-      <div className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] bg-white/3 border-b border-white/6 text-[11px] font-semibold uppercase tracking-wider text-white/35 px-3 py-2">
+    <div className="rounded-xl border border-border overflow-hidden bg-card text-sm">
+      <div className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] bg-muted/40 border-b border-border text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 py-2">
         <div>{de ? 'Typ' : 'Type'}</div>
         <div>{de ? 'Nummer' : 'Number'}</div>
         <div>{de ? 'Titel' : 'Title'}</div>
@@ -199,12 +199,12 @@ function CustomerBusinessDocsSection({ docs, de }) {
           : doc.docType === 'order' ? OrderStatusBadge
           : InvoiceStatusBadge;
         return (
-          <div key={doc._id} className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] border-b border-white/4 last:border-0 px-3 py-2.5 hover:bg-white/3 transition-colors">
+          <div key={doc._id} className="grid grid-cols-[5rem_8rem_1fr_6rem_6rem] border-b border-border last:border-0 px-3 py-2.5 hover:bg-muted/40 transition-colors">
             <div><StatusBadge status={doc.status} /></div>
-            <div className="font-mono text-white/40 text-[13px]">{num}</div>
-            <div className="truncate text-[13px] text-white/80">{doc.title || doc.customerName || '—'}</div>
-            <div className="text-[13px] text-white/40">{fmtDate(doc.createdAt)}</div>
-            <div className="text-right font-medium text-[13px] text-white/80">{fmt(doc.grandTotalRounded)} {doc.currency}</div>
+            <div className="font-mono text-muted-foreground text-[13px]">{num}</div>
+            <div className="truncate text-[13px] text-foreground">{doc.title || doc.customerName || '—'}</div>
+            <div className="text-[13px] text-muted-foreground">{fmtDate(doc.createdAt)}</div>
+            <div className="text-right font-medium text-[13px] text-foreground">{fmt(doc.grandTotalRounded)} {doc.currency}</div>
           </div>
         );
       })}
@@ -283,7 +283,7 @@ function CustomerAttachmentsSection({ customerId, attachments, canWrite, de }) {
     <div className="mt-5">
       {/* Section header */}
       <div className="flex items-center justify-between mb-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
           {de ? 'Anhänge' : 'Attachments'}
         </p>
         {canWrite && (
@@ -317,11 +317,11 @@ function CustomerAttachmentsSection({ customerId, attachments, canWrite, de }) {
         />
       ) : (
         <>
-          <div className="rounded-xl border border-white/6 overflow-hidden bg-[#0B0F18]">
+          <div className="rounded-xl border border-border overflow-hidden bg-card">
             {/* Table header */}
-            <div className="grid grid-cols-[1.5rem_1fr_5rem_6rem_1.75rem_5rem] items-center bg-white/3 border-b border-white/6 text-[11px] font-semibold uppercase tracking-wider text-white/35 px-3 py-2 gap-2">
+            <div className="grid grid-cols-[1.5rem_1fr_5rem_6rem_1.75rem_5rem] items-center bg-muted/40 border-b border-border text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 py-2 gap-2">
               {canWrite
-                ? <Checkbox checked={allSelected} onCheckedChange={toggleAll} className="border-white/20 data-[state=checked]:bg-white/20 data-[state=checked]:border-white/40" />
+                ? <Checkbox checked={allSelected} onCheckedChange={toggleAll} className="border-border data-[state=checked]:bg-muted data-[state=checked]:border-border0" />
                 : <span />}
               <div>{de ? 'Name' : 'Name'}</div>
               <div>{de ? 'Grösse' : 'Size'}</div>
@@ -338,32 +338,32 @@ function CustomerAttachmentsSection({ customerId, attachments, canWrite, de }) {
                 <div
                   key={file._id}
                   className={cn(
-                    'grid grid-cols-[1.5rem_1fr_5rem_6rem_1.75rem_5rem] items-center border-b border-white/4 last:border-0 px-3 py-2.5 gap-2 transition-colors',
-                    isSelected ? 'bg-white/5' : 'hover:bg-white/3',
+                    'grid grid-cols-[1.5rem_1fr_5rem_6rem_1.75rem_5rem] items-center border-b border-border last:border-0 px-3 py-2.5 gap-2 transition-colors',
+                    isSelected ? 'bg-muted/60' : 'hover:bg-muted/40',
                   )}
                 >
                   {canWrite
-                    ? <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(file._id)} className="border-white/20 data-[state=checked]:bg-white/20 data-[state=checked]:border-white/40" />
+                    ? <Checkbox checked={isSelected} onCheckedChange={() => toggleSelect(file._id)} className="border-border data-[state=checked]:bg-muted data-[state=checked]:border-border0" />
                     : <span />}
                   <div className="flex items-center gap-2 min-w-0">
                     <Icon className={cn('h-3.5 w-3.5 shrink-0', color)} />
-                    <span className="text-[13px] text-white/80 truncate">{file.originalName}</span>
+                    <span className="text-[13px] text-foreground truncate">{file.originalName}</span>
                   </div>
-                  <div className="text-[12px] text-white/40">{fmtBytes(file.sizeBytes)}</div>
-                  <div className="text-[12px] text-white/40">{fmtDate(file.createdAt)}</div>
-                  <div className="h-5 w-5 rounded-full bg-white/10 flex items-center justify-center text-[9px] font-semibold text-white/50 shrink-0 select-none">
+                  <div className="text-[12px] text-muted-foreground">{fmtBytes(file.sizeBytes)}</div>
+                  <div className="text-[12px] text-muted-foreground">{fmtDate(file.createdAt)}</div>
+                  <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-semibold text-muted-foreground shrink-0 select-none">
                     {uploaderInitials(file.uploadedBy)}
                   </div>
                   <div className="flex items-center gap-0.5 justify-end">
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-white/25 hover:text-white/70" onClick={() => download.mutate(file._id)} title={de ? 'Herunterladen' : 'Download'}>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground/60 hover:text-foreground" onClick={() => download.mutate(file._id)} title={de ? 'Herunterladen' : 'Download'}>
                       <Download className="h-3 w-3" />
                     </Button>
                     {canWrite && (
                       <>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-white/25 hover:text-white/70" onClick={() => openRename(file)} title={de ? 'Umbenennen' : 'Rename'}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground/60 hover:text-foreground" onClick={() => openRename(file)} title={de ? 'Umbenennen' : 'Rename'}>
                           <Pencil className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-white/25 hover:text-red-400" onClick={() => setDeleteTarget(file._id)} title={de ? 'Löschen' : 'Delete'}>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground/60 hover:text-red-400" onClick={() => setDeleteTarget(file._id)} title={de ? 'Löschen' : 'Delete'}>
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </>
@@ -376,15 +376,15 @@ function CustomerAttachmentsSection({ customerId, attachments, canWrite, de }) {
 
           {/* Bulk delete bar */}
           {selected.size > 0 && (
-            <div className="mt-2 flex items-center gap-2 bg-white/5 border border-white/8 rounded-lg px-3 py-2">
-              <span className="text-[12px] text-white/50 flex-1">
+            <div className="mt-2 flex items-center gap-2 bg-muted/60 border border-border rounded-lg px-3 py-2">
+              <span className="text-[12px] text-muted-foreground flex-1">
                 {selected.size} {de ? 'ausgewählt' : 'selected'}
               </span>
               <Button variant="ghost" size="sm" className="h-7 text-[12px] text-red-400 hover:text-red-300 hover:bg-red-400/10 gap-1.5" onClick={() => setBulkDeleteOpen(true)}>
                 <Trash2 className="h-3 w-3" />
                 {de ? 'Löschen' : 'Delete selected'}
               </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-white/30 hover:text-white/70" onClick={() => setSelected(new Set())}>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground/80 hover:text-foreground" onClick={() => setSelected(new Set())}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
@@ -461,7 +461,7 @@ function CustomerDocumentsTab({ customerId, de }) {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 mb-2">
           {de ? 'Geschäftsdokumente' : 'Business Documents'}
         </p>
         <CustomerBusinessDocsSection docs={businessDocs} de={de} />
@@ -526,16 +526,16 @@ export function CustomerDetail() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-white/35">
-        <Link href="/crm/customers" className="hover:text-white/65 transition-colors">
+      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Link href="/crm/customers" className="hover:text-foreground transition-colors">
           {t('crm.title', 'CRM')}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/crm/customers" className="hover:text-white/65 transition-colors">
+        <Link href="/crm/customers" className="hover:text-foreground transition-colors">
           {t('sidebar.customers', 'Customers')}
         </Link>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-white/70 font-medium truncate">{customer.name}</span>
+        <span className="text-foreground font-medium truncate">{customer.name}</span>
       </nav>
 
       {/* Main layout */}
@@ -543,7 +543,7 @@ export function CustomerDetail() {
         {/* Sidebar */}
         <div className="w-full lg:w-80 shrink-0 space-y-4">
           {/* Hero profile card */}
-          <div className="rounded-2xl border border-white/7 bg-[#0D1117] overflow-hidden">
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
             {/* Accent stripe */}
             <div className={cn('h-1 w-full bg-linear-to-r', accent.bar)} />
             <div className="p-6 text-center">
@@ -553,40 +553,40 @@ export function CustomerDetail() {
                 </div>
               </div>
 
-              <h1 className="text-[18px] font-bold text-white/90 tracking-tight mb-1 truncate">{customer.name}</h1>
+              <h1 className="text-[18px] font-bold text-foreground tracking-tight mb-1 truncate">{customer.name}</h1>
               {customer.customerNumber && (
-                <p className="text-xs font-mono text-white/35 mb-3">{customer.customerNumber}</p>
+                <p className="text-xs font-mono text-muted-foreground mb-3">{customer.customerNumber}</p>
               )}
 
               <div className="flex items-center justify-center gap-2 flex-wrap">
                 <span className={cn(
                   'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
                   isArchived
-                    ? 'bg-white/5 text-white/40'
-                    : 'bg-emerald-500/10 text-emerald-400',
+                    ? 'bg-muted/60 text-muted-foreground'
+                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
                 )}>
-                  <span className={cn('h-1.5 w-1.5 rounded-full', isArchived ? 'bg-white/20' : 'bg-emerald-500')} />
+                  <span className={cn('h-1.5 w-1.5 rounded-full', isArchived ? 'bg-muted' : 'bg-emerald-500')} />
                   {isArchived ? t('crm.statusArchived', 'Archived') : t('crm.statusActive', 'Active')}
                 </span>
                 <span className={cn(
                   'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
                   isBusiness
-                    ? 'bg-emerald-500/10 text-emerald-400'
-                    : 'bg-blue-500/10 text-blue-400',
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
                 )}>
                   <span className={cn('h-1.5 w-1.5 rounded-full', isBusiness ? 'bg-emerald-500' : 'bg-blue-500')} />
                   {isBusiness ? t('crm.typeBusiness', 'Business') : t('crm.typePrivate', 'Private')}
                 </span>
               </div>
 
-              <Separator className="my-4 bg-white/6" />
+              <Separator className="my-4 bg-border" />
 
               <div className="flex items-center justify-center gap-2">
                 {canWrite && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:bg-white/8 hover:text-white/80" onClick={() => setFormOpen(true)}>
+                        <Button variant="outline" size="icon" className="h-9 w-9 rounded-lg border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground" onClick={() => setFormOpen(true)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
@@ -601,7 +601,7 @@ export function CustomerDetail() {
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:bg-white/8 hover:text-white/80"
+                          className="h-9 w-9 rounded-lg border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                           onClick={() => { navigator.clipboard.writeText(customer.email); showSuccess(t('crm.copyEmail', 'Email copied')); }}
                         >
                           <Mail className="h-4 w-4" />
@@ -617,7 +617,7 @@ export function CustomerDetail() {
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:bg-white/8 hover:text-white/80"
+                        className="h-9 w-9 rounded-lg border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                         onClick={() => { navigator.clipboard.writeText(customer._id); showSuccess(t('crm.copyId', 'ID copied')); }}
                       >
                         <Hash className="h-4 w-4" />
@@ -633,7 +633,7 @@ export function CustomerDetail() {
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/10"
+                          className="h-9 w-9 rounded-lg border-border bg-muted/50 text-muted-foreground hover:border-amber-500/40 hover:text-amber-400 hover:bg-amber-500/10"
                           onClick={() => setMergeOpen(true)}
                         >
                           <GitMerge className="h-4 w-4" />
@@ -650,7 +650,7 @@ export function CustomerDetail() {
                         <Button
                           variant="outline"
                           size="icon"
-                          className="h-9 w-9 rounded-lg border-white/10 bg-white/4 text-white/55 hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
+                          className="h-9 w-9 rounded-lg border-border bg-muted/50 text-muted-foreground hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
                           onClick={() => setArchiveOpen(true)}
                         >
                           <Archive className="h-4 w-4" />
@@ -665,29 +665,29 @@ export function CustomerDetail() {
           </div>
 
           {/* Contact card */}
-          <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-1">
-            <SidebarRow t={t} icon={Mail} iconBg="bg-sky-500/10" iconColor="text-sky-400" label={t('crm.email', 'Email')} value={customer.email} />
-            <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" label={t('crm.phone', 'Phone')} value={formatPhone(customer.phone) || customer.phone} rawValue={customer.phone} />
-            <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" label={t('crm.mobile', 'Mobile')} value={formatPhone(customer.mobile) || customer.mobile} rawValue={customer.mobile} />
+          <div className="rounded-xl border border-border bg-card p-4 space-y-1">
+            <SidebarRow t={t} icon={Mail} iconBg="bg-sky-500/10" iconColor="text-sky-700 dark:text-sky-400" label={t('crm.email', 'Email')} value={customer.email} />
+            <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-700 dark:text-emerald-400" label={t('crm.phone', 'Phone')} value={formatPhone(customer.phone) || customer.phone} rawValue={customer.phone} />
+            <SidebarRow t={t} icon={Phone} iconBg="bg-emerald-500/10" iconColor="text-emerald-700 dark:text-emerald-400" label={t('crm.mobile', 'Mobile')} value={formatPhone(customer.mobile) || customer.mobile} rawValue={customer.mobile} />
             {isBusiness && (
-              <SidebarRow t={t} icon={User} iconBg="bg-emerald-500/10" iconColor="text-emerald-400" label={t('crm.ownerName', 'Owner name')} value={customer.ownerName} />
+              <SidebarRow t={t} icon={User} iconBg="bg-emerald-500/10" iconColor="text-emerald-700 dark:text-emerald-400" label={t('crm.ownerName', 'Owner name')} value={customer.ownerName} />
             )}
-            <SidebarRow t={t} icon={ReceiptText} iconBg="bg-amber-500/10" iconColor="text-amber-400" label={t('crm.uidVat', 'UID / VAT')} value={customer.uidNumber || customer.vatNumber} />
+            <SidebarRow t={t} icon={ReceiptText} iconBg="bg-amber-500/10" iconColor="text-amber-700 dark:text-amber-400" label={t('crm.uidVat', 'UID / VAT')} value={customer.uidNumber || customer.vatNumber} />
             <SidebarRow t={t} icon={Globe} iconBg="bg-indigo-500/10" iconColor="text-indigo-400" label={t('crm.website', 'Website')} value={customer.website} />
           </div>
 
           {/* Address card */}
           {fullAddress && (
-            <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-1">
-              <SidebarRow t={t} icon={MapPin} iconBg="bg-amber-500/10" iconColor="text-amber-400" label={t('crm.address', 'Address')} value={fullAddress} />
+            <div className="rounded-xl border border-border bg-card p-4 space-y-1">
+              <SidebarRow t={t} icon={MapPin} iconBg="bg-amber-500/10" iconColor="text-amber-700 dark:text-amber-400" label={t('crm.address', 'Address')} value={fullAddress} />
             </div>
           )}
 
           {/* Metadata card */}
-          <div className="rounded-xl border border-white/6 bg-[#0D1117] p-4 space-y-1">
-            <SidebarRow t={t} icon={Calendar} iconBg="bg-violet-500/10" iconColor="text-violet-400" label={t('crm.created', 'Created')} value={formatDate(customer.createdAt)} />
-            <SidebarRow t={t} icon={Calendar} iconBg="bg-violet-500/10" iconColor="text-violet-400" label={t('crm.updated', 'Updated')} value={formatDate(customer.updatedAt)} />
-            <SidebarRow t={t} icon={BellRing} iconBg="bg-amber-500/10" iconColor="text-amber-400" label={t('crm.newsletter', 'Newsletter')} value={customer.newsletterOptIn ? t('crm.optedIn', 'Opted in') : t('crm.optedOut', 'Opted out')} />
+          <div className="rounded-xl border border-border bg-card p-4 space-y-1">
+            <SidebarRow t={t} icon={Calendar} iconBg="bg-violet-500/10" iconColor="text-violet-700 dark:text-violet-400" label={t('crm.created', 'Created')} value={formatDate(customer.createdAt)} />
+            <SidebarRow t={t} icon={Calendar} iconBg="bg-violet-500/10" iconColor="text-violet-700 dark:text-violet-400" label={t('crm.updated', 'Updated')} value={formatDate(customer.updatedAt)} />
+            <SidebarRow t={t} icon={BellRing} iconBg="bg-amber-500/10" iconColor="text-amber-700 dark:text-amber-400" label={t('crm.newsletter', 'Newsletter')} value={customer.newsletterOptIn ? t('crm.optedIn', 'Opted in') : t('crm.optedOut', 'Opted out')} />
           </div>
         </div>
 
@@ -722,27 +722,27 @@ export function CustomerDetail() {
             </TabsList>
 
             <TabsContent value="overview">
-              <div className="grid gap-3 sm:grid-cols-2 p-4 bg-white/2 rounded-xl border border-white/5">
+              <div className="grid gap-3 sm:grid-cols-2 p-4 bg-muted/30 rounded-xl border border-border">
                 <InfoGridCell label={t('crm.type', 'Type')} value={isBusiness ? t('crm.typeBusiness', 'Business') : t('crm.typePrivate', 'Private')} />
                 {isBusiness && (
-                  <InfoGridCell label={t('crm.ownerName', 'Owner name')} value={customer.ownerName || 'â€”'} />
+                  <InfoGridCell label={t('crm.ownerName', 'Owner name')} value={customer.ownerName || '-'} />
                 )}
-                <InfoGridCell label={t('crm.customerNumber', 'Customer number')} value={customer.customerNumber || '—'} mono />
-                <InfoGridCell label={t('crm.uidVat', 'UID / VAT')} value={customer.uidNumber || customer.vatNumber || '—'} mono />
-                <InfoGridCell label={t('crm.email', 'Email')} value={customer.email || '—'} />
-                <InfoGridCell label={t('crm.phone', 'Phone')} value={formatPhone(customer.phone) || formatPhone(customer.mobile) || '—'} />
+                <InfoGridCell label={t('crm.customerNumber', 'Customer number')} value={customer.customerNumber || '-'} mono />
+                <InfoGridCell label={t('crm.uidVat', 'UID / VAT')} value={customer.uidNumber || customer.vatNumber || '-'} mono />
+                <InfoGridCell label={t('crm.email', 'Email')} value={customer.email || '-'} />
+                <InfoGridCell label={t('crm.phone', 'Phone')} value={formatPhone(customer.phone) || formatPhone(customer.mobile) || '-'} />
                 {fullAddress && (
                   <InfoGridCell label={t('crm.address', 'Address')} value={fullAddress} className="sm:col-span-2" />
                 )}
               </div>
               {customer.notes && (
-                <div className="mt-3 rounded-xl border border-white/5 bg-white/2 p-4 flex items-start gap-3.5">
+                <div className="mt-3 rounded-xl border border-border bg-muted/30 p-4 flex items-start gap-3.5">
                   <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-rose-500/10">
                     <FileText className="h-5 w-5 text-rose-400" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1">{t('crm.notes', 'Notes')}</p>
-                    <RichTextContent html={customer.notes} className="text-[13px] text-white/70" />
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 mb-1">{t('crm.notes', 'Notes')}</p>
+                    <RichTextContent html={customer.notes} className="text-[13px] text-foreground" />
                   </div>
                 </div>
               )}
@@ -804,29 +804,29 @@ function SidebarRow({ t, icon: Icon, iconBg, iconColor, label, value, rawValue }
   if (!value) {
     return (
       <div className="flex items-center gap-3 py-2 px-2 rounded-lg">
-        <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', iconBg || 'bg-white/5')}>
+        <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', iconBg || 'bg-muted/60')}>
           <Icon className={cn('h-3.5 w-3.5 opacity-40', iconColor)} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] text-white/30 uppercase tracking-wider font-medium">{label}</p>
-          <p className="text-[13px] text-white/20">—</p>
+          <p className="text-[10px] text-muted-foreground/80 uppercase tracking-wider font-medium">{label}</p>
+          <p className="text-[13px] text-muted-foreground/50">-</p>
         </div>
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-white/3 transition-colors group">
+    <div className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-muted/40 transition-colors group">
       <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center shrink-0', iconBg)}>
         <Icon className={cn('h-3.5 w-3.5', iconColor)} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] text-white/30 uppercase tracking-wider font-medium">{label}</p>
-        <p className="text-[13px] font-medium text-white/80 truncate">{value}</p>
+        <p className="text-[10px] text-muted-foreground/80 uppercase tracking-wider font-medium">{label}</p>
+        <p className="text-[13px] font-medium text-foreground truncate">{value}</p>
       </div>
       <Button
         variant="ghost"
         size="icon"
-        className="h-7 w-7 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-white/40 hover:text-white/70 hover:bg-white/5"
+        className="h-7 w-7 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/60"
         onClick={() => {
           navigator.clipboard.writeText(String(rawValue ?? value));
           showSuccess(t ? t('common.copied', 'Copied') : 'Copied');
@@ -841,8 +841,8 @@ function SidebarRow({ t, icon: Icon, iconBg, iconColor, label, value, rawValue }
 function InfoGridCell({ label, value, mono, className }) {
   return (
     <div className={className}>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mb-1">{label}</p>
-      <p className={cn('text-[13px] text-white/80', mono && 'font-mono')}>{value || '—'}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 mb-1">{label}</p>
+      <p className={cn('text-[13px] text-foreground', mono && 'font-mono')}>{value || '-'}</p>
     </div>
   );
 }
@@ -859,7 +859,7 @@ function DetailSkeleton() {
       </div>
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="w-full lg:w-80 shrink-0 space-y-4">
-          <div className="rounded-2xl border border-white/7 bg-[#0D1117] p-6 flex flex-col items-center">
+          <div className="rounded-2xl border border-border bg-card p-6 flex flex-col items-center">
             <Skeleton className="h-20 w-20 rounded-2xl mb-4" />
             <Skeleton className="h-5 w-40 mb-2" />
             <Skeleton className="h-4 w-24 mb-4" />
@@ -867,7 +867,7 @@ function DetailSkeleton() {
               <Skeleton className="h-6 w-16 rounded-full" />
               <Skeleton className="h-6 w-16 rounded-full" />
             </div>
-            <Separator className="w-full my-4 bg-white/6" />
+            <Separator className="w-full my-4 bg-border" />
             <div className="flex gap-2">
               <Skeleton className="h-9 w-9 rounded-lg" />
               <Skeleton className="h-9 w-9 rounded-lg" />

@@ -262,6 +262,42 @@ class OrderService {
     return updated;
   }
 
+  async softDelete(id, deletedBy, meta = {}) {
+    const existing = await orderRepository.findById(id);
+    if (!existing) throw new NotFoundError('Order', id);
+
+    if (existing.status !== 'CONFIRMED') {
+      throw new ConflictError('Only CONFIRMED orders can be deleted before work starts');
+    }
+
+    const { default: invoiceRepository } = await import('./invoice.repository.js');
+    const linkedInvoices = await invoiceRepository.findByOrderId(id);
+    if ((existing.invoiceIds?.length || 0) > 0 || linkedInvoices.length > 0) {
+      throw new ConflictError('Orders with invoices cannot be deleted');
+    }
+
+    await orderRepository.softDelete(id);
+    await this._invalidateOrderCache(id);
+    await this._invalidateListCache();
+
+    auditService.logEvent({
+      eventType: 'order.deleted',
+      userId: deletedBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { orderId: id, orderNumber: existing.orderNumber },
+      module: 'qop',
+    });
+
+    logger.info('Order deleted', {
+      module: 'qop',
+      action: 'softDelete',
+      orderId: id,
+      orderNumber: existing.orderNumber,
+    });
+  }
+
   async transitionStatus(id, targetStatus, { reason = null } = {}, userId, meta = {}) {
     const Order = (await import('./order.model.js')).default;
 

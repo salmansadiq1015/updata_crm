@@ -106,11 +106,10 @@ meetingSchema.index({ taskIds: 1 }, { sparse: true });
 meetingSchema.index({ title: 'text', agenda: 'text', description: 'text' });
 meetingSchema.index({ createdBy: 1, isDeleted: 1 });
 
-meetingSchema.pre('validate', function validateMeetingTiming(next) {
+meetingSchema.pre('validate', function validateMeetingTiming() {
   if (this.startAt && this.endAt && this.endAt <= this.startAt) {
     this.invalidate('endAt', 'Meeting end time must be after start time');
   }
-  next();
 });
 
 meetingSchema.pre(/^find/, function excludeSoftDeleted() {

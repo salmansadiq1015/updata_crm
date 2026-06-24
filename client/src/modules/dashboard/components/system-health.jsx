@@ -11,9 +11,9 @@ export function SystemHealth() {
   const { t } = useLanguage();
 
   const statusIcons = {
-    healthy: { icon: CheckCircle2, color: 'text-success', label: t('dashboard.healthy'), bg: 'bg-success/10' },
-    degraded: { icon: AlertTriangle, color: 'text-warning', label: t('dashboard.degraded'), bg: 'bg-warning/10' },
-    unhealthy: { icon: XCircle, color: 'text-destructive', label: t('dashboard.unhealthy'), bg: 'bg-destructive/10' },
+    healthy: { icon: CheckCircle2, color: 'text-success', label: t('dashboard.status.healthy', t('dashboard.healthy')), bg: 'bg-success/10' },
+    degraded: { icon: AlertTriangle, color: 'text-warning', label: t('dashboard.status.degraded', t('dashboard.degraded')), bg: 'bg-warning/10' },
+    unhealthy: { icon: XCircle, color: 'text-destructive', label: t('dashboard.status.unhealthy', t('dashboard.unhealthy')), bg: 'bg-destructive/10' },
   };
   const { data: health, isLoading } = useQuery({
     queryKey: ['health', 'status'],
@@ -22,7 +22,7 @@ export function SystemHealth() {
     staleTime: 15_000,
   });
 
-  const status = health?.status || 'unhealthy';
+  const status = String(health?.status || 'unhealthy').toLowerCase();
   const config = statusIcons[status] || statusIcons.unhealthy;
   const Icon = config.icon;
 

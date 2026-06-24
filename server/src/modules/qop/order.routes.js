@@ -17,6 +17,7 @@ router.post('/', authenticate, requirePermission('quotations:write'), validate(c
 router.get('/', authenticate, requirePermission('quotations:read'), validate(listOrdersSchema), (req, res, next) => orderController.list(req, res, next));
 router.get('/:id', authenticate, requirePermission('quotations:read'), validate(orderIdParamSchema), (req, res, next) => orderController.getById(req, res, next));
 router.put('/:id', authenticate, requirePermission('quotations:write'), validate(updateOrderSchema), (req, res, next) => orderController.update(req, res, next));
+router.delete('/:id', authenticate, requirePermission('quotations:delete'), validate(orderIdParamSchema), (req, res, next) => orderController.delete(req, res, next));
 router.patch('/:id/status', authenticate, requirePermission('quotations:write'), validate(transitionOrderStatusSchema), (req, res, next) => orderController.transitionStatus(req, res, next));
 router.get('/:id/invoices', authenticate, requirePermission('quotations:read'), validate(orderIdParamSchema), (req, res, next) => orderController.getInvoices(req, res, next));
 router.post('/:id/documents/generate', authenticate, requirePermission('quotations:write'), validate(orderIdParamSchema), (req, res, next) => orderController.generateDocument(req, res, next));

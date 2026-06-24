@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, MoreHorizontal, FileText, CheckCircle,
-  Send, DollarSign, History, Download, XCircle,
+  Send, DollarSign, History, Download, XCircle, Edit, Trash2, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -30,6 +31,8 @@ import { DocumentHistoryTimeline } from './document-history-timeline';
 import { InvoiceFormDialog } from './invoice-form-dialog';
 import { RecordPaymentDialog } from './record-payment-dialog';
 import { InvoiceDetailDialog } from './invoice-detail-dialog';
+import { QopBulkActionBar, QopPaginationControls, useQopCursorPagination } from './qop-pagination';
+import { VALID_INVOICE_TRANSITIONS } from '../constants/qop-constants';
 
 const INV_STATUSES = ['', 'DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
 
@@ -65,15 +68,61 @@ export function InvoicesTable({ advancedFilters = {} }) {
   const [detailInvoiceId, setDetail]  = useState(null);
   const [writeOffInvoice, setWriteOffInvoice] = useState(null);
   const [writeOffReason, setWriteOffReason] = useState('');
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkStatus, setBulkStatus] = useState('');
 
-  const filters = { ...advancedFilters };
-  if (search.trim())  filters.search = search.trim();
-  if (statusFilter)   filters.status = statusFilter;
+  const resetKey = useMemo(
+    () => JSON.stringify({ advancedFilters, search: search.trim(), statusFilter }),
+    [advancedFilters, search, statusFilter],
+  );
+  const pager = useQopCursorPagination(resetKey);
+
+  const filters = useMemo(() => {
+    const next = { ...advancedFilters, limit: pager.limit };
+    if (pager.cursor) next.cursor = pager.cursor;
+    if (search.trim()) next.search = search.trim();
+    if (statusFilter) next.status = statusFilter;
+    return next;
+  }, [advancedFilters, pager.cursor, pager.limit, search, statusFilter]);
 
   const { data, isLoading } = useInvoices(filters);
-  const items = data?.items ?? [];
+  const items = useMemo(() => data?.items ?? [], [data?.items]);
+  const visibleIds = useMemo(() => items.map((invoice) => invoice._id ?? invoice.id), [items]);
+  const selectedItems = useMemo(
+    () => items.filter((invoice) => selectedIds.has(invoice._id ?? invoice.id)),
+    [items, selectedIds],
+  );
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
 
-  const { finalizeInvoice, sendInvoice, transitionInvoiceStatus } = useInvoiceMutations();
+  const { finalizeInvoice, sendInvoice, transitionInvoiceStatus, deleteInvoice } = useInvoiceMutations();
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedIds(new Set());
+    setBulkStatus('');
+  }, [resetKey, pager.cursor, pager.limit]);
+
+  const clearSelection = () => setSelectedIds(new Set());
+  const toggleSelected = (id, checked) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+  const toggleVisible = (checked) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      visibleIds.forEach((id) => {
+        if (checked) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    });
+  };
 
   const handleGeneratePdf = async (id) => {
     try {
@@ -89,6 +138,32 @@ export function InvoicesTable({ advancedFilters = {} }) {
     }
   };
   const handleSend = (id) => sendInvoice.mutate(id);
+  const handleDelete = (invoice) => {
+    const id = invoice?._id ?? invoice?.id;
+    if (!id) return;
+    if (confirm(t('qop.invoices.deleteConfirm', 'Delete this invoice?'))) deleteInvoice.mutate(id);
+  };
+  const handleBulkDelete = async () => {
+    const deletable = selectedItems.filter((invoice) => invoice.status === 'DRAFT');
+    if (!deletable.length) return;
+    if (!confirm(t('qop.bulk.deleteConfirm', 'Delete selected records?'))) return;
+    const results = await Promise.allSettled(deletable.map((invoice) => deleteInvoice.mutateAsync(invoice._id ?? invoice.id)));
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    if (failed) alert(t('qop.bulk.partialFailure', '{count} records could not be processed.', { count: failed }));
+    clearSelection();
+  };
+  const handleBulkStatus = async () => {
+    if (!bulkStatus) return;
+    const actionable = selectedItems.filter((invoice) => VALID_INVOICE_TRANSITIONS[invoice.status]?.includes(bulkStatus));
+    if (!actionable.length) return;
+    const results = await Promise.allSettled(actionable.map((invoice) => (
+      transitionInvoiceStatus.mutateAsync({ id: invoice._id ?? invoice.id, targetStatus: bulkStatus })
+    )));
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    if (failed) alert(t('qop.bulk.partialFailure', '{count} records could not be processed.', { count: failed }));
+    setBulkStatus('');
+    clearSelection();
+  };
   const handleWriteOff = async () => {
     const id = writeOffInvoice?._id ?? writeOffInvoice?.id;
     if (!id || !writeOffReason.trim()) return;
@@ -104,9 +179,9 @@ export function InvoicesTable({ advancedFilters = {} }) {
   const openNewForm = (type) => { setFormType(type); setFormOpen(true); };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card/80 p-3 shadow-sm dark:bg-slate-950/50">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
@@ -150,9 +225,40 @@ export function InvoicesTable({ advancedFilters = {} }) {
         </DropdownMenu>
       </div>
 
+      <QopBulkActionBar selectedCount={selectedIds.size} onClear={clearSelection}>
+        <Select value={bulkStatus || undefined} onValueChange={setBulkStatus}>
+          <SelectTrigger className="h-8 w-44 text-xs">
+            <SelectValue placeholder={t('qop.bulk.statusPlaceholder', 'Set status')} />
+          </SelectTrigger>
+          <SelectContent>
+            {INV_STATUSES.filter(Boolean).map((status) => (
+              <SelectItem key={status} value={status}>
+                <InvoiceStatusBadge status={status} />
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button type="button" size="sm" className="h-8 gap-1.5" onClick={handleBulkStatus} disabled={!bulkStatus}>
+          <RefreshCw className="h-3.5 w-3.5" />
+          {t('qop.bulk.updateStatus', 'Update status')}
+        </Button>
+        <Button type="button" size="sm" variant="destructive" className="h-8 gap-1.5" onClick={handleBulkDelete}>
+          <Trash2 className="h-3.5 w-3.5" />
+          {t('qop.bulk.delete', 'Delete')}
+        </Button>
+      </QopBulkActionBar>
+
       {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
-        <div className="grid grid-cols-[9rem_6rem_1fr_8rem_7rem_7rem_8rem_2.5rem] bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground">
+      <div className="overflow-x-auto rounded-t-xl border border-border/70 bg-card/80 shadow-sm dark:bg-slate-950/50">
+        <div className="min-w-[1040px]">
+        <div className="grid grid-cols-[2.5rem_9rem_6rem_minmax(14rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] bg-muted/40 border-b border-border/70 text-xs font-medium text-muted-foreground">
+          <div className="flex items-center justify-center px-3 py-2.5">
+            <Checkbox
+              checked={allVisibleSelected || (someVisibleSelected ? 'indeterminate' : false)}
+              onCheckedChange={(checked) => toggleVisible(Boolean(checked))}
+              aria-label={t('qop.bulk.selectPage', 'Select visible rows')}
+            />
+          </div>
           {[
             t('qop.invoices.colNumber', 'Nummer'),
             t('qop.invoices.colType', 'Typ'),
@@ -168,8 +274,8 @@ export function InvoicesTable({ advancedFilters = {} }) {
         </div>
 
         {isLoading && Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="grid grid-cols-[9rem_6rem_1fr_8rem_7rem_7rem_8rem_2.5rem] border-b border-border px-3 py-3 gap-2">
-            {Array.from({ length: 7 }).map((_, j) => <Skeleton key={j} className="h-4 rounded" />)}
+          <div key={i} className="grid grid-cols-[2.5rem_9rem_6rem_minmax(14rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] border-b border-border/70 px-3 py-3 gap-2">
+            {Array.from({ length: 9 }).map((_, j) => <Skeleton key={j} className="h-4 rounded" />)}
           </div>
         ))}
 
@@ -192,8 +298,15 @@ export function InvoicesTable({ advancedFilters = {} }) {
           return (
             <div
               key={id}
-              className="grid grid-cols-[9rem_6rem_1fr_8rem_7rem_7rem_8rem_2.5rem] border-b border-border last:border-0 hover:bg-muted/30 transition-colors group"
+              className="grid grid-cols-[2.5rem_9rem_6rem_minmax(14rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] border-b border-border/70 last:border-0 hover:bg-primary/5 transition-colors group"
             >
+              <div className="flex items-center justify-center px-3 py-3">
+                <Checkbox
+                  checked={selectedIds.has(id)}
+                  onCheckedChange={(checked) => toggleSelected(id, Boolean(checked))}
+                  aria-label={t('qop.bulk.selectRow', 'Select row')}
+                />
+              </div>
               <div
                 className="px-3 py-3 text-sm font-mono text-muted-foreground cursor-pointer hover:text-foreground hover:underline"
                 onClick={() => setDetail(id)}
@@ -220,6 +333,11 @@ export function InvoicesTable({ advancedFilters = {} }) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
+                    {inv.status === 'DRAFT' && (
+                      <DropdownMenuItem onClick={() => setEditingInvoice(inv)}>
+                        <Edit className="h-4 w-4 mr-2" />{t('qop.table.edit', 'Edit')}
+                      </DropdownMenuItem>
+                    )}
                     {canFinalize && (
                       <DropdownMenuItem onClick={() => handleFinalize(id)}>
                         <CheckCircle className="h-4 w-4 mr-2" />{t('qop.invoices.finalize', 'Finalisieren')}
@@ -247,19 +365,47 @@ export function InvoicesTable({ advancedFilters = {} }) {
                     <DropdownMenuItem onClick={() => setHistoryFor(id)}>
                       <History className="h-4 w-4 mr-2" />{t('qop.table.history', 'Verlauf')}
                     </DropdownMenuItem>
+                    {inv.status === 'DRAFT' && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(inv)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />{t('common.delete', 'Delete')}
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
             </div>
           );
         })}
+        </div>
       </div>
+
+      <QopPaginationControls
+        pagination={data?.pagination}
+        itemCount={items.length}
+        limit={pager.limit}
+        pageIndex={pager.pageIndex}
+        canPrevious={pager.canPrevious}
+        onLimitChange={pager.setLimit}
+        onPrevious={pager.goPrevious}
+        onNext={pager.goNext}
+      />
 
       {/* Modals */}
       <InvoiceFormDialog
         open={formOpen}
         onClose={() => setFormOpen(false)}
         type={formType}
+      />
+      <InvoiceFormDialog
+        open={!!editingInvoice}
+        onClose={() => setEditingInvoice(null)}
+        invoice={editingInvoice}
       />
       <RecordPaymentDialog
         open={!!payingInvoice}

@@ -9,15 +9,26 @@ const RECURRENCE_FREQUENCIES = ['DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'CUSTO
 const RECURRENCE_END_TYPES = ['NEVER', 'AFTER_COUNT', 'UNTIL_DATE'];
 const CONFIRMATION_METHODS = ['EMAIL', 'SMS', 'PHONE'];
 const capabilityList = Joi.array().items(Joi.string().trim().max(80)).max(50).default([]);
+const optionalText = (max) => Joi.string().trim().max(max).allow('', null);
+const optionalLongText = (max) => Joi.string().max(max).allow('', null);
 
 const appointmentSchema = Joi.object({
-  customerContactName: Joi.string().trim().max(255),
-  customerContactPhone: Joi.string().trim().max(50),
-  customerContactEmail: Joi.string().trim().email(),
-  appointmentWindow: Joi.string().trim().max(100),
-  confirmationMethod: Joi.string().valid(...CONFIRMATION_METHODS),
-  customerNotes: Joi.string().max(2000),
+  customerContactName: optionalText(255),
+  customerContactPhone: optionalText(50),
+  customerContactEmail: Joi.string().trim().email().allow('', null),
+  appointmentWindow: optionalText(100),
+  confirmationMethod: Joi.string().valid(...CONFIRMATION_METHODS).allow('', null),
+  customerNotes: optionalLongText(2000),
 }).min(1);
+
+const recurrenceSchema = Joi.object({
+  frequency: Joi.string().valid(...RECURRENCE_FREQUENCIES).required(),
+  interval: Joi.number().integer().min(1),
+  daysOfWeek: optionalText(30),
+  endType: Joi.string().valid(...RECURRENCE_END_TYPES),
+  endCount: Joi.number().integer().min(1).max(365).allow(null),
+  endDate: Joi.date().iso().allow('', null),
+}).allow(null);
 
 export const createAssignmentSchema = {
   body: Joi.object({
@@ -28,33 +39,26 @@ export const createAssignmentSchema = {
     orderId: objectId.allow(null),
     projectId: objectId.allow(null),
     assignmentType: Joi.string().valid(...ASSIGNMENT_TYPES).required(),
-    title: Joi.string().trim().max(255),
+    title: optionalText(255),
     startDatetime: Joi.date().iso().required(),
     endDatetime: Joi.date().iso().greater(Joi.ref('startDatetime')).required(),
     isFullDay: Joi.boolean(),
     priority: Joi.string().valid(...PRIORITIES),
-    instructions: Joi.string().max(5000),
+    instructions: optionalLongText(5000),
     requiredSkills: capabilityList,
     recommendedSkills: capabilityList,
     requiredCertifications: capabilityList,
     recommendedCertifications: capabilityList,
     customerId: objectId.allow(null),
     siteId: objectId.allow(null),
-    colorCode: Joi.string().max(7),
+    colorCode: optionalText(7),
     isCustomerAppointment: Joi.boolean(),
     appointment: Joi.when('isCustomerAppointment', {
       is: true,
       then: appointmentSchema.required(),
-      otherwise: appointmentSchema.optional(),
+      otherwise: appointmentSchema.allow(null).optional(),
     }),
-    recurrence: Joi.object({
-      frequency: Joi.string().valid(...RECURRENCE_FREQUENCIES).required(),
-      interval: Joi.number().integer().min(1),
-      daysOfWeek: Joi.string().max(30),
-      endType: Joi.string().valid(...RECURRENCE_END_TYPES),
-      endCount: Joi.number().integer().min(1).max(365),
-      endDate: Joi.date().iso(),
-    }),
+    recurrence: recurrenceSchema,
     overrideConflicts: Joi.boolean().default(false),
     overrideReason: Joi.when('overrideConflicts', {
       is: true,

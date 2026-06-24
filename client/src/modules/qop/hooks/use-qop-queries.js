@@ -33,11 +33,14 @@ export function useQuotationHistory(id) {
   });
 }
 
-export function useOrders(filters = {}) {
+export function useOrders(filters = {}, options = {}) {
+  const { enabled = true, ...queryOptions } = options;
   return useQuery({
     queryKey: queryKeys.qop.orders(filters),
     queryFn: () => orderService.list(filters),
+    enabled,
     select: (r) => ({ items: Array.isArray(r.data) ? r.data : [], pagination: r.pagination }),
+    ...queryOptions,
   });
 }
 

@@ -18,6 +18,7 @@ import {
   getPositionPresets,
   getRoleByPresetName,
 } from '@/modules/users/constants/department-position-presets';
+import { getPresetDisplayLabel, getUserRoleLabel } from '@/modules/users/utils/user-display';
 import { getPreferredDepartmentId } from '@/modules/users/utils/project-assignment';
 import {
   Loader2, User, Mail, Shield, MapPin, Briefcase,
@@ -27,12 +28,16 @@ import {
 const EMPTY_TEAM_VALUE = '__none';
 
 const STEPS = [
-  { id: 'personal', label: 'Persoenlich', icon: User, fields: ['firstName', 'lastName'] },
-  { id: 'contact', label: 'Kontakt', icon: Mail, fields: ['email', 'phone'] },
-  { id: 'work', label: 'Arbeit', icon: Briefcase, fields: ['department', 'position', 'preferredDepartmentId'] },
-  { id: 'address', label: 'Adresse', icon: MapPin, fields: ['street', 'zip', 'city', 'country'] },
-  { id: 'access', label: 'Zugang', icon: Shield, fields: ['roleId', 'language'] },
+  { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persoenlich', icon: User, fields: ['firstName', 'lastName'] },
+  { id: 'contact', labelKey: 'users.step.contact', fallback: 'Kontakt', icon: Mail, fields: ['email', 'phone'] },
+  { id: 'work', labelKey: 'users.step.work', fallback: 'Arbeit', icon: Briefcase, fields: ['department', 'position', 'preferredDepartmentId'] },
+  { id: 'address', labelKey: 'users.step.address', fallback: 'Adresse', icon: MapPin, fields: ['street', 'zip', 'city', 'country'] },
+  { id: 'access', labelKey: 'users.step.access', fallback: 'Zugang', icon: Shield, fields: ['roleId', 'language'] },
 ];
+
+function getStepLabel(step, t) {
+  return t(step.labelKey, step.fallback);
+}
 
 export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = [], assignmentTargets = [], isLoading }) {
   const { t } = useLanguage();
@@ -146,35 +151,46 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   const rolePresetNotice = useMemo(() => {
     if (!selectedPositionPreset?.roleName) return null;
 
+    const presetRoleLabel = getUserRoleLabel(selectedPositionPreset.roleName, t);
+
     if (roles.length === 0) {
       return {
         tone: 'pending',
-        title: 'Rolle wird vorbereitet',
-        description: `${selectedPositionPreset.roleName} wird angewendet, sobald Rollen geladen sind.`,
+        title: t('users.rolePreset.pendingTitle', 'Rolle wird vorbereitet'),
+        description: t('users.rolePreset.pendingDesc', '{role} wird angewendet, sobald Rollen geladen sind.', {
+          role: presetRoleLabel,
+        }),
       };
     }
 
     if (isMappedRoleMissing) {
       return {
         tone: 'warning',
-        title: 'Standardrolle fehlt',
-        description: `Die Rolle ${selectedPositionPreset.roleName} ist nicht verfügbar. Wählen Sie im Zugang-Schritt eine Rolle manuell aus.`,
+        title: t('users.rolePreset.missingTitle', 'Standardrolle fehlt'),
+        description: t('users.rolePreset.missingDesc', 'Die Rolle {role} ist nicht verfuegbar. Waehlen Sie im Zugang-Schritt eine Rolle manuell aus.', {
+          role: presetRoleLabel,
+        }),
       };
     }
 
     if (isManualRoleOverride) {
       return {
         tone: 'override',
-        title: 'Manuell angepasst',
-        description: `${selectedPositionPreset.roleName} wäre die Standardrolle für diese Position. Aktuell ist ${currentRole?.name || 'eine andere Rolle'} ausgewählt.`,
+        title: t('users.rolePreset.overrideTitle', 'Manuell angepasst'),
+        description: t('users.rolePreset.overrideDesc', '{defaultRole} waere die Standardrolle fuer diese Position. Aktuell ist {currentRole} ausgewaehlt.', {
+          defaultRole: presetRoleLabel,
+          currentRole: getUserRoleLabel(currentRole?.name, t) || t('users.roleOther', 'eine andere Rolle'),
+        }),
       };
     }
 
     if (isPresetRoleApplied) {
       return {
         tone: 'applied',
-        title: 'Zugriff automatisch gesetzt',
-        description: `Die Berechtigungen werden über die Rolle ${mappedRole.name} angewendet.`,
+        title: t('users.rolePreset.appliedTitle', 'Zugriff automatisch gesetzt'),
+        description: t('users.rolePreset.appliedDesc', 'Die Berechtigungen werden ueber die Rolle {role} angewendet.', {
+          role: getUserRoleLabel(mappedRole.name, t),
+        }),
       };
     }
 
@@ -187,6 +203,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     mappedRole,
     roles.length,
     selectedPositionPreset,
+    t,
   ]);
 
   useEffect(() => {
@@ -325,7 +342,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     )}>
                       {isCompleted ? <Check className="h-3.5 w-3.5" /> : i + 1}
                     </div>
-                    <span className="text-xs font-medium hidden sm:block truncate">{s.label}</span>
+                    <span className="text-xs font-medium hidden sm:block truncate">{getStepLabel(s, t)}</span>
                   </button>
                   {i < STEPS.length - 1 && (
                     <div className={cn(
@@ -358,8 +375,13 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                 <step.icon className="h-4 w-4 text-primary" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold">{step.label}</h3>
-                <p className="text-xs text-muted-foreground">Schritt {currentStep + 1} von {STEPS.length}</p>
+                <h3 className="text-sm font-semibold">{getStepLabel(step, t)}</h3>
+                <p className="text-xs text-muted-foreground">
+                  {t('users.stepCounter', 'Schritt {current} von {total}', {
+                    current: currentStep + 1,
+                    total: STEPS.length,
+                  })}
+                </p>
               </div>
             </div>
 
@@ -381,7 +403,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                 <FormField label={t('users.email')} error={errors.email?.message} required>
                   <Input type="email" placeholder="max.muster@mbboiler.ch" {...register('email')} autoFocus />
                 </FormField>
-                <FormField label={`${t('users.phone')} (optional)`}>
+                <FormField label={`${t('users.phone')} (${t('common.optional', 'optional')})`}>
                   <Input placeholder="+41 79 123 45 67" {...register('phone')} />
                 </FormField>
               </div>
@@ -398,7 +420,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     <SelectContent>
                       {departmentOptions.map((department) => (
                         <SelectItem key={department.value} value={department.value}>
-                          {department.label}
+                          {getPresetDisplayLabel(department, t)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -416,7 +438,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     <SelectContent>
                       {positionOptions.map((position) => (
                         <SelectItem key={position.value} value={position.value}>
-                          {position.label}
+                          {getPresetDisplayLabel(position, t)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -492,7 +514,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     </SelectTrigger>
                     <SelectContent>
                       {roles.map((role) => (
-                        <SelectItem key={role._id} value={role._id}>{role.name}</SelectItem>
+                        <SelectItem key={role._id} value={role._id}>{getUserRoleLabel(role.name, t)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -525,7 +547,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 rounded-lg h-9" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  Zurück
+                  {t('common.back', 'Zurueck')}
                 </Button>
               ) : (
                 <Button type="button" variant="ghost" className="rounded-lg h-9" onClick={() => handleDialogOpenChange(false)}>
@@ -563,7 +585,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     goNext();
                   }}
                 >
-                  Weiter
+                  {t('common.next', 'Weiter')}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               )}

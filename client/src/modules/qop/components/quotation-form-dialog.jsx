@@ -1,18 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import {
+  FileText, ChevronDown, ChevronUp, Building2, FolderKanban,
+  Coins, Languages, Users, CalendarDays,
+} from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useQuotationMutations } from '../hooks/use-qop-mutations';
 import { useQopCustomerProjects, useQopCustomerSearch, useQopDepartments } from '../hooks/use-qop-queries';
@@ -20,6 +22,9 @@ import { useQuotationTemplateMutations } from '../hooks/use-qop-template-mutatio
 import { LineItemsEditor } from './line-items-editor';
 import { SelectTemplateDialog } from './select-template-dialog';
 import { CURRENCIES, DEFAULT_VALIDITY_DAYS } from '../constants/qop-constants';
+import {
+  LANGUAGE_OPTIONS, buildCustomerOptions, buildDepartmentOptions, buildProjectOptions,
+} from '../utils/document-form-utils';
 import { SourceDocumentsPanel } from '@/modules/doctpl/components/SourceDocumentsPanel';
 
 function addDays(date, days) {
@@ -52,7 +57,6 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [customerQuery, setCustomerQuery] = useState('');
-  const [showCustomerList, setShowCustomerList] = useState(false);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -60,9 +64,13 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   const { recordUsage } = useQuotationTemplateMutations();
   const isPending = createQuotation.isPending || updateQuotation.isPending;
 
-  const { data: customerResults = [] } = useQopCustomerSearch(customerQuery);
+  const { data: customerResults = [], isFetching: customersLoading } = useQopCustomerSearch(customerQuery);
   const { data: departments = [] } = useQopDepartments();
   const { data: projects = [] } = useQopCustomerProjects(form.customerId);
+
+  const customerOptions = useMemo(() => buildCustomerOptions(customerResults), [customerResults]);
+  const departmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
+  const projectOptions = useMemo(() => buildProjectOptions(projects), [projects]);
 
   useEffect(() => {
     if (quotation) {
@@ -83,12 +91,11 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
         termsAndConditions: quotation.termsAndConditions ?? '',
         version: quotation.version,
       });
-      setCustomerQuery(quotation.customerName ?? quotation.customer?.name ?? '');
     } else {
       setForm(EMPTY_FORM());
-      setCustomerQuery('');
       setShowAdvanced(false);
     }
+    setCustomerQuery('');
   }, [quotation, open]);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
@@ -149,136 +156,143 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-lg font-semibold">
-                {isEdit
-                  ? t('qop.form.editTitle', 'Offerte bearbeiten')
-                  : t('qop.form.newTitle', 'Neue Offerte')}
-              </DialogTitle>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto border-border/70 bg-popover/95 p-0 shadow-2xl supports-backdrop-filter:backdrop-blur-xl">
+          <DialogHeader className="border-b border-border/70 px-6 py-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl font-semibold tracking-tight">
+                    {isEdit ? t('qop.form.editTitle', 'Edit quotation') : t('qop.form.newTitle', 'New Quotation')}
+                  </DialogTitle>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t('qop.form.subtitle', 'Draft a customer quotation with positions and document texts.')}
+                  </p>
+                </div>
+              </div>
               {!isEdit && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 text-xs"
+                  className="mr-8 gap-1.5 rounded-lg text-xs"
                   onClick={() => setShowTemplateDialog(true)}
                 >
                   <FileText className="h-3.5 w-3.5" />
-                  {t('qop.form.fromTemplate', 'Aus Vorlage')}
+                  {t('qop.form.fromTemplate', 'From Template')}
                 </Button>
               )}
             </div>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5 mt-2">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 py-5">
             {/* Header fields */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {/* Customer */}
-              <div className="relative col-span-2 md:col-span-1 flex flex-col gap-1.5">
-                <Label>{t('qop.form.customer', 'Kunde')} *</Label>
-                <Input
-                  value={customerQuery}
-                  onChange={(e) => { setCustomerQuery(e.target.value); setShowCustomerList(true); }}
-                  onFocus={() => setShowCustomerList(true)}
-                  placeholder={t('qop.form.customerSearch', 'Kunden suchen...')}
-                  required={!form.customerId}
+              <div className="flex flex-col gap-1.5">
+                <Label>{t('qop.form.customer', 'Customer')} *</Label>
+                <Combobox
+                  async
+                  triggerIcon={Users}
+                  options={customerOptions}
+                  value={form.customerId}
+                  selectedLabel={form.customerName}
+                  loading={customersLoading}
+                  onSearchChange={setCustomerQuery}
+                  onChange={(value, option) => {
+                    set('customerId', value);
+                    set('customerName', option?.label ?? '');
+                    set('projectId', '');
+                  }}
+                  placeholder={t('qop.form.customerSearch', 'Search customer...')}
+                  searchPlaceholder={t('qop.form.customerSearch', 'Search customer...')}
+                  emptyIcon={Users}
+                  emptyMessage={customerQuery.length < 2
+                    ? t('qop.form.customerSearchHintTitle', 'Search customers')
+                    : t('qop.form.customerNoResults', 'No customers found')}
+                  emptyHint={customerQuery.length < 2
+                    ? t('qop.form.customerSearchHint', 'Type at least 2 characters to search.')
+                    : t('qop.form.customerNoResultsHint', 'Try a different name or number.')}
                 />
-                {showCustomerList && customerResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-border bg-popover shadow-md overflow-hidden">
-                    {customerResults.map((c) => (
-                      <button
-                        key={c._id ?? c.id}
-                        type="button"
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
-                        onClick={() => {
-                          set('customerId', c._id ?? c.id);
-                          set('customerName', c.name);
-                          setCustomerQuery(c.name);
-                          setShowCustomerList(false);
-                        }}
-                      >
-                        <span className="font-medium">{c.name}</span>
-                        {c.city && <span className="ml-2 text-muted-foreground text-xs">{c.city}</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Currency */}
               <div className="flex flex-col gap-1.5">
-                <Label>{t('qop.form.currency', 'Währung')}</Label>
-                <Select value={form.currency} onValueChange={(v) => set('currency', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CURRENCIES.map((c) => (
-                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>{t('qop.form.currency', 'Currency')}</Label>
+                <Combobox
+                  searchable={false}
+                  triggerIcon={Coins}
+                  options={CURRENCIES}
+                  value={form.currency}
+                  onChange={(value) => set('currency', value)}
+                />
               </div>
 
               {/* Valid Until */}
               <div className="flex flex-col gap-1.5">
-                <Label>{t('qop.form.validUntil', 'Gültig bis')} *</Label>
-                <Input
-                  type="date"
-                  value={form.validUntil}
-                  onChange={(e) => set('validUntil', e.target.value)}
-                  required
-                />
+                <Label>{t('qop.form.validUntil', 'Valid Until')} *</Label>
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="date"
+                    value={form.validUntil}
+                    onChange={(e) => set('validUntil', e.target.value)}
+                    className="h-11 rounded-xl pl-9"
+                    required
+                  />
+                </div>
               </div>
 
               {/* Department */}
               <div className="flex flex-col gap-1.5">
-                <Label>{t('qop.form.department', 'Abteilung')} *</Label>
-                <Select value={form.departmentId} onValueChange={(v) => set('departmentId', v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('qop.form.selectDepartment', 'Abteilung wählen...')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map((d) => (
-                      <SelectItem key={d._id ?? d.id} value={d._id ?? d.id}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>{t('qop.form.department', 'Department')} *</Label>
+                <Combobox
+                  triggerIcon={Building2}
+                  options={departmentOptions}
+                  value={form.departmentId}
+                  onChange={(value) => set('departmentId', value)}
+                  placeholder={t('qop.form.selectDepartment', 'Select department...')}
+                  emptyIcon={Building2}
+                  emptyMessage={t('qop.form.noDepartments', 'No departments found')}
+                  emptyHint={t('qop.form.noDepartmentsHint', 'Create a department in settings first.')}
+                />
               </div>
 
               {/* Project */}
               <div className="flex flex-col gap-1.5">
-                <Label>{t('qop.form.project', 'Projekt')} ({t('common.optional', 'optional')})</Label>
-                <Select value={form.projectId || 'NONE'} onValueChange={(v) => set('projectId', v === 'NONE' ? '' : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('qop.form.noProject', 'Kein Projekt')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NONE">{t('qop.form.noProject', '— Kein Projekt —')}</SelectItem>
-                    {projects.map((p) => (
-                      <SelectItem key={p._id ?? p.id} value={p._id ?? p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>{t('qop.form.project', 'Project')} ({t('common.optional', 'optional')})</Label>
+                <Combobox
+                  triggerIcon={FolderKanban}
+                  options={projectOptions}
+                  value={form.projectId}
+                  allowClear
+                  onChange={(value) => set('projectId', value || '')}
+                  placeholder={t('qop.form.noProject', 'No project')}
+                  emptyIcon={FolderKanban}
+                  emptyMessage={form.customerId
+                    ? t('qop.form.noProjects', 'No projects for this customer')
+                    : t('qop.form.selectCustomerFirst', 'Select a customer first')}
+                  emptyHint={form.customerId ? undefined : t('qop.form.projectsNeedCustomer', 'Projects are filtered by customer.')}
+                />
               </div>
 
               {/* Document Language */}
               <div className="flex flex-col gap-1.5">
-                <Label>{t('qop.form.language', 'Dokument-Sprache')}</Label>
-                <Select value={form.language} onValueChange={(v) => set('language', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="de">Deutsch</SelectItem>
-                    <SelectItem value="fr">Français</SelectItem>
-                    <SelectItem value="it">Italiano</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>{t('qop.form.language', 'Document Language')}</Label>
+                <Combobox
+                  searchable={false}
+                  triggerIcon={Languages}
+                  options={LANGUAGE_OPTIONS}
+                  value={form.language}
+                  onChange={(value) => set('language', value)}
+                />
               </div>
 
               {/* Global discount */}
               <div className="flex flex-col gap-1.5">
-                <Label>{t('qop.form.globalDiscount', 'Globalrabatt %')}</Label>
+                <Label>{t('qop.form.globalDiscount', 'Global Discount %')}</Label>
                 <Input
                   type="number"
                   min="0"
@@ -286,19 +300,18 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   step="0.1"
                   value={form.globalDiscountPercent}
                   onChange={(e) => set('globalDiscountPercent', e.target.value)}
+                  className="h-11 rounded-xl"
                 />
               </div>
             </div>
 
-            {/* Introduction */}
+            {/* Introduction — rich text */}
             <div className="flex flex-col gap-1.5">
-              <Label>{t('qop.form.introduction', 'Einleitung')}</Label>
-              <Textarea
-                rows={3}
+              <Label>{t('qop.form.introduction', 'Introduction')}</Label>
+              <RichTextEditor
                 value={form.introduction}
-                onChange={(e) => set('introduction', e.target.value)}
-                placeholder={t('qop.form.introductionPlaceholder', 'Einleitungstext für das Dokument...')}
-                className="resize-none text-sm"
+                onChange={(html) => set('introduction', html)}
+                placeholder={t('qop.form.introductionPlaceholder', 'Introduction text for the document...')}
                 maxLength={5000}
               />
             </div>
@@ -307,9 +320,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
 
             {/* Line items */}
             <div className="flex flex-col gap-2">
-              <Label className="text-sm font-medium">
-                {t('qop.form.positions', 'Positionen')}
-              </Label>
+              <Label className="text-sm font-medium">{t('qop.form.positions', 'Line Items')}</Label>
               <LineItemsEditor
                 value={form.lineItems}
                 onChange={(items) => set('lineItems', items)}
@@ -319,25 +330,25 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
             <Separator />
 
             {/* Notes */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="flex flex-col gap-1.5">
-                <Label>{t('qop.form.notes', 'Bemerkungen')} ({t('qop.form.forCustomer', 'für Kunden')})</Label>
+                <Label>{t('qop.form.notes', 'Notes')} ({t('qop.form.forCustomer', 'for customer')})</Label>
                 <Textarea
                   rows={3}
                   value={form.notes}
                   onChange={(e) => set('notes', e.target.value)}
-                  placeholder={t('qop.form.notesPlaceholder', 'Optionale Anmerkungen...')}
-                  className="resize-none text-sm"
+                  placeholder={t('qop.form.notesPlaceholder', 'Optional notes...')}
+                  className="resize-none rounded-xl text-sm"
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>{t('qop.form.internalNote', 'Interne Notiz')}</Label>
+                <Label>{t('qop.form.internalNote', 'Internal note')}</Label>
                 <Textarea
                   rows={3}
                   value={form.internalNote}
                   onChange={(e) => set('internalNote', e.target.value)}
-                  placeholder={t('qop.form.internalNotePlaceholder', 'Intern (nicht auf Dokument)...')}
-                  className="resize-none text-sm"
+                  placeholder={t('qop.form.internalNotePlaceholder', 'Internal (not on document)...')}
+                  className="resize-none rounded-xl text-sm"
                 />
               </div>
             </div>
@@ -346,33 +357,31 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors self-start"
+              className="flex items-center gap-1.5 self-start text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {t('qop.form.advancedFields', 'Zahlungsbedingungen & AGB')}
+              {t('qop.form.advancedFields', 'Payment terms & T&C')}
             </button>
 
             {showAdvanced && (
               <div className="grid grid-cols-1 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <Label>{t('qop.form.paymentTerms', 'Zahlungsbedingungen')}</Label>
+                  <Label>{t('qop.form.paymentTerms', 'Payment terms')}</Label>
                   <Textarea
                     rows={2}
                     value={form.paymentTerms}
                     onChange={(e) => set('paymentTerms', e.target.value)}
-                    placeholder={t('qop.form.paymentTermsPlaceholder', 'z.B. 30 Tage netto')}
-                    className="resize-none text-sm"
+                    placeholder={t('qop.form.paymentTermsPlaceholder', 'e.g. 30 days net')}
+                    className="resize-none rounded-xl text-sm"
                     maxLength={1000}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>{t('qop.form.termsAndConditions', 'AGB')}</Label>
-                  <Textarea
-                    rows={4}
+                  <Label>{t('qop.form.termsAndConditions', 'Terms & Conditions')}</Label>
+                  <RichTextEditor
                     value={form.termsAndConditions}
-                    onChange={(e) => set('termsAndConditions', e.target.value)}
-                    placeholder={t('qop.form.termsPlaceholder', 'Allgemeine Geschäftsbedingungen...')}
-                    className="resize-none text-sm"
+                    onChange={(html) => set('termsAndConditions', html)}
+                    placeholder={t('qop.form.termsPlaceholder', 'General terms and conditions...')}
                     maxLength={10000}
                   />
                 </div>
@@ -392,14 +401,14 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
               </>
             )}
 
-            <DialogFooter>
+            <DialogFooter className="sticky bottom-0 -mx-6 -mb-5 border-t border-border/70 bg-popover/95 px-6 py-4 supports-backdrop-filter:backdrop-blur-xl">
               <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
-                {t('common.cancel', 'Abbrechen')}
+                {t('common.cancel', 'Cancel')}
               </Button>
               <Button type="submit" disabled={isPending || !form.customerId || !form.departmentId}>
                 {isPending
-                  ? t('common.saving', 'Speichern...')
-                  : isEdit ? t('common.save', 'Aktualisieren') : t('common.create', 'Erstellen')}
+                  ? t('common.saving', 'Saving...')
+                  : isEdit ? t('common.save', 'Save') : t('common.create', 'Create')}
               </Button>
             </DialogFooter>
           </form>

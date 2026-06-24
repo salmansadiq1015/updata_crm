@@ -3,7 +3,6 @@
 import { useEffect, lazy, Suspense } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
-import { useDrawerStore } from '@/stores/drawer-store';
 import { Sidebar, MobileSidebar } from '@/layout/sidebar';
 import { Header } from '@/layout/header';
 import { RightDrawer } from '@/layout/right-drawer';
@@ -21,7 +20,6 @@ const AiAssistantPanel = lazy(() =>
 export default function PlatformLayout({ children }) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
-  const isDrawerOpen = useDrawerStore((s) => s.isOpen);
   const pathname = usePathname();
   const isChatPage = pathname?.includes('/chat');
   const isAiPage   = pathname === '/ai' || pathname?.startsWith('/ai/');
@@ -30,12 +28,13 @@ export default function PlatformLayout({ children }) {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+      const redirectPath = pathname || '/dashboard';
+      router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [isLoading, isAuthenticated, pathname, router]);
 
   if (isLoading) return <FullPageSpinner />;
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) return <FullPageSpinner />;
 
   return (
     <div className="flex h-dvh overflow-hidden">

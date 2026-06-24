@@ -150,23 +150,23 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
     }
   };
 
-  const inputCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20';
-  const selectTriggerCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 focus:border-violet-500/50 focus:ring-violet-500/20';
+  const inputCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20';
+  const selectTriggerCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-violet-500/50 focus:ring-violet-500/20';
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col border border-white/8 bg-[#0D1117] shadow-2xl">
+      <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col border border-border bg-card shadow-2xl">
         {/* Header */}
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-blue-500/10 ring-1 ring-blue-500/20 shrink-0">
               <Building2 className="h-5 w-5 text-blue-400" />
             </div>
             <div>
-              <DialogTitle className="text-[16px] font-semibold text-white/90">
+              <DialogTitle className="text-[16px] font-semibold text-foreground">
                 {isEdit ? t('crm.editCustomer', 'Kunde bearbeiten') : t('crm.newCustomer', 'Neuer Kunde')}
               </DialogTitle>
-              <DialogDescription className="text-[13px] text-white/45 mt-0.5">
+              <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
                 {isEdit
                   ? t('crm.editDesc', 'Passen Sie die Kundeninformationen an.')
                   : t('crm.createDesc', 'Erstellen Sie einen neuen Kunden.')}
@@ -176,7 +176,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
         </DialogHeader>
 
         {/* Step indicator */}
-        <div className="px-6 py-4 shrink-0 border-b border-white/6">
+        <div className="px-6 py-4 shrink-0 border-b border-border">
           <div className="flex items-center gap-2">
             {stepMeta.map((s, i) => {
               const StepIcon = s.icon;
@@ -191,9 +191,9 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     disabled={i > currentStep}
                     className={cn(
                       'flex items-center gap-2 h-9 px-3 rounded-lg transition-all text-xs font-semibold flex-1 min-w-0',
-                      isCurrent && 'bg-blue-500/10 text-blue-400',
-                      isCompleted && 'text-emerald-400 hover:bg-emerald-500/10',
-                      !isCurrent && !isCompleted && 'text-white/35',
+                      isCurrent && 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+                      isCompleted && 'text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400',
+                      !isCurrent && !isCompleted && 'text-muted-foreground/60',
                     )}
                   >
                     <div className={cn(
@@ -202,7 +202,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                         ? 'bg-emerald-500/20'
                         : isCurrent
                         ? 'bg-blue-500/15'
-                        : 'bg-white/5',
+                        : 'bg-muted',
                     )}>
                       {isCompleted ? <Check className="h-3.5 w-3.5" /> : <StepIcon className="h-3.5 w-3.5" />}
                     </div>
@@ -242,11 +242,11 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center ring-1 ring-blue-500/20">
-                    <User className="h-4 w-4 text-blue-400" />
+                    <User className="h-4 w-4 text-blue-700 dark:text-blue-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-white/80">{t('crm.stepBasic', 'Basis')}</h3>
-                    <p className="text-xs text-white/40">{t('crm.basicHint', 'Name und Kundentyp')}</p>
+                    <h3 className="text-sm font-semibold text-foreground">{t('crm.stepBasic', 'Basis')}</h3>
+                    <p className="text-xs text-muted-foreground">{t('crm.basicHint', 'Name und Kundentyp')}</p>
                   </div>
                 </div>
 
@@ -261,7 +261,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                 </DarkField>
 
                 <div className="space-y-1.5">
-                  <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+                  <Label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">
                     {t('crm.type', 'Typ')} <span className="text-red-400">*</span>
                   </Label>
                   <div className="grid grid-cols-2 gap-3">
@@ -272,15 +272,15 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                         'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
                         typeVal === 'private'
                           ? 'border-blue-500/60 bg-blue-500/8 ring-1 ring-blue-500/30'
-                          : 'border-white/8 bg-white/2 hover:border-white/15 hover:bg-white/4',
+                          : 'border-border bg-muted/30 hover:border-border hover:bg-muted/50',
                       )}
                     >
                       <div className="h-10 w-10 rounded-lg bg-blue-500/10 ring-1 ring-blue-500/20 flex items-center justify-center shrink-0">
-                        <User className="h-5 w-5 text-blue-400" />
+                        <User className="h-5 w-5 text-blue-700 dark:text-blue-400" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white/80">{t('crm.typePrivate', 'Privat')}</p>
-                        <p className="text-xs text-white/40">Privatperson / Haushalt</p>
+                        <p className="text-sm font-semibold text-foreground">{t('crm.typePrivate', 'Privat')}</p>
+                        <p className="text-xs text-muted-foreground">Privatperson / Haushalt</p>
                       </div>
                     </button>
                     <button
@@ -290,15 +290,15 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                         'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
                         typeVal === 'business'
                           ? 'border-emerald-500/60 bg-emerald-500/8 ring-1 ring-emerald-500/30'
-                          : 'border-white/8 bg-white/2 hover:border-white/15 hover:bg-white/4',
+                          : 'border-border bg-muted/30 hover:border-border hover:bg-muted/50',
                       )}
                     >
                       <div className="h-10 w-10 rounded-lg bg-emerald-500/10 ring-1 ring-emerald-500/20 flex items-center justify-center shrink-0">
-                        <Building2 className="h-5 w-5 text-emerald-400" />
+                        <Building2 className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-white/80">{t('crm.typeBusiness', 'Firma')}</p>
-                        <p className="text-xs text-white/40">Unternehmen / Verwaltung</p>
+                        <p className="text-sm font-semibold text-foreground">{t('crm.typeBusiness', 'Firma')}</p>
+                        <p className="text-xs text-muted-foreground">Unternehmen / Verwaltung</p>
                       </div>
                     </button>
                   </div>
@@ -335,11 +335,11 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="h-9 w-9 rounded-lg bg-sky-500/10 flex items-center justify-center ring-1 ring-sky-500/20">
-                    <Mail className="h-4 w-4 text-sky-400" />
+                    <Mail className="h-4 w-4 text-sky-700 dark:text-sky-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-white/80">{t('crm.stepContact', 'Kontakt')}</h3>
-                    <p className="text-xs text-white/40">Telefon, E-Mail und Website</p>
+                    <h3 className="text-sm font-semibold text-foreground">{t('crm.stepContact', 'Kontakt')}</h3>
+                    <p className="text-xs text-muted-foreground">Telefon, E-Mail und Website</p>
                   </div>
                 </div>
 
@@ -366,11 +366,11 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center ring-1 ring-amber-500/20">
-                    <MapPin className="h-4 w-4 text-amber-400" />
+                    <MapPin className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-white/80">{t('crm.stepAddress', 'Adresse')}</h3>
-                    <p className="text-xs text-white/40">Rechnungsadresse des Kunden</p>
+                    <h3 className="text-sm font-semibold text-foreground">{t('crm.stepAddress', 'Adresse')}</h3>
+                    <p className="text-xs text-muted-foreground">Rechnungsadresse des Kunden</p>
                   </div>
                 </div>
 
@@ -393,11 +393,11 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                       <SelectTrigger className={selectTriggerCls}>
                         <SelectValue placeholder="—" />
                       </SelectTrigger>
-                      <SelectContent position="popper" sideOffset={4} className="bg-[#0D1117] border-white/10">
+                      <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
                         {CH_CANTONS.map((c) => (
-                          <SelectItem key={c.code} value={c.code} className="text-white/80 focus:bg-white/5 focus:text-white/90">
+                          <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/60 focus:text-foreground">
                             <span className="flex items-center gap-2">
-                              <span className="font-mono text-[11px] text-white/40">{c.code}</span>
+                              <span className="font-mono text-[11px] text-muted-foreground">{c.code}</span>
                               {c.name}
                             </span>
                           </SelectItem>
@@ -440,19 +440,19 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
                   <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center ring-1 ring-violet-500/20">
-                    <Bell className="h-4 w-4 text-violet-400" />
+                    <Bell className="h-4 w-4 text-violet-700 dark:text-violet-400" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-white/80">{t('crm.stepPreferences', 'Einstellungen')}</h3>
-                    <p className="text-xs text-white/40">Newsletter und Notizen</p>
+                    <h3 className="text-sm font-semibold text-foreground">{t('crm.stepPreferences', 'Einstellungen')}</h3>
+                    <p className="text-xs text-muted-foreground">Newsletter und Notizen</p>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-white/8 bg-white/2 p-4">
+                <div className="rounded-xl border border-border bg-muted/30 p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-white/80">{t('crm.newsletterOptIn', 'Newsletter abonniert')}</p>
-                      <p className="text-xs text-white/40 mt-1">
+                      <p className="text-sm font-medium text-foreground">{t('crm.newsletterOptIn', 'Newsletter abonniert')}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
                         Einwilligung zum Erhalt von Newslettern und Marketing.
                       </p>
                     </div>
@@ -463,8 +463,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   </div>
 
                   {newsletterOptIn && (
-                    <div className="mt-4 pt-4 border-t border-white/6">
-                      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <Label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">
                         {t('crm.newsletterChannel', 'Kanal')}
                       </Label>
                       <Select
@@ -474,10 +474,10 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                         <SelectTrigger className={selectTriggerCls}>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent position="popper" sideOffset={4} className="bg-[#0D1117] border-white/10">
-                          <SelectItem value="email" className="text-white/80 focus:bg-white/5">{t('crm.channelEmail', 'E-Mail')}</SelectItem>
-                          <SelectItem value="whatsapp" className="text-white/80 focus:bg-white/5">{t('crm.channelWhatsapp', 'WhatsApp')}</SelectItem>
-                          <SelectItem value="both" className="text-white/80 focus:bg-white/5">{t('crm.channelBoth', 'Beide')}</SelectItem>
+                        <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
+                          <SelectItem value="email" className="text-foreground focus:bg-muted/60">{t('crm.channelEmail', 'E-Mail')}</SelectItem>
+                          <SelectItem value="whatsapp" className="text-foreground focus:bg-muted/60">{t('crm.channelWhatsapp', 'WhatsApp')}</SelectItem>
+                          <SelectItem value="both" className="text-foreground focus:bg-muted/60">{t('crm.channelBoth', 'Beide')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

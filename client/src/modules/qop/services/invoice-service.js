@@ -10,6 +10,7 @@ export const invoiceService = {
   createAdvance:    (data)        => apiClient.post(E.INVOICE_ADVANCE, data),
   createFinal:      (data)        => apiClient.post(E.INVOICE_FINAL, data),
   update:           (id, data)    => apiClient.put(E.INVOICE_BY_ID(id), data),
+  remove:           (id)          => apiClient.delete(E.INVOICE_BY_ID(id)),
   finalize:         (id)          => apiClient.post(E.INVOICE_FINALIZE(id)),
   send:             (id)          => apiClient.post(E.INVOICE_SEND(id)),
   transitionStatus: (id, targetStatus, reason) =>

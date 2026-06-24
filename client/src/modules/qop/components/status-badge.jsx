@@ -66,10 +66,10 @@ export function InvoiceTypeBadge({ type, className }) {
   const { locale: language } = useLanguage();
   const label = INVOICE_TYPE_LABELS?.[language]?.[type] ?? INVOICE_TYPE_LABELS?.en?.[type] ?? type;
   const colorMap = {
-    STANDARD: 'bg-slate-100 text-slate-700 border-slate-200',
-    ADVANCE: 'bg-orange-50 text-orange-700 border-orange-200',
-    FINAL: 'bg-violet-50 text-violet-700 border-violet-200',
-    CREDIT_NOTE: 'bg-pink-50 text-pink-700 border-pink-200',
+    STANDARD: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-200 dark:border-slate-400/20',
+    ADVANCE: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-200 dark:border-orange-400/20',
+    FINAL: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-200 dark:border-violet-400/20',
+    CREDIT_NOTE: 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-500/10 dark:text-pink-200 dark:border-pink-400/20',
   };
   return (
     <span

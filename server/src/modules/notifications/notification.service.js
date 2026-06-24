@@ -61,6 +61,28 @@ function preview(value, length = 200) {
   return text.length > length ? `${text.slice(0, length - 1)}...` : text;
 }
 
+function firstNonEmptyText(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined) continue;
+    const text = String(value).replace(/\s+/g, ' ').trim();
+    if (text) return text;
+  }
+  return '';
+}
+
+function buildDefaultBody(notification) {
+  const payload = notification?.payload || {};
+  return firstNonEmptyText(
+    payload.body,
+    payload.message,
+    payload.description,
+    payload.content,
+    payload.title,
+    notification?.type,
+    'Notification',
+  );
+}
+
 function statusTimeline(delivery) {
   return [
     { status: 'PENDING', at: delivery.createdAt },
@@ -248,8 +270,8 @@ class NotificationService {
 
         // Render template
         let renderedContent = {
-          subject: notification.payload?.title || notification.type,
-          body: notification.payload?.body || '',
+          subject: firstNonEmptyText(notification.payload?.title, notification.type, 'Notification'),
+          body: buildDefaultBody(notification),
           bodyHtml: notification.payload?.bodyHtml || null,
         };
 
@@ -267,7 +289,13 @@ class NotificationService {
             },
           );
           if (templateResult) {
-            renderedContent = templateResult;
+            renderedContent = {
+              ...renderedContent,
+              ...templateResult,
+              subject: firstNonEmptyText(templateResult.subject, renderedContent.subject),
+              body: firstNonEmptyText(templateResult.body, renderedContent.body),
+              bodyHtml: templateResult.bodyHtml || renderedContent.bodyHtml,
+            };
           }
         } catch (err) {
           logger.warn('Template rendering failed, using payload fallback', {
@@ -357,6 +385,18 @@ class NotificationService {
         content.relatedEntityId = notification.sourceEntityId || null;
         content.attachments = notification.payload?.attachments || [];
         content.downloadLinks = notification.payload?.downloadLinks || [];
+        content.subject = firstNonEmptyText(content.subject, notification.payload?.title, notification.type, 'Notification');
+        content.body = firstNonEmptyText(
+          content.body,
+          notification.payload?.body,
+          notification.payload?.message,
+          notification.payload?.description,
+          notification.payload?.content,
+          notification.payload?.title,
+          notification.type,
+          'Notification',
+        );
+        content.bodyHtml = content.bodyHtml || content.body;
       }
     } catch (err) {
       logger.warn('Failed to enrich delivery content from notification', {

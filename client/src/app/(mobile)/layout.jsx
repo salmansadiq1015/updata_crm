@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { FullPageSpinner } from '@/shared/components/loading-spinner';
 import { SyncStatusBar } from '@/modules/mobile/components/sync-status-bar';
@@ -16,13 +16,15 @@ import { getSocket, disconnectSocket } from '@/modules/mobile/lib/websocket-clie
 
 export default function MobileLayout({ children }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, isLoading, accessToken } = useAuthStore();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+      const redirectPath = pathname || '/m/tasks';
+      router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
     }
-  }, [isLoading, isAuthenticated, router]);
+  }, [isLoading, isAuthenticated, pathname, router]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -44,7 +46,7 @@ export default function MobileLayout({ children }) {
   }, [accessToken]);
 
   if (isLoading) return <FullPageSpinner />;
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) return <FullPageSpinner />;
 
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-background">

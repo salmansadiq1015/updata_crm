@@ -33,6 +33,14 @@ class OrderController {
     } catch (err) { next(err); }
   }
 
+  async delete(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      await orderService.softDelete(req.params.id, req.user._id, meta);
+      return res.success({ message: 'Order deleted successfully' });
+    } catch (err) { next(err); }
+  }
+
   async transitionStatus(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

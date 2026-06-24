@@ -50,6 +50,13 @@ export function useOrderMutations() {
   const qc = useQueryClient();
   const invalidateList = () => qc.invalidateQueries({ queryKey: ['qop', 'orders'] });
 
+  const createOrder = useMutation({
+    mutationFn: orderService.create,
+    onSuccess: () => {
+      invalidateList();
+      qc.invalidateQueries({ queryKey: ['qop', 'pipeline'] });
+    },
+  });
   const updateOrder = useMutation({
     mutationFn: ({ id, data }) => orderService.update(id, data),
     onSuccess: (_, { id }) => {
@@ -64,8 +71,18 @@ export function useOrderMutations() {
       invalidateList();
     },
   });
+  const deleteOrder = useMutation({
+    mutationFn: orderService.remove,
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'orders', 'detail', id] });
+      qc.invalidateQueries({ queryKey: ['qop', 'orders', 'invoices', id] });
+      qc.invalidateQueries({ queryKey: ['qop', 'billing-plan', id] });
+      invalidateList();
+      qc.invalidateQueries({ queryKey: ['qop', 'pipeline'] });
+    },
+  });
 
-  return { updateOrder, transitionOrderStatus };
+  return { createOrder, updateOrder, deleteOrder, transitionOrderStatus };
 }
 
 export function useInvoiceMutations() {
@@ -101,6 +118,26 @@ export function useInvoiceMutations() {
     mutationFn: invoiceService.createFinal,
     onSuccess: invalidateInvoiceCreation,
   });
+  const updateInvoice = useMutation({
+    mutationFn: ({ id, data }) => invoiceService.update(id, data),
+    onSuccess: (_, { id, data }) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'invoices', 'detail', id] });
+      if (data?.sourceOrderId) {
+        qc.invalidateQueries({ queryKey: ['qop', 'orders', 'invoices', data.sourceOrderId] });
+        qc.invalidateQueries({ queryKey: ['qop', 'billing-plan', data.sourceOrderId] });
+      }
+      invalidateList();
+    },
+  });
+  const deleteInvoice = useMutation({
+    mutationFn: invoiceService.remove,
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'invoices', 'detail', id] });
+      qc.invalidateQueries({ queryKey: ['qop', 'orders'] });
+      invalidateList();
+      qc.invalidateQueries({ queryKey: ['qop', 'aging'] });
+    },
+  });
   const finalizeInvoice = useMutation({
     mutationFn: invoiceService.finalize,
     onSuccess: (_, id) => {
@@ -133,7 +170,7 @@ export function useInvoiceMutations() {
 
   return {
     createInvoice, createInvoiceFromOrder, createInvoiceFromQuotation,
-    createAdvanceInvoice, createFinalInvoice,
+    createAdvanceInvoice, createFinalInvoice, updateInvoice, deleteInvoice,
     finalizeInvoice, sendInvoice, recordPayment, transitionInvoiceStatus,
   };
 }

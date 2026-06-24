@@ -165,28 +165,28 @@ function SummaryGrid({ summary, t }) {
       label: t('crm.addressBook.summaryTotal', 'Adressen'),
       value: summary.total,
       icon: BookOpen,
-      className: 'bg-violet-500/10 text-violet-300 ring-violet-500/20',
+      className: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 ring-violet-500/20',
     },
     {
       key: 'business',
       label: t('crm.addressBook.summaryBusiness', 'Firmen'),
       value: summary.business,
       icon: Building2,
-      className: 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
+      className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-amber-500/20',
     },
     {
       key: 'private',
       label: t('crm.addressBook.summaryPrivate', 'Privat'),
       value: summary.private,
       icon: UserRound,
-      className: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
+      className: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 ring-sky-500/20',
     },
     {
       key: 'geo',
       label: t('crm.addressBook.summaryGeo', 'Mit GPS'),
       value: summary.withCoordinates,
       icon: LocateFixed,
-      className: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
+      className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-emerald-500/20',
     },
   ];
 
@@ -197,11 +197,11 @@ function SummaryGrid({ summary, t }) {
         return (
           <div
             key={stat.key}
-            className="flex items-center justify-between rounded-lg border border-white/8 bg-white/[0.03] px-4 py-3"
+            className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3"
           >
             <div className="min-w-0">
-              <p className="text-xs font-medium text-white/45">{stat.label}</p>
-              <p className="mt-1 text-2xl font-semibold text-white/90">{stat.value || 0}</p>
+              <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
+              <p className="mt-1 text-2xl font-semibold text-foreground">{stat.value || 0}</p>
             </div>
             <span className={cn('flex h-10 w-10 items-center justify-center rounded-lg ring-1', stat.className)}>
               <Icon className="h-4 w-4" />
@@ -215,7 +215,7 @@ function SummaryGrid({ summary, t }) {
 
 function AddressBookFilters({ filters, setFilter, resetFilters, hasActiveFilters, t }) {
   return (
-    <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
+    <div className="rounded-lg border border-border bg-card p-3">
       <div className="grid gap-2 lg:grid-cols-[minmax(220px,1fr)_180px_180px_150px_150px_auto]">
         <label className="relative block">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -306,7 +306,7 @@ function AddressEntryCard({ entry, t }) {
   const routes = buildEntryRoutes(entry);
 
   return (
-    <Card className="overflow-hidden rounded-lg border-white/8 bg-white/[0.035] p-0 shadow-none">
+    <Card className="overflow-hidden rounded-lg border-border bg-card p-0 shadow-none">
       <div className="flex h-full flex-col p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
@@ -317,7 +317,7 @@ function AddressEntryCard({ entry, t }) {
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Link
                   href={routes.site || routes.customer}
-                  className="truncate text-sm font-semibold text-white/90 hover:text-white"
+                  className="truncate text-sm font-semibold text-foreground hover:text-foreground"
                 >
                   {entry.site?.name || entry.customer?.name || '-'}
                 </Link>
@@ -325,7 +325,7 @@ function AddressEntryCard({ entry, t }) {
                   {addressMeta.label}
                 </Badge>
               </div>
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-xs text-white/45">
+              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="truncate">{entry.customer?.name}</span>
                 {entry.customer?.customerNumber && <span>{entry.customer.customerNumber}</span>}
                 {entry.site?.siteNumber && <span>{entry.site.siteNumber}</span>}
@@ -340,23 +340,23 @@ function AddressEntryCard({ entry, t }) {
         </div>
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-lg border border-white/7 bg-black/10 p-3">
-            <p className="text-xs font-medium text-white/45">{t('crm.addressBook.address', 'Adresse')}</p>
-            <p className="mt-1 text-sm text-white/85">{entry.address?.formatted || '-'}</p>
+          <div className="rounded-lg border border-border bg-muted/40 p-3">
+            <p className="text-xs font-medium text-muted-foreground">{t('crm.addressBook.address', 'Adresse')}</p>
+            <p className="mt-1 text-sm text-foreground">{entry.address?.formatted || '-'}</p>
             {entry.coordinates && (
-              <p className="mt-1 text-xs text-emerald-300/80">
+              <p className="mt-1 text-xs text-emerald-700/80 dark:text-emerald-300/80">
                 GPS {Number(entry.coordinates.latitude).toFixed(5)}, {Number(entry.coordinates.longitude).toFixed(5)}
               </p>
             )}
             {entry.site?.accessInstructions && (
-              <p className="mt-2 line-clamp-2 text-xs text-white/50">{entry.site.accessInstructions}</p>
+              <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{entry.site.accessInstructions}</p>
             )}
           </div>
 
           <ContactBlock entry={entry} phone={phone} email={email} t={t} />
         </div>
 
-        <div className="mt-4 flex flex-col gap-3 border-t border-white/8 pt-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-4 flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-1.5">
             {getRelationChips(entry, t).map((chip) => (
               <RelationChip key={chip.key} chip={chip} />
@@ -395,11 +395,11 @@ function AddressEntryCard({ entry, t }) {
 function ContactBlock({ entry, phone, email, t }) {
   const primaryName = formatContactName(entry.primaryContact);
   return (
-    <div className="rounded-lg border border-white/7 bg-black/10 p-3">
+    <div className="rounded-lg border border-border bg-muted/40 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-white/45">{t('crm.addressBook.contact', 'Kontakt')}</p>
+        <p className="text-xs font-medium text-muted-foreground">{t('crm.addressBook.contact', 'Kontakt')}</p>
         {entry.contactCount > 0 && (
-          <span className="text-[11px] text-white/35">
+          <span className="text-[11px] text-muted-foreground">
             {entry.contactCount} {t('crm.addressBook.contactsShort', 'Kontakte')}
           </span>
         )}
@@ -407,25 +407,25 @@ function ContactBlock({ entry, phone, email, t }) {
 
       {primaryName ? (
         <div className="mt-1 min-w-0">
-          <p className="truncate text-sm font-medium text-white/85">{primaryName}</p>
+          <p className="truncate text-sm font-medium text-foreground">{primaryName}</p>
           {entry.primaryContact?.functionTitle && (
-            <p className="truncate text-xs text-white/45">{entry.primaryContact.functionTitle}</p>
+            <p className="truncate text-xs text-muted-foreground">{entry.primaryContact.functionTitle}</p>
           )}
         </div>
       ) : (
-        <p className="mt-1 text-sm text-white/35">{t('crm.addressBook.noContact', 'Kein Ansprechpartner')}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{t('crm.addressBook.noContact', 'Kein Ansprechpartner')}</p>
       )}
 
       <div className="mt-2 space-y-1 text-xs">
         {phone && (
-          <a href={`tel:${phone}`} className="flex min-w-0 items-center gap-1.5 text-white/60 hover:text-white">
-            <Phone className="h-3.5 w-3.5 shrink-0 text-white/35" />
+          <a href={`tel:${phone}`} className="flex min-w-0 items-center gap-1.5 text-muted-foreground hover:text-foreground">
+            <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate">{phone}</span>
           </a>
         )}
         {email && (
-          <a href={`mailto:${email}`} className="flex min-w-0 items-center gap-1.5 text-white/60 hover:text-white">
-            <Mail className="h-3.5 w-3.5 shrink-0 text-white/35" />
+          <a href={`mailto:${email}`} className="flex min-w-0 items-center gap-1.5 text-muted-foreground hover:text-foreground">
+            <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate">{email}</span>
           </a>
         )}
@@ -446,7 +446,7 @@ function RelationChip({ chip }) {
 
   if (!chip.enabled || !chip.href) {
     return (
-      <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-white/6 px-2 text-[11px] text-white/28">
+      <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-[11px] text-muted-foreground/70">
         {content}
       </span>
     );
@@ -455,7 +455,7 @@ function RelationChip({ chip }) {
   return (
     <Link
       href={chip.href}
-      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-white/8 bg-white/4 px-2 text-[11px] text-white/65 transition-colors hover:bg-white/8 hover:text-white"
+      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 text-[11px] text-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
     >
       {content}
     </Link>
@@ -464,8 +464,8 @@ function RelationChip({ chip }) {
 
 function PaginationBar({ page, pageCount, isFetching, hasPrev, hasNext, setPagination, t }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-xs text-white/45">
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-xs text-muted-foreground">
         {t('crm.addressBook.pageStatus', 'Seite {page} von {pageCount}', { page, pageCount })}
       </p>
       <div className="flex items-center gap-2">
@@ -498,7 +498,7 @@ function AddressBookSkeleton() {
   return (
     <div className="grid gap-3 xl:grid-cols-2">
       {Array.from({ length: 6 }).map((_, index) => (
-        <div key={index} className="rounded-lg border border-white/8 bg-white/[0.03] p-4">
+        <div key={index} className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-start gap-3">
             <Skeleton className="h-10 w-10 rounded-lg" />
             <div className="flex-1 space-y-2">

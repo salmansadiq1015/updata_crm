@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Search, Plus, MoreHorizontal, Copy, Send, CheckCircle, XCircle,
+  Search, Plus, MoreHorizontal, Copy, Send,
   ArrowRight, Trash2, History, RefreshCw, FileText, LayoutTemplate,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -31,6 +32,7 @@ import { ConvertToOrderDialog } from './convert-to-order-dialog';
 import { InvoiceFormDialog } from './invoice-form-dialog';
 import { QuotationTemplateManager } from './quotation-template-manager';
 import { VALID_QUOTATION_TRANSITIONS } from '../constants/qop-constants';
+import { QopBulkActionBar, QopPaginationControls, useQopCursorPagination } from './qop-pagination';
 
 const STATUSES = ['', 'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED'];
 
@@ -123,17 +125,36 @@ export function QuotationsTable({ advancedFilters = {} }) {
   const [convertTarget, setConvertTarget]   = useState(null);
   const [invoiceTarget, setInvoiceTarget]   = useState(null);
   const [templateMgrOpen, setTemplateMgr]  = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkStatus, setBulkStatus] = useState('');
 
-  const filters = { ...advancedFilters };
-  if (search.trim())    filters.search = search.trim();
-  if (statusFilter)     filters.status = statusFilter;
+  const resetKey = useMemo(
+    () => JSON.stringify({ advancedFilters, search: search.trim(), statusFilter }),
+    [advancedFilters, search, statusFilter],
+  );
+  const pager = useQopCursorPagination(resetKey);
+
+  const filters = useMemo(() => {
+    const next = { ...advancedFilters, limit: pager.limit };
+    if (pager.cursor) next.cursor = pager.cursor;
+    if (search.trim()) next.search = search.trim();
+    if (statusFilter) next.status = statusFilter;
+    return next;
+  }, [advancedFilters, pager.cursor, pager.limit, search, statusFilter]);
 
   const { data, isLoading } = useQuotations(filters);
-  const items = data?.items ?? [];
+  const items = useMemo(() => data?.items ?? [], [data?.items]);
+  const visibleIds = useMemo(() => items.map((quotation) => quotation._id ?? quotation.id), [items]);
+  const selectedItems = useMemo(
+    () => items.filter((quotation) => selectedIds.has(quotation._id ?? quotation.id)),
+    [items, selectedIds],
+  );
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
 
   const {
     deleteQuotation, duplicateQuotation, sendQuotation,
-    convertQuotation, transitionQuotationStatus,
+    transitionQuotationStatus,
   } = useQuotationMutations();
 
   const handleDelete    = (id) => {
@@ -149,11 +170,62 @@ export function QuotationsTable({ advancedFilters = {} }) {
     });
     setTrans(null);
   };
+  const clearSelection = () => setSelectedIds(new Set());
+  const toggleSelected = (id, checked) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+  const toggleVisible = (checked) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      visibleIds.forEach((id) => {
+        if (checked) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    });
+  };
+  const handleBulkDelete = async () => {
+    const deletable = selectedItems.filter((quotation) => quotation.status === 'DRAFT');
+    if (!deletable.length) return;
+    if (!confirm(t('qop.bulk.deleteConfirm', 'Delete selected records?'))) return;
+    const results = await Promise.allSettled(deletable.map((quotation) => deleteQuotation.mutateAsync(quotation._id ?? quotation.id)));
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    if (failed) alert(t('qop.bulk.partialFailure', '{count} records could not be processed.', { count: failed }));
+    clearSelection();
+  };
+  const handleBulkStatus = async () => {
+    if (!bulkStatus) return;
+    const actionable = selectedItems.filter((quotation) => (
+      VALID_QUOTATION_TRANSITIONS[quotation.status]?.includes(bulkStatus)
+    ));
+    if (!actionable.length) return;
+    const results = await Promise.allSettled(actionable.map((quotation) => (
+      transitionQuotationStatus.mutateAsync({
+        id: quotation._id ?? quotation.id,
+        targetStatus: bulkStatus,
+      })
+    )));
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    if (failed) alert(t('qop.bulk.partialFailure', '{count} records could not be processed.', { count: failed }));
+    setBulkStatus('');
+    clearSelection();
+  };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedIds(new Set());
+    setBulkStatus('');
+  }, [resetKey, pager.cursor, pager.limit]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card/80 p-3 shadow-sm dark:bg-slate-950/50">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
@@ -184,10 +256,39 @@ export function QuotationsTable({ advancedFilters = {} }) {
         </Button>
       </div>
 
+      <QopBulkActionBar selectedCount={selectedIds.size} onClear={clearSelection}>
+        <Select value={bulkStatus || undefined} onValueChange={setBulkStatus}>
+          <SelectTrigger className="h-8 w-44 text-xs">
+            <SelectValue placeholder={t('qop.bulk.statusPlaceholder', 'Set status')} />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUSES.filter(Boolean).map((s) => (
+              <SelectItem key={s} value={s}>{t(`qop.status.${s}`, s)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button type="button" size="sm" className="h-8 gap-1.5" onClick={handleBulkStatus} disabled={!bulkStatus}>
+          <RefreshCw className="h-3.5 w-3.5" />
+          {t('qop.bulk.updateStatus', 'Update status')}
+        </Button>
+        <Button type="button" size="sm" variant="destructive" className="h-8 gap-1.5" onClick={handleBulkDelete}>
+          <Trash2 className="h-3.5 w-3.5" />
+          {t('qop.bulk.delete', 'Delete')}
+        </Button>
+      </QopBulkActionBar>
+
       {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="overflow-x-auto rounded-t-xl border border-border/70 bg-card/80 shadow-sm dark:bg-slate-950/50">
+        <div className="min-w-[920px]">
         {/* Header */}
-        <div className="grid grid-cols-[9rem_1fr_8rem_7rem_7rem_8rem_2.5rem] bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground">
+        <div className="grid grid-cols-[2.5rem_9rem_minmax(14rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] bg-muted/40 border-b border-border/70 text-xs font-medium text-muted-foreground">
+          <div className="flex items-center justify-center px-3 py-2.5">
+            <Checkbox
+              checked={allVisibleSelected || (someVisibleSelected ? 'indeterminate' : false)}
+              onCheckedChange={(checked) => toggleVisible(Boolean(checked))}
+              aria-label={t('qop.bulk.selectPage', 'Select visible rows')}
+            />
+          </div>
           {[
             t('qop.table.colNumber', 'Nummer'),
             t('qop.table.colCustomer', 'Kunde'),
@@ -203,8 +304,8 @@ export function QuotationsTable({ advancedFilters = {} }) {
 
         {/* Loading */}
         {isLoading && Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="grid grid-cols-[9rem_1fr_8rem_7rem_7rem_8rem_2.5rem] border-b border-border last:border-0 px-3 py-2.5 gap-0">
-            {Array.from({ length: 6 }).map((_, j) => <Skeleton key={j} className="h-4 w-full rounded" />)}
+          <div key={i} className="grid grid-cols-[2.5rem_9rem_minmax(14rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] border-b border-border/70 last:border-0 px-3 py-2.5 gap-2">
+            {Array.from({ length: 8 }).map((_, j) => <Skeleton key={j} className="h-4 w-full rounded" />)}
           </div>
         ))}
 
@@ -224,8 +325,15 @@ export function QuotationsTable({ advancedFilters = {} }) {
           return (
             <div
               key={id}
-              className="grid grid-cols-[9rem_1fr_8rem_7rem_7rem_8rem_2.5rem] border-b border-border last:border-0 hover:bg-muted/30 transition-colors group"
+              className="grid grid-cols-[2.5rem_9rem_minmax(14rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] border-b border-border/70 last:border-0 hover:bg-primary/5 transition-colors group"
             >
+              <div className="flex items-center justify-center px-3 py-3">
+                <Checkbox
+                  checked={selectedIds.has(id)}
+                  onCheckedChange={(checked) => toggleSelected(id, Boolean(checked))}
+                  aria-label={t('qop.bulk.selectRow', 'Select row')}
+                />
+              </div>
               <div className="px-3 py-3 text-sm font-mono text-muted-foreground">
                 {q.quotationNumber}
               </div>
@@ -294,7 +402,19 @@ export function QuotationsTable({ advancedFilters = {} }) {
             </div>
           );
         })}
+        </div>
       </div>
+
+      <QopPaginationControls
+        pagination={data?.pagination}
+        itemCount={items.length}
+        limit={pager.limit}
+        pageIndex={pager.pageIndex}
+        canPrevious={pager.canPrevious}
+        onLimitChange={pager.setLimit}
+        onPrevious={pager.goPrevious}
+        onNext={pager.goNext}
+      />
 
       {/* Modals */}
       <QuotationFormDialog

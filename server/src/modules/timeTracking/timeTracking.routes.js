@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import timeTrackingController from './timeTracking.controller.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import { validate } from '../../shared/validation/validate.js';
@@ -15,11 +16,26 @@ import {
   overrideTimeEntrySchema,
   timeEntryCreateSchema,
   timeEntryIdSchema,
+  timeEntryImportSchema,
   timeEntryUpdateSchema,
   timeTrackingQuerySchema,
 } from './timeTracking.validation.js';
 
 const router = Router();
+
+const importUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter(_req, file, cb) {
+    const name = `${file.originalname || ''}`.toLowerCase();
+    const mime = `${file.mimetype || ''}`.toLowerCase();
+    const allowed = name.endsWith('.csv')
+      || mime.includes('csv')
+      || mime === 'text/plain'
+      || mime === 'application/vnd.ms-excel';
+    cb(allowed ? null : new Error('Only CSV time-entry import files are supported.'), allowed);
+  },
+});
 
 router.use(authenticate);
 
@@ -42,6 +58,20 @@ router.get(
   requirePermission('time-tracking:read'),
   validate(timeTrackingQuerySchema),
   (req, res, next) => timeTrackingController.exportTimeEntries(req, res, next),
+);
+
+router.get(
+  '/time-entries/import/template',
+  requirePermission('time-tracking:read'),
+  (req, res, next) => timeTrackingController.importTemplate(req, res, next),
+);
+
+router.post(
+  '/time-entries/import',
+  requirePermission('time-tracking:write'),
+  importUpload.single('file'),
+  validate(timeEntryImportSchema),
+  (req, res, next) => timeTrackingController.importTimeEntries(req, res, next),
 );
 
 router.get(

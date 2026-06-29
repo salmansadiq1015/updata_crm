@@ -53,10 +53,30 @@ export function useAgentRun() {
   }, [runStatus, setPanelView]);
 
   const dispatchMutation = useMutation({
-    mutationFn: (input) => aiAgentService.dispatch(input),
+    mutationFn: async (input) => {
+      const result = await aiAgentService.dispatch(input);
+      const agentRunId = result?.agentRunId || result?._id;
+
+      if (!agentRunId) {
+        throw new Error(t('ai.error.agentStartFailed', 'The assistant could not start this request. Please try again.'));
+      }
+
+      return {
+        ...result,
+        agentRunId,
+        status: result?.status?.toUpperCase?.() || AGENT_STATUSES.PENDING,
+      };
+    },
     onSuccess: (result) => {
       setActiveRunId(result.agentRunId);
       setPanelView(PANEL_VIEWS.AGENT);
+      queryClient.setQueryData(queryKeys.ai.agentRun(result.agentRunId), (old) => ({
+        ...(old || {}),
+        _id: result.agentRunId,
+        status: result.status || AGENT_STATUSES.PENDING,
+        workflowType: result.workflowType,
+        threadId: result.threadId,
+      }));
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentRuns({}) });
     },
     onError: (err) => {
@@ -87,7 +107,7 @@ export function useAgentRun() {
   const dispatch = useCallback((input) => {
     const trimmed = input?.trim();
     if (!trimmed || trimmed.length < MIN_AGENT_INPUT_LENGTH) return;
-    dispatchMutation.mutate(trimmed);
+    return dispatchMutation.mutateAsync(trimmed);
   }, [dispatchMutation]);
 
   const confirmRun = useCallback((decision) => {

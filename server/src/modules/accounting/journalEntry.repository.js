@@ -31,6 +31,7 @@ class JournalEntryRepository {
       if (filters.entryDateTo) filter.entryDate.$lte = new Date(filters.entryDateTo);
     }
     if (filters.referenceType) filter.referenceType = filters.referenceType;
+    if (filters.currency) filter.currency = filters.currency;
     if (filters.debitAccountId) filter.debitAccountId = filters.debitAccountId;
     if (filters.creditAccountId) filter.creditAccountId = filters.creditAccountId;
     if (filters.accountId) {

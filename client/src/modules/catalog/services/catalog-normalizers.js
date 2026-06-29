@@ -69,6 +69,45 @@ export function normalizeArticle(article = {}) {
   };
 }
 
+function getEntityId(value) {
+  if (!value) return '';
+  if (typeof value === 'object') return String(value._id || value.id || '');
+  return String(value);
+}
+
+function getEntityName(value) {
+  return value && typeof value === 'object' ? value.name || '' : '';
+}
+
+function buildCategoryNameById(categories = []) {
+  return new Map(
+    categories
+      .map((category) => [getEntityId(category), category?.name || ''])
+      .filter(([id]) => id),
+  );
+}
+
+export function normalizeTextBlock(block = {}, categoryNameById = new Map()) {
+  const categoryId = getEntityId(block.categoryId) || getEntityId(block.category);
+  const categoryName = getEntityName(block.category)
+    || getEntityName(block.categoryId)
+    || block.categoryName
+    || categoryNameById.get(categoryId)
+    || '';
+
+  return {
+    ...block,
+    id: block.id || block._id,
+    categoryId,
+    categoryName,
+  };
+}
+
+export function normalizeTextBlocks(blocks = [], categories = []) {
+  const categoryNameById = buildCategoryNameById(categories);
+  return blocks.map((block) => normalizeTextBlock(block, categoryNameById));
+}
+
 export function normalizeListResponse(response) {
   const data = Array.isArray(response) ? response : (response?.data ?? response?.items ?? []);
   return {

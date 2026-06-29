@@ -17,8 +17,8 @@ export function AiEntityCandidatePicker({ entity, entityKey, selectedId, onSelec
           className={cn(
             'rounded-full border px-2.5 py-0.5 text-xs transition-colors',
             selectedId === String(c.resolvedId)
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-border hover:bg-muted',
+              ? 'border-cyan-300/40 bg-cyan-300/10 text-cyan-100'
+              : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-cyan-300/25 hover:bg-white/[0.07]',
           )}
         >
           {c.label}

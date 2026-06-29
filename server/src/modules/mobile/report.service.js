@@ -5,13 +5,34 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
 import queueManager from '../../shared/queue/QueueManager.js';
-import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
+import { parse } from 'csv-parse/sync';
+import { NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 import mongoose from 'mongoose';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const EXPORT_LIMIT = 5000;
+const IMPORT_LIMIT = 500;
 const FINAL_REPORT_STATUSES = ['APPROVED', 'INVOICED'];
+const IMPORT_TEMPLATE_COLUMNS = [
+  'orderId',
+  'assignmentNumber',
+  'technicianId',
+  'reportDate',
+  'arrivalTime',
+  'departureTime',
+  'workPerformed',
+  'findings',
+  'nextSteps',
+  'followUpNeeded',
+  'technicianNotes',
+  'customerSignerName',
+  'billableMinutes',
+  'nonBillableMinutes',
+  'billableNotes',
+  'materialItems',
+  'status',
+];
 
 class ReportService {
   _isEditable(report) {
@@ -526,6 +547,108 @@ class ReportService {
     };
   }
 
+  importTemplate() {
+    const sample = {
+      orderId: '',
+      assignmentNumber: 'ASN-2026-00001',
+      technicianId: '',
+      reportDate: '2026-06-15',
+      arrivalTime: '2026-06-15T08:00:00.000Z',
+      departureTime: '2026-06-15T12:30:00.000Z',
+      workPerformed: 'Checked burner, cleaned heat exchanger, tested safety valve.',
+      findings: 'System operating within expected limits.',
+      nextSteps: 'Schedule annual maintenance follow-up.',
+      followUpNeeded: 'false',
+      technicianNotes: 'Imported from field worksheet.',
+      customerSignerName: 'Max Muster',
+      billableMinutes: '270',
+      nonBillableMinutes: '0',
+      billableNotes: 'Standard service visit.',
+      materialItems: 'Burner nozzle|1|pcs;Seal kit|2|pcs',
+      status: 'DRAFT',
+    };
+    return toCsv([sample], IMPORT_TEMPLATE_COLUMNS);
+  }
+
+  async importCsv(file, options = {}, userId, meta = {}) {
+    if (!file?.buffer) {
+      throw new ConflictError('Report import file is required.');
+    }
+
+    const rows = parseImportCsv(file.buffer);
+    if (rows.length === 0) {
+      throw new ValidationError('Report import file is empty.');
+    }
+    if (rows.length > IMPORT_LIMIT) {
+      throw new ConflictError(`Report import is limited to ${IMPORT_LIMIT} rows per file.`);
+    }
+
+    const dryRun = options.dryRun === true || options.dryRun === 'true';
+    const prepared = [];
+    const rowErrors = [];
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const rowNumber = index + 2;
+      const result = await prepareImportRow(rows[index], rowNumber, userId);
+      if (result.errors.length) {
+        rowErrors.push(...result.errors);
+      } else {
+        prepared.push(result.value);
+      }
+    }
+
+    const summary = {
+      dryRun,
+      totalRows: rows.length,
+      validRows: prepared.length,
+      created: 0,
+      skipped: rowErrors.length ? prepared.length : 0,
+      failed: rowErrors.length,
+      rowErrors,
+    };
+
+    if (dryRun || rowErrors.length) {
+      return summary;
+    }
+
+    for (const item of prepared) {
+      try {
+        await this.create(
+          item.orderId,
+          item.payload,
+          item.technicianId,
+          { ...meta, source: 'report-import' },
+        );
+        summary.created += 1;
+      } catch (err) {
+        summary.failed += 1;
+        summary.rowErrors.push({
+          row: item.row,
+          field: 'row',
+          message: err.message || 'Report could not be imported.',
+        });
+      }
+    }
+
+    summary.skipped = prepared.length - summary.created;
+
+    auditService.logEvent({
+      eventType: 'report.imported',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: summary.failed > 0 ? 'partial' : 'success',
+      details: {
+        totalRows: summary.totalRows,
+        created: summary.created,
+        failed: summary.failed,
+      },
+      module: 'mobile',
+    });
+
+    return summary;
+  }
+
   async getHistory(id, limit = 100) {
     await this.getById(id);
     const candidates = [id];
@@ -744,9 +867,9 @@ function buildExportRows(reports, type) {
   });
 }
 
-function toCsv(rows) {
+function toCsv(rows, preferredHeaders = null) {
   if (!rows.length) return '';
-  const headers = Object.keys(rows[0]);
+  const headers = preferredHeaders || Object.keys(rows[0]);
   const lines = [headers.join(',')];
   for (const row of rows) {
     lines.push(headers.map((header) => csvEscape(row[header])).join(','));
@@ -814,6 +937,200 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function parseImportCsv(buffer) {
+  try {
+    return parse(buffer.toString('utf8'), {
+      bom: true,
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    });
+  } catch (err) {
+    throw new ValidationError('Report import CSV could not be parsed.', [{
+      field: 'file',
+      message: err.message,
+    }]);
+  }
+}
+
+async function prepareImportRow(row, rowNumber, userId) {
+  const errors = [];
+  const orderResolution = await resolveImportAssignment(row);
+  if (orderResolution.error) errors.push(rowError(rowNumber, 'orderId', orderResolution.error));
+
+  const technicianResolution = await resolveImportTechnician(row, orderResolution.assignment, userId);
+  if (technicianResolution.error) errors.push(rowError(rowNumber, 'technicianId', technicianResolution.error));
+
+  const reportDate = parseDateField(row.reportDate, 'reportDate', rowNumber, errors, true);
+  const arrivalTime = parseDateField(row.arrivalTime, 'arrivalTime', rowNumber, errors, false);
+  const departureTime = parseDateField(row.departureTime, 'departureTime', rowNumber, errors, false);
+  if (arrivalTime && departureTime && departureTime <= arrivalTime) {
+    errors.push(rowError(rowNumber, 'departureTime', 'Departure time must be after arrival time.'));
+  }
+
+  const workPerformed = readString(row.workPerformed);
+  if (!workPerformed) errors.push(rowError(rowNumber, 'workPerformed', 'Work performed is required.'));
+  if (workPerformed.length > 5000) errors.push(rowError(rowNumber, 'workPerformed', 'Work performed must be 5000 characters or less.'));
+
+  const billableMinutes = parseIntegerField(row.billableMinutes, 'billableMinutes', rowNumber, errors);
+  const nonBillableMinutes = parseIntegerField(row.nonBillableMinutes, 'nonBillableMinutes', rowNumber, errors);
+  const materialItems = parseMaterialItems(row.materialItems, rowNumber, errors);
+  const requestedStatus = readString(row.status || 'DRAFT').toUpperCase();
+  if (requestedStatus && requestedStatus !== 'DRAFT') {
+    errors.push(rowError(rowNumber, 'status', 'CSV import creates DRAFT reports only. Submit, approve, and invoice through the report workflow.'));
+  }
+
+  if (errors.length) return { errors, value: null };
+
+  const payload = {
+    reportDate,
+    projectId: optionalObjectId(row.projectId) || orderResolution.assignment.projectId || null,
+    arrivalTime,
+    departureTime,
+    workPerformed,
+    findings: nullableString(row.findings),
+    nextSteps: nullableString(row.nextSteps),
+    followUpNeeded: parseBoolean(row.followUpNeeded),
+    technicianNotes: nullableString(row.technicianNotes),
+    customerSignerName: nullableString(row.customerSignerName),
+    billableNotes: nullableString(row.billableNotes),
+    materialItems,
+    generationSource: 'SYNC',
+  };
+  if (billableMinutes !== undefined) payload.billableMinutes = billableMinutes;
+  if (nonBillableMinutes !== undefined) payload.nonBillableMinutes = nonBillableMinutes;
+
+  return {
+    errors,
+    value: {
+      row: rowNumber,
+      orderId: orderResolution.assignment._id,
+      technicianId: technicianResolution.technicianId,
+      payload,
+    },
+  };
+}
+
+async function resolveImportAssignment(row) {
+  const Assignment = (await import('../deploy/assignment.model.js')).default;
+  const orderId = readString(row.orderId);
+  const assignmentNumber = readString(row.assignmentNumber);
+
+  if (orderId) {
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return { assignment: null, error: 'orderId must be a valid assignment ObjectId.' };
+    }
+    const assignment = await Assignment.findById(orderId).select('_id projectId employeeId assignmentNumber').lean();
+    return assignment
+      ? { assignment, error: null }
+      : { assignment: null, error: `Assignment '${orderId}' was not found.` };
+  }
+
+  if (!assignmentNumber) {
+    return { assignment: null, error: 'Either orderId or assignmentNumber is required.' };
+  }
+
+  const assignment = await Assignment.findOne({ assignmentNumber }).select('_id projectId employeeId assignmentNumber').lean();
+  return assignment
+    ? { assignment, error: null }
+    : { assignment: null, error: `Assignment '${assignmentNumber}' was not found.` };
+}
+
+async function resolveImportTechnician(row, assignment, userId) {
+  const User = (await import('../auth/user.model.js')).default;
+  const rawTechnicianId = readString(row.technicianId);
+  const technicianId = rawTechnicianId || objectIdString(assignment?.employeeId) || objectIdString(userId);
+  if (!mongoose.Types.ObjectId.isValid(technicianId)) {
+    return { technicianId: null, error: 'technicianId must be a valid user ObjectId.' };
+  }
+  const technician = await User.findById(technicianId).select('_id').lean();
+  return technician
+    ? { technicianId: technician._id, error: null }
+    : { technicianId: null, error: `Technician '${technicianId}' was not found.` };
+}
+
+function parseDateField(value, field, rowNumber, errors, required) {
+  const raw = readString(value);
+  if (!raw) {
+    if (required) errors.push(rowError(rowNumber, field, `${field} is required.`));
+    return null;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) {
+    errors.push(rowError(rowNumber, field, `${field} must be an ISO date or datetime.`));
+    return null;
+  }
+  return parsed;
+}
+
+function parseIntegerField(value, field, rowNumber, errors) {
+  const raw = readString(value);
+  if (!raw) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    errors.push(rowError(rowNumber, field, `${field} must be a non-negative whole number.`));
+    return undefined;
+  }
+  return parsed;
+}
+
+function parseMaterialItems(value, rowNumber, errors) {
+  const raw = readString(value);
+  if (!raw) return [];
+  return raw.split(';')
+    .map((entry, index) => {
+      const [descriptionRaw, quantityRaw, unitRaw] = entry.split('|').map((part) => readString(part));
+      if (!descriptionRaw || !quantityRaw || !unitRaw) {
+        errors.push(rowError(rowNumber, 'materialItems', `Material item ${index + 1} must use "description|quantity|unit".`));
+        return null;
+      }
+      if (descriptionRaw.length > 300) {
+        errors.push(rowError(rowNumber, 'materialItems', `Material item ${index + 1} description must be 300 characters or less.`));
+        return null;
+      }
+      const quantity = Number(quantityRaw);
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        errors.push(rowError(rowNumber, 'materialItems', `Material item ${index + 1} quantity must be a non-negative number.`));
+        return null;
+      }
+      if (unitRaw.length > 20) {
+        errors.push(rowError(rowNumber, 'materialItems', `Material item ${index + 1} unit must be 20 characters or less.`));
+        return null;
+      }
+      return {
+        catalogSource: 'CUSTOM',
+        description: descriptionRaw,
+        quantity,
+        unit: unitRaw,
+        sortOrder: index,
+      };
+    })
+    .filter(Boolean);
+}
+
+function parseBoolean(value) {
+  const raw = readString(value).toLowerCase();
+  return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'ja';
+}
+
+function optionalObjectId(value) {
+  const raw = readString(value);
+  return mongoose.Types.ObjectId.isValid(raw) ? raw : null;
+}
+
+function readString(value) {
+  return `${value ?? ''}`.trim();
+}
+
+function nullableString(value) {
+  const text = readString(value);
+  return text || null;
+}
+
+function rowError(row, field, message) {
+  return { row, field, message };
 }
 
 const reportService = new ReportService();

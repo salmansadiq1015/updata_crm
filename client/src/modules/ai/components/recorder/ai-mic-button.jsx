@@ -14,14 +14,18 @@ export function AiMicButton({ isSupported, onClick, disabled, className }) {
       disabled={!isSupported || disabled}
       size="lg"
       className={cn(
-        'relative h-16 w-16 rounded-full p-0',
-        'ring-4 ring-primary/20 transition-all',
-        isSupported && !disabled && 'hover:ring-primary/50 active:scale-95',
+        'relative h-24 w-24 rounded-full p-0 text-white',
+        'bg-gradient-to-br from-violet-500 via-purple-500 to-cyan-500',
+        'shadow-[0_0_0_8px_rgba(139,92,246,0.14),0_28px_80px_rgba(14,165,233,0.22)]',
+        'ring-1 ring-white/20 transition-all duration-200',
+        'before:absolute before:inset-2 before:rounded-full before:border before:border-white/15 before:bg-white/10',
+        'after:absolute after:-inset-3 after:rounded-full after:border after:border-violet-300/20',
+        isSupported && !disabled && 'hover:scale-[1.03] hover:shadow-[0_0_0_10px_rgba(139,92,246,0.18),0_32px_90px_rgba(14,165,233,0.28)] active:scale-95',
         className
       )}
       aria-label={t('ai.chat.startVoiceRecording', 'Start voice recording')}
     >
-      <Mic className="h-6 w-6" />
+      <Mic className="relative z-10 h-7 w-7" />
       {!isSupported && (
         <span className="sr-only">{t('ai.panel.voiceUnsupported', 'Voice not supported on this browser')}</span>
       )}

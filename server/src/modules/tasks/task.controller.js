@@ -55,6 +55,7 @@ class TaskController {
       const task = await taskService.changeStatus(req.params.id, req.body.status, req.user._id, {
         ...meta,
         expectedVersion: req.body.expectedVersion,
+        sortOrder: req.body.sortOrder,
         completeSubtasks: req.body.completeSubtasks === true,
         completeParentOnly: req.body.completeParentOnly === true,
       });

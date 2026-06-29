@@ -46,6 +46,7 @@ async function loadService({ payment, invoices }) {
   };
   const eventBus = { publish: jest.fn() };
   const auditService = { logEvent: jest.fn() };
+  const fiscalPeriodService = { assertPostingDateOpen: jest.fn(async () => null) };
 
   jest.unstable_mockModule('mongoose', () => ({
     default: { startSession: jest.fn(async () => session) },
@@ -65,6 +66,9 @@ async function loadService({ payment, invoices }) {
       WRITE_OFF_EXPENSE: 'WRITE_OFF_EXPENSE',
     },
     default: accountMappingService,
+  }));
+  jest.unstable_mockModule('../../src/modules/accounting/fiscalPeriod.service.js', () => ({
+    default: fiscalPeriodService,
   }));
   jest.unstable_mockModule('../../src/modules/accounting/dunningTemplate.repository.js', () => ({
     default: {},

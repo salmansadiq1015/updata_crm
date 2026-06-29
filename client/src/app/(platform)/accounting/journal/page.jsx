@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, RotateCcw, Search, Download } from 'lucide-react';
+import { Plus, RotateCcw, Download } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +17,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { useJournalEntries, useAccounts } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useJournalMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
 import { journalService } from '@/modules/accounting/services/accounting-service';
+import { cursorPageLabel, downloadResponse } from '@/modules/accounting/utils/accounting-ui';
 
 const fmt = (n) =>
   new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
@@ -30,7 +32,21 @@ const REF_TYPE_CONFIG = {
   REVERSAL:    { label: 'Storno',        labelEn: 'Reversal',     color: 'text-red-500' },
   WRITE_OFF:   { label: 'Abschreibung',  labelEn: 'Write-Off',    color: 'text-slate-500' },
   BANK_FEE:    { label: 'Bankgebühr',    labelEn: 'Bank Fee',     color: 'text-slate-400' },
+  INVOICE_FINALIZED: { label: 'Rechnung finalisiert', labelEn: 'Invoice Finalized', color: 'text-sky-500' },
+  INVOICE_PAYMENT: { label: 'Rechnungszahlung', labelEn: 'Invoice Payment', color: 'text-emerald-500' },
+  AUTO_RECONCILIATION: { label: 'Auto-Abgleich', labelEn: 'Auto Reconciliation', color: 'text-indigo-500' },
+  MANUAL_RECONCILIATION: { label: 'Manueller Abgleich', labelEn: 'Manual Reconciliation', color: 'text-indigo-600' },
+  CATEGORIZATION: { label: 'Kategorisierung', labelEn: 'Categorization', color: 'text-violet-500' },
+  NETTING: { label: 'Verrechnung', labelEn: 'Netting', color: 'text-teal-600' },
 };
+
+function currentYearRange() {
+  const now = new Date();
+  return {
+    startDate: `${now.getFullYear()}-01-01`,
+    endDate: now.toISOString().slice(0, 10),
+  };
+}
 
 function JournalFormDialog({ open, onClose, de, accounts }) {
   const { createEntry } = useJournalMutations();
@@ -126,32 +142,56 @@ function JournalFormDialog({ open, onClose, de, accounts }) {
 }
 
 export default function JournalPage() {
-  const { locale: language } = useLanguage();
+  const { locale: language, t } = useLanguage();
   const de = language === 'de';
-  const [search, setSearch] = useState('');
+  const [dateRange, setDateRange] = useState(() => currentYearRange());
   const [refType, setRefType] = useState('ALL');
+  const [accountId, setAccountId] = useState('ALL');
+  const [cursorStack, setCursorStack] = useState([null]);
+  const [isExporting, setIsExporting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const cursor = cursorStack[cursorStack.length - 1];
+  const hasDateRangeError = Boolean(dateRange.startDate && dateRange.endDate && dateRange.startDate > dateRange.endDate);
 
   const filters = {
+    limit: 50,
+    entryDateFrom: dateRange.startDate,
+    entryDateTo: dateRange.endDate,
     ...(refType !== 'ALL' && { referenceType: refType }),
-    ...(search && { q: search }),
+    ...(accountId !== 'ALL' && { accountId }),
+    ...(cursor && { cursor }),
   };
 
-  const { data: { items = [] } = {}, isLoading } = useJournalEntries(filters);
-  const { data: accounts = [] } = useAccounts();
+  const { data: { items = [], pagination } = {}, isLoading, isError, error } = useJournalEntries(filters, {
+    enabled: !hasDateRangeError,
+  });
+  const { data: accounts = [] } = useAccounts({ limit: 500 });
   const { reverseEntry } = useJournalMutations();
 
+  const resetList = () => setCursorStack([null]);
+
+  const updateDateRange = (key, value) => {
+    setDateRange((current) => ({ ...current, [key]: value }));
+    resetList();
+  };
+
   const handleExport = async () => {
+    if (hasDateRangeError || !dateRange.startDate || !dateRange.endDate) {
+      toast.error(de ? 'Bitte einen gueltigen Zeitraum waehlen.' : 'Select a valid date range.');
+      return;
+    }
+    setIsExporting(true);
     try {
-      const res = await journalService.export(filters);
-      const blob = new Blob([res.data], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `journal-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch { /* handled by toast */ }
+      const response = await journalService.export({
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      });
+      downloadResponse(response, `journal-${dateRange.startDate}-${dateRange.endDate}.csv`);
+    } catch (err) {
+      toast.error(err?.message || (de ? 'Journal-Export fehlgeschlagen.' : 'Journal export failed.'));
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -164,9 +204,9 @@ export default function JournalPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport}>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting || hasDateRangeError}>
             <Download className="h-4 w-4 mr-1.5" />
-            {de ? 'Export CSV' : 'Export CSV'}
+            {isExporting ? (de ? 'Export...' : 'Exporting...') : 'CSV'}
           </Button>
           <Button size="sm" onClick={() => setFormOpen(true)}>
             <Plus className="h-4 w-4 mr-1.5" />
@@ -176,12 +216,29 @@ export default function JournalPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9 h-9" placeholder={de ? 'Suchen...' : 'Search...'} value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <Select value={refType} onValueChange={setRefType}>
+      <div className="flex flex-wrap gap-3">
+        <Input
+          type="date"
+          className="h-9 w-40"
+          value={dateRange.startDate}
+          onChange={(event) => updateDateRange('startDate', event.target.value)}
+        />
+        <Input
+          type="date"
+          className="h-9 w-40"
+          value={dateRange.endDate}
+          onChange={(event) => updateDateRange('endDate', event.target.value)}
+        />
+        <Select value={accountId} onValueChange={(value) => { setAccountId(value); resetList(); }}>
+          <SelectTrigger className="h-9 w-72 text-xs"><SelectValue placeholder={de ? 'Konto' : 'Account'} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">{de ? 'Alle Konten' : 'All Accounts'}</SelectItem>
+            {accounts.map((account) => (
+              <SelectItem key={account._id} value={account._id}>{account.accountNumber} {account.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={refType} onValueChange={(value) => { setRefType(value); resetList(); }}>
           <SelectTrigger className="h-9 w-44 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">{de ? 'Alle Typen' : 'All Types'}</SelectItem>
@@ -191,6 +248,18 @@ export default function JournalPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {hasDateRangeError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+          {de ? 'Startdatum muss vor dem Enddatum liegen.' : 'Start date must be before end date.'}
+        </div>
+      )}
+
+      {isError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+          {error?.message || (de ? 'Journal konnte nicht geladen werden.' : 'Could not load journal entries.')}
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-xl border border-border overflow-hidden">
@@ -260,6 +329,25 @@ export default function JournalPage() {
             )}
           </tbody>
         </table>
+        <div className="flex items-center justify-between border-t border-border px-3 py-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCursorStack((current) => (current.length > 1 ? current.slice(0, -1) : current))}
+            disabled={cursorStack.length <= 1 || isLoading}
+          >
+            {de ? 'Zurueck' : 'Previous'}
+          </Button>
+          <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => pagination?.nextCursor && setCursorStack((current) => [...current, pagination.nextCursor])}
+            disabled={!pagination?.hasNext || isLoading}
+          >
+            {de ? 'Weiter' : 'Next'}
+          </Button>
+        </div>
       </div>
 
       <JournalFormDialog open={formOpen} onClose={() => setFormOpen(false)} de={de} accounts={accounts} />

@@ -1,34 +1,42 @@
 'use client';
 
-import Link from 'next/link';
+import { useMemo } from 'react';
 import {
   AlertTriangle,
   Archive,
+  BarChart3,
   Banknote,
-  ChevronRight,
+  CalendarDays,
   Clock,
   FileText,
+  Globe2,
   Landmark,
   LineChart,
+  Package,
+  Percent,
   Receipt,
+  Repeat2,
   Scale,
+  Search,
   TrendingDown,
   TrendingUp,
   WalletCards,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
-import {
-  useApAging,
-  useApSummary,
-  useArAging,
-  useArSummary,
-  useBankAccounts,
-  useCashForecast,
-  useProfitLoss,
-} from '@/modules/accounting/hooks/use-accounting-queries';
+import { useAccountingDashboard } from '@/modules/accounting/hooks/use-accounting-queries';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  AccountingAgingPanel,
+  AccountingHero,
+  AccountingHeroSignal,
+  AccountingSectionTitle,
+  AccountingStatCard,
+  AccountingWorkspaceCard,
+} from '@/modules/accounting/components/accounting-premium-ui';
 
-const fmt = (value, currency = 'CHF') =>
+const DASHBOARD_CURRENCY = 'CHF';
+
+const formatAmount = (value, currency = DASHBOARD_CURRENCY) =>
   new Intl.NumberFormat('de-CH', {
     style: 'currency',
     currency,
@@ -43,204 +51,324 @@ function currentYearRange() {
   };
 }
 
-function StatCard({ label, value, sub, icon: Icon, color, href, danger = false }) {
-  const content = (
-    <div className={`rounded-xl border border-border bg-card p-4 flex flex-col gap-3 transition-shadow ${href ? 'hover:shadow-md' : ''}`}>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
-        <span className={`h-8 w-8 shrink-0 rounded-lg flex items-center justify-center ${color}`}>
-          <Icon className="h-4 w-4" />
-        </span>
-      </div>
-      <div>
-        <p className={`text-2xl font-bold tabular-nums ${danger ? 'text-red-600' : ''}`}>{value}</p>
-        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  );
+const AGING_ROWS = [
+  { key: 'current', label: 'Current', labelDe: 'Aktuell', color: 'bg-emerald-400' },
+  { key: '1_30', label: '1-30 days', labelDe: '1-30 Tage', color: 'bg-amber-400' },
+  { key: '31_60', label: '31-60 days', labelDe: '31-60 Tage', color: 'bg-orange-400' },
+  { key: '61_90', label: '61-90 days', labelDe: '61-90 Tage', color: 'bg-rose-400' },
+  { key: 'over_90', label: '> 90 days', labelDe: '> 90 Tage', color: 'bg-red-500' },
+];
 
-  return href ? <Link href={href}>{content}</Link> : content;
-}
-
-function AgingBuckets({ buckets, label, de }) {
-  if (!buckets) return null;
-  const rows = [
-    { key: 'current', label: de ? 'Aktuell' : 'Current', color: 'bg-emerald-500' },
-    { key: '1_30', label: '1-30 Tage', color: 'bg-yellow-500' },
-    { key: '31_60', label: '31-60 Tage', color: 'bg-orange-500' },
-    { key: '61_90', label: '61-90 Tage', color: 'bg-red-400' },
-    { key: 'over_90', label: '> 90 Tage', color: 'bg-red-700' },
-  ];
-  const total = rows.reduce((sum, row) => sum + (buckets[row.key] ?? 0), 0) || 1;
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-5 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">{label}</h3>
-        <span className="text-xs text-muted-foreground">{fmt(total)}</span>
-      </div>
-      <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
-        {rows.map((row) => (
-          <div
-            key={row.key}
-            className={row.color}
-            style={{ width: `${((buckets[row.key] ?? 0) / total) * 100}%` }}
-          />
-        ))}
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {rows.map((row) => (
-          <div key={row.key} className="flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${row.color}`} />
-              <span className="text-muted-foreground">{row.label}</span>
-            </div>
-            <span className="font-medium tabular-nums">{fmt(buckets[row.key] ?? 0)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const NAV_CARDS = [
-  { href: '/accounting/receivables', label: 'Forderungen', labelEn: 'Receivables', icon: TrendingUp, color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
-  { href: '/accounting/payables', label: 'Verbindlichkeiten', labelEn: 'Payables', icon: TrendingDown, color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
-  { href: '/accounting/bank', label: 'Bank', labelEn: 'Bank', icon: Landmark, color: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
-  { href: '/accounting/cash', label: 'Liquiditaet', labelEn: 'Cash Flow', icon: WalletCards, color: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400' },
-  { href: '/accounting/reconciliation', label: 'Abstimmung', labelEn: 'Reconciliation', icon: Scale, color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
-  { href: '/accounting/open-items', label: 'Offene Posten', labelEn: 'Open Items', icon: Clock, color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-  { href: '/accounting/reports', label: 'Berichte', labelEn: 'Reports', icon: LineChart, color: 'bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400' },
-  { href: '/accounting/documents', label: 'Belege', labelEn: 'Documents', icon: Archive, color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400' },
-  { href: '/accounting/journal', label: 'Journal', labelEn: 'Journal', icon: Receipt, color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
-  { href: '/accounting/chart-of-accounts', label: 'Kontenplan', labelEn: 'Chart of Accounts', icon: FileText, color: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400' },
+const WORKSPACES = [
+  {
+    href: '/accounting/search',
+    label: 'Financial Search',
+    labelDe: 'Finanzsuche',
+    description: 'Search invoices, journals, accounts, bank transactions, and documents.',
+    descriptionDe: 'Rechnungen, Journale, Konten, Bankbewegungen und Belege durchsuchen.',
+    icon: Search,
+    accent: 'sky',
+  },
+  {
+    href: '/accounting/exchange-rates',
+    label: 'Exchange Rates',
+    labelDe: 'Wechselkurse',
+    description: 'Historical FX rates, conversions, and revaluation foundation.',
+    descriptionDe: 'Historische FX-Kurse, Umrechnung und Grundlage fuer Neubewertung.',
+    icon: Globe2,
+    accent: 'cyan',
+  },
+  {
+    href: '/accounting/tax',
+    label: 'Tax Management',
+    labelDe: 'Steuern',
+    description: 'Tax codes, input/output tax, withholding, and VAT reporting.',
+    descriptionDe: 'Steuercodes, Vorsteuer/Umsatzsteuer, Quellensteuer und Berichte.',
+    icon: Percent,
+    accent: 'amber',
+  },
+  {
+    href: '/accounting/assets',
+    label: 'Fixed Assets',
+    labelDe: 'Anlagen',
+    description: 'Asset register, depreciation postings, book value, and disposals.',
+    descriptionDe: 'Anlagenregister, Abschreibungen, Buchwert und Abgaenge.',
+    icon: Package,
+    accent: 'lime',
+  },
+  {
+    href: '/accounting/budgets',
+    label: 'Budgets',
+    labelDe: 'Budgets',
+    description: 'Budget planning, approvals, locked baselines, and budget-vs-actual variance.',
+    descriptionDe: 'Budgetplanung, Freigaben, gesperrte Basiswerte und Soll-Ist-Abweichung.',
+    icon: BarChart3,
+    accent: 'sky',
+  },
+  {
+    href: '/accounting/recurring',
+    label: 'Recurring',
+    labelDe: 'Wiederkehrend',
+    description: 'Scheduled journals, supplier bills, sales invoices, and run history.',
+    descriptionDe: 'Geplante Journale, Lieferantenrechnungen, Kundenrechnungen und Laufhistorie.',
+    icon: Repeat2,
+    accent: 'cyan',
+  },
+  {
+    href: '/accounting/receivables',
+    label: 'Receivables',
+    labelDe: 'Forderungen',
+    description: 'Customer invoices, collections, payment status, and dunning.',
+    descriptionDe: 'Kundenrechnungen, Zahlungseingang, Status und Mahnwesen.',
+    icon: TrendingUp,
+    accent: 'emerald',
+  },
+  {
+    href: '/accounting/payables',
+    label: 'Payables',
+    labelDe: 'Verbindlichkeiten',
+    description: 'Vendor bills, approvals, payment batches, and obligations.',
+    descriptionDe: 'Lieferantenrechnungen, Freigaben, Zahlungslaufe und Verpflichtungen.',
+    icon: TrendingDown,
+    accent: 'amber',
+  },
+  {
+    href: '/accounting/bank',
+    label: 'Bank',
+    labelDe: 'Bank',
+    description: 'Bank accounts, statements, sync status, and imported transactions.',
+    descriptionDe: 'Bankkonten, Kontoauszuge, Synchronisierung und Transaktionen.',
+    icon: Landmark,
+    accent: 'sky',
+  },
+  {
+    href: '/accounting/cash',
+    label: 'Cash Flow',
+    labelDe: 'Liquiditaet',
+    description: 'Cash position, 30-day forecast, balances, and liquidity alerts.',
+    descriptionDe: 'Cash-Position, 30-Tage-Prognose, Salden und Liquiditaetsrisiken.',
+    icon: WalletCards,
+    accent: 'cyan',
+  },
+  {
+    href: '/accounting/reconciliation',
+    label: 'Reconciliation',
+    labelDe: 'Abstimmung',
+    description: 'Auto-match suggestions, manual matching, and exception handling.',
+    descriptionDe: 'Automatische Vorschlage, manuelle Zuordnung und Ausnahmen.',
+    icon: Scale,
+    accent: 'violet',
+  },
+  {
+    href: '/accounting/open-items',
+    label: 'Open Items',
+    labelDe: 'Offene Posten',
+    description: 'Combined AR/AP exposure with due dates and payment pressure.',
+    descriptionDe: 'Gemeinsame AR/AP Sicht mit Faelligkeiten und Zahlungsdruck.',
+    icon: Clock,
+    accent: 'rose',
+  },
+  {
+    href: '/accounting/reports',
+    label: 'Reports',
+    labelDe: 'Berichte',
+    description: 'Balance sheet, P&L, trial balance, cash flow, and exports.',
+    descriptionDe: 'Bilanz, Erfolgsrechnung, Saldenliste, Cashflow und Exporte.',
+    icon: LineChart,
+    accent: 'lime',
+  },
+  {
+    href: '/accounting/fiscal-periods',
+    label: 'Fiscal Periods',
+    labelDe: 'Perioden',
+    description: 'Open, close, and protect posting periods for finance control.',
+    descriptionDe: 'Buchungsperioden oeffnen, schliessen und kontrollieren.',
+    icon: CalendarDays,
+    accent: 'amber',
+  },
+  {
+    href: '/accounting/documents',
+    label: 'Documents',
+    labelDe: 'Belege',
+    description: 'OCR inbox, allocation rules, attachments, and accounting archive.',
+    descriptionDe: 'OCR Eingang, Zuordnungsregeln, Anhange und Buchhaltungsarchiv.',
+    icon: Archive,
+    accent: 'cyan',
+  },
+  {
+    href: '/accounting/journal',
+    label: 'Journal',
+    labelDe: 'Journal',
+    description: 'Manual and automated journal entries with posting status.',
+    descriptionDe: 'Manuelle und automatische Buchungen mit Buchungsstatus.',
+    icon: Receipt,
+    accent: 'violet',
+  },
+  {
+    href: '/accounting/chart-of-accounts',
+    label: 'Chart of Accounts',
+    labelDe: 'Kontenplan',
+    description: 'Account hierarchy, balances, mappings, and ledger structure.',
+    descriptionDe: 'Kontenhierarchie, Salden, Zuordnungen und Ledger-Struktur.',
+    icon: FileText,
+    accent: 'slate',
+  },
 ];
 
 export default function AccountingDashboard() {
   const { locale: language } = useLanguage();
   const de = language === 'de';
-  const yearRange = currentYearRange();
+  const yearRange = useMemo(() => currentYearRange(), []);
 
-  const { data: arSummary, isLoading: arLoading } = useArSummary();
-  const { data: apSummary, isLoading: apLoading } = useApSummary();
-  const { data: arAging } = useArAging();
-  const { data: apAging } = useApAging();
-  const { data: bankAccounts = [], isLoading: bankLoading } = useBankAccounts();
-  const { data: cashForecast, isLoading: cashLoading } = useCashForecast({ days: 30 });
-  const { data: profitLoss, isLoading: reportLoading } = useProfitLoss({ ...yearRange, currency: 'CHF' });
+  const { data: snapshot, isLoading: loading } = useAccountingDashboard({
+    ...yearRange,
+    currency: DASHBOARD_CURRENCY,
+    forecastDays: 30,
+  });
 
-  const totalBankBalance = bankAccounts.reduce((sum, account) => sum + (account.currentBalance ?? 0), 0);
-  const projections = cashForecast?.projections || [];
+  const kpis = snapshot?.kpis || {};
+  const arAging = snapshot?.aging?.receivables;
+  const apAging = snapshot?.aging?.payables;
+  const bankAccounts = snapshot?.cash?.balances || [];
+  const projections = snapshot?.cash?.forecast?.projections || [];
   const projectedBalance = projections.length
     ? projections[projections.length - 1].netPosition
-    : cashForecast?.currentBalance;
+    : kpis.cashPosition;
   const upcomingOutflows = projections.reduce((sum, day) => sum + (day.outflows || 0), 0);
-  const loading = arLoading || apLoading || bankLoading || cashLoading || reportLoading;
+  const exposure = (kpis.openReceivables || 0) - (kpis.openPayables || 0);
+  const profitMargin = Number(kpis.profitMargin || 0);
+
+  const agingRows = AGING_ROWS.map((row) => ({
+    ...row,
+    label: de ? row.labelDe : row.label,
+  }));
+
+  const statCards = [
+    {
+      label: de ? 'Offene Forderungen' : 'Open Receivables',
+      value: formatAmount(kpis.openReceivables),
+      sub: `${arAging?.invoiceCount ?? 0} ${de ? 'Rechnungen' : 'invoices'}`,
+      icon: TrendingUp,
+      accent: 'emerald',
+      href: '/accounting/receivables',
+    },
+    {
+      label: de ? 'Ueberfaellig' : 'Overdue',
+      value: formatAmount(kpis.overdueReceivables),
+      sub: de ? 'kritische Forderungen' : 'receivables at risk',
+      icon: AlertTriangle,
+      accent: 'rose',
+      href: '/accounting/receivables',
+      danger: (kpis.overdueReceivables || 0) > 0,
+    },
+    {
+      label: de ? 'Verbindlichkeiten' : 'Payables',
+      value: formatAmount(kpis.openPayables),
+      sub: `${apAging?.invoiceCount ?? 0} ${de ? 'Rechnungen' : 'invoices'}`,
+      icon: TrendingDown,
+      accent: 'amber',
+      href: '/accounting/payables',
+    },
+    {
+      label: de ? 'Bankguthaben' : 'Bank Balance',
+      value: formatAmount(kpis.bankBalance),
+      sub: `${bankAccounts.length} ${de ? 'Konten' : 'accounts'}`,
+      icon: Banknote,
+      accent: 'sky',
+      href: '/accounting/bank',
+    },
+    {
+      label: de ? '30 Tage Cash' : '30-Day Cash',
+      value: formatAmount(kpis.projectedCashPosition ?? projectedBalance),
+      sub: `${de ? 'Faellige Zahlungen' : 'Due outflows'} ${formatAmount(upcomingOutflows)}`,
+      icon: WalletCards,
+      accent: 'cyan',
+      href: '/accounting/cash',
+      danger: (kpis.projectedCashPosition ?? projectedBalance ?? 0) < 0,
+    },
+    {
+      label: de ? 'Gewinn YTD' : 'YTD Profit',
+      value: formatAmount(kpis.netProfit, snapshot?.currency),
+      sub: `${de ? 'Marge' : 'Margin'} ${profitMargin.toFixed(1)}%`,
+      icon: LineChart,
+      accent: 'lime',
+      href: '/accounting/reports',
+      danger: (kpis.netProfit || 0) < 0,
+    },
+  ];
 
   return (
-    <div className="flex flex-col gap-6 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold">{de ? 'Buchhaltung' : 'Accounting'}</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          {de ? 'Finanzlage, Liquiditaet und offene Verpflichtungen auf einen Blick.' : 'Financial position, liquidity, and open obligations at a glance.'}
-        </p>
+    <div className="mx-auto flex max-w-7xl flex-col gap-6">
+      <AccountingHero
+        eyebrow={de ? 'Finance Cockpit' : 'Finance Cockpit'}
+        title={de ? 'Buchhaltung' : 'Accounting'}
+        description={
+          de
+            ? 'Finanzlage, Liquiditaet und offene Verpflichtungen in einer hochwertigen Management-Sicht.'
+            : 'A premium management view for liquidity, open obligations, exposure, and financial health.'
+        }
+        chips={[
+          de ? 'Live Snapshot' : 'Live snapshot',
+          DASHBOARD_CURRENCY,
+          de ? '30-Tage Prognose' : '30-day forecast',
+        ]}
+      >
+        <AccountingHeroSignal
+          label={de ? 'Netto Exposure' : 'Net Exposure'}
+          value={formatAmount(exposure)}
+          sub={de ? 'Forderungen minus Verbindlichkeiten' : 'Receivables minus payables'}
+          icon={Scale}
+          accent={exposure >= 0 ? 'emerald' : 'rose'}
+        />
+      </AccountingHero>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        {loading
+          ? Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-44 rounded-2xl bg-white/10" />
+          ))
+          : statCards.map((card) => (
+            <AccountingStatCard key={card.label} {...card} />
+          ))}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        {loading ? (
-          Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-32 rounded-xl" />)
-        ) : (
-          <>
-            <StatCard
-              label={de ? 'Offene Forderungen' : 'Open Receivables'}
-              value={fmt(arSummary?.openAmount)}
-              sub={`${arSummary?.openCount ?? 0} ${de ? 'Rechnungen' : 'invoices'}`}
-              icon={TrendingUp}
-              color="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-              href="/accounting/receivables"
-            />
-            <StatCard
-              label={de ? 'Ueberfaellig' : 'Overdue'}
-              value={fmt(arSummary?.overdueAmount)}
-              sub={`${arSummary?.overdueCount ?? 0} ${de ? 'offen' : 'open'}`}
-              icon={AlertTriangle}
-              color="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-              href="/accounting/receivables"
-              danger={(arSummary?.overdueAmount || 0) > 0}
-            />
-            <StatCard
-              label={de ? 'Verbindlichkeiten' : 'Payables'}
-              value={fmt(apSummary?.openAmount)}
-              sub={`${apSummary?.openCount ?? 0} ${de ? 'Rechnungen' : 'invoices'}`}
-              icon={TrendingDown}
-              color="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-              href="/accounting/payables"
-            />
-            <StatCard
-              label={de ? 'Bankguthaben' : 'Bank Balance'}
-              value={fmt(totalBankBalance)}
-              sub={`${bankAccounts.length} ${de ? 'Konten' : 'accounts'}`}
-              icon={Banknote}
-              color="bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400"
-              href="/accounting/bank"
-            />
-            <StatCard
-              label={de ? '30 Tage Cash' : '30-Day Cash'}
-              value={fmt(projectedBalance)}
-              sub={`${de ? 'Faellige Zahlungen' : 'Due outflows'} ${fmt(upcomingOutflows)}`}
-              icon={WalletCards}
-              color="bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400"
-              href="/accounting/cash"
-              danger={(projectedBalance || 0) < 0}
-            />
-            <StatCard
-              label={de ? 'Gewinn YTD' : 'YTD Profit'}
-              value={fmt(profitLoss?.netProfit, profitLoss?.currency)}
-              sub={`${de ? 'Marge' : 'Margin'} ${Number(profitLoss?.margin || 0).toFixed(1)}%`}
-              icon={LineChart}
-              color="bg-lime-100 text-lime-700 dark:bg-lime-900/30 dark:text-lime-400"
-              href="/accounting/reports"
-              danger={(profitLoss?.netProfit || 0) < 0}
-            />
-          </>
-        )}
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        <AgingBuckets
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AccountingAgingPanel
           buckets={arAging?.buckets}
           label={de ? 'Forderungen nach Faelligkeit' : 'AR Aging'}
-          de={de}
+          rows={agingRows}
+          totalLabel={de ? 'Offene Kundenpositionen' : 'Open customer exposure'}
+          format={formatAmount}
         />
-        <AgingBuckets
+        <AccountingAgingPanel
           buckets={apAging?.buckets}
           label={de ? 'Verbindlichkeiten nach Faelligkeit' : 'AP Aging'}
-          de={de}
+          rows={agingRows}
+          totalLabel={de ? 'Offene Lieferantenpositionen' : 'Open vendor obligations'}
+          format={formatAmount}
         />
       </div>
 
-      <div>
-        <h2 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
-          {de ? 'Arbeitsbereiche' : 'Workspaces'}
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {NAV_CARDS.map((card) => (
-            <Link
-              key={card.href}
-              href={card.href}
-              className="rounded-xl border border-border bg-card p-4 flex flex-col items-start gap-3 hover:shadow-md hover:border-primary/30 transition-all group"
-            >
-              <span className={`h-9 w-9 rounded-lg flex items-center justify-center ${card.color}`}>
-                <card.icon className="h-4.5 w-4.5" />
-              </span>
-              <div className="flex items-center gap-1 w-full">
-                <span className="text-sm font-medium flex-1">{de ? card.label : card.labelEn}</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-              </div>
-            </Link>
+      <section className="flex flex-col gap-4">
+        <AccountingSectionTitle>{de ? 'Arbeitsbereiche' : 'Workspaces'}</AccountingSectionTitle>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+          {WORKSPACES.map((workspace) => (
+            <AccountingWorkspaceCard
+              key={workspace.href}
+              href={workspace.href}
+              label={de ? workspace.labelDe : workspace.label}
+              description={de ? workspace.descriptionDe : workspace.description}
+              metric={workspace.href === '/accounting/bank'
+                ? `${bankAccounts.length} ${de ? 'aktive Konten' : 'active accounts'}`
+                : workspace.href === '/accounting/reports'
+                  ? (de ? 'Bilanz, P&L, Cashflow' : 'BS, P&L, cash flow')
+                  : undefined}
+              icon={workspace.icon}
+              accent={workspace.accent}
+            />
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

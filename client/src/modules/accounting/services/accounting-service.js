@@ -65,12 +65,78 @@ export const chartService = {
   exportOverview:(id, params = {}) => apiClient.get(E.ACCOUNT_OVERVIEW_EXPORT(id), { params, responseType: 'blob' }),
 };
 
+export const dashboardService = {
+  snapshot: (params = {}) => apiClient.get(E.DASHBOARD, { params }),
+};
+
+export const accountingSearchService = {
+  search: (params = {}) => apiClient.get(E.SEARCH, { params }),
+};
+
+export const exchangeRateService = {
+  list:    (params = {}) => apiClient.get(E.EXCHANGE_RATES, { params }),
+  upsert:  (data)        => apiClient.post(E.EXCHANGE_RATES, data),
+  resolve: (params = {}) => apiClient.get(E.EXCHANGE_RATE_RESOLVE, { params }),
+  convert: (data)        => apiClient.post(E.EXCHANGE_RATE_CONVERT, data),
+  revaluationPreview: (params = {}) => apiClient.get(E.FX_REVALUATION_PREVIEW, { params }),
+  postRevaluation:    (data = {})   => apiClient.post(E.FX_REVALUATION_POST, data),
+  revaluationRuns:    (params = {}) => apiClient.get(E.FX_REVALUATION_RUNS, { params }),
+};
+
+export const taxService = {
+  codes:        (params = {}) => apiClient.get(E.TAX_CODES, { params }),
+  createCode:   (data)        => apiClient.post(E.TAX_CODES, data),
+  updateCode:   (id, data)    => apiClient.put(E.TAX_CODE_BY_ID(id), data),
+  groups:       (params = {}) => apiClient.get(E.TAX_GROUPS, { params }),
+  exemptions:   (params = {}) => apiClient.get(E.TAX_EXEMPTIONS, { params }),
+  calculate:    (data)        => apiClient.post(E.TAX_CALCULATE, data),
+  transactions: (params = {}) => apiClient.get(E.TAX_TRANSACTIONS, { params }),
+  summary:      (params = {}) => apiClient.get(E.TAX_SUMMARY, { params }),
+  vatReport:    (params = {}) => apiClient.get(E.TAX_VAT_REPORT, { params }),
+};
+
+export const fixedAssetService = {
+  list:       (params = {}) => apiClient.get(E.FIXED_ASSETS, { params }),
+  summary:    (params = {}) => apiClient.get(E.FIXED_ASSET_SUMMARY, { params }),
+  getById:    (id)          => apiClient.get(E.FIXED_ASSET_BY_ID(id)),
+  create:     (data)        => apiClient.post(E.FIXED_ASSETS, data),
+  update:     (id, data)    => apiClient.put(E.FIXED_ASSET_BY_ID(id), data),
+  activate:   (id, data = {}) => apiClient.post(E.FIXED_ASSET_ACTIVATE(id), data),
+  depreciate: (id, data = {}) => apiClient.post(E.FIXED_ASSET_DEPRECIATE(id), data),
+  dispose:    (id, data = {}) => apiClient.post(E.FIXED_ASSET_DISPOSE(id), data),
+};
+
+export const budgetService = {
+  list:     (params = {}) => apiClient.get(E.BUDGETS, { params }),
+  summary:  (params = {}) => apiClient.get(E.BUDGET_SUMMARY, { params }),
+  getById:  (id)          => apiClient.get(E.BUDGET_BY_ID(id)),
+  create:   (data)        => apiClient.post(E.BUDGETS, data),
+  update:   (id, data)    => apiClient.put(E.BUDGET_BY_ID(id), data),
+  approve:  (id)          => apiClient.post(E.BUDGET_APPROVE(id)),
+  lock:     (id)          => apiClient.post(E.BUDGET_LOCK(id)),
+  variance: (id)          => apiClient.get(E.BUDGET_VARIANCE(id)),
+};
+
+export const recurringTransactionService = {
+  list:     (params = {}) => apiClient.get(E.RECURRING_TRANSACTIONS, { params }),
+  summary:  ()            => apiClient.get(E.RECURRING_TRANSACTION_SUMMARY),
+  runs:     (params = {}) => apiClient.get(E.RECURRING_TRANSACTION_RUNS, { params }),
+  getById:  (id)          => apiClient.get(E.RECURRING_TRANSACTION_BY_ID(id)),
+  create:   (data)        => apiClient.post(E.RECURRING_TRANSACTIONS, data),
+  update:   (id, data)    => apiClient.put(E.RECURRING_TRANSACTION_BY_ID(id), data),
+  activate: (id)          => apiClient.post(E.RECURRING_TRANSACTION_ACTIVATE(id)),
+  pause:    (id)          => apiClient.post(E.RECURRING_TRANSACTION_PAUSE(id)),
+  archive:  (id)          => apiClient.post(E.RECURRING_TRANSACTION_ARCHIVE(id)),
+  run:      (id, data = {}) => apiClient.post(E.RECURRING_TRANSACTION_RUN(id), data),
+  runDue:   (data = {})   => apiClient.post(E.RECURRING_TRANSACTION_RUN_DUE, data),
+};
+
 export const journalService = {
   list:    (params = {}) => apiClient.get(E.JOURNAL, { params }),
   getById: (id)          => apiClient.get(E.JOURNAL_BY_ID(id)),
   create:  (data)        => apiClient.post(E.JOURNAL, data),
   reverse: (id)          => apiClient.post(E.JOURNAL_REVERSE(id)),
-  export:  (params = {}) => apiClient.post(E.JOURNAL_EXPORT, params),
+  export:  (params = {}) => apiClient.post(E.JOURNAL_EXPORT, {}, { params, responseType: 'blob' }),
 };
 
 export const apService = {
@@ -171,6 +237,18 @@ export const openItemsService = {
 export const reportsService = {
   profitLoss:       (params = {}) => apiClient.get(E.PROFIT_LOSS, { params }),
   exportProfitLoss: (params = {}) => apiClient.get(E.PROFIT_LOSS_EXPORT, { params, responseType: 'blob' }),
+  balanceSheet:     (params = {}) => apiClient.get(E.BALANCE_SHEET, { params }),
+  trialBalance:     (params = {}) => apiClient.get(E.TRIAL_BALANCE, { params }),
+  cashFlow:         (params = {}) => apiClient.get(E.CASH_FLOW_REPORT, { params }),
+  generalLedger:    (params = {}) => apiClient.get(E.GENERAL_LEDGER, { params }),
+};
+
+export const fiscalPeriodService = {
+  list:    (params = {}) => apiClient.get(E.FISCAL_PERIODS, { params }),
+  getById: (id)          => apiClient.get(E.FISCAL_PERIOD_BY_ID(id)),
+  create:  (data)        => apiClient.post(E.FISCAL_PERIODS, data),
+  close:   (id, reason)  => apiClient.post(E.FISCAL_PERIOD_CLOSE(id), { reason }),
+  reopen:  (id, reason)  => apiClient.post(E.FISCAL_PERIOD_REOPEN(id), { reason }),
 };
 
 export const accDocService = {

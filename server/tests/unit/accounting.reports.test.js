@@ -94,4 +94,61 @@ describe('accounting reports', () => {
     expect(csv).toContain('EXPENSE,4000,Materials,250.00,0.00,250.00,CHF,2026-02-01,2026-02-28');
     expect(csv).toContain('SUMMARY,,Net profit,,,750.00,CHF,2026-02-01,2026-02-28');
   });
+
+  test('calculates balance sheet totals from debit and credit normal balances', async () => {
+    const { service } = await loadReportsService({
+      accounts: [
+        { _id: 'asset-1', accountNumber: '1020', name: 'Bank', type: 'ASSET' },
+        { _id: 'liability-1', accountNumber: '2000', name: 'Payables', type: 'LIABILITY' },
+        { _id: 'equity-1', accountNumber: '2800', name: 'Capital', type: 'EQUITY' },
+        { _id: 'revenue-1', accountNumber: '3400', name: 'Sales', type: 'REVENUE' },
+      ],
+      aggregateResult: [{
+        debits: [{ _id: 'asset-1', total: 1000 }],
+        credits: [
+          { _id: 'liability-1', total: 300 },
+          { _id: 'equity-1', total: 700 },
+        ],
+      }],
+    });
+
+    const report = await service.getBalanceSheet({ endDate: '2026-03-31', currency: 'CHF' });
+
+    expect(report).toMatchObject({
+      totalAssets: 1000,
+      totalLiabilities: 300,
+      totalEquity: 700,
+      totalLiabilitiesAndEquity: 1000,
+      imbalance: 0,
+    });
+    expect(report.rows).toHaveLength(3);
+    expect(report.groups.assets[0]).toEqual(expect.objectContaining({ accountNumber: '1020', balance: 1000 }));
+  });
+
+  test('calculates trial balance debit and credit sides', async () => {
+    const { service } = await loadReportsService({
+      accounts: [
+        { _id: 'asset-1', accountNumber: '1020', name: 'Bank', type: 'ASSET' },
+        { _id: 'expense-1', accountNumber: '4000', name: 'Materials', type: 'EXPENSE' },
+        { _id: 'revenue-1', accountNumber: '3400', name: 'Sales', type: 'REVENUE' },
+      ],
+      aggregateResult: [{
+        debits: [
+          { _id: 'asset-1', total: 100 },
+          { _id: 'expense-1', total: 25 },
+        ],
+        credits: [{ _id: 'revenue-1', total: 125 }],
+      }],
+    });
+
+    const report = await service.getTrialBalance({ endDate: '2026-03-31', currency: 'CHF' });
+
+    expect(report.totalDebit).toBe(125);
+    expect(report.totalCredit).toBe(125);
+    expect(report.imbalance).toBe(0);
+    expect(report.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ accountNumber: '1020', debitBalance: 100, creditBalance: 0 }),
+      expect.objectContaining({ accountNumber: '3400', debitBalance: 0, creditBalance: 125 }),
+    ]));
+  });
 });

@@ -101,6 +101,23 @@ export const reportService = {
     return res.data;
   },
 
+  async importReports({ file, dryRun = false } = {}) {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('dryRun', dryRun ? 'true' : 'false');
+    const res = await apiClient.post(ENDPOINTS.MOBILE.REPORTS_IMPORT, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return unwrapData(res);
+  },
+
+  async downloadImportTemplate() {
+    const res = await apiClient.get(ENDPOINTS.MOBILE.REPORTS_IMPORT_TEMPLATE, {
+      responseType: 'blob',
+    });
+    return res.data;
+  },
+
   async createReport(orderId, data) {
     const res = await apiClient.post(ENDPOINTS.MOBILE.ORDER_REPORTS(orderId), data);
     return normalizeReport(unwrapData(res));

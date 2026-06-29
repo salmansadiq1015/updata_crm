@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { parse } from 'csv-parse/sync';
 import TimeEntry from '../mobile/timeEntry.model.js';
 import timeEntryService from '../mobile/timeEntry.service.js';
 import LeaveRequest from './leaveRequest.model.js';
@@ -9,13 +10,35 @@ import User from '../auth/user.model.js';
 import auditService from '../auth/audit.service.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
-import { ConflictError, NotFoundError } from '../../shared/errors/AppError.js';
+import { ConflictError, NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 import { emitTimeTrackingRealtimeEvent } from '../../shared/socket/socketServer.js';
 
 const DEFAULT_WORKDAY_MINUTES = 8 * 60;
 const MAX_EXPORT_ROWS = 10000;
 const MAX_LIST_ROWS = 1000;
+const MAX_IMPORT_ROWS = 1000;
+const TIME_ENTRY_IMPORT_COLUMNS = [
+  'orderId',
+  'technicianId',
+  'date',
+  'startTime',
+  'endTime',
+  'breakDurationMin',
+  'activityType',
+  'note',
+];
+const TIME_ENTRY_IMPORT_SAMPLE = {
+  orderId: '66f000000000000000000001',
+  technicianId: '',
+  date: '2026-06-29',
+  startTime: '08:00',
+  endTime: '17:00',
+  breakDurationMin: '30',
+  activityType: 'ONSITE_WORK',
+  note: 'Imported maintenance visit',
+};
+const IMPORT_ACTIVITY_TYPES = ['TRAVEL', 'ONSITE_WORK', 'ADMINISTRATIVE', 'OTHER'];
 
 const TIME_ENTRY_POPULATE = [
   { path: 'technicianId', select: 'firstName lastName email department position' },
@@ -141,14 +164,109 @@ function csvEscape(value) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function toCsv(rows) {
+function toCsv(rows, preferredHeaders = null) {
   if (!rows.length) return '';
-  const headers = Object.keys(rows[0]);
+  const headers = preferredHeaders || Object.keys(rows[0]);
   const lines = [headers.join(',')];
   for (const row of rows) {
     lines.push(headers.map((header) => csvEscape(row[header])).join(','));
   }
   return `${lines.join('\r\n')}\r\n`;
+}
+
+function rowError(row, field, message) {
+  return { row, field, message };
+}
+
+function readCell(row, keys) {
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(row, key) && row[key] !== '') return row[key];
+  }
+  return '';
+}
+
+function parseCsvRows(file) {
+  if (!file?.buffer) {
+    throw new ConflictError('Time entry import file is required.');
+  }
+
+  try {
+    return parse(file.buffer.toString('utf8'), {
+      bom: true,
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    });
+  } catch (err) {
+    throw new ValidationError('Time entry import CSV could not be parsed.', [
+      { field: 'file', message: err.message || 'Invalid CSV file.' },
+    ]);
+  }
+}
+
+function parseDateOnly(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const candidate = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? new Date(`${text}T00:00:00.000Z`)
+    : new Date(text);
+  return Number.isNaN(candidate.getTime()) ? null : candidate;
+}
+
+function parseDateTime(date, value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const candidate = text.includes('T')
+    ? new Date(text)
+    : new Date(`${dateKey(date)}T${text.length === 5 ? `${text}:00` : text}.000Z`);
+  return Number.isNaN(candidate.getTime()) ? null : candidate;
+}
+
+function normalizeImportRow(row, rowNumber, fallbackTechnicianId) {
+  const errors = [];
+  const orderId = String(readCell(row, ['orderId', 'assignmentId', 'jobId']) || '').trim();
+  const technicianId = String(readCell(row, ['technicianId', 'employeeId', 'userId']) || fallbackTechnicianId || '').trim();
+  const date = parseDateOnly(readCell(row, ['date', 'workDate']));
+  const startTime = date ? parseDateTime(date, readCell(row, ['startTime', 'start'])) : null;
+  const endTime = date ? parseDateTime(date, readCell(row, ['endTime', 'end'])) : null;
+  const breakDurationMin = Number(readCell(row, ['breakDurationMin', 'breakMinutes', 'break']) || 0);
+  const activityType = String(readCell(row, ['activityType', 'activity']) || '').trim().toUpperCase();
+  const note = String(readCell(row, ['note', 'notes']) || '').trim();
+
+  if (!isObjectId(orderId)) errors.push(rowError(rowNumber, 'orderId', 'Valid orderId is required.'));
+  if (!isObjectId(technicianId)) errors.push(rowError(rowNumber, 'technicianId', 'Valid technicianId is required, or leave it blank for the importing user.'));
+  if (!date) errors.push(rowError(rowNumber, 'date', 'Valid date is required.'));
+  if (!startTime) errors.push(rowError(rowNumber, 'startTime', 'Valid startTime is required. Use HH:mm or ISO date-time.'));
+  if (!endTime) errors.push(rowError(rowNumber, 'endTime', 'Valid endTime is required. Use HH:mm or ISO date-time.'));
+  if (startTime && endTime && endTime <= startTime) errors.push(rowError(rowNumber, 'endTime', 'endTime must be after startTime.'));
+  if (!Number.isFinite(breakDurationMin) || breakDurationMin < 0) errors.push(rowError(rowNumber, 'breakDurationMin', 'breakDurationMin must be zero or greater.'));
+  if (startTime && endTime && Number.isFinite(breakDurationMin)) {
+    const grossMinutes = (endTime - startTime) / 60000;
+    if (breakDurationMin >= grossMinutes) errors.push(rowError(rowNumber, 'breakDurationMin', 'breakDurationMin must be less than the gross duration.'));
+  }
+  if (!IMPORT_ACTIVITY_TYPES.includes(activityType)) {
+    errors.push(rowError(rowNumber, 'activityType', `activityType must be one of: ${IMPORT_ACTIVITY_TYPES.join(', ')}.`));
+  }
+  if (note.length > 500) errors.push(rowError(rowNumber, 'note', 'note cannot exceed 500 characters.'));
+
+  if (errors.length) return { errors };
+
+  return {
+    errors,
+    value: {
+      row: rowNumber,
+      orderId,
+      technicianId,
+      payload: {
+        date,
+        startTime,
+        endTime,
+        breakDurationMin,
+        activityType,
+        note: note || null,
+      },
+    },
+  };
 }
 
 class TimeTrackingService {
@@ -292,6 +410,97 @@ class TimeTrackingService {
       filename: `time-records-${new Date().toISOString().slice(0, 10)}.csv`,
       csv: toCsv(rows),
     };
+  }
+
+  async getImportTemplate() {
+    return toCsv([TIME_ENTRY_IMPORT_SAMPLE], TIME_ENTRY_IMPORT_COLUMNS);
+  }
+
+  async importTimeEntriesCsv(file, options = {}, userId, meta = {}) {
+    const rows = parseCsvRows(file);
+    if (rows.length === 0) {
+      throw new ValidationError('Time entry import file is empty.');
+    }
+    if (rows.length > MAX_IMPORT_ROWS) {
+      throw new ConflictError(`Time entry import is limited to ${MAX_IMPORT_ROWS} rows per file.`);
+    }
+
+    const dryRun = options.dryRun === true || options.dryRun === 'true';
+    const prepared = [];
+    const rowErrors = [];
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const rowNumber = index + 2;
+      const result = normalizeImportRow(rows[index], rowNumber, normalizeId(userId));
+      if (result.errors.length) rowErrors.push(...result.errors);
+      else prepared.push(result.value);
+    }
+
+    if (prepared.length) {
+      const orderIds = [...new Set(prepared.map((item) => item.orderId))];
+      const technicianIds = [...new Set(prepared.map((item) => item.technicianId))];
+      const [orders, technicians] = await Promise.all([
+        Assignment.find({ _id: { $in: orderIds } }).select('_id').lean(),
+        User.find({ _id: { $in: technicianIds }, status: 'active' }).select('_id').lean(),
+      ]);
+      const existingOrderIds = new Set(orders.map((item) => normalizeId(item._id)));
+      const activeTechnicianIds = new Set(technicians.map((item) => normalizeId(item._id)));
+
+      for (const item of prepared) {
+        if (!existingOrderIds.has(item.orderId)) {
+          rowErrors.push(rowError(item.row, 'orderId', 'Referenced order was not found.'));
+        }
+        if (!activeTechnicianIds.has(item.technicianId)) {
+          rowErrors.push(rowError(item.row, 'technicianId', 'Referenced technician was not found or is inactive.'));
+        }
+      }
+    }
+
+    const invalidRows = new Set(rowErrors.map((error) => error.row));
+    const summary = {
+      dryRun,
+      totalRows: rows.length,
+      validRows: prepared.filter((item) => !invalidRows.has(item.row)).length,
+      created: 0,
+      skipped: rowErrors.length ? invalidRows.size : 0,
+      failed: invalidRows.size,
+      rowErrors,
+    };
+
+    if (dryRun || rowErrors.length) return summary;
+
+    for (const item of prepared) {
+      try {
+        await timeEntryService.create(
+          item.orderId,
+          item.payload,
+          item.technicianId,
+          { ...meta, source: 'time-tracking-import' },
+        );
+        summary.created += 1;
+      } catch (err) {
+        summary.failed += 1;
+        summary.rowErrors.push(rowError(item.row, 'row', err.message || 'Time entry could not be imported.'));
+      }
+    }
+
+    summary.skipped = prepared.length - summary.created;
+
+    auditService.logEvent({
+      eventType: 'time-entry.imported',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: summary.failed > 0 ? 'partial' : 'success',
+      module: 'time-tracking',
+      details: {
+        totalRows: summary.totalRows,
+        created: summary.created,
+        failed: summary.failed,
+      },
+    });
+
+    return summary;
   }
 
   async listLeaveRequests(filters = {}) {

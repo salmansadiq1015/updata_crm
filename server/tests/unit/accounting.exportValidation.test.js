@@ -12,9 +12,19 @@ async function loadJournalService(entries = []) {
     invalidatePattern: jest.fn(),
   };
 
-  jest.unstable_mockModule('mongoose', () => ({
-    default: { startSession: jest.fn() },
-  }));
+  jest.unstable_mockModule('mongoose', () => {
+    function MockSchema() {
+      return { index: jest.fn(), pre: jest.fn() };
+    }
+    MockSchema.Types = { ObjectId: 'ObjectId' };
+    return {
+      default: {
+        Schema: MockSchema,
+        model: jest.fn(() => ({})),
+        startSession: jest.fn(),
+      },
+    };
+  });
   jest.unstable_mockModule('../../src/modules/accounting/journalEntry.repository.js', () => ({
     default: journalEntryRepository,
   }));

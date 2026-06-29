@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { arPaymentRepository, arPaymentAllocationRepository } from './arPayment.repository.js';
 import journalEntryService from './journalEntry.service.js';
 import accountMappingService, { ACCOUNT_MAPPING } from './accountMapping.service.js';
+import fiscalPeriodService from './fiscalPeriod.service.js';
 import dunningTemplateRepository from './dunningTemplate.repository.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
@@ -143,6 +144,8 @@ function buildAgingPipeline(now = new Date()) {
 
 class ArReceivablesService {
   async recordPayment(data, userId, meta = {}) {
+    await fiscalPeriodService.assertPostingDateOpen(data.paymentDate);
+
     const payment = await arPaymentRepository.create({
       ...data,
       unallocatedAmount: data.amount,
@@ -217,6 +220,7 @@ class ArReceivablesService {
       await session.withTransaction(async () => {
         payment = await arPaymentRepository.findById(paymentId, { session });
         if (!payment) throw new NotFoundError('ArPayment', paymentId);
+        await fiscalPeriodService.assertPostingDateOpen(payment.paymentDate, { session });
 
         if (totalAllocating > roundMoney(payment.unallocatedAmount)) {
           throw new AppError(
@@ -491,6 +495,9 @@ class ArReceivablesService {
 
     try {
       await session.withTransaction(async () => {
+        const writeOffDate = new Date();
+        await fiscalPeriodService.assertPostingDateOpen(writeOffDate, { session });
+
         invoice = await Invoice.findOne({
           _id: invoiceId,
           isDeleted: false,
@@ -512,7 +519,7 @@ class ArReceivablesService {
           invoice.amountDue || 0,
           `Write-off: ${reason}`,
           userId,
-          { session },
+          { session, entryDate: writeOffDate },
         );
 
         const update = await Invoice.updateOne(

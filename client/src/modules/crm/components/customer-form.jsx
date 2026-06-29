@@ -229,8 +229,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
             {/* Duplicate warning */}
             {!isEdit && dupesData?.hasDuplicates && (
               <DuplicateWarning
-                title={t('crm.duplicateWarningTitle', 'Mögliche Duplikate gefunden')}
-                description={t('crm.duplicateWarningDesc', 'Kunden mit ähnlichem Namen existieren bereits:')}
+                title={t('crm.duplicateWarningTitle', 'Moegliche Duplikate gefunden')}
+                description={t('crm.duplicateWarningDesc', 'Kunden mit aehnlichem Namen existieren bereits:')}
                 duplicates={dupesData.duplicates || []}
                 onDismiss={() => handleOpenChange(false)}
                 className="mb-6"
@@ -383,7 +383,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     <Input placeholder="8000" {...register('postalCode')} className={inputCls} />
                   </DarkField>
                   <DarkField label={t('crm.city', 'Ort')} error={errors.city}>
-                    <Input placeholder="Zürich" {...register('city')} className={inputCls} />
+                    <Input placeholder="Zuerich" {...register('city')} className={inputCls} />
                   </DarkField>
                   <DarkField label={t('crm.canton', 'Kanton')} error={errors.canton}>
                     <Select
@@ -391,7 +391,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                       onValueChange={(v) => setValue('canton', v, { shouldValidate: true })}
                     >
                       <SelectTrigger className={selectTriggerCls}>
-                        <SelectValue placeholder="—" />
+                        <SelectValue placeholder="-" />
                       </SelectTrigger>
                       <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
                         {CH_CANTONS.map((c) => (
@@ -504,18 +504,18 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
             )}
           </div>
 
-          <Separator className="shrink-0 bg-white/6" />
+          <Separator className="shrink-0 bg-border" />
 
           {/* Footer */}
           <div className="flex items-center justify-between px-6 py-4 shrink-0">
             <div className="flex items-center gap-2">
               {currentStep > 0 ? (
-                <Button type="button" variant="ghost" className="gap-1.5 h-9 text-white/55 hover:text-white/80 hover:bg-white/5" onClick={goBack}>
+                <Button type="button" variant="ghost" className="gap-1.5 h-9 text-muted-foreground hover:text-foreground hover:bg-muted/60" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  {t('common.back', 'Zurück')}
+                  {t('common.back', 'Zurueck')}
                 </Button>
               ) : (
-                <Button type="button" variant="ghost" className="h-9 text-white/55 hover:text-white/80 hover:bg-white/5" onClick={() => handleOpenChange(false)}>
+                <Button type="button" variant="ghost" className="h-9 text-muted-foreground hover:text-foreground hover:bg-muted/60" onClick={() => handleOpenChange(false)}>
                   {t('common.cancel', 'Abbrechen')}
                 </Button>
               )}
@@ -528,7 +528,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     key={i}
                     className={cn(
                       'h-1.5 rounded-full transition-all',
-                      i === currentStep ? 'w-4 bg-blue-400' : i < currentStep ? 'w-1.5 bg-emerald-500' : 'w-1.5 bg-white/15',
+                      i === currentStep ? 'w-4 bg-blue-500' : i < currentStep ? 'w-1.5 bg-emerald-500' : 'w-1.5 bg-border',
                     )}
                   />
                 ))}
@@ -568,7 +568,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
 function DarkField({ label, required, error, children }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+      <Label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">
         {label}{required && <span className="text-red-400 ml-1">*</span>}
       </Label>
       {children}

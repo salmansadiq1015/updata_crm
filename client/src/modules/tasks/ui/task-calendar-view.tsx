@@ -25,8 +25,9 @@ function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 
-function getFirstDayOfWeek(year: number, month: number) {
-  return new Date(year, month, 1).getDay();
+function getFirstDayOffset(year: number, month: number, weekStartsOnMonday: boolean) {
+  const day = new Date(year, month, 1).getDay();
+  return weekStartsOnMonday ? (day + 6) % 7 : day;
 }
 
 function groupByDueDate(tasks: Task[]): Record<string, Task[]> {
@@ -56,7 +57,7 @@ export function TaskCalendarView({ tasks, listId }: TaskCalendarViewProps) {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const today = useMemo(() => new Date(), []);
-  const todayKey = useMemo(() => today.toISOString().slice(0, 10), [today]);
+  const todayKey = useMemo(() => toDateKey(today.getFullYear(), today.getMonth(), today.getDate()), [today]);
 
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -64,18 +65,19 @@ export function TaskCalendarView({ tasks, listId }: TaskCalendarViewProps) {
 
   const tasksByDate = useMemo(() => groupByDueDate(tasks), [tasks]);
   const noDateTasks = useMemo(() => tasks.filter((t) => !t.dueDate), [tasks]);
+  const weekStartsOnMonday = locale === 'de' || locale === 'fr' || locale === 'it';
   const monthLabel = useMemo(
     () => new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-US', { month: 'long', year: 'numeric' }).format(new Date(year, month, 1)),
     [locale, month, year],
   );
   const dayLabels = useMemo(
     () => Array.from({ length: 7 }, (_, day) =>
-      new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-US', { weekday: 'short' }).format(new Date(2026, 1, day + 1))),
-    [locale],
+      new Intl.DateTimeFormat(locale === 'de' ? 'de-CH' : 'en-US', { weekday: 'short' }).format(new Date(2026, 1, day + (weekStartsOnMonday ? 2 : 1)))),
+    [locale, weekStartsOnMonday],
   );
 
   const daysInMonth = getDaysInMonth(year, month);
-  const firstDow = getFirstDayOfWeek(year, month);
+  const firstDow = getFirstDayOffset(year, month, weekStartsOnMonday);
 
   const prevMonth = () => {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }

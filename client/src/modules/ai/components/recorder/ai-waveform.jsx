@@ -15,12 +15,14 @@ export function AiWaveform({ getWaveformData, stopWaveform, isActive }) {
   }, [isActive, getWaveformData, stopWaveform]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={320}
-      height={48}
-      className="w-full h-12 rounded"
-      aria-hidden="true"
-    />
+    <div className="w-full rounded-2xl border border-white/10 bg-slate-950/45 p-3 shadow-inner shadow-black/30">
+      <canvas
+        ref={canvasRef}
+        width={320}
+        height={64}
+        className="h-16 w-full rounded-xl bg-gradient-to-r from-cyan-400/5 via-violet-400/10 to-cyan-400/5"
+        aria-hidden="true"
+      />
+    </div>
   );
 }

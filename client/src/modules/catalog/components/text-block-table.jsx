@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Pencil, Trash2, Search, Type } from 'lucide-react';
+import { Pencil, Plus, Trash2, Search, Type } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -15,7 +15,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ListPage } from '@/components/ui/list-page';
-import { EmptyState } from '@/components/ui/empty-state';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { useTextBlocks } from '../hooks/use-text-block-queries';
 import { useTextBlockMutations } from '../hooks/use-text-block-mutations';
@@ -24,9 +23,16 @@ import { TextBlockFormDialog } from './text-block-form-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useClientPagination } from '@/shared/hooks/use-client-pagination';
+import { normalizeTextBlocks } from '../services/catalog-normalizers';
 
 const ALL = '__all__';
 const PAGE_SIZE = 10;
+
+function formatPrice(value) {
+  if (value === null || value === undefined || value === '') return '-';
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(2) : '-';
+}
 
 export function TextBlockTable() {
   const { t } = useLanguage();
@@ -42,43 +48,51 @@ export function TextBlockTable() {
   const { data: categories = [] } = useCatalogCategories();
   const { deleteTextBlock } = useTextBlockMutations();
 
-  const filtered = useMemo(() => blocks.filter((b) => {
-    const catId = b.categoryId ?? b.category?._id;
+  const normalizedBlocks = useMemo(() => normalizeTextBlocks(blocks, categories), [blocks, categories]);
+
+  const filtered = useMemo(() => normalizedBlocks.filter((b) => {
+    const catId = b.categoryId;
     if (categoryFilter !== ALL && catId !== categoryFilter) return false;
     if (statusFilter !== ALL && b.status !== statusFilter) return false;
     return true;
-  }), [blocks, categoryFilter, statusFilter]);
+  }), [normalizedBlocks, categoryFilter, statusFilter]);
 
   const { page, setPage, pageItems, total } = useClientPagination(filtered, PAGE_SIZE);
 
   const openCreate = () => { setDialogBlock(null); setDialogKey((k) => k + 1); setDialogOpen(true); };
   const openEdit = (b) => { setDialogBlock(b); setDialogKey((k) => k + 1); setDialogOpen(true); };
+  const statusLabel = (status) => (status === 'ACTIVE'
+    ? t('catalog.articles.statusActive')
+    : t('catalog.articles.statusInactive'));
 
   return (
     <ListPage>
       <ListPage.Toolbar>
-        <div className="relative max-w-xs flex-1">
+        <div className="relative min-w-0 flex-1 basis-full sm:basis-72 sm:max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input className="pl-8" placeholder={t('catalog.textBlocks.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-40"><SelectValue placeholder={t('common.category')} /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder={t('common.category')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('catalog.textBlocks.allCategories', 'All categories')}</SelectItem>
+            <SelectItem value={ALL}>{t('catalog.textBlocks.allCategories')}</SelectItem>
             {categories.map((c) => <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36"><SelectValue placeholder={t('common.status')} /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder={t('common.status')} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>{t('catalog.textBlocks.allStatuses', 'All statuses')}</SelectItem>
+            <SelectItem value={ALL}>{t('catalog.textBlocks.allStatuses')}</SelectItem>
             <SelectItem value="ACTIVE">{t('catalog.articles.statusActive')}</SelectItem>
             <SelectItem value="INACTIVE">{t('catalog.articles.statusInactive')}</SelectItem>
           </SelectContent>
         </Select>
-        <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">{total} {t('common.results', 'results')}</span>
-          <Button size="sm" onClick={openCreate}>+ {t('catalog.textBlocks.create')}</Button>
+        <div className="flex w-full items-center justify-between gap-3 sm:ml-auto sm:w-auto">
+          <span className="text-xs text-muted-foreground">{total} {t('common.results')}</span>
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-3.5 w-3.5" />
+            {t('catalog.textBlocks.create')}
+          </Button>
         </div>
       </ListPage.Toolbar>
 
@@ -86,11 +100,21 @@ export function TextBlockTable() {
         isLoading={isLoading}
         isError={isError}
         isEmpty={!isLoading && total === 0}
-        errorMessage={t('common.errorLoading', 'Could not load data')}
-        empty={{ icon: Type, title: t('catalog.textBlocks.empty'), description: t('catalog.textBlocks.emptyHint', 'Create your first text block.'), action: <Button size="sm" onClick={openCreate}>+ {t('catalog.textBlocks.create')}</Button> }}
+        errorMessage={t('common.errorLoading')}
+        empty={{
+          icon: Type,
+          title: t('catalog.textBlocks.empty'),
+          description: t('catalog.textBlocks.emptyHint'),
+          action: (
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="h-3.5 w-3.5" />
+              {t('catalog.textBlocks.create')}
+            </Button>
+          ),
+        }}
       >
-        <div className="overflow-hidden rounded-md border">
-          <Table>
+        <div className="rounded-md border">
+          <Table className="min-w-[720px]">
             <TableHeader>
               <TableRow>
                 <TableHead>{t('common.title')}</TableHead>
@@ -103,18 +127,39 @@ export function TextBlockTable() {
             <TableBody>
               {pageItems.map((block) => (
                 <TableRow key={block._id}>
-                  <TableCell className="font-medium">{block.title}</TableCell>
-                  <TableCell>{block.category?.name ?? '—'}</TableCell>
-                  <TableCell>{block.price ? Number(block.price).toFixed(2) : '—'}</TableCell>
-                  <TableCell><Badge variant={block.status === 'ACTIVE' ? 'default' : 'secondary'}>{block.status}</Badge></TableCell>
+                  <TableCell className="font-medium">
+                    <span className="block max-w-[24rem] truncate" title={block.title}>{block.title}</span>
+                  </TableCell>
+                  <TableCell className={block.categoryName ? undefined : 'text-muted-foreground'}>
+                    {block.categoryName || '-'}
+                  </TableCell>
+                  <TableCell className="tabular-nums">{formatPrice(block.price)}</TableCell>
+                  <TableCell>
+                    <Badge variant={block.status === 'ACTIVE' ? 'default' : 'secondary'}>
+                      {statusLabel(block.status)}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(block)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openEdit(block)}
+                        aria-label={`${t('common.edit')}: ${block.title}`}
+                        title={`${t('common.edit')}: ${block.title}`}
+                      >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            aria-label={`${t('common.delete')}: ${block.title}`}
+                            title={`${t('common.delete')}: ${block.title}`}
+                          >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </AlertDialogTrigger>

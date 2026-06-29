@@ -119,15 +119,19 @@ export function useAudioRecorder({ onUploadComplete, onError } = {}) {
   const getWaveformData = useCallback((canvas) => {
     if (!analyserRef.current || !canvas) return;
     const ctx    = canvas.getContext('2d');
+    if (!ctx) return;
     const width  = canvas.width;
     const height = canvas.height;
     const buffer = new Uint8Array(analyserRef.current.frequencyBinCount);
+    const strokeStyle =
+      getComputedStyle(canvas).getPropertyValue('--primary').trim() ||
+      '#9F7AEA';
 
     const draw = () => {
       analyserRef.current?.getByteTimeDomainData(buffer);
       ctx.clearRect(0, 0, width, height);
       ctx.beginPath();
-      ctx.strokeStyle = 'hsl(var(--primary))';
+      ctx.strokeStyle = strokeStyle;
       ctx.lineWidth   = 2;
       const sliceWidth = width / buffer.length;
       let x = 0;

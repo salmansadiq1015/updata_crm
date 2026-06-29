@@ -24,6 +24,31 @@ export const orderService = {
     };
   },
 
+  async exportOrders(filters = {}) {
+    const res = await apiClient.get(ENDPOINTS.MOBILE.ORDERS_EXPORT, {
+      params: filters,
+      responseType: 'blob',
+    });
+    return res.data;
+  },
+
+  async importOrders({ file, dryRun = false } = {}) {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('dryRun', dryRun ? 'true' : 'false');
+    const res = await apiClient.post(ENDPOINTS.MOBILE.ORDERS_IMPORT, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data?.data ?? res.data;
+  },
+
+  async downloadImportTemplate() {
+    const res = await apiClient.get(ENDPOINTS.MOBILE.ORDERS_IMPORT_TEMPLATE, {
+      responseType: 'blob',
+    });
+    return res.data;
+  },
+
   async getOrderById(id) {
     const res = await apiClient.get(ENDPOINTS.MOBILE.ORDER_BY_ID(id));
     return res.data;

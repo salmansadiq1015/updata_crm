@@ -17,6 +17,12 @@ import { useAccounts, useApInvoices, useApSummary, useBankAccounts } from '@/mod
 import { useApMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
 import { apService } from '@/modules/accounting/services/accounting-service';
 import { cursorPageLabel, downloadResponse } from '@/modules/accounting/utils/accounting-ui';
+import {
+  buildApInvoicePayload,
+  calculateApInvoicePreview,
+  calculateApLineTotal,
+  emptyApLine,
+} from '@/modules/accounting/utils/ap-invoice-payload';
 
 const fmt = (n, currency = 'CHF') =>
   new Intl.NumberFormat('de-CH', { style: 'currency', currency, minimumFractionDigits: 2 }).format(n ?? 0);
@@ -41,58 +47,6 @@ function isBatchEligible(invoice) {
   return invoice.status === 'APPROVED' && Number(invoice.outstandingAmount || 0) > 0 && !invoice.paymentBatchId;
 }
 
-const emptyLine = () => ({
-  description: '',
-  quantity: '1',
-  unit: 'pcs',
-  unitPrice: '',
-  vatRate: '8.1',
-  accountId: '',
-  costCenter: '',
-  projectReference: '',
-  orderReference: '',
-});
-
-function buildApPayload(form, lines) {
-  const lineItems = lines.map((line, index) => {
-    const quantity = Number(line.quantity || 0);
-    const unitPrice = Number(line.unitPrice || 0);
-    const lineTotal = Math.round(quantity * unitPrice * 100) / 100;
-    return {
-      position: index + 1,
-      description: line.description.trim(),
-      quantity,
-      unit: line.unit.trim() || 'pcs',
-      unitPrice,
-      vatRate: Number(line.vatRate || 0),
-      accountId: line.accountId,
-      costCenter: line.costCenter.trim() || null,
-      allocations: [{
-        accountId: line.accountId,
-        amount: lineTotal,
-        costCenter: line.costCenter.trim() || null,
-        projectReference: line.projectReference.trim() || form.projectReference.trim() || null,
-        orderReference: line.orderReference.trim() || form.orderReference.trim() || null,
-      }],
-    };
-  });
-
-  return {
-    supplierId: form.supplierId.trim(),
-    supplierName: form.supplierName.trim(),
-    supplierIban: form.supplierIban.trim() || null,
-    supplierBic: form.supplierBic.trim() || null,
-    supplierInvoiceNumber: form.supplierInvoiceNumber.trim(),
-    invoiceDate: form.invoiceDate,
-    dueDate: form.dueDate,
-    paymentTermsDays: Number(form.paymentTermsDays || 0),
-    currency: form.currency,
-    projectReference: form.projectReference.trim() || null,
-    orderReference: form.orderReference.trim() || null,
-    lineItems,
-  };
-}
-
 function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
   const { createApInvoice } = useApMutations();
   const today = new Date().toISOString().slice(0, 10);
@@ -109,13 +63,12 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
     projectReference: '',
     orderReference: '',
   });
-  const [lines, setLines] = useState([emptyLine()]);
+  const [lines, setLines] = useState([emptyApLine()]);
 
   const postingAccounts = accounts.filter((account) => !account.isGroup && account.isActive !== false);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const setLine = (index, key, value) => setLines((current) => current.map((line, i) => (i === index ? { ...line, [key]: value } : line)));
-  const subtotal = lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0);
-  const vatTotal = lines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0) * (Number(line.vatRate || 0) / 100), 0);
+  const preview = calculateApInvoicePreview(lines);
   const canSubmit = form.supplierId.trim()
     && form.supplierName.trim()
     && form.supplierInvoiceNumber.trim()
@@ -124,8 +77,8 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!canSubmit) return;
-    await createApInvoice.mutateAsync(buildApPayload(form, lines));
-    setLines([emptyLine()]);
+    await createApInvoice.mutateAsync(buildApInvoicePayload(form, lines));
+    setLines([emptyApLine()]);
     setForm((current) => ({
       ...current,
       supplierId: '',
@@ -206,14 +159,14 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
           <div className="rounded-xl border border-border">
             <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
               <span className="text-sm font-medium">{de ? 'Positionen' : 'Line Items'}</span>
-              <Button type="button" size="sm" variant="outline" onClick={() => setLines((current) => [...current, emptyLine()])} disabled={lines.length >= 20}>
+              <Button type="button" size="sm" variant="outline" onClick={() => setLines((current) => [...current, emptyApLine()])} disabled={lines.length >= 20}>
                 <Plus className="h-4 w-4 mr-1.5" />
                 {de ? 'Position' : 'Line'}
               </Button>
             </div>
             <div className="divide-y divide-border">
               {lines.map((line, index) => {
-                const lineTotal = Number(line.quantity || 0) * Number(line.unitPrice || 0);
+                const lineTotal = calculateApLineTotal(line);
                 return (
                   <div key={index} className="grid gap-2 p-3 md:grid-cols-[1.5fr_0.5fr_0.5fr_0.7fr_0.6fr_1fr_2rem]">
                     <Input className="h-9" value={line.description} onChange={(event) => setLine(index, 'description', event.target.value)} placeholder={de ? 'Beschreibung' : 'Description'} required />
@@ -249,9 +202,9 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
           </div>
 
           <div className="flex justify-end gap-6 text-sm">
-            <span>{de ? 'Netto' : 'Net'}: <strong>{fmt(subtotal, form.currency)}</strong></span>
-            <span>MWST: <strong>{fmt(vatTotal, form.currency)}</strong></span>
-            <span>Total: <strong>{fmt(subtotal + vatTotal, form.currency)}</strong></span>
+            <span>{de ? 'Netto' : 'Net'}: <strong>{fmt(preview.subtotal, form.currency)}</strong></span>
+            <span>MWST: <strong>{fmt(preview.vatTotal, form.currency)}</strong></span>
+            <span>Total: <strong>{fmt(preview.total, form.currency)}</strong></span>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={createApInvoice.isPending}>{de ? 'Abbrechen' : 'Cancel'}</Button>

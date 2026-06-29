@@ -1,8 +1,7 @@
 'use client';
 
-import { memo, useMemo, useRef } from 'react';
-import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
+import { memo, useMemo, useRef, useState, type ReactNode } from 'react';
+import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent, useDraggable, useDroppable } from '@dnd-kit/core';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { CalendarDays, GripVertical, MessageSquare, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -43,52 +42,58 @@ const formatDueDate = (value: string | null) => {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value));
 };
 
-const TaskCard = memo(function TaskCard({
+const sortBoardTasks = (items: Task[]) =>
+  [...items].sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+
+const getTopSortOrder = (items: Task[]) => {
+  const first = sortBoardTasks(items)[0];
+  return first ? first.sortOrder - 1 : 0;
+};
+
+function TaskCardSurface({
   task,
   selected,
   users,
+  dragHandle,
+  isDragging,
+  isOverlay,
   onSelectTask,
 }: {
   task: Task;
   selected: boolean;
   users: WorkspaceUser[];
-  onSelectTask: (taskId: string) => void;
+  dragHandle?: ReactNode;
+  isDragging?: boolean;
+  isOverlay?: boolean;
+  onSelectTask?: (taskId: string) => void;
 }) {
   const { t } = useLanguage();
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: task.id,
-    data: { status: task.status },
-  });
-  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
   const due = formatDueDate(task.dueDate);
 
   return (
     <article
-      ref={setNodeRef}
-      style={style}
       className={cn(
         'group rounded-lg border border-border bg-card p-3 shadow-sm transition hover:border-primary/40 focus-within:ring-2 focus-within:ring-ring',
         selected && 'border-primary bg-primary/5',
-        isDragging && 'z-20 opacity-80 shadow-lg',
+        isDragging && 'opacity-40',
+        isOverlay && 'cursor-grabbing border-primary/50 shadow-2xl ring-2 ring-primary/20',
       )}
     >
       <div className="flex items-start gap-2">
-        <button
-          type="button"
-          className="mt-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-          aria-label={t('tasks.dragTask', 'Aufgabe ziehen: {title}', { title: task.title })}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          className="min-w-0 flex-1 text-left text-sm font-semibold leading-5 text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => onSelectTask(task.id)}
-        >
-          <span className="line-clamp-2">{task.title}</span>
-        </button>
+        {dragHandle}
+        {onSelectTask ? (
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-left text-sm font-semibold leading-5 text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => onSelectTask(task.id)}
+          >
+            <span className="line-clamp-2">{task.title}</span>
+          </button>
+        ) : (
+          <div className="min-w-0 flex-1 text-sm font-semibold leading-5 text-foreground">
+            <span className="line-clamp-2">{task.title}</span>
+          </div>
+        )}
       </div>
 
       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
@@ -111,6 +116,47 @@ const TaskCard = memo(function TaskCard({
         </span>
       </div>
     </article>
+  );
+}
+
+const TaskCard = memo(function TaskCard({
+  task,
+  selected,
+  users,
+  onSelectTask,
+}: {
+  task: Task;
+  selected: boolean;
+  users: WorkspaceUser[];
+  onSelectTask: (taskId: string) => void;
+}) {
+  const { t } = useLanguage();
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task.id,
+    data: { status: task.status },
+  });
+
+  return (
+    <div ref={setNodeRef}>
+      <TaskCardSurface
+        task={task}
+        selected={selected}
+        users={users}
+        isDragging={isDragging}
+        onSelectTask={onSelectTask}
+        dragHandle={(
+          <button
+            type="button"
+            className="mt-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+            aria-label={t('tasks.dragTask', 'Aufgabe ziehen: {title}', { title: task.title })}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        )}
+      />
+    </div>
   );
 });
 
@@ -187,6 +233,7 @@ function TaskBoardColumn({
 
 export function TaskBoardView({ tasks, selectedTaskId, onSelectTask, onPatchTask, users }: TaskBoardViewProps) {
   const { t } = useLanguage();
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const grouped = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = {
       OPEN: [],
@@ -196,20 +243,42 @@ export function TaskBoardView({ tasks, selectedTaskId, onSelectTask, onPatchTask
       CANCELLED: [],
     };
     for (const task of tasks) map[task.status].push(task);
+    for (const status of TASK_STATUSES) map[status] = sortBoardTasks(map[status]);
     return map;
   }, [tasks]);
 
+  const activeTask = useMemo(
+    () => tasks.find((task) => task.id === activeTaskId) ?? null,
+    [activeTaskId, tasks],
+  );
+
+  const onDragStart = (event: DragStartEvent) => {
+    setActiveTaskId(String(event.active.id));
+  };
+
   const onDragEnd = (event: DragEndEvent) => {
+    setActiveTaskId(null);
     const taskId = String(event.active.id);
     const nextStatus = event.over?.id;
     if (!nextStatus || !TASK_STATUSES.includes(nextStatus as TaskStatus)) return;
     const task = tasks.find((item) => item.id === taskId);
-    if (!task || task.status === nextStatus) return;
-    onPatchTask(task.id, { status: nextStatus as TaskStatus, expectedVersion: task.version });
+    if (!task) return;
+
+    const targetStatus = nextStatus as TaskStatus;
+    const targetTasks = grouped[targetStatus].filter((item) => item.id !== task.id);
+    const nextSortOrder = getTopSortOrder(targetTasks);
+    const isAlreadyTop = task.status === targetStatus && grouped[targetStatus][0]?.id === task.id;
+    if (isAlreadyTop) return;
+
+    onPatchTask(task.id, {
+      ...(task.status !== targetStatus ? { status: targetStatus } : {}),
+      sortOrder: nextSortOrder,
+      expectedVersion: task.version,
+    });
   };
 
   return (
-    <DndContext onDragEnd={onDragEnd}>
+    <DndContext onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveTaskId(null)}>
       <div className="flex h-full min-h-0 gap-3 overflow-x-auto bg-card p-3 scrollbar-thin" aria-label={t('tasks.boardAria', 'Kanban-Board')}>
         {TASK_STATUSES.map((status) => (
           <TaskBoardColumn
@@ -222,6 +291,18 @@ export function TaskBoardView({ tasks, selectedTaskId, onSelectTask, onPatchTask
           />
         ))}
       </div>
+      <DragOverlay dropAnimation={null}>
+        {activeTask ? (
+          <div className="w-72">
+            <TaskCardSurface
+              task={activeTask}
+              selected={selectedTaskId === activeTask.id}
+              users={users ?? []}
+              isOverlay
+            />
+          </div>
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 }

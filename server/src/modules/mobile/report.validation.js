@@ -159,6 +159,12 @@ export const reportExportQuerySchema = {
   }),
 };
 
+export const reportImportSchema = {
+  body: Joi.object({
+    dryRun: Joi.boolean().default(false),
+  }),
+};
+
 export const bulkReportIdsSchema = {
   body: Joi.object({
     ids: Joi.array().items(objectId).min(1).max(100).required(),

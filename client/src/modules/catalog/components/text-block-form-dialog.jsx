@@ -28,11 +28,19 @@ const schema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE']),
 });
 
+function getCategoryId(textBlock) {
+  const categoryId = textBlock?.categoryId;
+  if (categoryId && typeof categoryId === 'object') {
+    return categoryId._id || categoryId.id || '__none__';
+  }
+  return categoryId || textBlock?.category?._id || textBlock?.category?.id || '__none__';
+}
+
 function buildTextBlockDefaults(textBlock) {
   return textBlock
     ? {
-      title: textBlock.title,
-      categoryId: textBlock.categoryId ?? '__none__',
+      title: textBlock.title ?? '',
+      categoryId: getCategoryId(textBlock),
       price: textBlock.price ?? '',
       unit: textBlock.unit ?? '',
       status: textBlock.status ?? 'ACTIVE',
@@ -100,7 +108,7 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="categoryId"
@@ -142,7 +150,7 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
                   )}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="price"
@@ -173,7 +181,7 @@ export function TextBlockFormDialog({ open, onClose, textBlock }) {
                 <RichTextEditor
                   value={bodyHtml}
                   onChange={setBodyHtml}
-                  placeholder={t('catalog.textBlocks.bodyPlaceholder', '')}
+                  placeholder={t('catalog.textBlocks.bodyPlaceholder')}
                   maxLength={5000}
                 />
               </div>

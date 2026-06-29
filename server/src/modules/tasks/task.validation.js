@@ -15,7 +15,7 @@ export const createTaskSchema = {
     projectId: objectId.allow(null),
     orderId: objectId.allow(null),
     meetingId: objectId.allow(null),
-    sortOrder: Joi.number().integer().min(0),
+    sortOrder: Joi.number().integer(),
   }),
 };
 
@@ -31,6 +31,7 @@ export const updateTaskSchema = {
     projectId: objectId.allow(null),
     orderId: objectId.allow(null),
     meetingId: objectId.allow(null),
+    sortOrder: Joi.number().integer(),
     expectedVersion: Joi.number().integer().min(0),
   }).min(1),
 };
@@ -63,6 +64,7 @@ export const changeStatusSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     status: Joi.string().valid(...TASK_STATUSES).required(),
+    sortOrder: Joi.number().integer(),
     expectedVersion: Joi.number().integer().min(0),
     completeSubtasks: Joi.boolean(),
     completeParentOnly: Joi.boolean(),
@@ -83,7 +85,7 @@ export const batchPatchSchema = {
         dueDate: Joi.date().iso().allow(null),
         listId: objectId,
         meetingId: objectId.allow(null),
-        sortOrder: Joi.number().integer().min(0),
+        sortOrder: Joi.number().integer(),
         expectedVersion: Joi.number().integer().min(0),
       }).min(1).required(),
     })).min(1).max(100).required(),

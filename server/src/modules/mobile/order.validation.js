@@ -32,6 +32,20 @@ export const listOrdersSchema = {
   }),
 };
 
+export const orderExportQuerySchema = {
+  query: listOrdersSchema.query.keys({
+    all: Joi.boolean().default(true),
+    limit: Joi.number().integer().min(1).max(5000).default(5000),
+    cursor: Joi.string().optional(),
+  }),
+};
+
+export const orderImportSchema = {
+  body: Joi.object({
+    dryRun: Joi.boolean().default(false),
+  }),
+};
+
 export const orderIdParamSchema = {
   params: Joi.object({ id: objectId.required() }),
 };

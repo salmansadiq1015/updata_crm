@@ -1,10 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, RefreshCw, Search, UploadCloud } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight, UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageHeader } from '@/shared/components/page-header';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { useDebounce } from '@/shared/hooks/use-debounce';
@@ -13,6 +11,7 @@ import { PERMISSIONS } from '@/shared/constants/permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { showError, showSuccess } from '@/lib/toast';
 import { DocumentPreviewDrawer } from '@/modules/doctpl/components/DocumentPreviewDrawer';
+import { DocumentRepositoryFilters } from '@/modules/documents/components/document-repository-filters';
 import { DocumentRepositoryTable } from '@/modules/documents/components/document-repository-table';
 import { DocumentUploadDialog } from '@/modules/documents/components/document-upload-dialog';
 import {
@@ -20,10 +19,6 @@ import {
   useDocumentRepository,
   useDownloadRepositoryDocument,
 } from '@/modules/documents/hooks/use-document-repository';
-import {
-  DOCUMENT_ORIGIN_OPTIONS,
-  DOCUMENT_SOURCE_OPTIONS,
-} from '@/modules/documents/utils/document-formatters';
 
 const PAGE_SIZE = 25;
 
@@ -68,19 +63,48 @@ export default function DocumentsPage() {
   const documents = data?.items ?? [];
   const pagination = data?.pagination ?? {};
 
-  const resetPaging = () => {
+  const handleRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
+  const resetPaging = useCallback(() => {
     setCursorStack([]);
-  };
+  }, []);
 
-  const handleFilterChange = (setter) => (value) => {
-    setter(value);
-    resetPaging();
-  };
-
-  const handleTextFilterChange = (setter) => (event) => {
-    setter(event.target.value);
-    resetPaging();
-  };
+  const filterHandlers = useMemo(() => ({
+    onSearchChange: (value) => {
+      setSearch(value);
+      resetPaging();
+    },
+    onSourceChange: (value) => {
+      setSource(value);
+      resetPaging();
+    },
+    onOriginChange: (value) => {
+      setOrigin(value);
+      resetPaging();
+    },
+    onDocumentTypeChange: (value) => {
+      setDocumentType(value);
+      resetPaging();
+    },
+    onCategoryChange: (value) => {
+      setCategory(value);
+      resetPaging();
+    },
+    onDateFromChange: (value) => {
+      setDateFrom(value);
+      resetPaging();
+    },
+    onDateToChange: (value) => {
+      setDateTo(value);
+      resetPaging();
+    },
+    onSortOrderChange: (value) => {
+      setSortOrder(value);
+      resetPaging();
+    },
+  }), [resetPaging]);
 
   const openDownloadUrl = (payload) => {
     if (payload?.downloadUrl) {
@@ -130,7 +154,7 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="flex min-w-0 flex-col gap-5">
       <PageHeader
         title={t('documents.repository.titlePage')}
         description={t('documents.repository.pageDescription')}
@@ -143,71 +167,26 @@ export default function DocumentsPage() {
         ) : null}
       </PageHeader>
 
-      <div className="grid gap-3 rounded-lg border bg-background p-4 shadow-sm xl:grid-cols-[minmax(260px,1fr)_170px_170px_140px_140px_140px_140px_130px_auto]">
-        <div className="relative min-w-0">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={handleTextFilterChange(setSearch)}
-            placeholder={t('documents.repository.searchPlaceholder')}
-            className="pl-9"
-          />
-        </div>
-
-        <Select value={source} onValueChange={handleFilterChange(setSource)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {DOCUMENT_SOURCE_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>{t(option.labelKey)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={origin} onValueChange={handleFilterChange(setOrigin)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {DOCUMENT_ORIGIN_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>{t(option.labelKey)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Input
-          value={documentType}
-          onChange={handleTextFilterChange(setDocumentType)}
-          placeholder={t('documents.repository.type')}
-        />
-        <Input
-          value={category}
-          onChange={handleTextFilterChange(setCategory)}
-          placeholder={t('documents.repository.category')}
-        />
-        <Input
-          type="date"
-          value={dateFrom}
-          onChange={handleTextFilterChange(setDateFrom)}
-          aria-label={t('documents.repository.dateFrom')}
-        />
-        <Input
-          type="date"
-          value={dateTo}
-          onChange={handleTextFilterChange(setDateTo)}
-          aria-label={t('documents.repository.dateTo')}
-        />
-
-        <Select value={sortOrder} onValueChange={handleFilterChange(setSortOrder)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="desc">{t('documents.repository.newest')}</SelectItem>
-            <SelectItem value="asc">{t('documents.repository.oldest')}</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Button variant="outline" className="gap-2" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-          {t('common.refresh')}
-        </Button>
-      </div>
+      <DocumentRepositoryFilters
+        search={search}
+        source={source}
+        origin={origin}
+        documentType={documentType}
+        category={category}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        sortOrder={sortOrder}
+        onSearchChange={filterHandlers.onSearchChange}
+        onSourceChange={filterHandlers.onSourceChange}
+        onOriginChange={filterHandlers.onOriginChange}
+        onDocumentTypeChange={filterHandlers.onDocumentTypeChange}
+        onCategoryChange={filterHandlers.onCategoryChange}
+        onDateFromChange={filterHandlers.onDateFromChange}
+        onDateToChange={filterHandlers.onDateToChange}
+        onSortOrderChange={filterHandlers.onSortOrderChange}
+        onRefresh={handleRefresh}
+        isFetching={isFetching}
+      />
 
       <DocumentRepositoryTable
         documents={documents}
@@ -226,11 +205,11 @@ export default function DocumentsPage() {
             ? t('documents.repository.refreshing')
             : t('documents.repository.pageCount', null, { count: documents.length })}
         </p>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex">
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className="w-full gap-1.5 sm:w-auto"
             disabled={cursorStack.length === 0 || isFetching}
             onClick={() => setCursorStack((stack) => stack.slice(0, -1))}
           >
@@ -240,7 +219,7 @@ export default function DocumentsPage() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            className="w-full gap-1.5 sm:w-auto"
             disabled={!pagination.hasNext || !pagination.nextCursor || isFetching}
             onClick={() => setCursorStack((stack) => [...stack, pagination.nextCursor])}
           >

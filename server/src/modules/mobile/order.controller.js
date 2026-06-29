@@ -1,6 +1,7 @@
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
-import { ConflictError, ValidationError } from '../../shared/errors/AppError.js';
+import { ConflictError } from '../../shared/errors/AppError.js';
+import orderManagementService, { buildOrderListFilters } from './orderManagement.service.js';
 import {
   serializeMobileAssignment,
   serializeMobileAssignments,
@@ -109,106 +110,8 @@ function toIso(value) {
 class OrderController {
   async createOrder(req, res, next) {
     try {
-      const { default: counterService } = await import('../deploy/counter.service.js');
-      const { default: assignmentRepository } = await import('../deploy/assignment.repository.js');
-      const { default: assignmentService } = await import('../deploy/assignment.service.js');
-      const { default: appointmentService } = await import('../deploy/appointment.service.js');
-
-      const {
-        orderType, assignmentType,
-        title, description, scopeOfWork, specialInstructions,
-        priority, scheduledStart, scheduledEnd,
-        projectId,
-        customerId, siteId,
-        customerName, customerPhone, customerEmail,
-        siteAddress, accessInstructions, parkingInfo,
-      } = req.body;
-
-      const resolvedType = assignmentType || orderType;
-      if (!resolvedType) {
-        throw new ValidationError('orderType is required');
-      }
-
-      const now = new Date();
-      const startDatetime = scheduledStart ? new Date(scheduledStart) : now;
-      const endDatetime = scheduledEnd ? new Date(scheduledEnd) : new Date(now.getTime() + 8 * 3600 * 1000);
-
-      const instructionsParts = [description, scopeOfWork, specialInstructions].filter(Boolean);
-      const instructions = instructionsParts.join('\n\n') || null;
-      const appointment = customerName || customerPhone || customerEmail || siteAddress || accessInstructions || parkingInfo
-        ? {
-          customerContactName: customerName || undefined,
-          customerContactPhone: customerPhone || undefined,
-          customerContactEmail: customerEmail || undefined,
-          customerNotes: [siteAddress, accessInstructions, parkingInfo].filter(Boolean).join(' | ') || undefined,
-        }
-        : null;
-
-      let assignment;
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      const target = await resolveAssignmentTarget(req.body);
-
-      if (target.employeeIds.length > 0) {
-        const [created] = await assignmentService.create({
-          employeeIds: target.employeeIds,
-          projectId: projectId || null,
-          customerId: customerId || null,
-          siteId: siteId || null,
-          assignmentTargetType: 'EMPLOYEE',
-          assignmentTargetId: null,
-          assignmentTargetLabel: null,
-          assignmentType: resolvedType,
-          title: title || null,
-          instructions,
-          priority: priority || 'NORMAL',
-          startDatetime,
-          endDatetime,
-          status: 'PLANNED',
-          isCustomerAppointment: Boolean(appointment),
-          appointment,
-          overrideConflicts: req.body.overrideConflicts,
-          overrideReason: req.body.overrideReason,
-        }, req.user._id, meta);
-        assignment = await assignmentService.getById(created.id);
-      } else {
-        const assignmentNumber = await counterService.getNextAssignmentNumber();
-        assignment = await assignmentRepository.create({
-          assignmentNumber,
-          assignmentType: resolvedType,
-          title: title || null,
-          instructions,
-          priority: priority || 'NORMAL',
-          startDatetime,
-          endDatetime,
-          employeeId: null,
-          projectId: projectId || null,
-          customerId: customerId || null,
-          siteId: siteId || null,
-          assignmentTargetType: target.type,
-          assignmentTargetId: target.targetId || null,
-          assignmentTargetLabel: target.targetLabel || null,
-          status: 'PLANNED',
-          isCustomerAppointment: Boolean(appointment),
-          createdBy: req.user._id,
-        });
-
-        if (appointment) {
-          await appointmentService.syncForAssignment(assignment._id, appointment, req.user._id, meta);
-        }
-
-        eventBus.publish(EVENT_TYPES.SCHEDULE_ASSIGNMENT_CREATED, {
-          assignmentId: assignment._id,
-          assignmentNumber,
-          assignmentType: resolvedType,
-          title: assignment.title,
-          employeeIds: target.recipientIds,
-          assignmentTargetType: target.type,
-          assignmentTargetId: target.targetId,
-          assignmentTargetLabel: target.targetLabel,
-          createdBy: req.user._id,
-        }, { source: 'mobile:orders' });
-      }
-
+      const assignment = await orderManagementService.createOrder(req.body, req.user._id, meta);
       const data = await serializeMobileAssignment(assignment);
       return res.success({ data, message: 'Order created successfully', statusCode: 201 });
     } catch (err) { next(err); }
@@ -221,18 +124,7 @@ class OrderController {
       // Field-ops / admin view: return all assignments with optional filters
       if (query.all === 'true' || query.all === true) {
         const { default: assignmentRepository } = await import('../deploy/assignment.repository.js');
-        const filters = {};
-        if (query.status) filters.status = query.status;
-        if (query.orderType || query.type) filters.assignmentType = query.orderType || query.type;
-        if (query.employeeId) filters.employeeId = query.employeeId;
-        if (query.projectId) filters.projectId = query.projectId;
-        if (query.customerId) filters.customerId = query.customerId;
-        if (query.siteId) filters.siteId = query.siteId;
-        if (query.priority) filters.priority = query.priority;
-        if (query.assignmentTargetType) filters.assignmentTargetType = query.assignmentTargetType;
-        if (query.assignmentTargetId || query.teamId) filters.assignmentTargetId = query.assignmentTargetId || query.teamId;
-        if (query.dateFrom) filters.dateFrom = query.dateFrom;
-        if (query.dateTo) filters.dateTo = query.dateTo;
+        const filters = buildOrderListFilters(query);
         const [result, summary] = await Promise.all([
           assignmentRepository.findWithCursor({
             limit: query.limit ? parseInt(query.limit, 10) : 100,
@@ -264,6 +156,38 @@ class OrderController {
       const syncTimestamp = new Date().toISOString();
       const data = await serializeMobileAssignments(assignments, { syncTimestamp });
       return res.success({ data, syncTimestamp });
+    } catch (err) { next(err); }
+  }
+
+  async exportCsv(req, res, next) {
+    try {
+      const filters = req._validatedQuery || req.query;
+      const { filename, csv } = await orderManagementService.exportCsv(filters);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.status(200).send(csv);
+    } catch (err) { next(err); }
+  }
+
+  async importTemplate(req, res, next) {
+    try {
+      const csv = orderManagementService.importTemplate();
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="order-import-template.csv"');
+      return res.status(200).send(csv);
+    } catch (err) { next(err); }
+  }
+
+  async importCsv(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const body = req.body || {};
+      const result = await orderManagementService.importCsv(req.file, { dryRun: body.dryRun }, req.user._id, meta);
+      return res.success({
+        data: result,
+        message: result.dryRun ? 'Order import validated' : 'Order import completed',
+        statusCode: result.dryRun ? 200 : 201,
+      });
     } catch (err) { next(err); }
   }
 

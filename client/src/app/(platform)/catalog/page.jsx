@@ -14,34 +14,35 @@ export default function CatalogPage() {
   const [filters, setFilters] = useState({});
 
   return (
-    <div className="flex flex-col gap-5 h-full">
-      <PageHeader
-        icon={Boxes}
-        title={t('catalog.page.title')}
-        description={t('catalog.page.description')}
-      />
+    <div className="flex h-full min-h-0 flex-col gap-5">
+      <div className="shrink-0 border-b border-border/70 pb-5">
+        <PageHeader
+          icon={Boxes}
+          title={t('catalog.page.title')}
+          description={t('catalog.page.description')}
+        />
+      </div>
 
-      <div className="flex flex-1 gap-5 min-h-0 overflow-hidden">
-        {/* Category tree sidebar */}
-        <div className="w-56 shrink-0 rounded-xl border bg-card overflow-hidden">
-          <CatalogCategoryTree
-            selectedId={selectedCategoryId}
-            onSelect={setSelectedCategoryId}
-          />
-        </div>
+      <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[20rem_minmax(0,1fr)]">
+        <aside className="grid min-h-0 gap-5 md:grid-cols-2 xl:grid-cols-1 xl:grid-rows-[minmax(16rem,1fr)_minmax(16rem,0.9fr)]">
+          <section className="min-h-0 overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-sm ring-1 ring-foreground/[0.03]">
+            <CatalogCategoryTree
+              selectedId={selectedCategoryId}
+              onSelect={setSelectedCategoryId}
+            />
+          </section>
 
-        {/* Faceted filter panel */}
-        <div className="w-56 shrink-0 rounded-xl border bg-card overflow-y-auto">
-          <CatalogFilterPanel
-            filters={{ ...filters, categoryId: selectedCategoryId || undefined }}
-            onFiltersChange={setFilters}
-          />
-        </div>
+          <section className="min-h-0 overflow-hidden rounded-2xl border border-border/70 bg-card/80 shadow-sm ring-1 ring-foreground/[0.03]">
+            <CatalogFilterPanel
+              filters={{ ...filters, categoryId: selectedCategoryId || undefined }}
+              onFiltersChange={setFilters}
+            />
+          </section>
+        </aside>
 
-        {/* Articles table */}
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        <section className="min-h-0 overflow-hidden rounded-2xl border border-border/70 bg-card/70 shadow-sm ring-1 ring-foreground/[0.03]">
           <CatalogArticlesTable filters={{ ...filters, categoryId: selectedCategoryId || undefined }} />
-        </div>
+        </section>
       </div>
     </div>
   );

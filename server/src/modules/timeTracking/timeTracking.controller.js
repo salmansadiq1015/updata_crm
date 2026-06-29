@@ -79,6 +79,31 @@ class TimeTrackingController {
     } catch (err) { next(err); }
   }
 
+  async importTemplate(req, res, next) {
+    try {
+      const csv = await timeTrackingService.getImportTemplate();
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="time-entry-import-template.csv"');
+      return res.status(200).send(csv);
+    } catch (err) { next(err); }
+  }
+
+  async importTimeEntries(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const data = await timeTrackingService.importTimeEntriesCsv(
+        req.file,
+        req._validatedBody || req.body,
+        req.user._id,
+        meta,
+      );
+      return res.success({
+        data,
+        message: data.dryRun ? 'Time entry import validated successfully' : 'Time entries imported successfully',
+      });
+    } catch (err) { next(err); }
+  }
+
   async listLeaveRequests(req, res, next) {
     try {
       const data = await timeTrackingService.listLeaveRequests(req._validatedQuery || req.query);

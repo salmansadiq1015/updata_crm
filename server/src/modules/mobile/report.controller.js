@@ -61,6 +61,28 @@ class ReportController {
     } catch (err) { next(err); }
   }
 
+  async importTemplate(req, res, next) {
+    try {
+      const csv = reportService.importTemplate();
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="work-report-import-template.csv"');
+      return res.status(200).send(csv);
+    } catch (err) { next(err); }
+  }
+
+  async importCsv(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const body = req.body || {};
+      const result = await reportService.importCsv(req.file, { dryRun: body.dryRun }, req.user._id, meta);
+      return res.success({
+        data: result,
+        message: result.dryRun ? 'Report import validated' : 'Report import completed',
+        statusCode: result.dryRun ? 200 : 201,
+      });
+    } catch (err) { next(err); }
+  }
+
   async create(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

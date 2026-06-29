@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import multer from 'multer';
 import reportController from './report.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
+import config from '../../config/index.js';
 import {
   createReportSchema,
   generateReportSchema,
@@ -14,8 +16,20 @@ import {
   reportHistorySchema,
   listReportsQuerySchema,
   reportExportQuerySchema,
+  reportImportSchema,
   bulkReportIdsSchema,
 } from './report.validation.js';
+
+const importUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: Math.min(config.storage.maxFileSize, 2 * 1024 * 1024) },
+  fileFilter(_req, file, cb) {
+    const name = `${file.originalname || ''}`.toLowerCase();
+    const mime = `${file.mimetype || ''}`.toLowerCase();
+    const allowed = name.endsWith('.csv') || mime.includes('csv') || mime === 'text/plain' || mime === 'application/vnd.ms-excel';
+    cb(allowed ? null : new Error('Only CSV report import files are supported.'), allowed);
+  },
+});
 
 // Nested router for routes under /orders/:id
 const reportOrderRouter = Router({ mergeParams: true });
@@ -68,6 +82,22 @@ reportRouter.get(
   requirePermission('mobile:read'),
   validate(reportExportQuerySchema),
   (req, res, next) => reportController.exportCsv(req, res, next),
+);
+
+reportRouter.get(
+  '/import/template',
+  authenticate,
+  requirePermission('mobile:read'),
+  (req, res, next) => reportController.importTemplate(req, res, next),
+);
+
+reportRouter.post(
+  '/import',
+  authenticate,
+  requirePermission('mobile:write'),
+  importUpload.single('file'),
+  validate(reportImportSchema),
+  (req, res, next) => reportController.importCsv(req, res, next),
 );
 
 // Bulk operations (before /:reportId to avoid param conflict)

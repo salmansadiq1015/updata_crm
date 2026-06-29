@@ -73,6 +73,27 @@ export const timeTrackingService = {
     return { filename };
   },
 
+  async downloadImportTemplate() {
+    const res = await apiClient.get(ENDPOINTS.TIME_TRACKING.TIME_ENTRIES_IMPORT_TEMPLATE, {
+      responseType: 'blob',
+    });
+    const blob = res.data instanceof Blob ? res.data : new Blob([res.data], { type: 'text/csv;charset=utf-8' });
+    downloadBlob(blob, 'time-entry-import-template.csv');
+    return { filename: 'time-entry-import-template.csv' };
+  },
+
+  async importTimeEntries(file, { dryRun = false } = {}) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('dryRun', String(dryRun));
+    const res = await apiClient.post(
+      ENDPOINTS.TIME_TRACKING.TIME_ENTRIES_IMPORT,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return res.data;
+  },
+
   async getLeaveRequests(params = {}) {
     const res = await apiClient.get(ENDPOINTS.TIME_TRACKING.LEAVE_REQUESTS, { params });
     return asArray(res.data);

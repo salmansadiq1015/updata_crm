@@ -47,10 +47,10 @@ export function AiChatMain({
 
   // Retry: look up the run's original input by correlationId, re-dispatch with same id
   const handleRetry = useCallback((correlationId) => {
-    const run = threadRuns.find((r) => r.correlationId === correlationId);
+    const run = [...threadRuns, ...pendingRuns].find((r) => r.correlationId === correlationId);
     const input = run?.input ?? '';
     dispatch(typeof input === 'string' ? input : JSON.stringify(input), correlationId);
-  }, [threadRuns, dispatch]);
+  }, [threadRuns, pendingRuns, dispatch]);
 
   // Auto-play TTS when AI run completes (hands-free or autoPlay on)
   const prevRunKeyRef = useRef(null);

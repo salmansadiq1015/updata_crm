@@ -25,6 +25,23 @@ function hasMatchingRun(runs, pendingRun) {
   );
 }
 
+function buildFailedPendingRun(run, error) {
+  return {
+    ...run,
+    status: AGENT_STATUSES.FAILED,
+    error: {
+      code: error?.code || 'AI_AGENT_DISPATCH_FAILED',
+      message: error?.message || 'The assistant could not reach the server. Please try again.',
+      statusCode: error?.statusCode,
+      isNetworkError: error?.isNetworkError,
+      isTimeout: error?.isTimeout,
+      isOffline: error?.isOffline,
+    },
+    output: null,
+    failedAt: new Date().toISOString(),
+  };
+}
+
 export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected, onThreadDeleted }) {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
@@ -73,7 +90,11 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentThread(resolvedThreadId) });
     },
     onError: (err, { correlationId } = {}) => {
-      setPendingRuns((runs) => runs.filter((run) => run.correlationId !== correlationId));
+      setPendingRuns((runs) =>
+        runs.map((run) => (
+          run.correlationId === correlationId ? buildFailedPendingRun(run, err) : run
+        ))
+      );
       if (err?.code === 'AI_AGENT_RATE_LIMITED') {
         showError(t('ai.chat.tooManyRequests'));
       } else {

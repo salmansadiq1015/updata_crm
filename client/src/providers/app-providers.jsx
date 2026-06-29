@@ -33,23 +33,40 @@ function cleanupDevelopmentServiceWorkers() {
   developmentWorkerCleanupStarted = true;
 
   // A production Serwist worker can remain registered on localhost and serve
-  // stale chunks during dev, which leaves route shells blank before React boots.
+  // stale chunks during dev (e.g. ChunkLoadError on lazily-built vendor chunks
+  // like prosemirror-view), which leaves route shells blank before React boots.
+  // `unregister()` alone does NOT release a tab the worker is already
+  // controlling, so a tab booted under the stale worker keeps getting its
+  // precached, now-missing chunk URLs. If we detect an active controller, force
+  // a single reload to escape the worker's scope and fetch fresh chunks. The
+  // sessionStorage flag guards against a reload loop.
+  const RELOAD_FLAG = 'dev-sw-cleanup-reloaded';
+  const hadController = Boolean(navigator.serviceWorker.controller);
+
+  const clearCaches = () => {
+    if (!('caches' in window)) return Promise.resolve();
+    return window.caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.includes('serwist') || key.includes('workbox') || key.startsWith('mobile-'))
+            .map((key) => window.caches.delete(key))
+        )
+      )
+      .catch(() => {});
+  };
+
   navigator.serviceWorker
     .getRegistrations()
     .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
-    .catch(() => {});
-
-  if (!('caches' in window)) return;
-
-  window.caches
-    .keys()
-    .then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key.includes('serwist') || key.includes('workbox') || key.startsWith('mobile-'))
-          .map((key) => window.caches.delete(key))
-      )
-    )
+    .then(() => clearCaches())
+    .then(() => {
+      if (hadController && !sessionStorage.getItem(RELOAD_FLAG)) {
+        sessionStorage.setItem(RELOAD_FLAG, '1');
+        window.location.reload();
+      }
+    })
     .catch(() => {});
 }
 

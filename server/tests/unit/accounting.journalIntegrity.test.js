@@ -25,6 +25,9 @@ async function loadJournalService({ original, reversalUpdate = { matchedCount: 1
   };
   const eventBus = { publish: jest.fn() };
   const auditService = { logEvent: jest.fn() };
+  const fiscalPeriodService = {
+    assertPostingDateOpen: jest.fn(async () => null),
+  };
 
   jest.unstable_mockModule('mongoose', () => ({
     default: { startSession: jest.fn(async () => session) },
@@ -37,6 +40,9 @@ async function loadJournalService({ original, reversalUpdate = { matchedCount: 1
   }));
   jest.unstable_mockModule('../../src/modules/accounting/account.repository.js', () => ({
     default: accountRepository,
+  }));
+  jest.unstable_mockModule('../../src/modules/accounting/fiscalPeriod.service.js', () => ({
+    default: fiscalPeriodService,
   }));
   jest.unstable_mockModule('../../src/shared/cache/CacheManager.js', () => ({
     default: cacheManager,
@@ -65,12 +71,13 @@ async function loadJournalService({ original, reversalUpdate = { matchedCount: 1
     journalEntryRepository,
     counterService,
     accountRepository,
+    fiscalPeriodService,
   };
 }
 
 describe('journal integrity', () => {
   test('creates manual entries inside the journal-number transaction', async () => {
-    const { service, session, journalEntryRepository, counterService, accountRepository } = await loadJournalService({
+    const { service, session, journalEntryRepository, counterService, accountRepository, fiscalPeriodService } = await loadJournalService({
       debitAccount: { _id: 'debit-1', isGroup: false },
       creditAccount: { _id: 'credit-1', isGroup: false },
     });
@@ -84,6 +91,10 @@ describe('journal integrity', () => {
     }, 'user-1');
 
     expect(session.withTransaction).toHaveBeenCalledTimes(1);
+    expect(fiscalPeriodService.assertPostingDateOpen).toHaveBeenCalledWith(
+      new Date('2026-05-12T00:00:00.000Z'),
+      { session },
+    );
     expect(accountRepository.findById).toHaveBeenCalledWith('debit-1', { session });
     expect(accountRepository.findById).toHaveBeenCalledWith('credit-1', { session });
     expect(counterService.getNextJournalEntryNumber).toHaveBeenCalledWith({ session });
@@ -107,11 +118,12 @@ describe('journal integrity', () => {
       referenceId: 'invoice-1',
       reversedBy: null,
     };
-    const { service, session, journalEntryRepository, counterService } = await loadJournalService({ original });
+    const { service, session, journalEntryRepository, counterService, fiscalPeriodService } = await loadJournalService({ original });
 
     await service.reverse('entry-original', 'Correction', 'user-1');
 
     expect(session.withTransaction).toHaveBeenCalledTimes(1);
+    expect(fiscalPeriodService.assertPostingDateOpen).toHaveBeenCalledWith(expect.any(Date), { session });
     expect(counterService.getNextJournalEntryNumber).toHaveBeenCalledWith({ session });
     expect(journalEntryRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({

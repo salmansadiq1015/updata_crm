@@ -72,6 +72,12 @@ export const timeEntryIdSchema = {
   params: Joi.object({ entryId: objectId.required() }),
 };
 
+export const timeEntryImportSchema = {
+  body: Joi.object({
+    dryRun: Joi.boolean().default(false),
+  }),
+};
+
 export const overrideTimeEntrySchema = {
   params: Joi.object({ entryId: objectId.required() }),
   body: Joi.object({

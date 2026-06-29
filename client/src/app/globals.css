@@ -453,3 +453,321 @@
     linear-gradient(45deg, transparent 75%, #374151 75%),
     linear-gradient(-45deg, transparent 75%, #374151 75%);
 }
+
+@keyframes accounting-aurora-drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.78;
+  }
+  50% {
+    transform: translate3d(2%, -1.5%, 0) scale(1.03);
+    opacity: 1;
+  }
+}
+
+@keyframes accounting-border-sweep {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.accounting-premium {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(135deg, #070b16 0%, #0b1020 42%, #0f172a 100%),
+    radial-gradient(140% 120% at 50% -20%, rgb(14 165 233 / 0.16), transparent 56%);
+  color: #e5e7eb;
+}
+
+.accounting-premium__aurora,
+.accounting-premium__mesh {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+
+.accounting-premium__aurora {
+  z-index: 0;
+  background:
+    radial-gradient(1000px 420px at 18% 0%, rgb(20 184 166 / 0.2), transparent 62%),
+    radial-gradient(850px 420px at 74% 8%, rgb(168 85 247 / 0.18), transparent 58%),
+    radial-gradient(900px 520px at 92% 72%, rgb(59 130 246 / 0.16), transparent 62%),
+    linear-gradient(115deg, rgb(255 255 255 / 0.05), transparent 32%, rgb(45 212 191 / 0.06) 68%, transparent);
+  filter: saturate(130%);
+  animation: accounting-aurora-drift 16s ease-in-out infinite;
+}
+
+.accounting-premium__mesh {
+  z-index: 1;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.75), transparent 82%);
+}
+
+.accounting-hero-panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.11), rgb(255 255 255 / 0.035)),
+    linear-gradient(120deg, rgb(20 184 166 / 0.12), transparent 36%, rgb(124 58 237 / 0.12));
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.34), inset 0 1px 0 rgb(255 255 255 / 0.1);
+  padding: 1.25rem;
+}
+
+.accounting-hero-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent, rgb(255 255 255 / 0.12), transparent),
+    linear-gradient(135deg, rgb(16 185 129 / 0.1), transparent 34%, rgb(168 85 247 / 0.12));
+  background-size: 200% 100%, auto;
+  opacity: 0.8;
+  animation: accounting-border-sweep 12s linear infinite;
+}
+
+.accounting-kicker,
+.accounting-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  border-radius: 999px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.06);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(226 232 240 / 0.86);
+}
+
+.accounting-kicker {
+  color: rgb(125 211 252);
+  box-shadow: 0 0 32px rgb(14 165 233 / 0.12);
+}
+
+.accounting-chip {
+  color: rgb(203 213 225 / 0.78);
+}
+
+.accounting-hero-signal {
+  min-width: min(100%, 18rem);
+  border-radius: 0.875rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(2 6 23 / 0.45);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 16px 48px rgb(0 0 0 / 0.25);
+  padding: 1rem;
+}
+
+.accounting-card,
+.accounting-premium .rounded-xl.border:not([data-slot="input"]) {
+  position: relative;
+  overflow: hidden;
+  border-color: rgb(255 255 255 / 0.1) !important;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.025)) !important;
+  box-shadow: 0 18px 60px rgb(0 0 0 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.accounting-card::after,
+.accounting-premium .rounded-xl.border:not([data-slot="input"])::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.1), transparent 32%, rgb(255 255 255 / 0.035));
+  opacity: 0.74;
+}
+
+.accounting-card-glow {
+  pointer-events: none;
+  position: absolute;
+  inset: -30% -20% auto auto;
+  height: 8rem;
+  width: 12rem;
+  filter: blur(24px);
+  opacity: 0.85;
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.accounting-stat-card {
+  min-height: 11rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  padding: 1rem;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.accounting-workspace-card {
+  display: flex;
+  min-height: 11rem;
+  flex-direction: column;
+  gap: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  padding: 1rem;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.accounting-stat-card:hover,
+.accounting-workspace-card:hover,
+.accounting-premium .rounded-xl.border:not([data-slot="input"]):hover {
+  border-color: rgb(125 211 252 / 0.28) !important;
+  box-shadow: 0 22px 70px rgb(0 0 0 / 0.3), 0 0 42px rgb(14 165 233 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+
+.accounting-stat-card:hover,
+.accounting-workspace-card:hover {
+  transform: translateY(-2px);
+}
+
+.accounting-stat-card:hover .accounting-card-glow,
+.accounting-workspace-card:hover .accounting-card-glow {
+  opacity: 1;
+  transform: translate3d(-0.35rem, 0.25rem, 0);
+}
+
+.accounting-premium h1 {
+  color: #f8fafc;
+}
+
+.accounting-premium h1 + p,
+.accounting-premium .text-muted-foreground {
+  color: rgb(203 213 225 / 0.72) !important;
+}
+
+.accounting-premium [data-slot="tabs-list"] {
+  min-height: 2.5rem;
+  gap: 0.25rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(2 6 23 / 0.38) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 0.25rem;
+}
+
+.accounting-premium [data-slot="tabs-trigger"] {
+  min-height: 2rem;
+  border-radius: 0.5rem;
+  color: rgb(203 213 225 / 0.72) !important;
+}
+
+.accounting-premium [data-slot="tabs-trigger"][data-active] {
+  border-color: rgb(255 255 255 / 0.12) !important;
+  background: linear-gradient(135deg, rgb(255 255 255 / 0.16), rgb(14 165 233 / 0.12)) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 8px 28px rgb(14 165 233 / 0.1), inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+
+.accounting-premium [data-slot="tabs-content"] {
+  animation: accounting-content-in 180ms ease-out;
+}
+
+@keyframes accounting-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.accounting-premium [data-slot="input"],
+.accounting-premium [data-slot="select-trigger"] {
+  border-color: rgb(255 255 255 / 0.1) !important;
+  background: rgb(2 6 23 / 0.34) !important;
+  color: #e5e7eb;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+.accounting-premium [data-slot="input"]::placeholder {
+  color: rgb(148 163 184 / 0.76);
+}
+
+.accounting-premium [data-slot="button"][data-variant="default"] {
+  background: linear-gradient(135deg, #7c3aed, #0891b2) !important;
+  box-shadow: 0 12px 32px rgb(8 145 178 / 0.18);
+}
+
+.accounting-premium [data-slot="button"][data-variant="outline"] {
+  border-color: rgb(255 255 255 / 0.12) !important;
+  background: rgb(255 255 255 / 0.045) !important;
+  color: #e2e8f0;
+}
+
+.accounting-premium .rounded-xl.border:has(table) {
+  overflow-x: auto !important;
+}
+
+.accounting-premium table {
+  min-width: 720px;
+  color: rgb(226 232 240 / 0.92);
+}
+
+.accounting-premium thead {
+  background: rgb(2 6 23 / 0.46) !important;
+}
+
+.accounting-premium th {
+  border-color: rgb(255 255 255 / 0.08) !important;
+  color: rgb(148 163 184 / 0.92) !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.accounting-premium td {
+  border-color: rgb(255 255 255 / 0.07) !important;
+}
+
+.accounting-premium tbody tr {
+  transition: background-color 150ms ease;
+}
+
+.accounting-premium tbody tr:hover {
+  background: rgb(255 255 255 / 0.045) !important;
+}
+
+.accounting-premium .bg-muted\/50,
+.accounting-premium .hover\:bg-muted\/30:hover {
+  background-color: rgb(255 255 255 / 0.045) !important;
+}
+
+@media (min-width: 1024px) {
+  .accounting-hero-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem);
+    align-items: stretch;
+    padding: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accounting-premium__aurora,
+  .accounting-hero-panel::before,
+  .accounting-premium [data-slot="tabs-content"] {
+    animation: none;
+  }
+
+  .accounting-stat-card,
+  .accounting-workspace-card {
+    transition: none;
+  }
+
+  .accounting-stat-card:hover,
+  .accounting-workspace-card:hover {
+    transform: none;
+  }
+}

@@ -15,7 +15,7 @@ export function AiProgressSteps({ steps = [], workflowLabel, isRunning }) {
   const { t } = useLanguage();
   if (!steps.length && isRunning) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 text-sm text-slate-300">
         <Loader2 className="h-4 w-4 animate-spin text-primary" />
         <span>{workflowLabel ?? t('ai.chat.working')}...</span>
       </div>
@@ -31,9 +31,9 @@ export function AiProgressSteps({ steps = [], workflowLabel, isRunning }) {
         const detail   = step.toolName ? `(${step.toolName})` : '';
 
         return (
-          <li key={step.stepIndex ?? i} className="flex items-start gap-2">
+          <li key={step.stepIndex ?? i} className="flex items-start gap-3 rounded-xl border border-white/8 bg-slate-950/30 px-3 py-2">
             <StepIcon type={step.type} isActive={isActive} />
-            <span className={cn('text-sm', isActive ? 'text-foreground' : 'text-muted-foreground')}>
+            <span className={cn('text-sm', isActive ? 'text-white' : 'text-slate-400')}>
               {label} {detail}
             </span>
           </li>

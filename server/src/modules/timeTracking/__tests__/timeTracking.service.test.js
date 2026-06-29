@@ -271,3 +271,98 @@ describe('timeTrackingService leave approval', () => {
     expect(result).toEqual(expect.objectContaining({ status: 'APPROVED' }));
   });
 });
+
+describe('timeTrackingService time entry import', () => {
+  it('validates a CSV import during dry run without creating entries', async () => {
+    const userId = '665f1d5f0f1d5f0f1d5f9001';
+    const orderId = '665f1d5f0f1d5f0f1d5f4001';
+    const csv = [
+      'orderId,technicianId,date,startTime,endTime,breakDurationMin,activityType,note',
+      `${orderId},,2026-06-29,08:00,17:00,30,ONSITE_WORK,Imported service visit`,
+    ].join('\n');
+
+    mockAssignmentFind.mockReturnValue(queryStub([{ _id: orderId }]));
+    mockUserFind.mockReturnValue(queryStub([{ _id: userId }]));
+
+    const result = await timeTrackingService.importTimeEntriesCsv(
+      { buffer: Buffer.from(csv) },
+      { dryRun: true },
+      userId,
+      { ipAddress: '127.0.0.1', userAgent: 'jest' },
+    );
+
+    expect(result).toEqual(expect.objectContaining({
+      dryRun: true,
+      totalRows: 1,
+      validRows: 1,
+      failed: 0,
+    }));
+    expect(mockTimeEntryService.create).not.toHaveBeenCalled();
+  });
+
+  it('creates validated CSV rows when import is committed', async () => {
+    const userId = '665f1d5f0f1d5f0f1d5f9001';
+    const technicianId = '665f1d5f0f1d5f0f1d5f0001';
+    const orderId = '665f1d5f0f1d5f0f1d5f4001';
+    const csv = [
+      'orderId,technicianId,date,startTime,endTime,breakDurationMin,activityType,note',
+      `${orderId},${technicianId},2026-06-29,08:00,17:00,30,TRAVEL,Imported travel time`,
+    ].join('\n');
+
+    mockAssignmentFind.mockReturnValue(queryStub([{ _id: orderId }]));
+    mockUserFind.mockReturnValue(queryStub([{ _id: technicianId }]));
+    mockTimeEntryService.create.mockResolvedValue({ _id: '665f1d5f0f1d5f0f1d5f3001' });
+
+    const result = await timeTrackingService.importTimeEntriesCsv(
+      { buffer: Buffer.from(csv) },
+      { dryRun: false },
+      userId,
+      { ipAddress: '127.0.0.1', userAgent: 'jest' },
+    );
+
+    expect(result).toEqual(expect.objectContaining({
+      dryRun: false,
+      totalRows: 1,
+      validRows: 1,
+      created: 1,
+      failed: 0,
+    }));
+    expect(mockTimeEntryService.create).toHaveBeenCalledWith(
+      orderId,
+      expect.objectContaining({
+        breakDurationMin: 30,
+        activityType: 'TRAVEL',
+        note: 'Imported travel time',
+      }),
+      technicianId,
+      expect.objectContaining({ source: 'time-tracking-import' }),
+    );
+    expect(mockAuditLogEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'time-entry.imported',
+      module: 'time-tracking',
+    }));
+  });
+
+  it('returns row errors and skips writes for invalid CSV rows', async () => {
+    const userId = '665f1d5f0f1d5f0f1d5f9001';
+    const csv = [
+      'orderId,technicianId,date,startTime,endTime,breakDurationMin,activityType,note',
+      'bad-id,,2026-06-29,17:00,08:00,0,UNKNOWN,Invalid row',
+    ].join('\n');
+
+    const result = await timeTrackingService.importTimeEntriesCsv(
+      { buffer: Buffer.from(csv) },
+      { dryRun: false },
+      userId,
+      { ipAddress: '127.0.0.1', userAgent: 'jest' },
+    );
+
+    expect(result.failed).toBe(1);
+    expect(result.rowErrors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ row: 2, field: 'orderId' }),
+      expect.objectContaining({ row: 2, field: 'endTime' }),
+      expect.objectContaining({ row: 2, field: 'activityType' }),
+    ]));
+    expect(mockTimeEntryService.create).not.toHaveBeenCalled();
+  });
+});

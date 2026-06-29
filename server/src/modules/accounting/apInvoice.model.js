@@ -26,6 +26,13 @@ const lineItemSchema = new mongoose.Schema(
     unitPrice: { type: Number, min: 0 },
     lineTotal: { type: Number },
     vatRate: { type: Number, min: 0 },
+    taxCodeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxCode',
+      default: null,
+    },
+    taxCode: { type: String, trim: true, uppercase: true, maxlength: 40 },
+    taxAmount: { type: Number, default: 0 },
     accountId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Account',
@@ -86,6 +93,7 @@ const apInvoiceSchema = new mongoose.Schema(
     dueDate: { type: Date, required: true },
     paymentTermsDays: { type: Number, default: 30 },
     lineItems: [lineItemSchema],
+    taxExemptionCode: { type: String, trim: true, uppercase: true, maxlength: 40, default: '' },
     subtotal: { type: Number, default: 0 },
     vatAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },

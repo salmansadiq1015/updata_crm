@@ -57,14 +57,14 @@ describe('DocumentRepositoryTable', () => {
       />,
     );
 
-    expect(screen.getByText('Signed installation contract')).toBeInTheDocument();
-    expect(screen.getByText('Repository')).toBeInTheDocument();
-    expect(screen.getByText('CONTRACT')).toBeInTheDocument();
-    expect(screen.getByText(/Project:/)).toBeInTheDocument();
+    expect(screen.getAllByText('Signed installation contract')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('Repository')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('CONTRACT')[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/Project:/)[0]).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTitle('Preview'));
-    fireEvent.click(screen.getByTitle('Download'));
-    fireEvent.click(screen.getByTitle('Delete'));
+    fireEvent.click(screen.getAllByTitle('Preview')[0]);
+    fireEvent.click(screen.getAllByTitle('Download')[0]);
+    fireEvent.click(screen.getAllByTitle('Delete')[0]);
 
     expect(onPreview).toHaveBeenCalledWith(documents[0]);
     expect(onDownload).toHaveBeenCalledWith(documents[0]);

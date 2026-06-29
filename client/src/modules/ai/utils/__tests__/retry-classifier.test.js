@@ -31,6 +31,12 @@ describe('classifyRunError', () => {
   it('treats UNHANDLED_ERROR as transient', () => {
     expect(classifyRunError({ code: 'UNHANDLED_ERROR' }).isTransient).toBe(true);
   });
+  it('treats NETWORK_ERROR as transient', () => {
+    expect(classifyRunError({ code: 'NETWORK_ERROR' }).isTransient).toBe(true);
+  });
+  it('treats normalized network errors without a code as transient', () => {
+    expect(classifyRunError({ isNetworkError: true }).isTransient).toBe(true);
+  });
   it('treats RBAC_DENIED as hard', () => {
     expect(classifyRunError({ code: 'RBAC_DENIED' }).isTransient).toBe(false);
   });

@@ -52,6 +52,8 @@ async function loadService({
   };
   const eventBus = { publish: jest.fn() };
   const auditService = { logEvent: jest.fn() };
+  const fiscalPeriodService = { assertPostingDateOpen: jest.fn(async () => null) };
+  const taxService = { recordFromApInvoice: jest.fn(async () => []) };
 
   jest.unstable_mockModule('mongoose', () => ({
     default: { startSession: jest.fn(async () => session) },
@@ -71,6 +73,12 @@ async function loadService({
   jest.unstable_mockModule('../../src/modules/accounting/iso20022.parser.js', () => iso20022Parser);
   jest.unstable_mockModule('../../src/modules/accounting/accounting.counter.service.js', () => ({
     default: accountingCounterService,
+  }));
+  jest.unstable_mockModule('../../src/modules/accounting/fiscalPeriod.service.js', () => ({
+    default: fiscalPeriodService,
+  }));
+  jest.unstable_mockModule('../../src/modules/accounting/tax.service.js', () => ({
+    default: taxService,
   }));
   jest.unstable_mockModule('../../src/shared/cache/CacheManager.js', () => ({
     default: cacheManager,
@@ -111,6 +119,7 @@ async function loadService({
     accountingCounterService,
     eventBus,
     auditService,
+    taxService,
   };
 }
 
@@ -323,7 +332,12 @@ describe('AP payment batch integrity', () => {
   });
 
   test('approves supplier invoice with split line allocations across posting accounts', async () => {
-    const { service, apInvoiceRepository, accountRepository } = await loadService({
+    const {
+      service,
+      apInvoiceRepository,
+      accountRepository,
+      taxService,
+    } = await loadService({
       invoice: {
         _id: 'invoice-1',
         status: 'RECORDED',
@@ -348,6 +362,10 @@ describe('AP payment batch integrity', () => {
     expect(apInvoiceRepository.updateById).toHaveBeenCalledWith(
       'invoice-1',
       expect.objectContaining({ status: 'APPROVED', approvedBy: 'user-1' }),
+    );
+    expect(taxService.recordFromApInvoice).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'invoice-1', status: 'APPROVED' }),
+      'user-1',
     );
   });
 

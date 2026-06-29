@@ -66,6 +66,25 @@ export function useTimeTrackingMutations() {
     onError: (err) => showError(err.message),
   });
 
+  const downloadImportTemplate = useMutation({
+    mutationFn: () => timeTrackingService.downloadImportTemplate(),
+    onSuccess: () => showSuccess(t('fieldOps.time.importTemplateDownloaded', 'Import template downloaded.')),
+    onError: (err) => showError(err.message),
+  });
+
+  const importTimeEntries = useMutation({
+    mutationFn: ({ file, dryRun }) => timeTrackingService.importTimeEntries(file, { dryRun }),
+    onSuccess: (result) => {
+      if (!result?.dryRun && Number(result?.created || 0) > 0) {
+        invalidate();
+        showSuccess(t('fieldOps.time.importComplete', 'Time entries imported.'));
+        return;
+      }
+      showSuccess(t('fieldOps.time.importValidated', 'Import file validated.'));
+    },
+    onError: (err) => showError(err.message),
+  });
+
   return {
     createLeaveRequest,
     approveLeaveRequest,
@@ -73,5 +92,7 @@ export function useTimeTrackingMutations() {
     cancelLeaveRequest,
     upsertVacationBalance,
     exportTimeEntries,
+    downloadImportTemplate,
+    importTimeEntries,
   };
 }

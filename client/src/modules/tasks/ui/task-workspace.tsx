@@ -141,7 +141,10 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     hasParent: false,
   }), [debouncedSearch, listId, priority, savedView, status]);
 
-  const taskParams = useMemo(() => toTaskParams(filters, pageSize), [filters, pageSize]);
+  const taskPageSize = activeView === 'calendar' || activeView === 'timeline'
+    ? Math.max(pageSize, 100)
+    : pageSize;
+  const taskParams = useMemo(() => toTaskParams(filters, taskPageSize), [filters, taskPageSize]);
   const listsQuery = useTaskListsV2();
   const tasksQuery = useTaskWindow(taskParams);
 
@@ -161,15 +164,15 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const hasFilters = Boolean(search || status !== 'ALL' || priority !== 'ALL' || savedView !== 'none');
 
   const content = (() => {
-    // Calendar and timeline render their own empty/loading states
-    if (activeView === 'calendar') return <TaskCalendarView tasks={tasks} listId={listId} />;
-    if (activeView === 'timeline') return <TaskTimelineView tasks={tasks} listId={listId} />;
-
     if (tasksQuery.isLoading) return activeView === 'board' ? <TaskBoardSkeleton /> : <TaskListSkeleton />;
     if (tasksQuery.isError) {
       return <TaskEmptyState type={typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'error'} onRetry={() => tasksQuery.refetch()} />;
     }
     if (tasks.length === 0) return <TaskEmptyState type={hasFilters ? 'filtered' : 'empty'} onReset={clearFilters} />;
+
+    if (activeView === 'calendar') return <TaskCalendarView tasks={tasks} listId={listId} />;
+    if (activeView === 'timeline') return <TaskTimelineView tasks={tasks} listId={listId} />;
+
     if (activeView === 'board') {
       return (
         <TaskBoardView

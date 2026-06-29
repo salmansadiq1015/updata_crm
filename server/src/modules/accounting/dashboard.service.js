@@ -1,0 +1,144 @@
+import arReceivablesService from './arReceivables.service.js';
+import apInvoiceService from './apInvoice.service.js';
+import cashManagementService from './cashManagement.service.js';
+import accountingReportsService from './reports.service.js';
+
+const DEFAULT_CURRENCY = 'CHF';
+
+function roundMoney(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+}
+
+function defaultPeriod({ startDate, endDate } = {}) {
+  const now = new Date();
+  return {
+    startDate: startDate || new Date(Date.UTC(now.getUTCFullYear(), 0, 1)).toISOString().slice(0, 10),
+    endDate: endDate || now.toISOString().slice(0, 10),
+  };
+}
+
+function emptyAging() {
+  return {
+    buckets: {
+      current: 0,
+      '1_30': 0,
+      '31_60': 0,
+      '61_90': 0,
+      '90_plus': 0,
+      over_90: 0,
+    },
+    totalOutstanding: 0,
+    invoiceCount: 0,
+  };
+}
+
+function settledValue(results, key, fallback, warnings) {
+  const result = results[key];
+  if (result?.status === 'fulfilled') return result.value;
+  warnings.push({
+    source: key,
+    message: result?.reason?.message || 'Accounting dashboard source unavailable',
+  });
+  return fallback;
+}
+
+function sumBalancesByCurrency(balances, currency) {
+  return roundMoney(
+    balances
+      .filter((balance) => !balance.currency || balance.currency === currency)
+      .reduce((sum, balance) => sum + Number(balance.balance || 0), 0),
+  );
+}
+
+class AccountingDashboardService {
+  async getSnapshot(query = {}) {
+    const currency = query.currency || DEFAULT_CURRENCY;
+    const period = defaultPeriod(query);
+    const forecastDays = Number(query.forecastDays || 90);
+
+    const entries = await Promise.allSettled([
+      arReceivablesService.getSummary(),
+      arReceivablesService.getAgingReport(),
+      apInvoiceService.getSummary(),
+      apInvoiceService.getAgingReport(),
+      cashManagementService.getBalances(),
+      cashManagementService.getForecast({ days: forecastDays }),
+      accountingReportsService.getProfitLoss({
+        startDate: period.startDate,
+        endDate: period.endDate,
+        currency,
+      }),
+    ]);
+
+    const results = {
+      arSummary: entries[0],
+      arAging: entries[1],
+      apSummary: entries[2],
+      apAging: entries[3],
+      cashBalances: entries[4],
+      cashForecast: entries[5],
+      profitLoss: entries[6],
+    };
+    const warnings = [];
+
+    const arSummary = settledValue(results, 'arSummary', {}, warnings);
+    const arAging = settledValue(results, 'arAging', emptyAging(), warnings);
+    const apSummary = settledValue(results, 'apSummary', {}, warnings);
+    const apAging = settledValue(results, 'apAging', emptyAging(), warnings);
+    const cashBalances = settledValue(results, 'cashBalances', [], warnings);
+    const cashForecast = settledValue(results, 'cashForecast', { currentBalance: 0, projections: [] }, warnings);
+    const profitLoss = settledValue(results, 'profitLoss', { revenue: 0, expenses: 0, netProfit: 0, margin: 0 }, warnings);
+
+    const bankBalance = sumBalancesByCurrency(cashBalances, currency);
+    const forecastCurrentBalance = cashForecast.currentBalance ?? bankBalance;
+    const latestProjection = cashForecast.projections?.[cashForecast.projections.length - 1] || null;
+
+    return {
+      generatedAt: new Date().toISOString(),
+      freshness: {
+        balancesSeconds: 60,
+        forecastSeconds: 120,
+        reports: 'live',
+      },
+      scope: {
+        company: query.companyId || null,
+        branch: query.branchId || null,
+      },
+      currency,
+      period,
+      kpis: {
+        openReceivables: roundMoney(arSummary.totalOutstanding ?? arSummary.openAmount),
+        overdueReceivables: roundMoney(arSummary.overdueAmount),
+        openPayables: roundMoney(apSummary.openAmount),
+        overduePayables: roundMoney(apSummary.overdueAmount),
+        bankBalance,
+        cashPosition: roundMoney(forecastCurrentBalance),
+        projectedCashPosition: roundMoney(latestProjection?.netPosition ?? forecastCurrentBalance),
+        monthlyRevenue: roundMoney(profitLoss.revenue),
+        monthlyExpenses: roundMoney(profitLoss.expenses),
+        netProfit: roundMoney(profitLoss.netProfit),
+        profitMargin: roundMoney(profitLoss.margin),
+        grossProfit: null,
+        ebitda: null,
+      },
+      aging: {
+        receivables: arAging,
+        payables: apAging,
+      },
+      cash: {
+        balances: cashBalances,
+        forecast: cashForecast,
+      },
+      drilldowns: {
+        receivables: '/api/v1/accounting/ar/open',
+        payables: '/api/v1/accounting/ap/invoices/open',
+        cash: '/api/v1/accounting/cash/forecast',
+        profitLoss: '/api/v1/accounting/reports/profit-loss',
+      },
+      warnings,
+    };
+  }
+}
+
+const accountingDashboardService = new AccountingDashboardService();
+export default accountingDashboardService;

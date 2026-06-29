@@ -1,10 +1,211 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  chartService, journalService, apService, arService, bankService, accDocService,
+  accountingSearchService, chartService, dashboardService, journalService, apService, arService, bankService, accDocService,
   cashService, reconciliationService, openItemsService, reportsService,
+  exchangeRateService, fiscalPeriodService, taxService, fixedAssetService, budgetService, recurringTransactionService,
 } from '../services/accounting-service';
 
+export function useAccountingDashboard(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'dashboard', params],
+    queryFn: () => dashboardService.snapshot(params),
+    select: (r) => r.data,
+    staleTime: 30 * 1000,
+  });
+}
+
 // ── Chart of Accounts ─────────────────────────────────────────
+export function useAccountingSearch(params = {}, options = {}) {
+  const query = String(params.q || '').trim();
+  const hasStructuredFilter = Boolean(
+    params.type ||
+    params.status ||
+    params.accountId ||
+    params.currency ||
+    params.startDate ||
+    params.endDate ||
+    params.minAmount ||
+    params.maxAmount,
+  );
+
+  return useQuery({
+    queryKey: ['accounting', 'search', params],
+    queryFn: () => accountingSearchService.search(params),
+    enabled: options.enabled ?? Boolean(query || hasStructuredFilter),
+    select: (r) => ({
+      items: Array.isArray(r.data) ? r.data : [],
+      meta: r.meta || {},
+    }),
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useExchangeRates(params = {}, options = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'exchange-rates', params],
+    queryFn: () => exchangeRateService.list(params),
+    enabled: options.enabled ?? true,
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useResolvedExchangeRate(params = {}, options = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'exchange-rate-resolve', params],
+    queryFn: () => exchangeRateService.resolve(params),
+    enabled: options.enabled ?? Boolean(params.baseCurrency && params.quoteCurrency),
+    select: (r) => r.data,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useFxRevaluationPreview(params = {}, options = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'fx-revaluation-preview', params],
+    queryFn: () => exchangeRateService.revaluationPreview(params),
+    enabled: options.enabled ?? true,
+    select: (r) => r.data,
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useFxRevaluationRuns(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'fx-revaluation-runs', params],
+    queryFn: () => exchangeRateService.revaluationRuns(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useTaxCodes(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'tax-codes', params],
+    queryFn: () => taxService.codes(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useTaxSummary(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'tax-summary', params],
+    queryFn: () => taxService.summary(params),
+    select: (r) => r.data,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useVatReport(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'vat-report', params],
+    queryFn: () => taxService.vatReport(params),
+    select: (r) => r.data,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useTaxTransactions(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'tax-transactions', params],
+    queryFn: () => taxService.transactions(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useFixedAssets(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'fixed-assets', params],
+    queryFn: () => fixedAssetService.list(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useFixedAsset(id) {
+  return useQuery({
+    queryKey: ['accounting', 'fixed-asset', id],
+    queryFn: () => fixedAssetService.getById(id),
+    enabled: !!id,
+    select: (r) => r.data,
+  });
+}
+
+export function useFixedAssetSummary(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'fixed-asset-summary', params],
+    queryFn: () => fixedAssetService.summary(params),
+    select: (r) => r.data,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useBudgets(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'budgets', params],
+    queryFn: () => budgetService.list(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useBudget(id) {
+  return useQuery({
+    queryKey: ['accounting', 'budget', id],
+    queryFn: () => budgetService.getById(id),
+    enabled: !!id,
+    select: (r) => r.data,
+  });
+}
+
+export function useBudgetSummary(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'budget-summary', params],
+    queryFn: () => budgetService.summary(params),
+    select: (r) => r.data,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useBudgetVariance(id) {
+  return useQuery({
+    queryKey: ['accounting', 'budget-variance', id],
+    queryFn: () => budgetService.variance(id),
+    enabled: !!id,
+    select: (r) => r.data,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useRecurringTransactions(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'recurring-transactions', params],
+    queryFn: () => recurringTransactionService.list(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useRecurringTransactionSummary() {
+  return useQuery({
+    queryKey: ['accounting', 'recurring-transaction-summary'],
+    queryFn: () => recurringTransactionService.summary(),
+    select: (r) => r.data,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useRecurringTransactionRuns(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'recurring-transaction-runs', params],
+    queryFn: () => recurringTransactionService.runs(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 15 * 1000,
+  });
+}
+
 export function useAccounts(params = {}) {
   return useQuery({
     queryKey: ['accounting', 'accounts', params],
@@ -40,10 +241,11 @@ export function useAccountOverview(id, params = {}) {
 }
 
 // ── Journal ───────────────────────────────────────────────────
-export function useJournalEntries(params = {}) {
+export function useJournalEntries(params = {}, options = {}) {
   return useQuery({
     queryKey: ['accounting', 'journal', params],
     queryFn: () => journalService.list(params),
+    enabled: options.enabled ?? true,
     select: (r) => ({ items: Array.isArray(r.data) ? r.data : [], pagination: r.pagination }),
   });
 }
@@ -227,11 +429,56 @@ export function useOpenItemsAging(params = {}) {
 }
 
 // â”€â”€ Reports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-export function useProfitLoss(params = {}) {
+export function useProfitLoss(params = {}, options = {}) {
   return useQuery({
     queryKey: ['accounting', 'profit-loss', params],
     queryFn: () => reportsService.profitLoss(params),
+    enabled: options.enabled ?? true,
     select: (r) => r.data,
+  });
+}
+
+export function useBalanceSheet(params = {}, options = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'balance-sheet', params],
+    queryFn: () => reportsService.balanceSheet(params),
+    enabled: options.enabled ?? true,
+    select: (r) => r.data,
+  });
+}
+
+export function useTrialBalance(params = {}, options = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'trial-balance', params],
+    queryFn: () => reportsService.trialBalance(params),
+    enabled: options.enabled ?? true,
+    select: (r) => r.data,
+  });
+}
+
+export function useCashFlowReport(params = {}, options = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'cash-flow-report', params],
+    queryFn: () => reportsService.cashFlow(params),
+    enabled: options.enabled ?? true,
+    select: (r) => r.data,
+  });
+}
+
+export function useGeneralLedger(params = {}, options = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'general-ledger', params],
+    queryFn: () => reportsService.generalLedger(params),
+    enabled: options.enabled ?? true,
+    select: (r) => ({ items: Array.isArray(r.data) ? r.data : [], pagination: r.pagination, meta: r.meta }),
+  });
+}
+
+export function useFiscalPeriods(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'fiscal-periods', params],
+    queryFn: () => fiscalPeriodService.list(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
   });
 }
 

@@ -37,9 +37,32 @@ function LoadingRows() {
       <TableCell><Skeleton className="h-4 w-28" /></TableCell>
       <TableCell><Skeleton className="h-4 w-40" /></TableCell>
       <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+      <TableCell><Skeleton className="ml-auto h-4 w-16" /></TableCell>
       <TableCell><Skeleton className="ml-auto h-8 w-28" /></TableCell>
     </TableRow>
   ));
+}
+
+function LoadingCards() {
+  return (
+    <div className="grid gap-3 lg:hidden">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div key={index} className="rounded-lg border bg-background p-4">
+          <div className="flex items-start gap-3">
+            <Skeleton className="h-10 w-10 shrink-0 rounded-md" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-4/5" />
+              <Skeleton className="h-3 w-2/3" />
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Skeleton className="h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function LinkSummary({ doc, t }) {
@@ -51,13 +74,121 @@ function LinkSummary({ doc, t }) {
   return (
     <div className="flex max-w-[240px] flex-wrap gap-1.5">
       {links.slice(0, 3).map((link) => (
-        <Badge key={`${link.label}-${link.value}`} variant="outline" className="max-w-full gap-1 border-border text-[11px] font-normal">
+        <Badge key={`${link.labelKey}-${link.value}`} variant="outline" className="max-w-full gap-1 border-border text-[11px] font-normal">
           <Link2 className="h-3 w-3 shrink-0" />
           <span className="truncate">{t(link.labelKey, link.type)}: {link.value.slice(-8)}</span>
         </Badge>
       ))}
       {links.length > 3 && <Badge variant="secondary" className="text-[11px]">+{links.length - 3}</Badge>}
     </div>
+  );
+}
+
+function DocumentActions({ doc, title, actionBusy, onPreview, onDownload, onDelete, canDelete, t }) {
+  return (
+    <div className="flex justify-end gap-1">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        title={t('common.preview')}
+        aria-label={`${t('common.preview')}: ${title}`}
+        onClick={() => onPreview?.(doc)}
+        disabled={actionBusy}
+      >
+        <Eye className="h-4 w-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        title={t('common.download')}
+        aria-label={`${t('common.download')}: ${title}`}
+        onClick={() => onDownload?.(doc)}
+        disabled={actionBusy}
+      >
+        <Download className="h-4 w-4" />
+      </Button>
+      {canDelete && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+          title={doc.canDelete === false ? t('documents.repository.deleteBlocked') : t('common.delete')}
+          aria-label={`${doc.canDelete === false ? t('documents.repository.deleteBlocked') : t('common.delete')}: ${title}`}
+          onClick={() => onDelete?.(doc)}
+          disabled={actionBusy || doc.canDelete === false}
+        >
+          {actionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function MobileDocumentCard({ doc, dateLocale, onPreview, onDownload, onDelete, busyId, canDelete, t }) {
+  const title = doc.title || doc.fileName || t('documents.repository.untitled');
+  const actionBusy = busyId === doc.id;
+
+  return (
+    <article className="rounded-lg border bg-background p-4 shadow-sm">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold">{title}</h3>
+          <p className="mt-1 truncate text-xs text-muted-foreground">{doc.fileName || title}</p>
+          {doc.folderPath ? (
+            <p className="mt-1 truncate text-xs text-muted-foreground">/{doc.folderPath}</p>
+          ) : null}
+        </div>
+        <Badge variant="outline" className={cn('shrink-0 text-xs', SOURCE_BADGE_CLASS[doc.source])}>
+          {t(`documents.repository.source.${doc.source}`, doc.sourceLabel || doc.source)}
+        </Badge>
+      </div>
+
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">{t('documents.repository.type')}</dt>
+          <dd className="mt-1 truncate font-medium">{doc.documentType || doc.category || '-'}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">{t('documents.repository.date')}</dt>
+          <dd className="mt-1 truncate font-medium">{formatDocumentDate(doc.createdAt, dateLocale)}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">{t('documents.repository.size')}</dt>
+          <dd className="mt-1 truncate font-medium">{formatFileSize(doc.fileSizeBytes)}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">{t('documents.repository.origin')}</dt>
+          <dd className="mt-1 truncate font-medium">
+            {doc.origin ? t(`documents.repository.origin.${doc.origin}`, doc.origin) : '-'}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="mb-1 text-xs text-muted-foreground">{t('documents.repository.links')}</p>
+          <LinkSummary doc={doc} t={t} />
+        </div>
+        <DocumentActions
+          doc={doc}
+          title={title}
+          actionBusy={actionBusy}
+          onPreview={onPreview}
+          onDownload={onDownload}
+          onDelete={onDelete}
+          canDelete={canDelete}
+          t={t}
+        />
+      </div>
+    </article>
   );
 }
 
@@ -101,16 +232,37 @@ export function DocumentRepositoryTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-background">
-      <Table>
+    <>
+      {loading ? (
+        <LoadingCards />
+      ) : (
+        <div className="grid gap-3 lg:hidden">
+          {documents.map((doc) => (
+            <MobileDocumentCard
+              key={doc.id}
+              doc={doc}
+              dateLocale={dateLocale}
+              onPreview={onPreview}
+              onDownload={onDownload}
+              onDelete={onDelete}
+              busyId={busyId}
+              canDelete={canDelete}
+              t={t}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="hidden min-w-0 overflow-hidden rounded-lg border bg-background lg:block">
+      <Table className="min-w-[1040px] table-fixed">
         <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableHead className="min-w-[300px] px-4">{t('documents.repository.document')}</TableHead>
-            <TableHead className="w-[140px]">{t('documents.repository.source')}</TableHead>
-            <TableHead className="w-[160px]">{t('documents.repository.type')}</TableHead>
-            <TableHead className="min-w-[220px]">{t('documents.repository.links')}</TableHead>
-            <TableHead className="w-[150px]">{t('documents.repository.date')}</TableHead>
-            <TableHead className="w-[92px] text-right">{t('documents.repository.size')}</TableHead>
+            <TableHead className="w-[32%] px-4">{t('documents.repository.document')}</TableHead>
+            <TableHead className="w-[130px]">{t('documents.repository.source')}</TableHead>
+            <TableHead className="w-[150px]">{t('documents.repository.type')}</TableHead>
+            <TableHead className="w-[220px]">{t('documents.repository.links')}</TableHead>
+            <TableHead className="w-[170px]">{t('documents.repository.date')}</TableHead>
+            <TableHead className="w-[96px] text-right">{t('documents.repository.size')}</TableHead>
             <TableHead className="w-[132px]" />
           </TableRow>
         </TableHeader>
@@ -158,43 +310,16 @@ export function DocumentRepositoryTable({
                     {formatFileSize(doc.fileSizeBytes)}
                   </TableCell>
                   <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        title={t('common.preview')}
-                        onClick={() => onPreview?.(doc)}
-                        disabled={actionBusy}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        title={t('common.download')}
-                        onClick={() => onDownload?.(doc)}
-                        disabled={actionBusy}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      {canDelete && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          title={doc.canDelete === false ? t('documents.repository.deleteBlocked') : t('common.delete')}
-                          onClick={() => onDelete?.(doc)}
-                          disabled={actionBusy || doc.canDelete === false}
-                        >
-                          {actionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        </Button>
-                      )}
-                    </div>
+                    <DocumentActions
+                      doc={doc}
+                      title={title}
+                      actionBusy={actionBusy}
+                      onPreview={onPreview}
+                      onDownload={onDownload}
+                      onDelete={onDelete}
+                      canDelete={canDelete}
+                      t={t}
+                    />
                   </TableCell>
                 </TableRow>
               );
@@ -202,6 +327,7 @@ export function DocumentRepositoryTable({
           )}
         </TableBody>
       </Table>
-    </div>
+      </div>
+    </>
   );
 }

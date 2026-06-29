@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import journalEntryRepository from './journalEntry.repository.js';
 import counterService from './accounting.counter.service.js';
 import accountRepository from './account.repository.js';
+import fiscalPeriodService from './fiscalPeriod.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
@@ -24,6 +25,8 @@ class JournalEntryService {
 
     try {
       await session.withTransaction(async () => {
+        await fiscalPeriodService.assertPostingDateOpen(data.entryDate, { session });
+
         // Validate accounts exist and are not groups
         const debitAccount = await accountRepository.findById(data.debitAccountId, { session });
         if (!debitAccount) throw new NotFoundError('Debit Account', data.debitAccountId);
@@ -77,15 +80,19 @@ class JournalEntryService {
   }
 
   async createFromEvent(referenceType, referenceId, debitAccountId, creditAccountId, amount, description, userId, options = {}) {
+    const entryDate = options.entryDate ? new Date(options.entryDate) : new Date();
+    await fiscalPeriodService.assertPostingDateOpen(entryDate, { session: options.session });
+
     const entryNumber = await counterService.getNextJournalEntryNumber({ session: options.session });
 
     const entry = await journalEntryRepository.create({
       entryNumber,
-      entryDate: new Date(),
+      entryDate,
       description,
       debitAccountId,
       creditAccountId,
       amount,
+      currency: options.currency || 'CHF',
       referenceType,
       referenceId,
       createdBy: userId,
@@ -121,12 +128,14 @@ class JournalEntryService {
           throw new ConflictError('Journal entry has already been reversed');
         }
 
+        const reversalDate = new Date();
+        await fiscalPeriodService.assertPostingDateOpen(reversalDate, { session });
         const entryNumber = await counterService.getNextJournalEntryNumber({ session });
 
         // Create reversal with swapped debit/credit
         reversalEntry = await journalEntryRepository.create({
           entryNumber,
-          entryDate: new Date(),
+          entryDate: reversalDate,
           description: `Reversal: ${reason}`,
           debitAccountId: original.creditAccountId._id || original.creditAccountId,
           creditAccountId: original.debitAccountId._id || original.debitAccountId,

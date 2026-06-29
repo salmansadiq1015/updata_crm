@@ -19,9 +19,10 @@ export function useFieldOpsReportMutations({
   onBulkArchive,
   onUpdate,
   onCreateInvoice,
+  onImport,
 } = {}) {
   const queryClient = useQueryClient();
-  const { t, locale: language } = useLanguage();
+  const { locale: language } = useLanguage();
   const de = language === 'de';
 
   const invalidate = (orderId) => {
@@ -145,6 +146,30 @@ export function useFieldOpsReportMutations({
     onError: (err) => showError(err.message),
   });
 
+  const importReports = useMutation({
+    mutationFn: reportService.importReports,
+    onSuccess: (result, variables) => {
+      if (!variables?.dryRun && result?.created > 0) {
+        queryClient.invalidateQueries({ queryKey: REPORTS_KEY });
+      }
+      const message = variables?.dryRun
+        ? (de ? 'Import geprueft.' : 'Import validated.')
+        : (de ? `${result?.created ?? 0} Berichte importiert.` : `${result?.created ?? 0} reports imported.`);
+      showSuccess(message);
+      onImport?.(result);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const downloadImportTemplate = useMutation({
+    mutationFn: reportService.downloadImportTemplate,
+    onSuccess: (blob) => {
+      downloadBlob(blob, 'work-report-import-template.csv');
+      showSuccess(de ? 'Importvorlage geladen.' : 'Import template downloaded.');
+    },
+    onError: (err) => showError(err.message),
+  });
+
   return {
     createReport,
     approve,
@@ -157,6 +182,8 @@ export function useFieldOpsReportMutations({
     bulkArchive,
     createInvoice,
     exportReports,
+    importReports,
+    downloadImportTemplate,
   };
 }
 

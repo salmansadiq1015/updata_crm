@@ -1,13 +1,30 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, FolderOpen, Folder, Plus, MoreHorizontal, Pencil, Ban } from 'lucide-react';
+import {
+  Ban,
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -15,6 +32,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useCatalogCategoryOptions, useCatalogCategoryTree } from '../hooks/use-catalog-queries';
 import { useCategoryMutations } from '../hooks/use-catalog-mutations';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -137,53 +155,111 @@ function CategoryDialog({ open, onOpenChange, category, categories }) {
 
   const blockedParentIds = new Set([category?._id || category?.id].filter(Boolean).map(String));
   const parentOptions = categories.filter((item) => !blockedParentIds.has(String(item._id || item.id)));
+  const isSaving = createCategory.isPending || updateCategory.isPending || moveCategory.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? t('catalog.categories.edit') : t('catalog.categories.create')}</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="category-code">{t('catalog.categories.code')}</Label>
-              <Input id="category-code" value={form.code} onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value.toUpperCase() }))} />
+      <DialogContent className="max-h-[90dvh] max-w-[calc(100vw-1rem)] sm:max-w-3xl">
+        <form
+          className="flex min-h-0 flex-1 flex-col"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!form.code || !form.name || isSaving) return;
+            save();
+          }}
+        >
+          <DialogHeader>
+            <div className="flex items-start gap-3 pr-10">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 text-primary shadow-sm">
+                <FolderPlus className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle>{isEdit ? t('catalog.categories.edit') : t('catalog.categories.create')}</DialogTitle>
+                <DialogDescription className="mt-1">
+                  {t('catalog.categories.dialogDescription', 'Organize material and service articles with clear category metadata and rich internal notes.')}
+                </DialogDescription>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="category-sort">{t('catalog.categories.sort')}</Label>
-              <Input id="category-sort" type="number" value={form.sortOrder} onChange={(event) => setForm((prev) => ({ ...prev, sortOrder: event.target.value }))} />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="category-name">{t('catalog.categories.name')}</Label>
-            <Input id="category-name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="category-description">{t('catalog.categories.description')}</Label>
-            <Input id="category-description" value={form.description} onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>{t('catalog.categories.parent')}</Label>
-            <Select value={form.parentId || ROOT_VALUE} onValueChange={(value) => setForm((prev) => ({ ...prev, parentId: value }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ROOT_VALUE}>{t('catalog.categories.root')}</SelectItem>
-                {parentOptions.map((item) => (
-                  <SelectItem key={item._id || item.id} value={item._id || item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button size="sm" onClick={save} disabled={!form.code || !form.name || createCategory.isPending || updateCategory.isPending || moveCategory.isPending}>
-            {t('common.save')}
-          </Button>
-        </DialogFooter>
+          </DialogHeader>
+
+          <DialogBody className="space-y-5 bg-muted/10">
+            <section className="space-y-4 rounded-2xl border border-border/70 bg-background/55 p-4 shadow-sm sm:p-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="category-code" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t('catalog.categories.code')} <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="category-code"
+                    value={form.code}
+                    onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value.toUpperCase() }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="category-sort" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t('catalog.categories.sort')}
+                  </Label>
+                  <Input
+                    id="category-sort"
+                    type="number"
+                    value={form.sortOrder}
+                    onChange={(event) => setForm((prev) => ({ ...prev, sortOrder: event.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="category-name" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('catalog.categories.name')} <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="category-name"
+                  value={form.name}
+                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('catalog.categories.description')}
+                </Label>
+                <RichTextEditor
+                  value={form.description}
+                  onChange={(value) => setForm((prev) => ({ ...prev, description: value }))}
+                  placeholder={t('catalog.categories.descriptionPlaceholder', 'Add category notes, inclusion rules or buying guidance...')}
+                  maxLength={4000}
+                  minHeight={180}
+                  disabled={isSaving}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('catalog.categories.parent')}
+                </Label>
+                <Select value={form.parentId || ROOT_VALUE} onValueChange={(value) => setForm((prev) => ({ ...prev, parentId: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ROOT_VALUE}>{t('catalog.categories.root')}</SelectItem>
+                    {parentOptions.map((item) => (
+                      <SelectItem key={item._id || item.id} value={item._id || item.id}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </section>
+          </DialogBody>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+            <Button type="submit" disabled={!form.code || !form.name || isSaving}>
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSaving ? t('common.saving') : t('common.save')}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

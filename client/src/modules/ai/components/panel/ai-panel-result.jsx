@@ -5,9 +5,9 @@ import { useMessageCopy } from '../../hooks/use-message-copy';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 function ResultIcon({ status }) {
-  if (status === AGENT_STATUSES.COMPLETED) return <CheckCircle2 className="h-10 w-10 text-green-500" />;
-  if (status === AGENT_STATUSES.FAILED)    return <XCircle      className="h-10 w-10 text-destructive" />;
-  return                                          <AlertTriangle className="h-10 w-10 text-amber-500" />;
+  if (status === AGENT_STATUSES.COMPLETED) return <CheckCircle2 className="h-8 w-8 text-emerald-200" />;
+  if (status === AGENT_STATUSES.FAILED)    return <XCircle      className="h-8 w-8 text-rose-200" />;
+  return                                          <AlertTriangle className="h-8 w-8 text-amber-200" />;
 }
 
 function buildResultContent(agentRun) {
@@ -28,23 +28,36 @@ export function AiPanelResult({ agentRun, onStartOver }) {
   const error   = agentRun?.error?.message;
 
   const { copy, copyState } = useMessageCopy();
+  const isSuccess = status === AGENT_STATUSES.COMPLETED;
 
   return (
-    <div className="flex flex-col items-center gap-4 px-2 py-6 text-center">
-      <ResultIcon status={status} />
+    <div className="flex min-h-full flex-col justify-center gap-4 px-5 py-8 text-center">
+      <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border shadow-[0_22px_70px_rgba(0,0,0,0.24)] ${
+        isSuccess
+          ? 'border-emerald-300/20 bg-emerald-400/10'
+          : status === AGENT_STATUSES.FAILED
+            ? 'border-rose-300/20 bg-rose-400/10'
+            : 'border-amber-300/20 bg-amber-400/10'
+      }`}>
+        <ResultIcon status={status} />
+      </div>
 
       {status === AGENT_STATUSES.COMPLETED && (
         <>
-          <p className="font-semibold text-green-600 dark:text-green-400">{t('ai.result.done', 'Erledigt')}</p>
-          {content && <p className="text-sm text-muted-foreground">{content}</p>}
+          <p className="font-semibold text-emerald-100">{t('ai.result.done', 'Done')}</p>
+          {content && (
+            <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm leading-6 text-slate-300">
+              {content}
+            </p>
+          )}
           {content && (
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5"
-              onClick={() => copy(content, 'markdown', agentRun._id)}
+              className="gap-1.5 border-white/10 bg-white/[0.04] text-slate-200 hover:bg-white/10 hover:text-white"
+              onClick={() => copy(content, 'markdown', agentRun?._id)}
             >
-              {copyState.copied && copyState.messageId === agentRun._id ? (
+              {copyState.copied && copyState.messageId === agentRun?._id ? (
                 <>
                   <Check className="h-3.5 w-3.5 text-green-500" />
                   {t('common.copiedShort', 'Kopiert')}
@@ -62,16 +75,16 @@ export function AiPanelResult({ agentRun, onStartOver }) {
 
       {status === AGENT_STATUSES.FAILED && (
         <>
-          <p className="font-semibold text-destructive">{t('ai.result.failed', 'Etwas ist schiefgelaufen')}</p>
-          {error && <p className="text-xs text-muted-foreground max-w-60">{error}</p>}
+          <p className="font-semibold text-rose-100">{t('ai.result.failed', 'Something went wrong')}</p>
+          {error && <p className="mx-auto max-w-72 text-xs leading-5 text-slate-400">{error}</p>}
         </>
       )}
 
       {status === AGENT_STATUSES.CANCELLED && (
-        <p className="text-sm text-muted-foreground">{t('ai.result.cancelled', 'Aktion abgebrochen')}</p>
+        <p className="text-sm text-slate-400">{t('ai.result.cancelled', 'Action cancelled')}</p>
       )}
 
-      <Button variant="outline" size="sm" onClick={onStartOver} className="mt-2">
+      <Button variant="outline" size="sm" onClick={onStartOver} className="mt-2 border-white/10 bg-white/[0.04] text-slate-200 hover:bg-white/10 hover:text-white">
         {t('ai.result.startOver', 'Neu starten')}
       </Button>
     </div>

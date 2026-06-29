@@ -1,4 +1,5 @@
 import cacheManager from '../../shared/cache/CacheManager.js';
+import fiscalPeriodService from './fiscalPeriod.service.js';
 import auditService from '../auth/audit.service.js';
 import logger from '../../shared/logger/index.js';
 
@@ -122,6 +123,7 @@ class CashManagementService {
    */
   async updateManualBalance(bankAccountId, balance, date, userId, meta = {}) {
     const bankAccountRepository = (await import('./bankAccount.repository.js')).default;
+    await fiscalPeriodService.assertPostingDateOpen(date);
 
     const updated = await bankAccountRepository.updateBalance(bankAccountId, balance, new Date(date));
 

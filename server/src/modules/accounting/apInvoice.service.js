@@ -4,6 +4,7 @@ import paymentBatchRepository from './paymentBatch.repository.js';
 import bankAccountRepository from './bankAccount.repository.js';
 import accountRepository from './account.repository.js';
 import accountingCounterService from './accounting.counter.service.js';
+import fiscalPeriodService from './fiscalPeriod.service.js';
 import { generatePain001 } from './iso20022.parser.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
@@ -12,6 +13,7 @@ import auditService from '../auth/audit.service.js';
 import { NotFoundError, ConflictError, ValidationError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import taxService from './tax.service.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
@@ -80,6 +82,8 @@ function getReferenceId(value) {
 
 class ApInvoiceService {
   async create(data, createdBy, meta = {}) {
+    await fiscalPeriodService.assertPostingDateOpen(data.invoiceDate);
+
     const apInvoiceNumber = await accountingCounterService.getNextApInvoiceNumber();
 
     // Check duplicate supplier + supplier invoice number
@@ -175,6 +179,8 @@ class ApInvoiceService {
       throw new ConflictError('Version conflict: invoice has been modified by another user');
     }
 
+    await fiscalPeriodService.assertPostingDateOpen(data.invoiceDate || existing.invoiceDate);
+
     // Recalculate totals if line items changed
     let totals = {};
     if (data.lineItems) {
@@ -207,6 +213,7 @@ class ApInvoiceService {
   async approve(id, approverId, meta = {}) {
     const invoice = await apInvoiceRepository.findById(id);
     if (!invoice) throw new NotFoundError('ApInvoice', id);
+    await fiscalPeriodService.assertPostingDateOpen(invoice.invoiceDate);
 
     this._validateTransition(invoice.status, 'APPROVED');
     await this._validateCompleteAllocations(invoice);
@@ -241,6 +248,7 @@ class ApInvoiceService {
       approvedBy: approverId,
       approvedAt: new Date(),
     });
+    await taxService.recordFromApInvoice(updated, approverId);
 
     await this._invalidateApCache(id);
     await this._invalidateListCache();
@@ -267,6 +275,7 @@ class ApInvoiceService {
   async secondApprove(id, approverId, meta = {}) {
     const invoice = await apInvoiceRepository.findById(id);
     if (!invoice) throw new NotFoundError('ApInvoice', id);
+    await fiscalPeriodService.assertPostingDateOpen(invoice.invoiceDate);
 
     if (!invoice.approvedBy) {
       throw new ConflictError('First approval is required before second approval');
@@ -286,6 +295,7 @@ class ApInvoiceService {
       secondApproverId: approverId,
       secondApprovedAt: new Date(),
     });
+    await taxService.recordFromApInvoice(updated, approverId);
 
     await this._invalidateApCache(id);
     await this._invalidateListCache();
@@ -313,6 +323,7 @@ class ApInvoiceService {
   async dispute(id, reason, userId, meta = {}) {
     const invoice = await apInvoiceRepository.findById(id);
     if (!invoice) throw new NotFoundError('ApInvoice', id);
+    await fiscalPeriodService.assertPostingDateOpen(invoice.invoiceDate);
 
     this._validateTransition(invoice.status, 'DISPUTED');
 
@@ -453,6 +464,7 @@ class ApInvoiceService {
     if (uniqueInvoiceIds.length !== invoiceIds.length) {
       throw new ConflictError('Payment batch invoice list contains duplicate invoices');
     }
+    await fiscalPeriodService.assertPostingDateOpen(new Date());
 
     const session = await mongoose.startSession();
     let batch;
@@ -532,6 +544,8 @@ class ApInvoiceService {
   }
 
   async exportPaymentBatchPain001(batchId, userId, meta = {}) {
+    await fiscalPeriodService.assertPostingDateOpen(new Date());
+
     const batch = await paymentBatchRepository.findById(batchId);
     if (!batch) throw new NotFoundError('PaymentBatch', batchId);
 
@@ -627,8 +641,9 @@ class ApInvoiceService {
       const lineTotal = roundMoney((item.quantity || 0) * (item.unitPrice || 0));
       item.lineTotal = lineTotal;
       this._validateSplitAllocationSum(item, lineTotal);
+      item.taxAmount = roundMoney(lineTotal * ((item.vatRate || 0) / 100));
       subtotal += lineTotal;
-      vatAmount += lineTotal * ((item.vatRate || 0) / 100);
+      vatAmount += item.taxAmount;
     }
 
     return {

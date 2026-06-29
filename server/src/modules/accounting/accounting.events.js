@@ -3,6 +3,10 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
 import accountMappingService, { ACCOUNT_MAPPING } from './accountMapping.service.js';
 
+function getPayload(event) {
+  return event?.payload || event || {};
+}
+
 /**
  * Register accounting module event handlers.
  *
@@ -10,7 +14,8 @@ import accountMappingService, { ACCOUNT_MAPPING } from './accountMapping.service
  * and triggers accounting-side actions (journal entries, OCR, aging updates).
  */
 export function registerAccountingEvents() {
-  eventBus.subscribe(EVENT_TYPES.INVOICE_FINALIZED, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.INVOICE_FINALIZED, async (event) => {
+    const data = getPayload(event);
     try {
       const journalEntryService = (await import('./journalEntry.service.js')).default;
       const [receivableAccountId, revenueAccountId] = await Promise.all([
@@ -23,10 +28,14 @@ export function registerAccountingEvents() {
         data.invoiceId,
         receivableAccountId,
         revenueAccountId,
-        data.totalAmount || data.totalGross || 0,
+        data.totalAmount ?? data.totalGross ?? data.grandTotalRounded ?? 0,
         `Revenue: Invoice ${data.invoiceNumber || data.invoiceId} finalized`,
         data.userId || null,
+        { entryDate: data.invoiceDate, currency: data.currency },
       );
+
+      const taxService = (await import('./tax.service.js')).default;
+      await taxService.recordFromArInvoiceEvent(data);
 
       logger.info('Journal entry created for finalized invoice', {
         module: 'accounting',
@@ -43,7 +52,8 @@ export function registerAccountingEvents() {
     }
   });
 
-  eventBus.subscribe(EVENT_TYPES.INVOICE_PAYMENT_RECORDED, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.INVOICE_PAYMENT_RECORDED, async (event) => {
+    const data = getPayload(event);
     try {
       const journalEntryService = (await import('./journalEntry.service.js')).default;
       const [bankAccountId, receivableAccountId] = await Promise.all([
@@ -56,9 +66,10 @@ export function registerAccountingEvents() {
         data.invoiceId || data.paymentId,
         bankAccountId,
         receivableAccountId,
-        data.amount || 0,
+        data.amount ?? data.paymentAmount ?? 0,
         `Payment recorded for invoice ${data.invoiceNumber || data.invoiceId}`,
         data.userId || null,
+        { entryDate: data.paymentDate || data.paidAt, currency: data.currency },
       );
 
       logger.info('Journal entry created for invoice payment', {
@@ -76,7 +87,8 @@ export function registerAccountingEvents() {
     }
   });
 
-  eventBus.subscribe(EVENT_TYPES.INVOICE_PAID, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.INVOICE_PAID, async (event) => {
+    const data = getPayload(event);
     try {
       logger.info('Invoice fully paid - AR open item closed', {
         module: 'accounting',
@@ -93,7 +105,8 @@ export function registerAccountingEvents() {
     }
   });
 
-  eventBus.subscribe(EVENT_TYPES.INVOICE_OVERDUE, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.INVOICE_OVERDUE, async (event) => {
+    const data = getPayload(event);
     try {
       logger.info('Invoice overdue - aging updated, dunning flagged', {
         module: 'accounting',
@@ -110,7 +123,8 @@ export function registerAccountingEvents() {
     }
   });
 
-  eventBus.subscribe(EVENT_TYPES.ACCOUNTING_DOCUMENT_UPLOADED, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.ACCOUNTING_DOCUMENT_UPLOADED, async (event) => {
+    const data = getPayload(event);
     try {
       if (data.documentType === 'SUPPLIER_INVOICE') {
         const queueManager = (await import('../../shared/queue/QueueManager.js')).default;

@@ -133,6 +133,39 @@ describe('mobile report workflow completion', () => {
     expect(exported.csv).toContain('RPT-A');
   });
 
+  test('validates and imports report CSV rows by assignment number', async () => {
+    const technician = await createMobileUser();
+    await Assignment.create({
+      assignmentNumber: 'ASN-IMPORT-1',
+      employeeId: technician._id,
+      assignmentType: 'SERVICE_CALL',
+      title: 'Import service visit',
+      startDatetime: new Date('2026-06-15T08:00:00.000Z'),
+      endDatetime: new Date('2026-06-15T12:00:00.000Z'),
+      status: 'PLANNED',
+      createdBy: technician._id,
+    });
+    const csv = [
+      'assignmentNumber,reportDate,arrivalTime,departureTime,workPerformed,materialItems,status',
+      '"ASN-IMPORT-1","2026-06-15","2026-06-15T08:00:00.000Z","2026-06-15T12:30:00.000Z","Checked burner and safety valve","Burner nozzle|1|pcs;Seal kit|2|pcs","DRAFT"',
+    ].join('\n');
+    const file = { buffer: Buffer.from(csv), originalname: 'reports.csv', mimetype: 'text/csv' };
+
+    const dryRun = await reportService.importCsv(file, { dryRun: true }, technician._id);
+    expect(dryRun).toMatchObject({ dryRun: true, totalRows: 1, validRows: 1, created: 0, failed: 0 });
+
+    const imported = await reportService.importCsv(file, { dryRun: false }, technician._id);
+    expect(imported).toMatchObject({ dryRun: false, totalRows: 1, validRows: 1, created: 1, failed: 0 });
+
+    const report = await WorkReport.findOne({ workPerformed: 'Checked burner and safety valve' }).lean();
+    expect(report).toMatchObject({
+      status: 'DRAFT',
+      generationSource: 'SYNC',
+      billableMinutes: 270,
+    });
+    expect(report.materialItems).toHaveLength(2);
+  });
+
   test('generates a draft report from tracked time entries', async () => {
     const technicianId = objectId();
     const orderId = objectId();

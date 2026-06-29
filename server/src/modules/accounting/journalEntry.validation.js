@@ -1,12 +1,15 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 
-const REFERENCE_TYPES = [
+export const REFERENCE_TYPES = [
   'AR_INVOICE', 'AR_PAYMENT', 'AP_INVOICE', 'AP_PAYMENT',
   'BANK_FEE', 'MANUAL', 'REVERSAL', 'WRITE_OFF',
   'INVOICE_FINALIZED', 'INVOICE_PAYMENT',
   'AUTO_RECONCILIATION', 'MANUAL_RECONCILIATION', 'CATEGORIZATION',
   'NETTING',
+  'FIXED_ASSET_ACQUISITION', 'FIXED_ASSET_DEPRECIATION', 'FIXED_ASSET_DISPOSAL',
+  'RECURRING_TRANSACTION',
+  'FX_REVALUATION',
 ];
 
 export const createJournalSchema = {

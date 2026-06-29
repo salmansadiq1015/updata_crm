@@ -23,7 +23,10 @@ const catalogSyncLogSchema = new mongoose.Schema(
     completedAt: { type: Date, default: null },
     triggeredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
-  { timestamps: true },
+  // `errors` is a reserved Mongoose schema path. It's safe here: this model is
+  // only read via .lean() and written via findByIdAndUpdate/.create(), so it never
+  // collides with Mongoose's internal document validation `errors` property.
+  { timestamps: true, suppressReservedKeysWarning: true },
 );
 
 catalogSyncLogSchema.index({ connectionId: 1, createdAt: -1 });

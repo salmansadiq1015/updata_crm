@@ -12,7 +12,7 @@ export default function TextBlocksPage() {
       <PageHeader
         icon={Type}
         title={t('catalog.textBlocks.title')}
-        description="Manage reusable text blocks for quotations and reports"
+        description={t('catalog.textBlocks.pageDescription')}
       />
       <div className="flex-1 overflow-y-auto">
         <TextBlockTable />

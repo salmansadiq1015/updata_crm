@@ -297,7 +297,7 @@ export function RichTextEditor({
           '[&_.tiptap]:outline-none [&_.tiptap]:min-h-[inherit]',
           '[&_.tiptap_p.is-editor-empty:first-child::before]:text-muted-foreground [&_.tiptap_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.tiptap_p.is-editor-empty:first-child::before]:float-left [&_.tiptap_p.is-editor-empty:first-child::before]:pointer-events-none [&_.tiptap_p.is-editor-empty:first-child::before]:h-0',
         )}
-        style={{ minHeight: 192 }}
+        style={{ minHeight }}
       />
       {maxLength && (
         <div className={cn(

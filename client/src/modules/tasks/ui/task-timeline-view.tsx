@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Flag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Circle, CircleCheck, CircleDashed, CirclePause, CircleX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import type { Task, TaskStatus } from '../types/task-types';
-import { taskPriorityIconColor, taskStatusIconColor } from './task-ui-constants';
+import { taskStatusIconColor } from './task-ui-constants';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -78,6 +78,12 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
   const rangeEnd = dates[dates.length - 1];
 
   const todayIndex = useMemo(() => daysBetween(rangeStart, today), [rangeStart, today]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ left: Math.max(0, todayIndex * DAY_WIDTH - 240) });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [todayIndex]);
 
   // Split tasks
   const { scheduledTasks, unscheduledTasks } = useMemo(() => {
@@ -116,10 +122,6 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
   const goForward = () => setOffset((o) => o + 30);
   const goToday = () => {
     setOffset(0);
-    // Scroll to today after state update
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ left: Math.max(0, todayIndex * DAY_WIDTH - 200), behavior: 'smooth' });
-    });
   };
 
   const navigate = (taskId: string) =>
@@ -148,8 +150,8 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
     <div className="flex h-full flex-col overflow-hidden bg-background">
       {/* ── Toolbar ── */}
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
-        <h2 className="text-base font-semibold">{t('tasks.timeline')}</h2>
-        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={goToday}>{t('common.today')}</Button>
+        <h2 className="text-base font-semibold">{t('tasks.timeline', 'Timeline')}</h2>
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={goToday}>{t('common.today', 'Today')}</Button>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goBack}>
             <ChevronLeft className="h-4 w-4" />
@@ -161,11 +163,11 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
         <span className="text-xs text-muted-foreground">
           {rangeLabel}
         </span>
-        <span className="ml-auto text-xs text-muted-foreground">{t('tasks.withDates', undefined, { count: scheduledTasks.length })}</span>
+        <span className="ml-auto text-xs text-muted-foreground">{t('tasks.withDates', '{count} with dates', { count: scheduledTasks.length })}</span>
       </div>
 
       {/* ── Body ── */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-y-auto">
         {/* Left: task label column */}
         <div className="flex shrink-0 flex-col border-r border-border" style={{ width: LABEL_WIDTH }}>
           {/* Header placeholder (matches date header height: 2 rows = 56px) */}
@@ -176,7 +178,7 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
           </div>
 
           {/* Task rows */}
-          <div className="flex-1 overflow-y-auto">
+          <div>
             {scheduledTasks.map((task) => {
               const Icon = STATUS_ICON[task.status];
               return (
@@ -195,7 +197,7 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
             {unscheduledTasks.length > 0 && (
               <>
                 <div className="border-b border-border bg-muted/20 px-3 py-1.5">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('tasks.noDates', undefined, { count: unscheduledTasks.length })}</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t('tasks.noDates', '{count} without dates', { count: unscheduledTasks.length })}</span>
                 </div>
                 {unscheduledTasks.map((task) => {
                   const Icon = STATUS_ICON[task.status];
@@ -217,7 +219,7 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
         </div>
 
         {/* Right: scrollable Gantt grid */}
-        <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto">
+        <div ref={scrollRef} className="min-w-0 flex-1 overflow-x-auto">
           <div style={{ width: totalWidth, minWidth: totalWidth }}>
             {/* Date header */}
             <div className="sticky top-0 z-10 border-b border-border bg-card" style={{ width: totalWidth }}>
@@ -315,7 +317,7 @@ export function TaskTimelineView({ tasks, listId }: TaskTimelineViewProps) {
               {/* Unscheduled rows */}
               {unscheduledTasks.length > 0 && (
                 <>
-                  <div className="border-b border-border bg-muted/20" style={{ height: 28, width: totalWidth }}>
+                  <div className="relative border-b border-border bg-muted/20" style={{ height: 28, width: totalWidth }}>
                     {/* Today line */}
                     {todayIndex >= 0 && todayIndex < dates.length && (
                       <div className="absolute inset-y-0 w-px bg-primary/60" style={{ left: todayIndex * DAY_WIDTH + DAY_WIDTH / 2 }} />

@@ -18,6 +18,46 @@ class AccountingReportsController {
       return res.send(csv);
     } catch (err) { next(err); }
   }
+
+  async getBalanceSheet(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const report = await accountingReportsService.getBalanceSheet(query);
+      return res.success({ data: report });
+    } catch (err) { next(err); }
+  }
+
+  async getTrialBalance(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const report = await accountingReportsService.getTrialBalance(query);
+      return res.success({ data: report });
+    } catch (err) { next(err); }
+  }
+
+  async getCashFlow(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const report = await accountingReportsService.getCashFlow(query);
+      return res.success({ data: report });
+    } catch (err) { next(err); }
+  }
+
+  async getGeneralLedger(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const report = await accountingReportsService.getGeneralLedger(query);
+      return res.success({
+        data: report.data,
+        pagination: report.pagination,
+        meta: {
+          period: report.period,
+          currency: report.currency,
+          scope: report.scope,
+        },
+      });
+    } catch (err) { next(err); }
+  }
 }
 
 const accountingReportsController = new AccountingReportsController();

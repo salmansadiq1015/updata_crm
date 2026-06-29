@@ -1,6 +1,6 @@
 'use client';
 
-import { X } from 'lucide-react';
+import { Command, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
 
@@ -102,20 +102,26 @@ export function AiHelpOverlay({ onClose }) {
   const commands = HELP_COMMANDS[locale] ?? HELP_COMMANDS.en;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-background border shadow-xl p-5 max-h-[80vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between mb-4 shrink-0">
-          <p className="font-semibold text-sm">{t('ai.panel.helpTrigger')}</p>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose} title={t('common.close')}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 backdrop-blur-md sm:items-center">
+      <div className="relative flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0a1020] p-5 text-slate-100 shadow-[0_28px_100px_rgba(0,0,0,0.45)]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(139,92,246,0.18),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(14,165,233,0.14),transparent_30%)]" />
+        <div className="relative z-10 mb-4 flex shrink-0 items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-200 ring-1 ring-cyan-200/20">
+              <Command className="h-5 w-5" />
+            </span>
+            <p className="font-semibold text-sm text-white">{t('ai.panel.helpTrigger')}</p>
+          </div>
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-slate-300 hover:bg-white/10 hover:text-white" onClick={onClose} title={t('common.close')}>
             <X className="h-4 w-4" />
           </Button>
         </div>
 
-        <ul className="grid gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+        <ul className="relative z-10 grid gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
           {commands.map(([trigger, result]) => (
-            <li key={trigger} className="flex flex-col gap-0.5 rounded-md border border-border/60 p-2.5">
-              <span className="text-sm font-medium">&quot;{trigger}&quot;</span>
-              <span className="text-xs text-muted-foreground">{result}</span>
+            <li key={trigger} className="flex flex-col gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-3">
+              <span className="text-sm font-semibold text-white">&quot;{trigger}&quot;</span>
+              <span className="text-xs leading-5 text-slate-400">{result}</span>
             </li>
           ))}
         </ul>

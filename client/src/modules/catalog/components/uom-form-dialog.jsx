@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod/v4';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
@@ -70,67 +70,74 @@ export function UomFormDialog({ open, onClose, unit }) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? t('catalog.units.edit') : t('catalog.units.create')}</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-lg">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="code"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('catalog.units.code')}</FormLabel>
-                  <FormControl>
-                    <Input {...field} disabled={isEdit} placeholder={t('catalog.units.codePlaceholder')} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {['nameDe', 'nameFr', 'nameIt'].map((name) => (
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+            <DialogHeader>
+              <DialogTitle>{isEdit ? t('catalog.units.edit') : t('catalog.units.create')}</DialogTitle>
+              <DialogDescription className="sr-only">
+                {isEdit ? t('catalog.units.edit') : t('catalog.units.create')}
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogBody className="space-y-4">
               <FormField
-                key={name}
                 control={form.control}
-                name={name}
+                name="code"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t(`catalog.units.${name}`)}</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormLabel>{t('catalog.units.code')}</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled={isEdit} placeholder={t('catalog.units.codePlaceholder')} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            ))}
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="baseUnitCode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('catalog.units.baseUnit')}</FormLabel>
-                    <FormControl><Input {...field} placeholder={t('catalog.units.baseUnitPlaceholder')} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="conversionFactor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('catalog.units.conversionFactor')}</FormLabel>
-                    <FormControl><Input {...field} type="number" step="any" placeholder={t('catalog.units.conversionFactorPlaceholder')} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
+              {['nameDe', 'nameFr', 'nameIt'].map((name) => (
+                <FormField
+                  key={name}
+                  control={form.control}
+                  name={name}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t(`catalog.units.${name}`)}</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ))}
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="baseUnitCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('catalog.units.baseUnit')}</FormLabel>
+                      <FormControl><Input {...field} placeholder={t('catalog.units.baseUnitPlaceholder')} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="conversionFactor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('catalog.units.conversionFactor')}</FormLabel>
+                      <FormControl><Input {...field} type="number" step="any" placeholder={t('catalog.units.conversionFactorPlaceholder')} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </DialogBody>
+
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
               <Button type="submit" disabled={isPending}>{isPending ? t('common.saving') : t('common.save')}</Button>
-            </div>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>

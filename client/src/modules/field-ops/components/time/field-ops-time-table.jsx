@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useCallback } from 'react';
-import { Clock, Eye, Pencil, Plus, ShieldAlert, Trash2, Unlock } from 'lucide-react';
+import { Clock, Eye, Pencil, Plus, Search, ShieldAlert, Trash2, Unlock } from 'lucide-react';
 import { useFieldOpsTimeEntries } from '@/modules/field-ops/hooks/use-field-ops-queries';
 import { useFieldOpsTimeMutations } from '@/modules/field-ops/hooks/use-field-ops-time-mutations';
 import { FieldOpsTimeStatusBadge } from './field-ops-time-status-badge';
@@ -17,6 +17,7 @@ import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { PageHeader } from '@/shared/components/page-header';
 import { PermissionGate } from '@/shared/components/permission-gate';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate } from '@/lib/formatters';
@@ -74,6 +75,26 @@ function fmtDuration(min) {
   return h > 0 ? `${h}h ${m > 0 ? `${m}m` : ''}`.trim() : `${m}m`;
 }
 
+function technicianName(entry) {
+  const tech = entry?.technicianId;
+  if (typeof tech === 'object' && tech) {
+    return `${tech.firstName ?? ''} ${tech.lastName ?? ''}`.trim() || tech.email || '';
+  }
+  return '';
+}
+
+function orderLabel(entry) {
+  const order = entry?.orderId;
+  if (typeof order === 'object' && order) {
+    return `${order.assignmentNumber || ''} ${order.title || ''}`.trim();
+  }
+  return '';
+}
+
+function normalizeSearch(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function FieldOpsTimeTable({ filters = {}, compact = false }) {
@@ -83,6 +104,8 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
   // Filters
   const [activityFilter, setActivityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [searchFilter, setSearchFilter] = useState('');
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
 
   // UI state
   const [rowSelection, setRowSelection] = useState({});
@@ -108,12 +131,24 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
 
   // Client-side filtering
   const filtered = useMemo(() => {
+    const searchTerm = normalizeSearch(searchFilter);
     return entries.filter((e) => {
       if (activityFilter !== 'all' && e.activityType !== activityFilter) return false;
       if (statusFilter !== 'all' && e.releaseStatus !== statusFilter) return false;
+      if (searchTerm) {
+        const haystack = normalizeSearch([
+          formatDate(e.date),
+          technicianName(e),
+          orderLabel(e),
+          e.activityType,
+          e.releaseStatus,
+          e.note,
+        ].join(' '));
+        if (!haystack.includes(searchTerm)) return false;
+      }
       return true;
     });
-  }, [entries, activityFilter, statusFilter]);
+  }, [entries, activityFilter, statusFilter, searchFilter]);
 
   // Selected IDs
   const selectedIds = useMemo(
@@ -166,6 +201,11 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
     { value: 'all', de: 'Alle Status', en: 'All Statuses' },
     ...Object.entries(RELEASE_STATUS_CONFIG).map(([v, c]) => ({ value: v, de: c.label, en: c.labelEn })),
   ];
+
+  const setFilterAndResetPage = (setter) => (value) => {
+    setter(value);
+    setPagination((current) => ({ ...current, pageIndex: 0 }));
+  };
 
   // Columns
   const columns = useMemo(() => [
@@ -296,6 +336,15 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
           count={filtered.length}
         >
           <div className="flex items-center gap-2">
+            <div className="relative w-56">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchFilter}
+                onChange={(event) => setFilterAndResetPage(setSearchFilter)(event.target.value)}
+                placeholder={de ? 'Suchen...' : 'Search...'}
+                className="h-8 rounded-full border-dashed bg-muted/30 pl-9 text-xs"
+              />
+            </div>
             <Select value={activityFilter} onValueChange={setActivityFilter}>
               <SelectTrigger className="h-8 w-40 text-xs rounded-full border-dashed">
                 <SelectValue />
@@ -327,9 +376,19 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
       )}
 
       {compact && (
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="grid grid-cols-2 gap-2 md:flex">
-            <Select value={activityFilter} onValueChange={setActivityFilter}>
+        <div className="rounded-xl border border-border/60 bg-card/70 p-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="grid gap-2 md:flex md:flex-1 md:items-center">
+            <div className="relative md:max-w-xs md:flex-1">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchFilter}
+                onChange={(event) => setFilterAndResetPage(setSearchFilter)(event.target.value)}
+                placeholder={de ? 'Zeiteintraege suchen...' : 'Search time records...'}
+                className="h-9 rounded-lg bg-background/70 pl-9 text-sm"
+              />
+            </div>
+            <Select value={activityFilter} onValueChange={setFilterAndResetPage(setActivityFilter)}>
               <SelectTrigger className="h-8 w-full text-xs md:w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -339,7 +398,7 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={setFilterAndResetPage(setStatusFilter)}>
               <SelectTrigger className="h-8 w-full text-xs md:w-36">
                 <SelectValue />
               </SelectTrigger>
@@ -354,6 +413,7 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
             <Plus className="h-4 w-4 mr-1.5" />
             {de ? 'Neuer Eintrag' : 'New Entry'}
           </Button>
+          </div>
         </div>
       )}
 
@@ -433,6 +493,12 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
         columns={columns}
         data={filtered}
         isLoading={isFetching && entries.length === 0}
+        manualPagination={false}
+        manualSorting={false}
+        enableGlobalFilter={false}
+        pagination={pagination}
+        onPaginationChange={setPagination}
+        rowCount={filtered.length}
         onRowClick={(row) => { setSelectedEntry(row); setPanelOpen(true); }}
         emptyState={<TimeEmptyState de={de} />}
         getRowId={(row) => row._id || row.id}

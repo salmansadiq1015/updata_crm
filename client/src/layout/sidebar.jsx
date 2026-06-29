@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
@@ -177,8 +177,14 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
   const Icon = leaf.icon;
   const label = t(leaf.labelKey);
 
+  const ref = useRef(null);
+  useEffect(() => {
+    if (isActive && ref.current) ref.current.scrollIntoView({ block: 'nearest' });
+  }, [isActive]);
+
   const linkEl = (
     <Link
+      ref={ref}
       href={leaf.disabled ? '#' : leaf.href}
       onClick={leaf.disabled ? undefined : onNavigate}
       className={cn(
@@ -188,7 +194,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
           : 'text-white/35 hover:bg-white/[0.05] hover:text-white/65',
         leaf.disabled && 'opacity-20 pointer-events-none',
         collapsed && 'justify-center px-0 py-2.5',
-        nested && !collapsed && 'pl-[28px] py-[7px]'
+        nested && !collapsed && 'pl-[26px] py-1.5'
       )}
     >
       {isActive && !nested && (
@@ -199,7 +205,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
         />
       )}
       {isActive && nested && (
-        <span className="w-1.5 h-1.5 rounded-full bg-[oklch(0.75_0.25_292)] mr-1 shrink-0" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[oklch(0.75_0.25_292)] shadow-[0_0_6px_oklch(0.65_0.25_292/60%)] mr-1 shrink-0" />
       )}
       <span className="relative shrink-0">
         <Icon className={cn(
@@ -323,7 +329,7 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            <div className="mt-0.5 space-y-0.5 border-l border-[oklch(0.65_0.25_292_/_22%)] ml-[22px]">
+            <div className="mt-0.5 space-y-0.5 border-l-2 border-[oklch(0.65_0.25_292_/_18%)] ml-[22px]">
               {children.map((leaf) => (
                 <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested onNavigate={onNavigate} unreadCount={unreadCount} />
               ))}
@@ -520,8 +526,11 @@ export function Sidebar() {
         <SidebarLogo collapsed={collapsed} />
 
         {/* Scrollable nav */}
-        <div className="relative flex-1 overflow-y-auto overflow-x-hidden py-3 scrollbar-thin scrollbar-dark">
-          <SidebarNav collapsed={collapsed} />
+        <div className="relative flex-1 min-h-0">
+          <div className="h-full overflow-y-auto overflow-x-hidden py-3 scrollbar-thin scrollbar-dark">
+            <SidebarNav collapsed={collapsed} />
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-sidebar to-transparent" />
         </div>
 
         {/* Bottom section */}
@@ -576,10 +585,13 @@ export function MobileSidebar() {
 
         <SidebarLogo collapsed={false} />
 
-        <div className="relative flex-1 overflow-y-auto overflow-x-hidden py-3 scrollbar-thin scrollbar-dark">
-          <TooltipProvider delayDuration={0}>
-            <SidebarNav collapsed={false} onNavigate={() => setMobileOpen(false)} />
-          </TooltipProvider>
+        <div className="relative flex-1 min-h-0">
+          <div className="h-full overflow-y-auto overflow-x-hidden py-3 scrollbar-thin scrollbar-dark">
+            <TooltipProvider delayDuration={0}>
+              <SidebarNav collapsed={false} onNavigate={() => setMobileOpen(false)} />
+            </TooltipProvider>
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-sidebar to-transparent" />
         </div>
 
         <div className="relative p-2.5 border-t border-white/[0.04]">

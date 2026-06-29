@@ -69,9 +69,9 @@ export function useAiAssistant() {
     }
   };
 
-  const handleTextSubmit = (input) => {
+  const handleTextSubmit = async (input) => {
     openPanel();
-    agentRun.dispatch(input);
+    return agentRun.dispatch(input);
   };
 
   const resetToIdle = () => {

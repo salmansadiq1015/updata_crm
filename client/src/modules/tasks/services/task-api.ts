@@ -217,11 +217,13 @@ export const taskApi = {
     const changedKeys = Object.keys(patch).filter((key) =>
       !['expectedVersion', 'completeSubtasks', 'completeParentOnly'].includes(key),
     );
-    if (changedKeys.length === 1 && changedKeys[0] === 'status' && patch.status) {
+    const statusEndpointKeys = new Set(['status', 'sortOrder']);
+    if (patch.status && changedKeys.every((key) => statusEndpointKeys.has(key))) {
       return taskApi.changeStatus(id, patch.status, {
         expectedVersion: patch.expectedVersion,
         completeSubtasks: patch.completeSubtasks,
         completeParentOnly: patch.completeParentOnly,
+        sortOrder: patch.sortOrder,
       });
     }
     const response = toApiResponse<unknown>(await apiClient.put(ENDPOINTS.TASKS.BY_ID(id), patch));
@@ -231,7 +233,7 @@ export const taskApi = {
   async changeStatus(
     id: string,
     status: Task['status'],
-    options: { expectedVersion?: number; completeSubtasks?: boolean; completeParentOnly?: boolean } = {},
+    options: { expectedVersion?: number; completeSubtasks?: boolean; completeParentOnly?: boolean; sortOrder?: number } = {},
   ): Promise<Task> {
     const response = toApiResponse<unknown>(
       await apiClient.patch(ENDPOINTS.TASKS.STATUS(id), { status, ...options }),

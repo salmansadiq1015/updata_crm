@@ -1,6 +1,7 @@
 import invoiceRepository from './invoice.repository.js';
 import counterService from './counter.service.js';
 import { calculateTotals, roundToFiveRappen } from './vatCalculation.js';
+import fiscalPeriodService from '../accounting/fiscalPeriod.service.js';
 import auditService from '../auth/audit.service.js';
 import cacheManager from '../../shared/cache/CacheManager.js';
 import eventBus from '../../shared/events/EventBus.js';
@@ -903,6 +904,8 @@ class InvoiceService {
       invoice.invoiceDate = new Date();
     }
 
+    await fiscalPeriodService.assertPostingDateOpen(invoice.invoiceDate);
+
     await invoice.save();
 
     await this._generateDoctplInvoicePdf(id, userId, meta);
@@ -912,6 +915,13 @@ class InvoiceService {
     eventBus.publish(EVENT_TYPES.INVOICE_FINALIZED, {
       invoiceId: id,
       invoiceNumber: invoice.invoiceNumber,
+      invoiceDate: invoice.invoiceDate,
+      totalAmount: invoice.invoiceType === 'FINAL' ? invoice.netSubtotal : invoice.grandTotalRounded,
+      totalGross: invoice.grandTotalRounded,
+      vatBreakdown: invoice.vatBreakdown || [],
+      customerId: invoice.customerId,
+      customerName: invoice.customerName,
+      currency: invoice.currency,
       userId,
     }, { source: 'qop:invoices' });
 
@@ -1011,6 +1021,8 @@ class InvoiceService {
       recordedAt: new Date(),
     };
 
+    await fiscalPeriodService.assertPostingDateOpen(payment.date);
+
     invoice.payments.push(payment);
 
     // Recalculate paid amounts
@@ -1045,9 +1057,12 @@ class InvoiceService {
     eventBus.publish(EVENT_TYPES.INVOICE_PAYMENT_RECORDED, {
       invoiceId: id,
       invoiceNumber: invoice.invoiceNumber,
+      amount: paymentData.amount,
       paymentAmount: paymentData.amount,
+      paymentDate: paymentData.date,
       totalPaid: invoice.amountPaid,
       amountDue: invoice.amountDue,
+      currency: invoice.currency,
       userId,
     }, { source: 'qop:invoices' });
 

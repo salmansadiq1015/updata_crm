@@ -111,6 +111,8 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
     mutationFn: ({ id, patch }: { id: string; patch: TaskPatch }) => taskApi.patch(id, patch),
     onSuccess: (updated) => {
       qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
+      qc.invalidateQueries({ queryKey: taskWorkspaceKeys.windows() });
+      qc.invalidateQueries({ queryKey: taskWorkspaceKeys.lists() });
     },
     onError: (error, variables) => {
       const incompleteCount = getIncompleteSubtaskCount(error);

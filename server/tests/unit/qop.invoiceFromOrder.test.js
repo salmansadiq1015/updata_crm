@@ -72,6 +72,7 @@ async function loadInvoiceService({
   };
   const eventBus = { publish: jest.fn() };
   const auditService = { logEvent: jest.fn() };
+  const fiscalPeriodService = { assertPostingDateOpen: jest.fn(async () => null) };
 
   jest.unstable_mockModule('../../src/modules/qop/invoice.repository.js', () => ({
     default: invoiceRepository,
@@ -87,6 +88,9 @@ async function loadInvoiceService({
   }));
   jest.unstable_mockModule('../../src/modules/qop/counter.service.js', () => ({
     default: counterService,
+  }));
+  jest.unstable_mockModule('../../src/modules/accounting/fiscalPeriod.service.js', () => ({
+    default: fiscalPeriodService,
   }));
   jest.unstable_mockModule('../../src/shared/cache/CacheManager.js', () => ({
     default: cacheManager,

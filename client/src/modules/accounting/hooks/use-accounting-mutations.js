@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   chartService, journalService, apService, arService, bankService,
   cashService, reconciliationService, openItemsService, accDocService,
+  exchangeRateService, fiscalPeriodService, taxService, fixedAssetService, budgetService, recurringTransactionService,
 } from '../services/accounting-service';
 import toast from 'react-hot-toast';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -44,7 +45,226 @@ export function useJournalMutations() {
   return { createEntry, reverseEntry };
 }
 
+export function useFiscalPeriodMutations() {
+  const qc = useQueryClient();
+  const { t } = useLanguage();
+  const invalidate = () => inv(
+    qc,
+    ['accounting', 'fiscal-periods'],
+    ['accounting', 'dashboard'],
+    ['accounting', 'journal'],
+  );
+
+  const createFiscalPeriod = useMutation({
+    mutationFn: fiscalPeriodService.create,
+    onSuccess: () => { invalidate(); success(t, 'fiscalPeriodCreated', 'Fiscal period created'); },
+  });
+  const closeFiscalPeriod = useMutation({
+    mutationFn: ({ id, reason }) => fiscalPeriodService.close(id, reason),
+    onSuccess: () => { invalidate(); success(t, 'fiscalPeriodClosed', 'Fiscal period closed'); },
+  });
+  const reopenFiscalPeriod = useMutation({
+    mutationFn: ({ id, reason }) => fiscalPeriodService.reopen(id, reason),
+    onSuccess: () => { invalidate(); success(t, 'fiscalPeriodReopened', 'Fiscal period reopened'); },
+  });
+
+  return { createFiscalPeriod, closeFiscalPeriod, reopenFiscalPeriod };
+}
+
+export function useExchangeRateMutations() {
+  const qc = useQueryClient();
+  const { t } = useLanguage();
+
+  const upsertExchangeRate = useMutation({
+    mutationFn: exchangeRateService.upsert,
+    onSuccess: () => {
+      inv(qc, ['accounting', 'exchange-rates'], ['accounting', 'exchange-rate-resolve']);
+      success(t, 'exchangeRateSaved', 'Exchange rate saved');
+    },
+  });
+
+  const convertAmount = useMutation({
+    mutationFn: exchangeRateService.convert,
+  });
+
+  const postFxRevaluation = useMutation({
+    mutationFn: exchangeRateService.postRevaluation,
+    onSuccess: () => {
+      inv(
+        qc,
+        ['accounting', 'fx-revaluation-preview'],
+        ['accounting', 'fx-revaluation-runs'],
+        ['accounting', 'journal'],
+        ['accounting', 'dashboard'],
+        ['accounting', 'balance-sheet'],
+        ['accounting', 'profit-loss'],
+      );
+      success(t, 'fxRevaluationPosted', 'FX revaluation posted');
+    },
+  });
+
+  return { upsertExchangeRate, convertAmount, postFxRevaluation };
+}
+
+export function useTaxMutations() {
+  const qc = useQueryClient();
+  const { t } = useLanguage();
+  const invalidate = () => inv(
+    qc,
+    ['accounting', 'tax-codes'],
+    ['accounting', 'tax-summary'],
+    ['accounting', 'vat-report'],
+    ['accounting', 'tax-transactions'],
+  );
+
+  const createTaxCode = useMutation({
+    mutationFn: taxService.createCode,
+    onSuccess: () => { invalidate(); success(t, 'taxCodeCreated', 'Tax code created'); },
+  });
+  const updateTaxCode = useMutation({
+    mutationFn: ({ id, data }) => taxService.updateCode(id, data),
+    onSuccess: () => { invalidate(); success(t, 'taxCodeUpdated', 'Tax code updated'); },
+  });
+  const calculateTax = useMutation({
+    mutationFn: taxService.calculate,
+  });
+
+  return { createTaxCode, updateTaxCode, calculateTax };
+}
+
+export function useFixedAssetMutations() {
+  const qc = useQueryClient();
+  const { t } = useLanguage();
+  const invalidate = () => inv(
+    qc,
+    ['accounting', 'fixed-assets'],
+    ['accounting', 'fixed-asset-summary'],
+    ['accounting', 'dashboard'],
+    ['accounting', 'journal'],
+    ['accounting', 'balance-sheet'],
+    ['accounting', 'profit-loss'],
+  );
+
+  const createFixedAsset = useMutation({
+    mutationFn: fixedAssetService.create,
+    onSuccess: () => { invalidate(); success(t, 'fixedAssetCreated', 'Fixed asset created'); },
+  });
+  const updateFixedAsset = useMutation({
+    mutationFn: ({ id, data }) => fixedAssetService.update(id, data),
+    onSuccess: () => { invalidate(); success(t, 'fixedAssetUpdated', 'Fixed asset updated'); },
+  });
+  const activateFixedAsset = useMutation({
+    mutationFn: ({ id, data }) => fixedAssetService.activate(id, data),
+    onSuccess: () => { invalidate(); success(t, 'fixedAssetActivated', 'Fixed asset activated'); },
+  });
+  const depreciateFixedAsset = useMutation({
+    mutationFn: ({ id, data }) => fixedAssetService.depreciate(id, data),
+    onSuccess: () => { invalidate(); success(t, 'fixedAssetDepreciated', 'Depreciation posted'); },
+  });
+  const disposeFixedAsset = useMutation({
+    mutationFn: ({ id, data }) => fixedAssetService.dispose(id, data),
+    onSuccess: () => { invalidate(); success(t, 'fixedAssetDisposed', 'Fixed asset disposed'); },
+  });
+
+  return {
+    createFixedAsset,
+    updateFixedAsset,
+    activateFixedAsset,
+    depreciateFixedAsset,
+    disposeFixedAsset,
+  };
+}
+
+export function useBudgetMutations() {
+  const qc = useQueryClient();
+  const { t } = useLanguage();
+  const invalidate = () => inv(
+    qc,
+    ['accounting', 'budgets'],
+    ['accounting', 'budget-summary'],
+    ['accounting', 'budget-variance'],
+    ['accounting', 'dashboard'],
+    ['accounting', 'profit-loss'],
+    ['accounting', 'balance-sheet'],
+  );
+
+  const createBudget = useMutation({
+    mutationFn: budgetService.create,
+    onSuccess: () => { invalidate(); success(t, 'budgetCreated', 'Budget created'); },
+  });
+  const updateBudget = useMutation({
+    mutationFn: ({ id, data }) => budgetService.update(id, data),
+    onSuccess: () => { invalidate(); success(t, 'budgetUpdated', 'Budget updated'); },
+  });
+  const approveBudget = useMutation({
+    mutationFn: (id) => budgetService.approve(id),
+    onSuccess: () => { invalidate(); success(t, 'budgetApproved', 'Budget approved'); },
+  });
+  const lockBudget = useMutation({
+    mutationFn: (id) => budgetService.lock(id),
+    onSuccess: () => { invalidate(); success(t, 'budgetLocked', 'Budget locked'); },
+  });
+
+  return { createBudget, updateBudget, approveBudget, lockBudget };
+}
+
 // ── AP ────────────────────────────────────────────────────────
+export function useRecurringTransactionMutations() {
+  const qc = useQueryClient();
+  const { t } = useLanguage();
+  const invalidate = () => inv(
+    qc,
+    ['accounting', 'recurring-transactions'],
+    ['accounting', 'recurring-transaction-summary'],
+    ['accounting', 'recurring-transaction-runs'],
+    ['accounting', 'dashboard'],
+    ['accounting', 'journal'],
+    ['accounting', 'ap-invoices'],
+    ['accounting', 'ar-receivables'],
+    ['accounting', 'profit-loss'],
+    ['accounting', 'balance-sheet'],
+  );
+
+  const createRecurringTransaction = useMutation({
+    mutationFn: recurringTransactionService.create,
+    onSuccess: () => { invalidate(); success(t, 'recurringCreated', 'Recurring transaction created'); },
+  });
+  const updateRecurringTransaction = useMutation({
+    mutationFn: ({ id, data }) => recurringTransactionService.update(id, data),
+    onSuccess: () => { invalidate(); success(t, 'recurringUpdated', 'Recurring transaction updated'); },
+  });
+  const activateRecurringTransaction = useMutation({
+    mutationFn: (id) => recurringTransactionService.activate(id),
+    onSuccess: () => { invalidate(); success(t, 'recurringActivated', 'Recurring transaction activated'); },
+  });
+  const pauseRecurringTransaction = useMutation({
+    mutationFn: (id) => recurringTransactionService.pause(id),
+    onSuccess: () => { invalidate(); success(t, 'recurringPaused', 'Recurring transaction paused'); },
+  });
+  const archiveRecurringTransaction = useMutation({
+    mutationFn: (id) => recurringTransactionService.archive(id),
+    onSuccess: () => { invalidate(); success(t, 'recurringArchived', 'Recurring transaction archived'); },
+  });
+  const runRecurringTransaction = useMutation({
+    mutationFn: ({ id, data }) => recurringTransactionService.run(id, data),
+    onSuccess: () => { invalidate(); success(t, 'recurringRun', 'Recurring transaction executed'); },
+  });
+  const runDueRecurringTransactions = useMutation({
+    mutationFn: recurringTransactionService.runDue,
+    onSuccess: () => { invalidate(); success(t, 'recurringRunDue', 'Due recurring transactions executed'); },
+  });
+
+  return {
+    createRecurringTransaction,
+    updateRecurringTransaction,
+    activateRecurringTransaction,
+    pauseRecurringTransaction,
+    archiveRecurringTransaction,
+    runRecurringTransaction,
+    runDueRecurringTransactions,
+  };
+}
+
 export function useApMutations() {
   const qc = useQueryClient();
   const { t } = useLanguage();

@@ -4,16 +4,23 @@ import { useState, useMemo, useCallback } from 'react';
 import {
   Archive,
   ArchiveRestore,
+  AlertTriangle,
   BarChart3,
+  ChevronDown,
   CheckCircle2,
   Clock,
   Download,
   Eye,
+  FileDown,
   FileCheck,
+  Filter,
   Pencil,
   Plus,
   ReceiptText,
+  RefreshCw,
+  ShieldCheck,
   Trash2,
+  UploadCloud,
   XCircle,
 } from 'lucide-react';
 import { useFieldOpsAllReports, useFieldOpsReportSummary } from '@/modules/field-ops/hooks/use-field-ops-queries';
@@ -22,22 +29,32 @@ import { FieldOpsReportStatusBadge } from './field-ops-report-status-badge';
 import { FieldOpsReportDetailPanel } from './field-ops-report-detail-panel';
 import { FieldOpsRejectDialog } from './field-ops-report-action-dialog';
 import { FieldOpsCreateReportDialog } from './field-ops-create-report-dialog';
+import { FieldOpsReportImportDialog } from './field-ops-report-import-dialog';
 import { REPORT_STATUS_CONFIG } from '@/modules/field-ops/constants/field-ops-constants';
 import { DataTableShell } from '@/shared/components/data-table/data-table-shell';
 import { BulkActionsBar } from '@/shared/components/data-table/bulk-actions-bar';
 import { RowActionsMenu } from '@/shared/components/data-table/row-actions-menu';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
-import { PageHeader } from '@/shared/components/page-header';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { useDebounce } from '@/shared/hooks/use-debounce';
 import { formatDate } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 
 // ── Animated empty state ──────────────────────────────────────────────────────
 
-function ReportsEmptyState({ de }) {
+function ReportsEmptyState({ t }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
       <div className="relative flex items-center justify-center">
@@ -48,12 +65,10 @@ function ReportsEmptyState({ de }) {
       </div>
       <div className="text-center space-y-1">
         <p className="text-sm font-medium text-foreground">
-          {de ? 'Keine Berichte gefunden' : 'No reports found'}
+          {t('fieldOps.reports.emptyTitle', 'No reports found')}
         </p>
         <p className="text-xs text-muted-foreground">
-          {de
-            ? 'Berichte erscheinen hier, sobald Techniker sie einreichen.'
-            : 'Reports will appear here once technicians submit them.'}
+          {t('fieldOps.reports.emptyHint', 'Reports will appear here once technicians submit them.')}
         </p>
       </div>
     </div>
@@ -62,31 +77,191 @@ function ReportsEmptyState({ de }) {
 
 // ── Archived badge ────────────────────────────────────────────────────────────
 
-function ArchivedBadge({ de }) {
+function ArchivedBadge({ t }) {
   return (
     <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
       <Archive className="h-2.5 w-2.5" />
-      {de ? 'Archiv' : 'Archived'}
+      {t('fieldOps.reports.archivedBadge', 'Archived')}
     </span>
   );
 }
 
 // ── Main table component ──────────────────────────────────────────────────────
 
-function SummaryMetric({ icon: Icon, label, value, sub }) {
+const EXPORT_OPTIONS = [
+  { type: 'reports', labelKey: 'fieldOps.reports.export.reports', descriptionKey: 'fieldOps.reports.export.reportsDescription' },
+  { type: 'payroll', labelKey: 'fieldOps.reports.export.payroll', descriptionKey: 'fieldOps.reports.export.payrollDescription' },
+  { type: 'controlling', labelKey: 'fieldOps.reports.export.controlling', descriptionKey: 'fieldOps.reports.export.controllingDescription' },
+  { type: 'invoicing', labelKey: 'fieldOps.reports.export.invoicing', descriptionKey: 'fieldOps.reports.export.invoicingDescription' },
+];
+
+const SERVER_SORT_FIELDS = {
+  reportNumber: 'reportNumber',
+  reportDate: 'reportDate',
+  status: 'status',
+};
+
+const METRIC_TONES = {
+  violet: {
+    shell: 'from-violet-500/15 via-primary/10 to-transparent shadow-[0_18px_50px_rgba(124,58,237,0.16)]',
+    icon: 'bg-violet-500/15 text-violet-300 ring-violet-400/20',
+  },
+  sky: {
+    shell: 'from-sky-500/15 via-cyan-500/10 to-transparent shadow-[0_18px_50px_rgba(14,165,233,0.14)]',
+    icon: 'bg-sky-500/15 text-sky-300 ring-sky-400/20',
+  },
+  emerald: {
+    shell: 'from-emerald-500/15 via-teal-500/10 to-transparent shadow-[0_18px_50px_rgba(16,185,129,0.13)]',
+    icon: 'bg-emerald-500/15 text-emerald-300 ring-emerald-400/20',
+  },
+  amber: {
+    shell: 'from-amber-500/15 via-orange-500/10 to-transparent shadow-[0_18px_50px_rgba(245,158,11,0.13)]',
+    icon: 'bg-amber-500/15 text-amber-300 ring-amber-400/20',
+  },
+};
+
+function SummaryMetric({ icon: Icon, label, value, sub, tone = 'violet', accent }) {
+  const styles = METRIC_TONES[tone] || METRIC_TONES.violet;
   return (
-    <div className="rounded-lg border border-border/40 bg-card px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
+    <div className={cn(
+      'group relative min-h-[116px] overflow-hidden rounded-lg border border-border/60 bg-card/90 bg-gradient-to-br p-4 ring-1 ring-foreground/[0.03] transition-all duration-200 hover:-translate-y-0.5',
+      styles.shell,
+    )}>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.14),transparent_42%)] opacity-70 transition-opacity group-hover:opacity-100" />
+      <div className="relative flex h-full flex-col justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{value}</p>
+          </div>
+          <div className={cn('flex h-11 w-11 items-center justify-center rounded-lg ring-1', styles.icon)}>
+            <Icon className="h-5 w-5" />
+          </div>
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-          <Icon className="h-4 w-4" />
+        <div className="flex min-h-5 items-center justify-between gap-2">
+          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+          {accent && <span className="text-xs font-medium text-foreground">{accent}</span>}
         </div>
       </div>
-      {sub && <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>}
     </div>
+  );
+}
+
+function ReportCommandHeader({
+  t,
+  title,
+  description,
+  totalReports,
+  submitted,
+  approved,
+  invoiced,
+  showArchived,
+  statusFilter,
+  statusOptions,
+  exportPending,
+  onToggleArchived,
+  onStatusChange,
+  onExport,
+  onImport,
+  onCreate,
+}) {
+  return (
+    <section className="relative overflow-hidden rounded-lg border border-border/60 bg-card px-5 py-5 shadow-[0_20px_70px_rgba(2,6,23,0.20)] ring-1 ring-foreground/[0.03]">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-sky-500/5 to-emerald-500/10" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+      <div className="relative flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+              {t('fieldOps.reports.managementBadge', 'Report Management')}
+            </Badge>
+            <Badge variant="outline">{t('fieldOps.reports.totalBadge', '{count} total', { count: totalReports })}</Badge>
+            {showArchived && (
+              <Badge variant="secondary" className="gap-1">
+                <Archive className="h-3 w-3" />
+                {t('fieldOps.reports.archiveVisible', 'Archive visible')}
+              </Badge>
+            )}
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-normal text-foreground sm:text-[28px]">{title}</h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{description}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/60 bg-background/50 px-3 text-xs text-muted-foreground">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+              {t('fieldOps.reports.awaitingApproval', '{count} awaiting approval', { count: submitted })}
+            </span>
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/60 bg-background/50 px-3 text-xs text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+              {t('fieldOps.reports.billingReady', '{count} billing-ready', { count: approved })}
+            </span>
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/60 bg-background/50 px-3 text-xs text-muted-foreground">
+              <ReceiptText className="h-3.5 w-3.5 text-sky-400" />
+              {t('fieldOps.reports.invoicedCount', '{count} invoiced', { count: invoiced })}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+          <Button
+            variant={showArchived ? 'secondary' : 'outline'}
+            size="sm"
+            className="h-9 gap-1.5"
+            onClick={onToggleArchived}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            {t('fieldOps.reports.archive', 'Archive')}
+          </Button>
+
+          <Select value={statusFilter} onValueChange={onStatusChange}>
+            <SelectTrigger className="h-9 w-40 border-border/70 bg-background/70 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {statusOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {t(option.labelKey, option.fallback)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={onImport}>
+            <UploadCloud className="h-3.5 w-3.5" />
+            {t('fieldOps.reports.importAction', 'Import')}
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5" disabled={exportPending}>
+                <FileDown className="h-3.5 w-3.5" />
+                {t('fieldOps.reports.exportAction', 'Export')}
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>{t('fieldOps.reports.csvExport', 'CSV Export')}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {EXPORT_OPTIONS.map((option) => (
+                <DropdownMenuItem key={option.type} className="items-start gap-2 py-2" onSelect={() => onExport(option.type)}>
+                  <Download className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-medium">{t(option.labelKey, option.type)}</span>
+                    <span className="text-xs text-muted-foreground">{t(option.descriptionKey, '')}</span>
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button size="sm" className="h-9 gap-1.5 shadow-[0_0_24px_hsl(var(--primary)/0.28)]" onClick={onCreate}>
+            <Plus className="h-4 w-4" />
+            {t('fieldOps.reports.newReport', 'New Report')}
+          </Button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -100,6 +275,10 @@ function getOrderId(report) {
 
 function isObjectIdLike(value) {
   return /^[a-f\d]{24}$/i.test(`${value || ''}`);
+}
+
+function getErrorMessage(error, fallback) {
+  return error?.message || fallback;
 }
 
 function formatHours(minutes) {
@@ -135,8 +314,7 @@ function getReportContext(report) {
 }
 
 export function FieldOpsReportsTable() {
-  const { t, locale: language } = useLanguage();
-  const de = language === 'de';
+  const { t } = useLanguage();
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('all');
@@ -148,11 +326,13 @@ export function FieldOpsReportsTable() {
   const [projectFilter, setProjectFilter] = useState('all');
   const [customerFilter, setCustomerFilter] = useState('all');
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 });
+  const [sorting, setSorting] = useState([]);
 
   // UI state
   const [selectedReport, setSelectedReport] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -160,19 +340,30 @@ export function FieldOpsReportsTable() {
   const [approveTarget, setApproveTarget] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rowSelection, setRowSelection] = useState({});
+  const debouncedSearchFilter = useDebounce(searchFilter, 300).trim();
+  const serverSort = useMemo(() => {
+    const activeSort = sorting[0];
+    const sortBy = SERVER_SORT_FIELDS[activeSort?.id];
+    if (!sortBy) return {};
+    return {
+      sortBy,
+      sortOrder: activeSort.desc ? 'desc' : 'asc',
+    };
+  }, [sorting]);
 
   const baseFilters = useMemo(() => {
     const f = {};
     if (statusFilter !== 'all') f.status = statusFilter;
     if (showArchived) f.includeArchived = true;
-    if (searchFilter.trim()) f.search = searchFilter.trim();
+    if (debouncedSearchFilter) f.search = debouncedSearchFilter;
     if (dateFrom) f.dateFrom = dateFrom;
     if (dateTo) f.dateTo = dateTo;
     if (isObjectIdLike(technicianFilter)) f.technicianId = technicianFilter;
     if (isObjectIdLike(projectFilter)) f.projectId = projectFilter;
     if (isObjectIdLike(customerFilter)) f.customerId = customerFilter;
+    Object.assign(f, serverSort);
     return f;
-  }, [statusFilter, showArchived, searchFilter, dateFrom, dateTo, technicianFilter, projectFilter, customerFilter]);
+  }, [statusFilter, showArchived, debouncedSearchFilter, dateFrom, dateTo, technicianFilter, projectFilter, customerFilter, serverSort]);
 
   const filters = useMemo(() => ({
     ...baseFilters,
@@ -180,8 +371,13 @@ export function FieldOpsReportsTable() {
     pageSize: pagination.pageSize,
   }), [baseFilters, pagination]);
 
-  const { data: reportsResult, isFetching } = useFieldOpsAllReports(filters);
-  const { data: summary } = useFieldOpsReportSummary(baseFilters);
+  const { data: reportsResult, isFetching, isError, error, refetch } = useFieldOpsAllReports(filters);
+  const {
+    data: summary,
+    isError: summaryIsError,
+    error: summaryError,
+    refetch: refetchSummary,
+  } = useFieldOpsReportSummary(baseFilters);
   const reports = reportsResult?.data || [];
   const paginationMeta = reportsResult?.pagination;
   const totalReports = paginationMeta?.total ?? reports.length;
@@ -208,7 +404,7 @@ export function FieldOpsReportsTable() {
   // Mutations
   const {
     createReport, approve, reject, updateReport, deleteReport, bulkDelete,
-    archiveReport, unarchiveReport, bulkArchive, createInvoice, exportReports,
+    archiveReport, unarchiveReport, bulkArchive, createInvoice, exportReports, importReports, downloadImportTemplate,
   } = useFieldOpsReportMutations({
     onCreate: () => setShowCreate(false),
     onApprove: () => setApproveTarget(null),
@@ -256,6 +452,19 @@ export function FieldOpsReportsTable() {
     setPagination((current) => (current.pageIndex === 0 ? current : { ...current, pageIndex: 0 }));
   }, []);
 
+  const handleSortingChange = useCallback((next) => {
+    setSorting((current) => {
+      const resolved = typeof next === 'function' ? next(current) : next;
+      return Array.isArray(resolved) ? resolved.slice(0, 1) : [];
+    });
+    resetPage();
+  }, [resetPage]);
+
+  const retryReportQueries = useCallback(() => {
+    refetch();
+    refetchSummary();
+  }, [refetch, refetchSummary]);
+
   const updateStatusFilter = useCallback((value) => {
     setStatusFilter(value);
     resetPage();
@@ -298,29 +507,35 @@ export function FieldOpsReportsTable() {
 
   // Status filter options
   const STATUS_OPTS = [
-    { value: 'all', de: 'Alle Status', en: 'All Statuses' },
-    ...Object.entries(REPORT_STATUS_CONFIG).map(([v, c]) => ({ value: v, de: c.label, en: c.labelEn })),
+    { value: 'all', labelKey: 'fieldOps.reports.allStatuses', fallback: 'All Statuses' },
+    ...Object.entries(REPORT_STATUS_CONFIG).map(([value, config]) => ({
+      value,
+      labelKey: `fieldOps.reports.status.${value}`,
+      fallback: config.labelEn,
+    })),
   ];
 
   // Columns
   const columns = useMemo(() => [
     {
       accessorKey: 'reportNumber',
-      header: de ? 'Bericht-Nr.' : 'Report #',
+      header: t('fieldOps.reports.table.reportNumber', 'Report #'),
       size: 120,
+      enableSorting: true,
       Cell: ({ row }) => (
         <div className="flex items-center gap-1">
           <span className="font-mono text-xs text-muted-foreground">
             {row.original.reportNumber || '—'}
           </span>
-          {row.original.isArchived && <ArchivedBadge de={de} />}
+          {row.original.isArchived && <ArchivedBadge t={t} />}
         </div>
       ),
     },
     {
       accessorKey: 'orderId',
-      header: de ? 'Auftrag' : 'Order',
+      header: t('fieldOps.reports.table.order', 'Order'),
       size: 140,
+      enableSorting: false,
       Cell: ({ row }) => {
         const context = getReportContext(row.original);
         return (
@@ -332,8 +547,9 @@ export function FieldOpsReportsTable() {
     },
     {
       id: 'customer',
-      header: de ? 'Kunde' : 'Customer',
+      header: t('fieldOps.reports.table.customer', 'Customer'),
       size: 160,
+      enableSorting: false,
       Cell: ({ row }) => (
         <span className="text-xs text-muted-foreground truncate block max-w-[150px]">
           {getReportContext(row.original).customerName}
@@ -342,8 +558,9 @@ export function FieldOpsReportsTable() {
     },
     {
       id: 'project',
-      header: de ? 'Projekt' : 'Project',
+      header: t('fieldOps.reports.table.project', 'Project'),
       size: 160,
+      enableSorting: false,
       Cell: ({ row }) => (
         <span className="text-xs text-muted-foreground truncate block max-w-[150px]">
           {getReportContext(row.original).projectName}
@@ -352,8 +569,9 @@ export function FieldOpsReportsTable() {
     },
     {
       accessorKey: 'technicianId',
-      header: de ? 'Techniker' : 'Technician',
+      header: t('fieldOps.reports.table.technician', 'Technician'),
       size: 160,
+      enableSorting: false,
       Cell: ({ row }) => {
         const tech = row.original.technicianId;
         return (
@@ -367,14 +585,16 @@ export function FieldOpsReportsTable() {
     },
     {
       accessorKey: 'reportDate',
-      header: de ? 'Datum' : 'Date',
+      header: t('fieldOps.reports.table.date', 'Date'),
       size: 110,
+      enableSorting: true,
       Cell: ({ row }) => <span className="text-xs">{formatDate(row.original.reportDate)}</span>,
     },
     {
       accessorKey: 'workPerformed',
-      header: de ? 'Arbeiten' : 'Work Performed',
+      header: t('fieldOps.reports.table.workPerformed', 'Work Performed'),
       size: 240,
+      enableSorting: false,
       Cell: ({ row }) => {
         const text = (row.original.workPerformed || '').replace(/<[^>]*>/g, '').trim();
         return (
@@ -386,14 +606,16 @@ export function FieldOpsReportsTable() {
     },
     {
       accessorKey: 'status',
-      header: 'Status',
+      header: t('fieldOps.reports.table.status', 'Status'),
       size: 130,
+      enableSorting: true,
       Cell: ({ row }) => <FieldOpsReportStatusBadge status={row.original.status} size="sm" />,
     },
     {
       id: 'hours',
-      header: de ? 'Stunden' : 'Hours',
+      header: t('fieldOps.reports.table.hours', 'Hours'),
       size: 110,
+      enableSorting: false,
       Cell: ({ row }) => {
         const report = row.original;
         return (
@@ -408,8 +630,9 @@ export function FieldOpsReportsTable() {
     },
     {
       accessorKey: 'materialItems',
-      header: de ? 'Material' : 'Materials',
+      header: t('fieldOps.reports.table.materials', 'Materials'),
       size: 80,
+      enableSorting: false,
       Cell: ({ row }) => (
         <span className={cn('text-xs', (row.original.materialItems?.length || 0) > 0 ? 'text-foreground font-medium' : 'text-muted-foreground')}>
           {(row.original.materialItems || []).length}
@@ -418,8 +641,9 @@ export function FieldOpsReportsTable() {
     },
     {
       id: 'invoice',
-      header: de ? 'Rechnung' : 'Invoice',
+      header: t('fieldOps.reports.table.invoice', 'Invoice'),
       size: 110,
+      enableSorting: false,
       Cell: ({ row }) => (
         <span className="text-xs text-muted-foreground">
           {getReportContext(row.original).invoiceLabel}
@@ -430,6 +654,7 @@ export function FieldOpsReportsTable() {
       id: 'actions',
       header: '',
       size: 52,
+      enableSorting: false,
       Cell: ({ row }) => {
         const report = row.original;
         const reportId = getReportId(report);
@@ -442,25 +667,25 @@ export function FieldOpsReportsTable() {
           <RowActionsMenu
             items={[
               {
-                label: de ? 'Anzeigen' : 'View',
+                label: t('fieldOps.reports.actions.view', 'View'),
                 icon: Eye,
                 onSelect: () => { setSelectedReport(report); setPanelOpen(true); },
               },
               {
-                label: de ? 'Bearbeiten' : 'Edit',
+                label: t('fieldOps.reports.actions.edit', 'Edit'),
                 icon: Pencil,
                 hidden: !isDraftOrSubmitted,
                 onSelect: () => setEditTarget(report),
               },
               { type: 'separator', hidden: !isSubmitted },
               {
-                label: de ? 'Genehmigen' : 'Approve',
+                label: t('fieldOps.reports.approve', 'Approve'),
                 icon: CheckCircle2,
                 hidden: !isSubmitted,
                 onSelect: () => setApproveTarget({ reportId, orderId }),
               },
               {
-                label: de ? 'Ablehnen' : 'Reject',
+                label: t('fieldOps.reports.reject', 'Reject'),
                 icon: XCircle,
                 hidden: !isSubmitted,
                 destructive: true,
@@ -468,14 +693,16 @@ export function FieldOpsReportsTable() {
               },
               { type: 'separator', hidden: !isApproved },
               {
-                label: de ? 'Rechnung erstellen' : 'Create Invoice',
+                label: t('fieldOps.reports.actions.createInvoice', 'Create Invoice'),
                 icon: ReceiptText,
                 hidden: !isApproved,
                 onSelect: () => createInvoice.mutate({ reportId, orderId }),
               },
               { type: 'separator' },
               {
-                label: report.isArchived ? (de ? 'Aus Archiv holen' : 'Unarchive') : (de ? 'Archivieren' : 'Archive'),
+                label: report.isArchived
+                  ? t('fieldOps.reports.actions.unarchive', 'Unarchive')
+                  : t('fieldOps.reports.actions.archive', 'Archive'),
                 icon: report.isArchived ? ArchiveRestore : Archive,
                 onSelect: () => report.isArchived
                   ? unarchiveReport.mutate({ reportId, orderId })
@@ -483,7 +710,7 @@ export function FieldOpsReportsTable() {
               },
               { type: 'separator' },
               {
-                label: de ? 'Löschen' : 'Delete',
+                label: t('fieldOps.reports.actions.delete', 'Delete'),
                 icon: Trash2,
                 hidden: !isDraftOrSubmitted,
                 destructive: true,
@@ -494,145 +721,149 @@ export function FieldOpsReportsTable() {
         );
       },
     },
-  ], [de, archiveReport, unarchiveReport, createInvoice]);
+  ], [t, archiveReport, unarchiveReport, createInvoice]);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <div className="space-y-5">
+      <ReportCommandHeader
+        t={t}
         title={t('fieldOps.reports.title', 'Work Reports')}
-        description={t('fieldOps.reports.desc', 'Review and approve submitted reports.')}
-        count={totalReports}
-      >
-        <div className="flex items-center gap-2">
-          {/* Archive toggle */}
-          <Button
-            variant={showArchived ? 'secondary' : 'outline'}
-            size="sm"
-            className="h-8 gap-1.5 text-xs rounded-full"
-            onClick={toggleArchived}
-          >
-            <Archive className="h-3.5 w-3.5" />
-            {de ? 'Archiv' : 'Archive'}
-          </Button>
-
-          {/* Status filter */}
-          <Select value={statusFilter} onValueChange={updateStatusFilter}>
-            <SelectTrigger className="h-8 w-36 text-xs rounded-full border-dashed">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {de ? o.de : o.en}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Create */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs rounded-full"
-            onClick={() => handleExport('payroll')}
-            disabled={exportReports.isPending}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Payroll
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 gap-1.5 text-xs rounded-full"
-            onClick={() => handleExport('invoicing')}
-            disabled={exportReports.isPending}
-          >
-            <Download className="h-3.5 w-3.5" />
-            {de ? 'Fakturierung' : 'Invoicing'}
-          </Button>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            {de ? 'Neuer Bericht' : 'New Report'}
-          </Button>
-        </div>
-      </PageHeader>
+        description={t('fieldOps.reports.managementDescription', 'Control submitted work, time, materials, approvals, and billing handoff from one operations workspace.')}
+        totalReports={totalReports}
+        submitted={summary?.totals?.submitted ?? 0}
+        approved={summary?.totals?.approved ?? 0}
+        invoiced={summary?.totals?.invoiced ?? 0}
+        showArchived={showArchived}
+        statusFilter={statusFilter}
+        statusOptions={STATUS_OPTS}
+        exportPending={exportReports.isPending}
+        onToggleArchived={toggleArchived}
+        onStatusChange={updateStatusFilter}
+        onExport={handleExport}
+        onImport={() => setShowImport(true)}
+        onCreate={() => setShowCreate(true)}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryMetric
           icon={BarChart3}
-          label={de ? 'Berichte' : 'Reports'}
+          label={t('fieldOps.reports.metrics.reports', 'Reports')}
           value={summary?.totals?.reports ?? totalReports}
-          sub={`${de ? 'Genehmigt' : 'Approved'} ${summary?.totals?.approved ?? 0} · ${de ? 'Verrechnet' : 'Invoiced'} ${summary?.totals?.invoiced ?? 0}`}
+          tone="violet"
+          sub={t('fieldOps.reports.metrics.reportsSub', 'Approved {approved} · Invoiced {invoiced}', {
+            approved: summary?.totals?.approved ?? 0,
+            invoiced: summary?.totals?.invoiced ?? 0,
+          })}
         />
         <SummaryMetric
           icon={Clock}
-          label={de ? 'Arbeitszeit' : 'Working Time'}
+          label={t('fieldOps.reports.metrics.workingTime', 'Working Time')}
           value={formatHours(summary?.totals?.totalMinutes)}
-          sub={`${de ? 'Billable' : 'Billable'} ${formatHours(summary?.totals?.billableMinutes)} · ${de ? 'Nicht billable' : 'Non-billable'} ${formatHours(summary?.totals?.nonBillableMinutes)}`}
+          tone="sky"
+          sub={t('fieldOps.reports.metrics.workingTimeSub', 'Billable {billable} · Non-billable {nonBillable}', {
+            billable: formatHours(summary?.totals?.billableMinutes),
+            nonBillable: formatHours(summary?.totals?.nonBillableMinutes),
+          })}
         />
         <SummaryMetric
           icon={FileCheck}
-          label={de ? 'Eingereicht' : 'Submitted'}
+          label={t('fieldOps.reports.metrics.submitted', 'Submitted')}
           value={summary?.totals?.submitted ?? 0}
-          sub={`${de ? 'Entwurf' : 'Draft'} ${summary?.totals?.draft ?? 0} · ${de ? 'Abgelehnt' : 'Rejected'} ${summary?.totals?.rejected ?? 0}`}
+          tone="emerald"
+          sub={t('fieldOps.reports.metrics.submittedSub', 'Draft {draft} · Rejected {rejected}', {
+            draft: summary?.totals?.draft ?? 0,
+            rejected: summary?.totals?.rejected ?? 0,
+          })}
         />
         <SummaryMetric
           icon={ReceiptText}
-          label={de ? 'Materialpositionen' : 'Material Items'}
+          label={t('fieldOps.reports.metrics.materialItems', 'Material Items')}
           value={summary?.totals?.materialItems ?? 0}
-          sub={de ? 'Aus genehmigten und offenen Berichten' : 'From open and approved reports'}
+          tone="amber"
+          sub={t('fieldOps.reports.metrics.materialItemsSub', 'From open and approved reports')}
         />
       </div>
 
-      <div className="grid gap-2 rounded-lg border border-border/40 bg-card p-3 md:grid-cols-2 xl:grid-cols-5">
-        <Input
-          type="date"
-          value={dateFrom}
-          onChange={(event) => updateDateFrom(event.target.value)}
-          className="h-9 text-xs"
-          aria-label={de ? 'Von Datum' : 'From date'}
-        />
-        <Input
-          type="date"
-          value={dateTo}
-          onChange={(event) => updateDateTo(event.target.value)}
-          className="h-9 text-xs"
-          aria-label={de ? 'Bis Datum' : 'To date'}
-        />
-        <Select value={technicianFilter} onValueChange={updateTechnicianFilter}>
-          <SelectTrigger className="h-9 text-xs">
-            <SelectValue placeholder={de ? 'Techniker' : 'Technician'} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{de ? 'Alle Techniker' : 'All Technicians'}</SelectItem>
-            {employeeOptions.map((option) => (
-              <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={projectFilter} onValueChange={updateProjectFilter}>
-          <SelectTrigger className="h-9 text-xs">
-            <SelectValue placeholder={de ? 'Projekt' : 'Project'} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{de ? 'Alle Projekte' : 'All Projects'}</SelectItem>
-            {projectOptions.map((option) => (
-              <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={customerFilter} onValueChange={updateCustomerFilter}>
-          <SelectTrigger className="h-9 text-xs">
-            <SelectValue placeholder={de ? 'Kunde' : 'Customer'} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{de ? 'Alle Kunden' : 'All Customers'}</SelectItem>
-            {customerOptions.map((option) => (
-              <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="rounded-lg border border-border/60 bg-card/80 p-3 shadow-theme-sm ring-1 ring-foreground/[0.03]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+            <Filter className="h-3.5 w-3.5 text-primary" />
+            {t('fieldOps.reports.filters.title', 'Filters')}
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {t('fieldOps.reports.filters.matches', '{count} matches', { count: totalReports })}
+          </span>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(event) => updateDateFrom(event.target.value)}
+            className="h-9 border-border/70 bg-background/70 text-xs"
+            aria-label={t('fieldOps.reports.filters.fromDate', 'From date')}
+          />
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(event) => updateDateTo(event.target.value)}
+            className="h-9 border-border/70 bg-background/70 text-xs"
+            aria-label={t('fieldOps.reports.filters.toDate', 'To date')}
+          />
+          <Select value={technicianFilter} onValueChange={updateTechnicianFilter}>
+            <SelectTrigger className="h-9 border-border/70 bg-background/70 text-xs">
+              <SelectValue placeholder={t('fieldOps.reports.filters.technician', 'Technician')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('fieldOps.reports.filters.allTechnicians', 'All Technicians')}</SelectItem>
+              {employeeOptions.map((option) => (
+                <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={projectFilter} onValueChange={updateProjectFilter}>
+            <SelectTrigger className="h-9 border-border/70 bg-background/70 text-xs">
+              <SelectValue placeholder={t('fieldOps.reports.filters.project', 'Project')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('fieldOps.reports.filters.allProjects', 'All Projects')}</SelectItem>
+              {projectOptions.map((option) => (
+                <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={customerFilter} onValueChange={updateCustomerFilter}>
+            <SelectTrigger className="h-9 border-border/70 bg-background/70 text-xs">
+              <SelectValue placeholder={t('fieldOps.reports.filters.customer', 'Customer')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('fieldOps.reports.filters.allCustomers', 'All Customers')}</SelectItem>
+              {customerOptions.map((option) => (
+                <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      {(isError || summaryIsError) && (
+        <div role="alert" className="flex flex-col gap-3 rounded-lg border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-700 shadow-theme-sm dark:text-red-300 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-semibold">
+                {t('fieldOps.reports.loadErrorTitle', 'Reports could not be loaded')}
+              </p>
+              <p className="text-xs opacity-80">
+                {getErrorMessage(error || summaryError, t('fieldOps.reports.loadErrorHint', 'Check the connection and retry.'))}
+              </p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" onClick={retryReportQueries} className="w-fit gap-2 border-red-500/30 bg-background/80">
+            <RefreshCw className="h-3.5 w-3.5" />
+            {t('fieldOps.reports.retry', 'Retry')}
+          </Button>
+        </div>
+      )}
 
       {/* Create dialog */}
       <FieldOpsCreateReportDialog
@@ -640,6 +871,13 @@ export function FieldOpsReportsTable() {
         onOpenChange={setShowCreate}
         onSave={handleCreate}
         isLoading={createReport.isPending}
+      />
+
+      <FieldOpsReportImportDialog
+        open={showImport}
+        onOpenChange={setShowImport}
+        importReports={importReports}
+        downloadImportTemplate={downloadImportTemplate}
       />
 
       {/* Edit dialog */}
@@ -655,51 +893,47 @@ export function FieldOpsReportsTable() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
-        title={de ? 'Bericht löschen' : 'Delete Report'}
-        description={de
-          ? `Bericht "${deleteTarget?.reportNumber || ''}" wird unwiderruflich gelöscht.`
-          : `Report "${deleteTarget?.reportNumber || ''}" will be permanently deleted.`}
+        title={t('fieldOps.reports.deleteTitle', 'Delete Report')}
+        description={t('fieldOps.reports.deleteDescription', 'Report "{reportNumber}" will be permanently deleted.', {
+          reportNumber: deleteTarget?.reportNumber || '',
+        })}
         onConfirm={handleDelete}
         isLoading={deleteReport.isPending}
         variant="destructive"
-        confirmText={de ? 'Löschen' : 'Delete'}
+        confirmText={t('fieldOps.reports.actions.delete', 'Delete')}
       />
 
       {/* Bulk delete confirm */}
       <ConfirmDialog
         open={bulkDeleteOpen}
         onOpenChange={setBulkDeleteOpen}
-        title={de ? `${selectedIds.length} Berichte löschen` : `Delete ${selectedIds.length} Reports`}
-        description={de
-          ? `${selectedIds.length} Berichte werden unwiderruflich gelöscht.`
-          : `${selectedIds.length} reports will be permanently deleted.`}
+        title={t('fieldOps.reports.bulkDeleteTitle', 'Delete {count} Reports', { count: selectedIds.length })}
+        description={t('fieldOps.reports.bulkDeleteDescription', '{count} reports will be permanently deleted.', { count: selectedIds.length })}
         onConfirm={handleBulkDelete}
         isLoading={bulkDelete.isPending}
         variant="destructive"
-        confirmText={de ? 'Alle löschen' : 'Delete All'}
+        confirmText={t('fieldOps.reports.deleteAll', 'Delete All')}
       />
 
       {/* Bulk archive confirm */}
       <ConfirmDialog
         open={bulkArchiveOpen}
         onOpenChange={setBulkArchiveOpen}
-        title={de ? `${selectedIds.length} Berichte archivieren` : `Archive ${selectedIds.length} Reports`}
-        description={de
-          ? `${selectedIds.length} Berichte werden archiviert und aus der Standardansicht ausgeblendet.`
-          : `${selectedIds.length} reports will be archived and hidden from the default view.`}
+        title={t('fieldOps.reports.bulkArchiveTitle', 'Archive {count} Reports', { count: selectedIds.length })}
+        description={t('fieldOps.reports.bulkArchiveDescription', '{count} reports will be archived and hidden from the default view.', { count: selectedIds.length })}
         onConfirm={handleBulkArchive}
         isLoading={bulkArchive.isPending}
         variant="default"
-        confirmText={de ? 'Archivieren' : 'Archive'}
+        confirmText={t('fieldOps.reports.actions.archive', 'Archive')}
       />
 
       {/* Approve single confirm */}
       <ConfirmDialog
         open={!!approveTarget}
         onOpenChange={(v) => { if (!v) setApproveTarget(null); }}
-        title={de ? 'Bericht genehmigen?' : 'Approve Report?'}
-        description={de ? 'Dieser Bericht wird als genehmigt markiert.' : 'This report will be marked as approved.'}
-        confirmText={de ? 'Genehmigen' : 'Approve'}
+        title={t('fieldOps.reports.approveConfirm', 'Approve Report?')}
+        description={t('fieldOps.reports.approveDescription', 'This report will be marked as approved.')}
+        confirmText={t('fieldOps.reports.approve', 'Approve')}
         variant="default"
         onConfirm={() => approve.mutate(approveTarget)}
         isLoading={approve.isPending}
@@ -720,10 +954,12 @@ export function FieldOpsReportsTable() {
         rowCount={totalReports}
         pagination={pagination}
         onPaginationChange={handlePaginationChange}
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
         globalFilter={searchFilter}
         onGlobalFilterChange={updateSearchFilter}
         onRowClick={(row) => { setSelectedReport(row); setPanelOpen(true); }}
-        emptyState={<ReportsEmptyState de={de} />}
+        emptyState={<ReportsEmptyState t={t} />}
         getRowId={(row) => getReportId(row)}
         enableRowSelection
         rowSelection={rowSelection}
@@ -740,7 +976,7 @@ export function FieldOpsReportsTable() {
           disabled={bulkArchive.isPending}
         >
           <Archive className="h-3.5 w-3.5" />
-          {de ? `${selectedIds.length} archivieren` : `Archive ${selectedIds.length}`}
+          {t('fieldOps.reports.bulkArchiveAction', 'Archive {count}', { count: selectedIds.length })}
         </Button>
         <Button
           size="sm"
@@ -750,7 +986,7 @@ export function FieldOpsReportsTable() {
           disabled={bulkDelete.isPending}
         >
           <Trash2 className="h-3.5 w-3.5" />
-          {de ? `${selectedIds.length} löschen` : `Delete ${selectedIds.length}`}
+          {t('fieldOps.reports.bulkDeleteAction', 'Delete {count}', { count: selectedIds.length })}
         </Button>
       </BulkActionsBar>
 

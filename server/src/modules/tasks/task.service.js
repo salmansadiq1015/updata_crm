@@ -279,6 +279,10 @@ class TaskService {
 
     const previousStatus = task.status;
     const updateData = { status, updatedBy: userId };
+    if (Number.isInteger(meta.sortOrder)) {
+      updateData.sortOrder = meta.sortOrder;
+    }
+    const changedFields = ['status', ...(Number.isInteger(meta.sortOrder) ? ['sortOrder'] : [])];
 
     // Handle completion
     if (status === 'COMPLETED') {
@@ -337,7 +341,7 @@ class TaskService {
         updatedAt: updated.updatedAt,
         previousStatus,
         newStatus: status,
-        changedFields: ['status'],
+        changedFields,
         task: updated,
         changedBy: userId,
       });
@@ -351,7 +355,7 @@ class TaskService {
         updatedAt: updated.updatedAt,
         previousStatus,
         newStatus: status,
-        changedFields: ['status'],
+        changedFields,
         task: updated,
         changedBy: userId,
       });

@@ -159,6 +159,66 @@ describe('useTaskWorkspaceMutations', () => {
       expect(statusEndpointCalled).toBe(true);
     });
 
+    it('sends sortOrder through the status endpoint for board moves', async () => {
+      let capturedBody: Record<string, unknown> | null = null;
+
+      server.use(
+        http.patch(`${BASE}/tasks/1/status`, async ({ request }) => {
+          capturedBody = (await request.json()) as Record<string, unknown>;
+          const status = capturedBody.status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'OPEN';
+          const sortOrder = typeof capturedBody.sortOrder === 'number' ? capturedBody.sortOrder : 0;
+          return HttpResponse.json({
+            success: true,
+            data: {
+              id: '1',
+              title: 'Task 1',
+              status,
+              priority: 'NONE',
+              description: null,
+              listId: null,
+              assigneeId: null,
+              createdBy: null,
+              updatedBy: null,
+              parentTaskId: null,
+              projectId: null,
+              orderId: null,
+              startDate: null,
+              dueDate: null,
+              sortOrder,
+              depth: 0,
+              subtaskCount: 0,
+              noteCount: 0,
+              attachmentCount: 0,
+              version: 2,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              completedAt: null,
+              completedBy: null,
+              cancelledAt: null,
+            },
+          });
+        })
+      );
+
+      const { result } = renderHook(
+        () => useTaskWorkspaceMutations(DEFAULT_ACTIVE_PARAMS),
+        { wrapper: makeWrapper() }
+      );
+
+      result.current.patchTask.mutate({
+        id: '1',
+        patch: { status: 'IN_PROGRESS', sortOrder: -1, expectedVersion: 3 },
+      });
+
+      await waitFor(() => expect(result.current.patchTask.isSuccess).toBe(true));
+
+      expect(capturedBody).toMatchObject({
+        status: 'IN_PROGRESS',
+        sortOrder: -1,
+        expectedVersion: 3,
+      });
+    });
+
     it('calls PUT /tasks/:id for multi-field patch', async () => {
       let putCalled = false;
       let capturedBody: Record<string, unknown> | null = null;

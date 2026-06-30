@@ -83,6 +83,10 @@ export function useChatMutations(roomId) {
 
   const refreshJoinCode = useMutation({
     mutationFn: (roomId) => chatService.refreshJoinCode(roomId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.chat.room(roomId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
+    },
   });
 
   return { sendMessage, deleteMessage, editMessage, addReaction, removeReaction, markRead, blockUser, unblockUser, createGroupRoom, joinByCode, leaveRoom, deleteRoom, refreshJoinCode };

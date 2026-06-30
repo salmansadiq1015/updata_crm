@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useStartDm } from '../hooks/use-start-dm';
-import { chatService } from '../services/chat-service';
+import { useChatUsers } from '../hooks/use-chat-directory';
 
 function useDebounce(value, delay) {
   const [debounced, setDebounced] = useState(value);
@@ -26,12 +25,7 @@ export function UserSearchDialog({ open, onClose }) {
   const debouncedSearch = useDebounce(searchTerm.toLowerCase().trim(), 300);
   const startDm = useStartDm();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['users', 'active'],
-    queryFn: () => chatService.listUsers(),
-    enabled: open,
-    staleTime: 60_000,
-  });
+  const { data, isLoading } = useChatUsers({ enabled: open });
 
   const users = Array.isArray(data) ? data : [];
 

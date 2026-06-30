@@ -12,6 +12,7 @@ vi.mock('@/lib/api/client', () => ({
 
 import {
   accDocService,
+  accountingEntityService,
   accountingSearchService,
   arService,
   bankService,
@@ -20,6 +21,7 @@ import {
   exchangeRateService,
   fiscalPeriodService,
   fixedAssetService,
+  inventoryAccountingService,
   journalService,
   recurringTransactionService,
   reportsService,
@@ -183,6 +185,27 @@ describe('accounting service normalization', () => {
         minAmount: 100,
       },
     });
+  });
+
+  test('calls accounting entity endpoints through the service layer', async () => {
+    apiClient.get.mockResolvedValueOnce({ data: [] });
+    apiClient.post
+      .mockResolvedValueOnce({ data: { _id: 'entity-1' } })
+      .mockResolvedValueOnce({ data: { status: 'ACTIVE' } })
+      .mockResolvedValueOnce({ data: { status: 'INACTIVE' } });
+    apiClient.put.mockResolvedValueOnce({ data: { _id: 'entity-1' } });
+
+    await accountingEntityService.list({ type: 'COMPANY' });
+    await accountingEntityService.create({ entityCode: 'MB-CH', name: 'MB Switzerland', type: 'COMPANY' });
+    await accountingEntityService.update('entity-1', { name: 'MB Schweiz' });
+    await accountingEntityService.activate('entity-1');
+    await accountingEntityService.deactivate('entity-1');
+
+    expect(apiClient.get).toHaveBeenCalledWith('/accounting/entities', { params: { type: 'COMPANY' } });
+    expect(apiClient.post).toHaveBeenNthCalledWith(1, '/accounting/entities', { entityCode: 'MB-CH', name: 'MB Switzerland', type: 'COMPANY' });
+    expect(apiClient.put).toHaveBeenCalledWith('/accounting/entities/entity-1', { name: 'MB Schweiz' });
+    expect(apiClient.post).toHaveBeenNthCalledWith(2, '/accounting/entities/entity-1/activate');
+    expect(apiClient.post).toHaveBeenNthCalledWith(3, '/accounting/entities/entity-1/deactivate');
   });
 
   test('calls exchange-rate endpoints through the service layer', async () => {
@@ -400,6 +423,28 @@ describe('accounting service normalization', () => {
     expect(apiClient.post).toHaveBeenNthCalledWith(4, '/accounting/recurring-transactions/recurring-1/archive');
     expect(apiClient.post).toHaveBeenNthCalledWith(5, '/accounting/recurring-transactions/recurring-1/run', { runDate: '2026-01-31' });
     expect(apiClient.post).toHaveBeenNthCalledWith(6, '/accounting/recurring-transactions/run-due', { asOfDate: '2026-01-31' });
+  });
+
+  test('calls inventory accounting endpoints through the service layer', async () => {
+    apiClient.get
+      .mockResolvedValueOnce({ data: { totalValue: 100 } })
+      .mockResolvedValueOnce({ data: { lines: [] } })
+      .mockResolvedValueOnce({ data: [] });
+    apiClient.post
+      .mockResolvedValueOnce({ data: { _id: 'entry-1' } })
+      .mockResolvedValueOnce({ data: { posted: 1 } });
+
+    await inventoryAccountingService.valuation({ currency: 'CHF' });
+    await inventoryAccountingService.movements({ costingMethod: 'FIFO' });
+    await inventoryAccountingService.entries({ limit: 10 });
+    await inventoryAccountingService.postMovement('movement-1', { costingMethod: 'FIFO' });
+    await inventoryAccountingService.postPeriod({ currency: 'CHF' });
+
+    expect(apiClient.get).toHaveBeenNthCalledWith(1, '/accounting/inventory/valuation', { params: { currency: 'CHF' } });
+    expect(apiClient.get).toHaveBeenNthCalledWith(2, '/accounting/inventory/movements', { params: { costingMethod: 'FIFO' } });
+    expect(apiClient.get).toHaveBeenNthCalledWith(3, '/accounting/inventory/entries', { params: { limit: 10 } });
+    expect(apiClient.post).toHaveBeenNthCalledWith(1, '/accounting/inventory/movements/movement-1/post', { costingMethod: 'FIFO' });
+    expect(apiClient.post).toHaveBeenNthCalledWith(2, '/accounting/inventory/post-period', { currency: 'CHF' });
   });
 
   test('exports journal CSV with date range as query params', async () => {

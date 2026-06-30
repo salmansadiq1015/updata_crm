@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import {
   useAccounts,
+  useAccountingEntities,
   useBalanceSheet,
   useCashFlowReport,
   useGeneralLedger,
@@ -130,6 +131,16 @@ function reportRows(activeReport, report) {
 function accountLabel(account) {
   if (!account || typeof account !== 'object') return '-';
   return [account.accountNumber, account.name].filter(Boolean).join(' ');
+}
+
+function entityLabel(entity) {
+  if (!entity || typeof entity !== 'object') return '-';
+  return [entity.entityCode, entity.name].filter(Boolean).join(' ');
+}
+
+function parentId(entity) {
+  if (!entity?.parentId) return null;
+  return typeof entity.parentId === 'object' ? entity.parentId._id : entity.parentId;
 }
 
 function ReportRows({ activeReport, rows, currency, de }) {
@@ -249,13 +260,24 @@ export default function AccountingReportsPage() {
   const [activeReport, setActiveReport] = useState('profit-loss');
   const [filters, setFilters] = useState(initialRange);
   const [currency, setCurrency] = useState('CHF');
+  const [scopeFilters, setScopeFilters] = useState({ companyId: 'ALL', branchId: 'ALL' });
   const [ledgerFilters, setLedgerFilters] = useState({ accountId: 'ALL', referenceType: 'ALL' });
   const [ledgerCursorStack, setLedgerCursorStack] = useState([null]);
   const ledgerCursor = ledgerCursorStack[ledgerCursorStack.length - 1];
   const hasDateRangeError = Boolean(filters.startDate && filters.endDate && filters.startDate > filters.endDate);
   const rangeReportEnabled = !hasDateRangeError;
-  const params = { ...filters, currency };
-  const asOfParams = { endDate: filters.endDate, currency };
+  const { data: accountingEntities = [] } = useAccountingEntities({ status: 'ACTIVE' });
+  const companies = useMemo(() => accountingEntities.filter((entity) => entity.type === 'COMPANY'), [accountingEntities]);
+  const branches = useMemo(() => accountingEntities.filter((entity) => (
+    entity.type === 'BRANCH'
+      && (scopeFilters.companyId === 'ALL' || String(parentId(entity)) === String(scopeFilters.companyId))
+  )), [accountingEntities, scopeFilters.companyId]);
+  const scopeParams = {
+    ...(scopeFilters.companyId !== 'ALL' && { companyId: scopeFilters.companyId }),
+    ...(scopeFilters.branchId !== 'ALL' && { branchId: scopeFilters.branchId }),
+  };
+  const params = { ...filters, currency, ...scopeParams };
+  const asOfParams = { endDate: filters.endDate, currency, ...scopeParams };
   const ledgerParams = {
     ...params,
     limit: 50,
@@ -293,6 +315,14 @@ export default function AccountingReportsPage() {
     setLedgerFilters((current) => ({ ...current, [key]: value }));
     resetLedgerCursor();
   };
+  const updateScopeFilter = (key, value) => {
+    setScopeFilters((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === 'companyId' ? { branchId: 'ALL' } : {}),
+    }));
+    resetLedgerCursor();
+  };
 
   const handleExport = async () => {
     const response = await reportsService.exportProfitLoss(params);
@@ -327,6 +357,24 @@ export default function AccountingReportsPage() {
             <SelectContent>
               <SelectItem value="CHF">CHF</SelectItem>
               <SelectItem value="EUR">EUR</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={scopeFilters.companyId} onValueChange={(value) => updateScopeFilter('companyId', value)}>
+            <SelectTrigger className="h-9 w-48 text-xs"><SelectValue placeholder={de ? 'Firma' : 'Company'} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">{de ? 'Alle Firmen' : 'All Companies'}</SelectItem>
+              {companies.map((company) => (
+                <SelectItem key={company._id} value={company._id}>{entityLabel(company)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={scopeFilters.branchId} onValueChange={(value) => updateScopeFilter('branchId', value)} disabled={branches.length === 0}>
+            <SelectTrigger className="h-9 w-48 text-xs"><SelectValue placeholder={de ? 'Filiale' : 'Branch'} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">{de ? 'Alle Filialen' : 'All Branches'}</SelectItem>
+              {branches.map((branch) => (
+                <SelectItem key={branch._id} value={branch._id}>{entityLabel(branch)}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           {activeReport === 'profit-loss' && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, RotateCcw, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { useJournalEntries, useAccounts } from '@/modules/accounting/hooks/use-accounting-queries';
+import { useAccountingEntities, useJournalEntries, useAccounts } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useJournalMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
 import { journalService } from '@/modules/accounting/services/accounting-service';
 import { cursorPageLabel, downloadResponse } from '@/modules/accounting/utils/accounting-ui';
@@ -48,7 +48,19 @@ function currentYearRange() {
   };
 }
 
-function JournalFormDialog({ open, onClose, de, accounts }) {
+function entityLabel(entity) {
+  if (!entity || typeof entity !== 'object') return '-';
+  return [entity.entityCode, entity.name].filter(Boolean).join(' ');
+}
+
+function parentId(entity) {
+  if (!entity?.parentId) return null;
+  return typeof entity.parentId === 'object' ? entity.parentId._id : entity.parentId;
+}
+
+function JournalFormDialog({
+  open, onClose, de, accounts, companies, branches,
+}) {
   const { createEntry } = useJournalMutations();
   const [form, setForm] = useState({
     entryDate: new Date().toISOString().slice(0, 10),
@@ -57,16 +69,25 @@ function JournalFormDialog({ open, onClose, de, accounts }) {
     creditAccountId: '',
     amount: '',
     currency: 'CHF',
+    companyId: 'ALL',
+    branchId: 'ALL',
   });
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k, v) => setForm((f) => ({
+    ...f,
+    [k]: v,
+    ...(k === 'companyId' ? { branchId: 'ALL' } : {}),
+  }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await createEntry.mutateAsync({
+    const payload = {
       ...form,
       amount: Number(form.amount),
       referenceType: 'MANUAL',
-    });
+    };
+    if (payload.companyId === 'ALL') delete payload.companyId;
+    if (payload.branchId === 'ALL') delete payload.branchId;
+    await createEntry.mutateAsync(payload);
     onClose();
   };
 
@@ -96,6 +117,34 @@ function JournalFormDialog({ open, onClose, de, accounts }) {
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">{de ? 'Beschreibung' : 'Description'}</Label>
             <Input className="h-8" value={form.description} onChange={(e) => set('description', e.target.value)} required maxLength={500} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Firma' : 'Company'}</Label>
+              <Select value={form.companyId} onValueChange={(v) => set('companyId', v)}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">{de ? 'Keine Zuordnung' : 'Unscoped'}</SelectItem>
+                  {companies.map((company) => (
+                    <SelectItem key={company._id} value={company._id}>{entityLabel(company)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">{de ? 'Filiale' : 'Branch'}</Label>
+              <Select value={form.branchId} onValueChange={(v) => set('branchId', v)} disabled={branches.length === 0}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">{de ? 'Keine Zuordnung' : 'Unscoped'}</SelectItem>
+                  {branches
+                    .filter((branch) => form.companyId === 'ALL' || String(parentId(branch)) === String(form.companyId))
+                    .map((branch) => (
+                      <SelectItem key={branch._id} value={branch._id}>{entityLabel(branch)}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -147,11 +196,18 @@ export default function JournalPage() {
   const [dateRange, setDateRange] = useState(() => currentYearRange());
   const [refType, setRefType] = useState('ALL');
   const [accountId, setAccountId] = useState('ALL');
+  const [scopeFilters, setScopeFilters] = useState({ companyId: 'ALL', branchId: 'ALL' });
   const [cursorStack, setCursorStack] = useState([null]);
   const [isExporting, setIsExporting] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const cursor = cursorStack[cursorStack.length - 1];
   const hasDateRangeError = Boolean(dateRange.startDate && dateRange.endDate && dateRange.startDate > dateRange.endDate);
+  const { data: accountingEntities = [] } = useAccountingEntities({ status: 'ACTIVE' });
+  const companies = useMemo(() => accountingEntities.filter((entity) => entity.type === 'COMPANY'), [accountingEntities]);
+  const branches = useMemo(() => accountingEntities.filter((entity) => entity.type === 'BRANCH'), [accountingEntities]);
+  const scopedBranches = useMemo(() => branches.filter((branch) => (
+    scopeFilters.companyId === 'ALL' || String(parentId(branch)) === String(scopeFilters.companyId)
+  )), [branches, scopeFilters.companyId]);
 
   const filters = {
     limit: 50,
@@ -159,6 +215,8 @@ export default function JournalPage() {
     entryDateTo: dateRange.endDate,
     ...(refType !== 'ALL' && { referenceType: refType }),
     ...(accountId !== 'ALL' && { accountId }),
+    ...(scopeFilters.companyId !== 'ALL' && { companyId: scopeFilters.companyId }),
+    ...(scopeFilters.branchId !== 'ALL' && { branchId: scopeFilters.branchId }),
     ...(cursor && { cursor }),
   };
 
@@ -174,6 +232,14 @@ export default function JournalPage() {
     setDateRange((current) => ({ ...current, [key]: value }));
     resetList();
   };
+  const updateScopeFilter = (key, value) => {
+    setScopeFilters((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === 'companyId' ? { branchId: 'ALL' } : {}),
+    }));
+    resetList();
+  };
 
   const handleExport = async () => {
     if (hasDateRangeError || !dateRange.startDate || !dateRange.endDate) {
@@ -185,6 +251,8 @@ export default function JournalPage() {
       const response = await journalService.export({
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
+        ...(scopeFilters.companyId !== 'ALL' && { companyId: scopeFilters.companyId }),
+        ...(scopeFilters.branchId !== 'ALL' && { branchId: scopeFilters.branchId }),
       });
       downloadResponse(response, `journal-${dateRange.startDate}-${dateRange.endDate}.csv`);
     } catch (err) {
@@ -244,6 +312,24 @@ export default function JournalPage() {
             <SelectItem value="ALL">{de ? 'Alle Typen' : 'All Types'}</SelectItem>
             {Object.keys(REF_TYPE_CONFIG).map((k) => (
               <SelectItem key={k} value={k}>{de ? REF_TYPE_CONFIG[k].label : REF_TYPE_CONFIG[k].labelEn}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={scopeFilters.companyId} onValueChange={(value) => updateScopeFilter('companyId', value)}>
+          <SelectTrigger className="h-9 w-48 text-xs"><SelectValue placeholder={de ? 'Firma' : 'Company'} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">{de ? 'Alle Firmen' : 'All Companies'}</SelectItem>
+            {companies.map((company) => (
+              <SelectItem key={company._id} value={company._id}>{entityLabel(company)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={scopeFilters.branchId} onValueChange={(value) => updateScopeFilter('branchId', value)} disabled={scopedBranches.length === 0}>
+          <SelectTrigger className="h-9 w-48 text-xs"><SelectValue placeholder={de ? 'Filiale' : 'Branch'} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">{de ? 'Alle Filialen' : 'All Branches'}</SelectItem>
+            {scopedBranches.map((branch) => (
+              <SelectItem key={branch._id} value={branch._id}>{entityLabel(branch)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -350,7 +436,14 @@ export default function JournalPage() {
         </div>
       </div>
 
-      <JournalFormDialog open={formOpen} onClose={() => setFormOpen(false)} de={de} accounts={accounts} />
+      <JournalFormDialog
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        de={de}
+        accounts={accounts}
+        companies={companies}
+        branches={branches}
+      />
     </div>
   );
 }

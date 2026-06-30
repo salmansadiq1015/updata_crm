@@ -51,6 +51,16 @@ const serviceMocks = vi.hoisted(() => ({
     run: vi.fn(),
     runDue: vi.fn(),
   },
+  inventory: {
+    postMovement: vi.fn(),
+    postPeriod: vi.fn(),
+  },
+  entities: {
+    create: vi.fn(),
+    update: vi.fn(),
+    activate: vi.fn(),
+    deactivate: vi.fn(),
+  },
 }));
 
 const toastSuccess = vi.hoisted(() => vi.fn());
@@ -65,12 +75,14 @@ vi.mock('../services/accounting-service', () => ({
   reconciliationService: {},
   openItemsService: {},
   accDocService: serviceMocks.documents,
+  accountingEntityService: serviceMocks.entities,
   exchangeRateService: serviceMocks.exchangeRates,
   fiscalPeriodService: serviceMocks.fiscalPeriods,
   taxService: serviceMocks.tax,
   fixedAssetService: serviceMocks.fixedAssets,
   budgetService: serviceMocks.budgets,
   recurringTransactionService: serviceMocks.recurring,
+  inventoryAccountingService: serviceMocks.inventory,
 }));
 
 vi.mock('@/lib/i18n/language-context', () => ({
@@ -85,11 +97,13 @@ vi.mock('react-hot-toast', () => ({
 
 import {
   useAccDocumentMutations,
+  useAccountingEntityMutations,
   useArMutations,
   useBankMutations,
   useBudgetMutations,
   useExchangeRateMutations,
   useFixedAssetMutations,
+  useInventoryAccountingMutations,
   useRecurringTransactionMutations,
   useTaxMutations,
 } from '../hooks/use-accounting-mutations';
@@ -110,6 +124,30 @@ function createWrapper() {
 describe('accounting mutation hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  test('createAccountingEntity refreshes entity and scoped accounting queries', async () => {
+    serviceMocks.entities.create.mockResolvedValue({ data: { _id: 'entity-1' } });
+    const { wrapper, invalidateSpy } = createWrapper();
+    const { result } = renderHook(() => useAccountingEntityMutations(), { wrapper });
+
+    await act(async () => {
+      await result.current.createAccountingEntity.mutateAsync({
+        entityCode: 'MB-CH',
+        name: 'MB Switzerland',
+        type: 'COMPANY',
+      });
+    });
+
+    expect(serviceMocks.entities.create).toHaveBeenCalledWith(
+      { entityCode: 'MB-CH', name: 'MB Switzerland', type: 'COMPANY' },
+      expect.objectContaining({ client: expect.any(QueryClient) }),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'entities'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'dashboard'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'journal'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'profit-loss'] });
+    expect(toastSuccess).toHaveBeenCalledWith('Accounting entity created');
   });
 
   test('recordInvoicePayment invalidates AR receivables, summary, and payments', async () => {
@@ -215,10 +253,13 @@ describe('accounting mutation hooks', () => {
       });
     });
 
-    expect(serviceMocks.exchangeRates.postRevaluation).toHaveBeenCalledWith({
-      baseCurrency: 'CHF',
-      revaluationDate: '2026-06-30',
-    });
+    expect(serviceMocks.exchangeRates.postRevaluation).toHaveBeenCalledWith(
+      {
+        baseCurrency: 'CHF',
+        revaluationDate: '2026-06-30',
+      },
+      expect.objectContaining({ client: expect.any(QueryClient) }),
+    );
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'fx-revaluation-preview'] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'fx-revaluation-runs'] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'journal'] });
@@ -323,6 +364,32 @@ describe('accounting mutation hooks', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'profit-loss'] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'balance-sheet'] });
     expect(toastSuccess).toHaveBeenCalledWith('Recurring transaction executed');
+  });
+
+  test('postInventoryMovement refreshes inventory, dashboard, journal, and financial report queries', async () => {
+    serviceMocks.inventory.postMovement.mockResolvedValue({ data: { _id: 'entry-1' } });
+    const { wrapper, invalidateSpy } = createWrapper();
+    const { result } = renderHook(() => useInventoryAccountingMutations(), { wrapper });
+
+    await act(async () => {
+      await result.current.postInventoryMovement.mutateAsync({
+        movementId: 'movement-1',
+        data: { costingMethod: 'FIFO' },
+      });
+    });
+
+    expect(serviceMocks.inventory.postMovement).toHaveBeenCalledWith(
+      'movement-1',
+      { costingMethod: 'FIFO' },
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'inventory-valuation'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'inventory-movements'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'inventory-entries'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'dashboard'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'journal'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'balance-sheet'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['accounting', 'profit-loss'] });
+    expect(toastSuccess).toHaveBeenCalledWith('Inventory movement posted');
   });
 
   test('confirmOcr refreshes document list and OCR result detail', async () => {

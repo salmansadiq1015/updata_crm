@@ -115,6 +115,8 @@ describe('journal integrity', () => {
       creditAccountId: { _id: 'credit-1' },
       amount: 75,
       currency: 'CHF',
+      companyId: 'company-1',
+      branchId: 'branch-1',
       referenceId: 'invoice-1',
       reversedBy: null,
     };
@@ -130,6 +132,8 @@ describe('journal integrity', () => {
         entryNumber: 1001,
         debitAccountId: 'credit-1',
         creditAccountId: 'debit-1',
+        companyId: 'company-1',
+        branchId: 'branch-1',
         referenceType: 'REVERSAL',
         reversalOf: 'entry-original',
       }),

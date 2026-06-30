@@ -136,7 +136,7 @@ function usePagedItems(items, initialPageSize = 10) {
   return { page: safePage, setPage, pageSize, setPageSize: setSize, pageCount, pageItems, total: items.length };
 }
 
-function PremiumHero({ title, description, count, dateFrom, dateTo, onDateFromChange, onDateToChange, onImport, onExport, exporting, de }) {
+function PremiumHero({ title, description, count, dateFrom, dateTo, onDateFromChange, onDateToChange, onImport, onExport, exporting, t }) {
   return (
     <section className="relative overflow-hidden rounded-xl border border-border/60 bg-card/80 shadow-[0_24px_80px_rgba(15,23,42,0.12)]">
       <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(168,85,247,0.13),transparent_34%,rgba(14,165,233,0.11)_68%,rgba(16,185,129,0.08))]" />
@@ -144,7 +144,7 @@ function PremiumHero({ title, description, count, dateFrom, dateTo, onDateFromCh
         <div className="min-w-0 space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
             <Sparkles className="h-3.5 w-3.5" />
-            {de ? 'Workforce Command Center' : 'Workforce Command Center'}
+            {t('fieldOps.time.commandLabel', 'Workforce Command Center')}
           </div>
           <div>
             <div className="flex items-center gap-2.5">
@@ -161,11 +161,11 @@ function PremiumHero({ title, description, count, dateFrom, dateTo, onDateFromCh
           <Input className="h-10 w-full rounded-lg bg-background/70 sm:w-40" type="date" value={dateTo} onChange={(event) => onDateToChange(event.target.value)} />
           <Button size="sm" variant="outline" className="h-10 gap-2" onClick={onImport}>
             <Upload className="h-4 w-4" />
-            {de ? 'Import' : 'Import'}
+            {t('fieldOps.time.actions.import', 'Import')}
           </Button>
           <Button size="sm" className="h-10 gap-2 bg-gradient-to-r from-violet-500 via-sky-500 to-emerald-500 text-white shadow-[0_0_28px_rgba(14,165,233,0.28)]" disabled={exporting} onClick={onExport}>
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            {de ? 'Export' : 'Export'}
+            {exporting ? t('fieldOps.time.actions.exporting', 'Exporting...') : t('fieldOps.time.actions.export', 'Export')}
           </Button>
         </div>
       </div>
@@ -401,7 +401,7 @@ function GroupBars({ groups, de, withControls = false }) {
   );
 }
 
-function ImportTimeEntriesDialog({ open, onOpenChange, mutations, de }) {
+function ImportTimeEntriesDialog({ open, onOpenChange, mutations, t }) {
   const inputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -428,33 +428,33 @@ function ImportTimeEntriesDialog({ open, onOpenChange, mutations, de }) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-primary" />
-            {de ? 'Zeiteintraege importieren' : 'Import time entries'}
+            {t('fieldOps.time.import.title', 'Import time entries')}
           </DialogTitle>
           <DialogDescription>
-            {de
-              ? 'CSV-Datei validieren, Fehler pruefen und anschliessend als Zeiteintraege importieren.'
-              : 'Validate a CSV file, review row errors, then import it as time entries.'}
+            {t('fieldOps.time.import.description', 'Validate a CSV file, review row errors, then import it as time entries.')}
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-4">
           <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-sm font-semibold">{de ? 'Referenzdatei' : 'Reference file'}</p>
+                <p className="text-sm font-semibold">{t('fieldOps.time.import.referenceTitle', 'Reference file')}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {IMPORT_REFERENCE_COLUMNS.join(', ')}
                 </p>
               </div>
               <Button variant="outline" className="gap-2" onClick={() => mutations.downloadImportTemplate.mutate()} disabled={isBusy}>
                 <FileDown className="h-4 w-4" />
-                {de ? 'Vorlage herunterladen' : 'Download template'}
+                {mutations.downloadImportTemplate.isPending
+                  ? t('fieldOps.time.import.downloadingTemplate', 'Downloading...')
+                  : t('fieldOps.time.import.downloadTemplate', 'Download template')}
               </Button>
             </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
             <div className="space-y-2">
-              <Label>{de ? 'CSV-Datei' : 'CSV file'}</Label>
+              <Label>{t('fieldOps.time.import.csvFile', 'CSV file')}</Label>
               <Input
                 ref={inputRef}
                 type="file"
@@ -467,30 +467,30 @@ function ImportTimeEntriesDialog({ open, onOpenChange, mutations, de }) {
             </div>
             <Button variant="outline" className="gap-2" disabled={!file || isBusy} onClick={() => runImport(true)}>
               {importMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              {de ? 'Validieren' : 'Validate'}
+              {importMutation.isPending ? t('fieldOps.time.import.validating', 'Validating...') : t('fieldOps.time.import.validate', 'Validate')}
             </Button>
             <Button className="gap-2" disabled={!file || isBusy || Number(summary?.failed || 0) > 0} onClick={() => runImport(false)}>
               {importMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {de ? 'Importieren' : 'Import'}
+              {importMutation.isPending ? t('fieldOps.time.import.importing', 'Importing...') : t('fieldOps.time.import.importAction', 'Import')}
             </Button>
           </div>
 
           {summary && (
             <div className="space-y-3 rounded-xl border border-border/60 bg-background/50 p-4">
               <div className="grid gap-2 sm:grid-cols-4">
-                <Badge variant="outline">{de ? 'Zeilen' : 'Rows'}: {summary.totalRows}</Badge>
-                <Badge variant="outline">{de ? 'Gueltig' : 'Valid'}: {summary.validRows}</Badge>
-                <Badge variant="success">{de ? 'Erstellt' : 'Created'}: {summary.created}</Badge>
-                <Badge variant={summary.failed > 0 ? 'destructive' : 'outline'}>{de ? 'Fehler' : 'Errors'}: {summary.failed}</Badge>
+                <Badge variant="outline">{t('fieldOps.time.import.rows', 'Rows')}: {summary.totalRows}</Badge>
+                <Badge variant="outline">{t('fieldOps.time.import.valid', 'Valid')}: {summary.validRows}</Badge>
+                <Badge variant="success">{t('fieldOps.time.import.created', 'Created')}: {summary.created}</Badge>
+                <Badge variant={summary.failed > 0 ? 'destructive' : 'outline'}>{t('fieldOps.time.import.errors', 'Errors')}: {summary.failed}</Badge>
               </div>
               {summary.rowErrors?.length ? (
                 <div className="max-h-48 overflow-auto rounded-lg border border-destructive/20">
                   <table className="w-full min-w-[520px] text-xs">
                     <thead className="bg-destructive/10 text-destructive">
                       <tr>
-                        <th className="px-3 py-2 text-left">{de ? 'Zeile' : 'Row'}</th>
-                        <th className="px-3 py-2 text-left">{de ? 'Feld' : 'Field'}</th>
-                        <th className="px-3 py-2 text-left">{de ? 'Meldung' : 'Message'}</th>
+                        <th className="px-3 py-2 text-left">{t('fieldOps.time.import.row', 'Row')}</th>
+                        <th className="px-3 py-2 text-left">{t('fieldOps.time.import.field', 'Field')}</th>
+                        <th className="px-3 py-2 text-left">{t('fieldOps.time.import.message', 'Message')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -507,15 +507,15 @@ function ImportTimeEntriesDialog({ open, onOpenChange, mutations, de }) {
               ) : (
                 <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600">
                   {summary.dryRun
-                    ? (de ? 'Datei ist bereit fuer den Import.' : 'File is ready to import.')
-                    : (de ? 'Import abgeschlossen.' : 'Import completed.')}
+                    ? t('fieldOps.time.import.ready', 'File is ready to import.')
+                    : t('fieldOps.time.import.completed', 'Import completed.')}
                 </div>
               )}
             </div>
           )}
         </DialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={() => reset(false)}>{de ? 'Schliessen' : 'Close'}</Button>
+          <Button variant="outline" onClick={() => reset(false)}>{t('fieldOps.time.import.close', 'Close')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1145,7 +1145,7 @@ export function TimeManagementWorkspace() {
         onImport={() => setImportOpen(true)}
         onExport={() => mutations.exportTimeEntries.mutate(filters)}
         exporting={mutations.exportTimeEntries.isPending}
-        de={de}
+        t={t}
       />
 
       {overviewQuery.error && (
@@ -1198,7 +1198,7 @@ export function TimeManagementWorkspace() {
         </TabsContent>
       </Tabs>
 
-      <ImportTimeEntriesDialog open={importOpen} onOpenChange={setImportOpen} mutations={mutations} de={de} />
+      <ImportTimeEntriesDialog open={importOpen} onOpenChange={setImportOpen} mutations={mutations} t={t} />
     </div>
   );
 }

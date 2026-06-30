@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  chartService, journalService, apService, arService, bankService,
+  accountingEntityService, chartService, journalService, apService, arService, bankService,
   cashService, reconciliationService, openItemsService, accDocService,
-  exchangeRateService, fiscalPeriodService, taxService, fixedAssetService, budgetService, recurringTransactionService,
+  exchangeRateService, fiscalPeriodService, taxService, fixedAssetService, budgetService, recurringTransactionService, inventoryAccountingService,
 } from '../services/accounting-service';
 import toast from 'react-hot-toast';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -265,6 +265,32 @@ export function useRecurringTransactionMutations() {
   };
 }
 
+export function useInventoryAccountingMutations() {
+  const qc = useQueryClient();
+  const { t } = useLanguage();
+  const invalidate = () => inv(
+    qc,
+    ['accounting', 'inventory-valuation'],
+    ['accounting', 'inventory-movements'],
+    ['accounting', 'inventory-entries'],
+    ['accounting', 'dashboard'],
+    ['accounting', 'journal'],
+    ['accounting', 'balance-sheet'],
+    ['accounting', 'profit-loss'],
+  );
+
+  const postInventoryMovement = useMutation({
+    mutationFn: ({ movementId, data }) => inventoryAccountingService.postMovement(movementId, data),
+    onSuccess: () => { invalidate(); success(t, 'inventoryMovementPosted', 'Inventory movement posted'); },
+  });
+  const postInventoryPeriod = useMutation({
+    mutationFn: inventoryAccountingService.postPeriod,
+    onSuccess: () => { invalidate(); success(t, 'inventoryPeriodPosted', 'Inventory period posted'); },
+  });
+
+  return { postInventoryMovement, postInventoryPeriod };
+}
+
 export function useApMutations() {
   const qc = useQueryClient();
   const { t } = useLanguage();
@@ -458,4 +484,43 @@ export function useAccDocumentMutations() {
     onSuccess: () => { invalidate(); success(t, 'documentAssigned', 'Document assigned'); },
   });
   return { uploadDocument, triggerOcr, confirmOcr, rejectOcr, assignDocument, bulkAssignDocuments };
+}
+
+export function useAccountingEntityMutations() {
+  const qc = useQueryClient();
+  const { t } = useLanguage();
+  const invalidate = () => inv(
+    qc,
+    ['accounting', 'entities'],
+    ['accounting', 'dashboard'],
+    ['accounting', 'journal'],
+    ['accounting', 'profit-loss'],
+    ['accounting', 'balance-sheet'],
+    ['accounting', 'trial-balance'],
+    ['accounting', 'cash-flow'],
+  );
+
+  const createAccountingEntity = useMutation({
+    mutationFn: accountingEntityService.create,
+    onSuccess: () => { invalidate(); success(t, 'entityCreated', 'Accounting entity created'); },
+  });
+  const updateAccountingEntity = useMutation({
+    mutationFn: ({ id, data }) => accountingEntityService.update(id, data),
+    onSuccess: () => { invalidate(); success(t, 'entityUpdated', 'Accounting entity updated'); },
+  });
+  const activateAccountingEntity = useMutation({
+    mutationFn: (id) => accountingEntityService.activate(id),
+    onSuccess: () => { invalidate(); success(t, 'entityActivated', 'Accounting entity activated'); },
+  });
+  const deactivateAccountingEntity = useMutation({
+    mutationFn: (id) => accountingEntityService.deactivate(id),
+    onSuccess: () => { invalidate(); success(t, 'entityDeactivated', 'Accounting entity deactivated'); },
+  });
+
+  return {
+    createAccountingEntity,
+    updateAccountingEntity,
+    activateAccountingEntity,
+    deactivateAccountingEntity,
+  };
 }

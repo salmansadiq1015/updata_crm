@@ -2,4 +2,5 @@
 export { StatsGrid } from './components/stats-grid';
 export { RecentActivity } from './components/recent-activity';
 export { SystemHealth } from './components/system-health';
+export { PremiumDashboard } from './components/premium-dashboard';
 export { dashboardService } from './services/dashboard-service';

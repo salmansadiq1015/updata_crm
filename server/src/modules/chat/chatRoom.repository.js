@@ -1,4 +1,5 @@
 import ChatRoom from './chatRoom.model.js';
+import '../crm/customer.model.js';
 
 const chatRoomRepository = {
   async findOrCreateProjectRoom(projectId, createdByUserId, memberIds = []) {
@@ -36,6 +37,9 @@ const chatRoomRepository = {
   async findRoomsForUser(userId) {
     return ChatRoom.find({ 'members.userId': userId, isActive: true })
       .populate('members.userId', 'firstName lastName email avatarUrl role')
+      .populate('projectId', 'projectNumber name customerName customerId status projectType')
+      .populate('orderId', 'orderNumber title customerName customerId projectId status')
+      .populate('customerId', 'customerNumber name city type')
       .sort({ lastMessageAt: -1 })
       .lean();
   },
@@ -43,6 +47,9 @@ const chatRoomRepository = {
   async findById(roomId) {
     return ChatRoom.findById(roomId)
       .populate('members.userId', 'firstName lastName email avatarUrl role')
+      .populate('projectId', 'projectNumber name customerName customerId status projectType')
+      .populate('orderId', 'orderNumber title customerName customerId projectId status')
+      .populate('customerId', 'customerNumber name city type')
       .lean();
   },
 
@@ -77,6 +84,9 @@ const chatRoomRepository = {
   async findByJoinCode(joinCode) {
     return ChatRoom.findOne({ joinCode, isActive: true })
       .populate('members.userId', 'firstName lastName email avatarUrl role')
+      .populate('projectId', 'projectNumber name customerName customerId status projectType')
+      .populate('orderId', 'orderNumber title customerName customerId projectId status')
+      .populate('customerId', 'customerNumber name city type')
       .lean();
   },
 

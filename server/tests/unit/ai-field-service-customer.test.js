@@ -1,11 +1,87 @@
 import { jest, describe, expect, test, beforeAll, beforeEach } from '@jest/globals';
 
 const mockCreateCustomer = jest.fn();
+const mockCreateReport = jest.fn();
 const mockPushStep = jest.fn();
+const mockFindAssignmentById = jest.fn();
+const mockFindAssignments = jest.fn();
+const mockFindUsers = jest.fn();
+const mockFindCustomerById = jest.fn();
+const mockFindCustomers = jest.fn();
+const mockFindProjectById = jest.fn();
+const mockFindProjects = jest.fn();
+const mockFindOrderById = jest.fn();
+const mockFindOrders = jest.fn();
+const mockFindInstallationById = jest.fn();
+
+function mockSelectLean(value) {
+  return {
+    select: jest.fn(() => ({
+      lean: jest.fn(() => Promise.resolve(value)),
+    })),
+  };
+}
+
+function mockSelectLimitLean(value) {
+  return {
+    select: jest.fn(() => ({
+      limit: jest.fn(() => ({
+        lean: jest.fn(() => Promise.resolve(value)),
+      })),
+    })),
+  };
+}
 
 jest.unstable_mockModule('../../src/modules/crm/customer.service.js', () => ({
   default: {
     create: mockCreateCustomer,
+  },
+}));
+
+jest.unstable_mockModule('../../src/modules/mobile/report.service.js', () => ({
+  default: {
+    create: mockCreateReport,
+  },
+}));
+
+jest.unstable_mockModule('../../src/modules/deploy/assignment.model.js', () => ({
+  default: {
+    findById: mockFindAssignmentById,
+    find: mockFindAssignments,
+  },
+}));
+
+jest.unstable_mockModule('../../src/modules/auth/user.model.js', () => ({
+  default: {
+    find: mockFindUsers,
+    findById: jest.fn(() => mockSelectLean(null)),
+  },
+}));
+
+jest.unstable_mockModule('../../src/modules/crm/customer.model.js', () => ({
+  default: {
+    find: mockFindCustomers,
+    findById: mockFindCustomerById,
+  },
+}));
+
+jest.unstable_mockModule('../../src/modules/pm/project.model.js', () => ({
+  default: {
+    find: mockFindProjects,
+    findById: mockFindProjectById,
+  },
+}));
+
+jest.unstable_mockModule('../../src/modules/qop/order.model.js', () => ({
+  default: {
+    find: mockFindOrders,
+    findById: mockFindOrderById,
+  },
+}));
+
+jest.unstable_mockModule('../../src/modules/crm/installation.model.js', () => ({
+  default: {
+    findById: mockFindInstallationById,
   },
 }));
 
@@ -27,6 +103,8 @@ jest.unstable_mockModule('../../src/shared/logger/index.js', () => ({
 describe('field service agent customer creation', () => {
   let fieldServiceAgentWorkflow;
   const userId = '64f000000000000000000001';
+  const assignmentId = '64f000000000000000000010';
+  const projectId = '64f000000000000000000020';
 
   beforeAll(async () => {
     ({ fieldServiceAgentWorkflow } = await import('../../src/modules/ai/workflows/fieldServiceAgent.workflow.js'));
@@ -43,6 +121,31 @@ describe('field service agent customer creation', () => {
       ownerName: 'Max Muster',
       uidNumber: 'CHE-123.456.789',
     });
+    mockCreateReport.mockResolvedValue({
+      _id: '64f000000000000000000030',
+      reportNumber: 'RPT-10001',
+      status: 'DRAFT',
+    });
+    mockFindAssignmentById.mockImplementation((id) => (
+      mockSelectLean(String(id) === assignmentId
+        ? {
+          _id: assignmentId,
+          assignmentNumber: 'ASN-10001',
+          status: 'IN_PROGRESS',
+          projectId,
+          customerId: '64f000000000000000000040',
+        }
+        : null)
+    ));
+    mockFindAssignments.mockReturnValue(mockSelectLimitLean([]));
+    mockFindUsers.mockReturnValue(mockSelectLimitLean([]));
+    mockFindCustomerById.mockReturnValue(mockSelectLean(null));
+    mockFindCustomers.mockReturnValue(mockSelectLimitLean([]));
+    mockFindProjectById.mockReturnValue(mockSelectLean(null));
+    mockFindProjects.mockReturnValue(mockSelectLimitLean([]));
+    mockFindOrderById.mockReturnValue(mockSelectLean(null));
+    mockFindOrders.mockReturnValue(mockSelectLimitLean([]));
+    mockFindInstallationById.mockReturnValue(mockSelectLean(null));
   });
 
   test('creates a company with owner name and UID through the CRM service', async () => {
@@ -93,5 +196,40 @@ describe('field service agent customer creation', () => {
       'UID number',
       'street address with postal code and city',
     ]));
+  });
+
+  test('creates a draft report against the current field assignment context', async () => {
+    const result = await fieldServiceAgentWorkflow.invoke({
+      agentRunId: 'run-3',
+      userId,
+      stepCount: 0,
+      input: 'Create a draft service report for the current order: boiler inspected, burner cleaned, ignition electrode replaced, system running again.',
+      entities: {
+        requestContext: {
+          source: 'route',
+          contextModule: 'field-ops',
+          recordType: 'assignment',
+          recordId: assignmentId,
+          orderId: assignmentId,
+        },
+      },
+    });
+
+    expect(mockCreateReport).toHaveBeenCalledWith(
+      assignmentId,
+      expect.objectContaining({
+        projectId,
+        status: 'DRAFT',
+        workPerformed: 'boiler inspected, burner cleaned, ignition electrode replaced, system running again.',
+      }),
+      userId,
+      { source: 'ai-agent' },
+    );
+    expect(result.output).toMatchObject({
+      action: 'CREATE_REPORT',
+      status: 'completed',
+      recordType: 'workReport',
+      recordId: '64f000000000000000000030',
+    });
   });
 });

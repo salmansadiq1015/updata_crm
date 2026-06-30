@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import accountRepository from './account.repository.js';
 import JournalEntry from './journalEntry.model.js';
 import { toCsv } from '../../shared/utils/csv.js';
@@ -24,6 +25,26 @@ function buildPeriod({ startDate, endDate } = {}) {
     startDate: startDate ? new Date(startDate) : defaults.startDate,
     endDate: endDate ? new Date(endDate) : defaults.endDate,
   };
+}
+
+function buildScope(query = {}) {
+  return {
+    company: query.companyId || null,
+    branch: query.branchId || null,
+  };
+}
+
+function scopeValue(value) {
+  if (typeof value === 'string' && mongoose.Types.ObjectId.isValid(value)) {
+    return new mongoose.Types.ObjectId(value);
+  }
+  return value;
+}
+
+function applyReportScope(match, query = {}) {
+  if (query.companyId) match.companyId = scopeValue(query.companyId);
+  if (query.branchId) match.branchId = scopeValue(query.branchId);
+  return match;
 }
 
 function accountAmount(accountType, totals) {
@@ -56,15 +77,22 @@ function trialBalanceSides(accountType, balance) {
 }
 
 class AccountingReportsService {
-  async _journalTotalsByAccount({ endDate, startDate, currency = 'CHF', accountIds = [] } = {}) {
+  async _journalTotalsByAccount({
+    endDate,
+    startDate,
+    currency = 'CHF',
+    accountIds = [],
+    companyId,
+    branchId,
+  } = {}) {
     if (!accountIds.length) return new Map();
-    const match = {
+    const match = applyReportScope({
       currency,
       $or: [
         { debitAccountId: { $in: accountIds } },
         { creditAccountId: { $in: accountIds } },
       ],
-    };
+    }, { companyId, branchId });
     if (startDate || endDate) {
       match.entryDate = {};
       if (startDate) match.entryDate.$gte = new Date(startDate);
@@ -107,14 +135,14 @@ class AccountingReportsService {
     const aggregates = accountIds.length
       ? await JournalEntry.aggregate([
         {
-          $match: {
+          $match: applyReportScope({
             currency,
             entryDate: { $gte: startDate, $lte: endDate },
             $or: [
               { debitAccountId: { $in: accountIds } },
               { creditAccountId: { $in: accountIds } },
             ],
-          },
+          }, query),
         },
         {
           $facet: {
@@ -172,6 +200,7 @@ class AccountingReportsService {
         endDate: endDate.toISOString().slice(0, 10),
       },
       currency,
+      scope: buildScope(query),
       revenue,
       expenses,
       netProfit,
@@ -252,7 +281,13 @@ class AccountingReportsService {
     const accounts = (await accountRepository.findAll())
       .filter((account) => BALANCE_SHEET_TYPES.has(account.type));
     const accountIds = accounts.map((account) => account._id);
-    const totalsByAccount = await this._journalTotalsByAccount({ endDate, currency, accountIds });
+    const totalsByAccount = await this._journalTotalsByAccount({
+      endDate,
+      currency,
+      accountIds,
+      companyId: query.companyId,
+      branchId: query.branchId,
+    });
 
     const rows = accounts
       .map((account) => {
@@ -283,7 +318,7 @@ class AccountingReportsService {
       asOfDate: endDate.toISOString().slice(0, 10),
       period: { startDate: null, endDate: endDate.toISOString().slice(0, 10) },
       currency,
-      scope: { company: null, branch: null },
+      scope: buildScope(query),
       totalAssets,
       totalLiabilities,
       totalEquity,
@@ -299,7 +334,13 @@ class AccountingReportsService {
     const currency = query.currency || 'CHF';
     const accounts = await accountRepository.findAll();
     const accountIds = accounts.map((account) => account._id);
-    const totalsByAccount = await this._journalTotalsByAccount({ endDate, currency, accountIds });
+    const totalsByAccount = await this._journalTotalsByAccount({
+      endDate,
+      currency,
+      accountIds,
+      companyId: query.companyId,
+      branchId: query.branchId,
+    });
 
     const rows = accounts
       .map((account) => {
@@ -327,7 +368,7 @@ class AccountingReportsService {
       asOfDate: endDate.toISOString().slice(0, 10),
       period: { startDate: null, endDate: endDate.toISOString().slice(0, 10) },
       currency,
-      scope: { company: null, branch: null },
+      scope: buildScope(query),
       totalDebit,
       totalCredit,
       imbalance: roundMoney(totalDebit - totalCredit),
@@ -345,6 +386,8 @@ class AccountingReportsService {
       endDate,
       currency,
       accountIds,
+      companyId: query.companyId,
+      branchId: query.branchId,
     });
 
     const rows = accounts
@@ -382,7 +425,7 @@ class AccountingReportsService {
         endDate: endDate.toISOString().slice(0, 10),
       },
       currency,
-      scope: { company: null, branch: null },
+      scope: buildScope(query),
       operating,
       investing,
       financing,
@@ -407,6 +450,8 @@ class AccountingReportsService {
         referenceType: query.referenceType,
         accountId: query.accountId,
         currency: query.currency,
+        companyId: query.companyId,
+        branchId: query.branchId,
       },
     });
 
@@ -416,7 +461,7 @@ class AccountingReportsService {
         endDate: query.endDate || null,
       },
       currency: query.currency || null,
-      scope: { company: null, branch: null },
+      scope: buildScope(query),
       data: result.data,
       pagination: result.pagination,
     };

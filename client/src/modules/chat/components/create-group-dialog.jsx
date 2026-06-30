@@ -1,8 +1,8 @@
 'use client';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
 import { useChatMutations } from '@/modules/chat/hooks/use-chat-mutations';
+import { useChatProjects, useChatUsers } from '@/modules/chat/hooks/use-chat-directory';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Users, X, FolderOpen, Link } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { chatService } from '../services/chat-service';
 
 function Checkbox({ checked, onCheckedChange }) {
   return (
@@ -55,12 +54,7 @@ export function CreateGroupDialog({ open, onClose }) {
   const { createGroupRoom } = useChatMutations();
 
   // Step 1: fetch projects
-  const { data: projectsData, isLoading: projectsLoading } = useQuery({
-    queryKey: ['pm', 'projects', 'list-for-chat'],
-    queryFn: () => chatService.listProjects(),
-    enabled: open && step === 1,
-    staleTime: 60_000,
-  });
+  const { data: projectsData, isLoading: projectsLoading } = useChatProjects({ enabled: open && step === 1 });
   const allProjects = Array.isArray(projectsData)
     ? projectsData
     : Array.isArray(projectsData?.items)
@@ -76,12 +70,7 @@ export function CreateGroupDialog({ open, onClose }) {
     : allProjects;
 
   // Step 3: fetch users
-  const { data: usersData, isLoading: usersLoading } = useQuery({
-    queryKey: ['users', 'active'],
-    queryFn: () => chatService.listUsers(),
-    enabled: open && step === 3,
-    staleTime: 60_000,
-  });
+  const { data: usersData, isLoading: usersLoading } = useChatUsers({ enabled: open && step === 3 });
   const users = Array.isArray(usersData) ? usersData : [];
 
   const filteredUsers = debouncedSearch
@@ -240,7 +229,7 @@ export function CreateGroupDialog({ open, onClose }) {
                 <div className="flex items-center gap-2 rounded-md bg-primary/5 border border-primary/20 px-3 py-2">
                   <Link className="h-3.5 w-3.5 text-primary shrink-0" />
                   <span className="text-xs text-primary font-medium truncate">
-                    {t('chat.linkedTo', { name: selectedProject.name })}
+                    {t('chat.linkedTo', null, { name: selectedProject.name })}
                   </span>
                 </div>
               )}
@@ -310,7 +299,7 @@ export function CreateGroupDialog({ open, onClose }) {
                           type="button"
                           onClick={() => setSelectedIds(prev => prev.filter(i => i !== id))}
                           className="ml-0.5 rounded-full hover:bg-accent p-0.5"
-                          aria-label={t('common.removeName', { name: user.firstName })}
+                          aria-label={t('common.removeName', null, { name: user.firstName })}
                         >
                           <X className="h-3 w-3" />
                         </button>

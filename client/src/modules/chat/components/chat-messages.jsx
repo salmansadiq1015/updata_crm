@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, MessageSquare } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate } from '@/lib/formatters';
 import { ChatMessage } from './chat-message';
@@ -28,7 +28,7 @@ function getDayLabel(ts, language) {
 }
 
 export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupRoom, onReply, onReact, onDelete, onEdit }) {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const bottomRef = useRef(null);
   const prevLenRef = useRef(0);
   const [showFab, setShowFab] = useState(false);
@@ -97,7 +97,7 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupR
 
   if (isLoading) {
     return (
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto bg-muted/10 px-4 py-4 space-y-3">
         {[0,1,2].map(i => (
           <div key={i} className={`flex gap-2 ${i % 2 === 0 ? '' : 'flex-row-reverse'}`}>
             <Skeleton className="h-8 w-8 rounded-full shrink-0" />
@@ -108,8 +108,24 @@ export function ChatMessages({ messages = [], isLoading, currentUserId, isGroupR
     );
   }
 
+  if (items.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-muted/10 px-6">
+        <div className="max-w-sm text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-3xl bg-primary/10 text-primary">
+            <MessageSquare className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold">{t('chat.noMessagesYet', 'No messages yet')}</h3>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            {t('chat.noMessagesDesc', 'Start the conversation with a message, file, image, or voice note.')}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative flex-1 overflow-hidden">
+    <div className="relative flex-1 overflow-hidden bg-muted/10">
       <div
         className="h-full overflow-y-auto py-2 scrollbar-thin scrollbar-thumb-border"
         onScroll={handleScroll}

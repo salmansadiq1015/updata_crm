@@ -13,6 +13,11 @@ import { MAX_STEPS, MIN_AGENT_INPUT_LENGTH } from '../agent/agent.guardrails.js'
 import agentRunRepository from '../agent/agentRun.repository.js';
 import { fetchWorkforcePlanningContextTool } from '../tools/workforce.tools.js';
 import { analyzeFieldTicketTool } from '../tools/fieldTicket.tools.js';
+import {
+  executeFieldServiceCapability,
+  getFieldServiceCapabilityFields,
+  isFieldServiceCapabilityAction,
+} from '../capabilities/fieldService.capabilities.js';
 import { WorkflowState } from './workflow.state.js';
 import logger from '../../../shared/logger/index.js';
 import swissPlzService from '../../../shared/ai/swissPlz.service.js';
@@ -21,6 +26,7 @@ const ACTIONS = Object.freeze({
   CREATE_CUSTOMER: 'CREATE_CUSTOMER',
   CREATE_TASK: 'CREATE_TASK',
   UPDATE_TASK: 'UPDATE_TASK',
+  CREATE_PROJECT: 'CREATE_PROJECT',
   CREATE_ORDER: 'CREATE_ORDER',
   UPDATE_ORDER: 'UPDATE_ORDER',
   CREATE_ASSIGNMENT: 'CREATE_ASSIGNMENT',
@@ -33,8 +39,12 @@ const ACTIONS = Object.freeze({
   ANALYZE_WORKFORCE: 'ANALYZE_WORKFORCE',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   SEARCH_CUSTOMER: 'SEARCH_CUSTOMER',
+  SEARCH_PROJECTS: 'SEARCH_PROJECTS',
+  SEARCH_ORDERS: 'SEARCH_ORDERS',
+  SEARCH_DOCUMENTS: 'SEARCH_DOCUMENTS',
   CREATE_QUOTATION: 'CREATE_QUOTATION',
   CREATE_INVOICE: 'CREATE_INVOICE',
+  CREATE_TASK_REMINDER: 'CREATE_TASK_REMINDER',
   GENERAL: 'GENERAL',
 });
 
@@ -42,6 +52,7 @@ const ACTION_LABELS = {
   [ACTIONS.CREATE_CUSTOMER]: 'create a customer',
   [ACTIONS.CREATE_TASK]: 'create a task',
   [ACTIONS.UPDATE_TASK]: 'update a task',
+  [ACTIONS.CREATE_PROJECT]: 'create a project',
   [ACTIONS.CREATE_ORDER]: 'create an order',
   [ACTIONS.UPDATE_ORDER]: 'update an order',
   [ACTIONS.CREATE_ASSIGNMENT]: 'schedule an assignment',
@@ -54,8 +65,12 @@ const ACTION_LABELS = {
   [ACTIONS.ANALYZE_WORKFORCE]: 'analyze workforce planning',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'analyze a technician ticket',
   [ACTIONS.SEARCH_CUSTOMER]: 'find customer information',
+  [ACTIONS.SEARCH_PROJECTS]: 'find project information',
+  [ACTIONS.SEARCH_ORDERS]: 'find job or order information',
+  [ACTIONS.SEARCH_DOCUMENTS]: 'find documents',
   [ACTIONS.CREATE_QUOTATION]: 'create a quotation',
   [ACTIONS.CREATE_INVOICE]: 'create an invoice',
+  [ACTIONS.CREATE_TASK_REMINDER]: 'create a task reminder',
   [ACTIONS.GENERAL]: 'help with the system',
 };
 
@@ -78,6 +93,24 @@ const PROJECT_STATUS_BY_PHRASE = [
   ['draft', 'DRAFT'],
 ];
 
+const ASSIGNMENT_CONTEXT_TYPES = new Set([
+  'assignment',
+  'field_order',
+  'field-order',
+  'mobile_order',
+  'mobile-order',
+  'work_order',
+  'work-order',
+  'workorder',
+]);
+
+const QOP_ORDER_CONTEXT_TYPES = new Set([
+  'qop_order',
+  'qop-order',
+  'commercial_order',
+  'commercial-order',
+]);
+
 async function executeAction(state) {
   const stepCount = state.stepCount + 1;
   if (stepCount >= MAX_STEPS) {
@@ -98,11 +131,12 @@ async function executeAction(state) {
   }
 
   const previousFollowUp = state.entities?.previousFollowUp || null;
+  const requestContext = state.entities?.requestContext || {};
   const action = previousFollowUp?.action || classifyAction(input);
   const effectiveInput = previousFollowUp?.originalInput
     ? `${previousFollowUp.originalInput}\nFollow-up answer: ${input}`
     : input;
-  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp);
+  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext);
   let output;
 
   try {
@@ -165,6 +199,38 @@ function classifyAction(input) {
   if (hasAny(text, ['ticket', 'incident', 'technician report', 'technician ticket', 'stoerung', 'meldung'])
     && hasAny(text, ['analyze', 'categorize', 'prioritize', 'recommend', 'analyse', 'kategorisier', 'priorisier'])) return ACTIONS.ANALYZE_FIELD_TICKET;
   if (hasAny(text, ['create customer', 'new customer', 'add customer', 'create company', 'new company', 'add company', 'kunde anlegen', 'kunden anlegen', 'neuer kunde', 'neuen kunden', 'firma erstellen', 'firma anlegen', 'neue firma'])) return ACTIONS.CREATE_CUSTOMER;
+  if (hasSearchIntent(text) && hasAny(text, ['document', 'documents', 'file', 'files', 'pdf', 'dokument', 'datei'])) return ACTIONS.SEARCH_DOCUMENTS;
+  if (hasSearchIntent(text) && hasAny(text, ['project', 'projects', 'projekt', 'projekte'])) return ACTIONS.SEARCH_PROJECTS;
+  if (hasSearchIntent(text) && hasAny(text, ['order', 'orders', 'job', 'jobs', 'auftrag', 'auftraege'])) return ACTIONS.SEARCH_ORDERS;
+  if (hasAny(text, ['quotation', 'quote', 'offerte', 'angebot'])) return ACTIONS.CREATE_QUOTATION;
+  if (hasAny(text, ['invoice', 'rechnung'])) return ACTIONS.CREATE_INVOICE;
+  if (hasAny(text, ['reminder', 'remind me', 'notify me', 'erinnerung', 'erinnere'])) return ACTIONS.CREATE_TASK_REMINDER;
+  if (hasAny(text, ['service report', 'work report', 'rapport', 'bericht'])) return ACTIONS.CREATE_REPORT;
+  if (hasAny(text, ['chat', 'message', 'nachricht', 'send to', 'schreib'])) return ACTIONS.SEND_CHAT;
+  if (hasAny(text, ['workforce', 'absence', 'absences', 'leave', 'vacation', 'availability', 'overtime', 'deficit', 'kapazitaet', 'kapazitaet', 'abwesenheit', 'ferien', 'ueberzeit', 'ueberzeit'])) return ACTIONS.ANALYZE_WORKFORCE;
+  if (hasAny(text, ['working hour', 'hours', 'time entry', 'zeit', 'stunden'])) return ACTIONS.RECORD_TIME;
+  if (hasAny(text, ['reschedule', 'move appointment', 'verschieb'])) return ACTIONS.RESCHEDULE_ASSIGNMENT;
+  if (hasAny(text, ['schedule', 'appointment', 'assign', 'plan', 'termin', 'zuweisen'])) return ACTIONS.CREATE_ASSIGNMENT;
+  if (hasAny(text, ['project', 'projekt']) && hasAny(text, ['create', 'new', 'add', 'erstelle', 'neues', 'neuen', 'anlegen'])) return ACTIONS.CREATE_PROJECT;
+  if (hasAny(text, ['project', 'projekt']) && hasAny(text, ['status', 'update', 'set', 'change', 'aktualisier'])) return ACTIONS.UPDATE_PROJECT;
+  if (hasAny(text, ['order', 'job', 'auftrag'])) {
+    if (hasAny(text, ['update', 'status', 'change', 'set'])) return ACTIONS.UPDATE_ORDER;
+    return ACTIONS.CREATE_ORDER;
+  }
+  if (hasAny(text, ['note', 'notiz', 'document', 'documentation', 'dokumentation'])) return ACTIONS.CREATE_NOTE;
+  if (hasAny(text, ['customer', 'kunde', 'client', 'show me', 'find', 'search', 'suche'])) return ACTIONS.SEARCH_CUSTOMER;
+  if (hasAny(text, ['task', 'aufgabe', 'todo'])) {
+    if (hasAny(text, ['complete', 'done', 'erledigt', 'in progress', 'bearbeitung'])) return ACTIONS.UPDATE_TASK;
+    return ACTIONS.CREATE_TASK;
+  }
+  return classifyActionLegacy(input);
+}
+
+function classifyActionLegacy(input) {
+  const text = input.toLowerCase();
+  if (hasAny(text, ['ticket', 'incident', 'technician report', 'technician ticket', 'stoerung', 'meldung'])
+    && hasAny(text, ['analyze', 'categorize', 'prioritize', 'recommend', 'analyse', 'kategorisier', 'priorisier'])) return ACTIONS.ANALYZE_FIELD_TICKET;
+  if (hasAny(text, ['create customer', 'new customer', 'add customer', 'create company', 'new company', 'add company', 'kunde anlegen', 'kunden anlegen', 'neuer kunde', 'neuen kunden', 'firma erstellen', 'firma anlegen', 'neue firma'])) return ACTIONS.CREATE_CUSTOMER;
   if (hasAny(text, ['quotation', 'quote', 'offerte', 'angebot'])) return ACTIONS.CREATE_QUOTATION;
   if (hasAny(text, ['invoice', 'rechnung'])) return ACTIONS.CREATE_INVOICE;
   if (hasAny(text, ['service report', 'work report', 'rapport', 'bericht'])) return ACTIONS.CREATE_REPORT;
@@ -188,6 +254,17 @@ function classifyAction(input) {
 }
 
 async function performAction(action, input, context, userId, state = {}) {
+  if (isFieldServiceCapabilityAction(action)) {
+    return executeFieldServiceCapability({
+      action,
+      input,
+      context,
+      userId,
+      state,
+      helpers: fieldServiceCapabilityHelpers,
+    });
+  }
+
   switch (action) {
     case ACTIONS.CREATE_CUSTOMER:
       return createCustomer(input, context, userId);
@@ -312,18 +389,18 @@ async function updateProject(input, context, userId) {
 }
 
 async function createReport(input, context, userId) {
-  if (context.orderCandidates?.length > 1) {
+  if (context.assignmentCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_REPORT, ['order/work order'], context);
   }
-  const orderId = context.order?._id || firstObjectId(input);
+  const orderId = context.assignment?._id;
   if (!orderId) {
     return needsFollowUp(ACTIONS.CREATE_REPORT, ['order/work order'], context);
   }
-  const workPerformed = cleanTitle(input, ['create service report', 'create work report', 'rapport', 'bericht']);
+  const workPerformed = extractReportWorkPerformed(input);
   const reportService = (await import('../../mobile/report.service.js')).default;
   const report = await reportService.create(orderId, {
     reportDate: new Date(),
-    projectId: context.project?._id || context.order?.projectId || null,
+    projectId: context.project?._id || objectIdValue(context.assignment?.projectId) || null,
     workPerformed,
     technicianNotes: input,
     materialItems: extractMaterials(input),
@@ -374,10 +451,10 @@ async function createAssignment(input, context, userId) {
 }
 
 async function recordTime(input, context, userId) {
-  if (context.orderCandidates?.length > 1) {
+  if (context.assignmentCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.RECORD_TIME, ['order/work order'], context);
   }
-  const orderId = context.order?._id || firstObjectId(input);
+  const orderId = context.assignment?._id || firstObjectId(input);
   if (!orderId) return needsFollowUp(ACTIONS.RECORD_TIME, ['order/work order'], context);
   const hours = extractDurationHours(input);
   if (!hours) return needsFollowUp(ACTIONS.RECORD_TIME, ['hours or start/end time'], context);
@@ -559,41 +636,83 @@ function needsFollowUp(action, missingFields, context = {}) {
   };
 }
 
-async function resolveContext(input, previousFollowUp = null) {
+async function resolveContext(input, previousFollowUp = null, requestContext = {}) {
   const objectId = firstObjectId(input);
-  const [userResult, customerResult, projectResult, orderResult, installationResult] = await Promise.all([
+  const requestResolved = await loadRequestResolvedContext(requestContext);
+  const [userResult, customerResult, projectResult, orderResult, assignmentResult, installationResult, taskResult] = await Promise.all([
     findUser(input, previousFollowUp),
     findCustomer(input, objectId, previousFollowUp),
     findProject(input, objectId, previousFollowUp),
     findOrder(input, objectId, previousFollowUp),
+    requestResolved.assignment ? { selected: null, candidates: [] } : findAssignment(input, objectId, previousFollowUp),
     findInstallation(input, objectId),
+    shouldResolveTask(input, previousFollowUp) ? findTask(input, objectId, previousFollowUp) : { selected: null, candidates: [] },
   ]);
   const previousResolved = await loadPreviousResolvedContext(previousFollowUp?.resolvedContext);
   return {
     assignee: userResult.selected || previousResolved.assignee,
     assigneeCandidates: userResult.selected ? [] : userResult.candidates,
-    customer: customerResult.selected || previousResolved.customer,
-    customerCandidates: customerResult.selected ? [] : customerResult.candidates,
-    project: projectResult.selected || previousResolved.project,
-    projectCandidates: projectResult.selected ? [] : projectResult.candidates,
+    customer: customerResult.selected || requestResolved.customer || previousResolved.customer,
+    customerCandidates: customerResult.selected || requestResolved.customer ? [] : customerResult.candidates,
+    project: projectResult.selected || requestResolved.project || previousResolved.project,
+    projectCandidates: projectResult.selected || requestResolved.project ? [] : projectResult.candidates,
     order: orderResult.selected || previousResolved.order,
     orderCandidates: orderResult.selected ? [] : orderResult.candidates,
-    installation: installationResult.selected || previousResolved.installation,
-    installationCandidates: installationResult.selected ? [] : installationResult.candidates,
+    assignment: assignmentResult.selected || requestResolved.assignment || previousResolved.assignment,
+    assignmentCandidates: assignmentResult.selected || requestResolved.assignment ? [] : assignmentResult.candidates,
+    installation: installationResult.selected || requestResolved.installation || previousResolved.installation,
+    installationCandidates: installationResult.selected || requestResolved.installation ? [] : installationResult.candidates,
+    task: taskResult.selected || previousResolved.task,
+    taskCandidates: taskResult.selected ? [] : taskResult.candidates,
     site: null,
     roomId: extractRoomId(input),
   };
 }
 
 async function loadPreviousResolvedContext(resolvedContext = {}) {
-  const [assignee, customer, project, order, installation] = await Promise.all([
+  const [assignee, customer, project, order, assignment, installation, task] = await Promise.all([
     loadPreviousUser(resolvedContext.assignee?.id),
     loadPreviousCustomer(resolvedContext.customer?.id),
     loadPreviousProject(resolvedContext.project?.id),
     loadPreviousOrder(resolvedContext.order?.id),
+    loadPreviousAssignment(resolvedContext.assignment?.id || resolvedContext.workOrder?.id),
     loadPreviousInstallation(resolvedContext.installation?.id),
+    loadPreviousTask(resolvedContext.task?.id),
   ]);
-  return { assignee, customer, project, order, installation };
+  return { assignee, customer, project, order, assignment, installation, task };
+}
+
+async function loadRequestResolvedContext(requestContext = {}) {
+  const recordId = requestContext.recordId || requestContext.contextRecordId || requestContext.id;
+  const recordType = normalizeContextRecordType(requestContext.recordType || requestContext.contextRecordType);
+  const assignmentId = requestContext.assignmentId
+    || requestContext.orderId
+    || (ASSIGNMENT_CONTEXT_TYPES.has(recordType) || recordType === 'order' ? recordId : null);
+  const qopOrderId = requestContext.qopOrderId
+    || (QOP_ORDER_CONTEXT_TYPES.has(recordType) ? recordId : null);
+  const projectId = requestContext.projectId || (recordType === 'project' ? recordId : null);
+  const customerId = requestContext.customerId || (recordType === 'customer' ? recordId : null);
+  const installationId = requestContext.installationId || (recordType === 'installation' ? recordId : null);
+
+  const [assignment, order, project, customer, installation] = await Promise.all([
+    loadPreviousAssignment(assignmentId),
+    loadPreviousOrder(qopOrderId),
+    loadPreviousProject(projectId),
+    loadPreviousCustomer(customerId),
+    loadPreviousInstallation(installationId),
+  ]);
+
+  return {
+    assignment,
+    order,
+    project: project || (assignment?.projectId && typeof assignment.projectId === 'object' ? assignment.projectId : null),
+    customer: customer || (assignment?.customerId && typeof assignment.customerId === 'object' ? assignment.customerId : null),
+    installation,
+  };
+}
+
+function normalizeContextRecordType(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, '_');
 }
 
 async function loadPreviousUser(id) {
@@ -620,10 +739,28 @@ async function loadPreviousOrder(id) {
   return Order.findById(id).select('orderNumber title status customerId customerName projectId').lean().catch(() => null);
 }
 
+async function loadPreviousAssignment(id) {
+  if (!id) return null;
+  const Assignment = (await import('../../deploy/assignment.model.js')).default;
+  return Assignment.findById(id)
+    .select('assignmentNumber title status projectId customerId orderId assignmentType priority startDatetime endDatetime')
+    .lean()
+    .catch(() => null);
+}
+
 async function loadPreviousInstallation(id) {
   if (!id) return null;
   const Installation = (await import('../../crm/installation.model.js')).default;
   return Installation.findById(id).select('name model serialNumber status siteId customerId').lean().catch(() => null);
+}
+
+async function loadPreviousTask(id) {
+  if (!id) return null;
+  const Task = (await import('../../tasks/task.model.js')).default;
+  return Task.findById(id)
+    .select('title status priority assigneeId dueDate projectId orderId')
+    .lean()
+    .catch(() => null);
 }
 
 async function findUser(input, previousFollowUp) {
@@ -704,6 +841,46 @@ async function findOrder(input, objectId, previousFollowUp) {
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
 }
 
+async function findAssignment(input, objectId, previousFollowUp) {
+  const Assignment = (await import('../../deploy/assignment.model.js')).default;
+  const previousCandidates = [
+    ...(previousFollowUp?.candidates?.assignments || []),
+    ...(previousFollowUp?.candidates?.orders || []),
+  ];
+  const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
+  if (selectedPrevious?._id) {
+    const selected = await Assignment.findById(selectedPrevious._id)
+      .select('assignmentNumber title status projectId customerId orderId assignmentType priority startDatetime endDatetime')
+      .lean();
+    if (selected) return { selected, candidates: [] };
+  }
+  if (objectId) {
+    const found = await Assignment.findById(objectId)
+      .select('assignmentNumber title status projectId customerId orderId assignmentType priority startDatetime endDatetime')
+      .lean()
+      .catch(() => null);
+    if (found) return { selected: found, candidates: [] };
+  }
+  if (/\bcurrent\s+(work\s+)?order\b/i.test(input)) {
+    return { selected: null, candidates: [] };
+  }
+  const term = extractSearchTerm(input);
+  if (!term || term.length < 2) {
+    return { selected: null, candidates: [] };
+  }
+  const regex = new RegExp(escapeRegex(term), 'i');
+  const candidates = await Assignment.find({
+    $or: [
+      { assignmentNumber: regex },
+      { title: regex },
+    ],
+  })
+    .select('assignmentNumber title status projectId customerId orderId assignmentType priority startDatetime endDatetime')
+    .limit(5)
+    .lean();
+  return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
+}
+
 async function findInstallation(input, objectId) {
   const Installation = (await import('../../crm/installation.model.js')).default;
   if (objectId) {
@@ -711,6 +888,38 @@ async function findInstallation(input, objectId) {
     return { selected, candidates: selected ? [selected] : [] };
   }
   return { selected: null, candidates: [] };
+}
+
+async function findTask(input, objectId, previousFollowUp) {
+  const Task = (await import('../../tasks/task.model.js')).default;
+  const previousCandidates = previousFollowUp?.candidates?.tasks || [];
+  const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
+  if (selectedPrevious?._id) {
+    const selected = await Task.findById(selectedPrevious._id)
+      .select('title status priority assigneeId dueDate projectId orderId')
+      .lean();
+    if (selected) return { selected, candidates: [] };
+  }
+  if (objectId) {
+    const found = await Task.findById(objectId)
+      .select('title status priority assigneeId dueDate projectId orderId')
+      .lean()
+      .catch(() => null);
+    if (found) return { selected: found, candidates: [] };
+  }
+  const term = extractSearchTerm(input);
+  if (!term || term.length < 2) return { selected: null, candidates: [] };
+  const candidates = await Task.find({ $text: { $search: term } })
+    .select('title status priority assigneeId dueDate projectId orderId')
+    .limit(5)
+    .lean();
+  return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
+}
+
+function shouldResolveTask(input, previousFollowUp) {
+  if (previousFollowUp?.action === ACTIONS.UPDATE_TASK || previousFollowUp?.action === ACTIONS.CREATE_TASK_REMINDER) return true;
+  const text = String(input || '').toLowerCase();
+  return hasAny(text, ['task', 'todo', 'aufgabe', 'reminder', 'remind me', 'erinnerung']);
 }
 
 function fieldsForAction(action) {
@@ -721,15 +930,42 @@ function fieldsForAction(action) {
     [ACTIONS.CREATE_QUOTATION]: ['customer', 'template or line items', 'pricing details'],
     [ACTIONS.CREATE_INVOICE]: ['customer or order', 'line items or source order'],
   };
-  return map[action] || ['details'];
+  return map[action] || getFieldServiceCapabilityFields(action) || ['details'];
 }
 
 function hasAny(text, terms) {
   return terms.some((term) => text.includes(term));
 }
 
+function hasSearchIntent(text) {
+  return hasAny(text, ['show', 'find', 'search', 'lookup', 'look up', 'suche', 'zeige']);
+}
+
+const fieldServiceCapabilityHelpers = {
+  needsFollowUp,
+  summarizeContext,
+  cleanTitle,
+  extractPriority,
+  extractDate,
+  extractDateTime,
+  extractDurationHours,
+  objectIdValue,
+  extractSearchTerm,
+};
+
+function escapeRegex(value) {
+  return `${value}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function firstObjectId(input) {
   return input.match(/\b[0-9a-f]{24}\b/i)?.[0] || null;
+}
+
+function objectIdValue(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (value._id) return value._id;
+  return value;
 }
 
 function extractRoomId(input) {
@@ -823,6 +1059,29 @@ function extractMaterials(input) {
     });
   }
   return materials.slice(0, 10);
+}
+
+function extractReportWorkPerformed(input) {
+  const cleaned = cleanTitle(input, [
+    'create a draft service report',
+    'create draft service report',
+    'create a service report',
+    'create service report',
+    'create a work report',
+    'create work report',
+    'draft service report',
+    'service report',
+    'work report',
+    'rapport',
+    'bericht',
+  ])
+    .replace(/\b(for|from)\s+(the\s+)?current\s+(work\s+)?order\b:?\s*/gi, ' ')
+    .replace(/\bcurrent\s+(work\s+)?order\b:?\s*/gi, ' ')
+    .replace(/^\s*[:.-]\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return (cleaned || input).slice(0, 500);
 }
 
 function extractCustomerDraft(input) {
@@ -961,6 +1220,7 @@ function selectCandidateFromAnswer(input, candidates = []) {
       candidate.customerNumber,
       candidate.projectNumber,
       candidate.orderNumber,
+      candidate.assignmentNumber,
       candidate.email,
       candidate.title,
       candidate.model,
@@ -1002,17 +1262,23 @@ function summarizeContext(context) {
     customer: context.customer ? { id: context.customer._id, name: context.customer.name } : null,
     project: context.project ? { id: context.project._id, name: context.project.name, status: context.project.status } : null,
     order: context.order ? { id: context.order._id, orderNumber: context.order.orderNumber, status: context.order.status } : null,
+    assignment: context.assignment ? { id: context.assignment._id, orderNumber: context.assignment.assignmentNumber, status: context.assignment.status } : null,
+    workOrder: context.assignment ? { id: context.assignment._id, orderNumber: context.assignment.assignmentNumber, status: context.assignment.status } : null,
     installation: context.installation ? { id: context.installation._id, name: context.installation.name || context.installation.model } : null,
+    task: context.task ? { id: context.task._id, title: context.task.title, status: context.task.status } : null,
   };
 }
 
 function summarizeCandidates(context) {
+  const assignmentCandidates = summarizeCandidateList(context.assignmentCandidates, candidateAssignmentLabel);
   return {
     assignees: summarizeCandidateList(context.assigneeCandidates, candidateUserLabel),
     customers: summarizeCandidateList(context.customerCandidates, (customer) => customer.name || customer.customerNumber),
     projects: summarizeCandidateList(context.projectCandidates, (project) => project.name || project.projectNumber),
-    orders: summarizeCandidateList(context.orderCandidates, (order) => order.orderNumber || order.title),
+    assignments: assignmentCandidates,
+    orders: assignmentCandidates.length ? assignmentCandidates : summarizeCandidateList(context.orderCandidates, (order) => order.orderNumber || order.title),
     installations: summarizeCandidateList(context.installationCandidates, (installation) => installation.name || installation.model || installation.serialNumber),
+    tasks: summarizeCandidateList(context.taskCandidates, (task) => task.title),
   };
 }
 
@@ -1029,6 +1295,10 @@ function summarizeCandidateList(candidates = [], labelFactory) {
 
 function candidateUserLabel(user) {
   return displayUser(user);
+}
+
+function candidateAssignmentLabel(assignment) {
+  return assignment.assignmentNumber || assignment.title || String(assignment._id || assignment.id || '');
 }
 
 const graph = new StateGraph(WorkflowState);

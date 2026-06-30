@@ -9,6 +9,7 @@ export const REFERENCE_TYPES = [
   'FIXED_ASSET_ACQUISITION', 'FIXED_ASSET_DEPRECIATION', 'FIXED_ASSET_DISPOSAL',
   'RECURRING_TRANSACTION',
   'FX_REVALUATION',
+  'INVENTORY_VALUATION',
 ];
 
 const journalEntrySchema = new mongoose.Schema(
@@ -48,6 +49,14 @@ const journalEntrySchema = new mongoose.Schema(
       enum: ['CHF', 'EUR'],
       default: 'CHF',
     },
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
     referenceType: {
       type: String,
       enum: REFERENCE_TYPES,
@@ -85,6 +94,8 @@ journalEntrySchema.index({ entryDate: -1 });
 journalEntrySchema.index({ debitAccountId: 1 });
 journalEntrySchema.index({ creditAccountId: 1 });
 journalEntrySchema.index({ referenceType: 1, referenceId: 1 });
+journalEntrySchema.index({ companyId: 1, branchId: 1, entryDate: -1 });
+journalEntrySchema.index({ companyId: 1, currency: 1, entryDate: -1 });
 
 // --- Immutability pre-hooks ---
 journalEntrySchema.pre('findOneAndUpdate', function () {

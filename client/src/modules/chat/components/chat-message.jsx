@@ -14,9 +14,9 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { ChatReactionBar } from './chat-reaction-bar';
 import { ChatEmojiPicker } from './chat-emoji-picker';
 
-function formatTime(ts) {
+function formatTime(ts, locale) {
   if (!ts) return '';
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(ts).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 const SENDER_COLORS = ['#ef5350','#ab47bc','#42a5f5','#26a69a','#66bb6a','#ffa726','#ec407a'];
@@ -28,7 +28,7 @@ function senderColor(name) {
 }
 
 export function ChatMessage({ message, isMine, showSenderName, showTimestamp, currentUserId, isGroupRoom, onReply, onReact, onDelete, onEdit }) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -50,7 +50,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
           <>
             <NextImage
               src={message.attachmentUrl}
-              alt="Photo"
+              alt={t('chat.photo', 'Photo')}
               width={240} height={180}
               className="rounded-lg cursor-pointer object-cover"
               onClick={() => setLightboxOpen(true)}
@@ -58,7 +58,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
             />
             <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
               <DialogContent className="max-w-3xl p-1 bg-black/95">
-                <NextImage src={message.attachmentUrl} alt="Photo" width={900} height={600} className="w-full rounded object-contain" unoptimized />
+                <NextImage src={message.attachmentUrl} alt={t('chat.photo', 'Photo')} width={900} height={600} className="w-full rounded object-contain" unoptimized />
               </DialogContent>
             </Dialog>
           </>
@@ -137,7 +137,7 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
           {showTimestamp && (
             <div className="flex items-center gap-1 mt-0.5 justify-end">
               {message.editedAt && <span className="text-[10px] opacity-60">{t('chat.edited', 'edited')}</span>}
-              <span className="text-[10px] opacity-70">{formatTime(ts)}</span>
+              <span className="text-[10px] opacity-70">{formatTime(ts, locale)}</span>
               {isMine && (
                 isRead
                   ? <CheckCheck className="h-3 w-3 text-blue-400" />

@@ -6,8 +6,8 @@ import { Command } from 'cmdk';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useTheme } from 'next-themes';
 import {
-  Search, LayoutDashboard, Users, Shield, Monitor, ScrollText,
-  User, Activity, Plus, Sun, Moon, ArrowRight, Video,
+  Search, LayoutDashboard, Users, Shield, ScrollText,
+  User, Plus, Sun, Moon, ArrowRight, Video,
 } from 'lucide-react';
 import { userService } from '@/modules/users/services/user-service';
 import { cn } from '@/lib/utils';
@@ -26,10 +26,8 @@ export function CommandSearch() {
     { label: t('sidebar.employmentManagement', 'Mitarbeiterverwaltung'), href: '/settings/users', icon: Users },
     { label: t('sidebar.roles', 'Rollen'), href: '/settings/roles', icon: Shield },
     { label: t('deploy.tabs.meetings', 'Meetings'), href: '/scheduling/meetings', icon: Video },
-    { label: t('sidebar.sessions', 'Sitzungen'), href: '/settings/sessions', icon: Monitor },
     { label: t('sidebar.audit', 'Audit Log'), href: '/settings/audit', icon: ScrollText },
     { label: t('dashboard.myProfile', 'Mein Profil'), href: '/profile', icon: User },
-    { label: t('sidebar.system', 'System'), href: '/settings/system', icon: Activity },
   ];
 
   useEffect(() => {

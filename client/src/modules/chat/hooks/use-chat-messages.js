@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { queryKeys } from '@/lib/query/keys';
@@ -75,6 +75,24 @@ export function useChatMessages(roomId) {
         setTypingUsers((prev) => prev.filter((u) => u.userId !== stoppedId));
       };
 
+      const onRead = ({ userId: readerId, readAt }) => {
+        queryClient.setQueryData(queryKeys.chat.messages(roomId), (old = []) =>
+          old.map((message) => {
+            const senderId = String(message.senderId?._id || message.senderId || message.sender_id || '');
+            if (!readerId || senderId === String(readerId)) return message;
+            const existing = message.readBy ?? [];
+            if (existing.some((entry) => String(entry.userId?._id || entry.userId || entry) === String(readerId))) {
+              return message;
+            }
+            return {
+              ...message,
+              readBy: [...existing, { userId: readerId, readAt }],
+            };
+          })
+        );
+        queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
+      };
+
       const onRoomUpdated = () => {
         queryClient.invalidateQueries({ queryKey: queryKeys.chat.rooms() });
       };
@@ -92,6 +110,7 @@ export function useChatMessages(roomId) {
       socket.on('chat:message_edited', onMessageEdited);
       socket.on('chat:typing', onTyping);
       socket.on('chat:stop typing', onStopTyping);
+      socket.on('chat:read', onRead);
       socket.on('chat:room_updated', onRoomUpdated);
       socket.on('chat:room_deleted', onRoomDeleted);
 
@@ -102,6 +121,7 @@ export function useChatMessages(roomId) {
         socket.off('chat:message_edited', onMessageEdited);
         socket.off('chat:typing', onTyping);
         socket.off('chat:stop typing', onStopTyping);
+        socket.off('chat:read', onRead);
         socket.off('chat:room_updated', onRoomUpdated);
         socket.off('chat:room_deleted', onRoomDeleted);
       };

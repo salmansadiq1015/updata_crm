@@ -7,7 +7,7 @@ import { AGENT_STATUSES } from '../constants/ai-constants';
 import { useAiHistory } from '../hooks/use-ai-history';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-export function AiAssistantButton() {
+export function AiAssistantButton({ className }) {
   const { t } = useLanguage();
   const openPanel  = useAiStore((s) => s.openPanel);
   const isPanelOpen = useAiStore((s) => s.isPanelOpen);
@@ -32,7 +32,8 @@ export function AiAssistantButton() {
         'shadow-[0_20px_60px_rgba(14,165,233,0.22),0_0_0_6px_rgba(139,92,246,0.12)]',
         'transition-all duration-200 hover:scale-105 hover:shadow-[0_24px_70px_rgba(14,165,233,0.28),0_0_0_8px_rgba(139,92,246,0.15)] active:scale-95',
         hasActiveRun && 'animate-pulse ring-4 ring-cyan-300/25',
-        isPanelOpen && 'opacity-0 pointer-events-none'
+        isPanelOpen && 'opacity-0 pointer-events-none',
+        className
       )}
     >
       <Bot className="h-6 w-6" />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { FullPageSpinner } from '@/shared/components/loading-spinner';
@@ -13,6 +13,13 @@ import { registerServiceWorker } from '@/modules/mobile/lib/sw-registration';
 import { requestPersistentStorage } from '@/modules/mobile/db/cleanup';
 import { cacheTokensForOffline } from '@/modules/mobile/lib/auth-offline';
 import { getSocket, disconnectSocket } from '@/modules/mobile/lib/websocket-client';
+
+const AiAssistantButton = lazy(() =>
+  import('@/modules/ai/components/ai-assistant-button').then((m) => ({ default: m.AiAssistantButton }))
+);
+const AiAssistantPanel = lazy(() =>
+  import('@/modules/ai/components/panel/ai-assistant-panel').then((m) => ({ default: m.AiAssistantPanel }))
+);
 
 export default function MobileLayout({ children }) {
   const router = useRouter();
@@ -57,6 +64,10 @@ export default function MobileLayout({ children }) {
       </main>
 
       <FloatingTimerWidget />
+      <Suspense fallback={null}>
+        <AiAssistantButton className="bottom-24 right-4" />
+        <AiAssistantPanel />
+      </Suspense>
       <BottomNav />
       <InstallPrompt />
     </div>

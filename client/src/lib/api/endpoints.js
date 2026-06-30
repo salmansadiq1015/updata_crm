@@ -5,6 +5,7 @@ export const ENDPOINTS = Object.freeze({
   },
   DASHBOARD: {
     STATS: '/dashboard/stats',
+    ANALYTICS: '/dashboard/analytics',
   },
   AUTH: {
     LOGIN: '/auth/login',
@@ -547,6 +548,10 @@ export const ENDPOINTS = Object.freeze({
   },
   ACCOUNTING: {
     DASHBOARD: '/accounting/dashboard',
+    ENTITIES: '/accounting/entities',
+    ENTITY_BY_ID: (id) => `/accounting/entities/${id}`,
+    ENTITY_ACTIVATE: (id) => `/accounting/entities/${id}/activate`,
+    ENTITY_DEACTIVATE: (id) => `/accounting/entities/${id}/deactivate`,
     SEARCH: '/accounting/search',
     EXCHANGE_RATES: '/accounting/exchange-rates',
     EXCHANGE_RATE_RESOLVE: '/accounting/exchange-rates/resolve',
@@ -583,6 +588,11 @@ export const ENDPOINTS = Object.freeze({
     RECURRING_TRANSACTION_PAUSE: (id) => `/accounting/recurring-transactions/${id}/pause`,
     RECURRING_TRANSACTION_ARCHIVE: (id) => `/accounting/recurring-transactions/${id}/archive`,
     RECURRING_TRANSACTION_RUN: (id) => `/accounting/recurring-transactions/${id}/run`,
+    INVENTORY_VALUATION: '/accounting/inventory/valuation',
+    INVENTORY_MOVEMENTS: '/accounting/inventory/movements',
+    INVENTORY_ENTRIES: '/accounting/inventory/entries',
+    INVENTORY_POST_MOVEMENT: (movementId) => `/accounting/inventory/movements/${movementId}/post`,
+    INVENTORY_POST_PERIOD: '/accounting/inventory/post-period',
     // Chart of Accounts
     ACCOUNTS: '/accounting/accounts',
     ACCOUNT_TREE: '/accounting/accounts/tree',

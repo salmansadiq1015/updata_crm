@@ -71,6 +71,7 @@ export const queryKeys = {
   },
   dashboard: {
     stats: () => ['dashboard', 'stats'],
+    analytics: (filters) => ['dashboard', 'analytics', filters],
   },
   platform: {
     health: () => ['platform', 'health'],
@@ -299,6 +300,7 @@ export const queryKeys = {
     quotationTemplateDetail: (id) => ['qop', 'quotation-templates', 'detail', id],
     quotationTemplateCategories: () => ['qop', 'quotation-templates', 'categories'],
     recurringItems: (params) => ['qop', 'recurring-items', params],
+    numberSequences: () => ['qop', 'numbering-sequences'],
   },
   tasks: {
     all: () => ['tasks'],
@@ -322,6 +324,7 @@ export const queryKeys = {
     rooms:    ()       => ['chat', 'rooms'],
     room:     (id)     => ['chat', 'room', id],
     messages: (roomId) => ['chat', 'messages', roomId],
+    search:   (params) => ['chat', 'search', params],
   },
   ai: {
     all:          ()         => ['ai'],

@@ -133,8 +133,8 @@ describe('accounting export validation', () => {
       startDate: '2026-05-01',
       endDate: '2026-05-31',
     });
-    expect(csv.split('\n')[0]).toBe('EntryNumber,EntryDate,DebitAccount,DebitAccountName,CreditAccount,CreditAccountName,Amount,Currency,Description,ReferenceType,ReferenceId,CreatedByEmail');
-    expect(csv).toContain('42,2026-05-13,1020,"Bank, CHF",1100,Receivables,1500.00,CHF,"\'=Imported invoice, check",AR_PAYMENT,507f1f77bcf86cd799439011,finance@example.test');
+    expect(csv.split('\n')[0]).toBe('EntryNumber,EntryDate,CompanyId,BranchId,DebitAccount,DebitAccountName,CreditAccount,CreditAccountName,Amount,Currency,Description,ReferenceType,ReferenceId,CreatedByEmail');
+    expect(csv).toContain('42,2026-05-13,,,1020,"Bank, CHF",1100,Receivables,1500.00,CHF,"\'=Imported invoice, check",AR_PAYMENT,507f1f77bcf86cd799439011,finance@example.test');
   });
 
   test('builds account overview with debit-normal running balance and CSV export', async () => {

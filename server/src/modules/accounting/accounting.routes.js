@@ -18,6 +18,8 @@ import taxRoutes from './tax.routes.js';
 import fixedAssetRoutes from './fixedAsset.routes.js';
 import budgetRoutes from './budget.routes.js';
 import recurringTransactionRoutes from './recurringTransaction.routes.js';
+import inventoryAccountingRoutes from './inventoryAccounting.routes.js';
+import accountingEntityRoutes from './accountingEntity.routes.js';
 
 /**
  * Accounting route aggregator.
@@ -43,15 +45,19 @@ import recurringTransactionRoutes from './recurringTransaction.routes.js';
  *   /api/v1/accounting/assets         - fixed asset register and depreciation
  *   /api/v1/accounting/budgets        - budget planning and budget-vs-actual
  *   /api/v1/accounting/recurring-transactions - recurring journals, bills, and invoices
+ *   /api/v1/accounting/inventory      - inventory valuation and stock movement postings
+ *   /api/v1/accounting/entities       - accounting company and branch master data
  */
 const router = Router();
 
 router.use('/search', accountingSearchRoutes);
+router.use('/entities', accountingEntityRoutes);
 router.use('/exchange-rates', exchangeRateRoutes);
 router.use('/tax', taxRoutes);
 router.use('/assets', fixedAssetRoutes);
 router.use('/budgets', budgetRoutes);
 router.use('/recurring-transactions', recurringTransactionRoutes);
+router.use('/inventory', inventoryAccountingRoutes);
 router.use('/accounts', accountRoutes);
 router.use('/account-mappings', accountMappingRoutes);
 router.use('/journal', journalEntryRoutes);

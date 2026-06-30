@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import {
-  accountingSearchService, chartService, dashboardService, journalService, apService, arService, bankService, accDocService,
+  accountingEntityService, accountingSearchService, chartService, dashboardService, journalService, apService, arService, bankService, accDocService,
   cashService, reconciliationService, openItemsService, reportsService,
-  exchangeRateService, fiscalPeriodService, taxService, fixedAssetService, budgetService, recurringTransactionService,
+  exchangeRateService, fiscalPeriodService, taxService, fixedAssetService, budgetService, recurringTransactionService, inventoryAccountingService,
 } from '../services/accounting-service';
 
 export function useAccountingDashboard(params = {}) {
@@ -203,6 +203,33 @@ export function useRecurringTransactionRuns(params = {}) {
     queryFn: () => recurringTransactionService.runs(params),
     select: (r) => Array.isArray(r.data) ? r.data : [],
     staleTime: 15 * 1000,
+  });
+}
+
+export function useInventoryValuation(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'inventory-valuation', params],
+    queryFn: () => inventoryAccountingService.valuation(params),
+    select: (r) => r.data,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useInventoryMovements(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'inventory-movements', params],
+    queryFn: () => inventoryAccountingService.movements(params),
+    select: (r) => r.data,
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useInventoryAccountingEntries(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'inventory-entries', params],
+    queryFn: () => inventoryAccountingService.entries(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 30 * 1000,
   });
 }
 
@@ -504,6 +531,24 @@ export function useAccDocumentOcrResult(id) {
   return useQuery({
     queryKey: ['accounting', 'document-ocr-result', id],
     queryFn: () => accDocService.getOcrResult(id),
+    enabled: !!id,
+    select: (r) => r.data,
+  });
+}
+
+export function useAccountingEntities(params = {}) {
+  return useQuery({
+    queryKey: ['accounting', 'entities', params],
+    queryFn: () => accountingEntityService.list(params),
+    select: (r) => Array.isArray(r.data) ? r.data : [],
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useAccountingEntity(id) {
+  return useQuery({
+    queryKey: ['accounting', 'entity', id],
+    queryFn: () => accountingEntityService.getById(id),
     enabled: !!id,
     select: (r) => r.data,
   });

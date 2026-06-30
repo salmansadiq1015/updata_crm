@@ -16,6 +16,7 @@ const INTENT_TO_WORKFLOW = {
   create_customer: 'FIELD_SERVICE_AGENT',
   create_task: 'FIELD_SERVICE_AGENT',
   update_task: 'FIELD_SERVICE_AGENT',
+  create_project: 'FIELD_SERVICE_AGENT',
   send_notification: 'NOTIFICATION',
   create_order: 'FIELD_SERVICE_AGENT',
   update_order: 'FIELD_SERVICE_AGENT',
@@ -28,8 +29,12 @@ const INTENT_TO_WORKFLOW = {
   record_time: 'FIELD_SERVICE_AGENT',
   analyze_workforce: 'FIELD_SERVICE_AGENT',
   search_customer: 'FIELD_SERVICE_AGENT',
+  search_projects: 'FIELD_SERVICE_AGENT',
+  search_orders: 'FIELD_SERVICE_AGENT',
+  search_documents: 'FIELD_SERVICE_AGENT',
   create_quotation: 'FIELD_SERVICE_AGENT',
   create_invoice: 'FIELD_SERVICE_AGENT',
+  create_task_reminder: 'FIELD_SERVICE_AGENT',
 };
 
 class AgentService {
@@ -57,7 +62,7 @@ class AgentService {
       const response = await llm.invoke([
         {
           role: 'system',
-          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_customer, create_task, update_task, send_notification, create_order, update_order, create_assignment, reschedule_assignment, create_report, update_project, create_note, send_chat_message, record_time, analyze_workforce, search_customer, create_quotation, create_invoice, general>", "confidence": 0.0-1.0}',
+          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_customer, create_task, update_task, create_project, send_notification, create_order, update_order, create_assignment, reschedule_assignment, create_report, update_project, create_note, send_chat_message, record_time, analyze_workforce, search_customer, search_projects, search_orders, search_documents, create_quotation, create_invoice, create_task_reminder, general>", "confidence": 0.0-1.0}',
         },
         { role: 'user', content: input },
       ]);
@@ -71,14 +76,20 @@ class AgentService {
   _classifyIntentHeuristic(input) {
     const text = String(input || '').toLowerCase();
     const has = (...terms) => terms.some((term) => text.includes(term));
+    const isSearch = has('show', 'find', 'search', 'lookup', 'look up', 'suche', 'zeige');
+    if (isSearch && has('document', 'documents', 'file', 'files', 'pdf', 'dokument', 'datei')) return 'search_documents';
+    if (isSearch && has('project', 'projects', 'projekt', 'projekte')) return 'search_projects';
+    if (isSearch && has('order', 'orders', 'job', 'jobs', 'auftrag', 'auftraege')) return 'search_orders';
     if (has('quotation', 'quote', 'offerte', 'angebot')) return 'create_quotation';
     if (has('invoice', 'rechnung')) return 'create_invoice';
+    if (has('reminder', 'remind me', 'notify me', 'erinnerung', 'erinnere')) return 'create_task_reminder';
     if (has('service report', 'work report', 'rapport', 'bericht')) return 'create_report';
     if (has('chat', 'message', 'nachricht', 'send to', 'schreib')) return 'send_chat_message';
     if (has('workforce', 'absence', 'absences', 'leave', 'vacation', 'availability', 'overtime', 'deficit', 'kapazität', 'kapazitaet', 'abwesenheit', 'ferien', 'überzeit', 'ueberzeit')) return 'analyze_workforce';
     if (has('working hour', 'hours', 'time entry', 'zeit', 'stunden')) return 'record_time';
     if (has('reschedule', 'move appointment', 'verschieb')) return 'reschedule_assignment';
     if (has('schedule', 'appointment', 'assign', 'plan', 'termin', 'zuweisen')) return 'create_assignment';
+    if (has('project', 'projekt') && has('create', 'new', 'add', 'erstelle', 'neues', 'neuen', 'anlegen')) return 'create_project';
     if (has('project', 'projekt') && has('status', 'update', 'set', 'change', 'aktualisier')) return 'update_project';
     if (has('order', 'job', 'auftrag')) return has('update', 'status', 'change', 'set') ? 'update_order' : 'create_order';
     if (has('note', 'notiz', 'documentation', 'dokumentation')) return 'create_note';

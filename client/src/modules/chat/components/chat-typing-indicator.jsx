@@ -4,15 +4,15 @@ import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 export function ChatTypingIndicator({ typingUsers = [] }) {
-  const { language } = useLanguage();
+  const { t } = useLanguage();
   const count = typingUsers.length;
 
   let label = '';
   if (count === 1) {
     const name = typingUsers[0]?.userName ?? String(typingUsers[0]);
-    label = language === 'de' ? `${name} schreibt...` : `${name} is typing...`;
+    label = t('chat.typingSingle', '{name} is typing...', { name });
   } else if (count > 1) {
-    label = language === 'de' ? 'Mehrere Personen schreiben...' : 'Several people are typing...';
+    label = t('chat.typingMultiple', 'Several people are typing...');
   }
 
   return (

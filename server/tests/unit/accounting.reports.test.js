@@ -72,6 +72,38 @@ describe('accounting reports', () => {
     ]);
   });
 
+  test('applies company and branch scope to profit and loss aggregation', async () => {
+    const accounts = [
+      { _id: 'revenue-1', accountNumber: '3400', name: 'Sales', type: 'REVENUE' },
+      { _id: 'expense-1', accountNumber: '4000', name: 'Materials', type: 'EXPENSE' },
+    ];
+    const { service, JournalEntry } = await loadReportsService({
+      accounts,
+      aggregateResult: [{
+        debits: [],
+        credits: [{ _id: 'revenue-1', total: 1200 }],
+      }],
+    });
+
+    const report = await service.getProfitLoss({
+      startDate: '2026-01-01',
+      endDate: '2026-01-31',
+      currency: 'CHF',
+      companyId: 'company-1',
+      branchId: 'branch-1',
+    });
+
+    expect(JournalEntry.aggregate).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({
+        $match: expect.objectContaining({
+          companyId: 'company-1',
+          branchId: 'branch-1',
+        }),
+      }),
+    ]));
+    expect(report.scope).toEqual({ company: 'company-1', branch: 'branch-1' });
+  });
+
   test('exports profit and loss CSV with summary rows', async () => {
     const { service } = await loadReportsService({
       accounts: [

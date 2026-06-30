@@ -1,112 +1,115 @@
 'use client';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Users } from 'lucide-react';
-import { format, isToday, isThisWeek } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
+import { Users, BriefcaseBusiness, UserRound, Hash, Building2 } from 'lucide-react';
+import { isToday, isThisWeek } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { usePresenceStore } from '@/stores/presence-store';
+import {
+  getInitials,
+  getOtherMember,
+  getRoomDisplayName,
+  getRoomKindLabel,
+  stableColor,
+} from '../utils/chat-room-utils';
 
-// Deterministic color from a string
-const COLORS = ['#e53935','#d81b60','#8e24aa','#3949ab','#1e88e5','#00897b','#43a047','#fb8c00','#6d4c41','#546e7a'];
-function nameColor(str) {
-  if (!str) return COLORS[0];
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
-  return COLORS[h % COLORS.length];
-}
-
-function formatTs(date) {
+function formatTs(date, locale) {
   if (!date) return '';
-  const d = new Date(date);
-  if (isToday(d)) return format(d, 'HH:mm');
-  if (isThisWeek(d)) return format(d, 'EEE');
-  return format(d, 'dd/MM/yy');
+  const value = new Date(date);
+  if (isToday(value)) {
+    return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(value);
+  }
+  if (isThisWeek(value)) {
+    return new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(value);
+  }
+  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: '2-digit' }).format(value);
 }
 
-function getDisplayName(room, currentUserId) {
-  if (room.roomType === 'DM') {
-    const other = room.members?.find(
-      (m) => String(m.userId?._id || m.userId) !== String(currentUserId)
-    );
-    if (other?.userId?.firstName) {
-      return `${other.userId.firstName} ${other.userId.lastName ?? ''}`.trim();
-    }
-    return 'Direct Message';
+function RoomTypeIcon({ room, className }) {
+  if (room.roomType === 'DM') return <UserRound className={className} />;
+  if (room.roomType === 'PROJECT' || room.roomType === 'ORDER' || room.projectId || room.orderId) {
+    return <BriefcaseBusiness className={className} />;
   }
-  if (room.roomType === 'GROUP') return room.name || 'Group';
-  if (room.roomType === 'PROJECT') {
-    return room.project?.customerName
-      ? `${room.project.customerName} · #${room.project.orderNumber}`
-      : 'Project Chat';
-  }
-  return 'Chat';
+  if (room.roomType === 'TEAM') return <Hash className={className} />;
+  if (room.roomType === 'DEPARTMENT') return <Building2 className={className} />;
+  return <Users className={className} />;
+}
+
+function getPreview(room, t) {
+  const source = room.lastMessageText || room.description || '';
+  if (!source) return room.roomType === 'DM' ? t('chat.directConversation', 'Direct conversation') : getRoomKindLabel(room, t);
+  return source.length > 54 ? `${source.slice(0, 54)}...` : source;
 }
 
 export function ChatSidebarItem({ room, isActive, currentUserId, onClick }) {
-  const onlineIds = usePresenceStore((s) => s.onlineIds);
-  const displayName = getDisplayName(room, currentUserId);
-  const timestamp = formatTs(room.lastMessageAt);
-  const preview = room.lastMessageText
-    ? room.lastMessageText.slice(0, 42) + (room.lastMessageText.length > 42 ? '…' : '')
-    : '';
+  const { locale, t } = useLanguage();
+  const onlineIds = usePresenceStore((state) => state.onlineIds);
+  const displayName = getRoomDisplayName(room, currentUserId, t);
+  const timestamp = formatTs(room.lastMessageAt, locale);
+  const preview = getPreview(room, t);
   const unread = room.unreadCount ?? 0;
-  const online = room.roomType === 'DM'
-    ? (() => {
-        const other = room.members?.find(
-          (m) => String(m.userId?._id || m.userId) !== String(currentUserId)
-        );
-        const otherId = String(other?.userId?._id || other?.userId || '');
-        return otherId ? onlineIds.has(otherId) : false;
-      })()
-    : false;
-  const bgColor = nameColor(displayName);
-  const initials = displayName.split(' ').slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
-
+  const isUnread = unread > 0;
+  const other = room.roomType === 'DM' ? getOtherMember(room, currentUserId) : null;
+  const otherId = String(other?.userId?._id || other?.userId || '');
+  const online = otherId ? onlineIds.has(otherId) : false;
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-3 px-3 py-3 text-left transition-colors',
-        'hover:bg-muted/40 border-l-[3px]',
-        isActive
-          ? 'bg-primary/[0.07] border-l-primary'
-          : 'border-l-transparent'
+        'group w-full px-2 py-1.5 text-left outline-none transition-colors',
+        'focus-visible:ring-2 focus-visible:ring-ring'
       )}
     >
-      {/* Avatar */}
-      <div className="relative shrink-0">
-        <Avatar className="h-11 w-11">
-          <AvatarFallback style={{ backgroundColor: bgColor }} className="text-white font-semibold text-sm">
-            {room.roomType === 'GROUP'
-              ? <Users className="h-5 w-5" />
-              : initials}
-          </AvatarFallback>
-        </Avatar>
-        {online && (
-          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-[#00a884] ring-2 ring-background" />
+      <div
+        className={cn(
+          'flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition-colors',
+          isActive
+            ? 'border-primary/45 bg-primary/10 shadow-sm'
+            : 'border-transparent hover:border-border/70 hover:bg-muted/45'
         )}
-        {room.roomType === 'GROUP' && (
-          <span className="absolute -bottom-0.5 -right-0.5 bg-primary/80 rounded-full p-0.5">
-            <Users className="h-2.5 w-2.5 text-white" />
-          </span>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-1">
-          <span className={cn('text-sm truncate', isActive ? 'font-bold' : 'font-semibold')}>
-            {displayName}
-          </span>
-          <span className="text-[11px] text-muted-foreground shrink-0">{timestamp}</span>
-        </div>
-        <div className="flex items-center justify-between gap-1 mt-0.5">
-          <span className="text-xs text-muted-foreground truncate">{preview || ' '}</span>
-          {unread > 0 && (
-            <span className="shrink-0 min-w-[20px] h-5 px-1.5 text-[10px] font-semibold rounded-full bg-[#00a884] text-white flex items-center justify-center">
-              {unread > 99 ? '99+' : unread}
+      >
+        <div className="relative shrink-0">
+          <Avatar className="h-11 w-11 ring-1 ring-border/50">
+            <AvatarFallback style={{ backgroundColor: stableColor(displayName) }} className="text-sm font-semibold text-white">
+              {room.roomType === 'DM' ? getInitials(displayName) : <RoomTypeIcon room={room} className="h-5 w-5" />}
+            </AvatarFallback>
+          </Avatar>
+          {online && (
+            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-card" />
+          )}
+          {room.roomType !== 'DM' && (
+            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-background ring-1 ring-border">
+              <RoomTypeIcon room={room} className="h-2.5 w-2.5 text-primary" />
             </span>
           )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className={cn('truncate text-sm', isUnread || isActive ? 'font-semibold' : 'font-medium')}>
+              {displayName}
+            </span>
+            <span className={cn('shrink-0 text-[11px] tabular-nums', isUnread ? 'font-medium text-primary' : 'text-muted-foreground')}>
+              {timestamp}
+            </span>
+          </div>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span className={cn('truncate text-xs', isUnread ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+              {preview}
+            </span>
+            {isUnread ? (
+              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            ) : (
+              <Badge variant="secondary" className="hidden shrink-0 rounded-full text-[10px] font-medium group-hover:inline-flex">
+                {getRoomKindLabel(room, t)}
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
     </button>

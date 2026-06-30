@@ -5,6 +5,12 @@ import {
   buildCursorResponse,
 } from '../../shared/utils/pagination.js';
 
+function applyDimensionFilters(filter, filters = {}) {
+  if (filters.companyId) filter.companyId = filters.companyId;
+  if (filters.branchId) filter.branchId = filters.branchId;
+  return filter;
+}
+
 class JournalEntryRepository {
   async create(data, options = {}) {
     const entry = new JournalEntry(data);
@@ -32,6 +38,7 @@ class JournalEntryRepository {
     }
     if (filters.referenceType) filter.referenceType = filters.referenceType;
     if (filters.currency) filter.currency = filters.currency;
+    applyDimensionFilters(filter, filters);
     if (filters.debitAccountId) filter.debitAccountId = filters.debitAccountId;
     if (filters.creditAccountId) filter.creditAccountId = filters.creditAccountId;
     if (filters.accountId) {
@@ -56,8 +63,8 @@ class JournalEntryRepository {
     return buildCursorResponse(docs, limit, sortBy);
   }
 
-  async findForExport({ startDate, endDate, limit = 100000 }) {
-    const filter = {};
+  async findForExport({ startDate, endDate, companyId, branchId, limit = 100000 }) {
+    const filter = applyDimensionFilters({}, { companyId, branchId });
     if (startDate || endDate) {
       filter.entryDate = {};
       if (startDate) filter.entryDate.$gte = new Date(startDate);

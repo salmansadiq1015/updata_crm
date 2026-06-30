@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   BrainCircuit,
   ClipboardList,
@@ -27,6 +27,7 @@ import { AiChatInput } from '../chat/ai-chat-input';
 import { AiChatThread } from '../chat/ai-chat-thread';
 import { AiVoiceStatusBar } from '../voice/ai-voice-status-bar';
 import { AiHelpOverlay } from '../ai-help-overlay';
+import { buildAiRouteContext } from '../../utils/ai-route-context';
 import {
   AGENT_STATUSES,
   SESSION_TYPES,
@@ -51,6 +52,30 @@ const PANEL_ACTIONS = [
     fallbackPrompt: 'Create a draft service report for the current order: boiler inspected, burner cleaned, ignition electrode replaced, system running again.',
   },
   {
+    key: 'project',
+    icon: ClipboardList,
+    label: 'ai.panel.action.project',
+    fallbackLabel: 'Create project',
+    prompt: 'ai.panel.prompt.project',
+    fallbackPrompt: 'Create a project for customer Mueller: heating modernization, planned start tomorrow.',
+  },
+  {
+    key: 'quotation',
+    icon: PenSquare,
+    label: 'ai.panel.action.quotation',
+    fallbackLabel: 'Create quote',
+    prompt: 'ai.panel.prompt.quotation',
+    fallbackPrompt: 'Create a draft quotation for customer Mueller: boiler service for CHF 500.',
+  },
+  {
+    key: 'invoice',
+    icon: FileText,
+    label: 'ai.panel.action.invoice',
+    fallbackLabel: 'Create invoice',
+    prompt: 'ai.panel.prompt.invoice',
+    fallbackPrompt: 'Create an invoice from the current order with a due date in 30 days.',
+  },
+  {
     key: 'address',
     icon: MapPinned,
     label: 'ai.panel.action.address',
@@ -65,6 +90,22 @@ const PANEL_ACTIONS = [
     fallbackLabel: 'Search customer',
     prompt: 'ai.panel.prompt.search',
     fallbackPrompt: 'Search customer Mueller and show the best CRM matches.',
+  },
+  {
+    key: 'documents',
+    icon: Search,
+    label: 'ai.panel.action.documents',
+    fallbackLabel: 'Search docs',
+    prompt: 'ai.panel.prompt.documents',
+    fallbackPrompt: 'Search documents for service report Mueller.',
+  },
+  {
+    key: 'reminder',
+    icon: Zap,
+    label: 'ai.panel.action.reminder',
+    fallbackLabel: 'Reminder',
+    prompt: 'ai.panel.prompt.reminder',
+    fallbackPrompt: 'Remind me about this task tomorrow at 09:00.',
   },
   {
     key: 'status',
@@ -111,7 +152,7 @@ function AiPanelChatWelcome({ onSuggestionClick }) {
           <div className="min-w-0">
             <p className="text-base font-semibold text-white">{t('ai.panel.chatTitle', 'Field-service assistant')}</p>
             <p className="mt-1 text-sm leading-6 text-slate-300">
-              {t('ai.panel.chatSubtitle', 'Create orders, dictate reports, capture addresses, search CRM, and confirm ERP actions from one conversation.')}
+              {t('ai.panel.chatSubtitle', 'Create work, draft documents, search authorized ERP data, schedule teams, and confirm actions from one conversation.')}
             </p>
           </div>
         </div>
@@ -136,11 +177,13 @@ function AiPanelChatWelcome({ onSuggestionClick }) {
 
 export function AiPanelChat({ onClose }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { t } = useLanguage();
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [currentThreadId, setCurrentThreadId] = useState(() => newThreadId());
   const [showHelp, setShowHelp] = useState(false);
   const [localRuns, setLocalRuns] = useState([]);
+  const routeContext = useMemo(() => buildAiRouteContext(pathname), [pathname]);
 
   const handleThreadSelected = useCallback((id) => {
     setSelectedThreadId((current) => (current === id ? current : id));
@@ -157,6 +200,7 @@ export function AiPanelChat({ onClose }) {
   const chat = useAiChat({
     selectedThreadId,
     currentThreadId,
+    context: routeContext,
     onThreadSelected: handleThreadSelected,
     onThreadDeleted: handleNewChat,
   });

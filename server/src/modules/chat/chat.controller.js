@@ -164,7 +164,7 @@ class ChatController {
   async refreshJoinCode(req, res, next) {
     try {
       const result = await chatRoomService.refreshJoinCode(req.params.roomId, req.user._id);
-      res.json(result);
+      res.success({ data: result });
     } catch (err) { next(err); }
   }
 }

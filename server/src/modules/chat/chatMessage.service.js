@@ -10,6 +10,11 @@ function userIdOf(user) {
   return String(user?._id ?? user);
 }
 
+function idOf(value) {
+  if (!value) return null;
+  return String(value._id ?? value);
+}
+
 function userNameOf(user) {
   return `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Unknown';
 }
@@ -58,8 +63,8 @@ const chatMessageService = {
 
     const message = await ChatMessage.create({
       roomId,
-      projectId: room.projectId || null,
-      orderId: room.orderId || null,
+      projectId: idOf(room.projectId) || null,
+      orderId: idOf(room.orderId) || null,
       senderId,
       senderName: userNameOf(sender),
       messageType: data.messageType || 'TEXT',
@@ -100,8 +105,8 @@ const chatMessageService = {
 
     eventBus.publish(EVENT_TYPES.MOBILE_CHAT_MESSAGE_SENT, {
       messageId: message._id,
-      projectId: room.projectId || null,
-      orderId: room.orderId || null,
+      projectId: idOf(room.projectId) || null,
+      orderId: idOf(room.orderId) || null,
       roomId,
       senderId,
       senderName: message.senderName,

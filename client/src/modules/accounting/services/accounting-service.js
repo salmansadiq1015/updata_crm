@@ -69,6 +69,15 @@ export const dashboardService = {
   snapshot: (params = {}) => apiClient.get(E.DASHBOARD, { params }),
 };
 
+export const accountingEntityService = {
+  list:       (params = {}) => apiClient.get(E.ENTITIES, { params }),
+  getById:    (id)          => apiClient.get(E.ENTITY_BY_ID(id)),
+  create:     (data)        => apiClient.post(E.ENTITIES, data),
+  update:     (id, data)    => apiClient.put(E.ENTITY_BY_ID(id), data),
+  activate:   (id)          => apiClient.post(E.ENTITY_ACTIVATE(id)),
+  deactivate: (id)          => apiClient.post(E.ENTITY_DEACTIVATE(id)),
+};
+
 export const accountingSearchService = {
   search: (params = {}) => apiClient.get(E.SEARCH, { params }),
 };
@@ -129,6 +138,14 @@ export const recurringTransactionService = {
   archive:  (id)          => apiClient.post(E.RECURRING_TRANSACTION_ARCHIVE(id)),
   run:      (id, data = {}) => apiClient.post(E.RECURRING_TRANSACTION_RUN(id), data),
   runDue:   (data = {})   => apiClient.post(E.RECURRING_TRANSACTION_RUN_DUE, data),
+};
+
+export const inventoryAccountingService = {
+  valuation:    (params = {}) => apiClient.get(E.INVENTORY_VALUATION, { params }),
+  movements:    (params = {}) => apiClient.get(E.INVENTORY_MOVEMENTS, { params }),
+  entries:      (params = {}) => apiClient.get(E.INVENTORY_ENTRIES, { params }),
+  postMovement: (movementId, data = {}) => apiClient.post(E.INVENTORY_POST_MOVEMENT(movementId), data),
+  postPeriod:   (data = {})   => apiClient.post(E.INVENTORY_POST_PERIOD, data),
 };
 
 export const journalService = {

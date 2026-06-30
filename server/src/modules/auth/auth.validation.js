@@ -69,6 +69,7 @@ export const auditQuerySchema = {
     endDate: Joi.date().iso(),
     module: Joi.string().trim(),
     email: Joi.string().trim(),
+    search: Joi.string().trim().max(200),
   }),
 };
 
@@ -80,6 +81,9 @@ export const auditExportSchema = {
     result: Joi.string().valid('success', 'failure'),
     startDate: Joi.date().iso(),
     endDate: Joi.date().iso(),
+    module: Joi.string().trim(),
+    email: Joi.string().trim(),
+    search: Joi.string().trim().max(200),
   }),
 };
 

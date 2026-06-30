@@ -1,36 +1,20 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import NextImage from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Paperclip, Smile, Mic, ArrowUp, X, Lock, FileText, Image as ImageIcon, Film, Music, AlertCircle, Loader2 } from 'lucide-react';
+import { Paperclip, Smile, Mic, ArrowUp, X, Lock, FileText, Image as ImageIcon, Film, Music, AlertCircle, Loader2, AtSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { chatService } from '../services/chat-service';
+import { CHAT_FILE_ACCEPTED_TYPES } from '../constants/chat-config';
+import { useChatAttachmentUpload } from '../hooks/use-chat-attachment-upload';
+import { useChatMentions } from '../hooks/use-chat-mentions';
 import { useChatTyping } from '../hooks/use-chat-typing';
+import { formatBytes } from '../utils/chat-file-utils';
 import { ChatReplyPreview } from './chat-reply-preview';
 import { ChatAudioRecorder } from './chat-audio-recorder';
 import { ChatEmojiPicker } from './chat-emoji-picker';
-
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
-
-const ACCEPTED_TYPES = [
-  'image/*', 'video/*', 'audio/*',
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.csv', '.zip',
-].join(',');
-
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getFileType(file) {
-  if (file.type.startsWith('image/')) return 'PHOTO';
-  if (file.type.startsWith('video/')) return 'VIDEO';
-  if (file.type.startsWith('audio/')) return 'AUDIO';
-  return 'DOCUMENT';
-}
 
 function FileTypeIcon({ type, className }) {
   if (type === 'PHOTO') return <ImageIcon className={className} />;
@@ -39,18 +23,32 @@ function FileTypeIcon({ type, className }) {
   return <FileText className={className} />;
 }
 
-export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply, isBlocked, editTarget, onClearEdit }) {
+export function ChatInput({ onSend, isLoading, roomId, room, currentUserId, replyTarget, onClearReply, isBlocked, editTarget, onClearEdit }) {
   const { t } = useLanguage();
   const [text, setText] = useState('');
+  const [draftSourceId, setDraftSourceId] = useState(null);
   const [attachment, setAttachment] = useState(null); // { url, fileId, messageType, name, size, preview }
-  const [uploadProgress, setUploadProgress] = useState(null); // null | 0-100
-  const [uploadError, setUploadError] = useState('');
   const [showRecorder, setShowRecorder] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
   const previewUrlRef = useRef(null);
   const { onKeystroke } = useChatTyping(roomId);
+  const {
+    uploadAttachment,
+    uploadProgress,
+    uploadError,
+    setUploadError,
+    clearUploadState,
+  } = useChatAttachmentUpload();
+  const editTargetId = editTarget?._id || null;
+  const inputValue = editTarget && draftSourceId !== editTargetId ? (editTarget.content || '') : text;
+  const {
+    suggestions: mentionSuggestions,
+    registerMention,
+    getMentionIds,
+    clearMentions,
+  } = useChatMentions({ room, currentUserId, value: inputValue });
 
   useEffect(() => {
     return () => {
@@ -58,17 +56,8 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
     };
   }, []);
 
-  const prevEditId = useRef(null);
-  if (editTarget && editTarget._id !== prevEditId.current) {
-    prevEditId.current = editTarget._id;
-    setText(editTarget.content || '');
-  }
-  if (!editTarget && prevEditId.current) {
-    prevEditId.current = null;
-  }
-
   const uploading = uploadProgress !== null;
-  const canSend = (text.trim().length > 0 || attachment) && !isLoading && !uploading;
+  const canSend = (inputValue.trim().length > 0 || attachment) && !isLoading && !uploading;
 
   const clearAttachment = useCallback(() => {
     if (previewUrlRef.current) {
@@ -76,26 +65,29 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
       previewUrlRef.current = null;
     }
     setAttachment(null);
-    setUploadError('');
-    setUploadProgress(null);
-  }, []);
+    clearUploadState();
+  }, [clearUploadState]);
 
   const handleSend = useCallback(async () => {
     if (!canSend) return;
+    const content = inputValue.trim();
     const payload = editTarget
-      ? { content: text.trim(), messageType: 'TEXT' }
+      ? { content, messageType: 'TEXT' }
       : {
           messageType: attachment?.messageType || 'TEXT',
-          content: text.trim() || '',
+          content: content || '',
           attachmentUrl: attachment?.url,
           attachmentFileId: attachment?.fileId,
           replyToId: replyTarget?._id,
+          mentions: getMentionIds(content),
         };
-    setText('');
-    clearAttachment();
-    textareaRef.current?.focus();
     await onSend(payload);
-  }, [canSend, text, attachment, replyTarget, editTarget, onSend, clearAttachment]);
+    setText('');
+    setDraftSourceId(null);
+    clearAttachment();
+    clearMentions();
+    textareaRef.current?.focus();
+  }, [canSend, inputValue, attachment, replyTarget, editTarget, onSend, clearAttachment, clearMentions, getMentionIds]);
 
   const handleKeyDown = useCallback(e => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -112,40 +104,18 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
 
     setUploadError('');
 
-    if (file.size > MAX_FILE_SIZE) {
-      setUploadError(t('chat.fileTooLarge', 'File too large. Maximum size is 25 MB (your file: {size})', { size: formatBytes(file.size) }));
-      return;
-    }
-
-    const type = getFileType(file);
-
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    const preview = type === 'PHOTO' ? URL.createObjectURL(file) : null;
+    const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
     previewUrlRef.current = preview;
 
-    setUploadProgress(0);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('module', 'chat');
-
-      const res = await chatService.uploadFile(formData, (pct) => setUploadProgress(pct));
-      const url = res.attachmentUrl || res.url || res.fileUrl;
-      const fileId = res._id || res.id || res.attachmentFileId;
-
-      setAttachment({ url, fileId, messageType: type, name: file.name, size: file.size, preview });
-    } catch (err) {
-      if (preview) {
-        URL.revokeObjectURL(preview);
-        previewUrlRef.current = null;
-      }
-      const msg = err?.response?.data?.message ?? t('chat.uploadFailed', 'Upload failed. Please try again.');
-      setUploadError(msg);
-    } finally {
-      setUploadProgress(null);
+    const uploaded = await uploadAttachment(file);
+    if (uploaded) {
+      setAttachment({ ...uploaded, preview });
+    } else if (preview) {
+      URL.revokeObjectURL(preview);
+      previewUrlRef.current = null;
     }
-  }, [t]);
+  }, [setUploadError, uploadAttachment]);
 
   const handleAudioComplete = useCallback(result => {
     setShowRecorder(false);
@@ -155,8 +125,18 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
       attachmentUrl: result.attachmentUrl,
       attachmentFileId: result.attachmentFileId,
       replyToId: replyTarget?._id,
+      mentions: [],
     });
   }, [replyTarget, onSend]);
+
+  const handleMentionSelect = useCallback((member) => {
+    setText(
+      inputValue.replace(/(^|\s)@([^\s@]{0,40})$/, (_, prefix) => `${prefix}@${member.name} `)
+    );
+    setDraftSourceId(editTargetId);
+    registerMention(member);
+    textareaRef.current?.focus();
+  }, [editTargetId, inputValue, registerMention]);
 
   if (isBlocked) {
     return (
@@ -172,7 +152,7 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
       {editTarget && (
         <div className="flex items-center justify-between px-4 pt-2 pb-1 text-xs text-primary">
           <span className="font-medium">{t('chat.editingMessage', 'Editing message')}</span>
-          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => { onClearEdit?.(); setText(''); }}>
+          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => { onClearEdit?.(); setText(''); setDraftSourceId(null); }}>
             <X className="h-3 w-3" />
           </Button>
         </div>
@@ -213,14 +193,17 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
       {attachment && !uploading && (
         <div className="mx-3 mt-2 flex items-center gap-2.5 rounded-xl bg-muted/60 px-2.5 py-2">
           {attachment.messageType === 'PHOTO' && attachment.preview ? (
-            <img
+            <NextImage
               src={attachment.preview}
               alt=""
+              width={40}
+              height={40}
+              unoptimized
               className="h-10 w-10 rounded-lg object-cover shrink-0"
             />
           ) : (
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <FileTypeIcon type={attachment.messageType} className="h-4.5 w-4.5 text-primary" />
+              <FileTypeIcon type={attachment.messageType} className="h-4 w-4 text-primary" />
             </div>
           )}
           <div className="flex-1 min-w-0">
@@ -251,22 +234,48 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
           >
             {uploading
               ? <Loader2 className="h-4 w-4 animate-spin" />
-              : <Paperclip className="h-4.5 w-4.5" />
+              : <Paperclip className="h-4 w-4" />
             }
           </Button>
           <input
             ref={fileInputRef}
             type="file"
             className="hidden"
-            accept={ACCEPTED_TYPES}
+            accept={CHAT_FILE_ACCEPTED_TYPES}
             onChange={handleFileChange}
           />
 
           <div className="relative flex-1">
+            {mentionSuggestions.length > 0 && (
+              <div className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-sm overflow-hidden rounded-2xl border border-border/70 bg-popover shadow-xl">
+                <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  <AtSign className="h-3.5 w-3.5" />
+                  {t('chat.mentionSomeone', 'Mention someone')}
+                </div>
+                <div className="max-h-52 overflow-y-auto p-1">
+                  {mentionSuggestions.map((member) => (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => handleMentionSelect(member)}
+                      className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
+                        {member.name.split(' ').slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('')}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{member.name}</span>
+                        {member.email && <span className="block truncate text-xs text-muted-foreground">{member.email}</span>}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <Textarea
               ref={textareaRef}
-              value={text}
-              onChange={e => { setText(e.target.value); onKeystroke(); }}
+              value={inputValue}
+              onChange={e => { setText(e.target.value); setDraftSourceId(editTargetId); onKeystroke(); }}
               onKeyDown={handleKeyDown}
               placeholder={t('chat.typeMessage')}
               rows={1}
@@ -288,7 +297,7 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
           {canSend ? (
             <Button
               size="icon"
-              className="h-9 w-9 shrink-0 rounded-full bg-[#00a884] hover:bg-[#00a884]/90 text-white"
+              className="h-9 w-9 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleSend}
               disabled={isLoading}
             >
@@ -301,7 +310,7 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
               onClick={() => setShowRecorder(true)}
               disabled={uploading}
             >
-              <Mic className="h-4.5 w-4.5" />
+              <Mic className="h-4 w-4" />
             </Button>
           )}
         </div>
@@ -310,7 +319,12 @@ export function ChatInput({ onSend, isLoading, roomId, replyTarget, onClearReply
       {showPicker && (
         <div className="px-3 pb-2">
           <ChatEmojiPicker
-            onSelect={emoji => { setText(current => current + emoji); setShowPicker(false); textareaRef.current?.focus(); }}
+            onSelect={emoji => {
+              setText(`${inputValue}${emoji}`);
+              setDraftSourceId(editTargetId);
+              setShowPicker(false);
+              textareaRef.current?.focus();
+            }}
             onClose={() => setShowPicker(false)}
           />
         </div>

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { useAiChat } from '../use-ai-chat';
 import { AGENT_STATUSES } from '../../constants/ai-constants';
 
@@ -52,6 +52,10 @@ function wrapper({ children }) {
 }
 
 describe('useAiChat', () => {
+  beforeEach(() => {
+    dispatchMock.mockReset();
+  });
+
   test('keeps failed dispatches visible as retryable pending runs', async () => {
     dispatchMock.mockRejectedValueOnce({
       code: 'NETWORK_ERROR',
@@ -87,6 +91,45 @@ describe('useAiChat', () => {
         message: 'Server not reachable. Please try again.',
         isNetworkError: true,
       },
+    });
+  });
+
+  test('passes current record context through the agent service', async () => {
+    dispatchMock.mockResolvedValueOnce({
+      agentRunId: 'run-1',
+      status: 'pending',
+      threadId: 'thread-1',
+    });
+    const context = {
+      source: 'route',
+      contextModule: 'field-ops',
+      recordType: 'assignment',
+      recordId: '64f000000000000000000010',
+      orderId: '64f000000000000000000010',
+    };
+
+    const { result } = renderHook(
+      () => useAiChat({
+        selectedThreadId: null,
+        currentThreadId: 'thread-1',
+        context,
+        onThreadSelected: vi.fn(),
+        onThreadDeleted: vi.fn(),
+      }),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current.dispatch('create service report for the current order');
+    });
+
+    await waitFor(() => {
+      expect(dispatchMock).toHaveBeenCalledWith(
+        'create service report for the current order',
+        'thread-1',
+        expect.any(String),
+        context,
+      );
     });
   });
 });

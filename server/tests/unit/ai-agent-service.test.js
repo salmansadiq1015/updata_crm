@@ -159,6 +159,13 @@ describe('AgentService.run()', () => {
       workflowType: 'NOTIFICATION',
     }));
   });
+  test('routes project automation intents to the field-service workflow', async () => {
+    await agentService.run('Create a new project for Muster AG', userId, permissions);
+
+    expect(queueManager.addJob).toHaveBeenCalledWith('ai-agent', 'execute', expect.objectContaining({
+      workflowType: 'FIELD_SERVICE_AGENT',
+    }));
+  });
 });
 
 describe('AgentService.confirmRun()', () => {

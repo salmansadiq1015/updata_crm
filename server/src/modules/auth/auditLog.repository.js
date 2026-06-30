@@ -12,6 +12,44 @@ import {
 
 const ALLOWED_SORT_FIELDS = ['timestamp', '_id'];
 
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildAuditFilter(filters = {}) {
+  const filter = {};
+
+  if (filters.userId) filter.userId = filters.userId;
+  if (filters.eventType) filter.eventType = filters.eventType;
+  if (filters.result) filter.result = filters.result;
+  if (filters.module) filter.module = { $regex: escapeRegex(filters.module), $options: 'i' };
+  if (filters.email) filter.email = { $regex: escapeRegex(filters.email), $options: 'i' };
+
+  if (filters.startDate || filters.endDate) {
+    filter.timestamp = {};
+    if (filters.startDate) filter.timestamp.$gte = new Date(filters.startDate);
+    if (filters.endDate) filter.timestamp.$lte = new Date(filters.endDate);
+  }
+
+  if (filters.search) {
+    const search = { $regex: escapeRegex(filters.search), $options: 'i' };
+    filter.$or = [
+      { eventType: search },
+      { email: search },
+      { module: search },
+      { ipAddress: search },
+      { 'details.type': search },
+      { 'details.category': search },
+      { 'details.source': search },
+      { 'details.email': search },
+      { 'details.targetEmail': search },
+      { 'details.targetUserEmail': search },
+    ];
+  }
+
+  return filter;
+}
+
 class AuditLogRepository {
   async create(data) {
     const entry = new AuditLog(data);
@@ -22,29 +60,25 @@ class AuditLogRepository {
    * Cursor-paginated query with filters.
    */
   async findWithCursor({ cursor, limit = 25, sortBy = 'timestamp', sortOrder = 'desc', filters = {} }) {
-    const filter = { ...buildCursorQuery(cursor, sortBy, sortOrder) };
-
-    if (filters.userId) filter.userId = filters.userId;
-    if (filters.eventType) filter.eventType = filters.eventType;
-    if (filters.result) filter.result = filters.result;
-    if (filters.module) filter.module = filters.module;
-    if (filters.email) filter.email = { $regex: filters.email, $options: 'i' };
-
-    // Date range on timestamp
-    if (filters.startDate || filters.endDate) {
-      filter.timestamp = filter.timestamp || {};
-      if (filters.startDate) filter.timestamp.$gte = new Date(filters.startDate);
-      if (filters.endDate) filter.timestamp.$lte = new Date(filters.endDate);
+    const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'timestamp';
+    const filter = buildAuditFilter(filters);
+    const cursorFilter = buildCursorQuery(cursor, safeSortBy, sortOrder);
+    for (const [key, value] of Object.entries(cursorFilter)) {
+      if (key === 'timestamp' && filter.timestamp && typeof value === 'object') {
+        filter.timestamp = { ...filter.timestamp, ...value };
+      } else {
+        filter[key] = value;
+      }
     }
 
-    const sort = buildCursorSort(sortBy, sortOrder);
+    const sort = buildCursorSort(safeSortBy, sortOrder);
 
     const docs = await AuditLog.find(filter)
       .sort(sort)
       .limit(limit + 1)
       .lean();
 
-    return buildCursorResponse(docs, limit, sortBy);
+    return buildCursorResponse(docs, limit, safeSortBy);
   }
 
   /**
@@ -52,16 +86,7 @@ class AuditLogRepository {
    * Returns a Mongoose cursor for memory-efficient streaming.
    */
   findForExport(filters = {}) {
-    const filter = {};
-
-    if (filters.userId) filter.userId = filters.userId;
-    if (filters.eventType) filter.eventType = filters.eventType;
-    if (filters.result) filter.result = filters.result;
-    if (filters.startDate || filters.endDate) {
-      filter.timestamp = {};
-      if (filters.startDate) filter.timestamp.$gte = new Date(filters.startDate);
-      if (filters.endDate) filter.timestamp.$lte = new Date(filters.endDate);
-    }
+    const filter = buildAuditFilter(filters);
 
     return AuditLog.find(filter).sort({ timestamp: -1 }).lean().cursor();
   }

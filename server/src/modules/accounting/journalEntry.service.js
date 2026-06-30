@@ -93,6 +93,8 @@ class JournalEntryService {
       creditAccountId,
       amount,
       currency: options.currency || 'CHF',
+      companyId: options.companyId || null,
+      branchId: options.branchId || null,
       referenceType,
       referenceId,
       createdBy: userId,
@@ -141,6 +143,8 @@ class JournalEntryService {
           creditAccountId: original.debitAccountId._id || original.debitAccountId,
           amount: original.amount,
           currency: original.currency,
+          companyId: original.companyId || null,
+          branchId: original.branchId || null,
           referenceType: 'REVERSAL',
           referenceId: original.referenceId,
           reversalOf: original._id,
@@ -206,11 +210,21 @@ class JournalEntryService {
     );
   }
 
-  async exportCsv({ startDate, endDate }) {
-    const entries = await journalEntryRepository.findForExport({ startDate, endDate });
+  async exportCsv({
+    startDate, endDate, companyId, branchId,
+  }) {
+    const exportQuery = {
+      startDate,
+      endDate,
+    };
+    if (companyId) exportQuery.companyId = companyId;
+    if (branchId) exportQuery.branchId = branchId;
+    const entries = await journalEntryRepository.findForExport(exportQuery);
     const headers = [
       'EntryNumber',
       'EntryDate',
+      'CompanyId',
+      'BranchId',
       'DebitAccount',
       'DebitAccountName',
       'CreditAccount',
@@ -226,6 +240,8 @@ class JournalEntryService {
     const rows = entries.map((entry) => ({
       EntryNumber: entry.entryNumber,
       EntryDate: formatDateOnly(entry.entryDate),
+      CompanyId: entry.companyId || '',
+      BranchId: entry.branchId || '',
       DebitAccount: entry.debitAccountId?.accountNumber || '',
       DebitAccountName: entry.debitAccountId?.name || '',
       CreditAccount: entry.creditAccountId?.accountNumber || '',

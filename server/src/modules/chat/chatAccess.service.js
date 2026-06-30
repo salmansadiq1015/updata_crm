@@ -183,7 +183,7 @@ const chatAccessService = {
 
   async assertLinkedRoomAccess(room, user) {
     if (!room?.projectId && !room?.orderId) return [];
-    return this.assertContextAccess({ projectId: room.projectId, orderId: room.orderId }, user);
+    return this.assertContextAccess({ projectId: idOf(room.projectId), orderId: idOf(room.orderId) }, user);
   },
 
   async hydrateRoomMembers(roomId, memberIds) {

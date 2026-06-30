@@ -10,6 +10,7 @@ export const REFERENCE_TYPES = [
   'FIXED_ASSET_ACQUISITION', 'FIXED_ASSET_DEPRECIATION', 'FIXED_ASSET_DISPOSAL',
   'RECURRING_TRANSACTION',
   'FX_REVALUATION',
+  'INVENTORY_VALUATION',
 ];
 
 export const createJournalSchema = {
@@ -20,6 +21,8 @@ export const createJournalSchema = {
     creditAccountId: objectId.required(),
     amount: Joi.number().min(0.01).required(),
     currency: Joi.string().valid('CHF', 'EUR'),
+    companyId: objectId,
+    branchId: objectId,
     referenceType: Joi.string().valid(...REFERENCE_TYPES).default('MANUAL'),
   }),
 };
@@ -33,7 +36,10 @@ export const listJournalSchema = {
     entryDateFrom: Joi.date().iso(),
     entryDateTo: Joi.date().iso(),
     referenceType: Joi.string().valid(...REFERENCE_TYPES),
+    currency: Joi.string().valid('CHF', 'EUR'),
     accountId: objectId,
+    companyId: objectId,
+    branchId: objectId,
   }),
 };
 
@@ -48,5 +54,7 @@ export const exportJournalSchema = {
   query: Joi.object({
     startDate: Joi.date().iso().required(),
     endDate: Joi.date().iso().required(),
+    companyId: objectId,
+    branchId: objectId,
   }),
 };

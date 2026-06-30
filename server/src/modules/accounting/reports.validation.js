@@ -40,6 +40,8 @@ export const generalLedgerSchema = {
     endDate: Joi.date().iso().min(Joi.ref('startDate')),
     currency,
     accountId: objectId,
+    companyId: objectId,
+    branchId: objectId,
     referenceType: Joi.string().valid(...REFERENCE_TYPES),
   }),
 };

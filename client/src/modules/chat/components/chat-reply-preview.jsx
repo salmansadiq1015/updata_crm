@@ -2,10 +2,12 @@
 
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export function ChatReplyPreview({ message, onClear, className }) {
+  const { t } = useLanguage();
   if (!message) return null;
-  const senderName = message.replyToSenderName || message.senderName || message.sender_name || 'Unknown';
+  const senderName = message.replyToSenderName || message.senderName || message.sender_name || t('common.unknown', 'Unknown');
   const snippet = message.replyToSnippet || message.content || '';
 
   return (

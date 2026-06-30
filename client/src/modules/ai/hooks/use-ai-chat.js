@@ -42,7 +42,7 @@ function buildFailedPendingRun(run, error) {
   };
 }
 
-export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected, onThreadDeleted }) {
+export function useAiChat({ selectedThreadId, currentThreadId, context, onThreadSelected, onThreadDeleted }) {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
   const [pendingRuns, setPendingRuns] = useState([]);
@@ -66,7 +66,9 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
   const latestRun = threadRuns[threadRuns.length - 1] ?? null;
 
   const dispatchMutation = useMutation({
-    mutationFn: ({ input, threadId, correlationId }) => aiAgentService.dispatch(input, threadId, correlationId),
+    mutationFn: ({ input, threadId, correlationId, context: requestContext }) => (
+      aiAgentService.dispatch(input, threadId, correlationId, requestContext)
+    ),
     onSuccess: (result, { threadId, correlationId }) => {
       const resolvedThreadId = result?.threadId || threadId;
       const resolvedRunId = result?.agentRunId || result?._id;
@@ -168,9 +170,10 @@ export function useAiChat({ selectedThreadId, currentThreadId, onThreadSelected,
         input: trimmed,
         threadId: currentThreadId,
         correlationId: nextCorrelationId,
+        context,
       });
     },
-    [dispatchMutation, currentThreadId],
+    [dispatchMutation, currentThreadId, context],
   );
 
   const confirm = useCallback(

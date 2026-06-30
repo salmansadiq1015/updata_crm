@@ -9,6 +9,8 @@ const DEFAULT_PREFIXES = {
   invoice: 'RE',
 };
 
+const ACTIVE_SEQUENCE_FILTER = { isActive: { $ne: false } };
+
 function buildCounterId(documentType, departmentId, resetsAnnually, year) {
   const scope = resetsAnnually ? year : 'all';
   return `qop:${documentType}:${departmentId || 'global'}:${scope}`;
@@ -42,12 +44,14 @@ class QOPCounterService {
       let sequence = await DocumentNumberSequence.findOne({
         documentType,
         departmentId: departmentId || null,
+        ...ACTIVE_SEQUENCE_FILTER,
       }).lean();
 
       if (!sequence && departmentId) {
         sequence = await DocumentNumberSequence.findOne({
           documentType,
           departmentId: null,
+          ...ACTIVE_SEQUENCE_FILTER,
         }).lean();
       }
 

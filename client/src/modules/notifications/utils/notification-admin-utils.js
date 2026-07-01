@@ -1,9 +1,15 @@
 export const NOTIFICATION_ADMIN_CHANNELS = ['PUSH', 'EMAIL', 'WHATSAPP', 'SMS', 'IN_APP'];
 export const NOTIFICATION_ADMIN_STATUSES = ['QUEUED', 'PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'BOUNCED', 'CANCELLED'];
+export const NOTIFICATION_ADMIN_SCHEDULE_STATUSES = ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
 export const NOTIFICATION_ADMIN_CATEGORIES = ['TASK', 'ORDER', 'CHAT', 'SYSTEM', 'FINANCE', 'MAINTENANCE', 'DOCUMENT', 'CRM', 'PROJECT', 'SCHEDULING'];
 export const NOTIFICATION_ADMIN_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'];
 export const NOTIFICATION_ADMIN_LANGUAGES = ['de', 'fr', 'it', 'en'];
 export const NOTIFICATION_ADMIN_PERIODS = ['24h', '7d', '30d'];
+export const NOTIFICATION_ADMIN_HISTORY_LIMIT = 50;
+export const NOTIFICATION_ADMIN_SCHEDULE_LIMIT = 50;
+export const NOTIFICATION_ADMIN_STALE_REVIEW_MINUTES = 60;
+export const NOTIFICATION_ADMIN_STALE_REVIEW_CHANNELS = ['EMAIL', 'WHATSAPP'];
+export const DEFAULT_TEMPLATE_SAMPLE_JSON = '{"customer":{"name":"Muster AG"},"appointment":{"date":"2026-06-23"}}';
 
 export const DEFAULT_TEMPLATE_FORM = Object.freeze({
   id: '',
@@ -61,18 +67,18 @@ export function compactObject(value) {
   );
 }
 
-export function parseJsonObject(raw, label) {
+export function parseJsonObject(raw, label, messages = {}) {
   const text = String(raw || '').trim();
   if (!text) return { data: {} };
 
   try {
     const parsed = JSON.parse(text);
     if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-      return { error: `${label} must be a JSON object.` };
+      return { error: messages.mustBeObject || `${label} must be a JSON object.` };
     }
     return { data: parsed };
   } catch {
-    return { error: `${label} contains invalid JSON.` };
+    return { error: messages.invalidJson || `${label} contains invalid JSON.` };
   }
 }
 
@@ -92,11 +98,11 @@ export function toggleChannel(channels, channel) {
   return [...channels, channel];
 }
 
-export function buildTemplatePayload(form) {
-  if (!String(form.type || '').trim()) return { error: 'Notification type is required.' };
-  if (!String(form.bodyTemplate || '').trim()) return { error: 'Body template is required.' };
+export function buildTemplatePayload(form, messages = {}) {
+  if (!String(form.type || '').trim()) return { error: messages.typeRequired || 'Notification type is required.' };
+  if (!String(form.bodyTemplate || '').trim()) return { error: messages.bodyRequired || 'Body template is required.' };
 
-  const variablesResult = parseJsonObject(form.variables, 'Variables');
+  const variablesResult = parseJsonObject(form.variables, messages.variablesLabel || 'Variables', messages.variablesJson);
   if (variablesResult.error) return { error: variablesResult.error };
 
   return {
@@ -128,12 +134,12 @@ export function templateToForm(template) {
   };
 }
 
-export function buildSchedulePayload(form) {
-  if (!String(form.notificationType || '').trim()) return { error: 'Notification type is required.' };
-  if (!Array.isArray(form.channels) || form.channels.length === 0) return { error: 'Select at least one channel.' };
-  if (!String(form.body || '').trim()) return { error: 'Message body is required.' };
+export function buildSchedulePayload(form, messages = {}) {
+  if (!String(form.notificationType || '').trim()) return { error: messages.typeRequired || 'Notification type is required.' };
+  if (!Array.isArray(form.channels) || form.channels.length === 0) return { error: messages.channelRequired || 'Select at least one channel.' };
+  if (!String(form.body || '').trim()) return { error: messages.bodyRequired || 'Message body is required.' };
 
-  const payloadResult = parseJsonObject(form.payloadJson, 'Payload JSON');
+  const payloadResult = parseJsonObject(form.payloadJson, messages.payloadLabel || 'Payload JSON', messages.payloadJson);
   if (payloadResult.error) return { error: payloadResult.error };
 
   const basePayload = compactObject({
@@ -157,10 +163,10 @@ export function buildSchedulePayload(form) {
   });
 
   if (form.scheduleType === 'ONE_TIME') {
-    if (!form.scheduledAt) return { error: 'Scheduled time is required.' };
+    if (!form.scheduledAt) return { error: messages.scheduledAtRequired || 'Scheduled time is required.' };
     payload.scheduledAt = new Date(form.scheduledAt).toISOString();
   } else {
-    if (!String(form.cronExpression || '').trim()) return { error: 'Cron expression is required.' };
+    if (!String(form.cronExpression || '').trim()) return { error: messages.cronRequired || 'Cron expression is required.' };
     payload.cronExpression = form.cronExpression.trim();
   }
 
@@ -169,7 +175,7 @@ export function buildSchedulePayload(form) {
 
 export function buildHistoryFilters({ cursor, search, channel, status }) {
   return compactObject({
-    limit: 50,
+    limit: NOTIFICATION_ADMIN_HISTORY_LIMIT,
     cursor,
     search: String(search || '').trim(),
     channel: channel === 'ALL' ? '' : channel,
@@ -227,6 +233,45 @@ export function failureRate(stats) {
   const sent = stats.sent || 0;
   if (!sent) return 0;
   return Math.round((((stats.failed || 0) + (stats.bounced || 0)) / sent) * 1000) / 10;
+}
+
+export function normalizeCollection(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+export function hasAnonymizeTarget(form) {
+  return Object.keys(compactObject(form || {})).length > 0;
+}
+
+export function buildNotificationAdminOverview({ metrics, templates, schedules }) {
+  const normalizedMetrics = normalizeMetrics(metrics);
+  const totals = normalizedMetrics.totals;
+  const templateRows = normalizeCollection(templates);
+  const scheduleRows = normalizeCollection(schedules);
+  const scheduleStatusCounts = NOTIFICATION_ADMIN_SCHEDULE_STATUSES.reduce((acc, status) => {
+    acc[status] = scheduleRows.filter((item) => item.status === status).length;
+    return acc;
+  }, {});
+
+  return {
+    sent: totals.sent || 0,
+    delivered: totals.delivered || 0,
+    failed: totals.failed || 0,
+    bounced: totals.bounced || 0,
+    reviewRequired: totals.reviewRequired || 0,
+    deliveryRate: deliveryRate(totals),
+    failureRate: failureRate(totals),
+    channelCount: normalizedMetrics.channels.length,
+    templateCount: templateRows.length,
+    activeTemplateCount: templateRows.filter((item) => item.isActive !== false).length,
+    scheduleCount: scheduleRows.length,
+    activeScheduleCount: scheduleStatusCounts.ACTIVE || 0,
+    pausedScheduleCount: scheduleStatusCounts.PAUSED || 0,
+    scheduleStatusCounts,
+  };
 }
 
 export function formatDateTime(value, locale = 'de') {

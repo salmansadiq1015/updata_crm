@@ -45,6 +45,12 @@ import {
   formatDashboardNumber,
   hasSeriesData,
 } from '@/modules/dashboard/utils/dashboard-formatters';
+import {
+  localizeDashboardSeries,
+  translateDashboardBreakdown,
+  translateDashboardEventType,
+  translateDashboardMetric,
+} from '@/modules/dashboard/utils/dashboard-i18n';
 import { EmptyAnalyticsState, GlassPanel, PanelHeader } from './dashboard-primitives';
 
 const GRID_COLOR = 'rgba(148, 163, 184, 0.16)';
@@ -52,6 +58,10 @@ const AXIS_COLOR = 'rgba(203, 213, 225, 0.68)';
 
 function getBreakdownTotal(items, field = 'value') {
   return (items || []).reduce((total, item) => total + (Number(item?.[field]) || 0), 0);
+}
+
+function metric(t, key, color) {
+  return { key, name: translateDashboardMetric(t, key), color };
 }
 
 function PremiumTooltip({ active, payload, label, locale, currency = false, currencyKeys = [] }) {
@@ -123,9 +133,10 @@ function ResponsiveChart({ children, height = 320 }) {
   );
 }
 
-function TrendAreaPanel({ title, description, icon, data, metrics, locale, currency, currencyKeys = [], children }) {
+function TrendAreaPanel({ title, description, icon, data, metrics, locale, t, currency, currencyKeys = [], children }) {
   const reduceMotion = useReducedMotion();
-  const hasData = hasSeriesData(data, metrics.map((metric) => metric.key));
+  const chartData = useMemo(() => localizeDashboardSeries(data, locale, t), [data, locale, t]);
+  const hasData = hasSeriesData(chartData, metrics.map((metric) => metric.key));
   const Icon = icon || TrendingUp;
 
   return (
@@ -134,7 +145,7 @@ function TrendAreaPanel({ title, description, icon, data, metrics, locale, curre
       {hasData ? (
         <div className="p-4">
           <ResponsiveChart>
-            <AreaChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
               <defs>
                 {metrics.map((metric) => (
                   <linearGradient key={metric.key} id={`gradient-${metric.key}`} x1="0" y1="0" x2="0" y2="1">
@@ -165,16 +176,34 @@ function TrendAreaPanel({ title, description, icon, data, metrics, locale, curre
           {children}
         </div>
       ) : (
-        <EmptyAnalyticsState title="No chart data" description="There is no activity in this filter window." />
+        <EmptyAnalyticsState
+          title={t('dashboard.analytics.empty.chartTitle', 'No chart data')}
+          description={t('dashboard.analytics.empty.chartDescription', 'There is no activity in this filter window.')}
+        />
       )}
     </GlassPanel>
   );
 }
 
-function BarPanel({ title, description, icon, data, valueKey = 'value', locale, currency = false, color = CHART_COLORS.neutral }) {
+function BarPanel({
+  title,
+  description,
+  icon,
+  data,
+  valueKey = 'value',
+  locale,
+  t,
+  labelGroup,
+  currency = false,
+  color = CHART_COLORS.neutral,
+}) {
   const reduceMotion = useReducedMotion();
-  const hasData = getBreakdownTotal(data, valueKey) > 0;
+  const chartData = useMemo(() => translateDashboardBreakdown(data, t, labelGroup), [data, labelGroup, t]);
+  const hasData = getBreakdownTotal(chartData, valueKey) > 0;
   const Icon = icon || BarChart3;
+  const valueLabel = currency
+    ? t('dashboard.analytics.tooltip.value', 'Value')
+    : t('dashboard.analytics.tooltip.count', 'Count');
 
   return (
     <GlassPanel className="min-w-0 xl:col-span-4">
@@ -182,7 +211,7 @@ function BarPanel({ title, description, icon, data, valueKey = 'value', locale, 
       {hasData ? (
         <div className="p-4">
           <ResponsiveChart height={300}>
-            <BarChart data={data} layout="vertical" margin={{ top: 8, right: 12, left: 28, bottom: 0 }}>
+            <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 12, left: 28, bottom: 0 }}>
               <CartesianGrid stroke={GRID_COLOR} horizontal={false} />
               <XAxis type="number" stroke={AXIS_COLOR} tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
               <YAxis
@@ -197,7 +226,7 @@ function BarPanel({ title, description, icon, data, valueKey = 'value', locale, 
               <Tooltip content={<PremiumTooltip locale={locale} currency={currency} />} />
               <Bar
                 dataKey={valueKey}
-                name={currency ? 'Value' : 'Count'}
+                name={valueLabel}
                 radius={[0, 6, 6, 0]}
                 fill={color}
                 isAnimationActive={!reduceMotion}
@@ -207,15 +236,19 @@ function BarPanel({ title, description, icon, data, valueKey = 'value', locale, 
           </ResponsiveChart>
         </div>
       ) : (
-        <EmptyAnalyticsState title="No breakdown data" description="Nothing matched this filter window." />
+        <EmptyAnalyticsState
+          title={t('dashboard.analytics.empty.breakdownTitle', 'No breakdown data')}
+          description={t('dashboard.analytics.empty.breakdownDescription', 'Nothing matched this filter window.')}
+        />
       )}
     </GlassPanel>
   );
 }
 
-function DonutPanel({ title, description, icon, data, locale, valueKey = 'value' }) {
+function DonutPanel({ title, description, icon, data, locale, t, labelGroup, valueKey = 'value' }) {
   const reduceMotion = useReducedMotion();
-  const total = getBreakdownTotal(data, valueKey);
+  const chartData = useMemo(() => translateDashboardBreakdown(data, t, labelGroup), [data, labelGroup, t]);
+  const total = getBreakdownTotal(chartData, valueKey);
   const Icon = icon || Gauge;
 
   return (
@@ -226,7 +259,7 @@ function DonutPanel({ title, description, icon, data, locale, valueKey = 'value'
           <ResponsiveChart height={260}>
             <PieChart>
               <Pie
-                data={data}
+                data={chartData}
                 dataKey={valueKey}
                 nameKey="label"
                 innerRadius="62%"
@@ -237,7 +270,7 @@ function DonutPanel({ title, description, icon, data, locale, valueKey = 'value'
                 isAnimationActive={!reduceMotion}
                 animationDuration={650}
               >
-                {data.map((entry, index) => (
+                {chartData.map((entry, index) => (
                   <Cell key={entry.id} fill={FEATURE_MIX_COLORS[index % FEATURE_MIX_COLORS.length]} />
                 ))}
               </Pie>
@@ -245,7 +278,7 @@ function DonutPanel({ title, description, icon, data, locale, valueKey = 'value'
             </PieChart>
           </ResponsiveChart>
           <div className="space-y-2">
-            {data.slice(0, 6).map((item, index) => (
+            {chartData.slice(0, 6).map((item, index) => (
               <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.05] px-3 py-2">
                 <span className="min-w-0 truncate text-sm text-slate-300">
                   <span className="mr-2 inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: FEATURE_MIX_COLORS[index % FEATURE_MIX_COLORS.length] }} />
@@ -259,7 +292,10 @@ function DonutPanel({ title, description, icon, data, locale, valueKey = 'value'
           </div>
         </div>
       ) : (
-        <EmptyAnalyticsState title="No segment data" description="Segments will appear after records are created." />
+        <EmptyAnalyticsState
+          title={t('dashboard.analytics.empty.segmentTitle', 'No segment data')}
+          description={t('dashboard.analytics.empty.segmentDescription', 'Segments will appear after records are created.')}
+        />
       )}
     </GlassPanel>
   );
@@ -314,7 +350,7 @@ function WorkQueuePanel({ items, t, locale }) {
             </div>
           );
         }) : (
-          <EmptyAnalyticsState title="No queue data" className="min-h-[12rem]" />
+          <EmptyAnalyticsState title={t('dashboard.analytics.empty.queueTitle', 'No queue data')} className="min-h-[12rem]" />
         )}
       </div>
     </GlassPanel>
@@ -329,7 +365,7 @@ function RecentActivityPanel({ data, t, locale }) {
         {data?.length ? data.map((entry) => (
           <div key={entry.id} className="flex items-start justify-between gap-3 rounded-md border border-white/10 bg-white/[0.045] px-3 py-2.5">
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-100">{entry.eventType || '-'}</p>
+              <p className="truncate text-sm font-medium text-slate-100">{translateDashboardEventType(t, entry.eventType)}</p>
               <p className="mt-1 truncate text-xs text-slate-500">{entry.email || entry.module || '-'}</p>
             </div>
             <span className={cn(
@@ -361,10 +397,11 @@ function OverviewTab({ data, t, locale }) {
           description={t('dashboard.analytics.overview.financialDesc', 'Invoices, quote pipeline, orders, and cash movement.')}
           icon={TrendingUp}
           data={data.overview.financialTrend}
+          t={t}
           metrics={[
-            { key: 'revenue', name: 'Revenue', color: CHART_COLORS.revenue },
-            { key: 'quoteValue', name: 'Quote value', color: CHART_COLORS.quoteValue },
-            { key: 'orderValue', name: 'Order value', color: CHART_COLORS.orderValue },
+            metric(t, 'revenue', CHART_COLORS.revenue),
+            metric(t, 'quoteValue', CHART_COLORS.quoteValue),
+            metric(t, 'orderValue', CHART_COLORS.orderValue),
           ]}
           locale={locale}
           currency
@@ -375,6 +412,8 @@ function OverviewTab({ data, t, locale }) {
           icon={BriefcaseBusiness}
           data={data.overview.featureMix}
           locale={locale}
+          t={t}
+          labelGroup="featureMix"
           valueKey="value"
         />
       </div>
@@ -384,10 +423,11 @@ function OverviewTab({ data, t, locale }) {
           description={t('dashboard.analytics.overview.operationsDesc', 'Tasks and scheduling movement.')}
           icon={Activity}
           data={data.overview.operationsTrend}
+          t={t}
           metrics={[
-            { key: 'created', name: 'Tasks created', color: CHART_COLORS.created },
-            { key: 'completed', name: 'Tasks completed', color: CHART_COLORS.completed },
-            { key: 'assignments', name: 'Assignments', color: CHART_COLORS.assignments },
+            metric(t, 'created', CHART_COLORS.created),
+            metric(t, 'completed', CHART_COLORS.completed),
+            metric(t, 'assignments', CHART_COLORS.assignments),
           ]}
           locale={locale}
           currencyKeys={['budget']}
@@ -416,10 +456,11 @@ function CrmTab({ data, t, locale }) {
           description={t('dashboard.analytics.crm.trendDesc', 'New customer records over time.')}
           icon={Users}
           data={data.crm.trend}
-          metrics={[{ key: 'customers', name: 'Customers', color: CHART_COLORS.quoteValue }]}
+          t={t}
+          metrics={[metric(t, 'customers', CHART_COLORS.quoteValue)]}
           locale={locale}
         />
-        <DonutPanel title={t('dashboard.analytics.crm.types', 'Customer types')} icon={Gauge} data={data.crm.byType} locale={locale} />
+        <DonutPanel title={t('dashboard.analytics.crm.types', 'Customer types')} icon={Gauge} data={data.crm.byType} locale={locale} t={t} labelGroup="crmType" />
       </div>
       <div className="grid gap-4 xl:grid-cols-12">
         <BarPanel
@@ -429,6 +470,7 @@ function CrmTab({ data, t, locale }) {
           data={data.crm.topCities}
           valueKey="count"
           locale={locale}
+          t={t}
           color={CHART_COLORS.created}
         />
       </div>
@@ -454,13 +496,14 @@ function ProjectsTab({ data, t, locale }) {
           description={t('dashboard.analytics.projects.trendDesc', 'New projects and estimated budget.')}
           icon={FolderKanban}
           data={data.projects.trend}
+          t={t}
           metrics={[
-            { key: 'projects', name: 'Projects', color: CHART_COLORS.created },
-            { key: 'budget', name: 'Budget', color: CHART_COLORS.revenue },
+            metric(t, 'projects', CHART_COLORS.created),
+            metric(t, 'budget', CHART_COLORS.revenue),
           ]}
           locale={locale}
         />
-        <BarPanel title={t('dashboard.analytics.projects.status', 'Project status')} icon={GitBranch} data={data.projects.byStatus} locale={locale} color={CHART_COLORS.quoteValue} />
+        <BarPanel title={t('dashboard.analytics.projects.status', 'Project status')} icon={GitBranch} data={data.projects.byStatus} locale={locale} t={t} labelGroup="projectStatus" color={CHART_COLORS.quoteValue} />
       </div>
       <div className="grid gap-4 xl:grid-cols-12">
         <BarPanel
@@ -469,6 +512,8 @@ function ProjectsTab({ data, t, locale }) {
           icon={WalletCards}
           data={data.projects.byType}
           locale={locale}
+          t={t}
+          labelGroup="projectType"
           currency
           color={CHART_COLORS.revenue}
         />
@@ -495,19 +540,20 @@ function SalesTab({ data, t, locale }) {
           description={t('dashboard.analytics.sales.trendDesc', 'Revenue, quote value, and order value.')}
           icon={TrendingUp}
           data={data.overview.financialTrend}
+          t={t}
           metrics={[
-            { key: 'revenue', name: 'Revenue', color: CHART_COLORS.revenue },
-            { key: 'quoteValue', name: 'Quote value', color: CHART_COLORS.quoteValue },
-            { key: 'orderValue', name: 'Order value', color: CHART_COLORS.orderValue },
+            metric(t, 'revenue', CHART_COLORS.revenue),
+            metric(t, 'quoteValue', CHART_COLORS.quoteValue),
+            metric(t, 'orderValue', CHART_COLORS.orderValue),
           ]}
           locale={locale}
           currencyKeys={['cashMovement']}
         />
-        <BarPanel title={t('dashboard.analytics.sales.quotes', 'Quote pipeline')} icon={FileText} data={data.sales.quotations.byStatus} locale={locale} currency color={CHART_COLORS.quoteValue} />
+        <BarPanel title={t('dashboard.analytics.sales.quotes', 'Quote pipeline')} icon={FileText} data={data.sales.quotations.byStatus} locale={locale} t={t} labelGroup="quoteStatus" currency color={CHART_COLORS.quoteValue} />
       </div>
       <div className="grid gap-4 xl:grid-cols-12">
-        <DonutPanel title={t('dashboard.analytics.sales.invoices', 'Invoice status')} icon={ReceiptText} data={data.sales.invoices.byStatus} locale={locale} />
-        <BarPanel title={t('dashboard.analytics.sales.orders', 'Order status')} icon={BriefcaseBusiness} data={data.sales.orders.byStatus} locale={locale} currency color={CHART_COLORS.orderValue} />
+        <DonutPanel title={t('dashboard.analytics.sales.invoices', 'Invoice status')} icon={ReceiptText} data={data.sales.invoices.byStatus} locale={locale} t={t} labelGroup="invoiceStatus" />
+        <BarPanel title={t('dashboard.analytics.sales.orders', 'Order status')} icon={BriefcaseBusiness} data={data.sales.orders.byStatus} locale={locale} t={t} labelGroup="orderStatus" currency color={CHART_COLORS.orderValue} />
       </div>
     </div>
   );
@@ -531,16 +577,17 @@ function TasksTab({ data, t, locale }) {
           description={t('dashboard.analytics.tasks.trendDesc', 'Created versus completed tasks.')}
           icon={ClipboardList}
           data={data.tasks.trend}
+          t={t}
           metrics={[
-            { key: 'created', name: 'Created', color: CHART_COLORS.created },
-            { key: 'completed', name: 'Completed', color: CHART_COLORS.completed },
+            metric(t, 'created', CHART_COLORS.created),
+            metric(t, 'completed', CHART_COLORS.completed),
           ]}
           locale={locale}
         />
-        <BarPanel title={t('dashboard.analytics.tasks.priority', 'Priority mix')} icon={AlertTriangle} data={data.tasks.byPriority} valueKey="count" locale={locale} color={CHART_COLORS.assignments} />
+        <BarPanel title={t('dashboard.analytics.tasks.priority', 'Priority mix')} icon={AlertTriangle} data={data.tasks.byPriority} valueKey="count" locale={locale} t={t} labelGroup="taskPriority" color={CHART_COLORS.assignments} />
       </div>
       <div className="grid gap-4 xl:grid-cols-12">
-        <DonutPanel title={t('dashboard.analytics.tasks.status', 'Task status')} icon={ListChecks} data={data.tasks.byStatus} locale={locale} />
+        <DonutPanel title={t('dashboard.analytics.tasks.status', 'Task status')} icon={ListChecks} data={data.tasks.byStatus} locale={locale} t={t} labelGroup="taskStatus" />
       </div>
     </div>
   );
@@ -564,16 +611,17 @@ function SchedulingTab({ data, t, locale }) {
           description={t('dashboard.analytics.scheduling.trendDesc', 'Assignments and planned hours.')}
           icon={CalendarClock}
           data={data.scheduling.trend}
+          t={t}
           metrics={[
-            { key: 'assignments', name: 'Assignments', color: CHART_COLORS.assignments },
-            { key: 'hours', name: 'Hours', color: CHART_COLORS.hours },
+            metric(t, 'assignments', CHART_COLORS.assignments),
+            metric(t, 'hours', CHART_COLORS.hours),
           ]}
           locale={locale}
         />
-        <DonutPanel title={t('dashboard.analytics.scheduling.status', 'Assignment status')} icon={Gauge} data={data.scheduling.byStatus} locale={locale} />
+        <DonutPanel title={t('dashboard.analytics.scheduling.status', 'Assignment status')} icon={Gauge} data={data.scheduling.byStatus} locale={locale} t={t} labelGroup="schedulingStatus" />
       </div>
       <div className="grid gap-4 xl:grid-cols-12">
-        <BarPanel title={t('dashboard.analytics.scheduling.types', 'Assignment types')} icon={BriefcaseBusiness} data={data.scheduling.byType} valueKey="count" locale={locale} color={CHART_COLORS.assignments} />
+        <BarPanel title={t('dashboard.analytics.scheduling.types', 'Assignment types')} icon={BriefcaseBusiness} data={data.scheduling.byType} valueKey="count" locale={locale} t={t} labelGroup="schedulingType" color={CHART_COLORS.assignments} />
       </div>
     </div>
   );
@@ -597,18 +645,19 @@ function AccountingTab({ data, t, locale }) {
           description={t('dashboard.analytics.accounting.cashDesc', 'Bank transaction movement over time.')}
           icon={Landmark}
           data={data.accounting.cashTrend}
+          t={t}
           metrics={[
-            { key: 'cashMovement', name: 'Cash movement', color: CHART_COLORS.cashMovement },
-            { key: 'bankTransactions', name: 'Transactions', color: CHART_COLORS.created },
+            metric(t, 'cashMovement', CHART_COLORS.cashMovement),
+            metric(t, 'bankTransactions', CHART_COLORS.created),
           ]}
           locale={locale}
           currency
         />
-        <BarPanel title={t('dashboard.analytics.accounting.payables', 'Payables status')} icon={WalletCards} data={data.accounting.payablesByStatus} locale={locale} currency color={CHART_COLORS.hours} />
+        <BarPanel title={t('dashboard.analytics.accounting.payables', 'Payables status')} icon={WalletCards} data={data.accounting.payablesByStatus} locale={locale} t={t} labelGroup="accountingPayableStatus" currency color={CHART_COLORS.hours} />
       </div>
       <div className="grid gap-4 xl:grid-cols-12">
-        <DonutPanel title={t('dashboard.analytics.accounting.bank', 'Bank reconciliation')} icon={ShieldCheck} data={data.accounting.bankByStatus} locale={locale} />
-        <BarPanel title={t('dashboard.analytics.accounting.references', 'Journal references')} icon={ReceiptText} data={data.accounting.journalByReferenceType} locale={locale} currency color={CHART_COLORS.revenue} />
+        <DonutPanel title={t('dashboard.analytics.accounting.bank', 'Bank reconciliation')} icon={ShieldCheck} data={data.accounting.bankByStatus} locale={locale} t={t} labelGroup="bankStatus" />
+        <BarPanel title={t('dashboard.analytics.accounting.references', 'Journal references')} icon={ReceiptText} data={data.accounting.journalByReferenceType} locale={locale} t={t} labelGroup="journalReferenceType" currency color={CHART_COLORS.revenue} />
       </div>
     </div>
   );
@@ -633,17 +682,18 @@ function SystemTab({ data, t, locale }) {
           description={t('dashboard.analytics.system.auditTrendDesc', 'Successful and failed audit events.')}
           icon={Activity}
           data={system.audit.trend}
+          t={t}
           metrics={[
-            { key: 'successes', name: 'Successes', color: CHART_COLORS.successes },
-            { key: 'failures', name: 'Failures', color: CHART_COLORS.failures },
+            metric(t, 'successes', CHART_COLORS.successes),
+            metric(t, 'failures', CHART_COLORS.failures),
           ]}
           locale={locale}
         />
         <RecentActivityPanel data={system.audit.recent} t={t} locale={locale} />
       </div>
       <div className="grid gap-4 xl:grid-cols-12">
-        <BarPanel title={t('dashboard.analytics.system.events', 'Top audit events')} icon={LineChart} data={system.audit.byEvent} valueKey="count" locale={locale} color={CHART_COLORS.created} />
-        <DonutPanel title={t('dashboard.analytics.system.userStatus', 'User status')} icon={Users} data={system.users.byStatus} locale={locale} />
+        <BarPanel title={t('dashboard.analytics.system.events', 'Top audit events')} icon={LineChart} data={system.audit.byEvent} valueKey="count" locale={locale} t={t} labelGroup="auditEvent" color={CHART_COLORS.created} />
+        <DonutPanel title={t('dashboard.analytics.system.userStatus', 'User status')} icon={Users} data={system.users.byStatus} locale={locale} t={t} labelGroup="userStatus" />
       </div>
     </div>
   );

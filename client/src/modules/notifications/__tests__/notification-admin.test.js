@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import {
   buildHistoryFilters,
+  buildNotificationAdminOverview,
   buildSchedulePayload,
   buildTemplatePayload,
+  hasAnonymizeTarget,
   normalizeMetrics,
   toggleChannel,
   withDefaultScheduleTime,
@@ -109,6 +111,41 @@ describe('notification admin utilities', () => {
       totals: { sent: 3, delivered: 2, failed: 1, reviewRequired: 1 },
       channels: [{ channel: 'EMAIL', sent: 3 }],
     });
+  });
+
+  it('builds the admin overview without coupling the UI to raw API envelopes', () => {
+    const overview = buildNotificationAdminOverview({
+      metrics: {
+        totals: { sent: 20, delivered: 16, failed: 3, bounced: 1 },
+        channels: {
+          EMAIL: { sent: 10, delivered: 8, failed: 2, reviewRequired: 1 },
+          IN_APP: { sent: 10, delivered: 8, failed: 1, bounced: 1, reviewRequired: 0 },
+        },
+      },
+      templates: { items: [{ isActive: true }, { isActive: false }] },
+      schedules: { items: [{ status: 'ACTIVE' }, { status: 'PAUSED' }, { status: 'ACTIVE' }] },
+    });
+
+    expect(overview).toMatchObject({
+      sent: 20,
+      delivered: 16,
+      failed: 3,
+      bounced: 1,
+      reviewRequired: 1,
+      deliveryRate: 80,
+      failureRate: 20,
+      channelCount: 2,
+      templateCount: 2,
+      activeTemplateCount: 1,
+      scheduleCount: 3,
+      activeScheduleCount: 2,
+      pausedScheduleCount: 1,
+    });
+  });
+
+  it('guards anonymization until at least one recipient target exists', () => {
+    expect(hasAnonymizeTarget({ recipientId: '', email: '', phone: '' })).toBe(false);
+    expect(hasAnonymizeTarget({ recipientId: '', email: 'customer@example.com', phone: '' })).toBe(true);
   });
 });
 

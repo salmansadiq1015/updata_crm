@@ -5,6 +5,8 @@ const mockCreateQuotation = jest.fn();
 const mockCreateInvoice = jest.fn();
 const mockCreateInvoiceFromOrder = jest.fn();
 const mockCreateReminder = jest.fn();
+const mockListOrders = jest.fn();
+const mockSoftDeleteOrder = jest.fn();
 
 jest.unstable_mockModule('../../src/modules/pm/project.service.js', () => ({
   default: {
@@ -22,6 +24,13 @@ jest.unstable_mockModule('../../src/modules/qop/invoice.service.js', () => ({
   default: {
     create: mockCreateInvoice,
     createFromOrder: mockCreateInvoiceFromOrder,
+  },
+}));
+
+jest.unstable_mockModule('../../src/modules/qop/order.service.js', () => ({
+  default: {
+    list: mockListOrders,
+    softDelete: mockSoftDeleteOrder,
   },
 }));
 
@@ -116,6 +125,18 @@ describe('field service AI capabilities', () => {
       channels: ['IN_APP'],
       status: 'PENDING',
     });
+    mockListOrders.mockResolvedValue({
+      data: [{
+        _id: order._id,
+        orderNumber: order.orderNumber,
+        title: 'Boiler repair',
+        status: 'CONFIRMED',
+        customerName: 'Muster AG',
+        projectId: project._id,
+        grandTotalRounded: 1200,
+      }],
+    });
+    mockSoftDeleteOrder.mockResolvedValue(undefined);
   });
 
   function run(action, input, context, permissions) {
@@ -240,6 +261,63 @@ describe('field service AI capabilities', () => {
       status: 'failed',
       error: { code: 'RBAC_DENIED' },
       requiredPermission: 'invoicing:write',
+    });
+  });
+
+  test('lists recent orders when the user asks to view all orders', async () => {
+    const result = await run(
+      'SEARCH_ORDERS',
+      'show all orders',
+      {},
+      ['quotations:read'],
+    );
+
+    expect(mockListOrders).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 10,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    }));
+    expect(result).toMatchObject({
+      action: 'SEARCH_ORDERS',
+      status: 'completed',
+      records: [expect.objectContaining({ orderNumber: order.orderNumber })],
+    });
+  });
+
+  test('requires confirmation before deleting an order', async () => {
+    const result = await run(
+      'DELETE_ORDER',
+      'delete this order',
+      { order },
+      ['quotations:delete'],
+    );
+
+    expect(mockSoftDeleteOrder).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      action: 'DELETE_ORDER',
+      status: 'awaiting_confirmation',
+      confirmation: {
+        recordType: 'order',
+        recordId: order._id,
+      },
+    });
+  });
+
+  test('deletes an order only after confirmation is present', async () => {
+    const result = await executeFieldServiceCapability({
+      action: 'DELETE_ORDER',
+      input: 'delete this order',
+      context: { order },
+      userId,
+      state: { permissions: ['quotations:delete'], confirmed: true },
+      helpers,
+    });
+
+    expect(mockSoftDeleteOrder).toHaveBeenCalledWith(order._id, userId, { source: 'ai-agent' });
+    expect(result).toMatchObject({
+      action: 'DELETE_ORDER',
+      status: 'completed',
+      recordType: 'order',
     });
   });
 });

@@ -61,9 +61,15 @@ export const WorkflowState = Annotation.Root({
     default: () => 0,
   }),
 
+  /** User confirmation supplied when resuming a guarded destructive action. */
+  confirmed: Annotation({
+    reducer: (_x, y) => y,
+    default: () => false,
+  }),
+
   /**
    * Workflow lifecycle status.
-   * @type {'pending'|'running'|'completed'|'failed'}
+   * @type {'pending'|'running'|'awaiting_confirmation'|'completed'|'failed'}
    */
   status: Annotation({
     reducer: (_x, y) => y,

@@ -14,23 +14,33 @@ import { randomUUID } from 'crypto';
 
 const INTENT_TO_WORKFLOW = {
   create_customer: 'FIELD_SERVICE_AGENT',
+  update_customer: 'FIELD_SERVICE_AGENT',
+  delete_customer: 'FIELD_SERVICE_AGENT',
   create_task: 'FIELD_SERVICE_AGENT',
   update_task: 'FIELD_SERVICE_AGENT',
+  delete_task: 'FIELD_SERVICE_AGENT',
   create_project: 'FIELD_SERVICE_AGENT',
+  delete_project: 'FIELD_SERVICE_AGENT',
   send_notification: 'NOTIFICATION',
   create_order: 'FIELD_SERVICE_AGENT',
   update_order: 'FIELD_SERVICE_AGENT',
+  delete_order: 'FIELD_SERVICE_AGENT',
   create_assignment: 'FIELD_SERVICE_AGENT',
   reschedule_assignment: 'FIELD_SERVICE_AGENT',
+  delete_assignment: 'FIELD_SERVICE_AGENT',
   create_report: 'FIELD_SERVICE_AGENT',
+  update_report: 'FIELD_SERVICE_AGENT',
+  delete_report: 'FIELD_SERVICE_AGENT',
   update_project: 'FIELD_SERVICE_AGENT',
   create_note: 'FIELD_SERVICE_AGENT',
   send_chat_message: 'FIELD_SERVICE_AGENT',
   record_time: 'FIELD_SERVICE_AGENT',
   analyze_workforce: 'FIELD_SERVICE_AGENT',
   search_customer: 'FIELD_SERVICE_AGENT',
+  search_tasks: 'FIELD_SERVICE_AGENT',
   search_projects: 'FIELD_SERVICE_AGENT',
   search_orders: 'FIELD_SERVICE_AGENT',
+  search_reports: 'FIELD_SERVICE_AGENT',
   search_documents: 'FIELD_SERVICE_AGENT',
   create_quotation: 'FIELD_SERVICE_AGENT',
   create_invoice: 'FIELD_SERVICE_AGENT',
@@ -62,7 +72,7 @@ class AgentService {
       const response = await llm.invoke([
         {
           role: 'system',
-          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_customer, create_task, update_task, create_project, send_notification, create_order, update_order, create_assignment, reschedule_assignment, create_report, update_project, create_note, send_chat_message, record_time, analyze_workforce, search_customer, search_projects, search_orders, search_documents, create_quotation, create_invoice, create_task_reminder, general>", "confidence": 0.0-1.0}',
+          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_customer, update_customer, delete_customer, create_task, update_task, delete_task, create_project, delete_project, send_notification, create_order, update_order, delete_order, create_assignment, reschedule_assignment, delete_assignment, create_report, update_report, delete_report, update_project, create_note, send_chat_message, record_time, analyze_workforce, search_customer, search_tasks, search_projects, search_orders, search_reports, search_documents, create_quotation, create_invoice, create_task_reminder, general>", "confidence": 0.0-1.0}',
         },
         { role: 'user', content: input },
       ]);
@@ -76,10 +86,27 @@ class AgentService {
   _classifyIntentHeuristic(input) {
     const text = String(input || '').toLowerCase();
     const has = (...terms) => terms.some((term) => text.includes(term));
-    const isSearch = has('show', 'find', 'search', 'lookup', 'look up', 'suche', 'zeige');
+    const isSearch = has('show', 'find', 'search', 'lookup', 'look up', 'list', 'view', 'display', 'all', 'recent', 'latest', 'suche', 'zeige', 'liste');
+    const isDelete = has('delete', 'remove', 'archive', 'deactivate', 'loeschen', 'löschen', 'archiv');
+    const isUpdate = has('update', 'edit', 'change', 'set', 'mark', 'status', 'aktualisier', 'aendere', 'ändere');
+
+    if (isDelete && has('customer', 'kunde', 'client', 'company', 'firma')) return 'delete_customer';
+    if (isDelete && has('service report', 'work report', 'report', 'rapport', 'bericht')) return 'delete_report';
+    if (isDelete && has('assignment', 'appointment', 'termin', 'einsatz')) return 'delete_assignment';
+    if (isDelete && has('project', 'projekt')) return 'delete_project';
+    if (isDelete && has('order', 'orders', 'job', 'jobs', 'auftrag', 'auftraege')) return 'delete_order';
+    if (isDelete && has('task', 'todo', 'aufgabe')) return 'delete_task';
+
+    if (isSearch && has('service report', 'work report', 'report', 'reports', 'rapport', 'bericht')) return 'search_reports';
+    if (isSearch && has('task', 'tasks', 'todo', 'todos', 'aufgabe', 'aufgaben')) return 'search_tasks';
     if (isSearch && has('document', 'documents', 'file', 'files', 'pdf', 'dokument', 'datei')) return 'search_documents';
     if (isSearch && has('project', 'projects', 'projekt', 'projekte')) return 'search_projects';
     if (isSearch && has('order', 'orders', 'job', 'jobs', 'auftrag', 'auftraege')) return 'search_orders';
+    if (isSearch && has('customer', 'customers', 'kunde', 'kunden', 'client', 'company', 'firma')) return 'search_customer';
+
+    if (isUpdate && has('customer', 'kunde', 'client', 'company', 'firma')) return 'update_customer';
+    if (isUpdate && has('service report', 'work report', 'report', 'rapport', 'bericht')) return 'update_report';
+
     if (has('quotation', 'quote', 'offerte', 'angebot')) return 'create_quotation';
     if (has('invoice', 'rechnung')) return 'create_invoice';
     if (has('reminder', 'remind me', 'notify me', 'erinnerung', 'erinnere')) return 'create_task_reminder';

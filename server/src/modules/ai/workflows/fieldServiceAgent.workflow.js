@@ -24,6 +24,7 @@ import swissPlzService from '../../../shared/ai/swissPlz.service.js';
 
 const ACTIONS = Object.freeze({
   CREATE_CUSTOMER: 'CREATE_CUSTOMER',
+  UPDATE_CUSTOMER: 'UPDATE_CUSTOMER',
   CREATE_TASK: 'CREATE_TASK',
   UPDATE_TASK: 'UPDATE_TASK',
   CREATE_PROJECT: 'CREATE_PROJECT',
@@ -32,15 +33,24 @@ const ACTIONS = Object.freeze({
   CREATE_ASSIGNMENT: 'CREATE_ASSIGNMENT',
   RESCHEDULE_ASSIGNMENT: 'RESCHEDULE_ASSIGNMENT',
   CREATE_REPORT: 'CREATE_REPORT',
+  UPDATE_REPORT: 'UPDATE_REPORT',
   UPDATE_PROJECT: 'UPDATE_PROJECT',
   CREATE_NOTE: 'CREATE_NOTE',
   SEND_CHAT: 'SEND_CHAT',
   RECORD_TIME: 'RECORD_TIME',
   ANALYZE_WORKFORCE: 'ANALYZE_WORKFORCE',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
+  DELETE_CUSTOMER: 'DELETE_CUSTOMER',
+  DELETE_TASK: 'DELETE_TASK',
+  DELETE_PROJECT: 'DELETE_PROJECT',
+  DELETE_ORDER: 'DELETE_ORDER',
+  DELETE_REPORT: 'DELETE_REPORT',
+  DELETE_ASSIGNMENT: 'DELETE_ASSIGNMENT',
   SEARCH_CUSTOMER: 'SEARCH_CUSTOMER',
+  SEARCH_TASKS: 'SEARCH_TASKS',
   SEARCH_PROJECTS: 'SEARCH_PROJECTS',
   SEARCH_ORDERS: 'SEARCH_ORDERS',
+  SEARCH_REPORTS: 'SEARCH_REPORTS',
   SEARCH_DOCUMENTS: 'SEARCH_DOCUMENTS',
   CREATE_QUOTATION: 'CREATE_QUOTATION',
   CREATE_INVOICE: 'CREATE_INVOICE',
@@ -50,6 +60,7 @@ const ACTIONS = Object.freeze({
 
 const ACTION_LABELS = {
   [ACTIONS.CREATE_CUSTOMER]: 'create a customer',
+  [ACTIONS.UPDATE_CUSTOMER]: 'update a customer',
   [ACTIONS.CREATE_TASK]: 'create a task',
   [ACTIONS.UPDATE_TASK]: 'update a task',
   [ACTIONS.CREATE_PROJECT]: 'create a project',
@@ -58,15 +69,24 @@ const ACTION_LABELS = {
   [ACTIONS.CREATE_ASSIGNMENT]: 'schedule an assignment',
   [ACTIONS.RESCHEDULE_ASSIGNMENT]: 'reschedule an assignment',
   [ACTIONS.CREATE_REPORT]: 'create a service report',
+  [ACTIONS.UPDATE_REPORT]: 'update a service report',
   [ACTIONS.UPDATE_PROJECT]: 'update a project',
   [ACTIONS.CREATE_NOTE]: 'create a note',
   [ACTIONS.SEND_CHAT]: 'send a chat message',
   [ACTIONS.RECORD_TIME]: 'record working hours',
   [ACTIONS.ANALYZE_WORKFORCE]: 'analyze workforce planning',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'analyze a technician ticket',
+  [ACTIONS.DELETE_CUSTOMER]: 'archive a customer',
+  [ACTIONS.DELETE_TASK]: 'delete a task',
+  [ACTIONS.DELETE_PROJECT]: 'delete a project',
+  [ACTIONS.DELETE_ORDER]: 'delete an order',
+  [ACTIONS.DELETE_REPORT]: 'delete a service report',
+  [ACTIONS.DELETE_ASSIGNMENT]: 'delete an assignment',
   [ACTIONS.SEARCH_CUSTOMER]: 'find customer information',
+  [ACTIONS.SEARCH_TASKS]: 'find task information',
   [ACTIONS.SEARCH_PROJECTS]: 'find project information',
   [ACTIONS.SEARCH_ORDERS]: 'find job or order information',
+  [ACTIONS.SEARCH_REPORTS]: 'find service reports',
   [ACTIONS.SEARCH_DOCUMENTS]: 'find documents',
   [ACTIONS.CREATE_QUOTATION]: 'create a quotation',
   [ACTIONS.CREATE_INVOICE]: 'create an invoice',
@@ -136,7 +156,7 @@ async function executeAction(state) {
   const effectiveInput = previousFollowUp?.originalInput
     ? `${previousFollowUp.originalInput}\nFollow-up answer: ${input}`
     : input;
-  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext);
+  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext, action);
   let output;
 
   try {
@@ -163,7 +183,7 @@ async function executeAction(state) {
     };
   }
 
-  if (output?.status === 'needs_follow_up') {
+  if (output?.status === 'needs_follow_up' || output?.status === 'awaiting_confirmation') {
     output.originalInput = previousFollowUp?.originalInput || input;
   }
 
@@ -188,7 +208,7 @@ async function executeAction(state) {
 
   return {
     stepCount,
-    status: 'completed',
+    status: output?.status === 'awaiting_confirmation' ? 'awaiting_confirmation' : 'completed',
     output,
     toolResults: [output],
   };
@@ -196,12 +216,30 @@ async function executeAction(state) {
 
 function classifyAction(input) {
   const text = input.toLowerCase();
+  const isDelete = hasAny(text, ['delete', 'remove', 'archive', 'deactivate', 'loeschen', 'löschen', 'archiv']);
+  const isUpdate = hasAny(text, ['update', 'edit', 'change', 'set', 'mark', 'status', 'aktualisier', 'aendere', 'ändere']);
+  const isView = hasSearchIntent(text) || hasAny(text, ['list', 'view', 'display', 'all', 'overview', 'recent', 'latest', 'alle', 'liste', 'uebersicht', 'übersicht']);
+
+  if (isDelete && hasAny(text, ['customer', 'kunde', 'client', 'company', 'firma'])) return ACTIONS.DELETE_CUSTOMER;
+  if (isDelete && hasAny(text, ['service report', 'work report', 'report', 'rapport', 'bericht'])) return ACTIONS.DELETE_REPORT;
+  if (isDelete && hasAny(text, ['assignment', 'appointment', 'termin', 'einsatz'])) return ACTIONS.DELETE_ASSIGNMENT;
+  if (isDelete && hasAny(text, ['project', 'projekt'])) return ACTIONS.DELETE_PROJECT;
+  if (isDelete && hasAny(text, ['order', 'orders', 'job', 'jobs', 'auftrag', 'auftraege'])) return ACTIONS.DELETE_ORDER;
+  if (isDelete && hasAny(text, ['task', 'todo', 'aufgabe'])) return ACTIONS.DELETE_TASK;
+
+  if (isView && hasAny(text, ['service report', 'work report', 'reports', 'report', 'rapport', 'bericht'])) return ACTIONS.SEARCH_REPORTS;
+  if (isView && hasAny(text, ['task', 'tasks', 'todo', 'todos', 'aufgabe', 'aufgaben'])) return ACTIONS.SEARCH_TASKS;
+  if (isView && hasAny(text, ['document', 'documents', 'file', 'files', 'pdf', 'dokument', 'datei'])) return ACTIONS.SEARCH_DOCUMENTS;
+  if (isView && hasAny(text, ['project', 'projects', 'projekt', 'projekte'])) return ACTIONS.SEARCH_PROJECTS;
+  if (isView && hasAny(text, ['order', 'orders', 'job', 'jobs', 'auftrag', 'auftraege'])) return ACTIONS.SEARCH_ORDERS;
+  if (isView && hasAny(text, ['customer', 'customers', 'kunde', 'kunden', 'client', 'company', 'firma'])) return ACTIONS.SEARCH_CUSTOMER;
+
+  if (isUpdate && hasAny(text, ['customer', 'kunde', 'client', 'company', 'firma'])) return ACTIONS.UPDATE_CUSTOMER;
+  if (isUpdate && hasAny(text, ['service report', 'work report', 'report', 'rapport', 'bericht'])) return ACTIONS.UPDATE_REPORT;
+
   if (hasAny(text, ['ticket', 'incident', 'technician report', 'technician ticket', 'stoerung', 'meldung'])
     && hasAny(text, ['analyze', 'categorize', 'prioritize', 'recommend', 'analyse', 'kategorisier', 'priorisier'])) return ACTIONS.ANALYZE_FIELD_TICKET;
   if (hasAny(text, ['create customer', 'new customer', 'add customer', 'create company', 'new company', 'add company', 'kunde anlegen', 'kunden anlegen', 'neuer kunde', 'neuen kunden', 'firma erstellen', 'firma anlegen', 'neue firma'])) return ACTIONS.CREATE_CUSTOMER;
-  if (hasSearchIntent(text) && hasAny(text, ['document', 'documents', 'file', 'files', 'pdf', 'dokument', 'datei'])) return ACTIONS.SEARCH_DOCUMENTS;
-  if (hasSearchIntent(text) && hasAny(text, ['project', 'projects', 'projekt', 'projekte'])) return ACTIONS.SEARCH_PROJECTS;
-  if (hasSearchIntent(text) && hasAny(text, ['order', 'orders', 'job', 'jobs', 'auftrag', 'auftraege'])) return ACTIONS.SEARCH_ORDERS;
   if (hasAny(text, ['quotation', 'quote', 'offerte', 'angebot'])) return ACTIONS.CREATE_QUOTATION;
   if (hasAny(text, ['invoice', 'rechnung'])) return ACTIONS.CREATE_INVOICE;
   if (hasAny(text, ['reminder', 'remind me', 'notify me', 'erinnerung', 'erinnere'])) return ACTIONS.CREATE_TASK_REMINDER;
@@ -636,17 +674,18 @@ function needsFollowUp(action, missingFields, context = {}) {
   };
 }
 
-async function resolveContext(input, previousFollowUp = null, requestContext = {}) {
+async function resolveContext(input, previousFollowUp = null, requestContext = {}, action = null) {
   const objectId = firstObjectId(input);
   const requestResolved = await loadRequestResolvedContext(requestContext);
-  const [userResult, customerResult, projectResult, orderResult, assignmentResult, installationResult, taskResult] = await Promise.all([
+  const [userResult, customerResult, projectResult, orderResult, assignmentResult, installationResult, taskResult, reportResult] = await Promise.all([
     findUser(input, previousFollowUp),
     findCustomer(input, objectId, previousFollowUp),
     findProject(input, objectId, previousFollowUp),
     findOrder(input, objectId, previousFollowUp),
     requestResolved.assignment ? { selected: null, candidates: [] } : findAssignment(input, objectId, previousFollowUp),
     findInstallation(input, objectId),
-    shouldResolveTask(input, previousFollowUp) ? findTask(input, objectId, previousFollowUp) : { selected: null, candidates: [] },
+    shouldResolveTask(input, previousFollowUp, action) ? findTask(input, objectId, previousFollowUp) : { selected: null, candidates: [] },
+    shouldResolveReport(input, previousFollowUp, action) ? findReport(input, objectId, previousFollowUp, requestResolved.assignment) : { selected: null, candidates: [] },
   ]);
   const previousResolved = await loadPreviousResolvedContext(previousFollowUp?.resolvedContext);
   return {
@@ -664,13 +703,15 @@ async function resolveContext(input, previousFollowUp = null, requestContext = {
     installationCandidates: installationResult.selected || requestResolved.installation ? [] : installationResult.candidates,
     task: taskResult.selected || previousResolved.task,
     taskCandidates: taskResult.selected ? [] : taskResult.candidates,
+    report: reportResult.selected || requestResolved.report || previousResolved.report,
+    reportCandidates: reportResult.selected || requestResolved.report ? [] : reportResult.candidates,
     site: null,
     roomId: extractRoomId(input),
   };
 }
 
 async function loadPreviousResolvedContext(resolvedContext = {}) {
-  const [assignee, customer, project, order, assignment, installation, task] = await Promise.all([
+  const [assignee, customer, project, order, assignment, installation, task, report] = await Promise.all([
     loadPreviousUser(resolvedContext.assignee?.id),
     loadPreviousCustomer(resolvedContext.customer?.id),
     loadPreviousProject(resolvedContext.project?.id),
@@ -678,8 +719,9 @@ async function loadPreviousResolvedContext(resolvedContext = {}) {
     loadPreviousAssignment(resolvedContext.assignment?.id || resolvedContext.workOrder?.id),
     loadPreviousInstallation(resolvedContext.installation?.id),
     loadPreviousTask(resolvedContext.task?.id),
+    loadPreviousReport(resolvedContext.report?.id || resolvedContext.workReport?.id),
   ]);
-  return { assignee, customer, project, order, assignment, installation, task };
+  return { assignee, customer, project, order, assignment, installation, task, report };
 }
 
 async function loadRequestResolvedContext(requestContext = {}) {
@@ -693,21 +735,28 @@ async function loadRequestResolvedContext(requestContext = {}) {
   const projectId = requestContext.projectId || (recordType === 'project' ? recordId : null);
   const customerId = requestContext.customerId || (recordType === 'customer' ? recordId : null);
   const installationId = requestContext.installationId || (recordType === 'installation' ? recordId : null);
+  const reportId = requestContext.reportId
+    || requestContext.workReportId
+    || (['report', 'workreport', 'work_report', 'work-report'].includes(recordType) ? recordId : null);
 
-  const [assignment, order, project, customer, installation] = await Promise.all([
+  const [assignment, order, project, customer, installation, report] = await Promise.all([
     loadPreviousAssignment(assignmentId),
     loadPreviousOrder(qopOrderId),
     loadPreviousProject(projectId),
     loadPreviousCustomer(customerId),
     loadPreviousInstallation(installationId),
+    loadPreviousReport(reportId),
   ]);
 
   return {
-    assignment,
+    assignment: assignment || (report?.orderId && typeof report.orderId === 'object' ? report.orderId : null),
     order,
-    project: project || (assignment?.projectId && typeof assignment.projectId === 'object' ? assignment.projectId : null),
+    project: project
+      || (assignment?.projectId && typeof assignment.projectId === 'object' ? assignment.projectId : null)
+      || (report?.projectId && typeof report.projectId === 'object' ? report.projectId : null),
     customer: customer || (assignment?.customerId && typeof assignment.customerId === 'object' ? assignment.customerId : null),
     installation,
+    report,
   };
 }
 
@@ -759,6 +808,15 @@ async function loadPreviousTask(id) {
   const Task = (await import('../../tasks/task.model.js')).default;
   return Task.findById(id)
     .select('title status priority assigneeId dueDate projectId orderId')
+    .lean()
+    .catch(() => null);
+}
+
+async function loadPreviousReport(id) {
+  if (!id) return null;
+  const WorkReport = (await import('../../mobile/workReport.model.js')).default;
+  return WorkReport.findById(id)
+    .select('reportNumber status orderId projectId reportDate workPerformed createdAt')
     .lean()
     .catch(() => null);
 }
@@ -916,19 +974,80 @@ async function findTask(input, objectId, previousFollowUp) {
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
 }
 
-function shouldResolveTask(input, previousFollowUp) {
-  if (previousFollowUp?.action === ACTIONS.UPDATE_TASK || previousFollowUp?.action === ACTIONS.CREATE_TASK_REMINDER) return true;
+async function findReport(input, objectId, previousFollowUp, requestAssignment = null) {
+  const WorkReport = (await import('../../mobile/workReport.model.js')).default;
+  const previousCandidates = previousFollowUp?.candidates?.reports || [];
+  const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
+  if (selectedPrevious?._id) {
+    const selected = await WorkReport.findById(selectedPrevious._id)
+      .select('reportNumber status orderId projectId reportDate workPerformed createdAt')
+      .lean();
+    if (selected) return { selected, candidates: [] };
+  }
+  if (objectId) {
+    const found = await WorkReport.findById(objectId)
+      .select('reportNumber status orderId projectId reportDate workPerformed createdAt')
+      .lean()
+      .catch(() => null);
+    if (found) return { selected: found, candidates: [] };
+  }
+  if (requestAssignment?._id) {
+    const reports = await WorkReport.find({ orderId: requestAssignment._id, isDeleted: false })
+      .select('reportNumber status orderId projectId reportDate workPerformed createdAt')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+    return { selected: reports.length === 1 ? reports[0] : null, candidates: reports };
+  }
+
+  const term = extractSearchTerm(input);
+  if (!term || term.length < 2) return { selected: null, candidates: [] };
+  const regex = new RegExp(escapeRegex(term), 'i');
+  const candidates = await WorkReport.find({
+    isDeleted: false,
+    $or: [
+      { reportNumber: regex },
+      { workPerformed: regex },
+      { findings: regex },
+      { nextSteps: regex },
+      { technicianNotes: regex },
+    ],
+  })
+    .select('reportNumber status orderId projectId reportDate workPerformed createdAt')
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean();
+  return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
+}
+
+function shouldResolveTask(input, previousFollowUp, action = null) {
+  if ([ACTIONS.UPDATE_TASK, ACTIONS.CREATE_TASK_REMINDER, ACTIONS.DELETE_TASK, ACTIONS.SEARCH_TASKS].includes(previousFollowUp?.action || action)) return true;
   const text = String(input || '').toLowerCase();
   return hasAny(text, ['task', 'todo', 'aufgabe', 'reminder', 'remind me', 'erinnerung']);
 }
 
+function shouldResolveReport(input, previousFollowUp, action = null) {
+  if ([ACTIONS.UPDATE_REPORT, ACTIONS.DELETE_REPORT, ACTIONS.SEARCH_REPORTS].includes(previousFollowUp?.action || action)) return true;
+  return false;
+}
+
 function fieldsForAction(action) {
   const map = {
+    [ACTIONS.UPDATE_CUSTOMER]: ['customer', 'field to update'],
     [ACTIONS.UPDATE_TASK]: ['task', 'new status or assignment'],
     [ACTIONS.UPDATE_ORDER]: ['order', 'new status or details'],
+    [ACTIONS.UPDATE_REPORT]: ['service report', 'new report content or status'],
     [ACTIONS.RESCHEDULE_ASSIGNMENT]: ['assignment', 'new date and time'],
     [ACTIONS.CREATE_QUOTATION]: ['customer', 'template or line items', 'pricing details'],
     [ACTIONS.CREATE_INVOICE]: ['customer or order', 'line items or source order'],
+    [ACTIONS.DELETE_CUSTOMER]: ['customer', 'confirmation'],
+    [ACTIONS.DELETE_TASK]: ['task', 'confirmation'],
+    [ACTIONS.DELETE_PROJECT]: ['project', 'confirmation'],
+    [ACTIONS.DELETE_ORDER]: ['order', 'confirmation'],
+    [ACTIONS.DELETE_REPORT]: ['service report', 'confirmation'],
+    [ACTIONS.DELETE_ASSIGNMENT]: ['assignment', 'confirmation'],
+    [ACTIONS.SEARCH_TASKS]: ['task search term'],
+    [ACTIONS.SEARCH_REPORTS]: ['service report search term'],
   };
   return map[action] || getFieldServiceCapabilityFields(action) || ['details'];
 }
@@ -1221,6 +1340,7 @@ function selectCandidateFromAnswer(input, candidates = []) {
       candidate.projectNumber,
       candidate.orderNumber,
       candidate.assignmentNumber,
+      candidate.reportNumber,
       candidate.email,
       candidate.title,
       candidate.model,
@@ -1266,6 +1386,8 @@ function summarizeContext(context) {
     workOrder: context.assignment ? { id: context.assignment._id, orderNumber: context.assignment.assignmentNumber, status: context.assignment.status } : null,
     installation: context.installation ? { id: context.installation._id, name: context.installation.name || context.installation.model } : null,
     task: context.task ? { id: context.task._id, title: context.task.title, status: context.task.status } : null,
+    report: context.report ? { id: context.report._id, reportNumber: context.report.reportNumber, status: context.report.status } : null,
+    workReport: context.report ? { id: context.report._id, reportNumber: context.report.reportNumber, status: context.report.status } : null,
   };
 }
 
@@ -1279,6 +1401,7 @@ function summarizeCandidates(context) {
     orders: assignmentCandidates.length ? assignmentCandidates : summarizeCandidateList(context.orderCandidates, (order) => order.orderNumber || order.title),
     installations: summarizeCandidateList(context.installationCandidates, (installation) => installation.name || installation.model || installation.serialNumber),
     tasks: summarizeCandidateList(context.taskCandidates, (task) => task.title),
+    reports: summarizeCandidateList(context.reportCandidates, (report) => report.reportNumber || report.workPerformed),
   };
 }
 

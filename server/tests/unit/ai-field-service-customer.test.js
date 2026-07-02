@@ -2,6 +2,7 @@ import { jest, describe, expect, test, beforeAll, beforeEach } from '@jest/globa
 
 const mockCreateCustomer = jest.fn();
 const mockCreateReport = jest.fn();
+const mockRemoveTask = jest.fn();
 const mockPushStep = jest.fn();
 const mockFindAssignmentById = jest.fn();
 const mockFindAssignments = jest.fn();
@@ -13,6 +14,8 @@ const mockFindProjects = jest.fn();
 const mockFindOrderById = jest.fn();
 const mockFindOrders = jest.fn();
 const mockFindInstallationById = jest.fn();
+const mockFindTaskById = jest.fn();
+const mockFindTasks = jest.fn();
 
 function mockSelectLean(value) {
   return {
@@ -41,6 +44,12 @@ jest.unstable_mockModule('../../src/modules/crm/customer.service.js', () => ({
 jest.unstable_mockModule('../../src/modules/mobile/report.service.js', () => ({
   default: {
     create: mockCreateReport,
+  },
+}));
+
+jest.unstable_mockModule('../../src/modules/tasks/task.service.js', () => ({
+  default: {
+    remove: mockRemoveTask,
   },
 }));
 
@@ -85,6 +94,13 @@ jest.unstable_mockModule('../../src/modules/crm/installation.model.js', () => ({
   },
 }));
 
+jest.unstable_mockModule('../../src/modules/tasks/task.model.js', () => ({
+  default: {
+    findById: mockFindTaskById,
+    find: mockFindTasks,
+  },
+}));
+
 jest.unstable_mockModule('../../src/modules/ai/agent/agentRun.repository.js', () => ({
   default: {
     pushStep: mockPushStep,
@@ -105,6 +121,7 @@ describe('field service agent customer creation', () => {
   const userId = '64f000000000000000000001';
   const assignmentId = '64f000000000000000000010';
   const projectId = '64f000000000000000000020';
+  const taskId = '64f000000000000000000050';
 
   beforeAll(async () => {
     ({ fieldServiceAgentWorkflow } = await import('../../src/modules/ai/workflows/fieldServiceAgent.workflow.js'));
@@ -126,6 +143,7 @@ describe('field service agent customer creation', () => {
       reportNumber: 'RPT-10001',
       status: 'DRAFT',
     });
+    mockRemoveTask.mockResolvedValue({ deleted: true });
     mockFindAssignmentById.mockImplementation((id) => (
       mockSelectLean(String(id) === assignmentId
         ? {
@@ -146,6 +164,17 @@ describe('field service agent customer creation', () => {
     mockFindOrderById.mockReturnValue(mockSelectLean(null));
     mockFindOrders.mockReturnValue(mockSelectLimitLean([]));
     mockFindInstallationById.mockReturnValue(mockSelectLean(null));
+    mockFindTaskById.mockImplementation((id) => (
+      mockSelectLean(String(id) === taskId
+        ? {
+          _id: taskId,
+          title: 'Check boiler pressure',
+          status: 'OPEN',
+          priority: 'MEDIUM',
+        }
+        : null)
+    ));
+    mockFindTasks.mockReturnValue(mockSelectLimitLean([]));
   });
 
   test('creates a company with owner name and UID through the CRM service', async () => {
@@ -230,6 +259,48 @@ describe('field service agent customer creation', () => {
       status: 'completed',
       recordType: 'workReport',
       recordId: '64f000000000000000000030',
+    });
+  });
+
+  test('pauses destructive task deletion until confirmation', async () => {
+    const result = await fieldServiceAgentWorkflow.invoke({
+      agentRunId: 'run-4',
+      userId,
+      permissions: ['tasks:write'],
+      stepCount: 0,
+      input: `delete task ${taskId}`,
+      entities: {},
+    });
+
+    expect(mockRemoveTask).not.toHaveBeenCalled();
+    expect(result.status).toBe('awaiting_confirmation');
+    expect(result.output).toMatchObject({
+      action: 'DELETE_TASK',
+      status: 'awaiting_confirmation',
+      confirmation: {
+        recordType: 'task',
+        recordId: taskId,
+      },
+    });
+  });
+
+  test('executes confirmed task deletion through the task service', async () => {
+    const result = await fieldServiceAgentWorkflow.invoke({
+      agentRunId: 'run-5',
+      userId,
+      permissions: ['tasks:write'],
+      confirmed: true,
+      stepCount: 0,
+      input: `delete task ${taskId}`,
+      entities: {},
+    });
+
+    expect(mockRemoveTask).toHaveBeenCalledWith(taskId, userId, { source: 'ai-agent' });
+    expect(result.output).toMatchObject({
+      action: 'DELETE_TASK',
+      status: 'completed',
+      recordType: 'task',
+      recordId: taskId,
     });
   });
 });

@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAiChat } from '../../hooks/use-ai-chat';
 import { AiChatSidebar } from './ai-chat-sidebar';
 import { AiChatMain } from './ai-chat-main';
 import { generateId } from '@/lib/utils/ids';
+import { buildAiRouteContext } from '../../utils/ai-route-context';
 
 function newThreadId() {
   return generateId();
@@ -16,11 +18,13 @@ function replacePath(path) {
 }
 
 export function AiChatLayout({ initialThreadId } = {}) {
+  const pathname = usePathname();
   // selectedThreadId = thread currently shown in main area
   const [selectedThreadId, setSelectedThreadId] = useState(initialThreadId ?? null);
   // currentThreadId = thread new messages are sent into (may differ from selected while browsing history)
   const [currentThreadId, setCurrentThreadId] = useState(initialThreadId ?? newThreadId());
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const routeContext = useMemo(() => buildAiRouteContext(pathname), [pathname]);
 
   const handleThreadSelected = useCallback((id) => {
     setSelectedThreadId((current) => (current === id ? current : id));
@@ -45,6 +49,7 @@ export function AiChatLayout({ initialThreadId } = {}) {
   const chat = useAiChat({
     selectedThreadId,
     currentThreadId,
+    context: routeContext,
     onThreadSelected: handleThreadSelected,
     onThreadDeleted: handleThreadDeleted,
   });

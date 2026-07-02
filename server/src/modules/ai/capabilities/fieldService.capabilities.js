@@ -1,25 +1,46 @@
 const PERMISSION_ALIASES = Object.freeze({
+  'crm:read': ['crm:admin'],
+  'crm:write': ['crm:admin'],
+  'crm:delete': ['crm:admin'],
   'project:create': ['projects:create', 'projects:write', 'projects:admin'],
   'project:edit': ['projects:write', 'projects:admin'],
+  'project:delete': ['projects:delete', 'projects:admin'],
   'projects:read': ['project:read', 'projects:admin'],
   'quotations:write': ['qop:write'],
   'quotations:read': ['qop:read'],
+  'quotations:delete': ['qop:delete', 'qop:write'],
   'invoicing:write': ['qop:write', 'accounting:write'],
   'tasks:write': ['tasks:create', 'tasks:update'],
+  'tasks:read': ['tasks:write', 'tasks:create', 'tasks:update'],
   'scheduling:write': ['deploy:write', 'field-service:write'],
+  'scheduling:delete': ['deploy:delete', 'deploy:write', 'field-service:admin'],
   'documents:read': ['project:documents:read', 'projects:read'],
+  'reports:read': ['mobile:read', 'field-service:read'],
+  'reports:write': ['mobile:write', 'field-service:write'],
 });
 
 const ACTIONS = Object.freeze({
   CREATE_PROJECT: 'CREATE_PROJECT',
+  UPDATE_CUSTOMER: 'UPDATE_CUSTOMER',
   UPDATE_TASK: 'UPDATE_TASK',
   UPDATE_ORDER: 'UPDATE_ORDER',
+  UPDATE_REPORT: 'UPDATE_REPORT',
   RESCHEDULE_ASSIGNMENT: 'RESCHEDULE_ASSIGNMENT',
   CREATE_QUOTATION: 'CREATE_QUOTATION',
   CREATE_INVOICE: 'CREATE_INVOICE',
   CREATE_TASK_REMINDER: 'CREATE_TASK_REMINDER',
+  DELETE_CUSTOMER: 'DELETE_CUSTOMER',
+  DELETE_TASK: 'DELETE_TASK',
+  DELETE_PROJECT: 'DELETE_PROJECT',
+  DELETE_ORDER: 'DELETE_ORDER',
+  DELETE_REPORT: 'DELETE_REPORT',
+  DELETE_ASSIGNMENT: 'DELETE_ASSIGNMENT',
+  SEARCH_CUSTOMER: 'SEARCH_CUSTOMER',
+  SEARCH_CUSTOMERS: 'SEARCH_CUSTOMERS',
+  SEARCH_TASKS: 'SEARCH_TASKS',
   SEARCH_PROJECTS: 'SEARCH_PROJECTS',
   SEARCH_ORDERS: 'SEARCH_ORDERS',
+  SEARCH_REPORTS: 'SEARCH_REPORTS',
   SEARCH_DOCUMENTS: 'SEARCH_DOCUMENTS',
 });
 
@@ -28,6 +49,11 @@ const CAPABILITIES = Object.freeze({
     requiredPermission: 'project:create',
     fields: ['customer', 'project name'],
     execute: createProject,
+  },
+  [ACTIONS.UPDATE_CUSTOMER]: {
+    requiredPermission: 'crm:write',
+    fields: ['customer', 'field to update'],
+    execute: updateCustomer,
   },
   [ACTIONS.UPDATE_TASK]: {
     requiredPermission: 'tasks:write',
@@ -38,6 +64,11 @@ const CAPABILITIES = Object.freeze({
     requiredPermission: 'quotations:write',
     fields: ['order', 'new status or details'],
     execute: updateOrder,
+  },
+  [ACTIONS.UPDATE_REPORT]: {
+    requiredPermission: 'reports:write',
+    fields: ['service report', 'new report content or status'],
+    execute: updateReport,
   },
   [ACTIONS.RESCHEDULE_ASSIGNMENT]: {
     requiredPermission: 'scheduling:write',
@@ -59,6 +90,51 @@ const CAPABILITIES = Object.freeze({
     fields: ['task', 'reminder date and time'],
     execute: createTaskReminder,
   },
+  [ACTIONS.DELETE_CUSTOMER]: {
+    requiredPermission: 'crm:delete',
+    fields: ['customer', 'confirmation'],
+    execute: deleteCustomer,
+  },
+  [ACTIONS.DELETE_TASK]: {
+    requiredPermission: 'tasks:write',
+    fields: ['task', 'confirmation'],
+    execute: deleteTask,
+  },
+  [ACTIONS.DELETE_PROJECT]: {
+    requiredPermission: 'project:delete',
+    fields: ['project', 'confirmation'],
+    execute: deleteProject,
+  },
+  [ACTIONS.DELETE_ORDER]: {
+    requiredPermission: 'quotations:delete',
+    fields: ['order', 'confirmation'],
+    execute: deleteOrder,
+  },
+  [ACTIONS.DELETE_REPORT]: {
+    requiredPermission: 'reports:write',
+    fields: ['service report', 'confirmation'],
+    execute: deleteReport,
+  },
+  [ACTIONS.DELETE_ASSIGNMENT]: {
+    requiredPermission: 'scheduling:delete',
+    fields: ['assignment', 'confirmation'],
+    execute: deleteAssignment,
+  },
+  [ACTIONS.SEARCH_CUSTOMERS]: {
+    requiredPermission: 'crm:read',
+    fields: ['customer search term'],
+    execute: searchCustomers,
+  },
+  [ACTIONS.SEARCH_CUSTOMER]: {
+    requiredPermission: 'crm:read',
+    fields: ['customer search term'],
+    execute: searchCustomers,
+  },
+  [ACTIONS.SEARCH_TASKS]: {
+    requiredPermission: 'tasks:read',
+    fields: ['task search term'],
+    execute: searchTasks,
+  },
   [ACTIONS.SEARCH_PROJECTS]: {
     requiredPermission: 'projects:read',
     fields: ['project search term'],
@@ -68,6 +144,11 @@ const CAPABILITIES = Object.freeze({
     requiredPermission: 'quotations:read',
     fields: ['job/order search term'],
     execute: searchOrders,
+  },
+  [ACTIONS.SEARCH_REPORTS]: {
+    requiredPermission: 'reports:read',
+    fields: ['service report search term'],
+    execute: searchReports,
   },
   [ACTIONS.SEARCH_DOCUMENTS]: {
     requiredPermission: 'documents:read',
@@ -168,6 +249,41 @@ async function createProject({ input, context, userId, helpers }) {
   };
 }
 
+async function updateCustomer({ input, context, userId, helpers }) {
+  if (context.customerCandidates?.length > 1) {
+    return helpers.needsFollowUp(ACTIONS.UPDATE_CUSTOMER, ['customer'], context);
+  }
+  if (!context.customer) {
+    return helpers.needsFollowUp(ACTIONS.UPDATE_CUSTOMER, ['customer'], context);
+  }
+
+  const updates = extractCustomerUpdates(input);
+  if (Object.keys(updates).length === 0) {
+    return helpers.needsFollowUp(ACTIONS.UPDATE_CUSTOMER, ['name, phone, email, address, owner, UID, or status'], context);
+  }
+
+  const customerService = (await import('../../crm/customer.service.js')).default;
+  const customer = await customerService.update(context.customer._id, updates, userId, { source: 'ai-agent' });
+
+  return {
+    action: ACTIONS.UPDATE_CUSTOMER,
+    status: 'completed',
+    message: `Customer ${customer.customerNumber || ''} ${customer.name || ''}`.trim() + ' updated.',
+    recordType: 'customer',
+    recordId: customer._id,
+    record: {
+      id: customer._id,
+      customerNumber: customer.customerNumber,
+      name: customer.name,
+      ownerName: customer.ownerName,
+      email: customer.email,
+      phone: customer.phone,
+      city: customer.city,
+      status: customer.status,
+    },
+  };
+}
+
 async function updateTask({ input, context, userId, helpers }) {
   if (context.taskCandidates?.length > 1) {
     return helpers.needsFollowUp(ACTIONS.UPDATE_TASK, ['task'], context);
@@ -258,6 +374,39 @@ async function updateOrder({ input, context, userId, helpers }) {
     recordType: 'order',
     recordId: order._id,
     record: { id: order._id, orderNumber: order.orderNumber, status: order.status, title: order.title },
+  };
+}
+
+async function updateReport({ input, context, userId, helpers }) {
+  if (context.reportCandidates?.length > 1) {
+    return helpers.needsFollowUp(ACTIONS.UPDATE_REPORT, ['service report'], context);
+  }
+
+  const report = context.report || await latestDraftReportForAssignment(context.assignment?._id);
+  if (!report) {
+    return helpers.needsFollowUp(ACTIONS.UPDATE_REPORT, ['service report'], context);
+  }
+
+  const updates = extractReportUpdates(input);
+  if (Object.keys(updates).length === 0) {
+    return helpers.needsFollowUp(ACTIONS.UPDATE_REPORT, ['new report content, findings, next steps, or status'], context);
+  }
+
+  const reportService = (await import('../../mobile/report.service.js')).default;
+  const updated = await reportService.update(report._id, updates, userId, { source: 'ai-agent' });
+
+  return {
+    action: ACTIONS.UPDATE_REPORT,
+    status: 'completed',
+    message: `Service report ${updated.reportNumber} updated.`,
+    recordType: 'workReport',
+    recordId: updated._id,
+    record: {
+      id: updated._id,
+      reportNumber: updated.reportNumber,
+      status: updated.status,
+      orderId: updated.orderId?._id || updated.orderId,
+    },
   };
 }
 
@@ -437,14 +586,201 @@ async function createTaskReminder({ input, context, userId, helpers }) {
   };
 }
 
+async function deleteCustomer({ context, userId, state, helpers }) {
+  if (context.customerCandidates?.length > 1) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_CUSTOMER, ['customer'], context);
+  }
+  if (!context.customer) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_CUSTOMER, ['customer'], context);
+  }
+  if (!state.confirmed) {
+    return confirmationRequired(ACTIONS.DELETE_CUSTOMER, context, {
+      recordType: 'customer',
+      recordId: context.customer._id,
+      label: context.customer.name || context.customer.customerNumber,
+      effect: 'The customer will be archived, not hard-deleted.',
+    });
+  }
+
+  const customerService = (await import('../../crm/customer.service.js')).default;
+  await customerService.archive(context.customer._id, userId, { source: 'ai-agent' });
+  return deletionResult(ACTIONS.DELETE_CUSTOMER, 'customer', context.customer._id, `Customer ${context.customer.name || context.customer.customerNumber} archived.`);
+}
+
+async function deleteTask({ context, userId, state, helpers }) {
+  if (context.taskCandidates?.length > 1) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_TASK, ['task'], context);
+  }
+  if (!context.task) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_TASK, ['task'], context);
+  }
+  if (!state.confirmed) {
+    return confirmationRequired(ACTIONS.DELETE_TASK, context, {
+      recordType: 'task',
+      recordId: context.task._id,
+      label: context.task.title,
+      effect: 'The task and its subtasks will be soft-deleted.',
+    });
+  }
+
+  const taskService = (await import('../../tasks/task.service.js')).default;
+  await taskService.remove(context.task._id, userId, { source: 'ai-agent' });
+  return deletionResult(ACTIONS.DELETE_TASK, 'task', context.task._id, `Task deleted: ${context.task.title}.`);
+}
+
+async function deleteProject({ context, userId, state, helpers }) {
+  if (context.projectCandidates?.length > 1) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_PROJECT, ['project'], context);
+  }
+  if (!context.project) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_PROJECT, ['project'], context);
+  }
+  if (!state.confirmed) {
+    return confirmationRequired(ACTIONS.DELETE_PROJECT, context, {
+      recordType: 'project',
+      recordId: context.project._id,
+      label: context.project.name || context.project.projectNumber,
+      effect: 'Only DRAFT projects can be deleted; non-draft projects must be archived.',
+    });
+  }
+
+  const projectService = (await import('../../pm/project.service.js')).default;
+  await projectService.delete(context.project._id, userId, { source: 'ai-agent' });
+  return deletionResult(ACTIONS.DELETE_PROJECT, 'project', context.project._id, `Project ${context.project.name || context.project.projectNumber} deleted.`);
+}
+
+async function deleteOrder({ context, userId, state, helpers }) {
+  if (context.orderCandidates?.length > 1) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_ORDER, ['order'], context);
+  }
+  if (!context.order) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_ORDER, ['order'], context);
+  }
+  if (!state.confirmed) {
+    return confirmationRequired(ACTIONS.DELETE_ORDER, context, {
+      recordType: 'order',
+      recordId: context.order._id,
+      label: context.order.orderNumber || context.order.title,
+      effect: 'Only confirmed orders without started work or invoices can be soft-deleted.',
+    });
+  }
+
+  const orderService = (await import('../../qop/order.service.js')).default;
+  await orderService.softDelete(context.order._id, userId, { source: 'ai-agent' });
+  return deletionResult(ACTIONS.DELETE_ORDER, 'order', context.order._id, `Order ${context.order.orderNumber || context.order.title} deleted.`);
+}
+
+async function deleteReport({ context, userId, state, helpers }) {
+  if (context.reportCandidates?.length > 1) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_REPORT, ['service report'], context);
+  }
+  const report = context.report || await latestDraftReportForAssignment(context.assignment?._id);
+  if (!report) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_REPORT, ['service report'], context);
+  }
+  if (!state.confirmed) {
+    return confirmationRequired(ACTIONS.DELETE_REPORT, context, {
+      recordType: 'workReport',
+      recordId: report._id,
+      label: report.reportNumber,
+      effect: 'Only editable work reports can be soft-deleted.',
+    });
+  }
+
+  const reportService = (await import('../../mobile/report.service.js')).default;
+  await reportService.delete(report._id, userId, { source: 'ai-agent' });
+  return deletionResult(ACTIONS.DELETE_REPORT, 'workReport', report._id, `Service report ${report.reportNumber} deleted.`);
+}
+
+async function deleteAssignment({ context, userId, state, helpers }) {
+  if (context.assignmentCandidates?.length > 1) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_ASSIGNMENT, ['assignment'], context);
+  }
+  if (!context.assignment) {
+    return helpers.needsFollowUp(ACTIONS.DELETE_ASSIGNMENT, ['assignment'], context);
+  }
+  if (!state.confirmed) {
+    return confirmationRequired(ACTIONS.DELETE_ASSIGNMENT, context, {
+      recordType: 'assignment',
+      recordId: context.assignment._id,
+      label: context.assignment.assignmentNumber || context.assignment.title,
+      effect: 'The assignment will be soft-deleted if no service constraints block it.',
+    });
+  }
+
+  const assignmentService = (await import('../../deploy/assignment.service.js')).default;
+  await assignmentService.delete(context.assignment._id, userId, { source: 'ai-agent' });
+  return deletionResult(ACTIONS.DELETE_ASSIGNMENT, 'assignment', context.assignment._id, `Assignment ${context.assignment.assignmentNumber || context.assignment.title} deleted.`);
+}
+
+async function searchCustomers({ input, context, helpers }) {
+  const customerService = (await import('../../crm/customer.service.js')).default;
+  const term = helpers.extractSearchTerm(input);
+  const customers = isListAllIntent(input)
+    ? (await customerService.list({ limit: 10, sortBy: 'createdAt', sortOrder: 'desc' })).data
+    : await customerService.search(term, 10);
+
+  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+    return helpers.needsFollowUp(ACTIONS.SEARCH_CUSTOMERS, ['customer search term'], context);
+  }
+
+  return {
+    action: ACTIONS.SEARCH_CUSTOMERS,
+    status: 'completed',
+    message: customers.length ? `Found ${customers.length} customers.` : 'No customers found.',
+    records: customers.map((customer) => ({
+      id: customer._id,
+      customerNumber: customer.customerNumber,
+      name: customer.name,
+      ownerName: customer.ownerName,
+      email: customer.email,
+      phone: customer.phone || customer.mobile,
+      city: customer.city,
+      status: customer.status,
+    })),
+  };
+}
+
+async function searchTasks({ input, context, userId, state, helpers }) {
+  const taskService = (await import('../../tasks/task.service.js')).default;
+  const term = helpers.extractSearchTerm(input);
+  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+    return helpers.needsFollowUp(ACTIONS.SEARCH_TASKS, ['task search term'], context);
+  }
+
+  const result = await taskService.list({
+    limit: 10,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+    ...(isListAllIntent(input) ? {} : { q: term }),
+  }, userId, { isAdmin: Boolean(state.permissions?.includes('*')) });
+  const tasks = result.data || [];
+
+  return {
+    action: ACTIONS.SEARCH_TASKS,
+    status: 'completed',
+    message: tasks.length ? `Found ${tasks.length} tasks.` : 'No tasks found.',
+    records: tasks.map((task) => ({
+      id: task._id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      assigneeId: task.assigneeId?._id || task.assigneeId,
+    })),
+  };
+}
+
 async function searchProjects({ input, context, helpers }) {
   const term = helpers.extractSearchTerm(input);
-  if (!term || term.length < 2) {
+  if (!isListAllIntent(input) && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_PROJECTS, ['project search term'], context);
   }
 
   const projectService = (await import('../../pm/project.service.js')).default;
-  const projects = await projectService.search(term, 10);
+  const projects = isListAllIntent(input)
+    ? (await projectService.list({ limit: 10, sortBy: 'createdAt', sortOrder: 'desc' })).data
+    : await projectService.search(term, 10);
   return {
     action: ACTIONS.SEARCH_PROJECTS,
     status: 'completed',
@@ -461,15 +797,18 @@ async function searchProjects({ input, context, helpers }) {
 
 async function searchOrders({ input, context, helpers }) {
   const term = helpers.extractSearchTerm(input);
-  if (!term || term.length < 2) {
+  if (!isListAllIntent(input) && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_ORDERS, ['job/order search term'], context);
   }
 
-  const Order = (await import('../../qop/order.model.js')).default;
-  const orders = await Order.find({ $text: { $search: term } })
-    .select('orderNumber title status customerName projectId grandTotalRounded createdAt')
-    .limit(10)
-    .lean();
+  const orderService = (await import('../../qop/order.service.js')).default;
+  const result = await orderService.list({
+    limit: 10,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+    ...(isListAllIntent(input) ? {} : { search: term }),
+  });
+  const orders = result.data || [];
 
   return {
     action: ACTIONS.SEARCH_ORDERS,
@@ -487,9 +826,41 @@ async function searchOrders({ input, context, helpers }) {
   };
 }
 
+async function searchReports({ input, context, helpers }) {
+  const term = helpers.extractSearchTerm(input);
+  if (!isListAllIntent(input) && !context.assignment && (!term || term.length < 2)) {
+    return helpers.needsFollowUp(ACTIONS.SEARCH_REPORTS, ['service report search term'], context);
+  }
+
+  const reportService = (await import('../../mobile/report.service.js')).default;
+  const result = context.assignment
+    ? { items: await reportService.listByOrder(context.assignment._id) }
+    : await reportService.list({
+      pageSize: 10,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+      ...(isListAllIntent(input) ? {} : { search: term }),
+    });
+  const reports = result.items || [];
+
+  return {
+    action: ACTIONS.SEARCH_REPORTS,
+    status: 'completed',
+    message: reports.length ? `Found ${reports.length} service reports.` : 'No service reports found.',
+    records: reports.map((report) => ({
+      id: report._id,
+      reportNumber: report.reportNumber,
+      status: report.status,
+      reportDate: report.reportDate,
+      orderId: report.orderId?._id || report.orderId,
+      workPerformed: String(report.workPerformed || '').slice(0, 180),
+    })),
+  };
+}
+
 async function searchDocuments({ input, context, userId, state, helpers }) {
   const term = helpers.extractSearchTerm(input);
-  if (!term || term.length < 2) {
+  if (!isListAllIntent(input) && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_DOCUMENTS, ['document search term'], context);
   }
 
@@ -497,7 +868,7 @@ async function searchDocuments({ input, context, userId, state, helpers }) {
   const user = await User.findById(userId).select('_id role').lean();
   const documentIndexService = (await import('../../documents/documentIndex.service.js')).default;
   const result = await documentIndexService.list({
-    search: term,
+    search: isListAllIntent(input) ? undefined : term,
     limit: 10,
     source: 'all',
     origin: 'all',
@@ -520,6 +891,124 @@ async function searchDocuments({ input, context, userId, state, helpers }) {
       updatedAt: document.updatedAt || document.createdAt,
     })),
   };
+}
+
+function confirmationRequired(action, context, { recordType, recordId, label, effect }) {
+  return {
+    action,
+    status: 'awaiting_confirmation',
+    message: `Please confirm before I continue: ${effect}`,
+    confirmation: {
+      action,
+      recordType,
+      recordId,
+      label,
+      effect,
+    },
+    recordType,
+    recordId,
+    resolvedContext: context,
+  };
+}
+
+function deletionResult(action, recordType, recordId, message) {
+  return {
+    action,
+    status: 'completed',
+    message,
+    recordType,
+    recordId,
+    deleted: true,
+  };
+}
+
+async function latestDraftReportForAssignment(assignmentId) {
+  if (!assignmentId) return null;
+  const reportService = (await import('../../mobile/report.service.js')).default;
+  const reports = await reportService.listByOrder(assignmentId);
+  return [...reports]
+    .filter((report) => report.status === 'DRAFT')
+    .sort((a, b) => new Date(b.createdAt || b.reportDate || 0) - new Date(a.createdAt || a.reportDate || 0))[0] || null;
+}
+
+function extractCustomerUpdates(input) {
+  const updates = {};
+  const text = String(input || '');
+  const fieldPatterns = [
+    ['name', /\b(?:name|customer name|company name)\s*(?:to|as|:)\s+(.+?)(?=\s+(?:phone|mobile|email|address|owner|uid|status)\b|[,;.]|$)/i],
+    ['phone', /\b(?:phone|telephone|tel)\s*(?:to|as|:)\s+([+0-9 ()/-]{5,30})/i],
+    ['mobile', /\bmobile\s*(?:to|as|:)\s+([+0-9 ()/-]{5,30})/i],
+    ['email', /\bemail\s*(?:to|as|:)\s+([^\s,;]+@[^\s,;]+)/i],
+    ['ownerName', /\b(?:owner|owner name)\s*(?:to|as|:)\s+(.+?)(?=\s+(?:phone|mobile|email|address|uid|status)\b|[,;.]|$)/i],
+    ['uidNumber', /\b(?:uid|vat|mwst)\s*(?:to|as|:)?\s*([A-Z]{2,3}[-\s.]?\d{3}[\s.-]?\d{3}[\s.-]?\d{3}|[A-Z0-9][A-Z0-9 .-]{4,40})/i],
+    ['status', /\bstatus\s*(?:to|as|:)\s+([a-z_ -]+)/i],
+  ];
+
+  for (const [field, pattern] of fieldPatterns) {
+    const value = text.match(pattern)?.[1]?.trim();
+    if (value) updates[field] = value;
+  }
+
+  const address = text.match(/\b(?:address|adresse)\s*(?:to|as|:)\s+(.+)$/i)?.[1]?.trim();
+  if (address) {
+    const postal = address.match(/\b([1-9]\d{3})\s+([\p{L} .'-]{2,80})$/u);
+    if (postal) {
+      updates.street = address.slice(0, postal.index).trim().replace(/,$/, '');
+      updates.postalCode = postal[1];
+      updates.city = postal[2].trim();
+      updates.country = 'CH';
+    }
+  }
+
+  return updates;
+}
+
+function extractReportUpdates(input) {
+  const text = String(input || '').trim();
+  const updates = {};
+  const status = extractReportStatus(text);
+  if (status) updates.status = status;
+
+  const findings = extractNamedSection(text, ['findings', 'finding', 'befund']);
+  if (findings) updates.findings = findings;
+  const nextSteps = extractNamedSection(text, ['next steps', 'recommendation', 'empfehlung']);
+  if (nextSteps) updates.nextSteps = nextSteps;
+
+  const workPerformed = extractNamedSection(text, ['work performed', 'service report', 'report content', 'content', 'text']);
+  if (workPerformed) updates.workPerformed = workPerformed;
+  if (!workPerformed && !status && text.length > 20) {
+    updates.workPerformed = text
+      .replace(/\b(update|edit|change|set|service report|work report|report)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 5000);
+  }
+
+  return Object.fromEntries(Object.entries(updates).filter(([, value]) => value));
+}
+
+function extractNamedSection(input, labels) {
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = input.match(new RegExp(`\\b${escaped}\\s*(?:to|as|:)?\\s+(.+)$`, 'i'));
+    if (match?.[1]?.trim()) return match[1].trim().slice(0, 5000);
+  }
+  return null;
+}
+
+function extractReportStatus(input) {
+  const text = String(input || '').toLowerCase();
+  if (hasAny(text, ['submit', 'submitted', 'einreichen'])) return 'SUBMITTED';
+  if (hasAny(text, ['approve', 'approved', 'genehmigen'])) return 'APPROVED';
+  if (hasAny(text, ['reject', 'rejected', 'ablehnen'])) return 'REJECTED';
+  if (hasAny(text, ['invoice', 'invoiced', 'verrechnet'])) return 'INVOICED';
+  if (hasAny(text, ['draft', 'entwurf'])) return 'DRAFT';
+  return null;
+}
+
+function isListAllIntent(input) {
+  return /\b(show|list|view|get|display|zeige|liste|alle|all|recent|latest|newest)\b/i.test(input)
+    && /\b(all|recent|latest|newest|list|alle|overview|uebersicht|übersicht)\b/i.test(input);
 }
 
 function extractProjectType(input) {

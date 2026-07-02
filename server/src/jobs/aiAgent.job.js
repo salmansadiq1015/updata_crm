@@ -52,16 +52,21 @@ class AiAgentWorker extends BaseWorker {
 
     const confirmation = await agentMemory.getConfirmation(agentRunId);
     const resumeState = { ...savedState.state, confirmed: confirmation?.decision ?? false };
+    const resumePermissions = permissions || resumeState.permissions || [];
 
     await agentRunRepository.updateById(agentRunId, { status: 'RUNNING' });
 
     return agentExecutor.execute(
       agentRunId,
       userId,
-      permissions,
+      resumePermissions,
       savedState.workflowType,
       resumeState.entities || {},
       resumeState.input || '',
+      {
+        confirmed: resumeState.confirmed,
+        stepCount: resumeState.stepCount || 0,
+      },
     );
   }
 }

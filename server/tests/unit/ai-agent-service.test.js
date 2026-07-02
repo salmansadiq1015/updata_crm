@@ -166,6 +166,23 @@ describe('AgentService.run()', () => {
       workflowType: 'FIELD_SERVICE_AGENT',
     }));
   });
+
+  test('routes delete commands to the field-service workflow instead of create flows', async () => {
+    await agentService.run('Delete task 64f000000000000000000050', userId, permissions);
+
+    expect(queueManager.addJob).toHaveBeenCalledWith('ai-agent', 'execute', expect.objectContaining({
+      workflowType: 'FIELD_SERVICE_AGENT',
+      input: expect.stringContaining('Delete task'),
+    }));
+  });
+
+  test('routes report list commands to the field-service workflow', async () => {
+    await agentService.run('Show all service reports', userId, permissions);
+
+    expect(queueManager.addJob).toHaveBeenCalledWith('ai-agent', 'execute', expect.objectContaining({
+      workflowType: 'FIELD_SERVICE_AGENT',
+    }));
+  });
 });
 
 describe('AgentService.confirmRun()', () => {

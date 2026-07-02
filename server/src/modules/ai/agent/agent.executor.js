@@ -8,7 +8,7 @@ import ERROR_CODES from '../../../shared/errors/errorCodes.js';
 import logger from '../../../shared/logger/index.js';
 
 class AgentExecutor {
-  async execute(agentRunId, userId, permissions, workflowType, entities, input) {
+  async execute(agentRunId, userId, permissions, workflowType, entities, input, stateOverrides = {}) {
     const workflow = getWorkflow(workflowType);
     if (!workflow) {
       await agentRunRepository.updateById(agentRunId, {
@@ -19,7 +19,16 @@ class AgentExecutor {
       throw new AppError(`No workflow for type: ${workflowType}`, 500, ERROR_CODES.AI_AGENT_WORKFLOW_NOT_FOUND);
     }
 
-    const initialState = { agentRunId, userId, permissions, entities, input, stepCount: 0, retryCount: 0 };
+    const initialState = {
+      agentRunId,
+      userId,
+      permissions,
+      entities,
+      input,
+      stepCount: 0,
+      retryCount: 0,
+      ...stateOverrides,
+    };
     let finalState;
 
     try {
@@ -50,6 +59,36 @@ class AgentExecutor {
       this._emitWs(userId, 'ai:agent:failed', { agentRunId, error: { message: err.message, code: errorCode } });
       await this._cleanup(agentRunId);
       throw err;
+    }
+
+    if (finalState.status === 'awaiting_confirmation') {
+      await agentMemory.saveWorkflowState(
+        agentRunId,
+        workflowType,
+        finalState.currentNode || 'awaiting_confirmation',
+        finalState,
+        finalState.stepCount || 0,
+      );
+      await agentRunRepository.updateById(agentRunId, {
+        status: 'AWAITING_CONFIRMATION',
+        output: finalState.output,
+      });
+      eventBus.publish(
+        EVENT_TYPES.AI_AGENT_AWAITING_CONFIRMATION,
+        { agentRunId, userId, summary: finalState.output },
+        { source: 'ai:agent' },
+      );
+      this._emitWs(userId, 'ai:agent:awaiting_confirmation', {
+        agentRunId,
+        summary: finalState.output,
+      });
+      logger.info('Agent run awaiting confirmation', {
+        module: 'ai-agent',
+        action: 'executor.execute',
+        agentRunId,
+        workflowType,
+      });
+      return finalState;
     }
 
     if (finalState.status === 'completed') {

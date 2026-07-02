@@ -90,10 +90,20 @@ export function useIntegrationAdminMutations(t) {
     onError: showError,
   });
 
+  const updateConfig = useMutation({
+    mutationFn: ({ integrationKey, data }) => integrationService.updateConfig(integrationKey, data),
+    onSuccess: async (_, variables) => {
+      await invalidate(variables.integrationKey);
+      showSuccess(t('integrations.admin.toast.configSaved'));
+    },
+    onError: showError,
+  });
+
   return {
     enable,
     disable,
     healthCheck,
-    isBusy: enable.isPending || disable.isPending || healthCheck.isPending,
+    updateConfig,
+    isBusy: enable.isPending || disable.isPending || healthCheck.isPending || updateConfig.isPending,
   };
 }

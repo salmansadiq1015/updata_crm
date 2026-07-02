@@ -9,10 +9,10 @@ export const updateConfigSchema = {
   params: Joi.object({ key: Joi.string().required() }),
   body: Joi.object({
     displayName: Joi.string(),
-    provider: Joi.string(),
+    provider: Joi.string().allow('', null),
     config: Joi.object(),
-    syncSchedule: Joi.string(),
-    credentialsRef: Joi.string(),
+    syncSchedule: Joi.string().allow('', null),
+    credentialsRef: Joi.string().allow('', null),
   }).min(1),
 };
 

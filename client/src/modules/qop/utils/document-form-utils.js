@@ -39,8 +39,24 @@ export const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
 ];
 
+export function normalizeReferenceItems(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+
+  const candidates = [
+    payload.data,
+    payload.items,
+    payload.results,
+    payload.records,
+    payload.departments,
+    payload.projects,
+  ];
+
+  return candidates.find(Array.isArray) ?? [];
+}
+
 export function buildDepartmentOptions(departments = []) {
-  return departments.map((d) => ({
+  return normalizeReferenceItems(departments).map((d) => ({
     value: d._id ?? d.id,
     label: d.name,
     badge: d.code || undefined,
@@ -48,15 +64,16 @@ export function buildDepartmentOptions(departments = []) {
 }
 
 export function buildProjectOptions(projects = []) {
-  return projects.map((p) => ({
+  return normalizeReferenceItems(projects).map((p) => ({
     value: p._id ?? p.id,
     label: p.name,
     badge: p.projectNumber || undefined,
+    keywords: [p.projectNumber, p.name, p.customerName, p.customerId?.name].filter(Boolean).join(' '),
   }));
 }
 
 export function buildCustomerOptions(customers = []) {
-  return customers.map((c) => ({
+  return normalizeReferenceItems(customers).map((c) => ({
     value: c._id ?? c.id,
     label: c.name,
     description: c.city || undefined,

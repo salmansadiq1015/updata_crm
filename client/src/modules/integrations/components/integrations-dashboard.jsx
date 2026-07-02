@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Table,
   TableBody,
@@ -30,7 +31,9 @@ import {
   useIntegrationSyncHistory,
 } from '@/modules/integrations/hooks/use-integration-admin';
 import {
+  buildIntegrationConfigPayload,
   calculateIntegrationSummary,
+  createIntegrationConfigFormValues,
   filterIntegrations,
   getIntegrationOperationalState,
 } from '@/modules/integrations/utils/integration-dashboard-utils';
@@ -53,6 +56,7 @@ import {
   RefreshCw,
   ScanText,
   Search,
+  Save,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -240,13 +244,26 @@ function IntegrationActionButtons({ item, busy, t, onHealthCheck, onToggle, onOp
   );
 }
 
-function IntegrationDetailDrawer({ open, integrationKey, item, onOpenChange, locale, t, busy, onHealthCheck, onToggle }) {
+function IntegrationDetailDrawer({
+  open,
+  integrationKey,
+  item,
+  onOpenChange,
+  locale,
+  t,
+  busy,
+  configSaving,
+  onHealthCheck,
+  onToggle,
+  onSaveConfig,
+}) {
   const detailQuery = useIntegrationDetail(integrationKey, { enabled: open });
   const healthQuery = useIntegrationHealthHistory(integrationKey, '24h', { enabled: open });
   const syncQuery = useIntegrationSyncHistory(integrationKey, { limit: 5 }, { enabled: open });
   const detail = detailQuery.data || item;
   const healthItems = Array.isArray(healthQuery.data) ? healthQuery.data.slice(0, 6) : [];
   const syncItems = syncQuery.data?.items?.slice(0, 5) ?? [];
+  const configEditorKey = `${detail?.integrationKey || integrationKey}:${detailQuery.data ? 'detail' : 'summary'}:${detail?.updatedAt || ''}`;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -315,6 +332,14 @@ function IntegrationDetailDrawer({ open, integrationKey, item, onOpenChange, loc
             </div>
           </section>
 
+          <IntegrationConfigEditor
+            key={configEditorKey}
+            integration={detail}
+            t={t}
+            configSaving={configSaving}
+            onSaveConfig={onSaveConfig}
+          />
+
           <section className="rounded-lg border border-border/70 bg-card p-4">
             <h3 className="text-sm font-semibold">{t('integrations.admin.detail.healthHistory')}</h3>
             {healthQuery.isFetching ? (
@@ -382,6 +407,123 @@ function InfoLine({ label, value }) {
   );
 }
 
+function IntegrationConfigEditor({ integration, t, configSaving, onSaveConfig }) {
+  const [configForm, setConfigForm] = useState(() => createIntegrationConfigFormValues(integration));
+  const [configError, setConfigError] = useState('');
+
+  const updateConfigField = (field, value) => {
+    setConfigForm((current) => ({ ...current, [field]: value }));
+    if (configError) setConfigError('');
+  };
+
+  const resetConfigForm = () => {
+    setConfigForm(createIntegrationConfigFormValues(integration));
+    setConfigError('');
+  };
+
+  const handleSaveConfig = () => {
+    const result = buildIntegrationConfigPayload(configForm);
+    if (!result.ok) {
+      setConfigError(
+        result.errorCode === 'invalid_json_object'
+          ? t('integrations.admin.config.invalidJsonObject')
+          : t('integrations.admin.config.invalidJson'),
+      );
+      return;
+    }
+    if (!integration?.integrationKey) {
+      setConfigError(t('integrations.admin.config.missingIntegration'));
+      return;
+    }
+
+    setConfigError('');
+    onSaveConfig(integration.integrationKey, result.payload);
+  };
+
+  return (
+    <section className="rounded-lg border border-border/70 bg-card p-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">{t('integrations.admin.config.editorTitle')}</h3>
+          <p className="text-xs text-muted-foreground">{t('integrations.admin.config.editorDescription')}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={resetConfigForm} disabled={configSaving}>
+            {t('integrations.admin.action.resetConfig')}
+          </Button>
+          <Button size="sm" onClick={handleSaveConfig} disabled={configSaving || !integration}>
+            {configSaving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {configSaving ? t('integrations.admin.action.savingConfig') : t('integrations.admin.action.saveConfig')}
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <ConfigField
+          label={t('integrations.admin.config.displayName')}
+          value={configForm.displayName}
+          onChange={(value) => updateConfigField('displayName', value)}
+          disabled={configSaving}
+        />
+        <ConfigField
+          label={t('integrations.admin.config.provider')}
+          value={configForm.provider}
+          onChange={(value) => updateConfigField('provider', value)}
+          disabled={configSaving}
+        />
+        <ConfigField
+          label={t('integrations.admin.config.syncSchedule')}
+          value={configForm.syncSchedule}
+          placeholder="0 3 * * *"
+          onChange={(value) => updateConfigField('syncSchedule', value)}
+          disabled={configSaving}
+        />
+        <ConfigField
+          label={t('integrations.admin.config.credentialsRef')}
+          value={configForm.credentialsRef}
+          placeholder="vault/provider/key"
+          onChange={(value) => updateConfigField('credentialsRef', value)}
+          disabled={configSaving}
+        />
+      </div>
+
+      <label className="mt-3 block text-xs font-semibold text-muted-foreground">
+        {t('integrations.admin.config.configJson')}
+      </label>
+      <Textarea
+        value={configForm.configJson}
+        onChange={(event) => updateConfigField('configJson', event.target.value)}
+        disabled={configSaving}
+        rows={8}
+        spellCheck={false}
+        className={cn('mt-1 font-mono text-xs', configError && 'border-destructive focus-visible:ring-destructive/20')}
+      />
+      <div className="mt-2 flex flex-col gap-1 text-xs">
+        {configError ? (
+          <p className="font-medium text-destructive">{configError}</p>
+        ) : (
+          <p className="text-muted-foreground">{t('integrations.admin.config.configJsonHint')}</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ConfigField({ label, value, onChange, placeholder, disabled }) {
+  return (
+    <label className="block text-xs font-semibold text-muted-foreground">
+      {label}
+      <Input
+        value={value}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 text-sm font-normal text-foreground"
+      />
+    </label>
+  );
+}
+
 export function IntegrationsDashboard() {
   const { t, locale } = useLanguage();
   const dashboardQuery = useIntegrationDashboard();
@@ -422,6 +564,18 @@ export function IntegrationsDashboard() {
       runWithBusyState(item.integrationKey, item.isEnabled ? mutations.disable : mutations.enable);
     },
     [mutations.disable, mutations.enable, runWithBusyState],
+  );
+
+  const handleSaveConfig = useCallback(
+    (integrationKey, data) => {
+      if (!integrationKey) return;
+      setBusyKey(integrationKey);
+      mutations.updateConfig.mutate(
+        { integrationKey, data },
+        { onSettled: () => setBusyKey(null) },
+      );
+    },
+    [mutations.updateConfig],
   );
 
   const statusFilters = useMemo(() => STATUS_FILTERS.map((value) => ({
@@ -660,8 +814,10 @@ export function IntegrationsDashboard() {
           locale={locale}
           t={t}
           busy={busyKey === selectedKey && mutations.isBusy}
+          configSaving={busyKey === selectedKey && mutations.updateConfig.isPending}
           onHealthCheck={handleHealthCheck}
           onToggle={handleToggle}
+          onSaveConfig={handleSaveConfig}
         />
       </div>
     </TooltipProvider>

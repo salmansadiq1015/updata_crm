@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useOrderMutations } from '../hooks/use-qop-mutations';
 import { useQopCustomerProjects, useQopCustomerSearch, useQopDepartments } from '../hooks/use-qop-queries';
 import { CURRENCIES } from '../constants/qop-constants';
@@ -48,6 +49,8 @@ export function OrderFormDialog({ open, onClose, order = null }) {
   const isEdit = Boolean(order);
   const [form, setForm] = useState(EMPTY_FORM);
   const [customerQuery, setCustomerQuery] = useState('');
+  const [projectQuery, setProjectQuery] = useState('');
+  const debouncedProjectQuery = useDebounce(projectQuery.trim(), 250);
 
   const { createOrder, updateOrder } = useOrderMutations();
   const isPending = createOrder.isPending || updateOrder.isPending;
@@ -62,13 +65,15 @@ export function OrderFormDialog({ open, onClose, order = null }) {
     data: projects = [],
     isFetching: projectsLoading,
     isError: projectsError,
-  } = useQopCustomerProjects(form.customerId);
+  } = useQopCustomerProjects(form.customerId, debouncedProjectQuery);
 
   const customerOptions = useMemo(() => buildCustomerOptions(customerResults), [customerResults]);
   const departmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
   const projectOptions = useMemo(() => buildProjectOptions(projects), [projects]);
+  const projectPickerLoading = projectsLoading || projectQuery.trim() !== debouncedProjectQuery;
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (!open) return;
     if (order) {
       const customerId = getEntityId(order.customerId ?? order.customer);
@@ -90,11 +95,14 @@ export function OrderFormDialog({ open, onClose, order = null }) {
         version: order.version,
       });
       setCustomerQuery('');
+      setProjectQuery('');
       return;
     }
 
     setForm(EMPTY_FORM());
     setCustomerQuery('');
+    setProjectQuery('');
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [open, order]);
 
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
@@ -171,6 +179,7 @@ export function OrderFormDialog({ open, onClose, order = null }) {
                   set('customerId', value);
                   set('customerName', option?.label ?? '');
                   set('projectId', '');
+                  setProjectQuery('');
                 }}
                 placeholder={t('qop.form.customerSearch', 'Search customer...')}
                 searchPlaceholder={t('qop.form.customerSearch', 'Search customer...')}
@@ -193,6 +202,7 @@ export function OrderFormDialog({ open, onClose, order = null }) {
                 loading={departmentsLoading}
                 onChange={(value) => set('departmentId', value)}
                 placeholder={t('qop.form.selectDepartment', 'Select department...')}
+                searchPlaceholder={t('qop.form.departmentSearch', 'Search departments...')}
                 emptyIcon={departmentsError ? SearchX : Building2}
                 emptyMessage={departmentsError
                   ? t('qop.form.departmentsLoadError', 'Departments could not be loaded')
@@ -200,6 +210,8 @@ export function OrderFormDialog({ open, onClose, order = null }) {
                 emptyHint={departmentsError
                   ? t('qop.form.referencesLoadErrorHint', 'Check your connection and permissions, then try again.')
                   : t('qop.form.noDepartmentsHint', 'Create a department in settings first.')}
+                noResultsMessage={t('qop.form.noMatchingDepartments', 'No matching departments')}
+                noResultsHint={t('qop.form.noMatchingDepartmentsHint', 'Try another name or code.')}
               />
             </div>
 
@@ -227,13 +239,18 @@ export function OrderFormDialog({ open, onClose, order = null }) {
             <div className="flex flex-col gap-1.5">
               <Label>{t('qop.form.project', 'Project')} ({t('common.optional', 'optional')})</Label>
               <Combobox
+                async
                 triggerIcon={FolderKanban}
                 options={projectOptions}
                 value={form.projectId}
                 allowClear
-                loading={projectsLoading}
+                loading={projectPickerLoading}
+                onSearchChange={setProjectQuery}
                 onChange={(value) => set('projectId', value || '')}
-                placeholder={t('qop.form.noProject', 'No project')}
+                placeholder={form.customerId
+                  ? t('qop.form.noProject', 'No project')
+                  : t('qop.form.selectCustomerFirst', 'Select a customer first')}
+                searchPlaceholder={t('qop.form.projectSearch', 'Search projects...')}
                 emptyIcon={projectsError ? SearchX : FolderKanban}
                 emptyMessage={projectsError
                   ? t('qop.form.projectsLoadError', 'Projects could not be loaded')
@@ -243,6 +260,8 @@ export function OrderFormDialog({ open, onClose, order = null }) {
                 emptyHint={projectsError
                   ? t('qop.form.referencesLoadErrorHint', 'Check your connection and permissions, then try again.')
                   : form.customerId ? undefined : t('qop.form.projectsNeedCustomer', 'Projects are filtered by customer.')}
+                noResultsMessage={form.customerId ? t('qop.form.noMatchingProjects', 'No matching projects') : undefined}
+                noResultsHint={form.customerId ? t('qop.form.noMatchingProjectsHint', 'Try another project number or name.') : undefined}
               />
             </div>
 

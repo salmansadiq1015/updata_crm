@@ -16,6 +16,7 @@ import {
   Coins, Languages, Users, CalendarDays, SearchX,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useQuotationMutations } from '../hooks/use-qop-mutations';
 import { useQopCustomerProjects, useQopCustomerSearch, useQopDepartments } from '../hooks/use-qop-queries';
 import { useQuotationTemplateMutations } from '../hooks/use-qop-template-mutations';
@@ -57,6 +58,8 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [customerQuery, setCustomerQuery] = useState('');
+  const [projectQuery, setProjectQuery] = useState('');
+  const debouncedProjectQuery = useDebounce(projectQuery.trim(), 250);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -74,13 +77,15 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
     data: projects = [],
     isFetching: projectsLoading,
     isError: projectsError,
-  } = useQopCustomerProjects(form.customerId);
+  } = useQopCustomerProjects(form.customerId, debouncedProjectQuery);
 
   const customerOptions = useMemo(() => buildCustomerOptions(customerResults), [customerResults]);
   const departmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
   const projectOptions = useMemo(() => buildProjectOptions(projects), [projects]);
+  const projectPickerLoading = projectsLoading || projectQuery.trim() !== debouncedProjectQuery;
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (quotation) {
       setForm({
         customerId: quotation.customerId ?? quotation.customer?._id ?? '',
@@ -104,6 +109,8 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
       setShowAdvanced(false);
     }
     setCustomerQuery('');
+    setProjectQuery('');
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [quotation, open]);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
@@ -213,6 +220,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                     set('customerId', value);
                     set('customerName', option?.label ?? '');
                     set('projectId', '');
+                    setProjectQuery('');
                   }}
                   placeholder={t('qop.form.customerSearch', 'Search customer...')}
                   searchPlaceholder={t('qop.form.customerSearch', 'Search customer...')}
@@ -263,6 +271,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   loading={departmentsLoading}
                   onChange={(value) => set('departmentId', value)}
                   placeholder={t('qop.form.selectDepartment', 'Select department...')}
+                  searchPlaceholder={t('qop.form.departmentSearch', 'Search departments...')}
                   emptyIcon={departmentsError ? SearchX : Building2}
                   emptyMessage={departmentsError
                     ? t('qop.form.departmentsLoadError', 'Departments could not be loaded')
@@ -270,6 +279,8 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   emptyHint={departmentsError
                     ? t('qop.form.referencesLoadErrorHint', 'Check your connection and permissions, then try again.')
                     : t('qop.form.noDepartmentsHint', 'Create a department in settings first.')}
+                  noResultsMessage={t('qop.form.noMatchingDepartments', 'No matching departments')}
+                  noResultsHint={t('qop.form.noMatchingDepartmentsHint', 'Try another name or code.')}
                 />
               </div>
 
@@ -277,13 +288,18 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
               <div className="flex flex-col gap-1.5">
                 <Label>{t('qop.form.project', 'Project')} ({t('common.optional', 'optional')})</Label>
                 <Combobox
+                  async
                   triggerIcon={FolderKanban}
                   options={projectOptions}
                   value={form.projectId}
                   allowClear
-                  loading={projectsLoading}
+                  loading={projectPickerLoading}
+                  onSearchChange={setProjectQuery}
                   onChange={(value) => set('projectId', value || '')}
-                  placeholder={t('qop.form.noProject', 'No project')}
+                  placeholder={form.customerId
+                    ? t('qop.form.noProject', 'No project')
+                    : t('qop.form.selectCustomerFirst', 'Select a customer first')}
+                  searchPlaceholder={t('qop.form.projectSearch', 'Search projects...')}
                   emptyIcon={projectsError ? SearchX : FolderKanban}
                   emptyMessage={projectsError
                     ? t('qop.form.projectsLoadError', 'Projects could not be loaded')
@@ -293,6 +309,8 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   emptyHint={projectsError
                     ? t('qop.form.referencesLoadErrorHint', 'Check your connection and permissions, then try again.')
                     : form.customerId ? undefined : t('qop.form.projectsNeedCustomer', 'Projects are filtered by customer.')}
+                  noResultsMessage={form.customerId ? t('qop.form.noMatchingProjects', 'No matching projects') : undefined}
+                  noResultsHint={form.customerId ? t('qop.form.noMatchingProjectsHint', 'Try another project number or name.') : undefined}
                 />
               </div>
 

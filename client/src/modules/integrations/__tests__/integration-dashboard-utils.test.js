@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildIntegrationConfigPayload,
   calculateIntegrationSummary,
+  createIntegrationConfigFormValues,
   filterIntegrations,
+  formatIntegrationConfigJson,
   getIntegrationOperationalState,
   normalizeIntegrationListResponse,
   normalizeSyncHistoryResponse,
@@ -52,5 +55,67 @@ describe('integration dashboard utils', () => {
     expect(getIntegrationOperationalState(items[1])).toBe('attention');
     expect(getIntegrationOperationalState(items[2])).toBe('disabled');
     expect(getIntegrationOperationalState(null)).toBe('unknown');
+  });
+
+  it('formats and builds editable configuration payloads', () => {
+    expect(formatIntegrationConfigJson({ region: 'eu-central-1' })).toBe('{\n  "region": "eu-central-1"\n}');
+    expect(formatIntegrationConfigJson(null)).toBe('{}');
+
+    const form = createIntegrationConfigFormValues({
+      displayName: 'Cloud Storage',
+      provider: 's3',
+      syncSchedule: '0 3 * * *',
+      credentialsRef: 'aws/prod',
+      config: { bucket: 'mb-prod' },
+    });
+
+    expect(form).toEqual({
+      displayName: 'Cloud Storage',
+      provider: 's3',
+      syncSchedule: '0 3 * * *',
+      credentialsRef: 'aws/prod',
+      configJson: '{\n  "bucket": "mb-prod"\n}',
+    });
+
+    expect(buildIntegrationConfigPayload(form)).toEqual({
+      ok: true,
+      payload: {
+        displayName: 'Cloud Storage',
+        provider: 's3',
+        syncSchedule: '0 3 * * *',
+        credentialsRef: 'aws/prod',
+        config: { bucket: 'mb-prod' },
+      },
+    });
+  });
+
+  it('allows optional integration config fields to be cleared', () => {
+    expect(buildIntegrationConfigPayload({
+      displayName: 'Cloud Storage',
+      provider: '',
+      syncSchedule: '',
+      credentialsRef: '',
+      configJson: '{}',
+    })).toEqual({
+      ok: true,
+      payload: {
+        displayName: 'Cloud Storage',
+        provider: null,
+        syncSchedule: null,
+        credentialsRef: null,
+        config: {},
+      },
+    });
+  });
+
+  it('rejects invalid integration config JSON', () => {
+    expect(buildIntegrationConfigPayload({ configJson: '{broken' })).toEqual({
+      ok: false,
+      errorCode: 'invalid_json',
+    });
+    expect(buildIntegrationConfigPayload({ configJson: '[]' })).toEqual({
+      ok: false,
+      errorCode: 'invalid_json_object',
+    });
   });
 });

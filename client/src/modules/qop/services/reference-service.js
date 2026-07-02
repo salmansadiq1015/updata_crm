@@ -7,13 +7,17 @@ export const referenceService = {
     params: { q: query, limit: 10 },
   }),
   listDepartments: () => apiClient.get('/admin/departments'),
-  listCustomerProjects: (customerId) => apiClient.get(ENDPOINTS.PM.PROJECTS, {
-    params: {
-      customerId,
-      limit: 50,
-      status: QOP_SELECTABLE_PROJECT_STATUSES.join(','),
-      sortBy: 'projectNumber',
-      sortOrder: 'asc',
-    },
-  }),
+  listCustomerProjects: (customerId, search = '') => {
+    const trimmedSearch = String(search || '').trim();
+    return apiClient.get(ENDPOINTS.PM.PROJECTS, {
+      params: {
+        customerId,
+        limit: 50,
+        status: QOP_SELECTABLE_PROJECT_STATUSES.join(','),
+        sortBy: 'projectNumber',
+        sortOrder: 'asc',
+        ...(trimmedSearch ? { search: trimmedSearch } : {}),
+      },
+    });
+  },
 };

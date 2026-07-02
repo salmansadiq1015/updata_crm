@@ -30,6 +30,8 @@ export function Combobox({
   emptyIcon: EmptyIcon = Inbox,
   emptyMessage,
   emptyHint,
+  noResultsMessage,
+  noResultsHint,
   selectedLabel,
   disabled = false,
   allowClear = false,
@@ -44,6 +46,8 @@ export function Combobox({
 
   const selected = options.find((o) => String(o.value) === String(value)) || null;
   const triggerLabel = selectedLabel || selected?.label;
+  const hasSearchQuery = query.trim().length > 0;
+  const shouldShowNoResultsCopy = hasSearchQuery && noResultsMessage && (async || options.length > 0);
 
   const filtered = useMemo(() => {
     if (async || !searchable) return options;
@@ -195,9 +199,17 @@ export function Combobox({
               <p className="text-sm font-medium text-foreground">
                 {loading
                   ? t('common.loading', 'Loading...')
-                  : (emptyMessage || t('common.noResults', 'No results found'))}
+                  : (shouldShowNoResultsCopy
+                    ? noResultsMessage
+                    : (emptyMessage || t('common.noResults', 'No results found')))}
               </p>
-              {!loading && emptyHint && <p className="max-w-[220px] text-xs text-muted-foreground">{emptyHint}</p>}
+              {!loading && (
+                shouldShowNoResultsCopy && noResultsHint ? (
+                  <p className="max-w-[220px] text-xs text-muted-foreground">{noResultsHint}</p>
+                ) : emptyHint ? (
+                  <p className="max-w-[220px] text-xs text-muted-foreground">{emptyHint}</p>
+                ) : null
+              )}
             </div>
           )}
         </div>

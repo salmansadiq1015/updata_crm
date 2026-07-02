@@ -35,7 +35,25 @@ describe('qop reference service', () => {
   test('loads customer projects with valid selectable project status filters', async () => {
     const { referenceService } = await import('../services/reference-service');
 
-    referenceService.listCustomerProjects('customer-1');
+    referenceService.listCustomerProjects('customer-1', ' boiler ');
+
+    expect(getMock).toHaveBeenCalledWith('/pm/projects', {
+      params: {
+        customerId: 'customer-1',
+        limit: 50,
+        status: 'DRAFT,PLANNING,SCHEDULED,WAITING_FOR_MATERIAL,IN_PROGRESS,AWAITING_CUSTOMER_APPROVAL,AWAITING_QUOTATION_APPROVAL,ON_HOLD',
+        sortBy: 'projectNumber',
+        sortOrder: 'asc',
+        search: 'boiler',
+      },
+    });
+    expect(getMock.mock.calls[0]?.[1]?.params.status).not.toBe('ACTIVE');
+  });
+
+  test('omits blank project search terms', async () => {
+    const { referenceService } = await import('../services/reference-service');
+
+    referenceService.listCustomerProjects('customer-1', '   ');
 
     expect(getMock).toHaveBeenCalledWith('/pm/projects', {
       params: {
@@ -46,6 +64,5 @@ describe('qop reference service', () => {
         sortOrder: 'asc',
       },
     });
-    expect(getMock.mock.calls[0]?.[1]?.params.status).not.toBe('ACTIVE');
   });
 });

@@ -89,8 +89,10 @@ export function InvoiceFormDialog({
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [orderSearch, setOrderSearch] = useState('');
+  const [projectQuery, setProjectQuery] = useState('');
   const [selectedOrderSnapshot, setSelectedOrderSnapshot] = useState(null);
   const debouncedOrderSearch = useDebounce(orderSearch.trim(), ORDER_SEARCH_DEBOUNCE_MS);
+  const debouncedProjectQuery = useDebounce(projectQuery.trim(), 250);
   const shouldLoadOrderOptions = open && !isEdit && !sourceOrderId && !sourceQuotationId;
   const orderFilters = useMemo(() => ({
     limit: ORDER_PICKER_LIMIT,
@@ -107,7 +109,7 @@ export function InvoiceFormDialog({
     data: projects = [],
     isFetching: projectsLoading,
     isError: projectsError,
-  } = useQopCustomerProjects(form.customerId);
+  } = useQopCustomerProjects(form.customerId, debouncedProjectQuery);
   const {
     data: orderData,
     isLoading: ordersLoading,
@@ -119,6 +121,7 @@ export function InvoiceFormDialog({
   const orderOptions = useMemo(() => buildOrderOptions(orders), [orders]);
   const departmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
   const projectOptions = useMemo(() => buildProjectOptions(projects), [projects]);
+  const projectPickerLoading = projectsLoading || projectQuery.trim() !== debouncedProjectQuery;
   const paymentTermOptions = useMemo(
     () => buildPaymentTermOptions(PAYMENT_TERMS, t('qop.invoices.daysNet', 'days net')),
     [t],
@@ -140,6 +143,7 @@ export function InvoiceFormDialog({
     /* eslint-disable react-hooks/set-state-in-effect */
     if (open) {
       setOrderSearch('');
+      setProjectQuery('');
       setSelectedOrderSnapshot(sourceOrder || null);
       if (invoice) {
         const customerId = getEntityId(invoice.customerId ?? invoice.customer);
@@ -348,6 +352,7 @@ export function InvoiceFormDialog({
                     loading={departmentsLoading}
                     onChange={(value) => set('departmentId', value || '')}
                     placeholder={t('qop.form.selectDepartment', 'Select department...')}
+                    searchPlaceholder={t('qop.form.departmentSearch', 'Search departments...')}
                     emptyIcon={departmentsError ? SearchX : Building2}
                     emptyMessage={departmentsError
                       ? t('qop.form.departmentsLoadError', 'Departments could not be loaded')
@@ -355,18 +360,25 @@ export function InvoiceFormDialog({
                     emptyHint={departmentsError
                       ? t('qop.form.referencesLoadErrorHint', 'Check your connection and permissions, then try again.')
                       : t('qop.form.noDepartmentsHint', 'Create a department in settings first.')}
+                    noResultsMessage={t('qop.form.noMatchingDepartments', 'No matching departments')}
+                    noResultsHint={t('qop.form.noMatchingDepartmentsHint', 'Try another name or code.')}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>{t('qop.form.project', 'Project')}</Label>
                   <Combobox
+                    async
                     triggerIcon={FolderKanban}
                     options={projectOptions}
                     value={form.projectId}
                     allowClear
-                    loading={projectsLoading}
+                    loading={projectPickerLoading}
+                    onSearchChange={setProjectQuery}
                     onChange={(value) => set('projectId', value || '')}
-                    placeholder={t('qop.form.noProject', 'No project')}
+                    placeholder={form.customerId
+                      ? t('qop.form.noProject', 'No project')
+                      : t('qop.form.selectCustomerFirst', 'Select a customer first')}
+                    searchPlaceholder={t('qop.form.projectSearch', 'Search projects...')}
                     emptyIcon={projectsError ? SearchX : FolderKanban}
                     emptyMessage={projectsError
                       ? t('qop.form.projectsLoadError', 'Projects could not be loaded')
@@ -376,6 +388,8 @@ export function InvoiceFormDialog({
                     emptyHint={projectsError
                       ? t('qop.form.referencesLoadErrorHint', 'Check your connection and permissions, then try again.')
                       : form.customerId ? undefined : t('qop.form.projectsNeedCustomer', 'Projects are filtered by customer.')}
+                    noResultsMessage={form.customerId ? t('qop.form.noMatchingProjects', 'No matching projects') : undefined}
+                    noResultsHint={form.customerId ? t('qop.form.noMatchingProjectsHint', 'Try another project number or name.') : undefined}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">

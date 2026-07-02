@@ -75,3 +75,47 @@ export function getIntegrationOperationalState(item) {
   if (item.status === 'healthy') return 'operational';
   return 'unknown';
 }
+
+export function formatIntegrationConfigJson(config) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return '{}';
+  return JSON.stringify(config, null, 2);
+}
+
+export function createIntegrationConfigFormValues(integration) {
+  return {
+    displayName: integration?.displayName || '',
+    provider: integration?.provider || '',
+    syncSchedule: integration?.syncSchedule || '',
+    credentialsRef: integration?.credentialsRef || '',
+    configJson: formatIntegrationConfigJson(integration?.config),
+  };
+}
+
+export function buildIntegrationConfigPayload(formValues = {}) {
+  let parsedConfig = {};
+  const configText = String(formValues.configJson || '').trim();
+
+  if (configText) {
+    try {
+      parsedConfig = JSON.parse(configText);
+    } catch {
+      return { ok: false, errorCode: 'invalid_json' };
+    }
+
+    if (!parsedConfig || typeof parsedConfig !== 'object' || Array.isArray(parsedConfig)) {
+      return { ok: false, errorCode: 'invalid_json_object' };
+    }
+  }
+
+  const payload = { config: parsedConfig };
+
+  const displayName = String(formValues.displayName || '').trim();
+  if (displayName) payload.displayName = displayName;
+
+  for (const key of ['provider', 'syncSchedule', 'credentialsRef']) {
+    const value = String(formValues[key] || '').trim();
+    payload[key] = value || null;
+  }
+
+  return { ok: true, payload };
+}

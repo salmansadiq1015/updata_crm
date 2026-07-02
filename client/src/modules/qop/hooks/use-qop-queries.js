@@ -6,6 +6,7 @@ import { invoiceService } from '../services/invoice-service';
 import { searchService } from '../services/search-service';
 import { reminderService } from '../services/reminder-service';
 import { referenceService } from '../services/reference-service';
+import { normalizeReferenceItems } from '../utils/document-form-utils';
 
 export function useQuotations(filters = {}) {
   return useQuery({
@@ -145,7 +146,7 @@ export function useQopCustomerSearch(query) {
     queryKey: ['qop', 'references', 'customers', query],
     queryFn: () => referenceService.searchCustomers(query),
     enabled: query.length >= 2,
-    select: (r) => r.data ?? [],
+    select: (r) => normalizeReferenceItems(r.data),
   });
 }
 
@@ -153,17 +154,18 @@ export function useQopDepartments() {
   return useQuery({
     queryKey: ['qop', 'references', 'departments'],
     queryFn: () => referenceService.listDepartments(),
-    select: (r) => Array.isArray(r.data) ? r.data : [],
+    select: (r) => normalizeReferenceItems(r.data),
     staleTime: 5 * 60 * 1000,
   });
 }
 
-export function useQopCustomerProjects(customerId) {
+export function useQopCustomerProjects(customerId, search = '') {
+  const trimmedSearch = String(search || '').trim();
   return useQuery({
-    queryKey: ['qop', 'references', 'projects', customerId],
-    queryFn: () => referenceService.listCustomerProjects(customerId),
+    queryKey: ['qop', 'references', 'projects', customerId, trimmedSearch],
+    queryFn: () => referenceService.listCustomerProjects(customerId, trimmedSearch),
     enabled: !!customerId,
-    select: (r) => Array.isArray(r.data) ? r.data : [],
+    select: (r) => normalizeReferenceItems(r.data),
   });
 }
 

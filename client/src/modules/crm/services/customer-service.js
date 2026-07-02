@@ -2,6 +2,16 @@ import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import { downloadBlob } from '@/lib/api/download';
 
+export function normalizeCustomerList(payload) {
+  let items = [];
+  if (Array.isArray(payload)) items = payload;
+  else if (Array.isArray(payload?.data)) items = payload.data;
+  else if (Array.isArray(payload?.items)) items = payload.items;
+  else if (Array.isArray(payload?.results)) items = payload.results;
+
+  return items.filter((customer) => customer?._id);
+}
+
 /**
  * Customer API service — thin axios wrappers.
  * List endpoints return the full envelope (to preserve `.pagination`).

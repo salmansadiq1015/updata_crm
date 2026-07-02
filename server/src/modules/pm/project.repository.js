@@ -7,7 +7,7 @@ import {
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
 
 const ALLOWED_FILTERS = {
-  status: 'exact',
+  status: 'in',
   projectType: 'exact',
   customerId: 'objectId',
   projectManagerId: 'objectId',

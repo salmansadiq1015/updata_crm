@@ -14,6 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useFieldOpsOrders } from '@/modules/field-ops/hooks/use-field-ops-queries';
+import {
+  FIELD_OPS_ORDER_PICKER_QUERY,
+  formatFieldOpsOrderOptionLabel,
+  getFieldOpsOrderId,
+  toFieldOpsOrderItems,
+} from '@/modules/field-ops/utils/order-option-utils';
 import { ClipboardList, FileText, StickyNote, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { stripEmptyHtml } from '@/lib/utils/html';
@@ -69,9 +75,13 @@ const slideVariants = {
 
 // ── Step components ───────────────────────────────────────────────────────────
 
-function Step1OrderDate({ form, de, isEdit }) {
+function Step1OrderDate({ form, de, isEdit, loadOrders }) {
   const { register, watch, setValue, formState: { errors } } = form;
-  const { data: orders = [] } = useFieldOpsOrders({});
+  const { data: ordersResponse, isFetching: ordersLoading, isError: ordersError } = useFieldOpsOrders(
+    FIELD_OPS_ORDER_PICKER_QUERY,
+    { enabled: loadOrders },
+  );
+  const orders = toFieldOpsOrderItems(ordersResponse);
 
   return (
     <FormSection
@@ -88,11 +98,31 @@ function Step1OrderDate({ form, de, isEdit }) {
             <SelectValue placeholder={de ? 'Auftrag wählen…' : 'Select order…'} />
           </SelectTrigger>
           <SelectContent>
-            {orders.map((o) => (
-              <SelectItem key={o._id || o.id} value={o._id || o.id}>
-                {o.assignmentNumber ? `#${o.assignmentNumber}` : ''} {o.title || (de ? 'Ohne Titel' : 'Untitled')}
+            {loadOrders && ordersLoading ? (
+              <SelectItem value="__orders_loading" disabled>
+                {de ? 'Auftraege werden geladen...' : 'Loading orders...'}
               </SelectItem>
-            ))}
+            ) : null}
+            {loadOrders && !ordersLoading && ordersError ? (
+              <SelectItem value="__orders_error" disabled>
+                {de ? 'Auftraege konnten nicht geladen werden' : 'Orders could not be loaded'}
+              </SelectItem>
+            ) : null}
+            {loadOrders && !ordersLoading && !ordersError && orders.length === 0 ? (
+              <SelectItem value="__orders_empty" disabled>
+                {de ? 'Keine Auftraege verfuegbar' : 'No orders available'}
+              </SelectItem>
+            ) : null}
+            {orders.map((order) => {
+              const orderId = getFieldOpsOrderId(order);
+              if (!orderId) return null;
+
+              return (
+                <SelectItem key={orderId} value={orderId}>
+                  {formatFieldOpsOrderOptionLabel(order, de ? 'de' : 'en')}
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
       </FormField>
@@ -310,7 +340,7 @@ export function FieldOpsCreateReportDialog({ open, onOpenChange, onSave, isLoadi
   ];
 
   const stepContent = [
-    <Step1OrderDate  key={0} form={form} de={de} isEdit={isEdit} />,
+    <Step1OrderDate key={0} form={form} de={de} isEdit={isEdit} loadOrders={open} />,
     <Step2WorkDetails key={1} form={form} de={de} />,
     <Step3NotesAndMaterials key={2} form={form} de={de} />,
   ];

@@ -22,7 +22,7 @@ const updateSchema = {
 
 const router = Router();
 
-router.get('/', authenticate, requirePermission('quotations:admin'), (req, res, next) => departmentController.list(req, res, next));
+router.get('/', authenticate, requirePermission('quotations:read'), (req, res, next) => departmentController.list(req, res, next));
 router.post('/', authenticate, requirePermission('quotations:admin'), validate(createSchema), (req, res, next) => departmentController.create(req, res, next));
 router.patch('/:id', authenticate, requirePermission('quotations:admin'), validate(updateSchema), (req, res, next) => departmentController.update(req, res, next));
 

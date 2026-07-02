@@ -23,8 +23,10 @@ import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 
 const cantonName = (code) => CH_CANTONS.find((c) => c.code === code)?.name || code;
 
-const baseTriggerCls = 'rounded-full px-3 py-1.5 text-[12px] font-medium border border-white/10 bg-white/4 text-white/55 hover:bg-white/8 hover:text-white/80 transition-all h-8';
-const activeTriggerCls = 'border-violet-500/30 bg-violet-500/15 text-violet-300';
+const filterTriggerCls = 'rounded-full px-3 py-1.5 text-[12px] font-medium border border-border/70 bg-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-all h-8 dark:border-white/10 dark:bg-white/4 dark:text-white/55 dark:hover:bg-white/8 dark:hover:text-white/80';
+const activeFilterTriggerCls = 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300';
+const filterSelectContentCls = 'border-border bg-popover text-popover-foreground dark:border-white/10 dark:bg-[#0D1117]';
+const filterSelectItemCls = 'text-foreground focus:bg-accent focus:text-accent-foreground dark:text-white/80 dark:focus:bg-white/5';
 
 export function SitesTable() {
   const { t } = useLanguage();
@@ -81,20 +83,20 @@ export function SitesTable() {
         const meta = SITE_TYPE_META[s.siteType] || SITE_TYPE_META.residential;
         return (
           <Link href={`/crm/sites/${s._id}`} className="flex items-center gap-3 group min-w-0">
-            <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center ring-1 ring-white/8 shrink-0', meta.bg)}>
+            <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center ring-1 ring-border shrink-0', meta.bg)}>
               <Building2 className={cn('h-4 w-4', meta.color)} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-[13px] text-white/80 truncate group-hover:text-white/90 transition-colors">
+                <span className="font-medium text-[13px] text-foreground truncate group-hover:text-primary transition-colors">
                   {s.name}
                 </span>
                 {s.siteNumber && (
-                  <span className="text-[10px] font-mono text-white/35 shrink-0">{s.siteNumber}</span>
+                  <span className="text-[10px] font-mono text-muted-foreground/70 shrink-0">{s.siteNumber}</span>
                 )}
               </div>
               {s.customerId?.name && (
-                <p className="text-xs text-white/40 truncate">{s.customerId.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{s.customerId.name}</p>
               )}
             </div>
           </Link>
@@ -124,10 +126,10 @@ export function SitesTable() {
           street: s.street, postalCode: s.postalCode, city: s.city,
           canton: s.canton ? cantonName(s.canton) : null, country: s.country,
         });
-        if (!addr) return <span className="text-[13px] text-white/25">—</span>;
+        if (!addr) return <span className="text-[13px] text-muted-foreground/50">—</span>;
         return (
-          <span className="text-[13px] text-white/80">
-            <MapPin className="inline h-3 w-3 mr-1 text-white/35" />{addr}
+          <span className="text-[13px] text-foreground">
+            <MapPin className="inline h-3 w-3 mr-1 text-muted-foreground" />{addr}
           </span>
         );
       },
@@ -137,10 +139,10 @@ export function SitesTable() {
       header: t('crm.sites.floorUnit', 'Unit'),
       size: 120,
       Cell: ({ row }) => row.original.floorUnit ? (
-        <span className="text-[13px] text-white/80 inline-flex items-center gap-1">
-          <Home className="h-3 w-3 text-white/35" />{row.original.floorUnit}
+        <span className="text-[13px] text-foreground inline-flex items-center gap-1">
+          <Home className="h-3 w-3 text-muted-foreground" />{row.original.floorUnit}
         </span>
-      ) : <span className="text-[13px] text-white/25">—</span>,
+      ) : <span className="text-[13px] text-muted-foreground/50">—</span>,
     },
     {
       accessorKey: 'status',
@@ -151,9 +153,9 @@ export function SitesTable() {
         return (
           <span className={cn(
             'inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full',
-            active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-white/40',
+            active ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground',
           )}>
-            <span className={cn('h-1.5 w-1.5 rounded-full', active ? 'bg-emerald-500' : 'bg-white/20')} />
+            <span className={cn('h-1.5 w-1.5 rounded-full', active ? 'bg-emerald-500' : 'bg-muted-foreground/40')} />
             {active ? t('crm.statusActive', 'Active') : t('crm.sites.statusInactive', 'Inactive')}
           </span>
         );
@@ -169,26 +171,26 @@ export function SitesTable() {
           <MapPin className="h-5 w-5 text-amber-400" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-[18px] font-semibold text-white/90 leading-tight">
+          <h1 className="text-[18px] font-semibold text-foreground leading-tight">
             {t('crm.sites.listTitle', 'Objects')}
           </h1>
-          <p className="text-[13px] text-white/40 mt-0.5">
+          <p className="text-[13px] text-muted-foreground mt-0.5">
             {items.length} {t('crm.sites.listDesc', 'objects in portfolio')}
           </p>
         </div>
         {/* List | Map view toggle */}
-        <div className="ml-auto inline-flex items-center rounded-full border border-white/10 bg-white/4 p-0.5">
+        <div className="ml-auto inline-flex items-center rounded-full border border-border/70 bg-card p-0.5 shadow-theme-sm dark:border-white/10 dark:bg-white/4 dark:shadow-none">
           <button
             type="button"
             onClick={() => setView('list')}
-            className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'list' ? 'bg-violet-500/15 text-violet-300' : 'text-white/50 hover:text-white/80')}
+            className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'list' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
           >
             <ListIcon className="h-3.5 w-3.5" /> {t('common.list', 'List')}
           </button>
           <button
             type="button"
             onClick={() => setView('map')}
-            className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'map' ? 'bg-violet-500/15 text-violet-300' : 'text-white/50 hover:text-white/80')}
+            className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'map' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
           >
             <MapIcon className="h-3.5 w-3.5" /> {t('common.map', 'Map')}
           </button>
@@ -203,56 +205,56 @@ export function SitesTable() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-3 flex-wrap rounded-xl border border-white/6 bg-[#0D1117] px-4 py-3">
-        <div className="flex items-center gap-1.5 text-white/35">
+      <div className="flex items-center gap-3 flex-wrap rounded-xl border border-border/60 bg-card px-4 py-3 shadow-theme-sm dark:border-white/6 dark:bg-[#0D1117]">
+        <div className="flex items-center gap-1.5 text-muted-foreground dark:text-white/35">
           <Filter className="h-3.5 w-3.5" />
           <span className="text-[11px] font-semibold uppercase tracking-wider">{t('common.filter', 'Filter')}</span>
         </div>
-        <div className="w-px h-5 bg-white/8" />
+        <div className="w-px h-5 bg-border dark:bg-white/8" />
 
         <div className="relative flex-1 min-w-50 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/30" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground dark:text-white/30" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('crm.sites.searchPlaceholder', 'Search sites...')}
-            className="w-full h-9 pl-9 pr-3 rounded-xl border border-white/8 bg-white/4 text-[13px] text-white/90 placeholder:text-white/25 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all"
+            className="w-full h-9 pl-9 pr-3 rounded-xl border border-input bg-muted/40 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all dark:border-white/8 dark:bg-white/4 dark:text-white/90 dark:placeholder:text-white/25"
           />
         </div>
 
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className={cn(baseTriggerCls, statusFilter !== 'all' && activeTriggerCls, 'w-37.5')}>
+          <SelectTrigger className={cn(filterTriggerCls, statusFilter !== 'all' && activeFilterTriggerCls, 'w-37.5')}>
             <SelectValue placeholder={t('crm.status', 'Status')} />
           </SelectTrigger>
-          <SelectContent position="popper" sideOffset={4} className="bg-[#0D1117] border-white/10">
-            <SelectItem value="all" className="text-white/80 focus:bg-white/5"><DotLabel tone="muted">{t('crm.allStatus', 'All statuses')}</DotLabel></SelectItem>
-            <SelectItem value="active" className="text-white/80 focus:bg-white/5"><DotLabel tone="emerald">{t('crm.statusActive', 'Active')}</DotLabel></SelectItem>
-            <SelectItem value="inactive" className="text-white/80 focus:bg-white/5"><DotLabel tone="slate">{t('crm.sites.statusInactive', 'Inactive')}</DotLabel></SelectItem>
+          <SelectContent position="popper" sideOffset={4} className={filterSelectContentCls}>
+            <SelectItem value="all" className={filterSelectItemCls}><DotLabel tone="muted">{t('crm.allStatus', 'All statuses')}</DotLabel></SelectItem>
+            <SelectItem value="active" className={filterSelectItemCls}><DotLabel tone="emerald">{t('crm.statusActive', 'Active')}</DotLabel></SelectItem>
+            <SelectItem value="inactive" className={filterSelectItemCls}><DotLabel tone="slate">{t('crm.sites.statusInactive', 'Inactive')}</DotLabel></SelectItem>
           </SelectContent>
         </Select>
 
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className={cn(baseTriggerCls, typeFilter !== 'all' && activeTriggerCls, 'w-37.5')}>
+          <SelectTrigger className={cn(filterTriggerCls, typeFilter !== 'all' && activeFilterTriggerCls, 'w-37.5')}>
             <SelectValue placeholder={t('crm.type', 'Type')} />
           </SelectTrigger>
-          <SelectContent position="popper" sideOffset={4} className="bg-[#0D1117] border-white/10">
-            <SelectItem value="all" className="text-white/80 focus:bg-white/5"><DotLabel tone="muted">{t('crm.allTypes', 'All types')}</DotLabel></SelectItem>
-            <SelectItem value="residential" className="text-white/80 focus:bg-white/5"><DotLabel tone="blue">{t('crm.sites.type.residential', 'Residential')}</DotLabel></SelectItem>
-            <SelectItem value="commercial" className="text-white/80 focus:bg-white/5"><DotLabel tone="emerald">{t('crm.sites.type.commercial', 'Commercial')}</DotLabel></SelectItem>
-            <SelectItem value="industrial" className="text-white/80 focus:bg-white/5"><DotLabel tone="amber">{t('crm.sites.type.industrial', 'Industrial')}</DotLabel></SelectItem>
+          <SelectContent position="popper" sideOffset={4} className={filterSelectContentCls}>
+            <SelectItem value="all" className={filterSelectItemCls}><DotLabel tone="muted">{t('crm.allTypes', 'All types')}</DotLabel></SelectItem>
+            <SelectItem value="residential" className={filterSelectItemCls}><DotLabel tone="blue">{t('crm.sites.type.residential', 'Residential')}</DotLabel></SelectItem>
+            <SelectItem value="commercial" className={filterSelectItemCls}><DotLabel tone="emerald">{t('crm.sites.type.commercial', 'Commercial')}</DotLabel></SelectItem>
+            <SelectItem value="industrial" className={filterSelectItemCls}><DotLabel tone="amber">{t('crm.sites.type.industrial', 'Industrial')}</DotLabel></SelectItem>
           </SelectContent>
         </Select>
 
         <Select value={cantonFilter} onValueChange={setCantonFilter}>
-          <SelectTrigger className={cn(baseTriggerCls, cantonFilter !== 'all' && activeTriggerCls, 'w-37.5')}>
+          <SelectTrigger className={cn(filterTriggerCls, cantonFilter !== 'all' && activeFilterTriggerCls, 'w-37.5')}>
             <SelectValue placeholder={t('crm.canton', 'Canton')} />
           </SelectTrigger>
-          <SelectContent position="popper" sideOffset={4} className="max-h-72 bg-[#0D1117] border-white/10">
-            <SelectItem value="all" className="text-white/80 focus:bg-white/5">{t('crm.allCantons', 'All cantons')}</SelectItem>
+          <SelectContent position="popper" sideOffset={4} className={cn('max-h-72', filterSelectContentCls)}>
+            <SelectItem value="all" className={filterSelectItemCls}>{t('crm.allCantons', 'All cantons')}</SelectItem>
             {CH_CANTONS.map((c) => (
-              <SelectItem key={c.code} value={c.code} className="text-white/80 focus:bg-white/5">
+              <SelectItem key={c.code} value={c.code} className={filterSelectItemCls}>
                 <span className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] text-white/35">{c.code}</span>{c.name}
+                  <span className="font-mono text-[11px] text-muted-foreground dark:text-white/35">{c.code}</span>{c.name}
                 </span>
               </SelectItem>
             ))}
@@ -261,8 +263,8 @@ export function SitesTable() {
 
         {hasActiveFilters && (
           <>
-            <div className="w-px h-5 bg-white/8" />
-            <Button variant="ghost" size="sm" className="h-8 text-[12px] text-white/35 gap-1 rounded-full hover:text-red-400 hover:bg-red-500/10" onClick={clear}>
+            <div className="w-px h-5 bg-border dark:bg-white/8" />
+            <Button variant="ghost" size="sm" className="h-8 text-[12px] text-muted-foreground gap-1 rounded-full hover:text-red-600 hover:bg-red-500/10 dark:text-white/35 dark:hover:text-red-400" onClick={clear}>
               <X className="h-3 w-3" /> {t('common.reset', 'Reset')}
             </Button>
           </>

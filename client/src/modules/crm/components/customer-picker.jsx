@@ -9,24 +9,16 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { queryKeys } from '@/lib/query/keys';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useDebounce } from '@/shared/hooks/use-debounce';
-import { customerService } from '@/modules/crm/services/customer-service';
+import { customerService, normalizeCustomerList } from '@/modules/crm/services/customer-service';
 import { cn } from '@/lib/utils';
 
 const CUSTOMER_PICKER_LIMIT = 20;
-
-function normalizeCustomers(payload) {
-  const items = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.data)
-    ? payload.data
-    : Array.isArray(payload?.items)
-    ? payload.items
-    : Array.isArray(payload?.results)
-    ? payload.results
-    : [];
-
-  return items.filter((customer) => customer?._id);
-}
+const CUSTOMER_PICKER_LIST_PARAMS = Object.freeze({
+  limit: CUSTOMER_PICKER_LIMIT,
+  sortBy: 'name',
+  sortOrder: 'asc',
+  status: 'active',
+});
 
 export function CustomerPicker({ selectedCustomer, onSelect, disabled = false, error }) {
   const { t } = useLanguage();
@@ -34,20 +26,20 @@ export function CustomerPicker({ selectedCustomer, onSelect, disabled = false, e
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 250).trim();
 
-  const { data, isFetching } = useQuery({
-    queryKey: debouncedSearch
+  const { data, isFetching, isError } = useQuery({
+    queryKey: debouncedSearch.length >= 2
       ? queryKeys.crm.customers.search(debouncedSearch)
-      : queryKeys.crm.customers.list({ limit: CUSTOMER_PICKER_LIMIT, sortBy: 'name', sortOrder: 'asc' }),
+      : queryKeys.crm.customers.list(CUSTOMER_PICKER_LIST_PARAMS),
     queryFn: () => (
-      debouncedSearch
+      debouncedSearch.length >= 2
         ? customerService.searchCustomers(debouncedSearch, CUSTOMER_PICKER_LIMIT)
-        : customerService.getCustomers({ limit: CUSTOMER_PICKER_LIMIT, sortBy: 'name', sortOrder: 'asc' })
+        : customerService.getCustomers(CUSTOMER_PICKER_LIST_PARAMS)
     ),
     enabled: open,
     staleTime: 120_000,
   });
 
-  const customers = useMemo(() => normalizeCustomers(data), [data]);
+  const customers = useMemo(() => normalizeCustomerList(data), [data]);
 
   return (
     <div className="space-y-1.5">
@@ -58,27 +50,27 @@ export function CustomerPicker({ selectedCustomer, onSelect, disabled = false, e
             variant="outline"
             disabled={disabled}
             className={cn(
-              'h-10 w-full justify-between rounded-lg border-white/10 bg-white/4 px-3 text-left text-[13px] font-normal text-white/90 hover:bg-white/6',
+              'h-10 w-full justify-between rounded-lg border-border bg-muted/50 px-3 text-left text-[13px] font-normal text-foreground hover:bg-muted/70 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/90 dark:hover:bg-white/[0.06]',
               error && 'border-red-400/70',
             )}
           >
             <span className="flex min-w-0 items-center gap-2">
-              <Building2 className="h-4 w-4 shrink-0 text-white/40" />
-              <span className={cn('truncate', !selectedCustomer?.name && 'text-white/35')}>
+              <Building2 className="h-4 w-4 shrink-0 text-muted-foreground dark:text-white/40" />
+              <span className={cn('truncate', !selectedCustomer?.name && 'text-muted-foreground')}>
                 {selectedCustomer?.name || t('crm.contacts.selectCustomer', 'Kunde auswählen')}
               </span>
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] overflow-hidden rounded-xl border-white/10 bg-[#0D1117] p-0 shadow-2xl" align="start">
-          <div className="border-b border-white/8 p-2">
+        <PopoverContent className="w-[--radix-popover-trigger-width] overflow-hidden rounded-xl border-border bg-popover p-0 shadow-2xl dark:border-white/10 dark:bg-[#0D1117]" align="start">
+          <div className="border-b border-border p-2 dark:border-white/[0.08]">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={t('crm.contacts.customerSearch', 'Kunde suchen...')}
-                className="h-9 rounded-lg border-white/10 bg-white/4 pl-8 text-[13px] text-white/90 placeholder:text-white/30"
+                className="h-9 rounded-lg border-input bg-background pl-8 text-[13px] text-foreground placeholder:text-muted-foreground/60 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/90 dark:placeholder:text-white/30"
                 autoFocus
               />
             </div>
@@ -97,32 +89,40 @@ export function CustomerPicker({ selectedCustomer, onSelect, disabled = false, e
                     setSearch('');
                   }}
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-white/80 transition-colors hover:bg-white/6',
-                    selected && 'bg-violet-500/12 text-white',
+                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-accent dark:text-white/80 dark:hover:bg-white/[0.06]',
+                    selected && 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/12 dark:text-white',
                   )}
                 >
-                  <Building2 className="h-3.5 w-3.5 shrink-0 text-white/35" />
+                  <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-white/35" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{customer.name}</span>
                     {customer.customerNumber && (
-                      <span className="block truncate text-[11px] text-white/35">{customer.customerNumber}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground dark:text-white/35">{customer.customerNumber}</span>
                     )}
                   </span>
-                  {selected && <Check className="h-3.5 w-3.5 shrink-0 text-violet-300" />}
+                  {selected && <Check className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />}
                 </button>
               );
             })}
 
             {isFetching && customers.length === 0 && (
-              <div className="flex items-center justify-center gap-2 py-6 text-xs text-white/45">
+              <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 {t('common.loading', 'Wird geladen...')}
               </div>
             )}
 
-            {!isFetching && customers.length === 0 && (
-              <p className="py-6 text-center text-xs text-white/45">
-                {t('crm.contacts.noCustomersFound', 'Keine Kunden gefunden')}
+            {!isFetching && isError && (
+              <p className="py-6 text-center text-xs text-destructive">
+                {t('crm.contacts.customerLoadError', 'Kunden konnten nicht geladen werden')}
+              </p>
+            )}
+
+            {!isFetching && !isError && customers.length === 0 && (
+              <p className="py-6 text-center text-xs text-muted-foreground">
+                {debouncedSearch.length >= 2
+                  ? t('crm.contacts.noCustomersFound', 'Keine Kunden gefunden')
+                  : t('crm.contacts.noCustomersAvailable', 'Keine Kunden verfuegbar')}
               </p>
             )}
           </div>

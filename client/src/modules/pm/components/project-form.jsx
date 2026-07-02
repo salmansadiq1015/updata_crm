@@ -11,7 +11,7 @@ import {
   projectStep3Schema,
   projectStep4Schema,
 } from '@/modules/pm/validations/project';
-import { customerService } from '@/modules/crm/services/customer-service';
+import { customerService, normalizeCustomerList } from '@/modules/crm/services/customer-service';
 import { queryKeys } from '@/lib/query/keys';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useDebounce } from '@/shared/hooks/use-debounce';
@@ -45,6 +45,13 @@ const BLANK_VALUES = {
 };
 
 const STEP_SCHEMAS = [projectStep1Schema, projectStep2Schema, projectStep3Schema, projectStep4Schema, null];
+const CUSTOMER_DROPDOWN_LIMIT = 20;
+const CUSTOMER_DROPDOWN_LIST_PARAMS = Object.freeze({
+  limit: CUSTOMER_DROPDOWN_LIMIT,
+  sortBy: 'name',
+  sortOrder: 'asc',
+  status: 'active',
+});
 
 export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
   const { t, language } = useLanguage();
@@ -66,19 +73,42 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerOpen, setCustomerOpen] = useState(false);
   const debouncedCustomerSearch = useDebounce(customerSearch, 300);
+  const trimmedCustomerSearch = debouncedCustomerSearch.trim();
 
-  const { data: customers = [] } = useQuery({
-    queryKey: queryKeys.crm.customers.search(debouncedCustomerSearch),
-    queryFn: () => customerService.searchCustomers(debouncedCustomerSearch, 20),
-    enabled: debouncedCustomerSearch.length >= 2,
+  const {
+    data: customers = [],
+    isFetching: isCustomerFetching,
+    isError: isCustomerError,
+  } = useQuery({
+    queryKey: trimmedCustomerSearch.length >= 2
+      ? queryKeys.crm.customers.search(trimmedCustomerSearch)
+      : queryKeys.crm.customers.list(CUSTOMER_DROPDOWN_LIST_PARAMS),
+    queryFn: async () => {
+      const payload = trimmedCustomerSearch.length >= 2
+        ? await customerService.searchCustomers(trimmedCustomerSearch, CUSTOMER_DROPDOWN_LIMIT)
+        : await customerService.getCustomers(CUSTOMER_DROPDOWN_LIST_PARAMS);
+      return normalizeCustomerList(payload);
+    },
+    enabled: customerOpen,
+    staleTime: 120_000,
   });
 
   const selectedCustomer = useMemo(() => {
     if (!watchedCustomerId) return null;
-    return customers?.find((c) => c._id === watchedCustomerId)
-      || defaultValues?.customerId?._id === watchedCustomerId
-        ? (defaultValues?.customerId?.name ? defaultValues.customerId : null)
-        : null;
+    const resultCustomer = customers?.find((c) => c._id === watchedCustomerId);
+    if (resultCustomer) return resultCustomer;
+
+    const defaultCustomer = defaultValues?.customerId;
+    if (
+      defaultCustomer
+      && typeof defaultCustomer === 'object'
+      && defaultCustomer._id === watchedCustomerId
+      && defaultCustomer.name
+    ) {
+      return defaultCustomer;
+    }
+
+    return null;
   }, [watchedCustomerId, customers, defaultValues]);
 
   // ── Users for review display ─────────────────────────────────
@@ -206,9 +236,11 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
     customerOpen,
     setCustomerOpen,
     customers,
-    debouncedCustomerSearch,
+    debouncedCustomerSearch: trimmedCustomerSearch,
     selectedCustomer,
-  }), [customerSearch, customerOpen, customers, debouncedCustomerSearch, selectedCustomer]);
+    isCustomerFetching,
+    isCustomerError,
+  }), [customerSearch, customerOpen, customers, trimmedCustomerSearch, selectedCustomer, isCustomerFetching, isCustomerError]);
 
   // ── Render current step ──────────────────────────────────────
   const stepContent = useMemo(() => {

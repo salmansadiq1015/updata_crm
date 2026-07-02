@@ -16,6 +16,14 @@ const PROJECT_STATUSES = [
 ];
 const PROJECT_TYPES = ['NEW_INSTALLATION', 'RENOVATION', 'MAINTENANCE', 'SERVICE_CONTRACT', 'OTHER'];
 
+const projectStatusFilter = Joi.string().trim().custom((value, helpers) => {
+  const statuses = value.split(',').map((status) => status.trim()).filter(Boolean);
+  if (statuses.length === 0) return helpers.error('any.invalid');
+  const invalidStatus = statuses.find((status) => !PROJECT_STATUSES.includes(status));
+  if (invalidStatus) return helpers.message(`status contains invalid project status: ${invalidStatus}`);
+  return statuses.join(',');
+}, 'project status filter');
+
 export const createProjectSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(255),
@@ -64,7 +72,7 @@ export const updateProjectSchema = {
 
 export const listProjectsSchema = {
   query: cursorPagination.keys({
-    status: Joi.string().valid(...PROJECT_STATUSES),
+    status: projectStatusFilter,
     projectType: Joi.string().valid(...PROJECT_TYPES),
     customerId: objectId,
     projectManagerId: objectId,

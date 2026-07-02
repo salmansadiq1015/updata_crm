@@ -1,16 +1,22 @@
 'use client';
 
+import { useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useFieldOpsOrders } from '@/modules/field-ops/hooks/use-field-ops-queries';
+import { toFieldOpsOrderItems } from '@/modules/field-ops/utils/order-option-utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { FieldOpsChatSidebarItem } from './field-ops-chat-sidebar-item';
 import { MessageSquare } from 'lucide-react';
 
 export function FieldOpsChatSidebar({ activeProjectId }) {
-  const { data: orders = [], isLoading } = useFieldOpsOrders({});
+  const { data: ordersResponse, isLoading } = useFieldOpsOrders({});
   const { t } = useLanguage();
 
-  const conversations = orders.filter((o) => o.projectId || o.project_id);
+  const orders = useMemo(() => toFieldOpsOrderItems(ordersResponse), [ordersResponse]);
+  const conversations = useMemo(
+    () => orders.filter((order) => order.projectId || order.project_id),
+    [orders],
+  );
 
   return (
     <div className="flex flex-col h-full">

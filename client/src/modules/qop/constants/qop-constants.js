@@ -44,6 +44,17 @@ export const CURRENCIES = [
   { value: 'EUR', label: 'EUR' },
 ];
 
+export const QOP_SELECTABLE_PROJECT_STATUSES = [
+  'DRAFT',
+  'PLANNING',
+  'SCHEDULED',
+  'WAITING_FOR_MATERIAL',
+  'IN_PROGRESS',
+  'AWAITING_CUSTOMER_APPROVAL',
+  'AWAITING_QUOTATION_APPROVAL',
+  'ON_HOLD',
+];
+
 export const PAYMENT_METHODS = [
   { value: 'bank_transfer', label: 'Banküberweisung' },
   { value: 'cash',          label: 'Bar' },

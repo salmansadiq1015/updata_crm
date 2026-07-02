@@ -102,7 +102,7 @@ export function ImagesPanel({ entityType, entityId }) {
   if (isLoading) return <ImagesSkeleton />;
 
   return (
-    <Card className="border-white/[0.07] bg-[#0D1117] rounded-2xl">
+    <Card className="rounded-2xl border-border/60 bg-card shadow-theme-sm dark:border-white/[0.07] dark:bg-[#0D1117]">
       <CardContent className="p-5">
         {/* Panel header */}
         <div className="flex items-center justify-between mb-5">
@@ -110,9 +110,9 @@ export function ImagesPanel({ entityType, entityId }) {
             <div className="p-1.5 rounded-lg bg-violet-500/10">
               <ImageIcon className="h-4 w-4 text-violet-400" />
             </div>
-            <h3 className="text-[14px] font-semibold text-white/85">{t('crm.images.title', 'Bilder')}</h3>
+            <h3 className="text-[14px] font-semibold text-foreground">{t('crm.images.title', 'Bilder')}</h3>
             {images.length > 0 && (
-              <span className="text-[11px] font-medium bg-white/[0.06] text-white/45 px-2 py-0.5 rounded-full">
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground dark:bg-white/[0.06] dark:text-white/45">
                 {images.length}
               </span>
             )}
@@ -155,8 +155,8 @@ export function ImagesPanel({ entityType, entityId }) {
           /* Drop zone empty state */
           <PermissionGate permission="crm:write" fallback={
             <div className="flex flex-col items-center justify-center py-10 text-center">
-              <ImageIcon className="h-10 w-10 text-white/10 mb-3" />
-              <p className="text-[13px] text-white/35">{t('crm.images.empty', 'Keine Bilder')}</p>
+              <ImageIcon className="mb-3 h-10 w-10 text-muted-foreground/25 dark:text-white/10" />
+              <p className="text-[13px] text-muted-foreground">{t('crm.images.empty', 'Keine Bilder')}</p>
             </div>
           }>
             <button
@@ -169,20 +169,20 @@ export function ImagesPanel({ entityType, entityId }) {
                 'w-full flex flex-col items-center justify-center gap-3 py-12 rounded-2xl border-2 border-dashed transition-all duration-200 cursor-pointer',
                 isDragOver
                   ? 'border-violet-500/60 bg-violet-500/[0.07]'
-                  : 'border-white/[0.08] bg-white/[0.02] hover:border-violet-500/30 hover:bg-violet-500/[0.04]'
+                  : 'border-border bg-muted/30 hover:border-violet-500/30 hover:bg-violet-500/[0.04] dark:border-white/[0.08] dark:bg-white/[0.02]'
               )}
             >
               <div className={cn(
                 'h-14 w-14 rounded-2xl flex items-center justify-center transition-colors',
-                isDragOver ? 'bg-violet-500/20' : 'bg-white/[0.05]'
+                isDragOver ? 'bg-violet-500/20' : 'bg-muted dark:bg-white/[0.05]'
               )}>
-                <CloudUpload className={cn('h-6 w-6', isDragOver ? 'text-violet-400' : 'text-white/25')} />
+                <CloudUpload className={cn('h-6 w-6', isDragOver ? 'text-violet-500 dark:text-violet-400' : 'text-muted-foreground dark:text-white/25')} />
               </div>
               <div className="text-center">
-                <p className="text-[13px] font-medium text-white/60">
+                <p className="text-[13px] font-medium text-foreground">
                   {isDragOver ? 'Bild hier ablegen' : t('crm.images.dropzone', 'Bild hierher ziehen oder klicken')}
                 </p>
-                <p className="text-[11px] text-white/30 mt-1">JPEG, PNG, WebP · max 5 MB</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">JPEG, PNG, WebP · max 5 MB</p>
               </div>
             </button>
           </PermissionGate>
@@ -208,10 +208,10 @@ export function ImagesPanel({ entityType, entityId }) {
             {canWrite && (
               <button
                 onClick={() => fileRef.current?.click()}
-                className="aspect-square rounded-xl border-2 border-dashed border-white/[0.08] hover:border-violet-500/30 bg-white/[0.02] hover:bg-violet-500/[0.04] flex flex-col items-center justify-center gap-2 transition-all group"
+                className="group flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/30 transition-all hover:border-violet-500/30 hover:bg-violet-500/[0.04] dark:border-white/[0.08] dark:bg-white/[0.02]"
               >
-                <Upload className="h-5 w-5 text-white/20 group-hover:text-violet-400 transition-colors" />
-                <span className="text-[11px] text-white/25 group-hover:text-violet-400 transition-colors font-medium">Hinzufügen</span>
+                <Upload className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-violet-500 dark:text-white/20 dark:group-hover:text-violet-400" />
+                <span className="text-[11px] font-medium text-muted-foreground transition-colors group-hover:text-violet-500 dark:text-white/25 dark:group-hover:text-violet-400">Hinzufügen</span>
               </button>
             )}
           </div>
@@ -294,7 +294,7 @@ function ImageTile({ image: img, canDelete, onDelete, onView, t }) {
   const Icon = meta.icon;
 
   return (
-    <div className="group/img relative aspect-square rounded-xl border border-white/[0.07] bg-[#060A10] overflow-hidden cursor-pointer shadow-sm hover:shadow-lg hover:shadow-black/30 transition-shadow">
+    <div className="group/img relative aspect-square cursor-pointer overflow-hidden rounded-xl border border-border bg-muted/30 shadow-sm transition-shadow hover:shadow-theme-md dark:border-white/[0.07] dark:bg-[#060A10] dark:hover:shadow-black/30">
       {img.url ? (
         <img
           src={img.thumbnailUrl || img.url}
@@ -303,15 +303,15 @@ function ImageTile({ image: img, canDelete, onDelete, onView, t }) {
           onClick={onView}
         />
       ) : (
-        <div className="h-full w-full flex items-center justify-center bg-white/[0.03]">
-          <ImageIcon className="h-8 w-8 text-white/15" />
+        <div className="flex h-full w-full items-center justify-center bg-muted/50 dark:bg-white/[0.03]">
+          <ImageIcon className="h-8 w-8 text-muted-foreground/35 dark:text-white/15" />
         </div>
       )}
 
       {/* Category badge — top left */}
       <div className="absolute top-2 left-2 z-10">
         <span className={cn(
-          'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md backdrop-blur-sm border border-white/[0.08]',
+          'inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md backdrop-blur-sm border border-border/60 dark:border-white/[0.08]',
           meta.bg, meta.color
         )}>
           <Icon className="h-2.5 w-2.5" />
@@ -355,6 +355,8 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
   // cleanup revokes the blob but useMemo never recreates it, leaving a dead src.)
   const [url, setUrl] = useState(null);
   useEffect(() => {
+    // Object URLs are external browser resources; create/revoke them after commit.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!file) { setUrl(null); return; }
     const objectUrl = URL.createObjectURL(file);
     setUrl(objectUrl);
@@ -372,18 +374,18 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-white/[0.08] bg-[#0D1117] shadow-2xl overflow-hidden">
+      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-2xl border border-border bg-card p-0 shadow-2xl sm:max-w-lg dark:border-white/[0.08] dark:bg-[#0D1117]">
 
         {/* ── Fixed Header ── */}
-        <div className="shrink-0 px-6 pt-5 pb-4 border-b border-white/[0.06] flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3 border-b border-border px-6 pb-4 pt-5 dark:border-white/[0.06]">
           <div className="p-2 rounded-xl bg-violet-500/10 ring-1 ring-violet-500/20">
             <CloudUpload className="h-5 w-5 text-violet-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <DialogTitle className="text-[16px] font-semibold text-white/90 leading-tight">
+            <DialogTitle className="text-[16px] font-semibold leading-tight text-foreground">
               {t('crm.images.uploadTitle', 'Bild hochladen')}
             </DialogTitle>
-            <p className="text-[12px] text-white/40 mt-0.5">
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
               {t('crm.images.uploadSubtitle', 'Bild prüfen, beschriften und Kategorie wählen')}
             </p>
           </div>
@@ -451,21 +453,21 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
 
           {/* Caption field */}
           <div className="space-y-1.5">
-            <label className="block text-[12px] font-medium text-white/55">
+            <label className="block text-[12px] font-medium text-muted-foreground">
               {t('crm.images.caption', 'Beschreibung')}
-              <span className="ml-1 text-white/25 font-normal">(optional)</span>
+              <span className="ml-1 font-normal text-muted-foreground/60">(optional)</span>
             </label>
             <Input
               value={caption}
               onChange={(e) => onCaptionChange(e.target.value)}
               placeholder={t('crm.images.captionPlaceholder', 'z.B. Typenschild Vorderseite')}
-              className="bg-white/[0.04] border-white/[0.10] rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+              className="h-9 rounded-lg border-input bg-muted/40 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 dark:border-white/[0.10] dark:bg-white/[0.04] dark:text-white/90 dark:placeholder:text-white/25"
             />
           </div>
 
           {/* Category picker — visual cards */}
           <div className="space-y-2">
-            <label className="block text-[12px] font-medium text-white/55">
+            <label className="block text-[12px] font-medium text-muted-foreground">
               {t('crm.images.category', 'Kategorie')}
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -481,14 +483,14 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
                       'flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all duration-150',
                       isActive
                         ? cn('border-current/30 ring-1 ring-current/20', meta.bg, meta.color)
-                        : 'border-white/[0.08] bg-white/[0.03] text-white/45 hover:bg-white/[0.07] hover:text-white/70'
+                        : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/45 dark:hover:bg-white/[0.07] dark:hover:text-white/70'
                     )}
                   >
                     <div className={cn(
                       'h-7 w-7 rounded-lg flex items-center justify-center shrink-0',
-                      isActive ? cn(meta.bg, 'ring-1 ring-current/25') : 'bg-white/[0.05]'
+                      isActive ? cn(meta.bg, 'ring-1 ring-current/25') : 'bg-background dark:bg-white/[0.05]'
                     )}>
-                      <Icon className={cn('h-3.5 w-3.5', isActive ? meta.color : 'text-white/30')} />
+                      <Icon className={cn('h-3.5 w-3.5', isActive ? meta.color : 'text-muted-foreground dark:text-white/30')} />
                     </div>
                     <span className="text-[12.5px] font-medium leading-tight">
                       {t(`crm.images.category.${key}`, meta.label)}
@@ -504,12 +506,12 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
         </div>
 
         {/* ── Fixed Footer ── */}
-        <div className="shrink-0 px-6 py-4 border-t border-white/[0.06] flex items-center justify-between gap-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-6 py-4 dark:border-white/[0.06]">
           <Button
             variant="ghost"
             onClick={onClose}
             disabled={isPending}
-            className="text-white/50 hover:text-white/80 hover:bg-white/[0.05]"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground dark:text-white/50 dark:hover:bg-white/[0.05] dark:hover:text-white/80"
           >
             {t('common.cancel', 'Abbrechen')}
           </Button>
@@ -532,7 +534,7 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
 
 function ImagesSkeleton() {
   return (
-    <Card className="border-white/[0.07] bg-[#0D1117] rounded-2xl">
+    <Card className="rounded-2xl border-border/60 bg-card shadow-theme-sm dark:border-white/[0.07] dark:bg-[#0D1117]">
       <CardContent className="p-5">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
@@ -543,7 +545,7 @@ function ImagesSkeleton() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-square rounded-xl bg-white/[0.05]" />
+            <Skeleton key={i} className="aspect-square rounded-xl bg-muted dark:bg-white/[0.05]" />
           ))}
         </div>
       </CardContent>

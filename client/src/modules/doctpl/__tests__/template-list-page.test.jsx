@@ -20,7 +20,18 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/i18n/language-context', () => ({
   useLanguage: () => ({
     locale: 'en',
-    t: (key, fallback) => fallback || key,
+    t: (key, fallback, vars) => {
+      const labels = {
+        'doctpl.templates.create': 'Create template',
+        'doctpl.templates.createFirst': 'Create first template',
+        'doctpl.templates.duplicateTemplate': 'Duplicate template',
+        'doctpl.templates.archiveTemplate': 'Archive template',
+      };
+      const raw = labels[key] || fallback || key;
+      return vars && typeof raw === 'string'
+        ? raw.replace(/\{(\w+)\}/g, (_, name) => (vars[name] == null ? `{${name}}` : String(vars[name])))
+        : raw;
+    },
   }),
 }));
 
@@ -35,6 +46,19 @@ vi.mock('@/shared/hooks/use-permissions', () => ({
 
 vi.mock('@/modules/doctpl/hooks/useTemplateQueries', () => ({
   useTemplates: (filters) => useTemplatesMock(filters),
+}));
+
+vi.mock('@/modules/doctpl/hooks/useCIQueries', () => ({
+  useCIAudit: () => ({
+    data: {
+      summary: { status: 'passed', templates: 1, activeTemplates: 1, assets: 3, issues: 0 },
+      templates: [{ templateId: 'tpl-1', status: 'passed' }],
+    },
+    isLoading: false,
+    isFetching: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
 }));
 
 vi.mock('@/modules/doctpl/hooks/useTemplateMutations', () => ({
@@ -101,7 +125,7 @@ describe('AdminTemplatesPage', () => {
     render(<AdminTemplatesPage />);
 
     expect(screen.getByText('Quotation Default')).toBeInTheDocument();
-    fireEvent.click(screen.getByTitle('Duplicate'));
+    fireEvent.click(screen.getByTitle('Duplicate template'));
 
     await waitFor(() => {
       expect(duplicateMutateAsync).toHaveBeenCalledWith({ id: 'tpl-1' });
@@ -151,7 +175,7 @@ describe('AdminTemplatesPage', () => {
     render(<AdminTemplatesPage />);
 
     expect(screen.queryByRole('button', { name: 'Create template' })).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Duplicate')).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Archive')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Duplicate template')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Archive template')).not.toBeInTheDocument();
   });
 });

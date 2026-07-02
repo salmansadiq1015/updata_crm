@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useChatMessages } from '@/modules/mobile/hooks/use-chat';
 import { useFieldOpsChatMutations } from '@/modules/field-ops/hooks/use-field-ops-chat-mutations';
 import { useFieldOpsOrders } from '@/modules/field-ops/hooks/use-field-ops-queries';
+import { toFieldOpsOrderItems } from '@/modules/field-ops/utils/order-option-utils';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { FieldOpsChatHeader } from './field-ops-chat-header';
 import { FieldOpsChatMessages } from './field-ops-chat-messages';
@@ -14,17 +15,19 @@ export function FieldOpsChatPanel({ projectId }) {
   const { user } = useAuth();
   const { data: messages = [], isLoading, typingUsers = [] } = useChatMessages(projectId);
   const { sendMessage } = useFieldOpsChatMutations(projectId);
-  const { data: orders = [] } = useFieldOpsOrders({});
+  const { data: ordersResponse } = useFieldOpsOrders({});
 
-  const order = orders.find(
-    (o) => (o.projectId || o.project_id) === projectId
+  const orders = useMemo(() => toFieldOpsOrderItems(ordersResponse), [ordersResponse]);
+  const order = useMemo(
+    () => orders.find((item) => (item.projectId || item.project_id) === projectId),
+    [orders, projectId],
   );
 
   const handleSend = useCallback(
     (payload) => {
       sendMessage.mutate(payload);
     },
-    [sendMessage.mutate]
+    [sendMessage]
   );
 
   return (

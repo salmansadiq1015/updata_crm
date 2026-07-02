@@ -25,6 +25,8 @@ export const PERMISSIONS = {
   // System
   SYSTEM_READ: 'system:read',
   SYSTEM_ADMIN: 'system:admin',
+  SETTINGS_READ: 'settings:read',
+  SETTINGS_ADMIN: 'settings:admin',
 
   // CRM
   CRM_READ: 'crm:read',

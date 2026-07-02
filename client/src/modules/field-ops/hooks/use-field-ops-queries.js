@@ -10,11 +10,15 @@ import { installationService } from '@/modules/mobile/services/installation-serv
 import { catalogService } from '@/modules/mobile/services/catalog-service';
 import { notificationService } from '@/modules/mobile/services/notification-service';
 
-export function useFieldOpsOrders(filters = {}) {
+export function useFieldOpsOrders(filters = {}, options = {}) {
+  const { enabled = true, ...queryOptions } = options;
+
   return useQuery({
     queryKey: ['field-ops', 'orders', 'all', filters],
     queryFn: () => orderService.getAllOrdersPage(filters),
+    enabled,
     staleTime: 30_000,
+    ...queryOptions,
   });
 }
 

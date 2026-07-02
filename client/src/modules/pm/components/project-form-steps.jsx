@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { htmlToPlainText } from '@/lib/utils/html';
-import { Search, Check, ChevronsUpDown, FileText, Building2, CalendarClock, Wallet, Pencil } from 'lucide-react';
+import { Search, Check, ChevronsUpDown, FileText, Building2, CalendarClock, Wallet, Pencil, Loader2 } from 'lucide-react';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import apiClient from '@/lib/api/client';
 
@@ -77,7 +77,17 @@ export function Step1Overview({ form, language, t }) {
 export function Step2CustomerSite({ form, language, t, customerState }) {
   const { setValue, watch, formState: { errors } } = form;
   const watchedCustomerId = watch('customerId');
-  const { customerSearch, setCustomerSearch, customerOpen, setCustomerOpen, customers, debouncedCustomerSearch, selectedCustomer } = customerState;
+  const {
+    customerSearch,
+    setCustomerSearch,
+    customerOpen,
+    setCustomerOpen,
+    customers,
+    debouncedCustomerSearch,
+    selectedCustomer,
+    isCustomerFetching,
+    isCustomerError,
+  } = customerState;
 
   const { data: sitesData } = useQuery({
     queryKey: queryKeys.crm.sites.byCustomer(watchedCustomerId),
@@ -109,13 +119,27 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
                     value={customerSearch}
                     onChange={(e) => setCustomerSearch(e.target.value)}
                     className="pl-8 h-8"
+                    autoFocus
                   />
                 </div>
               </div>
-              <div className="max-h-[200px] overflow-y-auto">
-                {customers?.length === 0 && debouncedCustomerSearch.length >= 2 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    {language === 'de' ? 'Keine Kunden gefunden' : 'No customers found'}
+              <div className="max-h-[220px] overflow-y-auto py-1">
+                {isCustomerFetching && customers.length === 0 && (
+                  <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {language === 'de' ? 'Kunden werden geladen...' : 'Loading customers...'}
+                  </div>
+                )}
+                {!isCustomerFetching && isCustomerError && (
+                  <p className="py-4 text-center text-sm text-destructive">
+                    {language === 'de' ? 'Kunden konnten nicht geladen werden' : 'Could not load customers'}
+                  </p>
+                )}
+                {!isCustomerFetching && !isCustomerError && customers.length === 0 && (
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    {debouncedCustomerSearch.length >= 2
+                      ? (language === 'de' ? 'Keine Kunden gefunden' : 'No customers found')
+                      : (language === 'de' ? 'Keine Kunden verfuegbar' : 'No customers available')}
                   </p>
                 )}
                 {customers?.map((c) => (

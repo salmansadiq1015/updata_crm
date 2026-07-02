@@ -98,8 +98,16 @@ export function InvoiceFormDialog({
     sortOrder: 'desc',
     ...(debouncedOrderSearch ? { search: debouncedOrderSearch } : {}),
   }), [debouncedOrderSearch]);
-  const { data: departments = [] } = useQopDepartments();
-  const { data: projects = [] } = useQopCustomerProjects(form.customerId);
+  const {
+    data: departments = [],
+    isFetching: departmentsLoading,
+    isError: departmentsError,
+  } = useQopDepartments();
+  const {
+    data: projects = [],
+    isFetching: projectsLoading,
+    isError: projectsError,
+  } = useQopCustomerProjects(form.customerId);
   const {
     data: orderData,
     isLoading: ordersLoading,
@@ -337,10 +345,16 @@ export function InvoiceFormDialog({
                     options={departmentOptions}
                     value={form.departmentId}
                     allowClear
+                    loading={departmentsLoading}
                     onChange={(value) => set('departmentId', value || '')}
                     placeholder={t('qop.form.selectDepartment', 'Select department...')}
-                    emptyIcon={Building2}
-                    emptyMessage={t('qop.form.noDepartments', 'No departments found')}
+                    emptyIcon={departmentsError ? SearchX : Building2}
+                    emptyMessage={departmentsError
+                      ? t('qop.form.departmentsLoadError', 'Departments could not be loaded')
+                      : t('qop.form.noDepartments', 'No departments found')}
+                    emptyHint={departmentsError
+                      ? t('qop.form.referencesLoadErrorHint', 'Check your connection and permissions, then try again.')
+                      : t('qop.form.noDepartmentsHint', 'Create a department in settings first.')}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -350,12 +364,18 @@ export function InvoiceFormDialog({
                     options={projectOptions}
                     value={form.projectId}
                     allowClear
+                    loading={projectsLoading}
                     onChange={(value) => set('projectId', value || '')}
                     placeholder={t('qop.form.noProject', 'No project')}
-                    emptyIcon={FolderKanban}
-                    emptyMessage={form.customerId
-                      ? t('qop.form.noProjects', 'No projects for this customer')
-                      : t('qop.form.selectCustomerFirst', 'Select a customer first')}
+                    emptyIcon={projectsError ? SearchX : FolderKanban}
+                    emptyMessage={projectsError
+                      ? t('qop.form.projectsLoadError', 'Projects could not be loaded')
+                      : form.customerId
+                        ? t('qop.form.noProjects', 'No projects for this customer')
+                        : t('qop.form.selectCustomerFirst', 'Select a customer first')}
+                    emptyHint={projectsError
+                      ? t('qop.form.referencesLoadErrorHint', 'Check your connection and permissions, then try again.')
+                      : form.customerId ? undefined : t('qop.form.projectsNeedCustomer', 'Projects are filtered by customer.')}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">

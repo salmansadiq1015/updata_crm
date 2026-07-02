@@ -134,10 +134,10 @@ const navSectionDefs = [
         ],
       },
       { type: 'leaf', labelKey: 'sidebar.templates', href: '/admin/templates', icon: LayoutTemplate, permission: 'templates:read' },
-      { type: 'leaf', labelKey: 'sidebar.migration', href: '/admin/migration', icon: RefreshCw, permission: 'settings:admin' },
+      { type: 'leaf', labelKey: 'sidebar.migration', href: '/admin/migration', icon: RefreshCw, permission: PERMISSIONS.SETTINGS_ADMIN },
       { type: 'leaf', labelKey: 'sidebar.integrations', href: '/admin/integrations', icon: Zap, permission: 'integrations:admin' },
       { type: 'leaf', labelKey: 'sidebar.widget', href: '/admin/integrations/widget/submissions', icon: Webhook, permission: 'integrations:widget:manage' },
-      { type: 'leaf', labelKey: 'sidebar.settings', href: '/settings', icon: Settings, disabled: true, permission: 'settings:read' },
+      { type: 'leaf', labelKey: 'sidebar.settings', href: '/admin/settings', icon: Settings, permission: PERMISSIONS.SETTINGS_READ },
     ],
   },
 ];

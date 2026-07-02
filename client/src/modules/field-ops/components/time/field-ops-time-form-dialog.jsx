@@ -13,6 +13,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFieldOpsOrders } from '@/modules/field-ops/hooks/use-field-ops-queries';
 import { ACTIVITY_TYPE_LABELS } from '@/modules/field-ops/constants/field-ops-constants';
+import {
+  FIELD_OPS_ORDER_PICKER_QUERY,
+  formatFieldOpsOrderOptionLabel,
+  getFieldOpsOrderId,
+  toFieldOpsOrderItems,
+} from '@/modules/field-ops/utils/order-option-utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Clock, StickyNote } from 'lucide-react';
 
@@ -81,9 +87,13 @@ function toTimeLocal(iso) {
 
 // ── Step components ───────────────────────────────────────────────────────────
 
-function Step1OrderTime({ form, de, isEdit }) {
+function Step1OrderTime({ form, de, isEdit, loadOrders }) {
   const { register, watch, setValue, formState: { errors } } = form;
-  const { data: orders = [] } = useFieldOpsOrders({});
+  const { data: ordersResponse, isFetching: ordersLoading, isError: ordersError } = useFieldOpsOrders(
+    FIELD_OPS_ORDER_PICKER_QUERY,
+    { enabled: loadOrders },
+  );
+  const orders = toFieldOpsOrderItems(ordersResponse);
 
   const [startTime, endTime, breakDurationMin] = watch(['startTime', 'endTime', 'breakDurationMin']);
   const netPreview = useMemo(() => {
@@ -109,11 +119,31 @@ function Step1OrderTime({ form, de, isEdit }) {
               <SelectValue placeholder={de ? 'Auftrag wählen…' : 'Select order…'} />
             </SelectTrigger>
             <SelectContent>
-              {orders.map((o) => (
-                <SelectItem key={o._id || o.id} value={o._id || o.id}>
-                  {o.assignmentNumber ? `#${o.assignmentNumber}` : ''} {o.title || (de ? 'Ohne Titel' : 'Untitled')}
+              {loadOrders && ordersLoading ? (
+                <SelectItem value="__orders_loading" disabled>
+                  {de ? 'Auftraege werden geladen...' : 'Loading orders...'}
                 </SelectItem>
-              ))}
+              ) : null}
+              {loadOrders && !ordersLoading && ordersError ? (
+                <SelectItem value="__orders_error" disabled>
+                  {de ? 'Auftraege konnten nicht geladen werden' : 'Orders could not be loaded'}
+                </SelectItem>
+              ) : null}
+              {loadOrders && !ordersLoading && !ordersError && orders.length === 0 ? (
+                <SelectItem value="__orders_empty" disabled>
+                  {de ? 'Keine Auftraege verfuegbar' : 'No orders available'}
+                </SelectItem>
+              ) : null}
+              {orders.map((order) => {
+                const orderId = getFieldOpsOrderId(order);
+                if (!orderId) return null;
+
+                return (
+                  <SelectItem key={orderId} value={orderId}>
+                    {formatFieldOpsOrderOptionLabel(order, de ? 'de' : 'en')}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </FormField>
@@ -238,7 +268,7 @@ export function FieldOpsTimeFormDialog({ open, onOpenChange, onSave, isLoading, 
   ];
 
   const stepContent = [
-    <Step1OrderTime key={0} form={form} de={de} isEdit={isEdit} />,
+    <Step1OrderTime key={0} form={form} de={de} isEdit={isEdit} loadOrders={open} />,
     <Step2ActivityNote key={1} form={form} de={de} />,
   ];
 

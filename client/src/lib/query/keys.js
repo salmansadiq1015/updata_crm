@@ -81,6 +81,10 @@ export const queryKeys = {
   },
   integrations: {
     all: () => ['integrations'],
+    dashboard: () => ['integrations', 'dashboard'],
+    detail: (key) => ['integrations', 'detail', key],
+    healthHistory: (key, period) => ['integrations', 'healthHistory', key, period],
+    syncHistory: (key, params) => ['integrations', 'syncHistory', key, params],
     calendar: {
       status: () => ['integrations', 'calendar', 'status'],
     },

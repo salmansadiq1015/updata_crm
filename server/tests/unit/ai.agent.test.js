@@ -83,6 +83,36 @@ jest.unstable_mockModule('../../src/modules/ai/agent/toolExecution.model.js', ()
 // Tests
 // ---------------------------------------------------------------------------
 
+describe('AI Agent — agent.validation (runAgentSchema)', () => {
+  let runAgentSchema;
+
+  beforeAll(async () => {
+    const mod = await import('../../src/modules/ai/agent/agent.validation.js');
+    runAgentSchema = mod.runAgentSchema;
+  });
+
+  test('accepts a request with no context (route has no page context)', () => {
+    const { error } = runAgentSchema.validate({ input: 'Create an urgent order for Herr Mueller' });
+    expect(error).toBeUndefined();
+  });
+
+  test('accepts context: null (global assistant sends this when no route context matches)', () => {
+    const { error } = runAgentSchema.validate({
+      input: 'Create an urgent order for Herr Mueller',
+      context: null,
+    });
+    expect(error).toBeUndefined();
+  });
+
+  test('accepts a populated context object', () => {
+    const { error } = runAgentSchema.validate({
+      input: 'Create an urgent order for Herr Mueller',
+      context: { contextModule: 'crm', contextRecordType: 'customer', contextRecordId: 'abc' },
+    });
+    expect(error).toBeUndefined();
+  });
+});
+
 describe('AI Agent — agent.guardrails', () => {
   let sanitizeUserInput, enforceMaxSteps;
 

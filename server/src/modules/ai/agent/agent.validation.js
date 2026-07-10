@@ -4,7 +4,7 @@ export const runAgentSchema = Joi.object({
   input: Joi.string().min(3).max(2000).required(),
   threadId: Joi.string().max(100).optional(),
   correlationId: Joi.string().max(120).optional(),
-  context: Joi.object().unknown(true).optional(),
+  context: Joi.object().unknown(true).allow(null).optional(),
 });
 
 export const confirmAgentSchema = Joi.object({

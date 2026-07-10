@@ -111,6 +111,18 @@ describe('AI Agent — agent.validation (runAgentSchema)', () => {
     });
     expect(error).toBeUndefined();
   });
+
+  test('rejects malformed context values', () => {
+    for (const context of ['null', ['bad-context']]) {
+      const { error } = runAgentSchema.validate({
+        input: 'Create an urgent order for Herr Mueller',
+        context,
+      });
+
+      expect(error).toBeDefined();
+      expect(error.details[0].path).toEqual(['context']);
+    }
+  });
 });
 
 describe('AI Agent — agent.guardrails', () => {

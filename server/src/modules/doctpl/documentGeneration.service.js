@@ -47,6 +47,7 @@ class DocumentGenerationService {
     const renderCiConfig = await ciRenderAssetsService.prepare(ciConfig);
 
     const renderData = this._prepareRenderData(templateType, data, renderCiConfig);
+    await this._resolveLineItemImages(renderData);
     this._validateRenderData(templateType, renderData, renderCiConfig);
 
     // 3. Build filename
@@ -165,6 +166,33 @@ class DocumentGenerationService {
     };
 
     return renderData;
+  }
+
+  /**
+   * Load image bytes for line items that carry an attached product image so the
+   * table renderer can embed them. Mirrors the CI logo/asset preparation:
+   * resolve FileMetadata, then download the buffer from storage. Only PNG/JPEG
+   * are embeddable by PDFKit — other types are skipped. Failures never abort
+   * generation; the affected line simply renders without an image.
+   */
+  async _resolveLineItemImages(renderData) {
+    const items = Array.isArray(renderData?.lineItems) ? renderData.lineItems : [];
+    const withImages = items.filter((li) => li && li.image && li.image.fileId);
+    if (!withImages.length) return;
+
+    const EMBEDDABLE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg']);
+    const { default: fileService } = await import('../files/file.service.js');
+    const { default: storageService } = await import('../../shared/storage/StorageService.js');
+
+    await Promise.all(withImages.map(async (li) => {
+      try {
+        const file = await fileService.getById(li.image.fileId);
+        if (!file || !EMBEDDABLE_MIME_TYPES.has(file.mimeType)) return;
+        li.imageBuffer = await storageService.download(file.key);
+      } catch {
+        // Non-fatal: render the line without its image rather than failing the PDF.
+      }
+    }));
   }
 
   _validateRenderData(templateType, data, ciConfig) {

@@ -4,6 +4,9 @@ import { pdfFonts } from './fonts.js';
 
 const ROW_HEIGHT = 16;
 const HEADER_HEIGHT = 18;
+// Product/line image (rendered above the description text when present)
+const IMG_MAX_HEIGHT = 120;
+const IMG_GAP = 4;
 
 export default class TableRenderer {
   draw(doc, pm, ciConfig, data, language, config = {}) {
@@ -77,6 +80,20 @@ export default class TableRenderer {
     pm.checkSpace(rowHeight);
     const y = pm.currentY;
 
+    // Attached product image: rendered at the top of the description column; the
+    // textual row is pushed down below it. Failures never break the row.
+    let imageExtra = 0;
+    if (item.imageBuffer) {
+      const box = this._descColBox(cols, pm);
+      const dims = this._imageBox(doc, item.imageBuffer, box.width, IMG_MAX_HEIGHT);
+      try {
+        doc.image(item.imageBuffer, left + box.x, y, { fit: [dims.w, dims.h] });
+      } catch {
+        // Ignore a malformed image buffer — render the row without the picture.
+      }
+      imageExtra = dims.h + IMG_GAP;
+    }
+
     doc.save().font(isOptional ? fonts.italic : fonts.body).fontSize(9).fillColor(colors.text);
 
     const vals = {
@@ -89,9 +106,10 @@ export default class TableRenderer {
       total:       (item.total ?? item.lineTotal) != null ? (item.total ?? item.lineTotal).toFixed(2) : '',
     };
 
+    const textY = y + imageExtra;
     for (const col of cols) {
       const v = vals[col.field] ?? '';
-      doc.text(v, left + col.x, y, { width: col.width - 4, align: col.align });
+      doc.text(v, left + col.x, textY, { width: col.width - 4, align: col.align });
     }
     doc.restore();
     pm.moveDown(rowHeight);
@@ -123,6 +141,41 @@ export default class TableRenderer {
     }, ROW_HEIGHT);
     doc.restore();
 
-    return Math.max(ROW_HEIGHT, Math.ceil(height) + 6);
+    let imageExtra = 0;
+    if (item.imageBuffer) {
+      const box = this._descColBox(cols, pm);
+      const dims = this._imageBox(doc, item.imageBuffer, box.width, IMG_MAX_HEIGHT);
+      imageExtra = dims.h + IMG_GAP;
+    }
+
+    return Math.max(ROW_HEIGHT, Math.ceil(height) + 6) + imageExtra;
+  }
+
+  /** Position + inner width of the description column (where line images sit). */
+  _descColBox(cols, pm) {
+    const descCol = cols.find((c) => c.field === 'description');
+    const x = descCol ? descCol.x : 0;
+    const width = (descCol ? descCol.width : pm.contentWidth) - 4;
+    return { x, width: Math.max(20, width) };
+  }
+
+  /**
+   * Scaled draw dimensions for a line image within a box, preserving aspect
+   * ratio and never upscaling. Falls back to the full box when the natural
+   * size can't be read (e.g. test doubles without openImage()).
+   */
+  _imageBox(doc, buffer, boxW, boxH) {
+    try {
+      if (buffer && typeof doc.openImage === 'function') {
+        const img = doc.openImage(buffer);
+        if (img && img.width > 0 && img.height > 0) {
+          const scale = Math.min(boxW / img.width, boxH / img.height, 1);
+          return { w: Math.max(1, img.width * scale), h: Math.max(1, img.height * scale) };
+        }
+      }
+    } catch {
+      // fall through to the fixed box
+    }
+    return { w: boxW, h: boxH };
   }
 }

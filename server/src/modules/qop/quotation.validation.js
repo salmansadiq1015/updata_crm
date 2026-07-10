@@ -19,6 +19,10 @@ const lineItemSchema = Joi.object({
   unitPrice: Joi.number().min(0),
   discountPercent: Joi.number().min(0).max(100),
   vatRate: Joi.number().valid(0, 2.6, 8.1).required(),
+  image: Joi.object({
+    fileId: objectId.allow(null, ''),
+    url: Joi.string().max(2000).allow('', null),
+  }).allow(null),
 });
 
 export const createQuotationSchema = {
@@ -38,6 +42,9 @@ export const createQuotationSchema = {
     paymentTerms: Joi.string().max(1000).allow(''),
     notes: Joi.string().max(5000).allow(''),
     termsAndConditions: Joi.string().max(10000).allow(''),
+    subsidyAmount: Joi.number().min(0),
+    subsidyNote: Joi.string().max(5000).allow(''),
+    clientSideWorks: Joi.string().max(5000).allow(''),
     assignedUserId: objectId.allow(null),
   }),
 };
@@ -61,6 +68,9 @@ export const updateQuotationSchema = {
     paymentTerms: Joi.string().max(1000).allow(''),
     notes: Joi.string().max(5000).allow(''),
     termsAndConditions: Joi.string().max(10000).allow(''),
+    subsidyAmount: Joi.number().min(0),
+    subsidyNote: Joi.string().max(5000).allow(''),
+    clientSideWorks: Joi.string().max(5000).allow(''),
     assignedUserId: objectId.allow(null),
   }).min(1),
 };

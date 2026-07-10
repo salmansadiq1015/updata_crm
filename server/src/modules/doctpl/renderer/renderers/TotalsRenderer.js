@@ -81,6 +81,33 @@ export default class TotalsRenderer {
     }
 
     row(t(language, 'grandTotal'), `${currency} ${(data.grandTotalRounded ?? data.grandTotal ?? 0).toFixed(2)}`, true);
+
+    // Subsidy deduction (Foerdergelder) and resulting investment total — offers.
+    const subsidyAmount = Number(data.subsidyAmount || 0);
+    if (subsidyAmount > 0) {
+      const gross = Number(data.grandTotalRounded ?? data.grandTotal ?? 0);
+      row(`${t(language, 'subsidy')} ${t(language, 'subsidyHint')}`, `-${currency} ${subsidyAmount.toFixed(2)}`);
+      row(t(language, 'totalInvestment'), `${currency} ${(gross - subsidyAmount).toFixed(2)}`, true);
+    }
+
+    // Full-width closing blocks: client-side works and subsidy notes (offers).
+    const fullBlock = (title, content) => {
+      if (!content) return;
+      pm.moveDown(8);
+      pm.checkSpace(30);
+      doc.save().font(fonts.bold).fontSize(9).fillColor(colors.primary);
+      doc.text(title, left, pm.currentY, { width });
+      doc.restore();
+      pm.moveDown(13);
+      doc.save().font(fonts.body).fontSize(8).fillColor(colors.text);
+      const h = doc.heightOfString(content, { width });
+      pm.checkSpace(Math.ceil(h) + 4);
+      doc.text(content, left, pm.currentY, { width });
+      doc.restore();
+      pm.moveDown(Math.ceil(h) + 4);
+    };
+    fullBlock(t(language, 'clientSideWorks'), data.clientSideWorks);
+    fullBlock(t(language, 'subsidyInfo'), data.subsidyNote);
   }
 
   _deductionLabel(deduction) {

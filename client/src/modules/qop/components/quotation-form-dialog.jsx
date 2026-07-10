@@ -49,6 +49,9 @@ const EMPTY_FORM = () => ({
   internalNote: '',
   paymentTerms: '',
   termsAndConditions: '',
+  subsidyAmount: 0,
+  subsidyNote: '',
+  clientSideWorks: '',
   version: undefined,
 });
 
@@ -102,6 +105,9 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
         internalNote: quotation.internalNote ?? '',
         paymentTerms: quotation.paymentTerms ?? '',
         termsAndConditions: quotation.termsAndConditions ?? '',
+        subsidyAmount: quotation.subsidyAmount ?? 0,
+        subsidyNote: quotation.subsidyNote ?? '',
+        clientSideWorks: quotation.clientSideWorks ?? '',
         version: quotation.version,
       });
     } else {
@@ -144,6 +150,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
       vatRate: Number(li.vatRate),
       catalogItemId: li.catalogItemId || li.catalogSnapshot?.catalogArticleId || undefined,
       catalogSnapshot: li.catalogSnapshot || undefined,
+      image: li.image?.fileId ? { fileId: li.image.fileId, url: li.image.url || '' } : null,
     }));
     const payload = {
       customerId: form.customerId,
@@ -159,6 +166,9 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
       notes: form.notes || undefined,
       paymentTerms: form.paymentTerms || undefined,
       termsAndConditions: form.termsAndConditions || undefined,
+      subsidyAmount: Number(form.subsidyAmount) || 0,
+      subsidyNote: form.subsidyNote || undefined,
+      clientSideWorks: form.clientSideWorks || undefined,
     };
     if (isEdit) {
       await updateQuotation.mutateAsync({ id: quotation._id ?? quotation.id, data: { ...payload, version: form.version } });
@@ -419,6 +429,40 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                     onChange={(html) => set('termsAndConditions', html)}
                     placeholder={t('qop.form.termsPlaceholder', 'General terms and conditions...')}
                     maxLength={10000}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.form.subsidyAmount', 'Foerdergelder (Abzug)')}</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.subsidyAmount}
+                    onChange={(e) => set('subsidyAmount', e.target.value)}
+                    placeholder="0.00"
+                    className="rounded-xl text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.form.subsidyNote', 'Foerdergelder-Hinweis')}</Label>
+                  <Textarea
+                    rows={2}
+                    value={form.subsidyNote}
+                    onChange={(e) => set('subsidyNote', e.target.value)}
+                    placeholder={t('qop.form.subsidyNotePlaceholder', 'z.B. Foerdergelder Basel-Land ...')}
+                    className="resize-none rounded-xl text-sm"
+                    maxLength={5000}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>{t('qop.form.clientSideWorks', 'Bauseitige Arbeiten und Lieferungen')}</Label>
+                  <Textarea
+                    rows={2}
+                    value={form.clientSideWorks}
+                    onChange={(e) => set('clientSideWorks', e.target.value)}
+                    placeholder={t('qop.form.clientSideWorksPlaceholder', 'z.B. Freiraeumen Arbeitsbereich ...')}
+                    className="resize-none rounded-xl text-sm"
+                    maxLength={5000}
                   />
                 </div>
               </div>

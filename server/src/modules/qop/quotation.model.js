@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
+import lineItemImageSchema from '../../shared/schemas/lineItemImage.schema.js';
 
 export const QUOTATION_STATUSES = [
   'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED',
@@ -35,6 +36,7 @@ const lineItemSchema = new mongoose.Schema(
     discountPercent: { type: Number, default: 0, min: 0, max: 100 },
     vatRate: { type: Number, default: 8.1 },
     lineTotal: { type: Number, default: 0 },
+    image: { type: lineItemImageSchema, default: null },
   },
   { _id: true },
 );
@@ -110,6 +112,11 @@ const quotationSchema = new mongoose.Schema(
     paymentTerms: { type: String, maxlength: 1000, default: '' },
     notes: { type: String, maxlength: 5000, default: '' },
     termsAndConditions: { type: String, maxlength: 10000, default: '' },
+    // Offer-specific: subsidy (Foerdergelder) deducted from the gross to show the
+    // resulting investment total, plus free-text subsidy info and client-side works.
+    subsidyAmount: { type: Number, min: 0, default: 0 },
+    subsidyNote: { type: String, maxlength: 5000, default: '' },
+    clientSideWorks: { type: String, maxlength: 5000, default: '' },
     assignedUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

@@ -15,6 +15,10 @@ const lineItemSchema = Joi.object({
   unitPrice: Joi.number().min(0).required(),
   discountPercent: Joi.number().min(0).max(100).default(0),
   vatRate: Joi.number().min(0).required(),
+  image: Joi.object({
+    fileId: objectId.allow(null, ''),
+    url: Joi.string().max(2000).allow('', null),
+  }).allow(null),
 });
 
 export const createOrderSchema = {

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
+import lineItemImageSchema from '../../shared/schemas/lineItemImage.schema.js';
 
 export const INVOICE_STATUSES = ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
 export const INVOICE_TYPES = ['STANDARD', 'ADVANCE', 'FINAL', 'CREDIT_NOTE'];
@@ -21,6 +22,7 @@ const lineItemSchema = new mongoose.Schema(
     lineTotal: { type: Number, default: 0 },
     sourceOrderLinePosition: { type: Number, min: 1, default: null },
     sourceOrderLineQuantity: { type: Number, min: 0, default: null },
+    image: { type: lineItemImageSchema, default: null },
   },
   { _id: false },
 );

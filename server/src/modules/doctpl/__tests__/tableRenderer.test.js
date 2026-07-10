@@ -29,3 +29,26 @@ describe('TableRenderer unit column (DOC-001)', () => {
     expect(text).toContain('Stk');
   });
 });
+
+describe('TableRenderer line images (offer product picture)', () => {
+  test('embeds an attached line image via doc.image() and still renders the row', () => {
+    const doc = createFakeDoc();
+    const pm = createFakePageManager();
+    const items = [
+      { position: 1, description: 'Waermepumpe Vitocal 250-A', unit: 'Stk', quantity: 1, unitPrice: 17227, total: 17227, imageBuffer: Buffer.from('fake-image-bytes') },
+    ];
+    new TableRenderer().draw(doc, pm, {}, { lineItems: items }, 'de', {});
+    expect(doc.__calls.image.length).toBe(1);
+    expect(doc.__renderedText()).toContain('Waermepumpe Vitocal 250-A');
+  });
+
+  test('does not call doc.image() when no line image is attached', () => {
+    const doc = createFakeDoc();
+    const pm = createFakePageManager();
+    const items = [
+      { position: 1, description: 'Service', unit: 'Stk', quantity: 1, unitPrice: 100, total: 100 },
+    ];
+    new TableRenderer().draw(doc, pm, {}, { lineItems: items }, 'de', {});
+    expect(doc.__calls.image.length).toBe(0);
+  });
+});

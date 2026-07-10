@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import voiceMetadataSchema from '../../shared/schemas/voiceMetadata.schema.js';
 import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
+import lineItemImageSchema from '../../shared/schemas/lineItemImage.schema.js';
 
 export const ORDER_STATUSES = ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
 
@@ -17,6 +18,7 @@ const lineItemSchema = new mongoose.Schema(
     discountPercent: { type: Number, default: 0, min: 0, max: 100 },
     vatRate: { type: Number, required: true, min: 0 },
     lineTotal: { type: Number, default: 0 },
+    image: { type: lineItemImageSchema, default: null },
   },
   { _id: false },
 );

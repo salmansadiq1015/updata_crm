@@ -1,18 +1,21 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { PackageSearch, Plus, Trash2 } from 'lucide-react';
+import { PackageSearch, Plus, Trash2, ImagePlus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { VAT_RATES } from '../constants/qop-constants';
 import { ArticlePickerDialog } from '@/modules/catalog/components/article-picker-dialog';
 import { CatalogLinePriceDrift } from './catalog-line-price-drift';
 import { TextBlockPicker } from './text-block-picker';
+import apiClient from '@/lib/api/client';
+import { ENDPOINTS } from '@/lib/api/endpoints';
+import { showError } from '@/lib/toast';
 
 function calcLineTotal(qty, price, discount) {
   const q = parseFloat(qty) || 0;
@@ -40,6 +43,118 @@ const UNITS = ['Stk', 'h', 'm', 'm²', 'm³', 'kg', 'l', 'psch'];
 
 let _uid = 0;
 function uid() { return ++_uid; }
+
+const LINE_IMAGE_MIME = ['image/png', 'image/jpeg', 'image/jpg'];
+const LINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Per-line product image control: upload a PNG/JPG that will be printed above
+ * the position on the generated offer/order/invoice PDF. Stores { fileId, url }
+ * on the line item; the server loads the image bytes by fileId when rendering.
+ */
+function LineImageControl({ image, disabled, onChange, t }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [refetchedUrl, setRefetchedUrl] = useState('');
+  const triedRefetch = useRef(false);
+
+  // Prefer a freshly refetched URL, then the stored one. The stored preview URL
+  // is a pre-signed link that can expire; when the <img> fails to load we fetch a
+  // fresh URL by fileId once (see onError). The generated document never depends
+  // on this URL — it renders server-side from the fileId. The control is remounted
+  // (keyed by fileId at the call site) when the attached image changes.
+  const displayUrl = refetchedUrl || image?.url || '';
+
+  const refetchUrl = async () => {
+    if (triedRefetch.current || !image?.fileId) return;
+    triedRefetch.current = true;
+    try {
+      const res = await apiClient.get(ENDPOINTS.FILES.DOWNLOAD(image.fileId));
+      const p = res?.data ?? res;
+      if (p?.url) setRefetchedUrl(p.url);
+    } catch {
+      // Keep the thumbnail broken; the generated document still renders the image.
+    }
+  };
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    if (!LINE_IMAGE_MIME.includes(file.type)) {
+      showError(t('qop.lineItems.imageType', 'Nur PNG- oder JPG-Bilder werden auf der Offerte unterstuetzt.'));
+      return;
+    }
+    if (file.size > LINE_IMAGE_MAX_BYTES) {
+      showError(t('qop.lineItems.imageTooLarge', 'Bild ist zu gross (max. 5 MB).'));
+      return;
+    }
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('module', 'qop');
+      form.append('bucket', 'images');
+      form.append('category', 'line-item');
+      const res = await apiClient.post(ENDPOINTS.FILES.UPLOAD, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const payload = res?.data ?? res;
+      const fileId = payload?._id || payload?.id;
+      if (!fileId) throw new Error('upload failed');
+      onChange({ fileId, url: payload?.url || '' });
+    } catch {
+      showError(t('qop.lineItems.imageUploadError', 'Bild konnte nicht hochgeladen werden.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (image?.fileId || image?.url) {
+    return (
+      <span className="relative group/img shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={displayUrl}
+          onError={refetchUrl}
+          alt={t('qop.lineItems.imageAlt', 'Positionsbild')}
+          className="h-8 w-8 rounded border border-border object-cover"
+        />
+        {!disabled && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            title={t('qop.lineItems.imageRemove', 'Bild entfernen')}
+            className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground group-hover/img:flex"
+          >
+            <X className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  if (disabled) return null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        title={t('qop.lineItems.imageAdd', 'Bild hinzufuegen')}
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:opacity-50"
+      >
+        <ImagePlus className="h-3.5 w-3.5" />
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg"
+        className="hidden"
+        onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ''; }}
+      />
+    </>
+  );
+}
 
 export function LineItemsEditor({ value = [], onChange, disabled = false }) {
   const { t } = useLanguage();
@@ -181,6 +296,13 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
                   />
                 )}
                 <CatalogLinePriceDrift item={item} />
+                <LineImageControl
+                  key={item.image?.fileId || 'noimg'}
+                  image={item.image}
+                  disabled={disabled}
+                  t={t}
+                  onChange={(img) => updateItem(idx, 'image', img)}
+                />
                 </div>
                 {item.catalogSnapshot && (
                   <div className="truncate px-1.5 text-[10px] leading-4 text-muted-foreground">

@@ -19,6 +19,10 @@ const lineItemSchema = Joi.object({
   vatRate: Joi.number().min(0).required(),
   sourceOrderLinePosition: Joi.number().integer().min(1).allow(null),
   sourceOrderLineQuantity: Joi.number().min(0).allow(null),
+  image: Joi.object({
+    fileId: objectId.allow(null, ''),
+    url: Joi.string().max(2000).allow('', null),
+  }).allow(null),
 });
 
 const orderLineSelectionSchema = Joi.object({

@@ -36,6 +36,9 @@ function normalizeLineItems(items = []) {
     discountPercent: Number(item.discountPercent || 0),
     vatRate: Number(item.vatRate || 0),
     lineTotal: Number(item.lineTotal || 0),
+    image: item.image && item.image.fileId
+      ? { fileId: String(item.image.fileId), url: item.image.url || '' }
+      : null,
   }));
 }
 
@@ -168,6 +171,9 @@ class QopDocumentPayloadService {
       }),
       introduction: quotation.introduction || '',
       validUntil: formatDate(quotation.validUntil),
+      subsidyAmount: Number(quotation.subsidyAmount || 0),
+      subsidyNote: quotation.subsidyNote || '',
+      clientSideWorks: quotation.clientSideWorks || '',
     };
 
     return {

@@ -127,10 +127,10 @@ export function DocumentsTable({
                 </td>
                 <td className="px-4 py-2">
                   <div className="flex gap-1 justify-end">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" title={t('common.preview')} onClick={() => handlePreview(doc)}>
+                    <Button type="button" size="icon" variant="ghost" className="h-7 w-7" title={t('common.preview')} onClick={() => handlePreview(doc)}>
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" title={t('common.download')} onClick={() => handleDownload(doc)}>
+                    <Button type="button" size="icon" variant="ghost" className="h-7 w-7" title={t('common.download')} onClick={() => handleDownload(doc)}>
                       <Download className="h-3.5 w-3.5" />
                     </Button>
                   </div>

@@ -79,14 +79,14 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
           <FileText className="h-4 w-4 text-muted-foreground" />{t('doctpl.documents')}
         </h4>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={handleGenerate} disabled={generate.isPending} className="gap-1.5">
+          <Button type="button" size="sm" variant="outline" onClick={handleGenerate} disabled={generate.isPending} className="gap-1.5">
             {generate.isPending
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
               : <Plus className="h-3.5 w-3.5" />}
             {t('doctpl.generatePdf')}
           </Button>
           {docs.length > 0 && (
-            <Button size="sm" variant="outline" onClick={handleEmailOpen} className="gap-1.5">
+            <Button type="button" size="sm" variant="outline" onClick={handleEmailOpen} className="gap-1.5">
               <Mail className="h-3.5 w-3.5" />{t('common.send')}
             </Button>
           )}

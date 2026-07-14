@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { showError } from '@/lib/toast';
 import { useSendEmail } from '../../hooks/useEmailMutations';
 
 const DEFAULT_FORM = {
@@ -74,15 +75,27 @@ function EmailComposeForm({ initialValues, onClose }) {
 
   const handleSend = async () => {
     const documentIds = form.attachments.map((a) => a.id);
-    await send.mutateAsync({
-      ...form,
+    const payload = {
       to: toRecipientList(form.to),
       cc: toRecipientList(form.cc),
       bcc: toRecipientList(form.bcc),
+      subject: form.subject,
+      bodyHtml: form.bodyHtml,
+      sourceModule: form.sourceModule,
+      sourceRecordId: form.sourceRecordId,
       documentId: documentIds[0] || null,
       documentIds,
-    });
-    onClose();
+    };
+    // senderName/senderAddress are optional; the server resolves them from the CI
+    // config when omitted. Sending empty strings fails Joi (string().email() rejects '').
+    if (form.senderName?.trim()) payload.senderName = form.senderName.trim();
+    if (form.senderAddress?.trim()) payload.senderAddress = form.senderAddress.trim();
+    try {
+      await send.mutateAsync(payload);
+      onClose();
+    } catch (err) {
+      showError(err);
+    }
   };
 
   return (

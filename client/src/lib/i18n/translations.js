@@ -4790,7 +4790,7 @@ export const translations = {
     'crm.installations.type.solar_thermal': 'Solarthermie',
     'crm.installations.type.radiator_system': 'Heizkoerpersystem',
     'crm.installations.type.ventilation': 'Lueftung',
-    'crm.installations.type.hot_water': 'Warmwasser',
+    'crm.installations.type.hot_water': 'Wassererwärmer',
     'crm.installations.type.other': 'Andere',
     'crm.installations.fuel.gas': 'Gas',
     'crm.installations.fuel.oil': 'Oel',

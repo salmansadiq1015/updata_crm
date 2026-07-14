@@ -90,11 +90,14 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     if (quotation) {
+      // Some fields come back populated (object {_id,...}) from the API → extract the id so the
+      // selects/combobox can match the option and the save sends a valid objectId.
+      const idOf = (v) => (v && typeof v === 'object' ? (v._id ?? v.id ?? '') : (v ?? ''));
       setForm({
-        customerId: quotation.customerId ?? quotation.customer?._id ?? '',
+        customerId: idOf(quotation.customerId) || quotation.customer?._id || '',
         customerName: quotation.customerName ?? quotation.customer?.name ?? '',
-        departmentId: quotation.departmentId ?? '',
-        projectId: quotation.projectId ?? '',
+        departmentId: idOf(quotation.departmentId),
+        projectId: idOf(quotation.projectId),
         language: quotation.language ?? 'de',
         currency: quotation.currency ?? 'CHF',
         validUntil: quotation.validUntil?.slice(0, 10) ?? addDays(new Date(), DEFAULT_VALIDITY_DAYS),

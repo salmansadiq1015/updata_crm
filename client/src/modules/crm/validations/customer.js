@@ -39,6 +39,8 @@ const customerBaseSchema = z.object({
     errorMap: () => ({ message: 'Typ ist erforderlich' }),
   }),
   ownerName: optionalStr(255),
+  // Anrede / salutation (client feedback #1) — optional, '' = "none"
+  salutation: z.enum(['herr', 'frau', 'familie', 'firma', 'herr_frau', 'frau_herr']).or(z.literal('')).optional(),
   // Address
   street: z
     .string()

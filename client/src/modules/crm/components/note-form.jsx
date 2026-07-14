@@ -54,18 +54,18 @@ export function NoteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
+      <DialogContent className="sm:max-w-lg p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-border bg-card shadow-2xl">
         {/* Fixed Header */}
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-slate-500/10 ring-1 ring-slate-500/20 shrink-0">
               <StickyNote className="h-5 w-5 text-slate-400" />
             </div>
             <div>
-              <DialogTitle className="text-[16px] font-semibold text-white/90">
+              <DialogTitle className="text-[16px] font-semibold text-foreground">
                 {isEdit ? t('crm.notes.editNote', 'Notiz bearbeiten') : t('crm.notes.newNote', 'Neue Notiz')}
               </DialogTitle>
-              <DialogDescription className="text-[13px] text-white/45 mt-0.5">
+              <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
                 {isEdit
                   ? t('crm.notes.editDesc', 'Notizinhalt und Einstellungen anpassen.')
                   : t('crm.notes.createDesc', 'Neue Notiz zu diesem Datensatz hinzufügen.')}
@@ -96,14 +96,14 @@ export function NoteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 
             <DarkField label={t('crm.notes.category', 'Kategorie')} error={errors.category}>
               <Select value={category} onValueChange={(v) => setValue('category', v, { shouldDirty: true })}>
-                <SelectTrigger className="bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 focus:border-slate-500/50 focus:ring-slate-500/20">
+                <SelectTrigger className="bg-background border-border rounded-lg h-9 text-[13px] text-foreground focus:border-slate-500/50 focus:ring-slate-500/20">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#0D1117] border-white/10">
+                <SelectContent className="bg-card border-border">
                   {Object.entries(NOTE_CATEGORY_META).map(([key, meta]) => {
                     const Icon = meta.icon;
                     return (
-                      <SelectItem key={key} value={key} className="text-white/80 focus:bg-white/5 focus:text-white/90">
+                      <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/50 focus:text-foreground">
                         <span className="flex items-center gap-2">
                           <Icon className={cn('h-3.5 w-3.5', meta.color)} />
                           {t(`crm.notes.category.${key}`, meta.label)}
@@ -115,36 +115,36 @@ export function NoteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
               </Select>
             </DarkField>
 
-            <Separator className="my-5 bg-white/6" />
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+            <Separator className="my-5 bg-muted/50" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.notes.sectionFlags', 'Markierungen')}
             </p>
 
-            <div className="flex items-center justify-between rounded-xl border border-white/6 bg-white/2 px-4 py-3">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-3">
               <div>
-                <Label className="text-[13px] font-medium text-white/80">{t('crm.notes.pinned', 'Angeheftet')}</Label>
-                <p className="text-xs text-white/40 mt-0.5">{t('crm.notes.pinnedHint', 'Oben in der Liste anzeigen')}</p>
+                <Label className="text-[13px] font-medium text-foreground">{t('crm.notes.pinned', 'Angeheftet')}</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('crm.notes.pinnedHint', 'Oben in der Liste anzeigen')}</p>
               </div>
               <Switch checked={isPinned} onCheckedChange={(v) => setValue('isPinned', v, { shouldDirty: true })} />
             </div>
 
-            <div className="flex items-center justify-between rounded-xl border border-white/6 bg-white/2 px-4 py-3">
+            <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-3">
               <div>
-                <Label className="text-[13px] font-medium text-white/80">{t('crm.notes.warning', 'Warnung')}</Label>
-                <p className="text-xs text-white/40 mt-0.5">{t('crm.notes.warningHint', 'Als Warnhinweis kennzeichnen')}</p>
+                <Label className="text-[13px] font-medium text-foreground">{t('crm.notes.warning', 'Warnung')}</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('crm.notes.warningHint', 'Als Warnhinweis kennzeichnen')}</p>
               </div>
               <Switch checked={isWarning} onCheckedChange={(v) => setValue('isWarning', v, { shouldDirty: true })} />
             </div>
           </div>
 
           {/* Fixed Footer */}
-          <div className="px-6 py-4 border-t border-white/6 shrink-0 flex items-center justify-between gap-3">
+          <div className="px-6 py-4 border-t border-border shrink-0 flex items-center justify-between gap-3">
             <Button
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
-              className="text-white/55 hover:text-white/80 hover:bg-white/5"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/50"
             >
               {t('common.cancel', 'Abbrechen')}
             </Button>
@@ -166,7 +166,7 @@ export function NoteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 function DarkField({ label, required, error, children }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+      <Label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">
         {label}{required && <span className="text-red-400 ml-1">*</span>}
       </Label>
       {children}

@@ -12,3 +12,8 @@ Thumbs.db
 docs/
 .superpowers/
 .screenshots/
+client/start-local.sh
+client/start-remote.sh
+server/package.json
+server/src/seed/demo-seed.js
+client/package-lock.json

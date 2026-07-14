@@ -16,6 +16,12 @@ const customerSchema = new mongoose.Schema(
       maxlength: 255,
     },
     ownerName: { type: String, trim: true, maxlength: 255, default: null },
+    // Anrede / salutation (client feedback #1) — optional, null = "none"
+    salutation: {
+      type: String,
+      enum: ['herr', 'frau', 'familie', 'firma', 'herr_frau', 'frau_herr', null],
+      default: null,
+    },
     type: {
       type: String,
       enum: ['private', 'business'],

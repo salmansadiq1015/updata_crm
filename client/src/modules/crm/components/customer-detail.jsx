@@ -42,6 +42,9 @@ import {
 import { pickCustomerAccent, CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 
 const cantonName = (code) => CH_CANTONS.find((c) => c.code === code)?.name || code;
+// Anrede / salutation (client feedback #1)
+const SALUTATION_LABELS = { herr: 'Herr', frau: 'Frau', familie: 'Familie', firma: 'Firma', herr_frau: 'Herr und Frau', frau_herr: 'Frau und Herr' };
+const salutationLabel = (code) => SALUTATION_LABELS[code] || '';
 
 // Accepted attachment types — documents + images (scans/photos of contracts).
 // Mirrors the server 'general' bucket policy (ALLOWED_MIME_TYPES.all minus audio/video).
@@ -553,7 +556,7 @@ export function CustomerDetail() {
                 </div>
               </div>
 
-              <h1 className="text-[18px] font-bold text-foreground tracking-tight mb-1 truncate">{customer.name}</h1>
+              <h1 className="text-[18px] font-bold text-foreground tracking-tight mb-1 truncate">{customer.salutation ? `${salutationLabel(customer.salutation)} ${customer.name}` : customer.name}</h1>
               {customer.customerNumber && (
                 <p className="text-xs font-mono text-muted-foreground mb-3">{customer.customerNumber}</p>
               )}

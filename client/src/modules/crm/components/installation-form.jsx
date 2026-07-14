@@ -87,25 +87,25 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
     }
   };
 
-  const inputCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20';
-  const selectTriggerCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 focus:border-emerald-500/50 focus:ring-emerald-500/20';
+  const inputCls = 'bg-background border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20';
+  const selectTriggerCls = 'bg-background border-border rounded-lg h-9 text-[13px] text-foreground focus:border-emerald-500/50 focus:ring-emerald-500/20';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
+      <DialogContent className="sm:max-w-xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-border bg-card shadow-2xl">
         {/* Fixed Header */}
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-emerald-500/10 ring-1 ring-emerald-500/20 shrink-0">
               <Flame className="h-5 w-5 text-emerald-400" />
             </div>
             <div>
-              <DialogTitle className="text-[16px] font-semibold text-white/90">
+              <DialogTitle className="text-[16px] font-semibold text-foreground">
                 {isEdit
                   ? t('crm.installations.editInstallation', 'Installation bearbeiten')
                   : t('crm.installations.newInstallation', 'Neue Installation')}
               </DialogTitle>
-              <DialogDescription className="text-[13px] text-white/45 mt-0.5">
+              <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
                 {t('crm.installations.formDesc', 'Anlage / Gerät am Standort (Heizkessel, Wärmepumpe, etc.).')}
               </DialogDescription>
             </div>
@@ -115,18 +115,18 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
         {/* Scrollable Body */}
         <form onSubmit={handleSubmit(submit)} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin space-y-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.installations.sectionType', 'Gerätetyp')}
             </p>
 
             <DarkField label={t('crm.installations.type', 'Typ')} required error={errors.type}>
               <Select value={type} onValueChange={(v) => setValue('type', v, { shouldDirty: true })}>
                 <SelectTrigger className={selectTriggerCls}><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-[#0D1117] border-white/10">
+                <SelectContent className="bg-card border-border">
                   {Object.entries(INSTALLATION_TYPE_META).map(([key, meta]) => {
                     const Icon = meta.icon;
                     return (
-                      <SelectItem key={key} value={key} className="text-white/80 focus:bg-white/5 focus:text-white/90">
+                      <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/50 focus:text-foreground">
                         <span className="flex items-center gap-2">
                           <Icon className={cn('h-3.5 w-3.5', meta.color)} />
                           {t(`crm.installations.type.${key}`, meta.label)}
@@ -154,8 +154,8 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
               />
             </DarkField>
 
-            <Separator className="my-5 bg-white/6" />
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+            <Separator className="my-5 bg-muted/50" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.installations.sectionDates', 'Daten & Leistung')}
             </p>
 
@@ -178,9 +178,9 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
               <DarkField label={t('crm.installations.fuelType', 'Energieträger')} error={errors.fuelType}>
                 <Select value={fuelType || ''} onValueChange={(v) => setValue('fuelType', v || null, { shouldDirty: true })}>
                   <SelectTrigger className={selectTriggerCls}><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent className="bg-[#0D1117] border-white/10">
+                  <SelectContent className="bg-card border-border">
                     {Object.entries(FUEL_TYPE_META).map(([key, meta]) => (
-                      <SelectItem key={key} value={key} className="text-white/80 focus:bg-white/5 focus:text-white/90">
+                      <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/50 focus:text-foreground">
                         {t(`crm.installations.fuel.${key}`, meta.label)}
                       </SelectItem>
                     ))}
@@ -189,8 +189,8 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
               </DarkField>
             </div>
 
-            <Separator className="my-5 bg-white/6" />
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+            <Separator className="my-5 bg-muted/50" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.installations.sectionNotes', 'Technische Notizen')}
             </p>
 
@@ -212,13 +212,13 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
           </div>
 
           {/* Fixed Footer */}
-          <div className="px-6 py-4 border-t border-white/6 shrink-0 flex items-center justify-between gap-3">
+          <div className="px-6 py-4 border-t border-border shrink-0 flex items-center justify-between gap-3">
             <Button
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
-              className="text-white/55 hover:text-white/80 hover:bg-white/5"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/50"
             >
               {t('common.cancel', 'Abbrechen')}
             </Button>
@@ -240,7 +240,7 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
 function DarkField({ label, required, error, children }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+      <Label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">
         {label}{required && <span className="text-red-400 ml-1">*</span>}
       </Label>
       {children}

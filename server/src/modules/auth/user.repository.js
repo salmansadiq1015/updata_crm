@@ -148,6 +148,21 @@ class UserRepository {
   }
 
   /**
+   * Count non-deleted users grouped by role.
+   * Returns a map { roleId: count } for the roles list "Benutzer" column.
+   */
+  async countGroupedByRole() {
+    const rows = await User.aggregate([
+      { $match: { isDeleted: false } },
+      { $group: { _id: '$role', count: { $sum: 1 } } },
+    ]);
+    return rows.reduce((acc, row) => {
+      if (row._id) acc[String(row._id)] = row.count;
+      return acc;
+    }, {});
+  }
+
+  /**
    * Count active users with admin role.
    * Used for "last admin" protection.
    */

@@ -651,7 +651,11 @@ export function ScheduleTab({ projectId }) {
   });
 
   const entries = useMemo(() => {
-    const raw = scheduleData?.entries || scheduleData || [];
+    // Check Array.isArray FIRST: when scheduleData is already an array, `scheduleData.entries`
+    // resolves to Array.prototype.entries (a truthy function), so `?.entries || …` would
+    // short-circuit to that method instead of the data. Only fall back to wrapped shapes.
+    if (Array.isArray(scheduleData)) return scheduleData;
+    const raw = scheduleData?.entries || scheduleData?.data || [];
     return Array.isArray(raw) ? raw : [];
   }, [scheduleData]);
 

@@ -64,8 +64,9 @@ router.put(
   (req, res, next) => taskDashboardController.setUserReminderDefaults(req, res, next),
 );
 
-// Project task integration routes (mounted under /projects/:projectId/tasks externally)
-export const projectTaskRouter = Router();
+// Project task integration routes (mounted under /projects/:projectId/tasks externally).
+// mergeParams lets this sub-router read :projectId from the parent mount path.
+export const projectTaskRouter = Router({ mergeParams: true });
 
 projectTaskRouter.get(
   '/',
@@ -83,8 +84,9 @@ projectTaskRouter.get(
   (req, res, next) => taskDashboardController.getProjectTaskSummary(req, res, next),
 );
 
-// Order task integration routes (mounted under /orders/:orderId/tasks externally)
-export const orderTaskRouter = Router();
+// Order task integration routes (mounted under /orders/:orderId/tasks externally).
+// mergeParams lets this sub-router read :orderId from the parent mount path.
+export const orderTaskRouter = Router({ mergeParams: true });
 
 orderTaskRouter.get(
   '/',

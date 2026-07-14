@@ -11,6 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { showError } from '@/lib/toast';
 import { useInvoiceMutations } from '../hooks/use-qop-mutations';
 import { PAYMENT_METHODS } from '../constants/qop-constants';
 
@@ -44,17 +45,22 @@ export function RecordPaymentDialog({ open, onClose, invoiceId, outstandingAmoun
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await recordPayment.mutateAsync({
-      id: invoiceId,
-      data: {
-        amount: Number(form.amount),
-        paymentDate: form.paymentDate,
-        paymentMethod: form.paymentMethod,
-        reference: form.reference || undefined,
-        notes: form.notes || undefined,
-      },
-    });
-    onClose();
+    // Field names must match the server recordPayment schema: date / method / note.
+    try {
+      await recordPayment.mutateAsync({
+        id: invoiceId,
+        data: {
+          amount: Number(form.amount),
+          date: form.paymentDate,
+          method: form.paymentMethod,
+          reference: form.reference || undefined,
+          note: form.notes || undefined,
+        },
+      });
+      onClose();
+    } catch (err) {
+      showError(err);
+    }
   };
 
   const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2 }).format(n);

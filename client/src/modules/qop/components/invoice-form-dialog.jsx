@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { showError } from '@/lib/toast';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -219,7 +220,7 @@ export function InvoiceFormDialog({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    try {
     if (isEdit) {
       await updateInvoice.mutateAsync({
         id: invoice._id ?? invoice.id,
@@ -288,6 +289,9 @@ export function InvoiceFormDialog({
       return;
     }
     onClose();
+    } catch (err) {
+      showError(err);
+    }
   };
 
   const titleMap = {
@@ -298,9 +302,11 @@ export function InvoiceFormDialog({
 
   const canSubmit = isEdit
     ? invoice?.status === 'DRAFT' && Boolean(form.customerName && form.dueDate && form.version)
-    : (type === 'STANDARD'
+    : type === 'STANDARD'
       ? Boolean(effectiveSourceOrderId || sourceQuotationId)
-      : Boolean(effectiveSourceOrderId));
+      : type === 'ADVANCE'
+        ? Boolean(effectiveSourceOrderId && form.milestoneDescription?.trim())
+        : Boolean(effectiveSourceOrderId);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>

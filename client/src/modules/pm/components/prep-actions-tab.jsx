@@ -409,7 +409,7 @@ export function PrepActionsTab({ projectId }) {
   const isEdit = !!editAction;
   const schema = isEdit ? updatePrepActionSchema : createPrepActionSchema;
 
-  const { register, handleSubmit, setValue, getValues, reset, control, formState: { errors } } = useForm({
+  const { register, handleSubmit, setValue, getValues, reset, watch, control, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: { actionType: 'OTHER', title: '', isMandatory: false, assignedToId: null, externalReference: '' },
   });

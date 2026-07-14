@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { showError } from '@/lib/toast';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -173,12 +174,16 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
       subsidyNote: form.subsidyNote || undefined,
       clientSideWorks: form.clientSideWorks || undefined,
     };
-    if (isEdit) {
-      await updateQuotation.mutateAsync({ id: quotation._id ?? quotation.id, data: { ...payload, version: form.version } });
-    } else {
-      await createQuotation.mutateAsync(payload);
+    try {
+      if (isEdit) {
+        await updateQuotation.mutateAsync({ id: quotation._id ?? quotation.id, data: { ...payload, version: form.version } });
+      } else {
+        await createQuotation.mutateAsync(payload);
+      }
+      onClose();
+    } catch (err) {
+      showError(err);
     }
-    onClose();
   };
 
   return (

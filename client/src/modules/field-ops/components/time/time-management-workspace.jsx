@@ -287,8 +287,8 @@ function TabToolbar({ search, onSearch, searchPlaceholder, filters = [], action 
       <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
         <SearchBox value={search} onChange={onSearch} placeholder={searchPlaceholder} />
         <div className="flex flex-wrap gap-2">
-          {filters.map((filter) => (
-            <ToolbarSelect key={filter.key} {...filter} />
+          {filters.map(({ key, ...filter }) => (
+            <ToolbarSelect key={key} {...filter} />
           ))}
         </div>
       </div>

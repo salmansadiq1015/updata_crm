@@ -30,7 +30,11 @@ export function RowActionsMenu({ items = [], label, align = 'end' }) {
   if (visible.length === 0) return null;
 
   return (
-    <DropdownMenu>
+    // Non-modal: a row-actions menu shouldn't trap focus or lock scroll. In modal
+    // mode Radix sets `pointer-events: none` on <body> while open and only restores
+    // it on close — if the row remounts (table re-render) while the menu is open,
+    // that cleanup never runs and the whole page stays frozen/unclickable.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

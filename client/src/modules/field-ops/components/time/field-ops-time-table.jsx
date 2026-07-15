@@ -95,6 +95,13 @@ function normalizeSearch(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+// Stable empty reference — avoids a fresh [] on every render while the query
+// has no data, which would otherwise cascade through the derived memos and
+// retrigger TanStack's autoReset pagination (re-render loop).
+const EMPTY_ENTRIES = [];
+
+const getEntryRowId = (row) => row._id || row.id;
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function FieldOpsTimeTable({ filters = {}, compact = false }) {
@@ -119,7 +126,8 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
   const [overrideTarget, setOverrideTarget] = useState(null);
 
   // Data
-  const { data: entries = [], isFetching } = useFieldOpsTimeEntries(filters);
+  const { data, isFetching } = useFieldOpsTimeEntries(filters);
+  const entries = data ?? EMPTY_ENTRIES;
 
   // Stats (derived, no extra query)
   const stats = useMemo(() => ({
@@ -172,6 +180,10 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
     onRelease: () => { setRowSelection({}); setReleaseOpen(false); setPanelOpen(false); },
     onOverride: () => { setOverrideTarget(null); setPanelOpen(false); },
   });
+
+  // react-query keeps mutate identities stable; use it as the columns dep so the
+  // column defs don't rebuild on every render (the mutation object itself is new each render).
+  const releaseMutate = release.mutate;
 
   const handleCreate = useCallback(({ orderId, payload }) => {
     createEntry.mutate({ orderId, payload });
@@ -305,7 +317,7 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
                 label: de ? 'Freigeben' : 'Release',
                 icon: Unlock,
                 hidden: !isPending,
-                onSelect: () => release.mutate(entry._id || entry.id),
+                onSelect: () => releaseMutate(entry._id || entry.id),
               },
               {
                 label: de ? 'Überschreiben' : 'Override',
@@ -325,7 +337,7 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
         );
       },
     },
-  ], [de, release]);
+  ], [de, releaseMutate]);
 
   return (
     <div className="space-y-6">
@@ -501,7 +513,7 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
         rowCount={filtered.length}
         onRowClick={(row) => { setSelectedEntry(row); setPanelOpen(true); }}
         emptyState={<TimeEmptyState de={de} />}
-        getRowId={(row) => row._id || row.id}
+        getRowId={getEntryRowId}
         enableRowSelection
         rowSelection={rowSelection}
         onRowSelectionChange={setRowSelection}

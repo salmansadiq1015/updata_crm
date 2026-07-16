@@ -200,11 +200,10 @@ export function InstallationsTable() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <PremiumStatCard label={t('crm.stats.total', 'Total')} value={pageStats.total} icon={Wrench} accent="violet" />
         <PremiumStatCard label={t('crm.statusActive', 'Active')} value={pageStats.active} accent="emerald" />
         <PremiumStatCard label={t('crm.installations.statusDecommissioned', 'Decommissioned')} value={pageStats.decommissioned} accent="rose" />
-        <PremiumStatCard label={t('crm.installations.totalPower', 'Total power')} value={formatNumber(pageStats.totalKw, { decimals: 1 })} suffix="kW" icon={Zap} accent="amber" />
       </div>
 
       {/* Filter bar */}

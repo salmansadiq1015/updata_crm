@@ -23,6 +23,9 @@ const FIELDS = [
 
 function RichTextEditor({ value, onChange, labelList }) {
   const editor = useEditor({
+    // Next.js renders this on the server first; Tiptap must defer its initial
+    // render to the client to avoid an SSR hydration mismatch (crashes the tab).
+    immediatelyRender: false,
     extensions: [StarterKit],
     content: value || '',
     onUpdate: ({ editor: activeEditor }) => onChange(activeEditor.getHTML()),

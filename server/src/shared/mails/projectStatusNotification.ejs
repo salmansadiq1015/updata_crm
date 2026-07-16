@@ -28,16 +28,16 @@
       <h1><%= appName %></h1>
     </div>
     <div class="content">
-      <h2>Projektstatus geaendert</h2>
+      <h2>Projektstatus geändert</h2>
       <p>Hallo <%= recipientName %>,</p>
-      <p>Der Status des Projekts <strong><%= projectName %></strong> (<%= projectNumber %>) wurde geaendert:</p>
+      <p>Der Status des Projekts <strong><%= projectName %></strong> (<%= projectNumber %>) wurde geändert:</p>
       <div class="status-change">
         <p>
           <span class="status-badge status-<%= fromStatus %>"><%= fromStatus %></span>
           &rarr;
           <span class="status-badge status-<%= toStatus %>"><%= toStatus %></span>
         </p>
-        <p><strong>Geaendert von:</strong> <%= changedBy %></p>
+        <p><strong>Geändert von:</strong> <%= changedBy %></p>
         <% if (comment) { %>
         <p><strong>Kommentar:</strong> <%= comment %></p>
         <% } %>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Download, RefreshCw, Plus } from 'lucide-react';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogBody, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Tabs, TabsList, TabsTrigger, TabsContent,
@@ -287,7 +287,9 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        {/* Base DialogContent has p-0; the padded, scrollable area must live in DialogBody
+            so tab content and action buttons keep their edge spacing. */}
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">
               {isLoading
@@ -296,6 +298,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
             </DialogTitle>
           </DialogHeader>
 
+          <DialogBody>
           {isLoading ? (
             <div className="flex flex-col gap-3 mt-4">
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
@@ -326,6 +329,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
               </TabsContent>
             </Tabs>
           )}
+          </DialogBody>
         </DialogContent>
       </Dialog>
 

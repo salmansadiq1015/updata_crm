@@ -314,7 +314,9 @@ function WorkPackagesTab({ order, orderId, de }) {
   const [title, setTitle] = useState('');
 
   const employee = order.employeeId || order.employee_id;
-  const assigneeId = typeof employee === 'object' ? (employee._id || employee.id) : employee;
+  // typeof null === 'object', so guard against a null employee (no user linked)
+  // before reading _id/id — otherwise the Work tab crashes.
+  const assigneeId = employee && typeof employee === 'object' ? (employee._id || employee.id) : employee;
   const isBusy = createTask.isPending || changeStatus.isPending || completeTask.isPending || reopenTask.isPending;
 
   const handleCreate = () => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useState, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { usePermissions } from '@/shared/hooks/use-permissions';
@@ -30,7 +30,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useAuthStore } from '@/stores/auth-store';
+import { authService } from '@/modules/auth/services/auth-service';
 import { useUnreadCount } from '@/modules/notifications/hooks/use-notification-feed';
 
 // Nav model. A section item is either a leaf (link) or a group (parent w/ children).
@@ -423,8 +423,13 @@ function SidebarLogo({ collapsed }) {
 
 function SidebarUserCard({ collapsed }) {
   const { user } = useAuth();
-  const logout = useAuthStore((s) => s.logout);
+  const router = useRouter();
   const { t } = useLanguage();
+
+  const logout = async () => {
+    await authService.logout();
+    router.push('/login');
+  };
 
   const initials = `${(user?.firstName || '')[0] || ''}${(user?.lastName || '')[0] || ''}`.toUpperCase();
   const roleName = typeof user?.role === 'object' ? user.role.name : user?.role;

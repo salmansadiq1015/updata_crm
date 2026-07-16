@@ -71,17 +71,20 @@ export class RedisCache {
    */
   async invalidatePattern(pattern) {
     try {
+      // ioredis applies keyPrefix to get/set/del but NOT to SCAN's MATCH pattern,
+      // so we must ensure the prefix is present exactly once. Call sites are
+      // inconsistent — some already pass `${keyPrefix}...`, others don't — so we
+      // prepend only when the caller hasn't already included the prefix.
+      const prefix = this.client.options?.keyPrefix || '';
+      const scanPattern = prefix && pattern.startsWith(prefix) ? pattern : `${prefix}${pattern}`;
       let cursor = '0';
       let totalDeleted = 0;
       do {
-        const [nextCursor, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        const [nextCursor, keys] = await this.client.scan(cursor, 'MATCH', scanPattern, 'COUNT', 100);
         cursor = nextCursor;
         if (keys.length > 0) {
-          // Strip keyPrefix before deleting since ioredis adds it automatically
-          const strippedKeys = keys.map((k) => {
-            const prefix = this.client.options?.keyPrefix || '';
-            return k.startsWith(prefix) ? k.slice(prefix.length) : k;
-          });
+          // Strip keyPrefix before deleting since ioredis adds it back automatically
+          const strippedKeys = keys.map((k) => (k.startsWith(prefix) ? k.slice(prefix.length) : k));
           await this.client.del(...strippedKeys);
           totalDeleted += keys.length;
         }

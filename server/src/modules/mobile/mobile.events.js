@@ -53,7 +53,7 @@ export function registerMobileEvents() {
         for (const employeeId of payload.employeeIds) {
           await notificationService.sendNotification(employeeId, {
             notificationType: 'ORDER_CHANGED',
-            title: 'Auftrag geaendert',
+            title: 'Auftrag geändert',
             body: `Ein Auftrag wurde aktualisiert: ${payload.title || 'Unbenannt'}`,
             deepLink: `/orders/${payload.assignmentId}`,
           });

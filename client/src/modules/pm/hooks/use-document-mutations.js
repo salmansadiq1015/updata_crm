@@ -2,7 +2,6 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { documentService } from '@/modules/pm/services/document-service';
-import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 
@@ -13,7 +12,10 @@ export function useDocumentMutations(projectId, {
   const { t } = useLanguage();
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.pm.documents.byProject(projectId) });
+    // Invalidate on the [pm, documents, projectId] prefix, not byProject(projectId):
+    // that helper pads missing category/filters as undefined/null positional elements,
+    // which never prefix-match the live query key (…, category, filters) → no refetch.
+    queryClient.invalidateQueries({ queryKey: ['pm', 'documents', projectId] });
   };
 
   const upload = useMutation({

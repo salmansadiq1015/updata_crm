@@ -93,7 +93,7 @@ export const INVOICE_STATUS_COLORS = {
 export const QUOTATION_STATUS_LABELS = {
   de: {
     DRAFT: 'Entwurf', SENT: 'Gesendet', VIEWED: 'Gesehen', ACCEPTED: 'Angenommen',
-    DECLINED: 'Abgelehnt', EXPIRED: 'Abgelaufen', CANCELLED: 'Storniert', CONVERTED: 'Konvertiert',
+    DECLINED: 'Abgelehnt', EXPIRED: 'Abgelaufen', CANCELLED: 'Storniert', CONVERTED: 'Umgewandelt',
   },
   en: {
     DRAFT: 'Draft', SENT: 'Sent', VIEWED: 'Viewed', ACCEPTED: 'Accepted',
@@ -114,7 +114,7 @@ export const ORDER_STATUS_LABELS = {
 
 export const INVOICE_STATUS_LABELS = {
   de: {
-    DRAFT: 'Entwurf', SENT: 'Gesendet', PARTIALLY_PAID: 'Teilzahlung',
+    DRAFT: 'Entwurf', SENT: 'Gesendet', PARTIALLY_PAID: 'Teilbezahlt',
     PAID: 'Bezahlt', OVERDUE: 'Überfällig', CANCELLED: 'Storniert',
   },
   en: {

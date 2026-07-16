@@ -38,6 +38,7 @@ const BLANK_VALUES = {
   name: '',
   ownerName: '',
   type: 'private',
+  salutation: '',
   phone: '',
   mobile: '',
   email: '',
@@ -53,6 +54,17 @@ const BLANK_VALUES = {
   newsletterChannel: 'email',
   notes: '',
 };
+
+// Anrede / salutation (client feedback #1). '__none__' = "none" (shadcn Select forbids an empty-string value).
+const SALUTATIONS = [
+  { value: '__none__', label: '(keine)' },
+  { value: 'herr', label: 'Herr' },
+  { value: 'frau', label: 'Frau' },
+  { value: 'familie', label: 'Familie' },
+  { value: 'firma', label: 'Firma' },
+  { value: 'herr_frau', label: 'Herr und Frau' },
+  { value: 'frau_herr', label: 'Frau und Herr' },
+];
 
 export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
   const { t } = useLanguage();
@@ -78,6 +90,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
         ...defaultValues,
         name: defaultValues.name || '',
         ownerName: defaultValues.ownerName || '',
+        salutation: defaultValues.salutation || '',
         type: defaultValues.type || 'private',
         phone: defaultValues.phone || '',
         mobile: defaultValues.mobile || '',
@@ -102,6 +115,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   const watchedName = useWatch({ control, name: 'name' });
   const watchedPlz = useWatch({ control, name: 'postalCode' });
   const typeVal = useWatch({ control, name: 'type' });
+  const selectedSalutation = useWatch({ control, name: 'salutation' });
   const newsletterOptIn = useWatch({ control, name: 'newsletterOptIn' });
   const selectedCanton = useWatch({ control, name: 'canton' });
   const newsletterChannel = useWatch({ control, name: 'newsletterChannel' });
@@ -229,8 +243,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
             {/* Duplicate warning */}
             {!isEdit && dupesData?.hasDuplicates && (
               <DuplicateWarning
-                title={t('crm.duplicateWarningTitle', 'Moegliche Duplikate gefunden')}
-                description={t('crm.duplicateWarningDesc', 'Kunden mit aehnlichem Namen existieren bereits:')}
+                title={t('crm.duplicateWarningTitle', 'Mögliche Duplikate gefunden')}
+                description={t('crm.duplicateWarningDesc', 'Kunden mit ähnlichem Namen existieren bereits:')}
                 duplicates={dupesData.duplicates || []}
                 onDismiss={() => handleOpenChange(false)}
                 className="mb-6"
@@ -249,6 +263,24 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     <p className="text-xs text-muted-foreground">{t('crm.basicHint', 'Name und Kundentyp')}</p>
                   </div>
                 </div>
+
+                <DarkField label={t('crm.salutation', 'Anrede')} error={errors.salutation}>
+                  <Select
+                    value={selectedSalutation ? selectedSalutation : '__none__'}
+                    onValueChange={(v) => setValue('salutation', v === '__none__' ? '' : v, { shouldValidate: true })}
+                  >
+                    <SelectTrigger className={selectTriggerCls}>
+                      <SelectValue placeholder="(keine)" />
+                    </SelectTrigger>
+                    <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
+                      {SALUTATIONS.map((s) => (
+                        <SelectItem key={s.value} value={s.value} className="text-foreground focus:bg-muted/60 focus:text-foreground">
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </DarkField>
 
                 <DarkField label={isBusiness ? t('crm.companyName', 'Firmenname') : t('crm.name', 'Name')} required error={errors.name}>
                   <Input
@@ -383,7 +415,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     <Input placeholder="8000" {...register('postalCode')} className={inputCls} />
                   </DarkField>
                   <DarkField label={t('crm.city', 'Ort')} error={errors.city}>
-                    <Input placeholder="Zuerich" {...register('city')} className={inputCls} />
+                    <Input placeholder="Zürich" {...register('city')} className={inputCls} />
                   </DarkField>
                   <DarkField label={t('crm.canton', 'Kanton')} error={errors.canton}>
                     <Select
@@ -426,12 +458,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   />
                 )}
 
-                <DarkField
-                  label={`${t('crm.country', 'Land')} (ISO-2, z.B. CH, DE, AT)`}
-                  error={errors.country}
-                >
-                  <Input placeholder="CH" maxLength={2} {...register('country')} className={inputCls} />
-                </DarkField>
+                {/* Country field hidden — business is 100% CH; value stays registered as CH (client feedback #2) */}
+                <input type="hidden" {...register('country')} />
               </div>
             )}
 
@@ -512,7 +540,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 h-9 text-muted-foreground hover:text-foreground hover:bg-muted/60" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  {t('common.back', 'Zurueck')}
+                  {t('common.back', 'Zurück')}
                 </Button>
               ) : (
                 <Button type="button" variant="ghost" className="h-9 text-muted-foreground hover:text-foreground hover:bg-muted/60" onClick={() => handleOpenChange(false)}>

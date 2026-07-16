@@ -52,9 +52,9 @@ export default function MobileSparePartsPage() {
     if (!installationId) return;
     try {
       await linkPart.mutateAsync({ sparePartId: partId, quantity: 1 });
-      toast.success(lang === 'de' ? 'Ersatzteil verknuepft' : 'Spare part linked');
+      toast.success(lang === 'de' ? 'Ersatzteil verknüpft' : 'Spare part linked');
     } catch (error) {
-      toast.error(error?.message || (lang === 'de' ? 'Verknuepfung fehlgeschlagen' : 'Link failed'));
+      toast.error(error?.message || (lang === 'de' ? 'Verknüpfung fehlgeschlagen' : 'Link failed'));
     }
   };
 
@@ -137,7 +137,7 @@ export default function MobileSparePartsPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold">{lang === 'de' ? 'Verknuepfte Ersatzteile' : 'Linked parts'}</h2>
+          <h2 className="text-sm font-semibold">{lang === 'de' ? 'Verknüpfte Ersatzteile' : 'Linked parts'}</h2>
           {linkedParts.isLoading && <SkeletonRows count={3} />}
           {linkedParts.isError && (
             <EmptyState
@@ -149,7 +149,7 @@ export default function MobileSparePartsPage() {
           {!linkedParts.isLoading && !linkedParts.isError && (linkedParts.data || []).length === 0 && (
             <EmptyState
               title={lang === 'de' ? 'Keine Ersatzteile' : 'No spare parts'}
-              description={lang === 'de' ? 'Verknuepfen Sie benoetigte Teile aus dem Katalog.' : 'Link required parts from the catalog.'}
+              description={lang === 'de' ? 'Verknüpfen Sie benötigte Teile aus dem Katalog.' : 'Link required parts from the catalog.'}
             />
           )}
           {(linkedParts.data || []).map((item) => (
@@ -176,7 +176,7 @@ function PartSearchRow({ part, lang, linked, pending, onLink }) {
         <PartSummary part={part} />
         <Button type="button" size="sm" disabled={linked || pending} onClick={onLink} className="h-9 shrink-0">
           <Link2 className="mr-1.5 h-3.5 w-3.5" />
-          {linked ? (lang === 'de' ? 'Verknuepft' : 'Linked') : (lang === 'de' ? 'Link' : 'Link')}
+          {linked ? (lang === 'de' ? 'Verknüpft' : 'Linked') : (lang === 'de' ? 'Link' : 'Link')}
         </Button>
       </div>
     </div>

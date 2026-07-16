@@ -187,19 +187,18 @@ export function NewsletterList() {
       <PageHeader
         title={t('crm.newsletters', 'Newsletters')}
         description={t('crm.newslettersDescription', 'Compose and send newsletters to opted-in customers (nDSG compliant)')}
-        actions={
-          <PermissionGate permission="crm:admin">
-            <Button
-              size="sm"
-              className="h-8 gap-1.5 text-xs"
-              onClick={() => { setEditNewsletter(null); setComposeOpen(true); }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {t('crm.newNewsletter', 'New Newsletter')}
-            </Button>
-          </PermissionGate>
-        }
-      />
+      >
+        <PermissionGate permission="crm:admin">
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => { setEditNewsletter(null); setComposeOpen(true); }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t('crm.newNewsletter', 'New Newsletter')}
+          </Button>
+        </PermissionGate>
+      </PageHeader>
 
       {/* Filters */}
       <div className="flex items-center gap-3">

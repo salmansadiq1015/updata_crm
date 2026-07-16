@@ -10,6 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { showError } from '@/lib/toast';
 import { searchService } from '../services/search-service';
 import { useQopDepartments } from '../hooks/use-qop-queries';
 
@@ -66,14 +67,19 @@ export function QopAdvancedFilters({ onFiltersChange }) {
   const handleExport = async () => {
     try {
       const res = await searchService.exportCsv(filters);
-      const blob = new Blob([res], { type: 'text/csv' });
+      // Blob responses skip the success-envelope unwrap, so the interceptor returns
+      // the raw axios response: the CSV Blob lives on res.data.
+      const payload = res?.data ?? res;
+      const blob = payload instanceof Blob ? payload : new Blob([payload], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = 'qop-export.csv';
       a.click();
       URL.revokeObjectURL(url);
-    } catch { /* silently fail */ }
+    } catch (err) {
+      showError(err);
+    }
   };
 
   return (

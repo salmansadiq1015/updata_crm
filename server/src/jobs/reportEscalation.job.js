@@ -55,8 +55,8 @@ export class ReportEscalationWorker extends BaseWorker {
           for (const employeeId of employeeIds) {
             await notificationService.sendNotification(employeeId, {
               notificationType: 'ESCALATION',
-              title: 'Ueberfaelliger Bericht',
-              body: `Der Bericht fuer "${assignment.title || 'Auftrag'}" ist ueberfaellig. Bitte umgehend einreichen.`,
+              title: 'Überfälliger Bericht',
+              body: `Der Bericht für "${assignment.title || 'Auftrag'}" ist überfällig. Bitte umgehend einreichen.`,
               deepLink: `/orders/${assignment._id}`,
             });
           }

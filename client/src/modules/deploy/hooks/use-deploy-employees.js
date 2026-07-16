@@ -22,7 +22,9 @@ export function useDeployEmployees(options = {}) {
 
   const trimmedSearch = search.trim();
   const params = {
-    limit,
+    // Server caps `limit` at 100 (employee.validation.js) — a higher value 400s
+    // and silently empties the list. Clamp so no caller can trip that.
+    limit: Math.min(limit, 100),
     ...(trimmedSearch ? { search: trimmedSearch } : {}),
     ...(startDatetime && endDatetime ? { startDatetime, endDatetime } : {}),
     ...(requiredSkills ? { requiredSkills } : {}),

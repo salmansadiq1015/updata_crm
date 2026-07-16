@@ -16,7 +16,7 @@ export const INSTALLATION_TYPE_META = Object.freeze({
   solar_thermal:   { label: 'Solarthermie',     icon: Sun,     color: 'text-amber-500',   bg: 'bg-amber-500/10',   ring: 'ring-amber-500/20' },
   radiator_system: { label: 'Heizkörpersystem',icon: Radio,   color: 'text-rose-500',    bg: 'bg-rose-500/10',    ring: 'ring-rose-500/20' },
   ventilation:     { label: 'Lüftung',          icon: Wind,    color: 'text-teal-500',    bg: 'bg-teal-500/10',    ring: 'ring-teal-500/20' },
-  hot_water:       { label: 'Warmwasser',       icon: Droplet, color: 'text-blue-500',    bg: 'bg-blue-500/10',    ring: 'ring-blue-500/20' },
+  hot_water:       { label: 'Wassererwärmer',   icon: Droplet, color: 'text-blue-500',    bg: 'bg-blue-500/10',    ring: 'ring-blue-500/20' },
   other:           { label: 'Sonstige',         icon: Package, color: 'text-slate-500',   bg: 'bg-slate-500/10',   ring: 'ring-slate-500/20' },
 });
 

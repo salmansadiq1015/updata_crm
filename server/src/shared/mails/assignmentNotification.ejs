@@ -33,14 +33,14 @@
           <tr><td>Art:</td><td><%= assignmentType %></td></tr>
           <% if (title) { %><tr><td>Titel:</td><td><%= title %></td></tr><% } %>
           <tr><td>Datum:</td><td><%= startDatetime %> - <%= endDatetime %></td></tr>
-          <tr><td>Prioritaet:</td><td><span class="priority-<%= priority %>"><%= priority %></span></td></tr>
+          <tr><td>Priorität:</td><td><span class="priority-<%= priority %>"><%= priority %></span></td></tr>
           <% if (customerName) { %><tr><td>Kunde:</td><td><%= customerName %></td></tr><% } %>
           <% if (siteAddress) { %><tr><td>Adresse:</td><td><%= siteAddress %></td></tr><% } %>
           <% if (instructions) { %><tr><td>Anweisungen:</td><td><%= instructions %></td></tr><% } %>
         </table>
       </div>
-      <p>Bitte pruefen Sie die Details in der App.</p>
-      <p>Freundliche Gruesse<br><%= appName %></p>
+      <p>Bitte prüfen Sie die Details in der App.</p>
+      <p>Freundliche Grüsse<br><%= appName %></p>
     </div>
     <div class="footer"><p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p></div>
   </div>

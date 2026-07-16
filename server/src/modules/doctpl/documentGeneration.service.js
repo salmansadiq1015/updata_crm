@@ -143,6 +143,13 @@ class DocumentGenerationService {
 
   _prepareRenderData(templateType, data, ciConfig) {
     const renderData = { ...(data || {}) };
+    // The generic /generate endpoint receives the raw source record (quotation, order…)
+    // whose identifier field is type-specific. Normalise it to documentNumber, which the
+    // renderer and payload validation expect, so quotations/orders don't 400 on generate.
+    if (!renderData.documentNumber) {
+      renderData.documentNumber = renderData.quotationNumber || renderData.orderNumber
+        || renderData.invoiceNumber || renderData.number || undefined;
+    }
     if (!INVOICE_TEMPLATE_TYPES.has(templateType) || renderData.qrBill) return renderData;
 
     const bankDetails = ciConfig?.companyDetails?.bankDetails || {};

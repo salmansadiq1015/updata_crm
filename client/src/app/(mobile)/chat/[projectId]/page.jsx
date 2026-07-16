@@ -381,7 +381,7 @@ function ChatBubble({ message, lang }) {
                   )}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {lang === 'de' ? 'Oeffnen' : 'Open'}
+                  {lang === 'de' ? 'Öffnen' : 'Open'}
                 </a>
               )}
             </div>

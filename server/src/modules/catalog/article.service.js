@@ -315,6 +315,11 @@ class ArticleService {
 
   async _invalidateListCache() {
     await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:articles:list:*`);
+    // Per-category article counts are embedded in the category tree/list, so a created,
+    // moved or deleted article must also refresh those caches — otherwise the tree
+    // counters stay stale until their TTL expires.
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:categories:tree:*`);
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:categories:list:*`);
   }
 
   _inferImportFormat(file) {

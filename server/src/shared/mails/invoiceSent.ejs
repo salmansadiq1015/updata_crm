@@ -30,13 +30,13 @@
         <table>
           <tr><td>Rechnungs-Nr.:</td><td><%= invoiceNumber %></td></tr>
           <tr><td>Rechnungsdatum:</td><td><%= invoiceDate %></td></tr>
-          <tr><td>Faellig bis:</td><td class="due-date"><%= dueDate %></td></tr>
+          <tr><td>Fällig bis:</td><td class="due-date"><%= dueDate %></td></tr>
           <tr><td>Betrag:</td><td class="amount"><%= currency %> <%= amountDue %></td></tr>
           <% if (paymentTermsText) { %><tr><td>Zahlungsbedingungen:</td><td><%= paymentTermsText %></td></tr><% } %>
         </table>
       </div>
-      <p>Die Rechnung finden Sie als PDF im Anhang. Bitte begleichen Sie den Betrag bis zum angegebenen Faelligkeitsdatum.</p>
-      <p>Freundliche Gruesse<br><%= appName %></p>
+      <p>Die Rechnung finden Sie als PDF im Anhang. Bitte begleichen Sie den Betrag bis zum angegebenen Fälligkeitsdatum.</p>
+      <p>Freundliche Grüsse<br><%= appName %></p>
     </div>
     <div class="footer"><p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p></div>
   </div>

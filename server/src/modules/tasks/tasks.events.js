@@ -16,19 +16,23 @@ function emitTaskEvent(eventName, data) {
 }
 
 export function registerTasksEvents() {
-  eventBus.subscribe(EVENT_TYPES.TASK_CREATED, async (data) => {
-    emitTaskEvent('task_created', data);
+  // EventBus delivers the full envelope { type, payload, … }; unwrap to the payload
+  // (same convention as ai.events.js). Reading data.* directly left every field
+  // undefined, so realtime task events carried no data and the client never updated.
+  eventBus.subscribe(EVENT_TYPES.TASK_CREATED, async (envelope) => {
+    emitTaskEvent('task_created', envelope.payload || envelope);
   });
 
-  eventBus.subscribe(EVENT_TYPES.TASK_UPDATED, async (data) => {
-    emitTaskEvent('task_updated', data);
+  eventBus.subscribe(EVENT_TYPES.TASK_UPDATED, async (envelope) => {
+    emitTaskEvent('task_updated', envelope.payload || envelope);
   });
 
-  eventBus.subscribe(EVENT_TYPES.TASK_MOVED, async (data) => {
-    emitTaskEvent('task_moved', data);
+  eventBus.subscribe(EVENT_TYPES.TASK_MOVED, async (envelope) => {
+    emitTaskEvent('task_moved', envelope.payload || envelope);
   });
 
-  eventBus.subscribe(EVENT_TYPES.TASK_DELETED, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.TASK_DELETED, async (envelope) => {
+    const data = envelope.payload || envelope;
     emitTaskRealtimeEvent('task_deleted', {
       type: 'task_deleted',
       taskId: String(data.taskId),
@@ -39,7 +43,8 @@ export function registerTasksEvents() {
   });
 
   // When a task is assigned to another user → send notification email
-  eventBus.subscribe(EVENT_TYPES.TASK_ASSIGNED, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.TASK_ASSIGNED, async (envelope) => {
+    const data = envelope.payload || envelope;
     try {
       if (data.assigneeId && String(data.assigneeId) !== String(data.assignedBy)) {
         // Lazy import to avoid circular deps
@@ -73,7 +78,8 @@ export function registerTasksEvents() {
   });
 
   // When a task reminder fires with EMAIL channel → send reminder email
-  eventBus.subscribe(EVENT_TYPES.TASK_REMINDER_FIRED, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.TASK_REMINDER_FIRED, async (envelope) => {
+    const data = envelope.payload || envelope;
     try {
       if (data.channels?.includes('EMAIL')) {
         const { sendTaskReminderEmail } = await import('../../shared/mail/mail.js');
@@ -101,7 +107,8 @@ export function registerTasksEvents() {
   });
 
   // When a task note mentions users → could send notification (placeholder for Module 13)
-  eventBus.subscribe(EVENT_TYPES.TASK_NOTE_ADDED, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.TASK_NOTE_ADDED, async (envelope) => {
+    const data = envelope.payload || envelope;
     try {
       if (data.mentions?.length > 0) {
         logger.info('Task note mentions detected — notification deferred to Module 13', {
@@ -121,7 +128,8 @@ export function registerTasksEvents() {
   });
 
   // When task due date changes → recalculate reminders
-  eventBus.subscribe(EVENT_TYPES.TASK_DUE_DATE_CHANGED, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.TASK_DUE_DATE_CHANGED, async (envelope) => {
+    const data = envelope.payload || envelope;
     try {
       const taskReminderService = (await import('./taskReminder.service.js')).default;
       await taskReminderService.recalculateReminders(data.taskId, data.newDueDate);
@@ -136,7 +144,8 @@ export function registerTasksEvents() {
   });
 
   // When task is deleted → cancel all pending reminders
-  eventBus.subscribe(EVENT_TYPES.TASK_DELETED, async (data) => {
+  eventBus.subscribe(EVENT_TYPES.TASK_DELETED, async (envelope) => {
+    const data = envelope.payload || envelope;
     try {
       const taskReminderRepository = (await import('./taskReminder.repository.js')).default;
       await taskReminderRepository.cancelByTaskId(data.taskId);

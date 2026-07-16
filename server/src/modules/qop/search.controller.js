@@ -503,10 +503,14 @@ class SearchController {
           if (dateFrom) filter.createdAt.$gte = new Date(dateFrom);
           if (dateTo)   filter.createdAt.$lte = new Date(dateTo);
         }
-        if (amountMin !== undefined || amountMax !== undefined) {
+        // Empty query strings ('') must be treated as "no bound": Number('') is 0,
+        // which would otherwise filter grandTotalRounded down to exactly 0 (no rows).
+        const min = amountMin === '' || amountMin === undefined || amountMin === null ? undefined : Number(amountMin);
+        const max = amountMax === '' || amountMax === undefined || amountMax === null ? undefined : Number(amountMax);
+        if (Number.isFinite(min) || Number.isFinite(max)) {
           filter.grandTotalRounded = {};
-          if (amountMin !== undefined) filter.grandTotalRounded.$gte = Number(amountMin);
-          if (amountMax !== undefined) filter.grandTotalRounded.$lte = Number(amountMax);
+          if (Number.isFinite(min)) filter.grandTotalRounded.$gte = min;
+          if (Number.isFinite(max)) filter.grandTotalRounded.$lte = max;
         }
         return filter;
       };

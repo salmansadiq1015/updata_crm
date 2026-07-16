@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Auftragsbestaetigung</title>
+  <title>Auftragsbestätigung</title>
   <style>
     body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
     .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
@@ -22,9 +22,9 @@
   <div class="container">
     <div class="header"><h1><%= appName %></h1></div>
     <div class="content">
-      <h2>Auftragsbestaetigung <%= orderNumber %></h2>
+      <h2>Auftragsbestätigung <%= orderNumber %></h2>
       <p>Guten Tag <%= customerName %>,</p>
-      <p>Vielen Dank fuer Ihren Auftrag. Hiermit bestaetigen wir:</p>
+      <p>Vielen Dank für Ihren Auftrag. Hiermit bestätigen wir:</p>
       <div class="details">
         <table>
           <tr><td>Auftrags-Nr.:</td><td><%= orderNumber %></td></tr>
@@ -34,8 +34,8 @@
           <% if (requestedDate) { %><tr><td>Wunschtermin:</td><td><%= requestedDate %></td></tr><% } %>
         </table>
       </div>
-      <p>Die Auftragsbestaetigung finden Sie als PDF im Anhang.</p>
-      <p>Freundliche Gruesse<br><%= appName %></p>
+      <p>Die Auftragsbestätigung finden Sie als PDF im Anhang.</p>
+      <p>Freundliche Grüsse<br><%= appName %></p>
     </div>
     <div class="footer"><p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p></div>
   </div>

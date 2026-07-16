@@ -203,19 +203,24 @@ export function initializeSocketServer(httpServer) {
       activeConnections: connectedUsers.get(userId).size,
     });
 
-    // Update online status
-    try {
-      const User = await getUserModel();
-      if (User) {
-        await User.findByIdAndUpdate(userId, { isOnline: true });
+    // Update online status — fire-and-forget so the socket.on(...) listeners below
+    // (tasks:subscribe, etc.) register synchronously in this same tick. If we awaited
+    // here, a client emitting tasks:subscribe right after connect would race ahead of
+    // its handler and never join the room (realtime silently broken until reload).
+    (async () => {
+      try {
+        const User = await getUserModel();
+        if (User) {
+          await User.findByIdAndUpdate(userId, { isOnline: true });
+        }
+        io.emit('userStatus', { userId, isOnline: true });
+        // Hydrate new client with current online roster
+        const onlineUserIds = Array.from(connectedUsers.keys());
+        socket.emit('userStatus:init', { onlineUserIds });
+      } catch (err) {
+        logger.warn('Failed to update online status', { module: 'socket', userId, error: err.message });
       }
-      io.emit('userStatus', { userId, isOnline: true });
-      // Hydrate new client with current online roster
-      const onlineUserIds = Array.from(connectedUsers.keys());
-      socket.emit('userStatus:init', { onlineUserIds });
-    } catch (err) {
-      logger.warn('Failed to update online status', { module: 'socket', userId, error: err.message });
-    }
+    })();
 
     // Flush pending push notifications on reconnect
     deliverPendingNotifications(userId, io);

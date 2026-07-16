@@ -279,7 +279,7 @@ export default function InstallationCapturePage() {
             )}
             {nameplateOcr.isPending && (
               <p className="mt-2 text-[11px] text-muted-foreground">
-                {lang === 'de' ? 'OCR wird ausgefuehrt...' : 'Running OCR...'}
+                {lang === 'de' ? 'OCR wird ausgeführt...' : 'Running OCR...'}
               </p>
             )}
             {nameplateCapture?.hints?.extraction?.lowConfidenceFields?.length > 0 && (

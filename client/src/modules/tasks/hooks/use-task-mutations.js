@@ -9,7 +9,12 @@ import toast from 'react-hot-toast';
 function useInvalidate() {
   const qc = useQueryClient();
   return {
-    lists:       ()   => qc.invalidateQueries({ queryKey: queryKeys.tasks.lists() }),
+    lists:       ()   => {
+      qc.invalidateQueries({ queryKey: queryKeys.tasks.lists() });
+      // The workspace sidebar reads folders+lists under ['tasks','workspace'];
+      // invalidate it too so a new/renamed/removed list shows without a reload.
+      qc.invalidateQueries({ queryKey: ['tasks', 'workspace'] });
+    },
     allTasks:    ()   => qc.invalidateQueries({ queryKey: queryKeys.tasks.all() }),
     task:        (id) => qc.invalidateQueries({ queryKey: queryKeys.tasks.detail(id) }),
     orderTasks:  (orderId) => qc.invalidateQueries({ queryKey: ['tasks', 'byOrder', orderId] }),

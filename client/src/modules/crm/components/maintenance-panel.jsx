@@ -146,7 +146,7 @@ function MaintenanceRow({ item: m, canWrite, canDelete, onEdit, onDelete, onMark
     : t(`crm.maintenance.type.${m.maintenanceType}`, typeMeta.label);
 
   const lastService = m.lastServiceDate ? new Date(m.lastServiceDate).toLocaleDateString('de-CH') : '—';
-  const nextService = m.nextServiceDate ? new Date(m.nextServiceDate).toLocaleDateString('de-CH') : '—';
+  const nextService = m.nextDueDate ? new Date(m.nextDueDate).toLocaleDateString('de-CH') : '—';
 
   return (
     <div className="group/maint relative rounded-xl border border-border bg-card p-3.5 hover:shadow-theme-sm transition-all">

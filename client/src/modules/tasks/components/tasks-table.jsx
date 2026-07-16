@@ -167,7 +167,7 @@ export function TasksTable({ listId }) {
             },
             row.original.status !== 'COMPLETED'
               ? {
-                  label: de ? 'Abschließen' : 'Complete',
+                  label: de ? 'Abschliessen' : 'Complete',
                   icon: CircleCheck,
                   onClick: () => completeTask.mutate({ id: row.original._id }),
                 }

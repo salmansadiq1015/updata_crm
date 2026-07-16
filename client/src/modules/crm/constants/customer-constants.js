@@ -32,7 +32,7 @@ export const CH_CANTONS = Object.freeze([
   { code: 'FR', name: 'Fribourg' },
   { code: 'GE', name: 'Genf' },
   { code: 'GL', name: 'Glarus' },
-  { code: 'GR', name: 'Graubuenden' },
+  { code: 'GR', name: 'Graubünden' },
   { code: 'JU', name: 'Jura' },
   { code: 'LU', name: 'Luzern' },
   { code: 'NE', name: 'Neuenburg' },
@@ -48,7 +48,7 @@ export const CH_CANTONS = Object.freeze([
   { code: 'VD', name: 'Waadt' },
   { code: 'VS', name: 'Wallis' },
   { code: 'ZG', name: 'Zug' },
-  { code: 'ZH', name: 'Zuerich' },
+  { code: 'ZH', name: 'Zürich' },
 ]);
 
 /**

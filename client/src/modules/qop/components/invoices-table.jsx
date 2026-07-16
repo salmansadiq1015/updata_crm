@@ -407,11 +407,13 @@ export function InvoicesTable({ advancedFilters = {} }) {
         onClose={() => setEditingInvoice(null)}
         invoice={editingInvoice}
       />
+      {/* Prefill the still-open balance (amountDue), not the gross total: on a final
+          invoice the balance is net of advance deductions, so grandTotal would overcharge. */}
       <RecordPaymentDialog
         open={!!payingInvoice}
         onClose={() => setPaying(null)}
         invoiceId={payingInvoice?._id ?? payingInvoice?.id}
-        outstandingAmount={payingInvoice?.outstandingAmount ?? payingInvoice?.grandTotal}
+        outstandingAmount={payingInvoice?.amountDue ?? payingInvoice?.grandTotalRounded ?? payingInvoice?.grandTotal}
         currency={payingInvoice?.currency ?? 'CHF'}
       />
       <HistoryDrawer

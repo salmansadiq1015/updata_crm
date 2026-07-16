@@ -541,8 +541,8 @@ function RelatedLinks({ contact, t }) {
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {links.map((link) => (
-        <RelatedChip key={link.key} {...link} />
+      {links.map(({ key, ...link }) => (
+        <RelatedChip key={key} {...link} />
       ))}
     </div>
   );

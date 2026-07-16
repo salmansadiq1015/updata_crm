@@ -25,11 +25,15 @@ class RoleService {
 
   async listRoles() {
     const cacheKey = 'auth:roles:all';
-    return cacheManager.getOrSet(
+    const roles = await cacheManager.getOrSet(
       cacheKey,
       () => roleRepository.findAll(),
       ROLE_CACHE_TTL,
     );
+    // userCount is computed fresh (outside the cache) so the "Benutzer" column
+    // reflects role assignments immediately instead of always showing 0.
+    const counts = await userRepository.countGroupedByRole();
+    return roles.map((role) => ({ ...role, userCount: counts[String(role._id)] || 0 }));
   }
 
   async createRole(data) {

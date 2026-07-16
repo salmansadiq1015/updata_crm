@@ -2,12 +2,19 @@ import { z } from 'zod';
 
 const objectId = z.string().regex(/^[0-9a-f]{24}$/i, 'Invalid ID');
 
+// Empty date inputs register as '' which z.coerce.date() turns into an Invalid Date,
+// failing validation silently. Treat '' (and undefined) as null before coercing.
+const optionalDate = z.preprocess(
+  (v) => (v === '' || v === undefined ? null : v),
+  z.coerce.date().nullable().optional(),
+);
+
 const fundingDetailsSchema = z.object({
   fundingBody: z.string().trim().max(255).nullable().optional(),
   applicationAmount: z.coerce.number().min(0).nullable().optional(),
   approvedAmount: z.coerce.number().min(0).nullable().optional(),
-  submissionDate: z.coerce.date().nullable().optional(),
-  expectedDecisionDate: z.coerce.date().nullable().optional(),
+  submissionDate: optionalDate,
+  expectedDecisionDate: optionalDate,
   fundingStatus: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_APPROVED', 'REJECTED']).optional().default('DRAFT'),
 });
 
@@ -21,8 +28,8 @@ const materialItemSchema = z.object({
 const materialOrderDetailsSchema = z.object({
   supplier: z.string().trim().max(255).nullable().optional(),
   orderReference: z.string().trim().max(100).nullable().optional(),
-  orderDate: z.coerce.date().nullable().optional(),
-  expectedDeliveryDate: z.coerce.date().nullable().optional(),
+  orderDate: optionalDate,
+  expectedDeliveryDate: optionalDate,
   deliveryStatus: z.enum(['PENDING', 'ORDERED', 'PARTIALLY_DELIVERED', 'DELIVERED']).optional().default('PENDING'),
   items: z.array(materialItemSchema).optional(),
 });
@@ -32,7 +39,7 @@ export const createPrepActionSchema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(255),
   description: z.string().max(5000).nullable().optional(),
   isMandatory: z.boolean().optional().default(false),
-  dueDate: z.coerce.date().nullable().optional(),
+  dueDate: optionalDate,
   assignedToId: objectId.nullable().optional(),
   externalReference: z.string().trim().max(255).nullable().optional(),
   fundingDetails: fundingDetailsSchema.optional(),
@@ -51,7 +58,7 @@ export const updatePrepActionSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   isMandatory: z.boolean().optional(),
   status: z.enum(['CREATED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED']).optional(),
-  dueDate: z.coerce.date().nullable().optional(),
+  dueDate: optionalDate,
   assignedToId: objectId.nullable().optional(),
   externalReference: z.string().trim().max(255).nullable().optional(),
   fundingDetails: fundingDetailsSchema.optional(),

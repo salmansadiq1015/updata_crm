@@ -4,9 +4,22 @@ export default class QrBillRenderer {
     if (!qrData?.iban) return;
     // Try swissqrbill integration; if invoice QR rendering is requested, failure
     // must stop generation so users do not send non-compliant invoices.
-    const swissqrbill = await import('swissqrbill');
+    // swissqrbill v4 removed the package main entry; the PDF renderer lives under the /pdf subpath.
+    const swissqrbill = await import('swissqrbill/pdf');
     const SwissQRBill = swissqrbill.SwissQRBill || swissqrbill.default?.SwissQRBill || swissqrbill.default;
     if (!SwissQRBill) throw new Error('Swiss QR-bill renderer is unavailable');
+
+    // A QR-IBAN (IID 30000-31999) requires a compliant 27-char QR reference (QRR).
+    // The document reference (project/quotation number) isn't one, so derive a valid
+    // QRR from its digits using swissqrbill's checksum helper.
+    const account = String(qrData.iban || '').replace(/\s/g, '');
+    const isQrIban = /^CH\d{2}3[01]\d{3}/.test(account);
+    let reference = qrData.reference || undefined;
+    if (isQrIban) {
+      const { calculateQRReferenceChecksum } = await import('swissqrbill/utils');
+      const seed = String(qrData.reference || account).replace(/\D/g, '').slice(-26).padStart(26, '0');
+      reference = seed + calculateQRReferenceChecksum(seed);
+    }
 
     const billData = {
       currency: qrData.currency || 'CHF',
@@ -20,7 +33,7 @@ export default class QrBillRenderer {
         account: qrData.iban,
       },
       debtor: qrData.debtor || undefined,
-      reference: qrData.reference || undefined,
+      reference,
       message: qrData.message || undefined,
     };
 

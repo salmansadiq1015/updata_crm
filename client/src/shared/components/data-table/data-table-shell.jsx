@@ -22,6 +22,10 @@ import {
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 
+// Stable empty default so `state.sorting` keeps the same reference across renders
+// when no sorting is controlled — a fresh [] each render churns the table's models.
+const EMPTY_SORTING = [];
+
 export function DataTableShell({
   columns: rawColumns,
   data = [],
@@ -118,7 +122,7 @@ export function DataTableShell({
     data,
     columns,
     state: {
-      sorting: sorting || [],
+      sorting: sorting || EMPTY_SORTING,
       globalFilter: globalFilter || '',
       ...(pagination ? { pagination } : {}),
       ...(enableRowSelection && rowSelection != null ? { rowSelection } : {}),
@@ -128,6 +132,12 @@ export function DataTableShell({
     onPaginationChange: onPaginationChange || undefined,
     onRowSelectionChange: onRowSelectionChange || undefined,
     getRowId: getRowId || ((row) => row._id || row.id),
+    // When pagination is externally controlled, TanStack's autoReset fires
+    // onPaginationChange whenever `data` changes; with a controlled state setter
+    // that mints a new pagination object each time, this feeds back into an
+    // infinite render loop (froze the whole page). Callers that control
+    // pagination already reset the page index themselves on filter changes.
+    ...(pagination ? { autoResetPageIndex: false } : {}),
     getCoreRowModel: getCoreRowModel(),
     ...(manualSorting ? { manualSorting: true } : { getSortedRowModel: getSortedRowModel() }),
     ...(manualPagination ? { manualPagination: true, rowCount } : { getPaginationRowModel: getPaginationRowModel() }),

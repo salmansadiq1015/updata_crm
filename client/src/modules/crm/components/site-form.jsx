@@ -79,23 +79,23 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
     }
   };
 
-  const inputCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20';
-  const selectTriggerCls = 'bg-white/4 border-white/10 rounded-lg h-9 text-[13px] text-white/90 focus:border-amber-500/50 focus:ring-amber-500/20';
+  const inputCls = 'bg-background border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20';
+  const selectTriggerCls = 'bg-background border-border rounded-lg h-9 text-[13px] text-foreground focus:border-amber-500/50 focus:ring-amber-500/20';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-white/8 bg-[#0D1117] shadow-2xl">
+      <DialogContent className="sm:max-w-2xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-border bg-card shadow-2xl">
         {/* Fixed Header */}
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-white/6 shrink-0">
+        <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-amber-500/10 ring-1 ring-amber-500/20 shrink-0">
               <MapPin className="h-5 w-5 text-amber-400" />
             </div>
             <div>
-              <DialogTitle className="text-[16px] font-semibold text-white/90">
+              <DialogTitle className="text-[16px] font-semibold text-foreground">
                 {isEdit ? t('crm.sites.editSite', 'Objekt bearbeiten') : t('crm.sites.newSite', 'Neues Objekt')}
               </DialogTitle>
-              <DialogDescription className="text-[13px] text-white/45 mt-0.5">
+              <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
                 {t('crm.sites.formDesc', 'Gebäude oder Standort, an dem Installationen betrieben werden.')}
               </DialogDescription>
             </div>
@@ -119,9 +119,9 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                 <SelectTrigger className={selectTriggerCls}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#0D1117] border-white/10">
+                <SelectContent className="bg-card border-border">
                   {Object.entries(SITE_TYPE_META).map(([key, meta]) => (
-                    <SelectItem key={key} value={key} className="text-white/80 focus:bg-white/5 focus:text-white/90">
+                    <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/50 focus:text-foreground">
                       {t(`crm.sites.type.${key}`, meta.label)}
                     </SelectItem>
                   ))}
@@ -129,12 +129,12 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
               </Select>
             </DarkField>
 
-            <Separator className="my-5 bg-white/6" />
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35 mb-3">
+            <Separator className="my-5 bg-muted/50" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.address', 'Adresse')}
             </p>
 
-            <div className="rounded-lg border border-white/6 bg-white/2 p-4 space-y-4">
+            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
               <DarkField label={t('crm.street', 'Strasse')} error={errors.street}>
                 <Input {...register('street')} className={inputCls} />
               </DarkField>
@@ -150,10 +150,10 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                 <DarkField label={t('crm.canton', 'Kanton')} error={errors.canton}>
                   <Select value={canton || ''} onValueChange={(v) => setValue('canton', v, { shouldDirty: true })}>
                     <SelectTrigger className={selectTriggerCls}><SelectValue placeholder="—" /></SelectTrigger>
-                    <SelectContent className="max-h-72 bg-[#0D1117] border-white/10">
+                    <SelectContent className="max-h-72 bg-card border-border">
                       {CH_CANTONS.map((c) => (
-                        <SelectItem key={c.code} value={c.code} className="text-white/80 focus:bg-white/5 focus:text-white/90">
-                          <span className="font-mono text-[10px] mr-1.5 text-white/40">{c.code}</span>{c.name}
+                        <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">
+                          <span className="font-mono text-[10px] mr-1.5 text-muted-foreground">{c.code}</span>{c.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -174,19 +174,19 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                 rows={2}
                 {...register('accessInstructions')}
                 placeholder={t('crm.sites.accessInstructionsPlaceholder', 'z.B. Schlüssel bei Hauswart Huber')}
-                className="bg-white/4 border-white/10 rounded-lg text-[13px] text-white/90 placeholder:text-white/25 focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20 resize-none"
+                className="bg-background border-border rounded-lg text-[13px] text-foreground placeholder:text-muted-foreground focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20 resize-none"
               />
             </DarkField>
           </div>
 
           {/* Fixed Footer */}
-          <div className="px-6 py-4 border-t border-white/6 shrink-0 flex items-center justify-between gap-3">
+          <div className="px-6 py-4 border-t border-border shrink-0 flex items-center justify-between gap-3">
             <Button
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
-              className="text-white/55 hover:text-white/80 hover:bg-white/5"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/50"
             >
               {t('common.cancel', 'Abbrechen')}
             </Button>
@@ -208,7 +208,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 function DarkField({ label, required, error, children }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[12px] font-medium text-white/60 mb-1.5 block">
+      <Label className="text-[12px] font-medium text-muted-foreground mb-1.5 block">
         {label}{required && <span className="text-red-400 ml-1">*</span>}
       </Label>
       {children}

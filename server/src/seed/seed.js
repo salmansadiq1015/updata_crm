@@ -5,6 +5,7 @@ import Permission from '../modules/auth/permission.model.js';
 import Role from '../modules/auth/role.model.js';
 import User from '../modules/auth/user.model.js';
 import PasswordHistory from '../modules/auth/passwordHistory.model.js';
+import Department from '../modules/qop/department.model.js';
 import { hashPassword } from '../shared/utils/crypto.js';
 import cacheManager from '../shared/cache/CacheManager.js';
 import config from '../config/index.js';
@@ -437,7 +438,24 @@ export async function seedDatabase() {
       }
     }
 
-    // 5. Seed catalog data (units of measure, etc.)
+    // 5. Seed default departments (Abteilungen) — required to create quotations /
+    // orders / invoices (and their per-department numbering). Without at least one,
+    // a fresh install is blocked from the entire commercial flow. Idempotent by code.
+    const DEFAULT_DEPARTMENTS = [
+      { name: 'Heizung', code: 'HZ' },
+      { name: 'Sanitär', code: 'SA' },
+      { name: 'Service', code: 'SV' },
+    ];
+    for (const dept of DEFAULT_DEPARTMENTS) {
+      await Department.updateOne(
+        { code: dept.code },
+        { $setOnInsert: { name: dept.name, code: dept.code, isActive: true } },
+        { upsert: true },
+      );
+    }
+    logger.info('Seeded default departments', { module: 'seed', count: DEFAULT_DEPARTMENTS.length });
+
+    // 6. Seed catalog data (units of measure, etc.)
     await seedCatalog();
 
     // 6. Seed AI assistant vocabulary and voice commands

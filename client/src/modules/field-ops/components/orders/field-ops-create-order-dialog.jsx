@@ -295,7 +295,7 @@ function Step3CustomerSite({ form, de }) {
 
 function Step4Assignment({ form, de }) {
   const { register, watch, setValue } = form;
-  const { data: employees = [] } = useDeployEmployees({ limit: 120 });
+  const { data: employees = [] } = useDeployEmployees({ limit: 100 });
   const departments = useMemo(() => uniqueDepartments(employees), [employees]);
   const targetType = watch('assignmentTargetType') || 'EMPLOYEE';
 

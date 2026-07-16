@@ -80,7 +80,7 @@ export function FieldOpsOrderFilters({
   const { locale: lang } = useLanguage();
   const [projectSearch, setProjectSearch] = useState('');
   const debouncedProjectSearch = useDebounce(projectSearch, 250);
-  const { data: employees = [] } = useDeployEmployees({ limit: 120 });
+  const { data: employees = [] } = useDeployEmployees({ limit: 100 });
   const { data: projects = [], isFetching: projectsFetching } = useAssignmentProjectOptions({
     search: debouncedProjectSearch,
     limit: 40,

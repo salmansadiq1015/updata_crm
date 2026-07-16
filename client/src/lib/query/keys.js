@@ -190,6 +190,11 @@ export const queryKeys = {
       settings: () => ['crm', 'maintenance', 'settings'],
       byInstallation: (installationId) => ['crm', 'maintenance', 'byInstallation', installationId],
     },
+    assetMaintenance: {
+      all: () => ['crm', 'assetMaintenance'],
+      workItems: (filters) => ['crm', 'assetMaintenance', 'workItems', filters],
+      context: (installationId) => ['crm', 'assetMaintenance', 'context', installationId],
+    },
     notes: {
       bySite: (siteId) => ['crm', 'notes', 'bySite', siteId],
       byInstallation: (installationId) => ['crm', 'notes', 'byInstallation', installationId],

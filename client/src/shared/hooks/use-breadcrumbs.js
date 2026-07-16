@@ -12,6 +12,7 @@ const labelMap = {
   profile: { key: 'userMenu.profile', fallback: 'Profile' },
   crm: { key: 'sidebar.crm', fallback: 'CRM' },
   customers: { key: 'sidebar.customers', fallback: 'Customers' },
+  'asset-maintenance': { key: 'sidebar.assetMaintenance', fallback: 'Systems & Maintenance' },
   projects: { key: 'sidebar.projects', fallback: 'Projects' },
   tasks: { key: 'sidebar.tasks', fallback: 'Tasks' },
   scheduling: { key: 'sidebar.scheduling', fallback: 'Scheduling' },

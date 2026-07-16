@@ -13,6 +13,8 @@ const ALLOWED_FILTERS = {
   projectId: 'objectId',
   customerId: 'objectId',
   siteId: 'objectId',
+  installationId: 'objectId',
+  maintenanceIntervalId: 'objectId',
   assignmentTargetType: 'exact',
   assignmentTargetId: 'exact',
   priority: 'exact',
@@ -23,6 +25,8 @@ const POPULATE_FIELDS = [
   { path: 'orderId', select: 'orderNumber title customerName status projectId customerId' },
   { path: 'customerId', select: 'name phone email street postalCode city' },
   { path: 'siteId', select: 'name street postalCode city' },
+  { path: 'installationId', select: 'installationNumber type manufacturer model status siteId' },
+  { path: 'maintenanceIntervalId', select: 'maintenanceType customTypeLabel maintenanceStatus nextDueDate' },
   {
     path: 'projectId',
     select: 'name projectNumber customerName status siteId plannedStartDate plannedEndDate',

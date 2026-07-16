@@ -16,7 +16,7 @@ import { useFiscalPeriodMutations } from '@/modules/accounting/hooks/use-account
 const STATUS_CONFIG = {
   OPEN: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   CLOSED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  ARCHIVED: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400',
+  ARCHIVED: 'bg-slate-100 text-muted-foreground dark:bg-slate-900/30 dark:text-muted-foreground',
 };
 
 function fmtDate(value) {

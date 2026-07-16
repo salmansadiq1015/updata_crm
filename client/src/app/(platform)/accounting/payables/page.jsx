@@ -30,7 +30,7 @@ const fmt = (n, currency = 'CHF') =>
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('de-CH') : '—';
 
 const STATUS_CONFIG = {
-  RECORDED:         { label: 'Erfasst',         labelEn: 'Recorded',          badge: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400' },
+  RECORDED:         { label: 'Erfasst',         labelEn: 'Recorded',          badge: 'bg-slate-100 text-muted-foreground dark:bg-slate-900/30 dark:text-muted-foreground' },
   APPROVED:         { label: 'Genehmigt',        labelEn: 'Approved',          badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
   PAID:             { label: 'Bezahlt',          labelEn: 'Paid',              badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
   PARTIALLY_PAID:   { label: 'Teilbezahlt',      labelEn: 'Partially Paid',    badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },

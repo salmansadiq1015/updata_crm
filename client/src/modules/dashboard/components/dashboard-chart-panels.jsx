@@ -68,16 +68,16 @@ function PremiumTooltip({ active, payload, label, locale, currency = false, curr
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="rounded-lg border border-white/10 bg-[#07111f]/95 px-3 py-2 text-xs text-slate-100 shadow-[0_18px_54px_rgba(0,0,0,0.34)] backdrop-blur-xl">
-      <p className="mb-2 font-semibold text-white">{label}</p>
+    <div className="rounded-lg border border-border bg-background/95 px-3 py-2 text-xs text-foreground shadow-[0_18px_54px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+      <p className="mb-2 font-semibold text-foreground">{label}</p>
       <div className="space-y-1.5">
         {payload.map((entry) => (
           <div key={entry.dataKey} className="flex items-center justify-between gap-4">
-            <span className="inline-flex items-center gap-2 text-slate-300">
+            <span className="inline-flex items-center gap-2 text-muted-foreground">
               <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: entry.color }} />
               {entry.name}
             </span>
-            <span className="font-semibold tabular-nums text-white">
+            <span className="font-semibold tabular-nums text-foreground">
               {currency || currencyKeys.includes(entry.dataKey)
                 ? formatDashboardCurrency(entry.value, locale)
                 : formatDashboardNumber(entry.value, locale)}
@@ -127,7 +127,7 @@ function ResponsiveChart({ children, height = 320 }) {
           {children}
         </ResponsiveContainer>
       ) : (
-        <div className="h-full w-full animate-pulse rounded-lg bg-white/[0.055]" />
+        <div className="h-full w-full animate-pulse rounded-lg bg-card" />
       )}
     </div>
   );
@@ -279,12 +279,12 @@ function DonutPanel({ title, description, icon, data, locale, t, labelGroup, val
           </ResponsiveChart>
           <div className="space-y-2">
             {chartData.slice(0, 6).map((item, index) => (
-              <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.05] px-3 py-2">
-                <span className="min-w-0 truncate text-sm text-slate-300">
+              <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
+                <span className="min-w-0 truncate text-sm text-muted-foreground">
                   <span className="mr-2 inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: FEATURE_MIX_COLORS[index % FEATURE_MIX_COLORS.length] }} />
                   {item.label}
                 </span>
-                <span className="text-sm font-semibold text-white tabular-nums">
+                <span className="text-sm font-semibold text-foreground tabular-nums">
                   {formatDashboardNumber(item[valueKey], locale)}
                 </span>
               </div>
@@ -310,8 +310,8 @@ function StatTiles({ items, locale }) {
           <GlassPanel key={item.label}>
             <div className="flex min-h-24 items-center justify-between gap-4 p-4">
               <div className="min-w-0">
-                <p className="truncate text-sm text-slate-400">{item.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-white tabular-nums">
+                <p className="truncate text-sm text-muted-foreground">{item.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground tabular-nums">
                   {item.currency
                     ? formatDashboardCurrency(item.value, locale)
                     : `${formatDashboardNumber(item.value, locale)}${item.suffix || ''}`}
@@ -342,8 +342,8 @@ function WorkQueuePanel({ items, t, locale }) {
             : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100';
 
           return (
-            <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.045] px-3 py-2.5">
-              <span className="min-w-0 truncate text-sm text-slate-300">{t(config.labelKey, config.fallback)}</span>
+            <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5">
+              <span className="min-w-0 truncate text-sm text-muted-foreground">{t(config.labelKey, config.fallback)}</span>
               <span className={cn('rounded-md border px-2 py-1 text-xs font-semibold tabular-nums', tone)}>
                 {formatDashboardNumber(item.value, locale)}
               </span>
@@ -363,10 +363,10 @@ function RecentActivityPanel({ data, t, locale }) {
       <PanelHeader icon={Activity} title={t('dashboard.recentActivity', 'Recent Activity')} description={t('dashboard.analytics.system.auditDesc', 'Latest audit events.')} />
       <div className="space-y-2 p-4">
         {data?.length ? data.map((entry) => (
-          <div key={entry.id} className="flex items-start justify-between gap-3 rounded-md border border-white/10 bg-white/[0.045] px-3 py-2.5">
+          <div key={entry.id} className="flex items-start justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5">
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-slate-100">{translateDashboardEventType(t, entry.eventType)}</p>
-              <p className="mt-1 truncate text-xs text-slate-500">{entry.email || entry.module || '-'}</p>
+              <p className="truncate text-sm font-medium text-foreground">{translateDashboardEventType(t, entry.eventType)}</p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">{entry.email || entry.module || '-'}</p>
             </div>
             <span className={cn(
               'shrink-0 rounded-md border px-2 py-1 text-xs font-semibold',

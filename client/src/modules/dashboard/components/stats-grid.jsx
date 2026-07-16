@@ -37,7 +37,7 @@ export function StatsGrid() {
                 {card.title}
               </CardTitle>
               <div className={`h-8 w-8 rounded-lg bg-gradient-to-br ${card.color} flex items-center justify-center shadow-sm`}>
-                <Icon className="h-4 w-4 text-white" />
+                <Icon className="h-4 w-4 text-foreground" />
               </div>
             </CardHeader>
             <CardContent>

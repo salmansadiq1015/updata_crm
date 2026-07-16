@@ -231,7 +231,7 @@ function AccountsTab({ de, onImport, onImportStatus }) {
                   <p className="font-mono text-xs text-muted-foreground mt-0.5">{acc.iban}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${acc.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${acc.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-muted-foreground'}`}>
                     {acc.isActive ? (de ? 'Aktiv' : 'Active') : (de ? 'Inaktiv' : 'Inactive')}
                   </span>
                   <span className="text-[11px] font-mono text-muted-foreground">{acc.connectionType || 'MANUAL'}</span>

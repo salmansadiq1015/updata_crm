@@ -242,7 +242,10 @@ export function AiChatInput({
                     : t('ai.chat.commandPlaceholder')
               }
               className={cn(
-                'resize-none border-0 bg-transparent',
+                // Keep the field transparent even on focus — the base Textarea forces
+                // focus-visible:bg-background (light), which hid the light text in the
+                // dark AI panel. The wrapper owns the background.
+                'resize-none border-0 bg-transparent focus-visible:bg-transparent',
                 'px-4 pt-4 pb-12',
                 'min-h-[64px] max-h-36',
                 'focus-visible:ring-0 shadow-none text-sm',

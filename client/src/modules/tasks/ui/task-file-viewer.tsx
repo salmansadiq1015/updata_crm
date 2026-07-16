@@ -1,11 +1,13 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Download, File, FileImage, FileText, FileVideo, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Download, File, FileImage, FileText, FileVideo, Loader2, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { TaskAttachment } from '../types/task-types';
+import { taskApi } from '../services/task-api';
 
 type FileViewerProps = {
   attachments: TaskAttachment[];
@@ -55,9 +57,33 @@ function isText(mimeType: string) {
   return mimeType.startsWith('text/');
 }
 
+/**
+ * Resolves a presigned S3 download URL for a task attachment via an
+ * authenticated API call. The raw API download endpoint requires a JWT
+ * which browsers don't send for <img src>, <embed src>, etc.
+ */
+function useResolvedUrl(taskId: string, attachmentId: string) {
+  return useQuery({
+    queryKey: ['tasks', taskId, 'attachments', attachmentId, 'downloadUrl'],
+    queryFn: () => taskApi.getAttachmentDownloadUrl(taskId, attachmentId),
+    staleTime: 4 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
 function FilePreview({ attachment }: { attachment: TaskAttachment }) {
   const [zoom, setZoom] = useState(1);
-  const { mimeType, downloadUrl, fileName } = attachment;
+  const { mimeType, fileName, taskId, id } = attachment;
+  const { data: resolvedUrl, isLoading: isResolvingUrl } = useResolvedUrl(taskId, id);
+
+  if (isResolvingUrl || !resolvedUrl) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin opacity-40" />
+        <p className="text-sm">Loading preview…</p>
+      </div>
+    );
+  }
 
   if (isImage(mimeType)) {
     return (
@@ -91,7 +117,7 @@ function FilePreview({ attachment }: { attachment: TaskAttachment }) {
         </div>
         <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-checkerboard">
           <img
-            src={downloadUrl}
+            src={resolvedUrl}
             alt={fileName}
             className="mx-auto block transition-transform"
             style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
@@ -104,7 +130,7 @@ function FilePreview({ attachment }: { attachment: TaskAttachment }) {
   if (isPdf(mimeType)) {
     return (
       <embed
-        src={downloadUrl}
+        src={resolvedUrl}
         type="application/pdf"
         className="min-h-0 flex-1 rounded-lg"
         width="100%"
@@ -114,7 +140,7 @@ function FilePreview({ attachment }: { attachment: TaskAttachment }) {
   }
 
   if (isOffice(mimeType)) {
-    const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(downloadUrl)}`;
+    const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(resolvedUrl)}`;
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-2">
         <p className="px-1 text-xs text-muted-foreground">
@@ -133,7 +159,7 @@ function FilePreview({ attachment }: { attachment: TaskAttachment }) {
   if (isVideo(mimeType)) {
     return (
       <video
-        src={downloadUrl}
+        src={resolvedUrl}
         controls
         className="min-h-0 flex-1 rounded-lg bg-black"
         style={{ maxHeight: '100%', width: '100%' }}
@@ -144,7 +170,7 @@ function FilePreview({ attachment }: { attachment: TaskAttachment }) {
   if (isText(mimeType)) {
     return (
       <iframe
-        src={downloadUrl}
+        src={resolvedUrl}
         className="min-h-0 flex-1 rounded-lg border border-border font-mono text-sm"
         title={fileName}
       />
@@ -156,12 +182,35 @@ function FilePreview({ attachment }: { attachment: TaskAttachment }) {
     <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
       <FileText className="h-16 w-16 opacity-40" />
       <p className="text-sm">This file type cannot be previewed.</p>
-      <a href={downloadUrl} download={fileName} target="_blank" rel="noopener noreferrer">
+      <a href={resolvedUrl} download={fileName} target="_blank" rel="noopener noreferrer">
         <Button variant="outline" className="gap-2">
           <Download className="h-4 w-4" /> Download file
         </Button>
       </a>
     </div>
+  );
+}
+
+function DownloadButton({ attachment }: { attachment: TaskAttachment }) {
+  const { data: resolvedUrl } = useResolvedUrl(attachment.taskId, attachment.id);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (resolvedUrl) {
+      window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="h-7 gap-1.5 text-xs"
+      onClick={handleClick}
+      disabled={!resolvedUrl}
+    >
+      <Download className="h-3.5 w-3.5" /> Download
+    </Button>
   );
 }
 
@@ -283,18 +332,9 @@ export function TaskFileViewer({
                   return <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />;
                 })()}
               <span className="truncate">{viewingAttachment?.fileName}</span>
-              <a
-                href={viewingAttachment?.downloadUrl}
-                download={viewingAttachment?.fileName}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-auto shrink-0"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-                  <Download className="h-3.5 w-3.5" /> Download
-                </Button>
-              </a>
+              <span className="ml-auto shrink-0">
+                {viewingAttachment && <DownloadButton attachment={viewingAttachment} />}
+              </span>
             </DialogTitle>
           </DialogHeader>
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">

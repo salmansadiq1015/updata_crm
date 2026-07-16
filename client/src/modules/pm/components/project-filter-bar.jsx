@@ -128,20 +128,34 @@ function UserPickerFilter({ value, onChange, placeholder, placeholderDe }) {
   );
 }
 
-/** Minimal customer picker — reuses customerService.searchCustomers (same as project-form.jsx) */
+/** Minimal customer picker — shows a default list on open, then filters as user types */
 function CustomerPickerFilter({ value, onChange }) {
   const { language } = useLanguage();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
 
-  const { data: customers = [] } = useQuery({
-    queryKey: queryKeys.crm.customers.search(debouncedSearch),
-    queryFn: () => customerService.searchCustomers(debouncedSearch, 20),
-    enabled: debouncedSearch.length >= 2,
+  // Default list: first 20 active customers (shown when search is empty)
+  const { data: defaultList = [] } = useQuery({
+    queryKey: queryKeys.crm.customers.list({ sortBy: 'name', sortOrder: 'asc', limit: 20 }),
+    queryFn: async () => {
+      const res = await customerService.getCustomers({ sortBy: 'name', sortOrder: 'asc', limit: 20 });
+      const items = res?.data || res?.items || (Array.isArray(res) ? res : []);
+      return items.filter((c) => c?._id);
+    },
+    staleTime: 60000,
   });
 
-  // When a value is set but no search results yet, fetch name via a secondary key
+  // Search results: flexible partial match (shown when user types 1+ chars)
+  const { data: searchResults = [] } = useQuery({
+    queryKey: queryKeys.crm.customers.search(debouncedSearch),
+    queryFn: () => customerService.searchCustomers(debouncedSearch, 20),
+    enabled: debouncedSearch.length >= 1,
+  });
+
+  const customers = debouncedSearch.length >= 1 ? searchResults : defaultList;
+
+  // When a value is set but not in current list, fetch name via a secondary key
   const { data: selectedCustomerData } = useQuery({
     queryKey: ['customerName', value],
     queryFn: async () => {
@@ -205,15 +219,13 @@ function CustomerPickerFilter({ value, onChange }) {
             >
               <Building2 className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
               <span className="truncate">{c.name}</span>
+              {c.customerNumber && (
+                <span className="ml-auto font-mono text-[10px] text-muted-foreground shrink-0">{c.customerNumber}</span>
+              )}
               {c._id === value && <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />}
             </button>
           ))}
-          {debouncedSearch.length < 2 && customers.length === 0 && (
-            <p className="px-3 py-3 text-xs text-muted-foreground text-center">
-              {language === 'de' ? 'Mind. 2 Zeichen eingeben' : 'Type at least 2 characters'}
-            </p>
-          )}
-          {debouncedSearch.length >= 2 && customers.length === 0 && (
+          {customers.length === 0 && debouncedSearch.length >= 1 && (
             <p className="px-3 py-3 text-xs text-muted-foreground text-center">
               {language === 'de' ? 'Keine Kunden gefunden' : 'No customers found'}
             </p>

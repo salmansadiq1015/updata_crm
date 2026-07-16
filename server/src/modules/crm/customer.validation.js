@@ -89,7 +89,7 @@ export const listCustomersSchema = {
 
 export const searchCustomersSchema = {
   query: Joi.object({
-    q: Joi.string().required().trim().min(2).max(100),
+    q: Joi.string().required().trim().min(1).max(100),
     limit: Joi.number().integer().min(1).max(50).default(25),
   }),
 };

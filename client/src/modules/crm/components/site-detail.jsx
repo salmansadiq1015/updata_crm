@@ -14,6 +14,8 @@ import { NotesPanel } from './notes-panel';
 import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
 import { SiteMapCard } from './site-map-card';
+import { SiteDocumentsTab } from './site-documents-tab';
+import { SiteBusinessTab } from './site-business-tab';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
 import { Button } from '@/components/ui/button';
@@ -24,12 +26,31 @@ import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import {
   Pencil, Archive, Building2, MapPin, Key, Home,
-  ChevronRight, Wrench, FileText, Image as ImageIcon, Activity,
+  ChevronRight, Wrench, FileText, Image as ImageIcon, Activity, Files, Receipt,
 } from 'lucide-react';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 
 const cantonName = (code) => CH_CANTONS.find((c) => c.code === code)?.name || code;
+
+const partyHasContent = (p) => !!(p && (p.name || p.careOf || p.street || p.postalCode || p.city || p.canton));
+
+function PartyCard({ title, party, icon: Icon }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
+        <Icon className="h-3.5 w-3.5" /> {title}
+      </div>
+      <div className="space-y-0.5 text-[13px] text-foreground">
+        {party.name && <p className="font-medium">{party.name}</p>}
+        {party.careOf && <p className="text-muted-foreground">c/o {party.careOf}</p>}
+        {party.street && <p>{party.street}</p>}
+        {(party.postalCode || party.city) && <p>{[party.postalCode, party.city].filter(Boolean).join(' ')}</p>}
+        {party.canton && <p className="text-muted-foreground">{cantonName(party.canton)}</p>}
+      </div>
+    </div>
+  );
+}
 
 export function SiteDetail() {
   const { t } = useLanguage();
@@ -91,22 +112,22 @@ export function SiteDetail() {
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-white/35">
-        <Link href="/crm/customers" className="hover:text-white/65 transition-colors">CRM</Link>
+      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Link href="/crm/customers" className="hover:text-foreground transition-colors">CRM</Link>
         <ChevronRight className="h-3.5 w-3.5" />
         {customerId ? (
-          <Link href={`/crm/customers/${customerId}`} className="hover:text-white/65 transition-colors truncate max-w-[200px]">
+          <Link href={`/crm/customers/${customerId}`} className="hover:text-foreground transition-colors truncate max-w-[200px]">
             {customerName || t('crm.customer', 'Kunde')}
           </Link>
         ) : (
           <span>{t('crm.customer', 'Kunde')}</span>
         )}
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-white/70 font-medium truncate">{site.name}</span>
+        <span className="text-foreground font-medium truncate">{site.name}</span>
       </nav>
 
       {/* Hero Header card */}
-      <div className="rounded-2xl border border-white/7 bg-[#0D1117] overflow-hidden mb-6">
+      <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6">
         {/* Amber accent stripe for site/object */}
         <div className="h-1 w-full bg-linear-to-r from-amber-500 via-amber-400 to-transparent" />
         <div className="p-6 flex items-start gap-4 flex-wrap">
@@ -116,18 +137,18 @@ export function SiteDetail() {
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h1 className="text-[22px] font-bold text-white/90 tracking-tight">{site.name}</h1>
+              <h1 className="text-[22px] font-bold text-foreground tracking-tight">{site.name}</h1>
               <span className={cn('inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full', typeMeta.bg, typeMeta.color)}>
                 {t(`crm.sites.type.${site.siteType}`, typeMeta.label)}
               </span>
               {!isActive && (
-                <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-white/5 text-white/40">
+                <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
                   {t('crm.sites.statusInactive', 'Inaktiv')}
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-4 text-[13px] text-white/45 flex-wrap">
+            <div className="flex items-center gap-4 text-[13px] text-muted-foreground flex-wrap">
               {addressLine && (
                 <span className="inline-flex items-center gap-1.5">
                   <MapPin className="h-3.5 w-3.5" /> {addressLine}
@@ -139,7 +160,7 @@ export function SiteDetail() {
                 </span>
               )}
               {site.accessInstructions && (
-                <span className="inline-flex items-center gap-1.5 text-amber-400">
+                <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
                   <Key className="h-3.5 w-3.5" /> {t('crm.sites.accessInfoBadge', 'Zugangsinfos vorhanden')}
                 </span>
               )}
@@ -151,7 +172,7 @@ export function SiteDetail() {
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 border-white/10 bg-white/4 text-white/60 hover:bg-white/8 hover:text-white/80"
+                className="gap-1.5"
                 onClick={() => setFormOpen(true)}
               >
                 <Pencil className="h-3.5 w-3.5" /> {t('common.edit', 'Bearbeiten')}
@@ -161,7 +182,7 @@ export function SiteDetail() {
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 border-white/10 bg-white/4 text-white/60 hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
+                className="gap-1.5 hover:border-red-500/40 hover:text-red-600 hover:bg-red-500/10"
                 onClick={() => setDeactivateOpen(true)}
               >
                 <Archive className="h-3.5 w-3.5" /> {t('crm.sites.deactivate', 'Deaktivieren')}
@@ -173,11 +194,22 @@ export function SiteDetail() {
         {site.accessInstructions && (
           <div className="px-6 pb-5">
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 mb-1">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">
                 <Key className="h-3.5 w-3.5" /> {t('crm.sites.accessInstructions', 'Zugangsinformationen')}
               </div>
-              <p className="text-[13px] text-white/70 whitespace-pre-wrap">{site.accessInstructions}</p>
+              <p className="text-[13px] text-foreground whitespace-pre-wrap">{site.accessInstructions}</p>
             </div>
+          </div>
+        )}
+
+        {(partyHasContent(site.billingAddress) || partyHasContent(site.ownership)) && (
+          <div className="grid gap-3 px-6 pb-5 sm:grid-cols-2">
+            {partyHasContent(site.billingAddress) && (
+              <PartyCard title={t('crm.sites.billingAddress', 'Rechnungsadresse')} party={site.billingAddress} icon={Building2} />
+            )}
+            {partyHasContent(site.ownership) && (
+              <PartyCard title={t('crm.sites.ownership', 'Eigentümerschaft')} party={site.ownership} icon={Home} />
+            )}
           </div>
         )}
       </div>
@@ -193,6 +225,12 @@ export function SiteDetail() {
           </TabsTrigger>
           <TabsTrigger value="images" className="gap-1.5">
             <ImageIcon className="h-3.5 w-3.5" /> {t('crm.images.title', 'Bilder')}
+          </TabsTrigger>
+          <TabsTrigger value="business" className="gap-1.5">
+            <Receipt className="h-3.5 w-3.5" /> {t('crm.sites.businessTab', 'Offerten & Aufträge')}
+          </TabsTrigger>
+          <TabsTrigger value="documents" className="gap-1.5">
+            <Files className="h-3.5 w-3.5" /> {t('crm.documents.title', 'Dokumente')}
           </TabsTrigger>
           <TabsTrigger value="activity" className="gap-1.5">
             <Activity className="h-3.5 w-3.5" /> {t('crm.installations.tab.history', 'Historie')}
@@ -212,6 +250,12 @@ export function SiteDetail() {
         </TabsContent>
         <TabsContent value="images">
           <ImagesPanel entityType="site" entityId={id} />
+        </TabsContent>
+        <TabsContent value="business">
+          <SiteBusinessTab siteId={id} />
+        </TabsContent>
+        <TabsContent value="documents">
+          <SiteDocumentsTab siteId={id} />
         </TabsContent>
         <TabsContent value="activity">
           <HistoryTimeline entityType="site" entityId={id} />
@@ -244,7 +288,7 @@ function SiteDetailSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-5 w-64" />
-      <div className="rounded-2xl border border-white/7 bg-[#0D1117] overflow-hidden">
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
         <div className="h-1 bg-amber-500/40 w-full" />
         <div className="p-6 flex gap-4">
           <Skeleton className="h-14 w-14 rounded-2xl" />

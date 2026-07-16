@@ -10,6 +10,7 @@ export const createUserSchema = {
     email: Joi.string().email().required().lowercase().trim().max(255),
     firstName: Joi.string().required().trim().max(100),
     lastName: Joi.string().required().trim().max(100),
+    salutation: Joi.string().valid('herr', 'frau').allow('', null),
     roleId: objectId.required(),
     language: Joi.string().valid('de', 'en', 'fr', 'it').default('de'),
     phone: Joi.string().trim().max(30).allow('', null),
@@ -33,6 +34,7 @@ export const updateUserSchema = {
     email: Joi.string().email().lowercase().trim().max(255),
     firstName: Joi.string().trim().max(100),
     lastName: Joi.string().trim().max(100),
+    salutation: Joi.string().valid('herr', 'frau').allow('', null),
     roleId: objectId,
     language: Joi.string().valid('de', 'en', 'fr', 'it'),
     phone: Joi.string().trim().max(30).allow('', null),
@@ -53,6 +55,7 @@ export const updateMeSchema = {
   body: Joi.object({
     firstName: Joi.string().trim().max(100),
     lastName: Joi.string().trim().max(100),
+    salutation: Joi.string().valid('herr', 'frau').allow('', null),
     language: Joi.string().valid('de', 'en', 'fr', 'it'),
     phone: Joi.string().trim().max(30).allow('', null),
     department: Joi.string().trim().max(100).allow('', null),

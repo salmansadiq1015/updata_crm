@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const createUserSchema = z.object({
   firstName: z.string().min(1, 'Vorname ist erforderlich').max(100),
   lastName: z.string().min(1, 'Nachname ist erforderlich').max(100),
+  salutation: z.enum(['herr', 'frau']).or(z.literal('')).optional(),
   email: z.string().email('Bitte gültige E-Mail-Adresse eingeben'),
   phone: z.string().max(30).optional().or(z.literal('')),
   department: z.string().max(100).optional().or(z.literal('')),

@@ -42,6 +42,10 @@ const statusConfig = {
 
 const langNames = { de: 'Deutsch', en: 'English', fr: 'Français', it: 'Italiano' };
 
+// Anrede / salutation — person-applicable values only (mirrors CRM customers).
+const salutationLabels = { herr: 'Herr', frau: 'Frau' };
+const salutationLabel = (code) => salutationLabels[code] || '';
+
 export default function UserDetailPage() {
   const { t } = useLanguage();
   const { id } = useParams();
@@ -136,7 +140,7 @@ export default function UserDetailPage() {
                 <div className={cn('absolute bottom-0.5 right-0.5 h-5 w-5 rounded-full border-[3px] border-card', status.dotColor)} />
               </div>
 
-              <h1 className="text-lg font-bold tracking-tight mb-1">{user.firstName} {user.lastName}</h1>
+              <h1 className="text-lg font-bold tracking-tight mb-1">{[salutationLabel(user.salutation), user.firstName, user.lastName].filter(Boolean).join(' ')}</h1>
               <p className="text-sm text-muted-foreground mb-3">{user.email}</p>
 
               <div className="flex items-center justify-center gap-2 mb-4">

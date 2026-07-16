@@ -555,24 +555,43 @@ export function UsersTable() {
                 </PermissionGate>
 
                 <PermissionGate permission="users:admin">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-lg"
-                          onClick={() => { setTargetUser(u); setConfirmOpen(true); }}
-                        >
-                          {isActive
-                            ? <UserX className="h-3.5 w-3.5 text-destructive" />
-                            : <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
-                          }
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{isActive ? t('users.deactivate') : t('users.activate')}</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  {(() => {
+                    // A pending user hasn't confirmed their e-mail yet and a locked
+                    // user is blocked — neither can be toggled here (mirrors the
+                    // status-column Switch). Show the action muted with a reason.
+                    const isPending = u.status === 'pending_activation';
+                    const isLocked = u.status === 'locked';
+                    const toggleBlocked = isPending || isLocked;
+                    return (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-disabled={toggleBlocked}
+                              className={cn('h-8 w-8 rounded-lg', toggleBlocked && 'cursor-not-allowed hover:bg-transparent')}
+                              onClick={() => { if (toggleBlocked) return; setTargetUser(u); setConfirmOpen(true); }}
+                            >
+                              {toggleBlocked
+                                ? <UserCheck className="h-3.5 w-3.5 text-muted-foreground/40" />
+                                : isActive
+                                  ? <UserX className="h-3.5 w-3.5 text-destructive" />
+                                  : <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
+                              }
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {isPending
+                              ? t('users.activatePendingHint', 'Benutzer muss zuerst seine E-Mail bestätigen')
+                              : isLocked
+                                ? t('users.activateLockedHint', 'Benutzer ist gesperrt')
+                                : isActive ? t('users.deactivate') : t('users.activate')}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })()}
                 </PermissionGate>
               </div>
             );
@@ -704,6 +723,9 @@ function UserCard({ user, onEdit, onToggle }) {
   const initials = `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase();
   const status = statusConfig[user.status] || statusConfig.active;
   const isActive = user.status === 'active' || user.isActive;
+  const isPending = user.status === 'pending_activation';
+  const isLocked = user.status === 'locked';
+  const toggleBlocked = isPending || isLocked;
   const lastLogin = user.lastLoginAt || user.lastLogin;
   const dateLocale = getUserDateLocale(locale);
 
@@ -758,13 +780,22 @@ function UserCard({ user, onEdit, onToggle }) {
               </DropdownMenuItem>
               <PermissionGate permission="users:admin">
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={onToggle}
-                  className={cn('gap-2', isActive ? 'text-destructive focus:text-destructive' : 'text-emerald-600 focus:text-emerald-600')}
-                >
-                  {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                  {isActive ? t('users.deactivate') : t('users.activate')}
-                </DropdownMenuItem>
+                {toggleBlocked ? (
+                  <DropdownMenuItem disabled className="gap-2">
+                    <UserCheck className="h-3.5 w-3.5" />
+                    {isPending
+                      ? t('users.activatePendingHint', 'Benutzer muss zuerst seine E-Mail bestätigen')
+                      : t('users.activateLockedHint', 'Benutzer ist gesperrt')}
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={onToggle}
+                    className={cn('gap-2', isActive ? 'text-destructive focus:text-destructive' : 'text-emerald-600 focus:text-emerald-600')}
+                  >
+                    {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                    {isActive ? t('users.deactivate') : t('users.activate')}
+                  </DropdownMenuItem>
+                )}
               </PermissionGate>
             </DropdownMenuContent>
           </DropdownMenu>

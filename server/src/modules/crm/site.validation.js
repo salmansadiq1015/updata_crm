@@ -10,6 +10,17 @@ const canton = Joi.string().trim()
   .valid(...SWISS_CANTONS)
   .messages({ 'any.only': 'Must be a valid Swiss canton code (e.g., ZH, BE, GE)' });
 
+// Named party + address block for an object (billing / ownership) — feedback #10.
+// Free-form (postal code not forced to the strict Swiss pattern here).
+const addressParty = Joi.object({
+  name: Joi.string().trim().max(255).allow('', null),
+  careOf: Joi.string().trim().max(255).allow('', null),
+  street: Joi.string().trim().max(255).allow('', null),
+  postalCode: Joi.string().trim().max(10).allow('', null),
+  city: Joi.string().trim().max(100).allow('', null),
+  canton: canton.allow('', null),
+}).allow(null);
+
 export const createSiteSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(255),
@@ -23,6 +34,8 @@ export const createSiteSchema = {
     siteType: Joi.string().valid('residential', 'commercial', 'industrial').default('residential'),
     latitude: Joi.number().min(-90).max(90).allow(null),
     longitude: Joi.number().min(-180).max(180).allow(null),
+    billingAddress: addressParty,
+    ownership: addressParty,
   }),
 };
 
@@ -40,6 +53,8 @@ export const updateSiteSchema = {
     siteType: Joi.string().valid('residential', 'commercial', 'industrial'),
     latitude: Joi.number().min(-90).max(90).allow(null),
     longitude: Joi.number().min(-180).max(180).allow(null),
+    billingAddress: addressParty,
+    ownership: addressParty,
   }).min(1),
 };
 

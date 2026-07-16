@@ -16,6 +16,8 @@ import { Loader2, MapPin, AlertCircle } from 'lucide-react';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 
+const BLANK_PARTY = { name: '', careOf: '', street: '', postalCode: '', city: '', canton: '' };
+
 const BLANK = {
   name: '',
   street: '',
@@ -28,6 +30,32 @@ const BLANK = {
   siteType: 'residential',
   latitude: null,
   longitude: null,
+  billingAddress: { ...BLANK_PARTY },
+  ownership: { ...BLANK_PARTY },
+};
+
+// Coerce a stored party (nullable fields) into blank-safe form values.
+const partyValues = (party) => ({
+  name: party?.name || '',
+  careOf: party?.careOf || '',
+  street: party?.street || '',
+  postalCode: party?.postalCode || '',
+  city: party?.city || '',
+  canton: party?.canton || '',
+});
+
+// Drop an all-empty party to null so we don't persist empty blocks.
+const cleanParty = (party) => {
+  if (!party) return null;
+  const values = {
+    name: party.name?.trim() || null,
+    careOf: party.careOf?.trim() || null,
+    street: party.street?.trim() || null,
+    postalCode: party.postalCode?.trim() || null,
+    city: party.city?.trim() || null,
+    canton: party.canton || null,
+  };
+  return Object.values(values).some(Boolean) ? values : null;
 };
 
 export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
@@ -52,6 +80,8 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
         floorUnit: defaultValues.floorUnit || '',
         accessInstructions: defaultValues.accessInstructions || '',
         siteType: defaultValues.siteType || 'residential',
+        billingAddress: partyValues(defaultValues.billingAddress),
+        ownership: partyValues(defaultValues.ownership),
       });
     } else {
       reset(BLANK);
@@ -60,6 +90,8 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 
   const canton = watch('canton');
   const siteType = watch('siteType');
+  const billingCanton = watch('billingAddress.canton');
+  const ownerCanton = watch('ownership.canton');
 
   const submit = async (data) => {
     const cleaned = {
@@ -70,6 +102,8 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
       canton: data.canton || null,
       floorUnit: data.floorUnit || null,
       accessInstructions: data.accessInstructions || null,
+      billingAddress: cleanParty(data.billingAddress),
+      ownership: cleanParty(data.ownership),
     };
     try {
       await onSubmit(cleaned);
@@ -177,6 +211,77 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                 className="bg-background border-border rounded-lg text-[13px] text-foreground placeholder:text-muted-foreground focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20 resize-none"
               />
             </DarkField>
+
+            {/* Billing address (Rechnungsadresse) — feedback #10 */}
+            <Separator className="my-5 bg-muted/50" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              {t('crm.sites.billingAddress', 'Rechnungsadresse')}
+            </p>
+            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+              <DarkField label={t('crm.name', 'Name')} error={errors.billingAddress?.name}>
+                <Input {...register('billingAddress.name')} placeholder="z.B. Peter Müller" className={inputCls} />
+              </DarkField>
+              <DarkField label={t('crm.sites.careOf', 'c/o')} error={errors.billingAddress?.careOf}>
+                <Input {...register('billingAddress.careOf')} placeholder="z.B. Test Liegenschaftsverwaltung AG" className={inputCls} />
+              </DarkField>
+              <DarkField label={t('crm.street', 'Strasse')} error={errors.billingAddress?.street}>
+                <Input {...register('billingAddress.street')} className={inputCls} />
+              </DarkField>
+              <div className="grid grid-cols-[120px_1fr] gap-4">
+                <DarkField label={t('crm.postalCode', 'PLZ')} error={errors.billingAddress?.postalCode}>
+                  <Input {...register('billingAddress.postalCode')} className={inputCls} />
+                </DarkField>
+                <DarkField label={t('crm.city', 'Ort')} error={errors.billingAddress?.city}>
+                  <Input {...register('billingAddress.city')} className={inputCls} />
+                </DarkField>
+              </div>
+              <DarkField label={t('crm.canton', 'Kanton')} error={errors.billingAddress?.canton}>
+                <Select value={billingCanton || ''} onValueChange={(v) => setValue('billingAddress.canton', v, { shouldDirty: true })}>
+                  <SelectTrigger className={selectTriggerCls}><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent className="max-h-72 bg-card border-border">
+                    {CH_CANTONS.map((c) => (
+                      <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">
+                        <span className="font-mono text-[10px] mr-1.5 text-muted-foreground">{c.code}</span>{c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </DarkField>
+            </div>
+
+            {/* Ownership (Eigentümerschaft) — feedback #10 */}
+            <Separator className="my-5 bg-muted/50" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              {t('crm.sites.ownership', 'Eigentümerschaft')}
+            </p>
+            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+              <DarkField label={t('crm.name', 'Name')} error={errors.ownership?.name}>
+                <Input {...register('ownership.name')} placeholder="z.B. Peter Müller" className={inputCls} />
+              </DarkField>
+              <DarkField label={t('crm.street', 'Strasse')} error={errors.ownership?.street}>
+                <Input {...register('ownership.street')} className={inputCls} />
+              </DarkField>
+              <div className="grid grid-cols-[120px_1fr] gap-4">
+                <DarkField label={t('crm.postalCode', 'PLZ')} error={errors.ownership?.postalCode}>
+                  <Input {...register('ownership.postalCode')} className={inputCls} />
+                </DarkField>
+                <DarkField label={t('crm.city', 'Ort')} error={errors.ownership?.city}>
+                  <Input {...register('ownership.city')} className={inputCls} />
+                </DarkField>
+              </div>
+              <DarkField label={t('crm.canton', 'Kanton')} error={errors.ownership?.canton}>
+                <Select value={ownerCanton || ''} onValueChange={(v) => setValue('ownership.canton', v, { shouldDirty: true })}>
+                  <SelectTrigger className={selectTriggerCls}><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent className="max-h-72 bg-card border-border">
+                    {CH_CANTONS.map((c) => (
+                      <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">
+                        <span className="font-mono text-[10px] mr-1.5 text-muted-foreground">{c.code}</span>{c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </DarkField>
+            </div>
           </div>
 
           {/* Fixed Footer */}

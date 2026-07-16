@@ -7,7 +7,7 @@ export function GlassPanel({ children, className }) {
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-lg border border-border bg-card shadow-[0_18px_64px_rgba(0,0,0,0.28)] backdrop-blur-xl',
+        'relative overflow-hidden rounded-lg border border-border bg-card shadow-theme-lg backdrop-blur-xl',
         'before:pointer-events-none before:absolute before:inset-0 before:bg-[linear-gradient(135deg,rgba(255,255,255,0.11),transparent_34%,rgba(34,211,238,0.06))]',
         className,
       )}

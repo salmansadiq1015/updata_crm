@@ -8,6 +8,7 @@ export const searchDocumentsSchema = {
     status: Joi.string(),
     customerId: objectId,
     projectId: objectId,
+    siteId: objectId,
     departmentId: objectId,
     dateFrom: Joi.date().iso(),
     dateTo: Joi.date().iso(),

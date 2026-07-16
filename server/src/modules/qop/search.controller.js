@@ -69,7 +69,7 @@ class SearchController {
     try {
       const query = req._validatedQuery || req.query;
       const {
-        q, type = 'all', status, customerId, projectId, departmentId,
+        q, type = 'all', status, customerId, projectId, siteId, departmentId,
         dateFrom, dateTo, amountMin, amountMax, assignedUserId,
         limit = 25, cursor, sortBy = 'createdAt', sortOrder = 'desc',
       } = query;
@@ -77,6 +77,15 @@ class SearchController {
       const searchTypes = type === 'all'
         ? ['quotation', 'order', 'invoice']
         : [type];
+
+      // Object (site) scope: quotations/orders/invoices reach an object through its
+      // projects. Resolve the site's projects and filter by projectId $in [...].
+      let siteProjectIds = null;
+      if (siteId) {
+        const { default: Project } = await import('../pm/project.model.js');
+        const projects = await Project.find({ siteId }).select('_id').lean();
+        siteProjectIds = projects.map((project) => project._id);
+      }
 
       const sortDirection = sortOrder === 'asc' ? 1 : -1;
       const decodedCursor = decodeSearchCursor(cursor, sortBy, sortOrder);
@@ -143,6 +152,7 @@ class SearchController {
         if (status) filter.status = status;
         if (customerId) filter.customerId = customerId;
         if (projectId) filter.projectId = projectId;
+        else if (siteProjectIds) filter.projectId = { $in: siteProjectIds };
         if (departmentId) {
           filter.departmentId = Array.isArray(departmentId) ? { $in: departmentId } : departmentId;
         }

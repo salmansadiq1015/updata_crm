@@ -16,6 +16,7 @@ export const listDocumentsSchema = {
     sourceRecordId: objectId,
     customerId: objectId,
     projectId: objectId,
+    siteId: objectId,
     jobId: objectId,
     employeeId: objectId,
     dateFrom: Joi.date().iso(),

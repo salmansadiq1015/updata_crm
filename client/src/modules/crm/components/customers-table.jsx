@@ -204,6 +204,28 @@ export function CustomersTable() {
       },
     },
     {
+      accessorKey: 'salesStatus',
+      header: t('crm.salesStatus', 'Vertriebsstatus'),
+      size: 170,
+      enableSorting: false,
+      Cell: ({ row }) => {
+        const s = row.original.salesStatus;
+        if (!s) return <span className="text-[13px] text-muted-foreground/60">-</span>;
+        const meta = {
+          zusage: { label: t('crm.salesZusage', 'Zusage'), text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-500/10', dot: 'bg-emerald-500' },
+          offer_received: { label: t('crm.salesOfferReceived', 'Nur Offerte erhalten'), text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-500/10', dot: 'bg-amber-500' },
+          absage: { label: t('crm.salesAbsage', 'Absage'), text: 'text-rose-700 dark:text-rose-400', bg: 'bg-rose-500/10', dot: 'bg-rose-500' },
+        }[s];
+        if (!meta) return <span className="text-[13px] text-muted-foreground/60">-</span>;
+        return (
+          <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full', meta.bg, meta.text)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
+            {meta.label}
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: 'address',
       header: t('crm.address', 'Address'),
       size: 220,

@@ -300,15 +300,20 @@ class CustomerService {
       const s = String(v).replace(/"/g, '""');
       return /[",\n;]/.test(s) ? `"${s}"` : s;
     };
+    const salesStatusLabel = {
+      zusage: 'Zusage',
+      offer_received: 'Nur Offerte erhalten',
+      absage: 'Absage',
+    };
     const header = [
-      'CustomerNumber', 'Name', 'Type', 'Status',
+      'CustomerNumber', 'Name', 'Type', 'Status', 'SalesStatus',
       'OwnerName', 'UidNumber', 'VatNumber',
       'Street', 'AddressSupplement', 'PostalCode', 'City', 'Canton', 'Country',
       'Phone', 'Mobile', 'Email', 'Website',
       'NewsletterOptIn', 'NewsletterChannel', 'CreatedAt',
     ].join(';');
     const body = rows.map((c) => [
-      c.customerNumber, c.name, c.type, c.status,
+      c.customerNumber, c.name, c.type, c.status, salesStatusLabel[c.salesStatus] || '',
       c.ownerName, c.uidNumber, c.vatNumber,
       c.street, c.addressSupplement, c.postalCode, c.city, c.canton, c.country,
       c.phone, c.mobile, c.email, c.website,

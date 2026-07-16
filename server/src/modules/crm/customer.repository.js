@@ -37,6 +37,16 @@ const ALLOWED_FILTERS = {
   newsletterOptIn: 'boolean',
 };
 
+// Derive a customer's sales status from the set of its quotation statuses.
+// Priority when outcomes are mixed: acceptance > only offer received > rejection.
+function deriveSalesStatus(statuses = []) {
+  const set = new Set(statuses);
+  if (set.has('ACCEPTED') || set.has('CONVERTED')) return 'zusage';
+  if (set.has('SENT') || set.has('VIEWED')) return 'offer_received';
+  if (set.has('DECLINED')) return 'absage';
+  return null;
+}
+
 class CustomerRepository {
   async create(data) {
     const customer = new Customer(data);
@@ -118,14 +128,15 @@ class CustomerRepository {
     if (!customers.length) return customers;
 
     const customerIds = customers.map((customer) => customer._id);
-    const [Site, Installation, MaintenanceInterval, Contact] = await Promise.all([
+    const [Site, Installation, MaintenanceInterval, Contact, Quotation] = await Promise.all([
       import('./site.model.js').then((module) => module.default),
       import('./installation.model.js').then((module) => module.default),
       import('./maintenanceInterval.model.js').then((module) => module.default),
       import('./contact.model.js').then((module) => module.default),
+      import('../qop/quotation.model.js').then((module) => module.default),
     ]);
 
-    const [siteCounts, installationCounts, lastServiceRows, primaryContacts] = await Promise.all([
+    const [siteCounts, installationCounts, lastServiceRows, primaryContacts, quotationStatusRows] = await Promise.all([
       Site.aggregate([
         { $match: { customerId: { $in: customerIds }, isDeleted: false } },
         { $group: { _id: '$customerId', total: { $sum: 1 } } },
@@ -157,11 +168,16 @@ class CustomerRepository {
       Contact.find({ customerId: { $in: customerIds }, isPrimary: true })
         .select('customerId firstName lastName functionTitle email phone mobile')
         .lean(),
+      Quotation.aggregate([
+        { $match: { customerId: { $in: customerIds }, isDeleted: { $ne: true } } },
+        { $group: { _id: '$customerId', statuses: { $addToSet: '$status' } } },
+      ]),
     ]);
 
     const siteCountByCustomer = new Map(siteCounts.map((row) => [String(row._id), row.total]));
     const installationCountByCustomer = new Map(installationCounts.map((row) => [String(row._id), row.total]));
     const lastServiceByCustomer = new Map(lastServiceRows.map((row) => [String(row._id), row.lastServiceDate]));
+    const salesStatusByCustomer = new Map(quotationStatusRows.map((row) => [String(row._id), deriveSalesStatus(row.statuses)]));
     const primaryContactByCustomer = new Map(primaryContacts.map((contact) => [
       String(contact.customerId),
       {
@@ -178,6 +194,7 @@ class CustomerRepository {
         totalSitesCount: siteCountByCustomer.get(key) || 0,
         totalInstallationsCount: installationCountByCustomer.get(key) || 0,
         lastServiceDate: lastServiceByCustomer.get(key) || null,
+        salesStatus: salesStatusByCustomer.get(key) || null,
         primaryContact,
         primaryContactName: primaryContact?.fullName || null,
         primaryContactEmail: primaryContact?.email || null,

@@ -185,7 +185,7 @@ export default function MobileTasksPage() {
           value={title}
           onChange={(event) => setTitle(event.target.value)}
           maxLength={500}
-          placeholder={t('mobile.tasks.quickAdd', locale === 'de' ? 'Aufgabe hinzufuegen' : 'Add task')}
+          placeholder={t('mobile.tasks.quickAdd', locale === 'de' ? 'Aufgabe hinzufügen' : 'Add task')}
           className="h-9"
         />
         <Button type="submit" size="icon" className="h-9 w-9 shrink-0" disabled={!title.trim() || mutations.createTask.isPending}>
@@ -216,7 +216,7 @@ export default function MobileTasksPage() {
           <Select value={priority} onValueChange={setPriority}>
             <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>{locale === 'de' ? 'Alle Prioritaeten' : 'All priorities'}</SelectItem>
+              <SelectItem value={ALL}>{locale === 'de' ? 'Alle Prioritäten' : 'All priorities'}</SelectItem>
               {Object.entries(PRIORITY_META).map(([value, meta]) => (
                 <SelectItem key={value} value={value}>{label(meta, locale)}</SelectItem>
               ))}

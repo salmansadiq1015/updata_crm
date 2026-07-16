@@ -200,7 +200,7 @@ export default function UserDetailPage() {
                         <Hash className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>User-ID kopieren</TooltipContent>
+                    <TooltipContent>Benutzer-ID kopieren</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>

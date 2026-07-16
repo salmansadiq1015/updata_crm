@@ -174,7 +174,7 @@ function TicketCard({ ticket, locale, expanded, onExpand, mutations }) {
           {ticket.description && <p className="text-sm text-muted-foreground">{ticket.description}</p>}
           {ticket.ai?.nextActions?.length > 0 && (
             <div className="rounded-lg bg-background p-3 text-xs">
-              <div className="mb-1 font-medium">{locale === 'de' ? 'AI nächste Schritte' : 'AI Next Actions'}</div>
+              <div className="mb-1 font-medium">{locale === 'de' ? 'KI-Empfehlungen' : 'AI Next Actions'}</div>
               <ul className="space-y-1 text-muted-foreground">
                 {ticket.ai.nextActions.slice(0, 3).map((action) => <li key={action}>- {action}</li>)}
               </ul>

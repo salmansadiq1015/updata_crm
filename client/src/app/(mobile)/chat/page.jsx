@@ -112,7 +112,7 @@ export default function ChatLandingPage() {
               title={lang === 'de' ? 'Kein aktiver Chat' : 'No active chats'}
               description={
                 lang === 'de'
-                  ? 'Sobald Sie Aufträgen mit Projekten zugewiesen werden, erscheinen diese hier.'
+                  ? 'Sobald Sie Projekten zugewiesen werden, erscheinen diese hier.'
                   : 'Projects you are assigned to will appear here.'
               }
             />

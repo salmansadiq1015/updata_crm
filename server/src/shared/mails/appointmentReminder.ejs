@@ -23,7 +23,7 @@
     <div class="content">
       <h2>Erinnerung: Termin morgen</h2>
       <p>Guten Tag <%= customerName %>,</p>
-      <p>Wir moechten Sie an Ihren Termin <strong>morgen</strong> erinnern:</p>
+      <p>Wir möchten Sie an Ihren Termin <strong>morgen</strong> erinnern:</p>
       <div class="details">
         <table>
           <tr><td>Datum:</td><td><%= appointmentDate %></td></tr>
@@ -32,8 +32,8 @@
           <% if (serviceAddress) { %><tr><td>Adresse:</td><td><%= serviceAddress %></td></tr><% } %>
         </table>
       </div>
-      <% if (contactPhone) { %><p>Bei Aenderungswuenschen kontaktieren Sie uns bitte unter <strong><%= contactPhone %></strong>.</p><% } %>
-      <p>Freundliche Gruesse<br><%= appName %></p>
+      <% if (contactPhone) { %><p>Bei Änderungswünschen kontaktieren Sie uns bitte unter <strong><%= contactPhone %></strong>.</p><% } %>
+      <p>Freundliche Grüsse<br><%= appName %></p>
     </div>
     <div class="footer"><p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p></div>
   </div>

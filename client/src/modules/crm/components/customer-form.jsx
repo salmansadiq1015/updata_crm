@@ -243,8 +243,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
             {/* Duplicate warning */}
             {!isEdit && dupesData?.hasDuplicates && (
               <DuplicateWarning
-                title={t('crm.duplicateWarningTitle', 'Moegliche Duplikate gefunden')}
-                description={t('crm.duplicateWarningDesc', 'Kunden mit aehnlichem Namen existieren bereits:')}
+                title={t('crm.duplicateWarningTitle', 'Mögliche Duplikate gefunden')}
+                description={t('crm.duplicateWarningDesc', 'Kunden mit ähnlichem Namen existieren bereits:')}
                 duplicates={dupesData.duplicates || []}
                 onDismiss={() => handleOpenChange(false)}
                 className="mb-6"
@@ -415,7 +415,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     <Input placeholder="8000" {...register('postalCode')} className={inputCls} />
                   </DarkField>
                   <DarkField label={t('crm.city', 'Ort')} error={errors.city}>
-                    <Input placeholder="Zuerich" {...register('city')} className={inputCls} />
+                    <Input placeholder="Zürich" {...register('city')} className={inputCls} />
                   </DarkField>
                   <DarkField label={t('crm.canton', 'Kanton')} error={errors.canton}>
                     <Select
@@ -540,7 +540,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 h-9 text-muted-foreground hover:text-foreground hover:bg-muted/60" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  {t('common.back', 'Zurueck')}
+                  {t('common.back', 'Zurück')}
                 </Button>
               ) : (
                 <Button type="button" variant="ghost" className="h-9 text-muted-foreground hover:text-foreground hover:bg-muted/60" onClick={() => handleOpenChange(false)}>

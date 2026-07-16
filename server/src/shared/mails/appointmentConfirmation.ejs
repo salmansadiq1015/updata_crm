@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Terminbestaetigung</title>
+  <title>Terminbestätigung</title>
   <style>
     body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }
     .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
@@ -21,9 +21,9 @@
   <div class="container">
     <div class="header"><h1><%= appName %></h1></div>
     <div class="content">
-      <h2>Terminbestaetigung</h2>
+      <h2>Terminbestätigung</h2>
       <p>Guten Tag <%= customerName %>,</p>
-      <p>Hiermit bestaetigen wir Ihren Termin:</p>
+      <p>Hiermit bestätigen wir Ihren Termin:</p>
       <div class="details">
         <table>
           <tr><td>Datum:</td><td><%= appointmentDate %></td></tr>
@@ -35,7 +35,7 @@
         </table>
       </div>
       <% if (contactPhone) { %><p>Bei Fragen erreichen Sie uns unter <strong><%= contactPhone %></strong>.</p><% } %>
-      <p>Freundliche Gruesse<br><%= appName %></p>
+      <p>Freundliche Grüsse<br><%= appName %></p>
     </div>
     <div class="footer"><p>&copy; <%= year %> <%= appName %> | <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a></p></div>
   </div>

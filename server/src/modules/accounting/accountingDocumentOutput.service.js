@@ -188,9 +188,9 @@ export async function generateDunningPdfBuffer(letter) {
     y += 34;
     pdf.font('Helvetica').fontSize(9)
       .text(`Rechnung: ${letter.invoiceNumber}`, 48, y)
-      .text(`Faellig am: ${formatDate(letter.dueDate)}`, 48, y + 14)
+      .text(`Fällig am: ${formatDate(letter.dueDate)}`, 48, y + 14)
       .text(`Offener Betrag: ${money(letter.amountDue, letter.currency)}`, 48, y + 28)
-      .text(`Mahngebuehr: ${money(letter.feeAmount || 0, letter.currency)}`, 48, y + 42);
+      .text(`Mahngebühr: ${money(letter.feeAmount || 0, letter.currency)}`, 48, y + 42);
     y += 76;
 
     pdf.font('Helvetica-Bold').fontSize(12).text(letter.subject, 48, y);

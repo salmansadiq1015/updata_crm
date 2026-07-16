@@ -50,7 +50,7 @@ const UI_STRINGS = {
     companyPlaceholder: 'Firmenname (optional)',
     streetPlaceholder: 'Bahnhofstrasse 1',
     zipPlaceholder: '8001',
-    cityPlaceholder: 'Zuerich',
+    cityPlaceholder: 'Zürich',
     preferredWindowPlaceholder: 'z.B. Montag Vormittag',
     descriptionPlaceholder: 'Beschreiben Sie Ihr Anliegen...',
     photoHelp: 'JPEG oder PNG bis 10 MB',

@@ -169,7 +169,7 @@ class WidgetSubmissionService {
       isDuplicate: Boolean(duplicate),
       duplicateOf: duplicate?._id || null,
       confirmationMessage: widgetConfig?.confirmationMessageDe
-        || 'Ihre Anfrage wurde erfolgreich uebermittelt. Wir melden uns innerhalb von 24 Stunden.',
+        || 'Ihre Anfrage wurde erfolgreich übermittelt. Wir melden uns innerhalb von 24 Stunden.',
     };
   }
 

@@ -139,7 +139,7 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
                   <p className="py-4 text-center text-sm text-muted-foreground">
                     {debouncedCustomerSearch.length >= 2
                       ? (language === 'de' ? 'Keine Kunden gefunden' : 'No customers found')
-                      : (language === 'de' ? 'Keine Kunden verfuegbar' : 'No customers available')}
+                      : (language === 'de' ? 'Keine Kunden verfügbar' : 'No customers available')}
                   </p>
                 )}
                 {customers?.map((c) => (
@@ -183,7 +183,7 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
         </Field>
       </div>
       {!watchedCustomerId && (
-        <p className="text-xs text-muted-foreground italic">{language === 'de' ? 'Waehlen Sie zuerst einen Kunden, um Objekte zu laden' : 'Select a customer first to load sites'}</p>
+        <p className="text-xs text-muted-foreground italic">{language === 'de' ? 'Wählen Sie zuerst einen Kunden, um Objekte zu laden' : 'Select a customer first to load sites'}</p>
       )}
     </div>
   );

@@ -17,7 +17,7 @@ const STATUS_STYLES = {
 
 const STATUS_LABELS = {
   [ORDER_STATUS.PLANNED]: { de: 'Geplant', en: 'Planned' },
-  [ORDER_STATUS.CONFIRMED]: { de: 'Bestaetigt', en: 'Confirmed' },
+  [ORDER_STATUS.CONFIRMED]: { de: 'Bestätigt', en: 'Confirmed' },
   [ORDER_STATUS.IN_PROGRESS]: { de: 'In Arbeit', en: 'In Progress' },
   [ORDER_STATUS.PAUSED]: { de: 'Pausiert', en: 'Paused' },
   [ORDER_STATUS.COMPLETED]: { de: 'Abgeschlossen', en: 'Completed' },

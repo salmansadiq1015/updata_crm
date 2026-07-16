@@ -243,7 +243,7 @@ export default function JournalPage() {
 
   const handleExport = async () => {
     if (hasDateRangeError || !dateRange.startDate || !dateRange.endDate) {
-      toast.error(de ? 'Bitte einen gueltigen Zeitraum waehlen.' : 'Select a valid date range.');
+      toast.error(de ? 'Bitte einen gültigen Zeitraum wählen.' : 'Select a valid date range.');
       return;
     }
     setIsExporting(true);
@@ -422,7 +422,7 @@ export default function JournalPage() {
             onClick={() => setCursorStack((current) => (current.length > 1 ? current.slice(0, -1) : current))}
             disabled={cursorStack.length <= 1 || isLoading}
           >
-            {de ? 'Zurueck' : 'Previous'}
+            {de ? 'Zurück' : 'Previous'}
           </Button>
           <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button

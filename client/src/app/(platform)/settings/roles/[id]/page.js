@@ -211,7 +211,7 @@ export default function RoleDetailPage() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Loeschen</TooltipContent>
+                      <TooltipContent>Löschen</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 )}
@@ -255,7 +255,7 @@ export default function RoleDetailPage() {
           {topModules.length > 0 && (
             <div className="rounded-xl border border-border bg-card p-4 shadow-theme-sm">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mb-3">
-                Top Module
+                Häufigste Module
               </p>
               <div className="space-y-2">
                 {topModules.map(([mod, count], i) => {
@@ -395,11 +395,11 @@ export default function RoleDetailPage() {
         onOpenChange={setConfirmOpen}
         title="Rolle löschen?"
         description={`Möchten Sie die Rolle "${role.name}" wirklich löschen?${
-          assignedUsers.length > 0 ? ` ${assignedUsers.length} Benutzer sind dieser Rolle zugewiesen und müssen zuerst umgewiesen werden.` : ''
+          assignedUsers.length > 0 ? ` ${assignedUsers.length} Benutzer sind dieser Rolle zugewiesen und müssen zuerst einer anderen Rolle zugewiesen werden.` : ''
         }`}
         onConfirm={() => deleteMutation.mutate()}
         loading={deleteMutation.isPending}
-        confirmText="Loeschen"
+        confirmText="Löschen"
         variant="destructive"
       />
     </div>

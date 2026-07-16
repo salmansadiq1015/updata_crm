@@ -70,10 +70,11 @@ export const customerService = {
     return res.data;
   },
 
-  async mergeCustomers(sourceId, targetId) {
+  async mergeCustomers(sourceId, targetId, fieldOverrides = {}) {
     const res = await apiClient.post(ENDPOINTS.CRM.CUSTOMERS_MERGE, {
       sourceId,
       targetId,
+      fieldOverrides,
     });
     return res.data;
   },

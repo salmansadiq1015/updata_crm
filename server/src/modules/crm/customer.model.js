@@ -28,6 +28,7 @@ const customerSchema = new mongoose.Schema(
       required: true,
     },
     street: { type: String, trim: true, maxlength: 255, default: null },
+    addressSupplement: { type: String, trim: true, maxlength: 255, default: null },
     postalCode: { type: String, trim: true, maxlength: 10, default: null },
     city: { type: String, trim: true, maxlength: 100, default: null },
     canton: { type: String, trim: true, maxlength: 2, default: null },

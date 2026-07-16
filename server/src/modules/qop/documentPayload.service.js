@@ -53,7 +53,7 @@ async function loadCustomer(customerId) {
   if (!isObjectId(id)) return null;
   const Customer = (await import('../crm/customer.model.js')).default;
   return Customer.findById(id)
-    .select('customerNumber name street postalCode city canton country phone mobile email')
+    .select('customerNumber name street addressSupplement postalCode city canton country phone mobile email')
     .lean();
 }
 
@@ -104,10 +104,13 @@ function buildCustomerBlock(document, customer, contact, billing = null) {
   // the c/o line never lands in the payment slip's address field.
   const useBilling = !!(billing && billing.street);
   const recipientName = (useBilling && billing.name) || document.customerName || customer?.name || '';
+  const hasSupplement = !useBilling && !!customer?.addressSupplement;
   const addressLine1 = useBilling
     ? (billing.careOf ? `c/o ${billing.careOf}` : (billing.street || ''))
-    : (customer?.street || '');
-  const addressLine2 = useBilling && billing.careOf ? (billing.street || '') : '';
+    : (hasSupplement ? customer.addressSupplement : (customer?.street || ''));
+  const addressLine2 = useBilling
+    ? (billing.careOf ? (billing.street || '') : '')
+    : (hasSupplement ? (customer?.street || '') : '');
   const plz = useBilling ? (billing.postalCode || '') : (customer?.postalCode || '');
   const city = useBilling ? (billing.city || '') : (customer?.city || '');
 
@@ -124,6 +127,7 @@ function buildCustomerBlock(document, customer, contact, billing = null) {
       email,
       phone,
       ...(useBilling ? { qrAddress: billing.street || '' } : {}),
+      ...(hasSupplement ? { qrAddress: customer.street || '' } : {}),
     },
     customerEmail: email,
     customerPhone: phone,

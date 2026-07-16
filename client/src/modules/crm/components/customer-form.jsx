@@ -30,7 +30,7 @@ import { DuplicateWarning } from './duplicate-warning';
 const STEPS = [
   { id: 'basic', icon: User, fields: ['name', 'type', 'ownerName', 'uidNumber'] },
   { id: 'contact', icon: Mail, fields: ['phone', 'mobile', 'email', 'website'] },
-  { id: 'address', icon: MapPin, fields: ['street', 'postalCode', 'city', 'canton', 'country'] },
+  { id: 'address', icon: MapPin, fields: ['street', 'addressSupplement', 'postalCode', 'city', 'canton', 'country'] },
   { id: 'preferences', icon: Bell, fields: ['newsletterOptIn', 'newsletterChannel', 'notes'] },
 ];
 
@@ -46,6 +46,7 @@ const BLANK_VALUES = {
   uidNumber: '',
   vatNumber: '',
   street: '',
+  addressSupplement: '',
   postalCode: '',
   city: '',
   canton: '',
@@ -99,6 +100,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
         uidNumber: defaultValues.uidNumber || '',
         vatNumber: defaultValues.vatNumber || '',
         street: defaultValues.street || '',
+        addressSupplement: defaultValues.addressSupplement || '',
         postalCode: defaultValues.postalCode || '',
         city: defaultValues.city || '',
         canton: defaultValues.canton || '',
@@ -408,6 +410,10 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
 
                 <DarkField label={t('crm.street', 'Strasse')} error={errors.street}>
                   <Input placeholder="Musterstrasse 1" autoFocus {...register('street')} className={inputCls} />
+                </DarkField>
+
+                <DarkField label={t('crm.addressSupplement', 'Adresszusatz')} error={errors.addressSupplement}>
+                  <Input placeholder="z.B. c/o Verwaltung Müller AG, z.Hd. Herr Meier" {...register('addressSupplement')} className={inputCls} />
                 </DarkField>
 
                 <div className="grid grid-cols-1 sm:grid-cols-[120px_1fr_150px] gap-4">

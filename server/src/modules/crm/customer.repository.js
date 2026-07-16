@@ -6,6 +6,29 @@ import {
 } from '../../shared/utils/pagination.js';
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
 
+// Build a regex pattern where each letter matches its accented variants too.
+// "mull" → "[mM][uüùûú][lL][lL]" so it matches "Müller", "muller", etc.
+// Combined with $options:'i' this gives full accent+case insensitive search.
+const ACCENT_GROUPS = [
+  'aäàâáå', 'oöòôó', 'uüùûú', 'eèêéë', 'iìîíï', 'cç', 'nñ', 'sß',
+];
+const ACCENT_MAP = {};
+for (const group of ACCENT_GROUPS) {
+  const cls = `[${group}]`;
+  for (const ch of group) ACCENT_MAP[ch] = cls;
+}
+
+function accentSafeRegex(term) {
+  let result = '';
+  for (const ch of term) {
+    const lower = ch.toLowerCase();
+    if (ACCENT_MAP[lower]) result += ACCENT_MAP[lower];
+    else if (/[.*+?^${}()|[\]\\]/.test(ch)) result += `\\${ch}`;
+    else result += ch;
+  }
+  return result;
+}
+
 const ALLOWED_FILTERS = {
   status: 'exact',
   type: 'exact',
@@ -33,21 +56,48 @@ class CustomerRepository {
     return Customer.findOne({ customerNumber }).lean();
   }
 
+  // Sales status is derived from the customer's quotations (not a stored field).
+  // Priority when a customer has mixed outcomes: Zusage > only offer received > Absage.
+  async _customerIdsBySalesStatus(salesStatus) {
+    const Quotation = (await import('../qop/quotation.model.js')).default;
+    const base = { isDeleted: { $ne: true } };
+    const accepted = await Quotation.distinct('customerId', { ...base, status: { $in: ['ACCEPTED', 'CONVERTED'] } });
+    if (salesStatus === 'zusage') return accepted;
+
+    const acceptedSet = new Set(accepted.map(String));
+    const open = await Quotation.distinct('customerId', { ...base, status: { $in: ['SENT', 'VIEWED'] } });
+    if (salesStatus === 'offer_received') {
+      return open.filter((id) => !acceptedSet.has(String(id)));
+    }
+    if (salesStatus === 'absage') {
+      const openSet = new Set(open.map(String));
+      const declined = await Quotation.distinct('customerId', { ...base, status: 'DECLINED' });
+      return declined.filter((id) => !acceptedSet.has(String(id)) && !openSet.has(String(id)));
+    }
+    return [];
+  }
+
   async findWithCursor({ cursor, limit = 25, sortBy = 'createdAt', sortOrder = 'desc', filters = {}, search }) {
+    const { salesStatus, ...listFilters } = filters;
     const filter = {
-      ...buildFilter(filters, ALLOWED_FILTERS),
+      ...buildFilter(listFilters, ALLOWED_FILTERS),
       ...buildCursorQuery(cursor, sortBy, sortOrder),
     };
 
+    if (salesStatus) {
+      filter._id = { $in: await this._customerIdsBySalesStatus(salesStatus) };
+    }
+
     if (search) {
+      const safePattern = accentSafeRegex(search);
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { ownerName: { $regex: search, $options: 'i' } },
-        { customerNumber: { $regex: search, $options: 'i' } },
-        { uidNumber: { $regex: search, $options: 'i' } },
-        { vatNumber: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { city: { $regex: search, $options: 'i' } },
+        { name: { $regex: safePattern, $options: 'i' } },
+        { ownerName: { $regex: safePattern, $options: 'i' } },
+        { customerNumber: { $regex: safePattern, $options: 'i' } },
+        { uidNumber: { $regex: safePattern, $options: 'i' } },
+        { vatNumber: { $regex: safePattern, $options: 'i' } },
+        { email: { $regex: safePattern, $options: 'i' } },
+        { city: { $regex: safePattern, $options: 'i' } },
       ];
     }
 
@@ -137,20 +187,74 @@ class CustomerRepository {
   }
 
   async findDuplicates(name, postalCode) {
-    const filter = { name: { $regex: name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } };
+    const raw = (name || '').trim();
+    if (!raw) return [];
+
+    const words = raw.split(/\s+/).filter((w) => w.length >= 2);
+
+    // Build multiple match strategies (accent-insensitive):
+    // 1. Full name (case+accent insensitive substring match)
+    // 2. Each word individually (catches "Max" in "Max Muster AG")
+    const conditions = [{ name: { $regex: accentSafeRegex(raw), $options: 'i' } }];
+    for (const word of words) {
+      conditions.push({ name: { $regex: accentSafeRegex(word), $options: 'i' } });
+    }
+
+    const filter = { $or: conditions };
     if (postalCode) filter.postalCode = postalCode;
-    return Customer.find(filter)
+
+    const candidates = await Customer.find(filter)
       .select('_id customerNumber name postalCode city')
-      .limit(5)
+      .limit(20)
       .lean();
+
+    // Score candidates by similarity: prefer exact/close matches
+    const inputLower = raw.toLowerCase();
+    const scored = candidates.map((c) => {
+      const candidateLower = (c.name || '').toLowerCase();
+      let score = 0;
+      // Exact match
+      if (candidateLower === inputLower) score = 100;
+      // One contains the other
+      else if (candidateLower.includes(inputLower) || inputLower.includes(candidateLower)) score = 80;
+      // Word overlap
+      else {
+        const inputWords = inputLower.split(/\s+/);
+        const candidateWords = candidateLower.split(/\s+/);
+        const matches = inputWords.filter((w) => candidateWords.some((cw) => cw.includes(w) || w.includes(cw)));
+        score = Math.round((matches.length / Math.max(inputWords.length, 1)) * 60);
+      }
+      return { ...c, _score: score };
+    });
+
+    return scored
+      .filter((c) => c._score > 0)
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 5)
+      .map(({ _score, ...rest }) => rest);
   }
 
   async textSearch(searchTerm, limit = 25) {
-    return Customer.find(
-      { $text: { $search: searchTerm } },
-      { score: { $meta: 'textScore' } },
-    )
-      .sort({ score: { $meta: 'textScore' } })
+    const raw = (searchTerm || '').trim();
+    if (!raw) return [];
+
+    // Split into individual words and escape regex characters.
+    const words = raw.split(/\s+/).filter((w) => w.length >= 1);
+    if (!words.length) return [];
+
+    const searchFields = ['name', 'ownerName', 'customerNumber', 'email', 'city', 'street', 'phone', 'mobile'];
+
+    // Each word must match at least one field (AND across words).
+    // accentSafeRegex makes "mull" match "Müller", "uber" match "Über", etc.
+    const wordConditions = words.map((word) => {
+      const regex = { $regex: accentSafeRegex(word), $options: 'i' };
+      return { $or: searchFields.map((field) => ({ [field]: regex })) };
+    });
+
+    const filter = wordConditions.length === 1 ? wordConditions[0] : { $and: wordConditions };
+
+    return Customer.find(filter)
+      .sort({ name: 1 })
       .limit(limit)
       .select('-__v')
       .lean();

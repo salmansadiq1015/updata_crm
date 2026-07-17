@@ -23,7 +23,7 @@ const USER_CACHE_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_CACHE_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 // Fields users can edit on their own profile
-const SELF_EDITABLE_FIELDS = ['firstName', 'lastName', 'language', 'phone', 'department', 'position', 'street', 'city', 'zip', 'country'];
+const SELF_EDITABLE_FIELDS = ['firstName', 'lastName', 'salutation', 'language', 'phone', 'department', 'position', 'street', 'city', 'zip', 'country'];
 
 function applyPreferredDepartmentPatch(updateData) {
   if (!Object.prototype.hasOwnProperty.call(updateData, 'preferredDepartmentId')) {
@@ -66,6 +66,7 @@ class UserService {
       passwordHash: hashedPassword,
       firstName: data.firstName,
       lastName: data.lastName,
+      salutation: data.salutation || null,
       phone: data.phone || null,
       department: data.department || null,
       position: data.position || null,
@@ -164,6 +165,11 @@ class UserService {
       if (data[field] !== undefined) filtered[field] = data[field];
     }
 
+    // Normalize empty salutation to null (Mongoose enum only allows herr/frau/null).
+    if (Object.prototype.hasOwnProperty.call(filtered, 'salutation') && !filtered.salutation) {
+      filtered.salutation = null;
+    }
+
     if (Object.keys(filtered).length === 0) {
       return this.getById(userId);
     }
@@ -188,6 +194,11 @@ class UserService {
     if (!existing) throw new NotFoundError('User', id);
 
     const updateData = { ...data };
+
+    // Normalize empty salutation to null (Mongoose enum only allows herr/frau/null).
+    if (Object.prototype.hasOwnProperty.call(updateData, 'salutation') && !updateData.salutation) {
+      updateData.salutation = null;
+    }
 
     // If roleId is provided, use it as role
     if (updateData.roleId) {

@@ -47,6 +47,7 @@ const customerBaseSchema = z.object({
     .trim()
     .min(1, 'Strasse ist erforderlich')
     .max(255, 'Strasse darf maximal 255 Zeichen lang sein'),
+  addressSupplement: optionalStr(255),
   postalCode: z
     .string()
     .trim()

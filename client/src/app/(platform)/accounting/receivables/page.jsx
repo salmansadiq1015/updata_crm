@@ -29,7 +29,7 @@ const AR_STATUS_CONFIG = {
   PARTIALLY_PAID:   { label: 'Teilbezahlt',    labelEn: 'Partially Paid', badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
   PAID:             { label: 'Bezahlt',        labelEn: 'Paid',           badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
   OVERDUE:          { label: 'Überfällig',     labelEn: 'Overdue',        badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-  WRITTEN_OFF:      { label: 'Abgeschrieben',  labelEn: 'Written Off',    badge: 'bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400' },
+  WRITTEN_OFF:      { label: 'Abgeschrieben',  labelEn: 'Written Off',    badge: 'bg-slate-100 text-muted-foreground dark:bg-slate-900/30 dark:text-muted-foreground' },
 };
 
 function ARStatusBadge({ status, de }) {
@@ -247,7 +247,7 @@ function DunningTab({ de }) {
           <span className="text-sm text-orange-800 flex-1">
             {selected.size} {de ? 'Rechnungen ausgewählt' : 'invoices selected'}
           </span>
-          <Button size="sm" onClick={handleGenerate} disabled={generateDunning.isPending} className="bg-orange-600 hover:bg-orange-700 text-white">
+          <Button size="sm" onClick={handleGenerate} disabled={generateDunning.isPending} className="bg-orange-600 hover:bg-orange-700 text-foreground">
             <Send className="h-3.5 w-3.5 mr-1.5" />
             {de ? 'Mahnung generieren' : 'Generate Dunning'}
           </Button>

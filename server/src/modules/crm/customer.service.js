@@ -163,7 +163,7 @@ class CustomerService {
     });
   }
 
-  async merge(sourceId, targetId, mergedBy, meta = {}) {
+  async merge(sourceId, targetId, mergedBy, meta = {}, fieldOverrides = {}) {
     if (sourceId === targetId) {
       throw new ConflictError('Cannot merge a customer with itself');
     }
@@ -207,6 +207,14 @@ class CustomerService {
       logger.warn('Could not reassign QOP documents during customer merge', {
         module: 'crm', action: 'merge', sourceId, targetId, error: err.message,
       });
+    }
+
+    // Apply field overrides to the target (user-selected values from source)
+    const cleanOverrides = Object.fromEntries(
+      Object.entries(fieldOverrides || {}).filter(([, v]) => v !== undefined),
+    );
+    if (Object.keys(cleanOverrides).length > 0) {
+      await customerRepository.updateById(targetId, cleanOverrides);
     }
 
     // Archive source with merge pointer
@@ -292,17 +300,22 @@ class CustomerService {
       const s = String(v).replace(/"/g, '""');
       return /[",\n;]/.test(s) ? `"${s}"` : s;
     };
+    const salesStatusLabel = {
+      zusage: 'Zusage',
+      offer_received: 'Nur Offerte erhalten',
+      absage: 'Absage',
+    };
     const header = [
-      'CustomerNumber', 'Name', 'Type', 'Status',
+      'CustomerNumber', 'Name', 'Type', 'Status', 'SalesStatus',
       'OwnerName', 'UidNumber', 'VatNumber',
-      'Street', 'PostalCode', 'City', 'Canton', 'Country',
+      'Street', 'AddressSupplement', 'PostalCode', 'City', 'Canton', 'Country',
       'Phone', 'Mobile', 'Email', 'Website',
       'NewsletterOptIn', 'NewsletterChannel', 'CreatedAt',
     ].join(';');
     const body = rows.map((c) => [
-      c.customerNumber, c.name, c.type, c.status,
+      c.customerNumber, c.name, c.type, c.status, salesStatusLabel[c.salesStatus] || '',
       c.ownerName, c.uidNumber, c.vatNumber,
-      c.street, c.postalCode, c.city, c.canton, c.country,
+      c.street, c.addressSupplement, c.postalCode, c.city, c.canton, c.country,
       c.phone, c.mobile, c.email, c.website,
       c.newsletterOptIn ? 'true' : 'false', c.newsletterChannel,
       c.createdAt ? new Date(c.createdAt).toISOString() : '',

@@ -5,6 +5,7 @@ import GeneratedDocument from '../doctpl/generatedDocument.model.js';
 import generatedDocumentRepository from '../doctpl/generatedDocument.repository.js';
 import documentAccessPolicyService from '../doctpl/documentAccessPolicy.service.js';
 import ProjectDocument from '../pm/projectDocument.model.js';
+import Project from '../pm/project.model.js';
 import AccountingDocument from '../accounting/accountingDocument.model.js';
 import FileMetadata from '../files/file.model.js';
 import fileService from '../files/file.service.js';
@@ -121,6 +122,11 @@ function isAdmin(user) {
 
 class DocumentIndexService {
   async list(query = {}, user) {
+    // An object (site) has no direct document link; documents reach it through its
+    // projects. Resolve the site's projects and aggregate their documents. (Slice 1
+    // of client feedback #18 — read-only, no model change.)
+    if (query.siteId) return this._listBySite(query, user);
+
     const permissions = await this._permissions(user);
     const limit = Math.min(Number(query.limit || 25), 100);
     const cursor = decodeCursor(query.cursor);
@@ -145,6 +151,41 @@ class DocumentIndexService {
         nextCursor: hasNext ? encodeCursor(pageItems[pageItems.length - 1]) : null,
         limit,
       },
+    };
+  }
+
+  async _listBySite(query, user) {
+    const limit = Math.min(Number(query.limit || 25), 100);
+    const projects = await Project.find({ siteId: query.siteId }).select('_id').lean();
+    const projectIds = projects.map((project) => String(project._id));
+    if (!projectIds.length) {
+      return { data: [], pagination: { hasNext: false, nextCursor: null, limit } };
+    }
+
+    // Reuse the per-project federated list (each source already filters by projectId),
+    // then merge + dedupe across the site's projects.
+    const perProject = await Promise.all(
+      projectIds.map((projectId) => this.list(
+        { ...query, siteId: undefined, cursor: undefined, projectId, limit: 100 },
+        user,
+      )),
+    );
+
+    const seen = new Set();
+    const merged = [];
+    for (const result of perProject) {
+      for (const doc of result.data) {
+        if (doc?.id == null || seen.has(doc.id)) continue;
+        seen.add(doc.id);
+        merged.push(doc);
+      }
+    }
+
+    const sorted = sortDocuments(merged, query.sortOrder);
+    const pageItems = sorted.slice(0, limit);
+    return {
+      data: pageItems,
+      pagination: { hasNext: sorted.length > limit, nextCursor: null, limit },
     };
   }
 

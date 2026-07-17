@@ -36,6 +36,13 @@ const userSchema = new mongoose.Schema(
       trim: true,
       maxlength: 100,
     },
+    // Anrede / gender — optional, null = "none". Only person-applicable values
+    // (users are always individuals, unlike CRM customers which can be firms).
+    salutation: {
+      type: String,
+      enum: ['herr', 'frau', null],
+      default: null,
+    },
     phone: {
       type: String,
       trim: true,

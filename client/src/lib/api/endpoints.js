@@ -244,6 +244,7 @@ export const ENDPOINTS = Object.freeze({
     NOTE_BY_ID: (taskId, noteId) => `/tasks/${taskId}/notes/${noteId}`,
     ATTACHMENTS: (taskId) => `/tasks/${taskId}/attachments`,
     ATTACHMENT_BY_ID: (taskId, attachId) => `/tasks/${taskId}/attachments/${attachId}`,
+    ATTACHMENT_DOWNLOAD: (taskId, attachId) => `/tasks/${taskId}/attachments/${attachId}/download`,
     REMINDERS: (taskId) => `/tasks/${taskId}/reminders`,
     REMINDER_BY_ID: (taskId, reminderId) => `/tasks/${taskId}/reminders/${reminderId}`,
     REMINDER_SNOOZE: (taskId, reminderId) => `/tasks/${taskId}/reminders/${reminderId}/snooze`,

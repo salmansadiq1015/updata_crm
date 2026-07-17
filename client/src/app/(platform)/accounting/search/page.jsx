@@ -33,7 +33,7 @@ const TYPE_OPTIONS = [
 ];
 
 const TYPE_META = {
-  ACCOUNT: { label: 'Account', labelDe: 'Konto', icon: FileText, className: 'text-slate-200 bg-slate-500/15' },
+  ACCOUNT: { label: 'Account', labelDe: 'Konto', icon: FileText, className: 'text-muted-foreground bg-slate-500/15' },
   JOURNAL_ENTRY: { label: 'Journal', labelDe: 'Journal', icon: BookOpen, className: 'text-violet-200 bg-violet-500/15' },
   AR_INVOICE: { label: 'Receivable', labelDe: 'Forderung', icon: Receipt, className: 'text-emerald-200 bg-emerald-500/15' },
   AP_INVOICE: { label: 'Payable', labelDe: 'Verbindlichkeit', icon: Landmark, className: 'text-amber-200 bg-amber-500/15' },
@@ -98,17 +98,17 @@ function SearchResultRow({ item, de }) {
   return (
     <Link
       href={item.href || '/accounting'}
-      className="grid gap-3 border-b border-white/10 px-4 py-4 transition-colors last:border-b-0 hover:bg-white/[0.04] sm:grid-cols-[auto_1fr_auto]"
+      className="grid gap-3 border-b border-border px-4 py-4 transition-colors last:border-b-0 hover:bg-card sm:grid-cols-[auto_1fr_auto]"
     >
       <ResultIcon type={item.type} />
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <TypeBadge type={item.type} de={de} />
-          {item.status && <span className="text-xs font-medium text-slate-400">{item.status}</span>}
-          {item.reference && <span className="font-mono text-xs text-slate-500">{item.reference}</span>}
+          {item.status && <span className="text-xs font-medium text-muted-foreground">{item.status}</span>}
+          {item.reference && <span className="font-mono text-xs text-muted-foreground">{item.reference}</span>}
         </div>
-        <p className="mt-2 truncate text-sm font-semibold text-white">{item.title || item.reference || item.id}</p>
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
+        <p className="mt-2 truncate text-sm font-semibold text-foreground">{item.title || item.reference || item.id}</p>
+        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {item.partyName && <span>{item.partyName}</span>}
           {item.date && <span>{formatDate(item.date)}</span>}
           {(item.highlights || []).slice(0, 3).map((highlight) => (
@@ -117,10 +117,10 @@ function SearchResultRow({ item, de }) {
         </div>
       </div>
       <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-center">
-        <span className="text-sm font-semibold tabular-nums text-slate-100">
+        <span className="text-sm font-semibold tabular-nums text-foreground">
           {hasAmount ? formatMoney(item.amount, item.currency || 'CHF') : '-'}
         </span>
-        <span className="text-xs text-slate-500">{de ? 'Oeffnen' : 'Open'}</span>
+        <span className="text-xs text-muted-foreground">{de ? 'Oeffnen' : 'Open'}</span>
       </div>
     </Link>
   );
@@ -154,34 +154,34 @@ export default function AccountingSearchPage() {
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">{de ? 'Finanzsuche' : 'Financial Search'}</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-foreground">{de ? 'Finanzsuche' : 'Financial Search'}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {de
               ? 'Rechnungen, Journale, Konten, Bankbewegungen und Belege zentral finden.'
               : 'Find invoices, journals, accounts, bank transactions, and documents from one place.'}
           </p>
         </div>
         {submitted && (
-          <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300">
+          <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
             {meta.returned ?? items.length} {de ? 'Treffer' : 'results'}
             {meta.durationMs != null ? ` / ${meta.durationMs}ms` : ''}
           </div>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+      <form onSubmit={handleSubmit} className="rounded-2xl border border-border bg-card p-4">
         <div className="grid gap-3 lg:grid-cols-[1.5fr_12rem_12rem_12rem]">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="h-10 border-white/10 bg-slate-950/40 pl-9 text-slate-100 placeholder:text-slate-500"
+              className="h-10 border-border bg-slate-950/40 pl-9 text-foreground placeholder:text-muted-foreground"
               value={filters.q}
               onChange={(event) => set('q', event.target.value)}
               placeholder={de ? 'Rechnung, Kunde, Lieferant, Betrag, Journal...' : 'Invoice, customer, vendor, amount, journal...'}
             />
           </div>
           <Select value={filters.type} onValueChange={(value) => set('type', value)}>
-            <SelectTrigger className="h-10 border-white/10 bg-slate-950/40 text-xs text-slate-100"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-10 border-border bg-slate-950/40 text-xs text-foreground"><SelectValue /></SelectTrigger>
             <SelectContent>
               {TYPE_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>{de ? option.labelDe : option.label}</SelectItem>
@@ -189,7 +189,7 @@ export default function AccountingSearchPage() {
             </SelectContent>
           </Select>
           <Select value={filters.currency} onValueChange={(value) => set('currency', value)}>
-            <SelectTrigger className="h-10 border-white/10 bg-slate-950/40 text-xs text-slate-100"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-10 border-border bg-slate-950/40 text-xs text-foreground"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">{de ? 'Alle Waehrungen' : 'All currencies'}</SelectItem>
               <SelectItem value="CHF">CHF</SelectItem>
@@ -204,13 +204,13 @@ export default function AccountingSearchPage() {
 
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <Input
-            className="h-9 border-white/10 bg-slate-950/30 text-slate-100 placeholder:text-slate-500"
+            className="h-9 border-border bg-slate-950/30 text-foreground placeholder:text-muted-foreground"
             value={filters.status}
             onChange={(event) => set('status', event.target.value)}
             placeholder={de ? 'Status' : 'Status'}
           />
           <Select value={filters.accountId} onValueChange={(value) => set('accountId', value)}>
-            <SelectTrigger className="h-9 border-white/10 bg-slate-950/30 text-xs text-slate-100"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 border-border bg-slate-950/30 text-xs text-foreground"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">{de ? 'Alle Konten' : 'All accounts'}</SelectItem>
               {accounts.map((account) => (
@@ -222,13 +222,13 @@ export default function AccountingSearchPage() {
           </Select>
           <Input
             type="date"
-            className="h-9 border-white/10 bg-slate-950/30 text-slate-100"
+            className="h-9 border-border bg-slate-950/30 text-foreground"
             value={filters.startDate}
             onChange={(event) => set('startDate', event.target.value)}
           />
           <Input
             type="date"
-            className="h-9 border-white/10 bg-slate-950/30 text-slate-100"
+            className="h-9 border-border bg-slate-950/30 text-foreground"
             value={filters.endDate}
             onChange={(event) => set('endDate', event.target.value)}
           />
@@ -236,7 +236,7 @@ export default function AccountingSearchPage() {
             type="number"
             min="0"
             step="0.01"
-            className="h-9 border-white/10 bg-slate-950/30 text-slate-100 placeholder:text-slate-500"
+            className="h-9 border-border bg-slate-950/30 text-foreground placeholder:text-muted-foreground"
             value={filters.minAmount}
             onChange={(event) => set('minAmount', event.target.value)}
             placeholder={de ? 'Min. Betrag' : 'Min amount'}
@@ -245,7 +245,7 @@ export default function AccountingSearchPage() {
             type="number"
             min="0"
             step="0.01"
-            className="h-9 border-white/10 bg-slate-950/30 text-slate-100 placeholder:text-slate-500"
+            className="h-9 border-border bg-slate-950/30 text-foreground placeholder:text-muted-foreground"
             value={filters.maxAmount}
             onChange={(event) => set('maxAmount', event.target.value)}
             placeholder={de ? 'Max. Betrag' : 'Max amount'}
@@ -253,27 +253,27 @@ export default function AccountingSearchPage() {
         </div>
 
         <div className="mt-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <SlidersHorizontal className="size-4" />
             {de ? 'Filter wirken serverseitig auf alle Suchquellen.' : 'Filters are applied server-side across all sources.'}
           </div>
-          <Button type="button" variant="ghost" size="sm" onClick={handleClear} className="text-slate-300 hover:text-white">
+          <Button type="button" variant="ghost" size="sm" onClick={handleClear} className="text-muted-foreground hover:text-foreground">
             {de ? 'Zuruecksetzen' : 'Clear'}
           </Button>
         </div>
       </form>
 
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/30">
+      <section className="overflow-hidden rounded-2xl border border-border bg-slate-950/30">
         {isLoading && (
           <div className="grid gap-0">
             {Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="grid gap-3 border-b border-white/10 px-4 py-4 sm:grid-cols-[auto_1fr_auto]">
-                <Skeleton className="size-10 rounded-xl bg-white/10" />
+              <div key={index} className="grid gap-3 border-b border-border px-4 py-4 sm:grid-cols-[auto_1fr_auto]">
+                <Skeleton className="size-10 rounded-xl bg-muted" />
                 <div className="space-y-2">
-                  <Skeleton className="h-4 w-48 bg-white/10" />
-                  <Skeleton className="h-4 w-72 bg-white/10" />
+                  <Skeleton className="h-4 w-48 bg-muted" />
+                  <Skeleton className="h-4 w-72 bg-muted" />
                 </div>
-                <Skeleton className="h-5 w-24 bg-white/10" />
+                <Skeleton className="h-5 w-24 bg-muted" />
               </div>
             ))}
           </div>
@@ -287,15 +287,15 @@ export default function AccountingSearchPage() {
 
         {!isLoading && !isError && !submitted && (
           <div className="px-4 py-12 text-center">
-            <Search className="mx-auto size-10 text-slate-500" />
-            <p className="mt-3 text-sm font-medium text-slate-200">{de ? 'Suchbegriff oder Filter eingeben.' : 'Enter a search term or filter.'}</p>
+            <Search className="mx-auto size-10 text-muted-foreground" />
+            <p className="mt-3 text-sm font-medium text-muted-foreground">{de ? 'Suchbegriff oder Filter eingeben.' : 'Enter a search term or filter.'}</p>
           </div>
         )}
 
         {!isLoading && !isError && submitted && items.length === 0 && (
           <div className="px-4 py-12 text-center">
-            <Search className="mx-auto size-10 text-slate-500" />
-            <p className="mt-3 text-sm font-medium text-slate-200">{de ? 'Keine Treffer gefunden.' : 'No results found.'}</p>
+            <Search className="mx-auto size-10 text-muted-foreground" />
+            <p className="mt-3 text-sm font-medium text-muted-foreground">{de ? 'Keine Treffer gefunden.' : 'No results found.'}</p>
           </div>
         )}
 

@@ -164,7 +164,10 @@ class DocumentGenerationService {
       reference: renderData.qrReference || renderData.documentNumber,
       debtor: customer?.name ? {
         name: customer.name,
-        address: customer.addressLine1 || '',
+        // Prefer the dedicated street (set when an object billing address with a c/o
+        // is used) so the c/o line never lands in the QR-bill address. Falls back to
+        // the existing address line — unchanged for every non-billing case.
+        address: customer.qrAddress || customer.addressLine1 || '',
         zip: String(customer.plz || customer.zip || ''),
         city: customer.city || '',
         country: customer.country || 'CH',

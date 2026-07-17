@@ -41,6 +41,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  Plus,
   RefreshCw,
   Search,
   UserRound,
@@ -90,16 +91,26 @@ export default function AddressBook() {
         icon={BookOpen}
         count={total}
       >
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
-          {t('common.refresh', 'Aktualisieren')}
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Address book is a read-only rollup; contacts are created on the Kontakte
+              page (which has its own "+ Neuer Kontakt"). Client feedback #5. */}
+          <Button asChild size="sm" className="gap-2">
+            <Link href="/crm/contacts">
+              <Plus className="h-3.5 w-3.5" />
+              {t('crm.contacts.newContact', 'Neuer Kontakt')}
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', isFetching && 'animate-spin')} />
+            {t('common.refresh', 'Aktualisieren')}
+          </Button>
+        </div>
       </PageHeader>
 
       <SummaryGrid summary={normalizedSummary} t={t} />

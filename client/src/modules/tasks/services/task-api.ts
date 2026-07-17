@@ -335,6 +335,14 @@ export const taskApi = {
     await apiClient.delete(ENDPOINTS.TASKS.ATTACHMENT_BY_ID(taskId, attachmentId));
   },
 
+  async getAttachmentDownloadUrl(taskId: string, attachmentId: string): Promise<string> {
+    const response = toApiResponse<unknown>(
+      await apiClient.get(ENDPOINTS.TASKS.ATTACHMENT_DOWNLOAD(taskId, attachmentId)),
+    );
+    const data = readRecord(response.data);
+    return readString(data.url);
+  },
+
   async listReminders(taskId: string): Promise<TaskReminder[]> {
     const response = toApiResponse<unknown[]>(await apiClient.get(ENDPOINTS.TASKS.REMINDERS(taskId)));
     return readArray(response.data).map(normalizeReminder);

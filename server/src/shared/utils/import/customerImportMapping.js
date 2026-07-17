@@ -78,9 +78,9 @@ export const CUSTOMER_IMPORT_HEADER_MAP = {
   "house no": "address.streetNumber",
 
   // Adresszusatz
-  adresszusatz: "addressLine2",
-  "address line 2": "addressLine2",
-  "address addition": "addressLine2",
+  adresszusatz: "addressSupplement",
+  "address line 2": "addressSupplement",
+  "address addition": "addressSupplement",
 
   // PLZ
   plz: "address.zip",

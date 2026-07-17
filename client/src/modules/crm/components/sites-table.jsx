@@ -2,20 +2,26 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { siteService } from '@/modules/crm/services/site-service';
+import { customerService, normalizeCustomerList } from '@/modules/crm/services/customer-service';
 import { useCursorList } from '@/modules/crm/hooks/use-cursor-list';
 import { queryKeys } from '@/lib/query/keys';
 import { useDebounce } from '@/shared/hooks/use-debounce';
+import { showSuccess, showError } from '@/lib/toast';
 import { DataTableShell } from '@/shared/components/data-table/data-table-shell';
 import { RowActionsMenu } from '@/shared/components/data-table/row-actions-menu';
 import { PremiumStatCard } from '@/shared/components/premium-stat-card';
+import { SiteForm } from './site-form';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { formatSwissAddress } from '@/lib/formatters';
-import { Building2, Eye, ExternalLink, Filter, Search, X, MapPin, Home, Map as MapIcon, List as ListIcon } from 'lucide-react';
+import { Building2, Eye, ExternalLink, Filter, Search, X, MapPin, Home, Map as MapIcon, List as ListIcon, Plus, UserRound } from 'lucide-react';
 import { DotLabel } from '@/shared/components/filter-dot';
 import { SitesMap } from '@/modules/crm/components/sites-map';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
@@ -178,22 +184,25 @@ export function SitesTable() {
             {items.length} {t('crm.sites.listDesc', 'objects in portfolio')}
           </p>
         </div>
-        {/* List | Map view toggle */}
-        <div className="ml-auto inline-flex items-center rounded-full border border-border/70 bg-card p-0.5 shadow-theme-sm dark:border-white/10 dark:bg-white/4 dark:shadow-none">
-          <button
-            type="button"
-            onClick={() => setView('list')}
-            className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'list' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
-          >
-            <ListIcon className="h-3.5 w-3.5" /> {t('common.list', 'List')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setView('map')}
-            className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'map' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
-          >
-            <MapIcon className="h-3.5 w-3.5" /> {t('common.map', 'Map')}
-          </button>
+        <div className="ml-auto flex items-center gap-2">
+          <NewObjectFlow onCreated={reset} />
+          {/* List | Map view toggle */}
+          <div className="inline-flex items-center rounded-full border border-border/70 bg-card p-0.5 shadow-theme-sm dark:border-white/10 dark:bg-white/4 dark:shadow-none">
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'list' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
+            >
+              <ListIcon className="h-3.5 w-3.5" /> {t('common.list', 'List')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('map')}
+              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'map' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
+            >
+              <MapIcon className="h-3.5 w-3.5" /> {t('common.map', 'Map')}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -310,5 +319,110 @@ export function SitesTable() {
         />
       )}
     </div>
+  );
+}
+
+// ── New object flow (client feedback #7) ──────────────────────────────────────
+// An object belongs to a customer, so from the standalone /crm/sites list we
+// first pick the customer, then reuse SiteForm to create the object for it.
+function NewObjectFlow({ onCreated }) {
+  const { t } = useLanguage();
+  const qc = useQueryClient();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [customer, setCustomer] = useState(null);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
+
+  const { data: customers = [], isFetching } = useQuery({
+    queryKey: ['crm', 'customers', 'site-picker', debouncedSearch],
+    queryFn: async () => normalizeCustomerList(
+      await customerService.getCustomers({ ...(debouncedSearch ? { search: debouncedSearch } : {}), limit: 20 }),
+    ),
+    enabled: pickerOpen,
+    staleTime: 30_000,
+  });
+
+  const createMut = useMutation({
+    mutationFn: (data) => siteService.createForCustomer(customer._id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.crm.sites.all() });
+      showSuccess(t('crm.sites.createdToast', 'Objekt erstellt'));
+      setFormOpen(false);
+      setCustomer(null);
+      onCreated?.();
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const pickCustomer = (c) => {
+    setCustomer(c);
+    setPickerOpen(false);
+    setFormOpen(true);
+  };
+
+  return (
+    <>
+      <Button size="sm" className="h-8 gap-1.5" onClick={() => { setSearch(''); setPickerOpen(true); }}>
+        <Plus className="h-3.5 w-3.5" /> {t('crm.sites.newSite', 'Neues Objekt')}
+      </Button>
+
+      {/* Step 1 — choose the customer the object is attached to */}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('crm.sites.pickCustomerTitle', 'Kunde wählen')}</DialogTitle>
+            <DialogDescription>
+              {t('crm.sites.pickCustomerDesc', 'Wählen Sie den Kunden, dem das neue Objekt zugeordnet wird.')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('crm.sites.pickCustomerSearch', 'Kunde suchen...')}
+              className="h-9 pl-9"
+            />
+          </div>
+          <div className="mt-1 max-h-72 space-y-1 overflow-y-auto">
+            {customers.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                {isFetching ? t('common.loading', 'Wird geladen...') : t('crm.sites.noCustomer', 'Kein Kunde gefunden')}
+              </p>
+            ) : (
+              customers.map((c) => {
+                const isPrivate = (c.customerType || c.type) === 'private';
+                return (
+                  <button
+                    key={c._id}
+                    type="button"
+                    onClick={() => pickCustomer(c)}
+                    className="flex w-full items-center gap-2.5 rounded-lg border border-border/60 bg-card px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-muted/50"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      {isPrivate ? <UserRound className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-foreground">{c.name}</span>
+                      {c.customerNumber && <span className="block truncate text-xs text-muted-foreground">{c.customerNumber}</span>}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Step 2 — the object form, scoped to the chosen customer */}
+      <SiteForm
+        open={formOpen}
+        onOpenChange={(v) => { setFormOpen(v); if (!v) setCustomer(null); }}
+        onSubmit={(data) => createMut.mutateAsync(data)}
+        isLoading={createMut.isPending}
+      />
+    </>
   );
 }

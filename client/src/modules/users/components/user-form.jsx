@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 
 const EMPTY_TEAM_VALUE = '__none';
+const SALUTATION_NONE = '__none_salutation';
 
 const STEPS = [
   { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persoenlich', icon: User, fields: ['firstName', 'lastName'] },
@@ -49,7 +50,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   const { register, handleSubmit, reset, setValue, getValues, control, formState: { errors }, trigger } = useForm({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
-      firstName: '', lastName: '', email: '', phone: '',
+      firstName: '', lastName: '', salutation: '', email: '', phone: '',
       department: '', position: '',
       street: '', city: '', zip: '', country: 'Schweiz',
       roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
@@ -62,6 +63,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       reset({
         firstName: defaultValues.firstName || '',
         lastName: defaultValues.lastName || '',
+        salutation: defaultValues.salutation || '',
         email: defaultValues.email || '',
         phone: defaultValues.phone || '',
         department: defaultValues.department || '',
@@ -76,7 +78,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       });
     } else {
       reset({
-        firstName: '', lastName: '', email: '', phone: '',
+        firstName: '', lastName: '', salutation: '', email: '', phone: '',
         department: '', position: '',
         street: '', city: '', zip: '', country: 'Schweiz',
         roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
@@ -84,6 +86,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     }
   }, [defaultValues, reset, defaultRoleId, open]);
 
+  const selectedSalutation = useWatch({ control, name: 'salutation' });
   const selectedDepartment = useWatch({ control, name: 'department' });
   const selectedPosition = useWatch({ control, name: 'position' });
   const selectedRoleId = useWatch({ control, name: 'roleId' });
@@ -281,6 +284,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     }
     onSubmit({
       ...data,
+      salutation: data.salutation || null,
       preferredDepartmentId: data.preferredDepartmentId || null,
     });
     handleDialogOpenChange(false);
@@ -387,13 +391,30 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
 
             {/* Step 1: Personal */}
             {currentStep === 0 && (
-              <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4 duration-300">
-                <FormField label={t('users.firstName')} error={errors.firstName?.message} required>
-                  <Input placeholder="Max" {...register('firstName')} autoFocus />
+              <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                <FormField label={t('users.salutation', 'Anrede')}>
+                  <Select
+                    value={selectedSalutation || SALUTATION_NONE}
+                    onValueChange={(v) => setValue('salutation', v === SALUTATION_NONE ? '' : v, { shouldValidate: true })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('users.salutationPlaceholder', 'Anrede wählen')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SALUTATION_NONE}>{t('users.salutationNone', 'Keine Angabe')}</SelectItem>
+                      <SelectItem value="herr">{t('users.salutationHerr', 'Herr')}</SelectItem>
+                      <SelectItem value="frau">{t('users.salutationFrau', 'Frau')}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </FormField>
-                <FormField label={t('users.lastName')} error={errors.lastName?.message} required>
-                  <Input placeholder="Muster" {...register('lastName')} />
-                </FormField>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label={t('users.firstName')} error={errors.firstName?.message} required>
+                    <Input placeholder="Max" {...register('firstName')} autoFocus />
+                  </FormField>
+                  <FormField label={t('users.lastName')} error={errors.lastName?.message} required>
+                    <Input placeholder="Muster" {...register('lastName')} />
+                  </FormField>
+                </div>
               </div>
             )}
 

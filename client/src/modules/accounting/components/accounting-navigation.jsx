@@ -48,24 +48,24 @@ export function AccountingBackBar() {
   };
 
   return (
-    <div className="accounting-backbar mb-5 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.045] px-3 py-3 shadow-[0_16px_48px_rgb(0_0_0/0.18)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+    <div className="accounting-backbar mb-5 flex flex-col gap-3 rounded-xl border border-border bg-card px-3 py-3 shadow-[0_16px_48px_rgb(0_0_0/0.18)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
       <nav aria-label="Accounting breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
         <Link
           href="/accounting"
-          className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.05] text-slate-300 transition-colors hover:text-white"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
           aria-label="Accounting home"
           title="Accounting home"
         >
           <Home className="size-4" />
         </Link>
-        <ChevronRight className="size-4 shrink-0 text-slate-600" />
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
         <span className="flex min-w-0 items-center gap-2">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-cyan-400/10 text-cyan-200 ring-1 ring-cyan-300/20">
             <Landmark className="size-4" />
           </span>
           <span className="min-w-0">
-            <span className="block text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">Accounting</span>
-            <span className="block truncate font-semibold text-slate-100">{currentPageLabel(pathname)}</span>
+            <span className="block text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Accounting</span>
+            <span className="block truncate font-semibold text-foreground">{currentPageLabel(pathname)}</span>
           </span>
         </span>
       </nav>
@@ -74,7 +74,7 @@ export function AccountingBackBar() {
         variant="outline"
         size="sm"
         onClick={handleBack}
-        className="h-9 w-full border-white/10 bg-white/[0.04] text-slate-200 hover:bg-white/[0.08] hover:text-white sm:w-auto"
+        className="h-9 w-full border-border bg-card text-muted-foreground hover:bg-card hover:text-foreground sm:w-auto"
       >
         <ArrowLeft className="mr-1.5 size-4" />
         Back

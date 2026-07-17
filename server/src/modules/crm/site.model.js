@@ -1,6 +1,20 @@
 import mongoose from 'mongoose';
 import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js';
 
+// Named party + address block attached to an object (client feedback #10):
+// e.g. billing address (Rechnungsadresse, with c/o) and ownership (Eigentümerschaft).
+const siteAddressPartySchema = new mongoose.Schema(
+  {
+    name: { type: String, trim: true, maxlength: 255, default: null },
+    careOf: { type: String, trim: true, maxlength: 255, default: null },
+    street: { type: String, trim: true, maxlength: 255, default: null },
+    postalCode: { type: String, trim: true, maxlength: 10, default: null },
+    city: { type: String, trim: true, maxlength: 100, default: null },
+    canton: { type: String, trim: true, maxlength: 2, default: null },
+  },
+  { _id: false },
+);
+
 const siteSchema = new mongoose.Schema(
   {
     customerId: {
@@ -26,6 +40,10 @@ const siteSchema = new mongoose.Schema(
     country: { type: String, trim: true, maxlength: 2, default: 'CH' },
     floorUnit: { type: String, trim: true, maxlength: 100, default: null },
     accessInstructions: { type: String, maxlength: 2000, default: null },
+    // Distinct billing address (Rechnungsadresse) and ownership (Eigentümerschaft)
+    // for the object — client feedback #10. Free-form, optional.
+    billingAddress: { type: siteAddressPartySchema, default: null },
+    ownership: { type: siteAddressPartySchema, default: null },
     siteType: {
       type: String,
       enum: ['residential', 'commercial', 'industrial'],

@@ -83,27 +83,27 @@ const KPI_ICONS = Object.freeze({
 
 const ACCENT_CLASSES = Object.freeze({
   cyan: {
-    icon: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100 shadow-[0_0_30px_rgba(34,211,238,0.14)]',
+    icon: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-700 dark:text-cyan-200 shadow-[0_0_30px_rgba(34,211,238,0.14)]',
     line: 'from-cyan-300/70 via-cyan-300/20 to-transparent',
   },
   violet: {
-    icon: 'border-violet-300/20 bg-violet-300/10 text-violet-100 shadow-[0_0_30px_rgba(167,139,250,0.14)]',
+    icon: 'border-violet-300/20 bg-violet-300/10 text-violet-700 dark:text-violet-200 shadow-[0_0_30px_rgba(167,139,250,0.14)]',
     line: 'from-violet-300/70 via-violet-300/20 to-transparent',
   },
   blue: {
-    icon: 'border-blue-300/20 bg-blue-300/10 text-blue-100 shadow-[0_0_30px_rgba(96,165,250,0.14)]',
+    icon: 'border-blue-300/20 bg-blue-300/10 text-blue-700 dark:text-blue-200 shadow-[0_0_30px_rgba(96,165,250,0.14)]',
     line: 'from-blue-300/70 via-blue-300/20 to-transparent',
   },
   emerald: {
-    icon: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100 shadow-[0_0_30px_rgba(52,211,153,0.14)]',
+    icon: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200 shadow-[0_0_30px_rgba(52,211,153,0.14)]',
     line: 'from-emerald-300/70 via-emerald-300/20 to-transparent',
   },
   amber: {
-    icon: 'border-amber-300/20 bg-amber-300/10 text-amber-100 shadow-[0_0_30px_rgba(251,191,36,0.14)]',
+    icon: 'border-amber-300/20 bg-amber-300/10 text-amber-700 dark:text-amber-200 shadow-[0_0_30px_rgba(251,191,36,0.14)]',
     line: 'from-amber-300/70 via-amber-300/20 to-transparent',
   },
   rose: {
-    icon: 'border-rose-300/20 bg-rose-300/10 text-rose-100 shadow-[0_0_30px_rgba(251,113,133,0.14)]',
+    icon: 'border-rose-300/20 bg-rose-300/10 text-rose-700 dark:text-rose-200 shadow-[0_0_30px_rgba(251,113,133,0.14)]',
     line: 'from-rose-300/70 via-rose-300/20 to-transparent',
   },
 });
@@ -127,10 +127,10 @@ function MetricCard({ item, locale, t }) {
       <div className="flex h-full flex-col justify-between gap-5 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-slate-400">
+            <p className="truncate text-sm font-medium text-muted-foreground">
               {t(config.labelKey, config.fallback)}
             </p>
-            <p className="mt-3 text-3xl font-semibold tracking-normal text-white tabular-nums">
+            <p className="mt-3 text-3xl font-semibold tracking-normal text-foreground tabular-nums">
               {formatDashboardMetric(item.value, item.format, locale)}
             </p>
           </div>
@@ -143,13 +143,13 @@ function MetricCard({ item, locale, t }) {
             className={cn(
               'rounded-md border px-2 py-1 font-semibold tabular-nums',
               isPositive
-                ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100'
-                : 'border-rose-300/20 bg-rose-300/10 text-rose-100',
+                ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-700 dark:text-emerald-200'
+                : 'border-rose-300/20 bg-rose-300/10 text-rose-700 dark:text-rose-200',
             )}
           >
             {formatDelta(item.delta)}
           </span>
-          <span className="truncate text-slate-500">
+          <span className="truncate text-muted-foreground">
             {t('dashboard.analytics.vsPrevious', 'vs previous period')}
           </span>
         </div>
@@ -166,12 +166,12 @@ function MetricSkeletonGrid() {
           <div className="space-y-5 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-3">
-                <div className="h-4 w-24 animate-pulse rounded-md bg-white/10" />
-                <div className="h-8 w-28 animate-pulse rounded-md bg-white/10" />
+                <div className="h-4 w-24 animate-pulse rounded-md bg-muted" />
+                <div className="h-8 w-28 animate-pulse rounded-md bg-muted" />
               </div>
-              <div className="h-11 w-11 animate-pulse rounded-lg bg-white/10" />
+              <div className="h-11 w-11 animate-pulse rounded-lg bg-muted" />
             </div>
-            <div className="h-6 w-36 animate-pulse rounded-md bg-white/10" />
+            <div className="h-6 w-36 animate-pulse rounded-md bg-muted" />
           </div>
         </GlassPanel>
       ))}
@@ -183,14 +183,14 @@ function DashboardError({ error, onRetry, t }) {
   return (
     <GlassPanel>
       <div className="flex min-h-[24rem] flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-rose-300/20 bg-rose-300/10 text-rose-100 shadow-[0_0_34px_rgba(251,113,133,0.12)]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-rose-300/20 bg-rose-300/10 text-rose-700 dark:text-rose-200 shadow-[0_0_34px_rgba(251,113,133,0.12)]">
           <AlertCircle className="h-6 w-6" />
         </div>
         <div className="space-y-2">
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-foreground">
             {t('dashboard.analytics.errorTitle', 'Analytics could not be loaded')}
           </h2>
-          <p className="max-w-lg text-sm text-slate-400">
+          <p className="max-w-lg text-sm text-muted-foreground">
             {error?.message || t('dashboard.analytics.errorDescription', 'The server returned an unexpected response.')}
           </p>
         </div>
@@ -234,22 +234,20 @@ export function PremiumDashboard() {
     : null;
 
   return (
-    <section className="relative -m-4 min-h-[calc(100dvh-4rem)] overflow-hidden bg-[#07111f] text-slate-100 sm:-m-6">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(139,92,246,0.16),transparent_28%,rgba(6,182,212,0.12)_56%,rgba(34,197,94,0.08))]" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.028)_1px,transparent_1px)] bg-[size:72px_72px] opacity-70" />
+    <section className="relative -m-4 min-h-[calc(100dvh-4rem)] overflow-hidden bg-background text-foreground sm:-m-6">
 
       <div className="relative z-10 mx-auto flex max-w-[1800px] flex-col gap-5 p-4 sm:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0 space-y-3">
-            <div className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-3 text-xs font-semibold uppercase text-cyan-100 shadow-[0_0_30px_rgba(34,211,238,0.1)]">
+            <div className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-3 text-xs font-semibold uppercase text-cyan-700 dark:text-cyan-200 shadow-[0_0_30px_rgba(34,211,238,0.1)]">
               <Sparkles className="h-3.5 w-3.5" />
               {t('dashboard.analytics.badge', 'Executive analytics')}
             </div>
             <div className="space-y-2">
-              <h1 className="text-3xl font-semibold tracking-normal text-white sm:text-4xl">
+              <h1 className="text-3xl font-semibold tracking-normal text-foreground sm:text-4xl">
                 {t('dashboard.welcome', 'Welcome')}, {user?.firstName || user?.name || 'System'}
               </h1>
-              <p className="max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
+              <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
                 {t('dashboard.analytics.subtitle', 'Live business performance across customers, projects, sales, tasks, scheduling, accounting, and system activity.')}
               </p>
             </div>
@@ -260,7 +258,7 @@ export function PremiumDashboard() {
               <Select value={range} onValueChange={handleRangeChange}>
                 <SelectTrigger
                   aria-label={t('dashboard.analytics.range', 'Analytics range')}
-                  className="h-11 min-w-36 border-white/10 bg-white/[0.07] text-slate-100 shadow-none hover:bg-white/[0.1]"
+                  className="h-11 min-w-36 border-border bg-card text-foreground shadow-none hover:bg-accent"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -276,7 +274,7 @@ export function PremiumDashboard() {
               <Select value={granularity} onValueChange={setGranularity}>
                 <SelectTrigger
                   aria-label={t('dashboard.analytics.granularity', 'Analytics granularity')}
-                  className="h-11 min-w-36 border-white/10 bg-white/[0.07] text-slate-100 shadow-none hover:bg-white/[0.1]"
+                  className="h-11 min-w-36 border-border bg-card text-foreground shadow-none hover:bg-accent"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -295,7 +293,7 @@ export function PremiumDashboard() {
               variant="outline"
               aria-label={t('dashboard.analytics.refresh', 'Refresh analytics')}
               onClick={() => refetch()}
-              className="h-11 border-white/10 bg-white/[0.07] px-4 text-slate-100 hover:bg-white/[0.1] hover:text-white"
+              className="h-11 border-border bg-card px-4 text-foreground hover:bg-accent hover:text-foreground"
             >
               <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
               <span className="sm:hidden">{t('dashboard.analytics.refresh', 'Refresh')}</span>
@@ -303,13 +301,13 @@ export function PremiumDashboard() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <span className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.05] px-2.5 py-1.5">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
             <DatabaseZap className="h-3.5 w-3.5 text-cyan-200" />
             {t('dashboard.analytics.optimizedApi', 'Single cached analytics API')}
           </span>
           {updatedAt && (
-            <span className="inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.05] px-2.5 py-1.5">
+            <span className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">
               {t('dashboard.analytics.updatedAt', 'Updated')} {updatedAt}
             </span>
           )}
@@ -333,14 +331,14 @@ export function PremiumDashboard() {
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="gap-4">
               <div className="overflow-x-auto pb-1">
-                <TabsList className="min-h-12 min-w-max gap-1 rounded-lg border border-white/10 bg-white/[0.065] p-1 text-slate-400 shadow-[0_16px_44px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+                <TabsList className="min-h-12 min-w-max gap-1 rounded-lg border border-border bg-card p-1 text-muted-foreground shadow-sm">
                   {DASHBOARD_TABS.map((tab) => {
                     const Icon = TAB_ICONS[tab.id] || BarChart3;
                     return (
                       <TabsTrigger
                         key={tab.id}
                         value={tab.id}
-                        className="h-10 rounded-md px-3 text-sm text-slate-400 data-active:border-violet-300/70 data-active:bg-[linear-gradient(135deg,rgba(124,58,237,0.48),rgba(88,28,135,0.34))] data-active:text-white data-active:ring-1 data-active:ring-violet-300/60 data-active:shadow-[0_0_0_1px_rgba(167,139,250,0.35),0_0_28px_rgba(139,92,246,0.34),inset_0_1px_0_rgba(255,255,255,0.16)]"
+                        className="h-10 rounded-md px-3 text-sm text-muted-foreground data-active:border-violet-300/70 data-active:bg-[linear-gradient(135deg,rgba(124,58,237,0.48),rgba(88,28,135,0.34))] data-active:text-white data-active:ring-1 data-active:ring-violet-300/60 data-active:shadow-[0_0_0_1px_rgba(167,139,250,0.35),0_0_28px_rgba(139,92,246,0.34),inset_0_1px_0_rgba(255,255,255,0.16)]"
                       >
                         <Icon className="h-4 w-4" />
                         {t(tab.labelKey, tab.fallback)}
@@ -374,10 +372,10 @@ export function PremiumDashboard() {
               <Link key={action.href} href={action.href} className="group block">
                 <GlassPanel className="transition-transform duration-200 group-hover:-translate-y-0.5">
                   <div className="flex min-h-16 items-center gap-3 p-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-violet-300/20 bg-violet-300/10 text-violet-100 shadow-[0_0_26px_rgba(167,139,250,0.1)]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-violet-300/20 bg-violet-300/10 text-violet-700 dark:text-violet-200 shadow-[0_0_26px_rgba(167,139,250,0.1)]">
                       <Icon className="h-4 w-4" />
                     </div>
-                    <span className="min-w-0 truncate text-sm font-semibold text-slate-100">
+                    <span className="min-w-0 truncate text-sm font-semibold text-foreground">
                       {t(action.labelKey, action.fallback)}
                     </span>
                   </div>

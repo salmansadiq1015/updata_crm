@@ -59,7 +59,7 @@ class CustomerController {
   async merge(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      await customerService.merge(req.body.sourceId, req.body.targetId, req.user._id, meta);
+      await customerService.merge(req.body.sourceId, req.body.targetId, req.user._id, meta, req.body.fieldOverrides);
       return res.success({ message: 'Customers merged successfully' });
     } catch (err) { next(err); }
   }

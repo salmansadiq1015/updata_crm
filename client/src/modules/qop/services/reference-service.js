@@ -7,6 +7,11 @@ export const referenceService = {
     params: { q: query, limit: 10 },
   }),
   listDepartments: () => apiClient.get('/admin/departments'),
+  // Admin management view: include deactivated ones so they can be reactivated
+  // (the QOP form dropdowns keep using listDepartments = active only).
+  listAllDepartments: () => apiClient.get('/admin/departments', { params: { includeInactive: true } }),
+  createDepartment: (data) => apiClient.post('/admin/departments', data),
+  updateDepartment: (id, data) => apiClient.patch(`/admin/departments/${id}`, data),
   listCustomerProjects: (customerId, search = '') => {
     const trimmedSearch = String(search || '').trim();
     return apiClient.get(ENDPOINTS.PM.PROJECTS, {

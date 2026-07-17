@@ -57,14 +57,14 @@ export function FieldOpsInstallationsTable({ siteId }) {
   return (
     <div className="space-y-2">
       {installations.map((inst) => (
-        <div key={inst._id} className="border border-border rounded-xl px-4 py-3.5 space-y-2 hover:bg-muted/30 transition-colors">
+        <div key={inst.id || inst._id} className="border border-border rounded-xl px-4 py-3.5 space-y-2 hover:bg-muted/30 transition-colors">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-primary/10 text-primary shrink-0">
                 <Wrench className="h-3.5 w-3.5" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{inst.model || inst.type || inst.name || '—'}</p>
+                <p className="text-sm font-medium truncate">{inst.model || inst.system_type || inst.type || inst.name || '—'}</p>
                 {(inst.manufacturer || inst.brand) && (
                   <p className="text-xs text-muted-foreground">{inst.manufacturer || inst.brand}</p>
                 )}
@@ -81,12 +81,12 @@ export function FieldOpsInstallationsTable({ siteId }) {
             <InfoChip
               icon={CalendarDays}
               label={de ? 'Eingebaut' : 'Installed'}
-              value={inst.installationDate ? formatDate(inst.installationDate) : null}
+              value={(inst.commissioning_date || inst.installationDate) ? formatDate(inst.commissioning_date || inst.installationDate) : null}
             />
             <InfoChip
               icon={ShieldCheck}
               label={de ? 'Garantie bis' : 'Warranty'}
-              value={inst.warrantyExpiry ? formatDate(inst.warrantyExpiry) : null}
+              value={(inst.warranty_until || inst.warrantyExpiry) ? formatDate(inst.warranty_until || inst.warrantyExpiry) : null}
             />
             <InfoChip
               icon={Clock}

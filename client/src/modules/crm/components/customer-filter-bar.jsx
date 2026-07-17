@@ -24,6 +24,8 @@ export function CustomerFilterBar({
   onCantonFilterChange,
   newsletterFilter,
   onNewsletterFilterChange,
+  salesFilter,
+  onSalesFilterChange,
   hasActiveFilters,
   onClear,
 }) {
@@ -97,6 +99,18 @@ export function CustomerFilterBar({
           <SelectItem value="all" className="text-foreground focus:bg-muted/60"><DotLabel tone="muted">{t('crm.allNewsletter', 'All')}</DotLabel></SelectItem>
           <SelectItem value="optin" className="text-foreground focus:bg-muted/60"><DotLabel tone="amber">{t('crm.optedIn', 'Opted in')}</DotLabel></SelectItem>
           <SelectItem value="optout" className="text-foreground focus:bg-muted/60"><DotLabel tone="slate">{t('crm.optedOut', 'Opted out')}</DotLabel></SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select value={salesFilter} onValueChange={onSalesFilterChange}>
+        <SelectTrigger className={cn(baseTriggerCls, salesFilter !== 'all' && activeTriggerCls, 'w-[180px]')}>
+          <SelectValue placeholder={t('crm.salesStatus', 'Vertriebsstatus')} />
+        </SelectTrigger>
+        <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
+          <SelectItem value="all" className="text-foreground focus:bg-muted/60"><DotLabel tone="muted">{t('crm.allSalesStatus', 'Alle Vertriebsstatus')}</DotLabel></SelectItem>
+          <SelectItem value="offer_received" className="text-foreground focus:bg-muted/60"><DotLabel tone="amber">{t('crm.salesOfferReceived', 'Nur Offerte erhalten')}</DotLabel></SelectItem>
+          <SelectItem value="zusage" className="text-foreground focus:bg-muted/60"><DotLabel tone="emerald">{t('crm.salesZusage', 'Zusage')}</DotLabel></SelectItem>
+          <SelectItem value="absage" className="text-foreground focus:bg-muted/60"><DotLabel tone="rose">{t('crm.salesAbsage', 'Absage')}</DotLabel></SelectItem>
         </SelectContent>
       </Select>
 

@@ -6,7 +6,7 @@ import Site from './site.model.js';
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 const MAX_CANDIDATES = 5000;
-const CUSTOMER_SELECT = 'customerNumber name ownerName type street postalCode city canton country phone mobile email status updatedAt';
+const CUSTOMER_SELECT = 'customerNumber name ownerName type street addressSupplement postalCode city canton country phone mobile email status updatedAt';
 const CONTACT_SELECT = 'customerId firstName lastName functionTitle phone mobile email isPrimary updatedAt';
 const SITE_PROJECT = {
   __v: 0,
@@ -35,9 +35,9 @@ function toObjectId(value) {
   return id && mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null;
 }
 
-function compactAddress({ street, postalCode, city, canton, country }) {
+function compactAddress({ addressSupplement, street, postalCode, city, canton, country }) {
   const locality = [postalCode, city].filter(Boolean).join(' ');
-  return [street, locality, canton, country].filter(Boolean).join(', ');
+  return [addressSupplement, street, locality, canton, country].filter(Boolean).join(', ');
 }
 
 function normalizeQuery(params = {}) {
@@ -319,6 +319,7 @@ class AddressBookService {
       site: null,
       address: {
         label: 'Billing address',
+        addressSupplement: customer.addressSupplement,
         street: customer.street,
         postalCode: customer.postalCode,
         city: customer.city,
@@ -381,6 +382,7 @@ class AddressBookService {
       ownerName: customer.ownerName,
       type: customer.type,
       street: customer.street,
+      addressSupplement: customer.addressSupplement,
       postalCode: customer.postalCode,
       city: customer.city,
       canton: customer.canton,

@@ -518,6 +518,7 @@ export function CustomerDetail() {
   const isArchived = customer.status === 'archived';
 
   const fullAddress = [
+    customer.addressSupplement,
     customer.street,
     [customer.postalCode, customer.city].filter(Boolean).join(' '),
     customer.canton ? cantonName(customer.canton) : null,
@@ -797,7 +798,7 @@ export function CustomerDetail() {
         onOpenChange={setMergeOpen}
         source={customer}
         loading={merge.isPending}
-        onConfirm={({ sourceId, targetId }) => merge.mutate({ sourceId, targetId })}
+        onConfirm={({ sourceId, targetId, fieldOverrides }) => merge.mutate({ sourceId, targetId, fieldOverrides })}
       />
     </div>
   );

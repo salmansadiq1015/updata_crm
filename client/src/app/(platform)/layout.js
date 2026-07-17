@@ -8,6 +8,7 @@ import { Header } from '@/layout/header';
 import { RightDrawer } from '@/layout/right-drawer';
 import { FullPageSpinner } from '@/shared/components/loading-spinner';
 import { useKeyboardShortcuts } from '@/shared/hooks/use-keyboard-shortcuts';
+import { useAiStore } from '@/modules/ai/store/ai-store';
 import { cn } from '@/lib/utils';
 
 const AiAssistantButton = lazy(() =>
@@ -23,6 +24,10 @@ export default function PlatformLayout({ children }) {
   const pathname = usePathname();
   const isChatPage = pathname?.includes('/chat');
   const isAiPage   = pathname === '/ai' || pathname?.startsWith('/ai/');
+  const isAiPanelOpen = useAiStore((s) => s.isPanelOpen);
+  // Dock (reserve space) for the non-modal AI panel on wide screens; on smaller
+  // screens it floats over the right of the content.
+  const isDocked = isAiPanelOpen && !isAiPage;
 
   useKeyboardShortcuts();
 
@@ -51,7 +56,8 @@ export default function PlatformLayout({ children }) {
       {/* Main content area */}
       <div className={cn(
         'flex flex-1 flex-col overflow-hidden min-w-0',
-        'transition-all duration-300'
+        'transition-all duration-300',
+        isDocked && 'xl:pr-96'
       )}>
         {/* Header — hidden on AI chat page */}
         {!isAiPage && <Header />}

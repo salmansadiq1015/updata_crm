@@ -23,7 +23,7 @@ import {
   BookOpen, ClipboardList, MessageSquare, Bell, Smartphone,
   FileCheck, Clock4, Files, LayoutTemplate,
   Type, TrendingUp, Ruler, RefreshCw, CalendarDays, Grid3X3, AlertTriangle,
-  ShoppingCart, PlugZap, Percent, Video,
+  ShoppingCart, PlugZap, Percent, Video, Building2,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import {
@@ -118,6 +118,7 @@ const navSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.users', href: '/settings/users', icon: Users, permission: 'users:read' },
       { type: 'leaf', labelKey: 'sidebar.roles', href: '/settings/roles', icon: ShieldCheck, permission: 'roles:read' },
       { type: 'leaf', labelKey: 'sidebar.audit', href: '/settings/audit', icon: ScrollText, permission: 'audit:read' },
+      { type: 'leaf', labelKey: 'sidebar.departments', href: '/admin/departments', icon: Building2, permission: 'quotations:admin' },
       { type: 'leaf', labelKey: 'sidebar.numbering', href: '/admin/numbering', icon: Hash, permission: 'quotations:admin' },
       { type: 'leaf', labelKey: 'sidebar.reminders', href: '/admin/reminders', icon: BellRing, permission: 'quotations:admin' },
       { type: 'leaf', labelKey: 'sidebar.notificationOperations', href: '/admin/notifications', icon: BellRing, permission: PERMISSIONS.NOTIFICATIONS_METRICS_READ },
@@ -186,8 +187,8 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
       className={cn(
         'group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
         isActive
-          ? 'bg-gradient-to-r from-[oklch(0.65_0.25_292_/_15%)] to-transparent text-white sidebar-active-glow'
-          : 'text-white/35 hover:bg-white/[0.05] hover:text-white/65',
+          ? 'bg-gradient-to-r from-[oklch(0.65_0.25_292_/_15%)] to-transparent text-sidebar-foreground sidebar-active-glow'
+          : 'text-sidebar-foreground/35 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground/65',
         leaf.disabled && 'opacity-20 pointer-events-none',
         collapsed && 'justify-center px-0 py-2.5',
         nested && !collapsed && 'pl-[26px] py-1.5'
@@ -206,7 +207,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
       <span className="relative shrink-0">
         <Icon className={cn(
           'h-[18px] w-[18px] transition-all duration-200',
-          isActive ? 'text-[oklch(0.78_0.22_292)]' : 'text-white/30 group-hover:text-white/55',
+          isActive ? 'text-[oklch(0.78_0.22_292)]' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55',
           nested && 'h-[14px] w-[14px]'
         )} />
         {leaf.href === '/notifications' && unreadCount > 0 && (
@@ -230,7 +231,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
         )}
       </AnimatePresence>
       {!collapsed && leaf.disabled && (
-        <span className="ml-auto text-[8px] rounded-full bg-white/[0.06] px-1.5 py-0.5 text-white/15 uppercase tracking-widest font-bold">
+        <span className="ml-auto text-[8px] rounded-full bg-sidebar-foreground/[0.06] px-1.5 py-0.5 text-sidebar-foreground/15 uppercase tracking-widest font-bold">
           {t('common.soon', 'Soon')}
         </span>
       )}
@@ -241,7 +242,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>{linkEl}</TooltipTrigger>
-        <TooltipContent side="right" sideOffset={12} className="bg-[#1a1f2e] text-white border-white/10 text-xs font-medium px-3 py-1.5 shadow-lg">
+        <TooltipContent side="right" sideOffset={12} className="bg-popover text-popover-foreground border-border text-xs font-medium px-3 py-1.5 shadow-lg">
           {label}
         </TooltipContent>
       </Tooltip>
@@ -272,18 +273,18 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
                 type="button"
                 className={cn(
                   'group relative flex w-full items-center justify-center rounded-xl py-2.5 transition-all duration-200',
-                  groupActive ? 'bg-white/[0.08] text-white sidebar-active-glow' : 'text-white/45 hover:bg-white/[0.05]'
+                  groupActive ? 'bg-sidebar-foreground/[0.08] text-sidebar-foreground sidebar-active-glow' : 'text-sidebar-foreground/45 hover:bg-sidebar-foreground/[0.05]'
                 )}
               >
-                <Icon className={cn('h-[18px] w-[18px]', groupActive ? 'text-[oklch(0.75_0.18_292)]' : 'text-white/30 group-hover:text-white/55')} />
+                <Icon className={cn('h-[18px] w-[18px]', groupActive ? 'text-[oklch(0.75_0.18_292)]' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55')} />
               </button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={12} className="bg-[#1a1f2e] text-white border-white/10 text-xs font-medium px-3 py-1.5 shadow-lg">
+          <TooltipContent side="right" sideOffset={12} className="bg-popover text-popover-foreground border-border text-xs font-medium px-3 py-1.5 shadow-lg">
             {label}
           </TooltipContent>
         </Tooltip>
-        <PopoverContent side="right" sideOffset={12} align="start" className="w-52 p-2 bg-[#0D1117] border border-white/[0.08] rounded-xl shadow-2xl">
+        <PopoverContent side="right" sideOffset={12} align="start" className="w-52 p-2 bg-popover border border-border rounded-xl shadow-2xl">
           <p className="px-2 py-1 text-[10px] text-violet-400 uppercase tracking-wider font-semibold">{label}</p>
           <div className="space-y-0.5">
             {children.map((leaf) => (
@@ -304,15 +305,15 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
         onClick={() => toggleGroup(group.key)}
         className={cn(
           'group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
-          groupActive ? 'text-white' : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80'
+          groupActive ? 'text-sidebar-foreground' : 'text-sidebar-foreground/50 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground/80'
         )}
       >
-        <Icon className={cn('h-[18px] w-[18px] shrink-0', groupActive ? 'text-[oklch(0.75_0.22_292)]' : 'text-white/30 group-hover:text-white/55')} />
-        <span className={cn('truncate whitespace-nowrap flex-1 text-left', groupActive ? 'text-white/85' : 'text-white/50')}>{label}</span>
+        <Icon className={cn('h-[18px] w-[18px] shrink-0', groupActive ? 'text-[oklch(0.75_0.22_292)]' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55')} />
+        <span className={cn('truncate whitespace-nowrap flex-1 text-left', groupActive ? 'text-sidebar-foreground/85' : 'text-sidebar-foreground/50')}>{label}</span>
         {groupActive && (
           <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[oklch(0.75_0.25_292)] shadow-[0_0_6px_oklch(0.65_0.25_292)]" />
         )}
-        <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-white/20 transition-transform duration-200 group-hover:text-white/40', expanded && 'rotate-180')} />
+        <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-sidebar-foreground/20 transition-transform duration-200 group-hover:text-sidebar-foreground/40', expanded && 'rotate-180')} />
       </button>
       <AnimatePresence initial={false}>
         {expanded && (
@@ -353,13 +354,13 @@ function SidebarNav({ collapsed, onNavigate }) {
             <div key={section.titleKey} className={cn(sIdx > 0 && 'pt-4')}>
               {!collapsed && (
                 <div className="flex items-center gap-2.5 px-3 mb-1.5">
-                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/20 select-none whitespace-nowrap">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-sidebar-foreground/20 select-none whitespace-nowrap">
                     {t(section.titleKey)}
                   </p>
-                  <div className="flex-1 h-px bg-gradient-to-r from-white/[0.06] to-transparent" />
+                  <div className="flex-1 h-px bg-gradient-to-r from-sidebar-foreground/[0.06] to-transparent" />
                 </div>
               )}
-              {collapsed && sIdx > 0 && <div className="mx-3 mb-2 h-px bg-white/[0.06]" />}
+              {collapsed && sIdx > 0 && <div className="mx-3 mb-2 h-px bg-sidebar-foreground/[0.06]" />}
 
               <div className="space-y-0.5">
                 {visibleItems.map((item) => {
@@ -392,7 +393,7 @@ function SidebarNav({ collapsed, onNavigate }) {
 function SidebarLogo({ collapsed }) {
   return (
     <div className={cn(
-      'relative flex items-center h-15 px-4 border-b border-white/6 bg-linear-to-b from-white/2 to-transparent',
+      'relative flex items-center h-15 px-4 border-b border-sidebar-border bg-linear-to-b from-white/2 to-transparent',
       collapsed && 'justify-center px-0'
     )}>
       {collapsed ? (
@@ -405,7 +406,7 @@ function SidebarLogo({ collapsed }) {
             <Zap className="h-5 w-5 text-white" />
           </div>
           <div className="min-w-0">
-            <span className="text-[15px] font-bold tracking-tight text-white/90 block leading-tight">
+            <span className="text-[15px] font-bold tracking-tight text-sidebar-foreground/90 block leading-tight">
               MB Boiler
             </span>
             <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[oklch(0.7_0.25_292)] leading-none">
@@ -436,7 +437,7 @@ function SidebarUserCard({ collapsed }) {
   const cardContent = (
     <button className={cn(
       'flex items-center gap-3 w-full rounded-xl px-3 py-2.5 transition-all duration-200',
-      'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.10]',
+      'bg-sidebar-foreground/[0.03] hover:bg-sidebar-foreground/[0.06] border border-sidebar-border hover:border-sidebar-border',
       collapsed && 'justify-center px-0 py-2.5'
     )}>
       <Avatar className="h-8 w-8 ring-2 ring-[oklch(0.65_0.25_292/35%)] shadow-[0_0_16px_oklch(0.65_0.25_292/20%)]">
@@ -446,7 +447,7 @@ function SidebarUserCard({ collapsed }) {
       </Avatar>
       {!collapsed && (
         <div className="text-left min-w-0 flex-1">
-          <p className="text-[13px] font-semibold truncate text-white/85 leading-tight">
+          <p className="text-[13px] font-semibold truncate text-sidebar-foreground/85 leading-tight">
             {user?.firstName} {user?.lastName}
           </p>
           <span className="text-[10px] font-medium bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded-full">
@@ -477,7 +478,7 @@ function SidebarUserCard({ collapsed }) {
             </DropdownMenuContent>
           </DropdownMenu>
         </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={12} className="bg-[#1a1f2e] text-white border-white/10 text-xs font-medium">
+        <TooltipContent side="right" sideOffset={12} className="bg-popover text-popover-foreground border-border text-xs font-medium">
           {user?.firstName} {user?.lastName}
         </TooltipContent>
       </Tooltip>
@@ -519,7 +520,7 @@ export function Sidebar() {
       <motion.aside
         animate={{ width: collapsed ? 68 : 256 }}
         transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-        className="relative flex flex-col h-screen overflow-hidden bg-sidebar text-sidebar-foreground border-r border-[rgba(255,255,255,0.04)] sidebar-inner-glow"
+        className="relative flex flex-col h-screen overflow-hidden bg-sidebar text-sidebar-foreground border-r border-sidebar-border sidebar-inner-glow"
       >
         {/* Ambient gradient */}
         <div className="pointer-events-none absolute inset-0 sidebar-ambient" />
@@ -535,7 +536,7 @@ export function Sidebar() {
         </div>
 
         {/* Bottom section */}
-        <div className="relative p-2.5 space-y-2 border-t border-white/[0.04]">
+        <div className="relative p-2.5 space-y-2 border-t border-sidebar-border">
           <SidebarUserCard collapsed={collapsed} />
 
           {/* Collapse toggle */}
@@ -544,7 +545,7 @@ export function Sidebar() {
               onClick={toggleCollapsed}
               className={cn(
                 'flex items-center justify-center w-full rounded-lg py-1.5 transition-all duration-200',
-                'text-[11px] text-white/25 hover:text-white/55 hover:bg-white/[0.04]'
+                'text-[11px] text-sidebar-foreground/25 hover:text-sidebar-foreground/55 hover:bg-sidebar-foreground/[0.04]'
               )}
             >
               {collapsed ? (
@@ -595,7 +596,7 @@ export function MobileSidebar() {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-sidebar to-transparent" />
         </div>
 
-        <div className="relative p-2.5 border-t border-white/[0.04]">
+        <div className="relative p-2.5 border-t border-sidebar-border">
           <TooltipProvider delayDuration={0}>
             <SidebarUserCard collapsed={false} />
           </TooltipProvider>

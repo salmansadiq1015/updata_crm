@@ -61,7 +61,7 @@ export function useCustomerMutations({ onCreate, onUpdate, onArchive, onBulkArch
   });
 
   const merge = useMutation({
-    mutationFn: ({ sourceId, targetId }) => customerService.mergeCustomers(sourceId, targetId),
+    mutationFn: ({ sourceId, targetId, fieldOverrides }) => customerService.mergeCustomers(sourceId, targetId, fieldOverrides),
     onSuccess: (res) => {
       invalidate();
       // Merge cascades to contacts + sites — clear those too.

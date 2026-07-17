@@ -52,13 +52,14 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  overlay = true,
   ...props
 }) {
   const { t } = useLanguage();
 
   return (
     <SheetPortal>
-      <SheetOverlay />
+      {overlay && <SheetOverlay />}
       <SheetPrimitive.Content
         data-slot="sheet-content"
         data-side={side}

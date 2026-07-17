@@ -53,7 +53,7 @@ async function loadCustomer(customerId) {
   if (!isObjectId(id)) return null;
   const Customer = (await import('../crm/customer.model.js')).default;
   return Customer.findById(id)
-    .select('customerNumber name street postalCode city canton country phone mobile email')
+    .select('customerNumber name street addressSupplement postalCode city canton country phone mobile email')
     .lean();
 }
 
@@ -75,24 +75,59 @@ async function loadProject(projectId) {
     .lean();
 }
 
-function buildCustomerBlock(document, customer, contact) {
+// Object-level billing address (Rechnungsadresse) for an invoice — feedback #10.
+// Resolves Invoice → project.siteId → Site.billingAddress. Only returned when it
+// carries a real street, so an incomplete block never replaces the customer address.
+async function loadSiteBillingAddress(projectId) {
+  const id = toId(projectId);
+  if (!isObjectId(id)) return null;
+  const Project = (await import('../pm/project.model.js')).default;
+  const project = await Project.findById(id).select('siteId').lean();
+  const siteId = toId(project?.siteId);
+  if (!isObjectId(siteId)) return null;
+  const Site = (await import('../crm/site.model.js')).default;
+  const site = await Site.findById(siteId).select('billingAddress').lean();
+  const billing = site?.billingAddress;
+  return billing && billing.street ? billing : null;
+}
+
+function buildCustomerBlock(document, customer, contact, billing = null) {
   const contactName = contact
     ? [contact.firstName, contact.lastName].filter(Boolean).join(' ')
     : '';
   const email = contact?.email || customer?.email || null;
   const phone = contact?.mobile || contact?.phone || customer?.mobile || customer?.phone || null;
 
+  // When the object carries a billing address (Rechnungsadresse), it becomes the
+  // printed recipient + QR-bill debtor. Otherwise everything stays on the customer
+  // address (unchanged behaviour). `qrAddress` keeps the street for the QR-bill so
+  // the c/o line never lands in the payment slip's address field.
+  const useBilling = !!(billing && billing.street);
+  const recipientName = (useBilling && billing.name) || document.customerName || customer?.name || '';
+  const hasSupplement = !useBilling && !!customer?.addressSupplement;
+  const addressLine1 = useBilling
+    ? (billing.careOf ? `c/o ${billing.careOf}` : (billing.street || ''))
+    : (hasSupplement ? customer.addressSupplement : (customer?.street || ''));
+  const addressLine2 = useBilling
+    ? (billing.careOf ? (billing.street || '') : '')
+    : (hasSupplement ? (customer?.street || '') : '');
+  const plz = useBilling ? (billing.postalCode || '') : (customer?.postalCode || '');
+  const city = useBilling ? (billing.city || '') : (customer?.city || '');
+
   return {
     customer: {
       number: customer?.customerNumber || '',
-      name: document.customerName || customer?.name || '',
+      name: recipientName,
       contactName,
-      addressLine1: customer?.street || '',
-      plz: customer?.postalCode || '',
-      city: customer?.city || '',
+      addressLine1,
+      addressLine2,
+      plz,
+      city,
       country: customer?.country || 'CH',
       email,
       phone,
+      ...(useBilling ? { qrAddress: billing.street || '' } : {}),
+      ...(hasSupplement ? { qrAddress: customer.street || '' } : {}),
     },
     customerEmail: email,
     customerPhone: phone,
@@ -100,8 +135,8 @@ function buildCustomerBlock(document, customer, contact) {
   };
 }
 
-function buildBaseData({ document, customer, contact, project, templateType, documentNumber, documentDate }) {
-  const customerBlock = buildCustomerBlock(document, customer, contact);
+function buildBaseData({ document, customer, contact, project, templateType, documentNumber, documentDate, billing = null }) {
+  const customerBlock = buildCustomerBlock(document, customer, contact, billing);
   const projectName = project?.name || document.projectName || '';
   const customerId = toId(document.customerId || customer);
   const projectId = toId(document.projectId || project);
@@ -231,10 +266,11 @@ class QopDocumentPayloadService {
   async buildInvoicePayload(invoiceOrId) {
     const invoice = await this._resolveDocument('invoice', invoiceOrId);
     if (!invoice) throw new Error(`Invoice not found: ${invoiceOrId}`);
-    const [customer, contact, project] = await Promise.all([
+    const [customer, contact, project, billing] = await Promise.all([
       loadCustomer(invoice.customerId),
       loadContact(invoice.contactId),
       loadProject(invoice.projectId),
+      loadSiteBillingAddress(invoice.projectId),
     ]);
     const templateType = invoiceTemplateType(invoice.invoiceType);
     const advanceDeductions = (invoice.advanceDeductions || []).map((deduction) => ({
@@ -255,6 +291,7 @@ class QopDocumentPayloadService {
         templateType,
         documentNumber: invoice.invoiceNumber,
         documentDate: formatDate(invoice.invoiceDate || invoice.createdAt),
+        billing,
       }),
       invoiceType: templateType,
       dueDate: formatDate(invoice.dueDate),

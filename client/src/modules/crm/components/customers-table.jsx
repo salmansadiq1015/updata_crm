@@ -63,6 +63,7 @@ export function CustomersTable() {
   const [typeFilter, setTypeFilter] = useState('all');
   const [cantonFilter, setCantonFilter] = useState('all');
   const [newsletterFilter, setNewsletterFilter] = useState('all');
+  const [salesFilter, setSalesFilter] = useState('all');
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -83,8 +84,9 @@ export function CustomersTable() {
     if (cantonFilter !== 'all') p.canton = cantonFilter;
     if (newsletterFilter === 'optin') p.newsletterOptIn = 'true';
     if (newsletterFilter === 'optout') p.newsletterOptIn = 'false';
+    if (salesFilter !== 'all') p.salesStatus = salesFilter;
     return p;
-  }, [debouncedSearch, statusFilter, typeFilter, cantonFilter, newsletterFilter]);
+  }, [debouncedSearch, statusFilter, typeFilter, cantonFilter, newsletterFilter, salesFilter]);
 
   const {
     items: customers,
@@ -127,7 +129,8 @@ export function CustomersTable() {
     statusFilter !== 'all' ||
     typeFilter !== 'all' ||
     cantonFilter !== 'all' ||
-    newsletterFilter !== 'all';
+    newsletterFilter !== 'all' ||
+    salesFilter !== 'all';
 
   const clearFilters = useCallback(() => {
     setSearch('');
@@ -135,6 +138,7 @@ export function CustomersTable() {
     setTypeFilter('all');
     setCantonFilter('all');
     setNewsletterFilter('all');
+    setSalesFilter('all');
     resetCursor();
   }, [resetCursor]);
 
@@ -195,6 +199,28 @@ export function CustomersTable() {
           )}>
             <span className={cn('h-1.5 w-1.5 rounded-full', isBiz ? 'bg-emerald-500' : 'bg-blue-500')} />
             {isBiz ? t('crm.typeBusiness', 'Business') : t('crm.typePrivate', 'Private')}
+          </span>
+        );
+      },
+    },
+    {
+      accessorKey: 'salesStatus',
+      header: t('crm.salesStatus', 'Vertriebsstatus'),
+      size: 170,
+      enableSorting: false,
+      Cell: ({ row }) => {
+        const s = row.original.salesStatus;
+        if (!s) return <span className="text-[13px] text-muted-foreground/60">-</span>;
+        const meta = {
+          zusage: { label: t('crm.salesZusage', 'Zusage'), text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-500/10', dot: 'bg-emerald-500' },
+          offer_received: { label: t('crm.salesOfferReceived', 'Nur Offerte erhalten'), text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-500/10', dot: 'bg-amber-500' },
+          absage: { label: t('crm.salesAbsage', 'Absage'), text: 'text-rose-700 dark:text-rose-400', bg: 'bg-rose-500/10', dot: 'bg-rose-500' },
+        }[s];
+        if (!meta) return <span className="text-[13px] text-muted-foreground/60">-</span>;
+        return (
+          <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full', meta.bg, meta.text)}>
+            <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
+            {meta.label}
           </span>
         );
       },
@@ -357,6 +383,8 @@ export function CustomersTable() {
         onCantonFilterChange={setCantonFilter}
         newsletterFilter={newsletterFilter}
         onNewsletterFilterChange={setNewsletterFilter}
+        salesFilter={salesFilter}
+        onSalesFilterChange={setSalesFilter}
         hasActiveFilters={hasActiveFilters}
         onClear={clearFilters}
       />
@@ -530,7 +558,7 @@ export function CustomersTable() {
         onOpenChange={(v) => { setMergeOpen(v); if (!v) setMergeSource(null); }}
         source={mergeSource}
         loading={merge.isPending}
-        onConfirm={({ sourceId, targetId }) => merge.mutate({ sourceId, targetId })}
+        onConfirm={({ sourceId, targetId, fieldOverrides }) => merge.mutate({ sourceId, targetId, fieldOverrides })}
       />
     </div>
   );

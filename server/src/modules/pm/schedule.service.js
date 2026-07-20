@@ -596,6 +596,23 @@ class ScheduleService {
       })),
     };
 
+    // The document renderer has no schedule-specific layout, so render the plan
+    // as a rich-text body (Phasen + Meilensteine) that the BodyRenderer draws.
+    const STATUS_DE = {
+      PLANNED: 'Geplant', IN_PROGRESS: 'In Arbeit', COMPLETED: 'Abgeschlossen',
+      CANCELLED: 'Abgebrochen', WAIVED: 'Verzichtet',
+    };
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const isoToCh = (s) => (s ? s.split('-').reverse().join('.') : '');
+    const phaseLines = templateData.phases.map((p) => `<b>${esc(p.name)}</b> — ${isoToCh(p.startDate)} – ${isoToCh(p.endDate)} · ${STATUS_DE[p.status] || p.status}`);
+    const msLines = templateData.milestones.map((m) => `<b>${esc(m.name)}</b> — ${isoToCh(m.date)} · ${STATUS_DE[m.status] || m.status}`);
+    templateData.introduction = [
+      '<b>Phasen</b>',
+      phaseLines.length ? phaseLines.join('<br>') : '—',
+      '<br><b>Meilensteine</b>',
+      msLines.length ? msLines.join('<br>') : '—',
+    ].join('<br>');
+
     const documentGenerationService = (await import('../doctpl/documentGeneration.service.js')).default;
     const generatedDoc = await documentGenerationService.generate({
       templateType: 'project_schedule',

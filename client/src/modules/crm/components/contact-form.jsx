@@ -75,6 +75,9 @@ export function ContactForm({
   }, [defaultValues, reset, open]);
 
   const isPrimary = useWatch({ control, name: 'isPrimary' });
+  const watchedFunctionTitle = useWatch({ control, name: 'functionTitle' });
+  const watchedSiteId = useWatch({ control, name: 'siteId' });
+  const isPresetFunction = FUNCTION_PRESETS.some((p) => p.value === watchedFunctionTitle);
 
   const submit = async (data) => {
     const cleaned = {
@@ -148,7 +151,7 @@ export function ContactForm({
             <div className="grid grid-cols-2 gap-4">
               <DarkField label={t('crm.contacts.functionTitle', 'Funktion / Rolle')} error={errors.functionTitle}>
                 <Select
-                  value={useWatch({ control, name: 'functionTitle' }) || '_custom'}
+                  value={isPresetFunction ? watchedFunctionTitle : '_custom'}
                   onValueChange={(v) => setValue('functionTitle', v === '_custom' ? '' : v, { shouldDirty: true })}
                 >
                   <SelectTrigger className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-violet-500/50 focus:ring-violet-500/20">
@@ -161,7 +164,7 @@ export function ContactForm({
                     <SelectItem value="_custom">{t('crm.contacts.customFunction', 'Andere...')}</SelectItem>
                   </SelectContent>
                 </Select>
-                {(!useWatch({ control, name: 'functionTitle' }) || !FUNCTION_PRESETS.some((p) => p.value === useWatch({ control, name: 'functionTitle' }))) && (
+                {!isPresetFunction && (
                   <Input
                     {...register('functionTitle')}
                     placeholder={t('crm.contacts.functionPlaceholder', 'z.B. Hausverwaltung')}
@@ -172,7 +175,7 @@ export function ContactForm({
               {sites.length > 0 && (
                 <DarkField label={t('crm.contacts.site', 'Objekt')}>
                   <Select
-                    value={useWatch({ control, name: 'siteId' }) || 'none'}
+                    value={watchedSiteId || 'none'}
                     onValueChange={(v) => setValue('siteId', v === 'none' ? '' : v, { shouldDirty: true })}
                   >
                     <SelectTrigger className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-violet-500/50 focus:ring-violet-500/20">

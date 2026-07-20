@@ -145,7 +145,9 @@ export function useQopCustomerSearch(query) {
   return useQuery({
     queryKey: ['qop', 'references', 'customers', query],
     queryFn: () => referenceService.searchCustomers(query),
-    enabled: query.length >= 2,
+    // Always enabled so the dropdown shows suggestions before the user types
+    // (empty query -> default list); typing then filters server-side.
+    enabled: true,
     select: (r) => normalizeReferenceItems(r.data),
   });
 }

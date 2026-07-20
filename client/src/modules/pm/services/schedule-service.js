@@ -74,4 +74,13 @@ export const scheduleService = {
     });
     return res.data;
   },
+
+  // Materialize the Bauplan into deploy planning (target: 'einsatzplanung' |
+  // 'grobplanung'); allocationPercent is an optional Grobplanung override.
+  async transferSchedule(projectId, { target, allocationPercent } = {}) {
+    const body = { target };
+    if (allocationPercent) body.allocationPercent = allocationPercent;
+    const res = await apiClient.post(ENDPOINTS.PM.SCHEDULE_TRANSFER(projectId), body);
+    return res?.data?.data || res?.data;
+  },
 };

@@ -220,6 +220,7 @@ export const ENDPOINTS = Object.freeze({
     CONFIRMATIONS: (id, entryId) => `/pm/projects/${id}/schedule/entries/${entryId}/confirmations`,
     CONFIRMATION_BY_ID: (id, entryId, confId) => `/pm/projects/${id}/schedule/entries/${entryId}/confirmations/${confId}`,
     SCHEDULE_EXPORT: (id) => `/pm/projects/${id}/schedule/export`,
+    SCHEDULE_TRANSFER: (id) => `/pm/projects/${id}/schedule/transfer`,
     DOCUMENTS: (id) => `/pm/projects/${id}/documents`,
     DOCUMENTS_PREVIEW: (id) => `/pm/projects/${id}/documents/preview`,
     DOCUMENT_BY_ID: (id, docId) => `/pm/projects/${id}/documents/${docId}`,

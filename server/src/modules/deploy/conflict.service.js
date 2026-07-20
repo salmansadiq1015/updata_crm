@@ -39,20 +39,6 @@ function formatDate(date) {
 /**
  * Get all calendar dates covered by a datetime range.
  */
-function getDatesBetween(start, end) {
-  const dates = [];
-  const current = new Date(start);
-  current.setHours(0, 0, 0, 0);
-  const endDate = new Date(end);
-  endDate.setHours(0, 0, 0, 0);
-
-  while (current <= endDate) {
-    dates.push(new Date(current));
-    current.setDate(current.getDate() + 1);
-  }
-  return dates;
-}
-
 class ConflictService {
   /**
    * Detect all conflicts for a given employee and time window.
@@ -123,18 +109,19 @@ class ConflictService {
       });
     }
 
-    // 2. ABSENCE (HARD)
+    // 2. ABSENCE (HARD) — single range query over the whole span instead of one
+    // query per day (the per-day loop was O(days) sequential round-trips, which
+    // made multi-day assignments — e.g. Bauplan phases — slow enough to time out).
     const { default: availabilityRepository } = await import('./availability.repository.js');
-    const dates = getDatesBetween(start, end);
-    for (const date of dates) {
-      const absences = await availabilityRepository.findAbsences(employeeId, date, date);
-      for (const absence of absences) {
-        conflicts.push({
-          conflictType: 'ABSENCE',
-          severity: 'HARD',
-          description: `Employee on ${absence.availabilityType} on ${formatDate(absence.date)}`,
-        });
-      }
+    const absenceFrom = new Date(start); absenceFrom.setHours(0, 0, 0, 0);
+    const absenceTo = new Date(end); absenceTo.setHours(23, 59, 59, 999);
+    const absences = await availabilityRepository.findAbsences(employeeId, absenceFrom, absenceTo);
+    for (const absence of absences) {
+      conflicts.push({
+        conflictType: 'ABSENCE',
+        severity: 'HARD',
+        description: `Employee on ${absence.availabilityType} on ${formatDate(absence.date)}`,
+      });
     }
 
     // 3. WORKING_HOURS (SOFT)

@@ -399,14 +399,14 @@ const REVIEW_SECTIONS = [
   { key: 'budget', stepIndex: 3, icon: Wallet, labelEn: 'Budget & Notes', labelDe: 'Budget & Notizen' },
 ];
 
-function ReviewRow({ label, value, isChanged }) {
+function ReviewRow({ label, value, isChanged, wrap }) {
   return (
-    <div className="flex items-start justify-between py-1.5">
-      <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+    <div className="flex items-start justify-between py-1.5 gap-4">
+      <span className="text-xs text-muted-foreground flex items-center gap-1.5 shrink-0">
         {label}
         {isChanged && <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />}
       </span>
-      <span className="text-sm font-medium text-right max-w-[60%] truncate">
+      <span className={cn('text-sm font-medium text-right', wrap ? 'break-words whitespace-pre-wrap' : 'max-w-[60%] truncate')}>
         {value || <span className="text-muted-foreground/50">—</span>}
       </span>
     </div>
@@ -423,7 +423,20 @@ export function Step5Review({ form, language, t, onGoToStep, resolvers, initialV
 
   const formatDate = (d) => {
     if (!d) return null;
-    try { return new Date(d).toLocaleDateString(language === 'de' ? 'de-CH' : 'en-GB'); } catch { return null; }
+    try {
+      const dt = new Date(d);
+      const dd = String(dt.getDate()).padStart(2, '0');
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const yyyy = dt.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
+    } catch { return null; }
+  };
+
+  const formatBudget = (amount, currency) => {
+    if (!amount && amount !== 0) return null;
+    const num = Number(amount);
+    const formatted = num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+    return `${formatted} ${currency || 'CHF'}`;
   };
 
   const isChanged = (field) => {
@@ -439,7 +452,7 @@ export function Step5Review({ form, language, t, onGoToStep, resolvers, initialV
       rows: [
         { label: t('pm.projectName', 'Project Name'), value: values.name, changed: isChanged('name') },
         { label: t('pm.projectType', 'Project Type'), value: typeLabel, changed: isChanged('projectType') },
-        { label: t('pm.description', 'Description'), value: htmlToPlainText(values.description), changed: isChanged('description') },
+        { label: t('pm.description', 'Description'), value: htmlToPlainText(values.description), changed: isChanged('description'), wrap: true },
       ],
     },
     {
@@ -460,8 +473,8 @@ export function Step5Review({ form, language, t, onGoToStep, resolvers, initialV
     {
       ...REVIEW_SECTIONS[3],
       rows: [
-        { label: t('pm.budget', 'Budget'), value: values.estimatedBudget ? `${values.estimatedBudget} ${values.currency || 'CHF'}` : null, changed: isChanged('estimatedBudget') || isChanged('currency') },
-        { label: t('pm.notes', 'Notes'), value: htmlToPlainText(values.notes), changed: isChanged('notes') },
+        { label: t('pm.budget', 'Budget'), value: formatBudget(values.estimatedBudget, values.currency), changed: isChanged('estimatedBudget') || isChanged('currency') },
+        { label: t('pm.notes', 'Notes'), value: htmlToPlainText(values.notes), changed: isChanged('notes'), wrap: true },
       ],
     },
   ];
@@ -490,7 +503,7 @@ export function Step5Review({ form, language, t, onGoToStep, resolvers, initialV
             </div>
             <div className="divide-y divide-border/50">
               {section.rows.map((row) => (
-                <ReviewRow key={row.label} label={row.label} value={row.value} isChanged={row.changed} />
+                <ReviewRow key={row.label} label={row.label} value={row.value} isChanged={row.changed} wrap={row.wrap} />
               ))}
             </div>
           </div>

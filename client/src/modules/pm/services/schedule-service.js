@@ -69,10 +69,19 @@ export const scheduleService = {
       downloadBlob(data, filename, 'text/csv;charset=utf-8');
       return { filename };
     }
+    // PDF is generated + stored server-side (for the document archive) and the
+    // endpoint returns its metadata — unlike iCal/Excel which stream a blob. So
+    // resolve the generated document's download URL and open it for the user.
     const res = await apiClient.get(ENDPOINTS.PM.SCHEDULE_EXPORT(projectId), {
       params: { format: 'pdf' },
     });
-    return res.data;
+    const generatedDoc = res?.data || {};
+    const documentId = generatedDoc.documentId || generatedDoc._id;
+    if (documentId) {
+      const url = await this.getGeneratedDocumentDownloadUrl(documentId);
+      if (url && typeof window !== 'undefined') window.open(url, '_blank', 'noopener');
+    }
+    return { filename: generatedDoc.fileName };
   },
 
   // Materialize the Bauplan into deploy planning (target: 'einsatzplanung' |

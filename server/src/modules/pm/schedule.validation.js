@@ -95,7 +95,10 @@ export const exportScheduleSchema = {
 export const transferScheduleSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
-    target: Joi.string().valid('einsatzplanung').default('einsatzplanung'),
+    target: Joi.string().valid('einsatzplanung', 'grobplanung').default('einsatzplanung'),
+    // Grobplanung only: manual override of the weekly allocation; omitted =
+    // derive it from each phase's working-day coverage of the week.
+    allocationPercent: Joi.number().valid(25, 50, 75, 100),
   }),
 };
 

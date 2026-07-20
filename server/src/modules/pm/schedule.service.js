@@ -10,6 +10,24 @@ import logger from '../../shared/logger/index.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 
+// ISO-8601 calendar week + week-year for a date (Grobplanung transfer).
+function isoWeekOf(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;       // Mon=0 … Sun=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);    // move to the Thursday of this week
+  const calendarYear = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(calendarYear, 0, 1));
+  const calendarWeek = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return { calendarYear, calendarWeek };
+}
+
+// Grobplanung stores discrete allocation steps (25/50/75/100). Map a raw
+// duration-derived percentage to the nearest allowed step; 0 → skip.
+function snapAllocationPercent(raw) {
+  if (raw <= 0) return 0;
+  return [25, 50, 75, 100].reduce((best, o) => (Math.abs(o - raw) < Math.abs(best - raw) ? o : best), 25);
+}
+
 class ScheduleService {
   async getSchedule(projectId) {
     const cacheKey = `pm:schedule:project:${projectId}`;
@@ -664,6 +682,76 @@ class ScheduleService {
       conflictCount: conflicts.length,
       createdIds,
       conflicts,
+    };
+  }
+
+  /**
+   * Transfer the project's Bauplan into the Grobplanung (weekly coarse
+   * allocations). Each internal-team PHASE is spread over the ISO weeks it
+   * spans; the weekly allocationPercent is derived from the phase's working-day
+   * coverage of that week (Q5) unless an explicit percent is supplied (manual
+   * override from the dialog). Reuses coarseService.create, which enforces the
+   * ≤100 %/week cap (Ueberzuteilung) and rejects duplicates — so a re-run
+   * skips weeks already transferred, and over-allocated weeks are reported.
+   */
+  async transferToGrobplanung(projectId, { allocationPercent = null } = {}, userId, meta = {}) {
+    const entries = await scheduleRepository.findByProjectId(projectId);
+    const phases = entries.filter((e) => (
+      e.entryType === 'PHASE'
+      && e.responsibleType === 'INTERNAL_TEAM'
+      && e.responsibleTeamId
+      && e.startDate && e.endDate
+    ));
+
+    const coarseService = (await import('../deploy/coarse.service.js')).default;
+    let createdCount = 0;
+    let skippedCount = 0;
+    const overAllocated = [];
+
+    for (const phase of phases) {
+      const employeeId = (phase.responsibleTeamId && typeof phase.responsibleTeamId === 'object')
+        ? phase.responsibleTeamId._id
+        : phase.responsibleTeamId;
+
+      // Count the phase's working days (Mon–Fri) per ISO week it covers.
+      const workingDaysByWeek = new Map();
+      const cursor = new Date(phase.startDate); cursor.setHours(12, 0, 0, 0);
+      const end = new Date(phase.endDate); end.setHours(12, 0, 0, 0);
+      while (cursor <= end) {
+        const dow = cursor.getDay();
+        if (dow !== 0 && dow !== 6) {
+          const { calendarYear, calendarWeek } = isoWeekOf(cursor);
+          const key = `${calendarYear}:${calendarWeek}`;
+          workingDaysByWeek.set(key, (workingDaysByWeek.get(key) || 0) + 1);
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      for (const [key, workingDays] of workingDaysByWeek) {
+        const [calendarYear, calendarWeek] = key.split(':').map(Number);
+        const percent = allocationPercent || snapAllocationPercent(Math.round((workingDays / 5) * 100));
+        if (!percent) continue;
+        try {
+          await coarseService.create({ employeeId, projectId, calendarYear, calendarWeek, allocationPercent: percent }, userId, meta);
+          createdCount += 1;
+        } catch (err) {
+          if (err instanceof ConflictError) {
+            if (/already exists/i.test(err.message)) skippedCount += 1;
+            else overAllocated.push({ phase: phase.name, week: `${calendarYear}-KW${calendarWeek}` });
+          } else {
+            throw err;
+          }
+        }
+      }
+    }
+
+    return {
+      target: 'grobplanung',
+      phaseCount: phases.length,
+      createdCount,
+      skippedCount,
+      overAllocatedCount: overAllocated.length,
+      overAllocated,
     };
   }
 

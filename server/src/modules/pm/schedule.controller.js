@@ -93,8 +93,10 @@ class ScheduleController {
       const body = req._validatedBody || req.body || {};
       const target = body.target || 'einsatzplanung';
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      const result = await scheduleService.transferToEinsatzplanung(req.params.id, req.user._id, meta);
-      return res.success({ data: result, message: 'Schedule transferred to Einsatzplanung' });
+      const result = target === 'grobplanung'
+        ? await scheduleService.transferToGrobplanung(req.params.id, { allocationPercent: body.allocationPercent }, req.user._id, meta)
+        : await scheduleService.transferToEinsatzplanung(req.params.id, req.user._id, meta);
+      return res.success({ data: result, message: `Schedule transferred to ${target}` });
     } catch (err) { next(err); }
   }
 }

@@ -5,6 +5,7 @@ import siteRoutes, { customerSitesRouter } from './site.routes.js';
 import installationRoutes, { siteInstallationsRouter } from './installation.routes.js';
 import sparePartRoutes, { installationSparePartsRouter } from './sparePart.routes.js';
 import maintenanceRoutes from './maintenance.routes.js';
+import assetMaintenanceRoutes from './assetMaintenance.routes.js';
 import noteRoutes from './note.routes.js';
 import imageRoutes from './image.routes.js';
 import newsletterRoutes from './newsletter/newsletter.routes.js';
@@ -65,6 +66,7 @@ router.use('/purchase-orders', purchaseOrderRoutes);
 router.use('/procurement', procurementRoutes);
 
 // Maintenance standalone routes (dashboard, due, overdue, update, delete)
+router.use('/asset-maintenance', assetMaintenanceRoutes);
 router.use('/maintenance', maintenanceRoutes);
 
 // Note standalone routes (update, delete)

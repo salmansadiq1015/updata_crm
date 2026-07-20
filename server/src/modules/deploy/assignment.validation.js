@@ -51,6 +51,8 @@ export const createAssignmentSchema = {
     recommendedCertifications: capabilityList,
     customerId: objectId.allow(null),
     siteId: objectId.allow(null),
+    installationId: objectId.allow(null),
+    maintenanceIntervalId: objectId.allow(null),
     colorCode: optionalText(7),
     isCustomerAppointment: Joi.boolean(),
     appointment: Joi.when('isCustomerAppointment', {
@@ -92,6 +94,8 @@ export const updateAssignmentSchema = {
     recommendedCertifications: capabilityList,
     customerId: objectId.allow(null),
     siteId: objectId.allow(null),
+    installationId: objectId.allow(null),
+    maintenanceIntervalId: objectId.allow(null),
     colorCode: Joi.string().max(7).allow('', null),
     isCustomerAppointment: Joi.boolean(),
     appointment: appointmentSchema.optional(),

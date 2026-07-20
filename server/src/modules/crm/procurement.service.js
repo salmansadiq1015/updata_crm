@@ -83,9 +83,14 @@ function deliveryNoteText(file) {
   }
   const asUtf8 = file?.buffer?.toString('utf8') || '';
   const printableRatio = asUtf8.length
-    ? asUtf8.replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]/g, '').length / asUtf8.length
+    ? Array.from(asUtf8).filter(isPrintableTextChar).length / asUtf8.length
     : 0;
   return printableRatio > 0.85 ? asUtf8 : '';
+}
+
+function isPrintableTextChar(char) {
+  const code = char.charCodeAt(0);
+  return code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 126) || code >= 160;
 }
 
 function parseDelimitedLine(line) {

@@ -1,7 +1,5 @@
-'use client';
-
-import { InstallationsTable } from '@/modules/crm/components/installations-table';
+import { redirect } from 'next/navigation';
 
 export default function CrmInstallationsPage() {
-  return <InstallationsTable />;
+  redirect('/crm/asset-maintenance');
 }

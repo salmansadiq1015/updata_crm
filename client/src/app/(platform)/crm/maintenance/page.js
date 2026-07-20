@@ -1,7 +1,5 @@
-'use client';
-
-import { MaintenanceDashboard } from '@/modules/crm/components/maintenance-dashboard';
+import { redirect } from 'next/navigation';
 
 export default function MaintenancePage() {
-  return <MaintenanceDashboard />;
+  redirect('/crm/asset-maintenance');
 }

@@ -12,11 +12,21 @@ import EVENT_TYPES from '../../src/shared/events/eventTypes.js';
 import eventBus from '../../src/shared/events/EventBus.js';
 
 const createNotification = jest.fn(async (data) => ({ _id: 'notification-1', ...data }));
+const logger = {
+  debug: jest.fn(),
+  error: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+};
 
 jest.unstable_mockModule('../../src/modules/notifications/notification.service.js', () => ({
   default: {
     create: createNotification,
   },
+}));
+
+jest.unstable_mockModule('../../src/shared/logger/index.js', () => ({
+  default: logger,
 }));
 
 const { registerNotificationsEvents } = await import('../../src/modules/notifications/notifications.events.js');
@@ -30,7 +40,9 @@ function flushEventHandlers() {
 describe('maintenance notification events', () => {
   beforeEach(() => {
     eventBus.removeAllListeners();
-    createNotification.mockClear();
+    createNotification.mockReset();
+    createNotification.mockImplementation(async (data) => ({ _id: 'notification-1', ...data }));
+    Object.values(logger).forEach((mock) => mock.mockClear());
   });
 
   test('dispatches overdue maintenance notifications to assigned recipients', async () => {
@@ -112,6 +124,75 @@ describe('maintenance notification events', () => {
       }),
       null,
       { ipAddress: 'internal', userAgent: 'event-handler' },
+    );
+  });
+
+  test('skips duplicate task overdue notifications without error logging', async () => {
+    registerNotificationsEvents();
+
+    const duplicateError = new Error('Duplicate notification (idempotency key already exists)');
+    duplicateError.code = 'NOTIF_DUPLICATE';
+    duplicateError.statusCode = 409;
+    createNotification.mockRejectedValueOnce(duplicateError);
+
+    eventBus.publish(EVENT_TYPES.TASK_OVERDUE, {
+      taskId: 'task-1',
+      taskTitle: 'Replace pump',
+      assigneeId: 'user-1',
+      dueDate: '2026-07-16',
+    }, { source: 'jobs:task-overdue-check' });
+
+    await flushEventHandlers();
+
+    expect(createNotification).toHaveBeenCalledTimes(1);
+    expect(createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'task_overdue',
+        sourceEvent: 'TASK_OVERDUE',
+        sourceEntityType: 'Task',
+        sourceEntityId: 'task-1',
+        idempotencyKey: expect.stringMatching(/^task-overdue-task-1-\d{4}-\d{2}-\d{2}$/),
+      }),
+      null,
+      { ipAddress: 'internal', userAgent: 'event-handler' },
+    );
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledWith(
+      'Skipped duplicate notification dispatch for TASK_OVERDUE',
+      expect.objectContaining({
+        action: 'event.dispatch.duplicate',
+        sourceEvent: 'TASK_OVERDUE',
+        idempotencyKey: expect.stringMatching(/^task-overdue-task-1-\d{4}-\d{2}-\d{2}$/),
+      }),
+    );
+  });
+
+  test('logs task overdue notification dispatch failures when the error is not a duplicate', async () => {
+    registerNotificationsEvents();
+
+    createNotification.mockRejectedValueOnce(new Error('queue unavailable'));
+
+    eventBus.publish(EVENT_TYPES.TASK_OVERDUE, {
+      taskId: 'task-2',
+      taskTitle: 'Calibrate valve',
+      assigneeId: 'user-1',
+      dueDate: '2026-07-16',
+    }, { source: 'jobs:task-overdue-check' });
+
+    await flushEventHandlers();
+
+    expect(logger.info).not.toHaveBeenCalledWith(
+      'Skipped duplicate notification dispatch for TASK_OVERDUE',
+      expect.any(Object),
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      'Failed to dispatch notification for TASK_OVERDUE',
+      expect.objectContaining({
+        action: 'event.dispatch',
+        sourceEvent: 'TASK_OVERDUE',
+        idempotencyKey: expect.stringMatching(/^task-overdue-task-2-\d{4}-\d{2}-\d{2}$/),
+        error: expect.objectContaining({ message: 'queue unavailable' }),
+      }),
     );
   });
 });

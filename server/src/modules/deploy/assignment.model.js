@@ -124,6 +124,16 @@ const assignmentSchema = new mongoose.Schema(
       ref: 'Site',
       default: null,
     },
+    installationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Installation',
+      default: null,
+    },
+    maintenanceIntervalId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'MaintenanceInterval',
+      default: null,
+    },
     recurrenceGroupId: {
       type: mongoose.Schema.Types.ObjectId,
       default: null,
@@ -171,6 +181,8 @@ assignmentSchema.index({ employeeId: 1, startDatetime: 1 }, { sparse: true });
 assignmentSchema.index({ assignmentTargetType: 1, assignmentTargetId: 1, startDatetime: 1 });
 assignmentSchema.index({ orderId: 1 });
 assignmentSchema.index({ projectId: 1 });
+assignmentSchema.index({ installationId: 1, startDatetime: 1 }, { sparse: true });
+assignmentSchema.index({ maintenanceIntervalId: 1 }, { sparse: true });
 assignmentSchema.index({ startDatetime: 1 });
 assignmentSchema.index({ recurrenceGroupId: 1 });
 assignmentSchema.index({ isDeleted: 1, status: 1 });

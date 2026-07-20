@@ -28,9 +28,11 @@ import { useQuery, keepPreviousData } from '@tanstack/react-query';
  *   button works against the already-fetched page history.
  */
 export function useCursorList({ queryKey, queryFn, params = {}, initialSize = 25, refetchInterval }) {
-  const [cursorStack, setCursorStack] = useState([null]); // null = first page
+  const paramsKey = useMemo(() => JSON.stringify(params), [params]);
+  const [cursorState, setCursorState] = useState({ paramsKey, stack: [null] }); // null = first page
   const [pageSize, setPageSize] = useState(initialSize);
 
+  const cursorStack = cursorState.paramsKey === paramsKey ? cursorState.stack : [null];
   const currentCursor = cursorStack[cursorStack.length - 1];
 
   const merged = useMemo(
@@ -38,7 +40,7 @@ export function useCursorList({ queryKey, queryFn, params = {}, initialSize = 25
     [currentCursor, pageSize, params],
   );
 
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isFetching, isError, error, refetch, isPlaceholderData } = useQuery({
     queryKey: queryKey(merged),
     queryFn: () => queryFn(merged),
     placeholderData: keepPreviousData,
@@ -47,23 +49,31 @@ export function useCursorList({ queryKey, queryFn, params = {}, initialSize = 25
 
   const items = data?.data || [];
   const nextCursor = data?.pagination?.nextCursor || data?.pagination?.cursor || null;
-  const hasMore = !!(data?.pagination?.hasNext ?? data?.pagination?.hasMore);
+  const hasMore = !isPlaceholderData && !!(data?.pagination?.hasNext ?? data?.pagination?.hasMore);
 
   const onNext = useCallback(() => {
     if (!hasMore || !nextCursor) return;
-    setCursorStack((prev) => [...prev, nextCursor]);
-  }, [hasMore, nextCursor]);
+    setCursorState((prev) => ({
+      paramsKey,
+      stack: prev.paramsKey === paramsKey ? [...prev.stack, nextCursor] : [null, nextCursor],
+    }));
+  }, [hasMore, nextCursor, paramsKey]);
 
   const onPrev = useCallback(() => {
-    setCursorStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
-  }, []);
+    setCursorState((prev) => ({
+      paramsKey,
+      stack: prev.paramsKey === paramsKey && prev.stack.length > 1 ? prev.stack.slice(0, -1) : [null],
+    }));
+  }, [paramsKey]);
 
-  const reset = useCallback(() => setCursorStack([null]), []);
+  const reset = useCallback(() => {
+    setCursorState({ paramsKey, stack: [null] });
+  }, [paramsKey]);
 
   const handleSetPageSize = useCallback((size) => {
     setPageSize(size);
-    setCursorStack([null]);
-  }, []);
+    setCursorState({ paramsKey, stack: [null] });
+  }, [paramsKey]);
 
   return {
     items,
@@ -72,6 +82,8 @@ export function useCursorList({ queryKey, queryFn, params = {}, initialSize = 25
     hasNext: hasMore,
     hasPrev: cursorStack.length > 1,
     isFetching,
+    isError,
+    error,
     onNext,
     onPrev,
     reset,

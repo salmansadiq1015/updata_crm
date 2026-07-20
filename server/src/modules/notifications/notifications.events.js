@@ -2,9 +2,23 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import queueManager from '../../shared/queue/QueueManager.js';
 import logger from '../../shared/logger/index.js';
+import ERROR_CODES from '../../shared/errors/errorCodes.js';
 
 function uniqueRecipientIds(values = []) {
   return [...new Set(values.map((value) => String(value || '')).filter(Boolean))];
+}
+
+function isDuplicateNotificationError(err, idempotencyKey) {
+  if (!err) return false;
+  if (err.code === ERROR_CODES.NOTIF_DUPLICATE) return true;
+
+  return Boolean(idempotencyKey)
+    && err.code === 11000
+    && (
+      err.keyPattern?.idempotencyKey
+      || err.keyValue?.idempotencyKey
+      || String(err.message || '').includes('idempotencyKey')
+    );
 }
 
 /**
@@ -29,10 +43,23 @@ export function registerNotificationsEvents() {
         idempotencyKey: notifConfig.idempotencyKey || null,
       }, null, { ipAddress: 'internal', userAgent: 'event-handler' });
     } catch (err) {
+      if (isDuplicateNotificationError(err, notifConfig.idempotencyKey)) {
+        logger.info(`Skipped duplicate notification dispatch for ${notifConfig.sourceEvent}`, {
+          module: 'notifications',
+          action: 'event.dispatch.duplicate',
+          sourceEvent: notifConfig.sourceEvent,
+          sourceEntityType: notifConfig.sourceEntityType || null,
+          sourceEntityId: notifConfig.sourceEntityId || null,
+          idempotencyKey: notifConfig.idempotencyKey || null,
+        });
+        return;
+      }
+
       logger.error(`Failed to dispatch notification for ${notifConfig.sourceEvent}`, {
         module: 'notifications',
         action: 'event.dispatch',
         sourceEvent: notifConfig.sourceEvent,
+        idempotencyKey: notifConfig.idempotencyKey || null,
         error: { message: err.message, stack: err.stack },
       });
     }

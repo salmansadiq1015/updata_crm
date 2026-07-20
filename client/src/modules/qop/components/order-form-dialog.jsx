@@ -148,7 +148,10 @@ export function OrderFormDialog({ open, onClose, order = null }) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto border-border/70 bg-popover/95 p-0 shadow-2xl supports-backdrop-filter:backdrop-blur-xl">
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        className="max-w-5xl max-h-[90vh] overflow-y-auto border-border/70 bg-popover/95 p-0 shadow-2xl supports-backdrop-filter:backdrop-blur-xl"
+      >
         <DialogHeader className="border-b border-border/70 px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary">

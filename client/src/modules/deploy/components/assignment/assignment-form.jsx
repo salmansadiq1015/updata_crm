@@ -196,6 +196,10 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
         projectId: normalizeReferenceId(defaultValues.projectId),
         customerId: normalizeReferenceId(defaultValues.customerId),
         siteId: normalizeReferenceId(defaultValues.siteId),
+        // Keep text inputs as controlled strings — the API returns null for empty
+        // optional fields, which would otherwise fail validation / warn in React.
+        title: defaultValues.title || '',
+        instructions: defaultValues.instructions || '',
         startDatetime: defaultValues.startDatetime?.slice(0, 16) || '',
         endDatetime: defaultValues.endDatetime?.slice(0, 16) || '',
         requiredSkills: joinList(defaultValues.requiredSkills),

@@ -166,6 +166,18 @@ function normalizeReferenceId(value) {
   return value?._id || value?.id || value || '';
 }
 
+// Format a stored ISO datetime for the date / datetime-local input, in LOCAL
+// time. A raw ISO slice would show UTC and — for full-day, whose input is
+// type="date" and expects YYYY-MM-DD — produce an invalid value (empty field).
+function toDateInputValue(iso, isFullDay) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return isFullDay ? date : `${date}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
@@ -200,8 +212,8 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
         // optional fields, which would otherwise fail validation / warn in React.
         title: defaultValues.title || '',
         instructions: defaultValues.instructions || '',
-        startDatetime: defaultValues.startDatetime?.slice(0, 16) || '',
-        endDatetime: defaultValues.endDatetime?.slice(0, 16) || '',
+        startDatetime: toDateInputValue(defaultValues.startDatetime, defaultValues.isFullDay),
+        endDatetime: toDateInputValue(defaultValues.endDatetime, defaultValues.isFullDay),
         requiredSkills: joinList(defaultValues.requiredSkills),
         recommendedSkills: joinList(defaultValues.recommendedSkills),
         requiredCertifications: joinList(defaultValues.requiredCertifications),

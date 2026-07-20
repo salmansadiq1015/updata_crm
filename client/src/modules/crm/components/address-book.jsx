@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,10 @@ import {
   ArrowRight,
   BookOpen,
   Building2,
+  Download,
+  FileText,
+  LayoutGrid,
+  List,
   LocateFixed,
   Mail,
   MapPin,
@@ -56,8 +61,101 @@ const EMPTY_SUMMARY = Object.freeze({
   withCoordinates: 0,
 });
 
+function exportCsv(entries, t) {
+  const sep = ';';
+  const esc = (v) => {
+    if (v == null) return '';
+    const s = String(v).replace(/"/g, '""');
+    return /[";,\n]/.test(s) ? `"${s}"` : s;
+  };
+  const header = [
+    t('crm.addressBook.colName', 'Name'),
+    t('crm.addressBook.colCustomer', 'Kunde'),
+    t('crm.addressBook.colCustomerNr', 'KundenNr'),
+    t('crm.addressBook.colType', 'Typ'),
+    t('crm.addressBook.colAddressType', 'Adresstyp'),
+    t('crm.addressBook.colAddress', 'Adresse'),
+    t('crm.addressBook.colContact', 'Kontakt'),
+    t('crm.addressBook.colPhone', 'Telefon'),
+    t('crm.addressBook.colEmail', 'E-Mail'),
+    t('crm.addressBook.colGps', 'GPS'),
+  ].map(esc).join(sep);
+  const rows = entries.map((e) => [
+    e.site?.name || e.customer?.name || '',
+    e.customer?.name || '',
+    e.customer?.customerNumber || '',
+    e.customer?.type === 'business' ? 'Firma' : 'Privat',
+    e.addressType || '',
+    e.address?.formatted || '',
+    formatContactName(e.primaryContact),
+    getPrimaryPhone(e),
+    getPrimaryEmail(e),
+    e.coordinates ? `${e.coordinates.latitude},${e.coordinates.longitude}` : '',
+  ].map(esc).join(sep)).join('\n');
+
+  const blob = new Blob([`\uFEFF${header}\n${rows}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `adressbuch-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportPdf(entries, t) {
+  const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const tableRows = entries.map((e) => `
+    <tr>
+      <td>${esc(e.site?.name || e.customer?.name)}</td>
+      <td>${esc(e.customer?.name)}</td>
+      <td>${esc(e.customer?.customerNumber)}</td>
+      <td>${esc(e.addressType)}</td>
+      <td>${esc(e.address?.formatted)}</td>
+      <td>${esc(formatContactName(e.primaryContact))}</td>
+      <td>${esc(getPrimaryPhone(e))}</td>
+      <td>${esc(getPrimaryEmail(e))}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${t('crm.addressBook.title', 'Adressbuch')}</title>
+    <style>
+      body{font-family:system-ui,sans-serif;font-size:11px;margin:20px;color:#1a1a1a}
+      h1{font-size:18px;margin-bottom:4px}
+      p.sub{color:#666;font-size:12px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse}
+      th,td{border:1px solid #ddd;padding:5px 8px;text-align:left}
+      th{background:#f5f5f5;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+      tr:nth-child(even){background:#fafafa}
+      .footer{margin-top:16px;font-size:10px;color:#999}
+    </style></head><body>
+    <h1>${esc(t('crm.addressBook.title', 'Adressbuch'))}</h1>
+    <p class="sub">${entries.length} ${esc(t('crm.addressBook.entries', 'Eintraege'))} — ${new Date().toLocaleDateString('de-CH')}</p>
+    <table>
+      <thead><tr>
+        <th>${esc(t('crm.addressBook.colName', 'Name'))}</th>
+        <th>${esc(t('crm.addressBook.colCustomer', 'Kunde'))}</th>
+        <th>${esc(t('crm.addressBook.colCustomerNr', 'Nr.'))}</th>
+        <th>${esc(t('crm.addressBook.colAddressType', 'Typ'))}</th>
+        <th>${esc(t('crm.addressBook.colAddress', 'Adresse'))}</th>
+        <th>${esc(t('crm.addressBook.colContact', 'Kontakt'))}</th>
+        <th>${esc(t('crm.addressBook.colPhone', 'Telefon'))}</th>
+        <th>${esc(t('crm.addressBook.colEmail', 'E-Mail'))}</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+    <p class="footer">${esc(t('crm.addressBook.exportedAt', 'Exportiert am'))} ${new Date().toLocaleString('de-CH')}</p>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
 export default function AddressBook() {
   const { t } = useLanguage();
+  const [viewMode, setViewMode] = useState('card');
   const {
     entries,
     summary,
@@ -92,8 +190,14 @@ export default function AddressBook() {
         count={total}
       >
         <div className="flex items-center gap-2">
-          {/* Address book is a read-only rollup; contacts are created on the Kontakte
-              page (which has its own "+ Neuer Kontakt"). Client feedback #5. */}
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => exportCsv(entries, t)} disabled={entries.length === 0}>
+            <Download className="h-3.5 w-3.5" />
+            CSV
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={() => exportPdf(entries, t)} disabled={entries.length === 0}>
+            <FileText className="h-3.5 w-3.5" />
+            PDF
+          </Button>
           <Button asChild size="sm" className="gap-2">
             <Link href="/crm/contacts">
               <Plus className="h-3.5 w-3.5" />
@@ -120,6 +224,8 @@ export default function AddressBook() {
         setFilter={setFilter}
         resetFilters={resetFilters}
         hasActiveFilters={hasActiveFilters}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
         t={t}
       />
 
@@ -135,7 +241,7 @@ export default function AddressBook() {
           )}
         />
       ) : showInitialLoading ? (
-        <AddressBookSkeleton />
+        <AddressBookSkeleton viewMode={viewMode} />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={MapPin}
@@ -148,11 +254,15 @@ export default function AddressBook() {
         />
       ) : (
         <>
-          <div className="grid gap-3 xl:grid-cols-2">
-            {entries.map((entry) => (
-              <AddressEntryCard key={entry.id} entry={entry} t={t} />
-            ))}
-          </div>
+          {viewMode === 'card' ? (
+            <div className="grid gap-3 xl:grid-cols-2">
+              {entries.map((entry) => (
+                <AddressEntryCard key={entry.id} entry={entry} t={t} />
+              ))}
+            </div>
+          ) : (
+            <AddressListView entries={entries} t={t} />
+          )}
 
           <PaginationBar
             page={page}
@@ -224,10 +334,10 @@ function SummaryGrid({ summary, t }) {
   );
 }
 
-function AddressBookFilters({ filters, setFilter, resetFilters, hasActiveFilters, t }) {
+function AddressBookFilters({ filters, setFilter, resetFilters, hasActiveFilters, viewMode, setViewMode, t }) {
   return (
     <div className="rounded-lg border border-border bg-card p-3">
-      <div className="grid gap-2 lg:grid-cols-[minmax(220px,1fr)_180px_180px_150px_150px_auto]">
+      <div className="grid gap-2 lg:grid-cols-[minmax(220px,1fr)_180px_180px_150px_150px_auto_auto]">
         <label className="relative block">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -284,6 +394,27 @@ function AddressBookFilters({ filters, setFilter, resetFilters, hasActiveFilters
           <RefreshCw className="h-3.5 w-3.5" />
           {t('common.reset', 'Reset')}
         </Button>
+
+        <div className="flex items-center gap-0.5 rounded-lg border border-border/40 bg-muted/50 p-0.5">
+          <Button
+            variant={viewMode === 'card' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-7 w-7 rounded-md"
+            onClick={() => setViewMode('card')}
+            aria-label={t('crm.addressBook.viewCards', 'Kartenansicht')}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="icon"
+            className="h-7 w-7 rounded-md"
+            onClick={() => setViewMode('list')}
+            aria-label={t('crm.addressBook.viewList', 'Listenansicht')}
+          >
+            <List className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -473,6 +604,88 @@ function RelationChip({ chip }) {
   );
 }
 
+function AddressListView({ entries, t }) {
+  return (
+    <div className="rounded-xl border overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/40">
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">{t('crm.addressBook.colName', 'Name')}</th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">{t('crm.addressBook.colCustomer', 'Kunde')}</th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">{t('crm.addressBook.colAddressType', 'Typ')}</th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">{t('crm.addressBook.colAddress', 'Adresse')}</th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">{t('crm.addressBook.colContact', 'Kontakt')}</th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">{t('crm.addressBook.colPhone', 'Telefon')}</th>
+              <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">{t('crm.addressBook.colEmail', 'E-Mail')}</th>
+              <th className="w-[80px] px-3 py-2.5" />
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((entry) => {
+              const addressMeta = getAddressTypeMeta(entry, t);
+              const phone = getPrimaryPhone(entry);
+              const email = getPrimaryEmail(entry);
+              const mapUrl = buildMapUrl(entry);
+              const routes = buildEntryRoutes(entry);
+              return (
+                <tr key={entry.id} className="border-b last:border-b-0 transition-colors hover:bg-muted/30">
+                  <td className="px-3 py-2.5 font-medium max-w-[200px] truncate">
+                    <Link href={routes.site || routes.customer} className="hover:text-primary">
+                      {entry.site?.name || entry.customer?.name || '-'}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-2.5 text-muted-foreground max-w-[160px] truncate">
+                    {entry.customer?.name || '-'}
+                    {entry.customer?.customerNumber && (
+                      <span className="ml-1.5 text-xs text-muted-foreground/60">{entry.customer.customerNumber}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <Badge className={cn('h-5 px-1.5 text-[10px] ring-1', addressMeta.className)}>
+                      {addressMeta.label}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2.5 text-muted-foreground max-w-[220px] truncate">
+                    {entry.address?.formatted || '-'}
+                  </td>
+                  <td className="px-3 py-2.5 max-w-[150px] truncate">
+                    {formatContactName(entry.primaryContact) || '-'}
+                  </td>
+                  <td className="px-3 py-2.5 text-muted-foreground">
+                    {phone ? (
+                      <a href={`tel:${phone}`} className="hover:text-foreground">{phone}</a>
+                    ) : '-'}
+                  </td>
+                  <td className="px-3 py-2.5 text-muted-foreground max-w-[180px] truncate">
+                    {email ? (
+                      <a href={`mailto:${email}`} className="hover:text-foreground">{email}</a>
+                    ) : '-'}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1">
+                      {phone && (
+                        <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                          <a href={`tel:${phone}`}><Phone className="h-3 w-3" /></a>
+                        </Button>
+                      )}
+                      {mapUrl && (
+                        <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                          <a href={mapUrl} target="_blank" rel="noopener noreferrer"><MapPin className="h-3 w-3" /></a>
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function PaginationBar({ page, pageCount, isFetching, hasPrev, hasNext, setPagination, t }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
@@ -505,7 +718,24 @@ function PaginationBar({ page, pageCount, isFetching, hasPrev, hasNext, setPagin
   );
 }
 
-function AddressBookSkeleton() {
+function AddressBookSkeleton({ viewMode }) {
+  if (viewMode === 'list') {
+    return (
+      <div className="rounded-xl border overflow-hidden">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-4 border-b last:border-b-0 px-3 py-3">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-3 xl:grid-cols-2">
       {Array.from({ length: 6 }).map((_, index) => (

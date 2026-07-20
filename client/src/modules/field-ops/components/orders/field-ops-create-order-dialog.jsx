@@ -521,7 +521,10 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-3xl">
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-3xl"
+      >
         <DialogHeader className="shrink-0 border-b border-border px-6 pb-4 pt-5">
           <DialogTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">

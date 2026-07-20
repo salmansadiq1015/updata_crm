@@ -84,6 +84,11 @@ export const customerService = {
     return res;
   },
 
+  async getCleanupAudit() {
+    const res = await apiClient.get(ENDPOINTS.CRM.CUSTOMERS_CLEANUP_AUDIT);
+    return res.data;
+  },
+
   /**
    * Download customers CSV. Triggers a browser file download.
    * Returns { filename } so the caller can surface a success toast.

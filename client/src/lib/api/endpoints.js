@@ -57,6 +57,7 @@ export const ENDPOINTS = Object.freeze({
     CUSTOMERS_BULK_UPDATE: '/crm/customers/bulk-update',
     CUSTOMERS_BULK_DELETE: '/crm/customers/bulk-delete',
     CUSTOMERS_MERGE: '/crm/customers/merge',
+    CUSTOMERS_CLEANUP_AUDIT: '/crm/customers/cleanup-audit',
     // Contacts (Phase 2)
     CONTACTS: '/crm/contacts',
     CONTACTS_OVERVIEW: '/crm/contacts/overview',

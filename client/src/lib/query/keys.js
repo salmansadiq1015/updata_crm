@@ -135,6 +135,7 @@ export const queryKeys = {
       search: (q) => ['crm', 'customers', 'search', q],
       duplicates: (params) => ['crm', 'customers', 'duplicates', params],
       activity: (id, filters) => ['crm', 'customers', 'activity', id, filters],
+      cleanupAudit: () => ['crm', 'customers', 'cleanupAudit'],
     },
     contacts: {
       all: () => ['crm', 'contacts'],

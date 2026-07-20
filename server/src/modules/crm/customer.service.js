@@ -394,6 +394,10 @@ class CustomerService {
     };
   }
 
+  async cleanupAudit() {
+    return customerRepository.cleanupAudit();
+  }
+
   async _invalidateCustomerCache(id) {
     await cacheManager.del(`crm:customer:${id}`);
   }

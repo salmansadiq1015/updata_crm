@@ -316,6 +316,44 @@ class CustomerRepository {
   async countAll() {
     return Customer.countDocuments({ isDeleted: false });
   }
+
+  /**
+   * Return ALL customers (including soft-deleted) with activity counts for the
+   * data-cleanup admin view. Uses aggregation to $lookup related collections.
+   */
+  async cleanupAudit() {
+    return Customer.aggregate([
+      // Include ALL customers (even soft-deleted) for cleanup review
+      { $lookup: { from: 'sites', localField: '_id', foreignField: 'customerId', pipeline: [{ $match: { isDeleted: { $ne: true } } }, { $project: { _id: 1 } }], as: '_sites' } },
+      { $lookup: { from: 'contacts', localField: '_id', foreignField: 'customerId', pipeline: [{ $match: { isDeleted: { $ne: true } } }, { $project: { _id: 1 } }], as: '_contacts' } },
+      { $lookup: { from: 'quotations', localField: '_id', foreignField: 'customerId', pipeline: [{ $match: { isDeleted: { $ne: true } } }, { $project: { _id: 1, status: 1 } }], as: '_quotations' } },
+      { $lookup: { from: 'orders', localField: '_id', foreignField: 'customerId', pipeline: [{ $match: { isDeleted: { $ne: true } } }, { $project: { _id: 1 } }], as: '_orders' } },
+      { $lookup: { from: 'invoices', localField: '_id', foreignField: 'customerId', pipeline: [{ $match: { isDeleted: { $ne: true } } }, { $project: { _id: 1 } }], as: '_invoices' } },
+      {
+        $project: {
+          customerNumber: 1,
+          name: 1,
+          type: 1,
+          status: 1,
+          isDeleted: 1,
+          city: 1,
+          createdAt: 1,
+          sitesCount: { $size: '$_sites' },
+          contactsCount: { $size: '$_contacts' },
+          quotationsCount: { $size: '$_quotations' },
+          ordersCount: { $size: '$_orders' },
+          invoicesCount: { $size: '$_invoices' },
+          hasDeclined: {
+            $gt: [{ $size: { $filter: { input: '$_quotations', cond: { $eq: ['$$this.status', 'DECLINED'] } } } }, 0],
+          },
+          totalActivity: {
+            $add: [{ $size: '$_sites' }, { $size: '$_contacts' }, { $size: '$_quotations' }, { $size: '$_orders' }, { $size: '$_invoices' }],
+          },
+        },
+      },
+      { $sort: { totalActivity: 1, createdAt: 1 } },
+    ]);
+  }
 }
 
 const customerRepository = new CustomerRepository();

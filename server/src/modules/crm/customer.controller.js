@@ -99,6 +99,13 @@ class CustomerController {
       return res.success({ data: result.data, pagination: result.pagination });
     } catch (err) { next(err); }
   }
+
+  async cleanupAudit(req, res, next) {
+    try {
+      const data = await customerService.cleanupAudit();
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
 }
 
 const customerController = new CustomerController();

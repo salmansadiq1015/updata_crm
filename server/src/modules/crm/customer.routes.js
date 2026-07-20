@@ -77,6 +77,7 @@ router.get('/duplicates', authenticate, requirePermission('crm:read'), validate(
  *               type: string
  */
 router.get('/export', authenticate, requirePermission('crm:read'), validate(exportCustomersSchema), (req, res, next) => customerController.exportCsv(req, res, next));
+router.get('/cleanup-audit', authenticate, requirePermission('crm:admin'), (req, res, next) => customerController.cleanupAudit(req, res, next));
 router.patch('/bulk-update', authenticate, requirePermission('crm:admin'), validate(bulkUpdateCustomersSchema), (req, res, next) => customerController.bulkUpdate(req, res, next));
 router.post('/bulk-delete', authenticate, requirePermission('crm:admin'), validate(bulkDeleteCustomersSchema), (req, res, next) => customerController.bulkDeactivate(req, res, next));
 router.post('/merge', authenticate, requirePermission('crm:admin'), validate(mergeCustomersSchema), (req, res, next) => customerController.merge(req, res, next));

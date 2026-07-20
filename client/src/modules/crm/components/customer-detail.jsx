@@ -40,6 +40,7 @@ import {
   File, Image as ImageIcon, Paperclip,
 } from 'lucide-react';
 import { pickCustomerAccent, CH_CANTONS } from '@/modules/crm/constants/customer-constants';
+import { recordRecentCustomer } from '@/modules/crm/utils/recent-customers';
 
 const cantonName = (code) => CH_CANTONS.find((c) => c.code === code)?.name || code;
 // Anrede / salutation (client feedback #1)
@@ -499,6 +500,11 @@ export function CustomerDetail() {
     queryFn: () => customerService.getCustomerById(id),
     enabled: !!id,
   });
+
+  // Remember this fiche for the dashboard "recently opened" quick-access widget.
+  useEffect(() => {
+    if (customer?._id) recordRecentCustomer(customer);
+  }, [customer?._id, customer?.name, customer?.city, customer?.customerNumber]);
 
   const { update, archive, merge } = useCustomerMutations({
     onUpdate: () => setFormOpen(false),

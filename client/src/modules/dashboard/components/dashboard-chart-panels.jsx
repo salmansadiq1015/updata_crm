@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useReducedMotion } from 'framer-motion';
 import {
   Area,
@@ -21,9 +22,12 @@ import {
   AlertTriangle,
   BarChart3,
   BriefcaseBusiness,
+  Building2,
   CalendarClock,
   CheckCircle2,
+  ChevronRight,
   ClipboardList,
+  Clock,
   FileText,
   FolderKanban,
   Gauge,
@@ -31,14 +35,15 @@ import {
   Landmark,
   LineChart,
   ListChecks,
-  MapPin,
   ReceiptText,
   ShieldCheck,
   TrendingUp,
+  User,
   Users,
   WalletCards,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getRecentCustomers, RECENT_CUSTOMERS_EVENT } from '@/modules/crm/utils/recent-customers';
 import { CHART_COLORS, FEATURE_MIX_COLORS, WORK_QUEUE_CONFIG } from '@/modules/dashboard/data/dashboard-config';
 import {
   formatDashboardCurrency,
@@ -388,6 +393,78 @@ function RecentActivityPanel({ data, t, locale }) {
   );
 }
 
+function formatRecentOpenedAt(at, t, locale) {
+  if (!at) return '';
+  const min = Math.floor((Date.now() - at) / 60000);
+  if (min < 1) return t('dashboard.analytics.crm.recent.justNow', 'just now');
+  if (min < 60) return t('dashboard.analytics.crm.recent.minutesAgo', '{n} min ago').replace('{n}', String(min));
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return t('dashboard.analytics.crm.recent.hoursAgo', '{n} h ago').replace('{n}', String(hrs));
+  return new Date(at).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+}
+
+function RecentCustomersPanel({ t, locale }) {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    const load = () => setItems(getRecentCustomers());
+    load();
+    window.addEventListener(RECENT_CUSTOMERS_EVENT, load);
+    window.addEventListener('storage', load);
+    return () => {
+      window.removeEventListener(RECENT_CUSTOMERS_EVENT, load);
+      window.removeEventListener('storage', load);
+    };
+  }, []);
+
+  return (
+    <GlassPanel className="min-w-0 xl:col-span-12">
+      <PanelHeader
+        icon={Clock}
+        title={t('dashboard.analytics.crm.recent.title', 'Recently opened')}
+        description={t('dashboard.analytics.crm.recent.desc', 'Quick access to the customers you opened last.')}
+      />
+      <div className="p-4">
+        {items.length ? (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {items.map((c) => {
+              const Icon = c.type === 'business' ? Building2 : User;
+              const subtitle = [c.customerNumber, c.city].filter(Boolean).join(' · ');
+              return (
+                <Link
+                  key={c._id}
+                  href={`/crm/customers/${c._id}`}
+                  className="group flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5 transition-colors hover:border-primary/40 hover:bg-accent"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted/40 text-muted-foreground">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-foreground">{c.name || '—'}</span>
+                      {subtitle && <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                    {formatRecentOpenedAt(c.at, t, locale)}
+                    <ChevronRight className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100" />
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyAnalyticsState
+            title={t('dashboard.analytics.crm.recent.emptyTitle', 'No recently opened customers')}
+            description={t('dashboard.analytics.crm.recent.emptyDesc', 'Open a customer to see it here for quick access.')}
+            className="min-h-[12rem]"
+          />
+        )}
+      </div>
+    </GlassPanel>
+  );
+}
+
 function OverviewTab({ data, t, locale }) {
   return (
     <div className="space-y-4">
@@ -463,16 +540,7 @@ function CrmTab({ data, t, locale }) {
         <DonutPanel title={t('dashboard.analytics.crm.types', 'Customer types')} icon={Gauge} data={data.crm.byType} locale={locale} t={t} labelGroup="crmType" />
       </div>
       <div className="grid gap-4 xl:grid-cols-12">
-        <BarPanel
-          title={t('dashboard.analytics.crm.cities', 'Top cities')}
-          description={t('dashboard.analytics.crm.citiesDesc', 'Largest customer locations.')}
-          icon={MapPin}
-          data={data.crm.topCities}
-          valueKey="count"
-          locale={locale}
-          t={t}
-          color={CHART_COLORS.created}
-        />
+        <RecentCustomersPanel t={t} locale={locale} />
       </div>
     </div>
   );

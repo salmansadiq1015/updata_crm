@@ -90,10 +90,21 @@ export function CoarseMatrix() {
     [projectRowsResponse],
   );
 
+  // getMatrix now returns { allocations, assignmentLoads }; older shape was a
+  // bare array. matrixData is the unwrapped envelope, so the payload is .data.
+  const matrixPayload = useMemo(() => matrixData?.data ?? matrixData, [matrixData]);
+
   const allocations = useMemo(() => {
-    const raw = Array.isArray(matrixData) ? matrixData : matrixData?.data || [];
-    return raw;
-  }, [matrixData]);
+    if (Array.isArray(matrixPayload)) return matrixPayload;
+    return matrixPayload?.allocations || [];
+  }, [matrixPayload]);
+
+  // Real-assignment load per (employee, week) — merged into cells so capacity
+  // reflects actual Einsätze, not just coarse allocations (employee view only).
+  const assignmentLoads = useMemo(
+    () => (Array.isArray(matrixPayload) ? [] : (matrixPayload?.assignmentLoads || [])),
+    [matrixPayload],
+  );
 
   const weeks = useMemo(() => {
     const arr = [];
@@ -127,8 +138,18 @@ export function CoarseMatrix() {
       if (!entry.weekMap[a.calendarWeek]) entry.weekMap[a.calendarWeek] = [];
       entry.weekMap[a.calendarWeek].push(a);
     });
+
+    // Assignments belong to employees, so their load only maps onto employee rows.
+    if (!isProjectView) {
+      assignmentLoads.forEach((al) => {
+        const entry = map.get(String(al.employeeId));
+        if (!entry) return;
+        if (!entry.assignmentMap) entry.assignmentMap = {};
+        entry.assignmentMap[al.calendarWeek] = al.percent;
+      });
+    }
     return Array.from(map.values());
-  }, [allocations, employees, isProjectView, projectRows]);
+  }, [allocations, assignmentLoads, employees, isProjectView, projectRows]);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();

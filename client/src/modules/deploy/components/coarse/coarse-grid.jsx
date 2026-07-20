@@ -97,6 +97,7 @@ export function CoarseGrid({
                 <div key={week} className={cn('min-w-[58px] flex-1', week === currentWeek && 'bg-primary/[0.04]')}>
                   <CoarseCell
                     allocation={row.weekMap[week] || []}
+                    assignmentPercent={row.assignmentMap?.[week] || 0}
                     projectName={isProjectView ? row.name : undefined}
                     isCurrentWeek={week === currentWeek}
                     inDragRange={dragFill.isInRange(row.id, week)}

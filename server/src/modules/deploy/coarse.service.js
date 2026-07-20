@@ -9,6 +9,27 @@ import logger from '../../shared/logger/index.js';
 
 const COARSE_TTL = { l1Ttl: 60, l2Ttl: 300 };
 
+// ISO-8601 calendar week + week-year for a date.
+function isoWeekOf(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  const calendarYear = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(calendarYear, 0, 1));
+  const calendarWeek = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return { calendarYear, calendarWeek };
+}
+
+// Monday (local, 00:00) of ISO week `week` in `year`.
+function isoWeekMonday(year, week) {
+  const jan4 = new Date(year, 0, 4);
+  const jan4Dow = (jan4.getDay() + 6) % 7;
+  const monday = new Date(jan4);
+  monday.setDate(jan4.getDate() - jan4Dow + (week - 1) * 7);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
 class CoarseService {
   async getMatrix(year, weekFrom, weekTo, filters = {}) {
     const { employeeIds, projectId } = filters;
@@ -21,9 +42,60 @@ class CoarseService {
 
     return cacheManager.getOrSet(
       cacheKey,
-      () => coarseRepository.findByWeekRange(year, weekFrom, weekTo, { employeeIds, projectId }),
+      async () => {
+        const [allocations, assignmentLoads] = await Promise.all([
+          coarseRepository.findByWeekRange(year, weekFrom, weekTo, { employeeIds, projectId }),
+          this._computeAssignmentLoads(year, weekFrom, weekTo, { employeeIds }),
+        ]);
+        return { allocations, assignmentLoads };
+      },
       COARSE_TTL,
     );
+  }
+
+  // Weekly load (%) each employee carries from actual assignments (Einsätze) in
+  // the visible range — so the Grobplanung capacity reflects real bookings, not
+  // just coarse allocations. Load = share of the week's working days (Mon–Fri)
+  // that the employee has at least one assignment on.
+  async _computeAssignmentLoads(year, weekFrom, weekTo, { employeeIds } = {}) {
+    const rangeStart = isoWeekMonday(year, weekFrom);
+    const rangeEnd = isoWeekMonday(year, weekTo);
+    rangeEnd.setDate(rangeEnd.getDate() + 7); // exclusive end = Monday after weekTo
+
+    const { default: assignmentRepository } = await import('./assignment.repository.js');
+    const assignments = await assignmentRepository.findByDateRange(rangeStart, rangeEnd, { employeeIds });
+
+    const coverage = new Map(); // `${empId}:${year}:${week}` -> Set(dayKey)
+    for (const a of assignments) {
+      const empId = String(a.employeeId?._id || a.employeeId || '');
+      if (!empId || empId === 'null' || empId === 'undefined') continue;
+
+      const cursor = new Date(Math.max(new Date(a.startDatetime).getTime(), rangeStart.getTime()));
+      cursor.setHours(12, 0, 0, 0);
+      const end = new Date(Math.min(new Date(a.endDatetime).getTime(), rangeEnd.getTime()));
+      while (cursor <= end) {
+        const dow = cursor.getDay();
+        if (dow !== 0 && dow !== 6) {
+          const { calendarYear, calendarWeek } = isoWeekOf(cursor);
+          if (calendarYear === year && calendarWeek >= weekFrom && calendarWeek <= weekTo) {
+            const key = `${empId}:${calendarYear}:${calendarWeek}`;
+            if (!coverage.has(key)) coverage.set(key, new Set());
+            coverage.get(key).add(cursor.toISOString().slice(0, 10));
+          }
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
+    return Array.from(coverage.entries()).map(([key, days]) => {
+      const [employeeId, calendarYear, calendarWeek] = key.split(':');
+      return {
+        employeeId,
+        calendarYear: Number(calendarYear),
+        calendarWeek: Number(calendarWeek),
+        percent: Math.min(100, Math.round((days.size / 5) * 100)),
+      };
+    });
   }
 
   async create(data, createdBy, meta = {}) {

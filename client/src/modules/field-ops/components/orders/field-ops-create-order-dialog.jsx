@@ -27,6 +27,9 @@ import {
   UsersRound,
 } from 'lucide-react';
 
+// Mirrors the server CRM PHONE_PATTERN (crm.constants.js) so client + API agree.
+const PHONE_REGEX = /^(\+[1-9]\d{0,2}[\s.-]?)?(\(?\d{1,4}\)?[\s.-]?){1,5}\d{1,4}$/;
+
 const step1Schema = z.object({
   orderType: z.string().min(1, 'Required'),
   priority: z.string().optional(),
@@ -44,8 +47,8 @@ const step3Schema = z.object({
   customerId: z.string().optional(),
   siteId: z.string().optional(),
   customerName: z.string().optional(),
-  customerPhone: z.string().optional(),
-  customerEmail: z.string().optional(),
+  customerPhone: z.string().regex(PHONE_REGEX, 'Ungültige Telefonnummer').or(z.literal('')).optional(),
+  customerEmail: z.string().email('Ungültige E-Mail-Adresse').or(z.literal('')).optional(),
   siteAddress: z.string().optional(),
   accessInstructions: z.string().optional(),
   parkingInfo: z.string().optional(),
@@ -215,7 +218,7 @@ function Step2ScopeOfWork({ form, de }) {
 }
 
 function Step3CustomerSite({ form, de }) {
-  const { register, watch, setValue } = form;
+  const { register, watch, setValue, formState: { errors } } = form;
   const [projectSearch, setProjectSearch] = useState('');
   const debouncedProjectSearch = useDebounce(projectSearch, 250);
   const { data: projects = [], isFetching } = useAssignmentProjectOptions({
@@ -273,11 +276,11 @@ function Step3CustomerSite({ form, de }) {
         <FormField label={de ? 'Kundenname' : 'Customer Name'}>
           <Input {...register('customerName')} placeholder={de ? 'Firma / Name...' : 'Company / Name...'} />
         </FormField>
-        <FormField label={de ? 'Telefon' : 'Phone'}>
-          <Input {...register('customerPhone')} type="tel" placeholder="+41 79 000 00 00" />
+        <FormField label={de ? 'Telefon' : 'Phone'} error={errors.customerPhone?.message}>
+          <Input {...register('customerPhone')} type="tel" placeholder="+41 79 000 00 00" className={errors.customerPhone ? 'border-destructive' : ''} />
         </FormField>
-        <FormField label={de ? 'E-Mail' : 'Email'}>
-          <Input {...register('customerEmail')} type="email" placeholder="name@firma.ch" />
+        <FormField label={de ? 'E-Mail' : 'Email'} error={errors.customerEmail?.message}>
+          <Input {...register('customerEmail')} type="email" placeholder="name@firma.ch" className={errors.customerEmail ? 'border-destructive' : ''} />
         </FormField>
         <FormField label={de ? 'Standortadresse' : 'Site Address'}>
           <Input {...register('siteAddress')} placeholder={de ? 'Strasse, PLZ Ort...' : 'Street, ZIP City...'} />

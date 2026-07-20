@@ -257,34 +257,27 @@ export function ProjectDetail() {
         {/* Content area */}
         <div className="flex-1 min-w-0">
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="w-full justify-start border-b rounded-none bg-transparent p-0 h-auto">
-              <TabsTrigger value="overview" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
-                <ClipboardList className="h-3.5 w-3.5 mr-1.5" />
-                {t('pm.overview', 'Overview')}
+            <TabsList variant="line">
+              <TabsTrigger value="overview" className="gap-1.5">
+                <ClipboardList className="h-3.5 w-3.5" /> {t('pm.overview', 'Übersicht')}
               </TabsTrigger>
-              <TabsTrigger value="status" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
-                <Clock className="h-3.5 w-3.5 mr-1.5" />
-                {t('pm.statusHistory', 'Status')}
+              <TabsTrigger value="status" className="gap-1.5">
+                <Clock className="h-3.5 w-3.5" /> {t('pm.statusHistory', 'Status')}
               </TabsTrigger>
-              <TabsTrigger value="prep-actions" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
-                <ListChecks className="h-3.5 w-3.5 mr-1.5" />
-                {t('pm.prepActions', 'Prep Actions')}
+              <TabsTrigger value="prep-actions" className="gap-1.5">
+                <ListChecks className="h-3.5 w-3.5" /> {t('pm.prepActions', 'Vorbereitung')}
               </TabsTrigger>
-              <TabsTrigger value="schedule" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
-                <CalendarClock className="h-3.5 w-3.5 mr-1.5" />
-                {t('pm.schedule', 'Schedule')}
+              <TabsTrigger value="schedule" className="gap-1.5">
+                <CalendarClock className="h-3.5 w-3.5" /> {t('pm.schedule', 'Termine')}
               </TabsTrigger>
-              <TabsTrigger value="documents" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
-                <FileText className="h-3.5 w-3.5 mr-1.5" />
-                {t('pm.documents', 'Documents')}
+              <TabsTrigger value="documents" className="gap-1.5">
+                <FileText className="h-3.5 w-3.5" /> {t('pm.documents', 'Dokumente')}
               </TabsTrigger>
-              <TabsTrigger value="tasks" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
-                <ListTodo className="h-3.5 w-3.5 mr-1.5" />
-                {t('pm.tasks', 'Tasks')}
+              <TabsTrigger value="tasks" className="gap-1.5">
+                <ListTodo className="h-3.5 w-3.5" /> {t('pm.tasks', 'Aufgaben')}
               </TabsTrigger>
-              <TabsTrigger value="activity" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 pb-2">
-                <Activity className="h-3.5 w-3.5 mr-1.5" />
-                {t('pm.activity', 'Activity')}
+              <TabsTrigger value="activity" className="gap-1.5">
+                <Activity className="h-3.5 w-3.5" /> {t('pm.activity', 'Aktivität')}
               </TabsTrigger>
             </TabsList>
 

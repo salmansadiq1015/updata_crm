@@ -922,30 +922,33 @@ export function ScheduleTab({ projectId }) {
 
         <div className="flex items-center gap-2">
           {entries.length > 0 && (
-            <div className="flex items-center rounded-lg border border-border overflow-hidden">
+            <div className="flex items-center rounded-lg border border-border overflow-hidden divide-x divide-border">
               <button
-                className="px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
                 onClick={() => exportSchedule.mutate('ical')}
                 disabled={exportSchedule.isPending}
                 title="iCal (.ics)"
               >
                 <Calendar className="h-3.5 w-3.5" />
+                iCal
               </button>
               <button
-                className="px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
                 onClick={() => exportSchedule.mutate('pdf')}
                 disabled={exportSchedule.isPending}
                 title="PDF"
               >
                 <Download className="h-3.5 w-3.5" />
+                PDF
               </button>
               <button
-                className="px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
                 onClick={() => exportSchedule.mutate('excel')}
                 disabled={exportSchedule.isPending}
                 title="Excel (.csv)"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5" />
+                Excel
               </button>
             </div>
           )}

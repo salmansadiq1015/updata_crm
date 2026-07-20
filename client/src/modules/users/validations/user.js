@@ -13,6 +13,9 @@ export const createUserSchema = z.object({
   zip: z.string().max(20).optional().or(z.literal('')),
   country: z.string().max(100).optional().or(z.literal('')),
   preferredDepartmentId: z.string().nullable().optional().or(z.literal('')),
+  // Comma-separated in the form; mapped to schedulingSkills/-Certifications arrays on submit.
+  skills: z.string().optional().or(z.literal('')),
+  certifications: z.string().optional().or(z.literal('')),
   roleId: z.string().min(1, 'Rolle ist erforderlich'),
   language: z.string().default('de'),
 });

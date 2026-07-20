@@ -30,7 +30,7 @@ import {
   Pencil, UserX, UserCheck, Mail, Phone,
   Globe, Calendar, Clock, Shield, Monitor, Activity,
   Copy, Briefcase, MapPin, ChevronRight,
-  KeyRound, ExternalLink, Hash,
+  KeyRound, ExternalLink, Hash, Wrench, Award,
 } from 'lucide-react';
 
 // Account state — one clear label per status plus a plain-language description
@@ -268,6 +268,36 @@ export default function UserDetailPage() {
                 <OverviewInfoCard icon={KeyRound} iconBg={status.bgColor} iconColor={status.textColor} label={t('users.accountStatus', 'Kontostatus')} value={t(status.key, status.fallback)} description={t(status.descKey, status.descFallback)} />
                 {fullAddress && (
                   <OverviewInfoCard icon={MapPin} iconBg="bg-rose-500/10" iconColor="text-rose-500" label={t('users.address') || 'Adresse'} value={fullAddress} className="sm:col-span-2" />
+                )}
+                {(user.schedulingSkills?.length > 0 || user.schedulingCertifications?.length > 0) && (
+                  <div className="rounded-xl border border-border/40 bg-card p-4 sm:col-span-2 ring-1 ring-foreground/5 space-y-3">
+                    {user.schedulingSkills?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Wrench className="h-3.5 w-3.5 text-emerald-500" />
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('users.skills', 'Skills / Qualifikationen')}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {user.schedulingSkills.map((s) => (
+                            <span key={s} className="inline-flex items-center rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-medium">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {user.schedulingCertifications?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Award className="h-3.5 w-3.5 text-sky-500" />
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('users.certifications', 'Zertifikate / Kompetenzen')}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {user.schedulingCertifications.map((c) => (
+                            <span key={c} className="inline-flex items-center rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-400 px-2.5 py-0.5 text-xs font-medium">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </TabsContent>

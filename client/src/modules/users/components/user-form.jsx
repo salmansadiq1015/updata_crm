@@ -28,6 +28,12 @@ import {
 const EMPTY_TEAM_VALUE = '__none';
 const SALUTATION_NONE = '__none_salutation';
 
+// Comma-separated skills/certifications text -> trimmed, de-duplicated array.
+function splitCapabilities(value) {
+  if (!value) return [];
+  return [...new Set(String(value).split(',').map((v) => v.trim()).filter(Boolean))];
+}
+
 const STEPS = [
   { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persoenlich', icon: User, fields: ['firstName', 'lastName'] },
   { id: 'contact', labelKey: 'users.step.contact', fallback: 'Kontakt', icon: Mail, fields: ['email', 'phone'] },
@@ -51,7 +57,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     resolver: zodResolver(createUserSchema),
     defaultValues: {
       firstName: '', lastName: '', salutation: '', email: '', phone: '',
-      department: '', position: '',
+      department: '', position: '', skills: '', certifications: '',
       street: '', city: '', zip: '', country: 'Schweiz',
       roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
       ...defaultValues,
@@ -72,6 +78,8 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
         city: defaultValues.city || '',
         zip: defaultValues.zip || '',
         country: defaultValues.country || 'Schweiz',
+        skills: (defaultValues.schedulingSkills || []).join(', '),
+        certifications: (defaultValues.schedulingCertifications || []).join(', '),
         roleId: defaultValues.role?._id || defaultValues.roleId || '',
         preferredDepartmentId: getPreferredDepartmentId(defaultValues),
         language: defaultValues.language || 'de',
@@ -79,7 +87,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     } else {
       reset({
         firstName: '', lastName: '', salutation: '', email: '', phone: '',
-        department: '', position: '',
+        department: '', position: '', skills: '', certifications: '',
         street: '', city: '', zip: '', country: 'Schweiz',
         roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
       });
@@ -282,10 +290,13 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     if (currentStep < STEPS.length - 1) {
       return;
     }
+    const { skills, certifications, ...rest } = data;
     onSubmit({
-      ...data,
+      ...rest,
       salutation: data.salutation || null,
       preferredDepartmentId: data.preferredDepartmentId || null,
+      schedulingSkills: splitCapabilities(skills),
+      schedulingCertifications: splitCapabilities(certifications),
     });
     handleDialogOpenChange(false);
     reset();
@@ -500,6 +511,20 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     {assignmentTargets.length === 0
                       ? (t('users.preferredTeamUnavailable') || 'Keine aktiven Teams verfuegbar.')
                       : (t('users.preferredTeamHint') || 'Dieses Team wird verwendet, wenn der Benutzer einem Projekt als Team zugewiesen wird.')}
+                  </p>
+                </FormField>
+
+                <FormField label={t('users.skills', 'Skills / Qualifikationen')} className="sm:col-span-2">
+                  <Input placeholder={t('users.skillsPlaceholder', 'z.B. Wärmepumpe, Gasheizung, Solar')} {...register('skills')} />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('users.skillsHint', 'Mit Komma trennen — Grundlage für die Einsatzplanung.')}
+                  </p>
+                </FormField>
+
+                <FormField label={t('users.certifications', 'Zertifikate / Kompetenzen')} className="sm:col-span-2">
+                  <Input placeholder={t('users.certificationsPlaceholder', 'z.B. Kältemittel-Zertifikat, Schweissausweis')} {...register('certifications')} />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('users.certificationsHint', 'Mit Komma trennen.')}
                   </p>
                 </FormField>
               </div>

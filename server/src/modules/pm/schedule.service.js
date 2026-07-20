@@ -623,10 +623,10 @@ class ScheduleService {
   /**
    * Transfer the project's Bauplan into the Einsatzplanung (deploy assignments).
    * Only PHASE entries owned by an internal team member with a valid date range
-   * are transferred — milestones stay markers (PROJ – Bauplan). Idempotent: a
-   * phase already transferred (matched via sourceScheduleEntryId) is skipped, so
-   * the same call doubles as the "update from plan" re-sync. Conflicts are
-   * detected by the existing deploy conflict engine (Konflikte).
+   * are transferred — milestones stay markers (PROJ – Bauplan). Re-sync from the
+   * plan: a phase not yet transferred is created; a linked assignment whose
+   * employee/dates/title drifted from the plan is updated; an unchanged one is
+   * left alone. Conflicts are detected by the existing deploy conflict engine.
    */
   async transferToEinsatzplanung(projectId, userId, meta = {}) {
     const entries = await scheduleRepository.findByProjectId(projectId);
@@ -638,49 +638,63 @@ class ScheduleService {
     ));
 
     const Assignment = (await import('../deploy/assignment.model.js')).default;
-    const existing = await Assignment.find({
+    const existingList = await Assignment.find({
       sourceScheduleEntryId: { $in: phases.map((p) => p._id) },
-    }).select('sourceScheduleEntryId').lean();
-    const alreadyTransferred = new Set(existing.map((a) => String(a.sourceScheduleEntryId)));
+    }).select('sourceScheduleEntryId employeeId startDatetime endDatetime title').lean();
+    const existingByEntry = new Map(existingList.map((a) => [String(a.sourceScheduleEntryId), a]));
 
     const assignmentService = (await import('../deploy/assignment.service.js')).default;
-    const createdIds = [];
     const conflicts = [];
+    let createdCount = 0;
+    let updatedCount = 0;
     let skippedCount = 0;
 
     for (const phase of phases) {
-      if (alreadyTransferred.has(String(phase._id))) { skippedCount += 1; continue; }
-
       const start = new Date(phase.startDate); start.setHours(0, 0, 0, 0);
       const end = new Date(phase.endDate); end.setHours(23, 59, 59, 999);
       const employeeId = (phase.responsibleTeamId && typeof phase.responsibleTeamId === 'object')
         ? phase.responsibleTeamId._id
         : phase.responsibleTeamId;
+      const existing = existingByEntry.get(String(phase._id));
 
-      const results = await assignmentService.create({
+      if (!existing) {
+        const results = await assignmentService.create({
+          employeeIds: [employeeId],
+          assignmentType: 'PROJECT_WORK',
+          projectId,
+          title: phase.name,
+          startDatetime: start,
+          endDatetime: end,
+          isFullDay: true,
+          sourceScheduleEntryId: phase._id,
+        }, userId, meta);
+        createdCount += results.length;
+        for (const r of results) if (r.conflicts?.length) conflicts.push({ phase: phase.name, count: r.conflicts.length });
+        continue;
+      }
+
+      const drifted = String(existing.employeeId) !== String(employeeId)
+        || new Date(existing.startDatetime).getTime() !== start.getTime()
+        || new Date(existing.endDatetime).getTime() !== end.getTime()
+        || existing.title !== phase.name;
+      if (!drifted) { skippedCount += 1; continue; }
+
+      await assignmentService.update(existing._id, {
         employeeIds: [employeeId],
-        assignmentType: 'PROJECT_WORK',
-        projectId,
         title: phase.name,
         startDatetime: start,
         endDatetime: end,
-        isFullDay: true,
-        sourceScheduleEntryId: phase._id,
       }, userId, meta);
-
-      for (const r of results) {
-        createdIds.push(r.id);
-        if (r.conflicts?.length) conflicts.push({ assignmentId: r.id, phase: phase.name, count: r.conflicts.length });
-      }
+      updatedCount += 1;
     }
 
     return {
       target: 'einsatzplanung',
       phaseCount: phases.length,
-      createdCount: createdIds.length,
+      createdCount,
+      updatedCount,
       skippedCount,
       conflictCount: conflicts.length,
-      createdIds,
       conflicts,
     };
   }
@@ -690,9 +704,11 @@ class ScheduleService {
    * allocations). Each internal-team PHASE is spread over the ISO weeks it
    * spans; the weekly allocationPercent is derived from the phase's working-day
    * coverage of that week (Q5) unless an explicit percent is supplied (manual
-   * override from the dialog). Reuses coarseService.create, which enforces the
-   * ≤100 %/week cap (Ueberzuteilung) and rejects duplicates — so a re-run
-   * skips weeks already transferred, and over-allocated weeks are reported.
+   * override). Re-sync from the plan: a phase whose derived allocations match
+   * what is already stored (via sourceScheduleEntryId) is skipped; a phase that
+   * drifted (dates/employee/percent) has its old allocations deleted and the
+   * current ones recreated. coarseService.create enforces the ≤100 %/week cap
+   * (Ueberzuteilung), so over-allocated weeks are reported.
    */
   async transferToGrobplanung(projectId, { allocationPercent = null } = {}, userId, meta = {}) {
     const entries = await scheduleRepository.findByProjectId(projectId);
@@ -703,8 +719,20 @@ class ScheduleService {
       && e.startDate && e.endDate
     ));
 
+    const CoarseAllocation = (await import('../deploy/coarseAllocation.model.js')).default;
+    const existingList = await CoarseAllocation.find({
+      sourceScheduleEntryId: { $in: phases.map((p) => p._id) },
+    }).select('sourceScheduleEntryId employeeId calendarYear calendarWeek allocationPercent').lean();
+    const existingByEntry = new Map();
+    for (const a of existingList) {
+      const k = String(a.sourceScheduleEntryId);
+      if (!existingByEntry.has(k)) existingByEntry.set(k, []);
+      existingByEntry.get(k).push(a);
+    }
+
     const coarseService = (await import('../deploy/coarse.service.js')).default;
     let createdCount = 0;
+    let updatedCount = 0;
     let skippedCount = 0;
     const overAllocated = [];
 
@@ -713,7 +741,8 @@ class ScheduleService {
         ? phase.responsibleTeamId._id
         : phase.responsibleTeamId;
 
-      // Count the phase's working days (Mon–Fri) per ISO week it covers.
+      // Derive the desired weekly allocation (weekKey -> percent) from the
+      // phase's working-day (Mon–Fri) coverage of each ISO week it spans.
       const workingDaysByWeek = new Map();
       const cursor = new Date(phase.startDate); cursor.setHours(12, 0, 0, 0);
       const end = new Date(phase.endDate); end.setHours(12, 0, 0, 0);
@@ -721,24 +750,36 @@ class ScheduleService {
         const dow = cursor.getDay();
         if (dow !== 0 && dow !== 6) {
           const { calendarYear, calendarWeek } = isoWeekOf(cursor);
-          const key = `${calendarYear}:${calendarWeek}`;
-          workingDaysByWeek.set(key, (workingDaysByWeek.get(key) || 0) + 1);
+          workingDaysByWeek.set(`${calendarYear}:${calendarWeek}`, (workingDaysByWeek.get(`${calendarYear}:${calendarWeek}`) || 0) + 1);
         }
         cursor.setDate(cursor.getDate() + 1);
       }
-
+      const desired = new Map();
       for (const [key, workingDays] of workingDaysByWeek) {
-        const [calendarYear, calendarWeek] = key.split(':').map(Number);
         const percent = allocationPercent || snapAllocationPercent(Math.round((workingDays / 5) * 100));
-        if (!percent) continue;
+        if (percent) desired.set(key, percent);
+      }
+
+      // Compare with what this phase previously produced.
+      const existing = existingByEntry.get(String(phase._id)) || [];
+      const existingByWeek = new Map(existing.map((a) => [`${a.calendarYear}:${a.calendarWeek}`, a]));
+      const sameEmployee = existing.every((a) => String(a.employeeId) === String(employeeId));
+      const sameSet = existing.length === desired.size
+        && [...desired].every(([key, pct]) => existingByWeek.get(key)?.allocationPercent === pct);
+      if (existing.length > 0 && sameEmployee && sameSet) { skippedCount += 1; continue; }
+
+      // Drifted (or new): delete this phase's old allocations, recreate current.
+      const isUpdate = existing.length > 0;
+      for (const a of existing) await coarseService.delete(a._id, userId, meta);
+      for (const [key, percent] of desired) {
+        const [calendarYear, calendarWeek] = key.split(':').map(Number);
         try {
-          await coarseService.create({ employeeId, projectId, calendarYear, calendarWeek, allocationPercent: percent }, userId, meta);
-          createdCount += 1;
+          await coarseService.create({ employeeId, projectId, calendarYear, calendarWeek, allocationPercent: percent, sourceScheduleEntryId: phase._id }, userId, meta);
+          if (isUpdate) updatedCount += 1; else createdCount += 1;
         } catch (err) {
-          if (err instanceof ConflictError) {
-            if (/already exists/i.test(err.message)) skippedCount += 1;
-            else overAllocated.push({ phase: phase.name, week: `${calendarYear}-KW${calendarWeek}` });
-          } else {
+          if (err instanceof ConflictError && !/already exists/i.test(err.message)) {
+            overAllocated.push({ phase: phase.name, week: `${calendarYear}-KW${calendarWeek}` });
+          } else if (!(err instanceof ConflictError)) {
             throw err;
           }
         }
@@ -749,6 +790,7 @@ class ScheduleService {
       target: 'grobplanung',
       phaseCount: phases.length,
       createdCount,
+      updatedCount,
       skippedCount,
       overAllocatedCount: overAllocated.length,
       overAllocated,

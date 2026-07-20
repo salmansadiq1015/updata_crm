@@ -70,10 +70,12 @@ export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onD
     mutationFn: (payload) => scheduleService.transferSchedule(projectId, payload),
     onSuccess: (res) => {
       const created = res?.createdCount ?? 0;
+      const updated = res?.updatedCount ?? 0;
       const skipped = res?.skippedCount ?? 0;
       const issues = (res?.conflictCount ?? 0) + (res?.overAllocatedCount ?? 0);
-      showSuccess(t('pm.transferDone', '{created} übernommen, {skipped} übersprungen{issues}', {
+      showSuccess(t('pm.transferDone', '{created} erstellt, {updated} aktualisiert, {skipped} unverändert{issues}', {
         created,
+        updated,
         skipped,
         issues: issues ? t('pm.transferIssues', ', {n} mit Konflikt', { n: issues }) : '',
       }));

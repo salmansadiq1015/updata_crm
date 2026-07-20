@@ -1,6 +1,7 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { PROJECT_TYPE_CONFIG } from '@/modules/pm/constants/pm-constants';
 import { Input } from '@/components/ui/input';
@@ -12,9 +13,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { htmlToPlainText } from '@/lib/utils/html';
-import { Search, Check, ChevronsUpDown, FileText, Building2, CalendarClock, Wallet, Pencil, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Search, Check, ChevronsUpDown, FileText, Building2, CalendarClock, Wallet, Pencil, Loader2, Plus, MapPin } from 'lucide-react';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import apiClient from '@/lib/api/client';
+import { siteService } from '@/modules/crm/services/site-service';
+import { showSuccess, showError } from '@/lib/toast';
 
 function Field({ label, error, required, children }) {
   return (
@@ -73,6 +77,88 @@ export function Step1Overview({ form, language, t }) {
   );
 }
 
+// ── Quick-add site mini modal ─────────────────────────────────
+function QuickSiteModal({ open, onOpenChange, customerId, language, onCreated }) {
+  const qc = useQueryClient();
+  const [fields, setFields] = useState({ name: '', street: '', postalCode: '', city: '' });
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const createMut = useMutation({
+    mutationFn: (data) => siteService.createForCustomer(customerId, data),
+    onSuccess: (newSite) => {
+      qc.invalidateQueries({ queryKey: queryKeys.crm.sites.byCustomer(customerId) });
+      onCreated(newSite);
+      showSuccess(language === 'de' ? 'Objekt erstellt' : 'Site created');
+      onOpenChange(false);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const errs = {};
+    if (!fields.name.trim()) errs.name = true;
+    if (!fields.street.trim()) errs.street = true;
+    if (!fields.postalCode.trim()) errs.postalCode = true;
+    if (!fields.city.trim()) errs.city = true;
+    if (Object.keys(errs).length) { setFieldErrors(errs); return; }
+    setFieldErrors({});
+    createMut.mutate({
+      name: fields.name.trim(),
+      street: fields.street.trim(),
+      postalCode: fields.postalCode.trim(),
+      city: fields.city.trim(),
+    });
+  };
+
+  // Reset on open
+  const handleOpenChange = (v) => {
+    if (v) { setFields({ name: '', street: '', postalCode: '', city: '' }); setFieldErrors({}); }
+    onOpenChange(v);
+  };
+
+  const set = (key) => (e) => setFields((f) => ({ ...f, [key]: e.target.value }));
+  const inputCls = (key) => cn('h-8 text-sm', fieldErrors[key] && 'border-destructive');
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-md p-0 gap-0 rounded-xl" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogHeader className="px-5 pt-4 pb-3 border-b">
+          <DialogTitle className="flex items-center gap-2 text-sm">
+            <MapPin className="h-4 w-4 text-primary" />
+            {language === 'de' ? 'Neues Objekt' : 'New Site'}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-3">
+          <Field label={language === 'de' ? 'Bezeichnung' : 'Name'} required>
+            <Input value={fields.name} onChange={set('name')} placeholder={language === 'de' ? 'z.B. Mehrfamilienhaus Muster' : 'e.g. Main building'} className={inputCls('name')} autoFocus />
+          </Field>
+          <Field label={language === 'de' ? 'Strasse' : 'Street'} required>
+            <Input value={fields.street} onChange={set('street')} placeholder={language === 'de' ? 'z.B. Musterstrasse 12' : 'e.g. Main St 12'} className={inputCls('street')} />
+          </Field>
+          <div className="grid grid-cols-[120px_1fr] gap-3">
+            <Field label={language === 'de' ? 'PLZ' : 'Postal code'} required>
+              <Input value={fields.postalCode} onChange={set('postalCode')} placeholder="8000" className={inputCls('postalCode')} />
+            </Field>
+            <Field label={language === 'de' ? 'Ort' : 'City'} required>
+              <Input value={fields.city} onChange={set('city')} placeholder={language === 'de' ? 'z.B. Zürich' : 'e.g. Zurich'} className={inputCls('city')} />
+            </Field>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={createMut.isPending}>
+              {language === 'de' ? 'Abbrechen' : 'Cancel'}
+            </Button>
+            <Button type="submit" size="sm" disabled={createMut.isPending}>
+              {createMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
+              {language === 'de' ? 'Anlegen' : 'Create'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Step 2: Customer & Site ───────────────────────────────────
 export function Step2CustomerSite({ form, language, t, customerState }) {
   const { setValue, watch, formState: { errors } } = form;
@@ -82,6 +168,7 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
     setCustomerSearch,
     customerOpen,
     setCustomerOpen,
+    setCustomerNameCache,
     customers,
     debouncedCustomerSearch,
     selectedCustomer,
@@ -99,6 +186,8 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
   });
   const sites = Array.isArray(sitesData) ? sitesData : [];
 
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -106,7 +195,7 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
           <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" role="combobox" className={cn('w-full justify-between font-normal', !watchedCustomerId && 'text-muted-foreground')}>
-                {selectedCustomer?.name || (watchedCustomerId ? watchedCustomerId : (language === 'de' ? 'Kunde wählen...' : 'Select customer...'))}
+                {selectedCustomer?.name || (language === 'de' ? 'Kunde wählen...' : 'Select customer...')}
                 <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
@@ -154,6 +243,7 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
                       setValue('customerId', c._id, { shouldValidate: true });
                       setValue('siteId', '', { shouldValidate: false });
                       setCustomerSearch(c.name);
+                      setCustomerNameCache(c.name);
                       setCustomerOpen(false);
                     }}
                   >
@@ -167,23 +257,45 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
           </Popover>
         </Field>
         <Field label={t('pm.site', 'Site')} error={errors.siteId}>
-          <Select
-            value={watch('siteId') || 'none'}
-            onValueChange={(v) => setValue('siteId', v === 'none' ? '' : v, { shouldValidate: true })}
-            disabled={!watchedCustomerId}
-          >
-            <SelectTrigger><SelectValue placeholder={language === 'de' ? 'Objekt wählen...' : 'Select site...'} /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{language === 'de' ? 'Kein Objekt' : 'No site'}</SelectItem>
-              {sites.map((s) => (
-                <SelectItem key={s._id} value={s._id}>{s.name || s.address || s._id}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-1.5">
+            <Select
+              value={watch('siteId') || 'none'}
+              onValueChange={(v) => setValue('siteId', v === 'none' ? '' : v, { shouldValidate: true })}
+              disabled={!watchedCustomerId}
+            >
+              <SelectTrigger className="flex-1"><SelectValue placeholder={language === 'de' ? 'Objekt wählen...' : 'Select site...'} /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{language === 'de' ? 'Kein Objekt' : 'No site'}</SelectItem>
+                {sites.map((s) => (
+                  <SelectItem key={s._id} value={s._id}>{s.name || s.address || s._id}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="shrink-0 h-9 w-9"
+              disabled={!watchedCustomerId}
+              onClick={() => setQuickAddOpen(true)}
+              title={language === 'de' ? 'Neues Objekt anlegen' : 'Add new site'}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
         </Field>
       </div>
       {!watchedCustomerId && (
         <p className="text-xs text-muted-foreground italic">{language === 'de' ? 'Wählen Sie zuerst einen Kunden, um Objekte zu laden' : 'Select a customer first to load sites'}</p>
+      )}
+      {watchedCustomerId && (
+        <QuickSiteModal
+          open={quickAddOpen}
+          onOpenChange={setQuickAddOpen}
+          customerId={watchedCustomerId}
+          language={language}
+          onCreated={(newSite) => setValue('siteId', newSite._id, { shouldValidate: true })}
+        />
       )}
     </div>
   );
@@ -192,6 +304,9 @@ export function Step2CustomerSite({ form, language, t, customerState }) {
 // ── Step 3: Manager & Dates ───────────────────────────────────
 export function Step3ManagerDates({ form, language, t }) {
   const { register, watch, setValue, formState: { errors } } = form;
+  const startDate = watch('plannedStartDate');
+  const endDate = watch('plannedEndDate');
+  const dateConflict = startDate && endDate && new Date(endDate) <= new Date(startDate);
 
   const { data: usersData } = useQuery({
     queryKey: queryKeys.users.list({ status: 'active', limit: 100 }),
@@ -218,13 +333,18 @@ export function Step3ManagerDates({ form, language, t }) {
       </Field>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label={t('pm.plannedStart', 'Planned Start')} error={errors.plannedStartDate}>
-          <Input type="date" {...register('plannedStartDate')} />
+          <Input type="date" {...register('plannedStartDate')} className={cn(dateConflict && 'border-destructive')} />
         </Field>
         <Field label={t('pm.plannedEnd', 'Planned End')} error={errors.plannedEndDate}>
-          <Input type="date" {...register('plannedEndDate')} />
+          <Input type="date" {...register('plannedEndDate')} className={cn(dateConflict && 'border-destructive')} />
         </Field>
       </div>
-      {watch('plannedStartDate') && new Date(watch('plannedStartDate')) < new Date(new Date().toISOString().split('T')[0]) && (
+      {dateConflict && (
+        <p className="text-xs text-destructive animate-in fade-in slide-in-from-left-1">
+          {language === 'de' ? 'Das Enddatum muss nach dem Startdatum liegen' : 'End date must be after start date'}
+        </p>
+      )}
+      {!dateConflict && startDate && new Date(startDate) < new Date(new Date().toISOString().split('T')[0]) && (
         <p className="text-xs text-amber-500">{language === 'de' ? 'Startdatum liegt in der Vergangenheit' : 'Start date is in the past'}</p>
       )}
     </div>

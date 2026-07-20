@@ -49,7 +49,7 @@ export function FieldOpsOrderImportDialog({ open, onOpenChange, importOrders, do
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-w-3xl">
         <DialogHeader className="bg-linear-to-r from-primary/10 via-cyan-500/10 to-emerald-500/10">
-          <DialogTitle>{t('fieldOps.orders.import.title', 'Import Orders')}</DialogTitle>
+          <DialogTitle>{t('fieldOps.orders.import.title', 'Import Assignments')}</DialogTitle>
           <DialogDescription>
             {t('fieldOps.orders.import.description', 'Validate a CSV file before creating orders and fix row-level issues precisely.')}
           </DialogDescription>
@@ -200,7 +200,7 @@ export function FieldOpsOrderImportDialog({ open, onOpenChange, importOrders, do
               ? t('fieldOps.orders.import.processing', 'Processing...')
               : dryRun
                 ? t('fieldOps.orders.import.validateImport', 'Validate Import')
-                : t('fieldOps.orders.import.createOrders', 'Create Orders')}
+                : t('fieldOps.orders.import.createOrders', 'Create Assignments')}
           </Button>
         </DialogFooter>
       </DialogContent>

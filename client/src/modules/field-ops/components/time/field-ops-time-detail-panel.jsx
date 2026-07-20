@@ -157,7 +157,7 @@ export function FieldOpsTimeDetailPanel({
           {/* Assignment */}
           <Section icon={Activity} title={de ? 'Zuordnung' : 'Assignment'}>
             <div className="grid grid-cols-1 gap-3">
-              <DetailRow label={de ? 'Auftrag' : 'Order'} value={orderLabel} />
+              <DetailRow label={de ? 'Einsatz' : 'Assignment'} value={orderLabel} />
               <DetailRow label={de ? 'Techniker' : 'Technician'} value={technicianName} />
             </div>
           </Section>

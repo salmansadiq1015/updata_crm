@@ -533,7 +533,7 @@ export function FieldOpsReportsTable() {
     },
     {
       accessorKey: 'orderId',
-      header: t('fieldOps.reports.table.order', 'Order'),
+      header: t('fieldOps.reports.table.order', 'Assignment'),
       size: 140,
       enableSorting: false,
       Cell: ({ row }) => {

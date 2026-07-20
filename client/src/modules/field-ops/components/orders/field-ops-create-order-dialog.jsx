@@ -129,11 +129,11 @@ function Step1OrderDetails({ form, de }) {
   const { register, watch, setValue, formState: { errors } } = form;
   return (
     <FormSection
-      title={de ? 'Auftragsdetails' : 'Order Details'}
-      description={de ? 'Typ, Prioritaet und Titel des Auftrags' : 'Order type, priority and title'}
+      title={de ? 'Einsatzdetails' : 'Assignment Details'}
+      description={de ? 'Typ, Prioritaet und Titel des Einsatzes' : 'Assignment type, priority and title'}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label={de ? 'Auftragstyp' : 'Order Type'} required error={errors.orderType?.message}>
+        <FormField label={de ? 'Einsatztyp' : 'Assignment Type'} required error={errors.orderType?.message}>
           <Select value={watch('orderType')} onValueChange={(value) => setValue('orderType', value, { shouldValidate: true })}>
             <SelectTrigger className={errors.orderType ? 'border-destructive' : ''}>
               <SelectValue placeholder={de ? 'Typ waehlen...' : 'Select type...'} />
@@ -163,7 +163,7 @@ function Step1OrderDetails({ form, de }) {
       <FormField label={de ? 'Titel' : 'Title'} required error={errors.title?.message}>
         <Input
           {...register('title')}
-          placeholder={de ? 'Auftragstitel...' : 'Order title...'}
+          placeholder={de ? 'Einsatztitel...' : 'Assignment title...'}
           className={errors.title ? 'border-destructive' : ''}
         />
       </FormField>
@@ -481,7 +481,7 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
   }, [open, defaultValues, reset]);
 
   const steps = useMemo(() => [
-    { label: de ? 'Auftrag' : 'Order', icon: ClipboardList },
+    { label: de ? 'Einsatz' : 'Assignment', icon: ClipboardList },
     { label: de ? 'Leistung' : 'Scope', icon: FileText },
     { label: de ? 'Kunde' : 'Customer', icon: Building2 },
     { label: de ? 'Termin' : 'Schedule', icon: CalendarClock },
@@ -533,8 +533,8 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
             <span className="flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-primary" />
               {isEditMode
-                ? (de ? 'Auftrag bearbeiten' : 'Edit Order')
-                : (de ? 'Neuer Auftrag' : 'New Order')}
+                ? (de ? 'Einsatz bearbeiten' : 'Edit Assignment')
+                : (de ? 'Neuer Einsatz' : 'New Assignment')}
             </span>
             <span className="text-sm font-normal text-muted-foreground">
               {de ? `Schritt ${currentStep + 1} von ${steps.length}` : `Step ${currentStep + 1} of ${steps.length}`}
@@ -575,7 +575,7 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
             cancelLabel={de ? 'Abbrechen' : 'Cancel'}
             submitLabel={isEditMode
               ? (de ? 'Speichern' : 'Save Changes')
-              : (de ? 'Auftrag erstellen' : 'Create Order')}
+              : (de ? 'Einsatz erstellen' : 'Create Assignment')}
           />
         </div>
       </DialogContent>

@@ -141,7 +141,7 @@ export function FieldOpsOrdersCommand({
           <div className="min-w-0 space-y-4">
             <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
               <Radar className="h-3.5 w-3.5" />
-              {t('fieldOps.orders.commandLabel', 'Order Command')}
+              {t('fieldOps.orders.commandLabel', 'Assignment Command')}
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -194,7 +194,7 @@ export function FieldOpsOrdersCommand({
                 </Button>
                 <Button size="sm" onClick={onCreate} className="h-10 gap-2 rounded-lg bg-primary-gradient px-4 shadow-theme-md">
                   <Plus className="h-4 w-4" />
-                  {de ? 'Neuer Auftrag' : 'New Order'}
+                  {de ? 'Neuer Einsatz' : 'New Assignment'}
                 </Button>
               </div>
             </div>

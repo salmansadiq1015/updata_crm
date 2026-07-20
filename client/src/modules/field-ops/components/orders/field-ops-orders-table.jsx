@@ -296,7 +296,7 @@ export function FieldOpsOrdersTable() {
   const columns = useMemo(() => [
     {
       accessorKey: 'assignmentNumber',
-      header: de ? 'Auftrag #' : 'Order #',
+      header: de ? 'Einsatz #' : 'Assignment #',
       size: 170,
       enableSorting: false,
       Cell: ({ row }) => (
@@ -513,7 +513,7 @@ export function FieldOpsOrdersTable() {
   return (
     <div className="space-y-6">
       <FieldOpsOrdersCommand
-        title={t('fieldOps.orders.title', 'Orders')}
+        title={t('fieldOps.orders.title', 'Assignments')}
         description={t('fieldOps.orders.desc', 'Monitor and manage all technician orders.')}
         count={summaryTotal || orders.length}
         de={de}
@@ -557,9 +557,9 @@ export function FieldOpsOrdersTable() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        title={de ? 'Auftrag loeschen' : 'Delete Order'}
+        title={de ? 'Einsatz loeschen' : 'Delete Assignment'}
         description={de
-          ? `Auftrag "${deleteTarget?.title || deleteTarget?.assignmentNumber}" wird unwiderruflich geloescht.`
+          ? `Einsatz "${deleteTarget?.title || deleteTarget?.assignmentNumber}" wird unwiderruflich geloescht.`
           : `Order "${deleteTarget?.title || deleteTarget?.assignmentNumber}" will be permanently deleted.`}
         onConfirm={handleDelete}
         isLoading={deleteOrder.isPending}
@@ -570,9 +570,9 @@ export function FieldOpsOrdersTable() {
       <ConfirmDialog
         open={bulkDeleteOpen}
         onOpenChange={setBulkDeleteOpen}
-        title={de ? `${selectedIds.length} Auftraege loeschen` : `Delete ${selectedIds.length} Orders`}
+        title={de ? `${selectedIds.length} Einsaetze loeschen` : `Delete ${selectedIds.length} Orders`}
         description={de
-          ? `${selectedIds.length} Auftraege werden unwiderruflich geloescht.`
+          ? `${selectedIds.length} Einsaetze werden unwiderruflich geloescht.`
           : `${selectedIds.length} orders will be permanently deleted.`}
         onConfirm={handleBulkDelete}
         isLoading={bulkDelete.isPending}
@@ -612,7 +612,7 @@ export function FieldOpsOrdersTable() {
           <div className="flex items-start gap-3">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
-              <p className="font-semibold">{de ? 'Auftraege konnten nicht geladen werden' : 'Orders could not be loaded'}</p>
+              <p className="font-semibold">{de ? 'Einsaetze konnten nicht geladen werden' : 'Assignments could not be loaded'}</p>
               <p className="text-xs opacity-80">{de ? 'Pruefen Sie die Verbindung und versuchen Sie es erneut.' : 'Check the connection and retry.'}</p>
             </div>
           </div>
@@ -635,9 +635,9 @@ export function FieldOpsOrdersTable() {
               <div className="absolute inset-[-6px] rounded-3xl bg-primary/15 blur-xl" />
               <AlertCircle className="h-6 w-6 text-primary/40" />
             </div>
-            <p className="text-sm font-semibold text-foreground">{de ? 'Keine Auftraege gefunden' : 'No orders found'}</p>
+            <p className="text-sm font-semibold text-foreground">{de ? 'Keine Einsaetze gefunden' : 'No orders found'}</p>
             <p className="max-w-sm text-center text-xs">
-              {de ? 'Aendern Sie die Filter oder erstellen Sie einen neuen Auftrag.' : 'Adjust filters or create a new order.'}
+              {de ? 'Aendern Sie die Filter oder erstellen Sie einen neuen Einsatz.' : 'Adjust filters or create a new order.'}
             </p>
             <div className="mt-2 flex flex-wrap justify-center gap-2">
               <Button size="sm" variant="outline" onClick={clear} className="h-8 gap-2 rounded-lg">
@@ -645,7 +645,7 @@ export function FieldOpsOrdersTable() {
                 {de ? 'Filter zuruecksetzen' : 'Reset Filters'}
               </Button>
               <Button size="sm" onClick={() => setShowCreate(true)} className="h-8 rounded-lg">
-                {de ? 'Neuer Auftrag' : 'New Order'}
+                {de ? 'Neuer Einsatz' : 'New Assignment'}
               </Button>
             </div>
           </div>

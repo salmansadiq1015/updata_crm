@@ -108,7 +108,7 @@ export function FieldOpsOrderFilters({
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder={lang === 'de' ? 'Auftraege, Kunde, Projekt...' : 'Orders, customer, project...'}
+            placeholder={lang === 'de' ? 'Einsaetze, Kunde, Projekt...' : 'Assignments, customer, project...'}
             value={search}
             onChange={(event) => onSearch(event.target.value)}
             className="h-8 w-64 rounded-full border-dashed pl-8 text-sm"

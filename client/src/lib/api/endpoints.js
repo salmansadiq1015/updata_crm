@@ -58,6 +58,8 @@ export const ENDPOINTS = Object.freeze({
     CUSTOMERS_BULK_DELETE: '/crm/customers/bulk-delete',
     CUSTOMERS_MERGE: '/crm/customers/merge',
     CUSTOMERS_CLEANUP_AUDIT: '/crm/customers/cleanup-audit',
+    // Suppliers (business-type customers, used by accounting AP invoices)
+    SUPPLIERS: '/crm/suppliers',
     // Contacts (Phase 2)
     CONTACTS: '/crm/contacts',
     CONTACTS_OVERVIEW: '/crm/contacts/overview',

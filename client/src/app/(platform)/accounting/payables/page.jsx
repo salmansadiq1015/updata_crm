@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { CreditCard, Download, Plus, Search, Trash2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Building2, CreditCard, Download, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Combobox } from '@/components/ui/combobox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -13,7 +14,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { useAccounts, useApInvoices, useApSummary, useBankAccounts } from '@/modules/accounting/hooks/use-accounting-queries';
+import { useAccounts, useApInvoices, useApSummary, useBankAccounts, useSupplierSearch } from '@/modules/accounting/hooks/use-accounting-queries';
 import { useApMutations } from '@/modules/accounting/hooks/use-accounting-mutations';
 import { apService } from '@/modules/accounting/services/accounting-service';
 import { cursorPageLabel, downloadResponse } from '@/modules/accounting/utils/accounting-ui';
@@ -64,6 +65,16 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
     orderReference: '',
   });
   const [lines, setLines] = useState([emptyApLine()]);
+  const [supplierQuery, setSupplierQuery] = useState('');
+
+  const { data: supplierResults = [], isFetching: suppliersLoading } = useSupplierSearch(supplierQuery);
+  const supplierOptions = useMemo(() => supplierResults.map((s) => ({
+    value: s._id,
+    label: s.name,
+    icon: Building2,
+    description: [s.customerNumber, s.city].filter(Boolean).join(' · ') || undefined,
+    keywords: [s.name, s.customerNumber, s.city, s.email].filter(Boolean).join(' '),
+  })), [supplierResults]);
 
   const postingAccounts = accounts.filter((account) => !account.isGroup && account.isActive !== false);
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
@@ -100,13 +111,28 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex max-h-[75vh] flex-col gap-4 overflow-y-auto pr-1">
           <div className="grid gap-3 md:grid-cols-4">
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Supplier ID' : 'Supplier ID'}</Label>
-              <Input className="h-9 font-mono text-xs" value={form.supplierId} onChange={(event) => set('supplierId', event.target.value)} required />
-            </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 md:col-span-2">
               <Label className="text-xs">{de ? 'Lieferant' : 'Supplier'}</Label>
-              <Input className="h-9" value={form.supplierName} onChange={(event) => set('supplierName', event.target.value)} required />
+              <Combobox
+                async
+                size="sm"
+                triggerIcon={Building2}
+                options={supplierOptions}
+                value={form.supplierId}
+                selectedLabel={form.supplierName}
+                loading={suppliersLoading}
+                allowClear
+                onSearchChange={setSupplierQuery}
+                onChange={(value, option) => {
+                  set('supplierId', value);
+                  set('supplierName', option?.label ?? '');
+                }}
+                placeholder={de ? 'Lieferant auswählen...' : 'Select supplier...'}
+                searchPlaceholder={de ? 'Lieferant suchen...' : 'Search supplier...'}
+                emptyIcon={Building2}
+                emptyMessage={de ? 'Kein Lieferant gefunden' : 'No supplier found'}
+                emptyHint={de ? 'Lieferanten sind Geschäftskunden im CRM.' : 'Suppliers are business customers in the CRM.'}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">{de ? 'Rechnungsnr.' : 'Invoice No.'}</Label>
@@ -300,7 +326,7 @@ export default function PayablesPage() {
   const { data: { items = [], pagination } = {}, isLoading } = useApInvoices(filters);
   const { data: summary } = useApSummary();
   const { data: bankAccounts = [] } = useBankAccounts();
-  const { data: accounts = [] } = useAccounts({ limit: 500 });
+  const { data: accounts = [] } = useAccounts({ limit: 100 });
   const { createPaymentBatch } = useApMutations();
   const activeBankAccountId = bankAccountId || bankAccounts[0]?._id || '';
 

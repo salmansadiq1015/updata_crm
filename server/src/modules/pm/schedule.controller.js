@@ -87,6 +87,16 @@ class ScheduleController {
       return res.success({ data: generatedDoc, message: 'Schedule PDF generated successfully' });
     } catch (err) { next(err); }
   }
+
+  async transferSchedule(req, res, next) {
+    try {
+      const body = req._validatedBody || req.body || {};
+      const target = body.target || 'einsatzplanung';
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await scheduleService.transferToEinsatzplanung(req.params.id, req.user._id, meta);
+      return res.success({ data: result, message: 'Schedule transferred to Einsatzplanung' });
+    } catch (err) { next(err); }
+  }
 }
 
 const scheduleController = new ScheduleController();

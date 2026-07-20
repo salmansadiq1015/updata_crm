@@ -603,6 +603,71 @@ class ScheduleService {
   }
 
   /**
+   * Transfer the project's Bauplan into the Einsatzplanung (deploy assignments).
+   * Only PHASE entries owned by an internal team member with a valid date range
+   * are transferred — milestones stay markers (PROJ – Bauplan). Idempotent: a
+   * phase already transferred (matched via sourceScheduleEntryId) is skipped, so
+   * the same call doubles as the "update from plan" re-sync. Conflicts are
+   * detected by the existing deploy conflict engine (Konflikte).
+   */
+  async transferToEinsatzplanung(projectId, userId, meta = {}) {
+    const entries = await scheduleRepository.findByProjectId(projectId);
+    const phases = entries.filter((e) => (
+      e.entryType === 'PHASE'
+      && e.responsibleType === 'INTERNAL_TEAM'
+      && e.responsibleTeamId
+      && e.startDate && e.endDate
+    ));
+
+    const Assignment = (await import('../deploy/assignment.model.js')).default;
+    const existing = await Assignment.find({
+      sourceScheduleEntryId: { $in: phases.map((p) => p._id) },
+    }).select('sourceScheduleEntryId').lean();
+    const alreadyTransferred = new Set(existing.map((a) => String(a.sourceScheduleEntryId)));
+
+    const assignmentService = (await import('../deploy/assignment.service.js')).default;
+    const createdIds = [];
+    const conflicts = [];
+    let skippedCount = 0;
+
+    for (const phase of phases) {
+      if (alreadyTransferred.has(String(phase._id))) { skippedCount += 1; continue; }
+
+      const start = new Date(phase.startDate); start.setHours(0, 0, 0, 0);
+      const end = new Date(phase.endDate); end.setHours(23, 59, 59, 999);
+      const employeeId = (phase.responsibleTeamId && typeof phase.responsibleTeamId === 'object')
+        ? phase.responsibleTeamId._id
+        : phase.responsibleTeamId;
+
+      const results = await assignmentService.create({
+        employeeIds: [employeeId],
+        assignmentType: 'PROJECT_WORK',
+        projectId,
+        title: phase.name,
+        startDatetime: start,
+        endDatetime: end,
+        isFullDay: true,
+        sourceScheduleEntryId: phase._id,
+      }, userId, meta);
+
+      for (const r of results) {
+        createdIds.push(r.id);
+        if (r.conflicts?.length) conflicts.push({ assignmentId: r.id, phase: phase.name, count: r.conflicts.length });
+      }
+    }
+
+    return {
+      target: 'einsatzplanung',
+      phaseCount: phases.length,
+      createdCount: createdIds.length,
+      skippedCount,
+      conflictCount: conflicts.length,
+      createdIds,
+      conflicts,
+    };
+  }
+
+  /**
    * Export the Bauplan / milestone plan as a spreadsheet (CSV, UTF-8 + BOM,
    * ';' separator) that opens natively in Excel. Mirrors the PDF content:
    * header block + Phasen table + Meilensteine table (PROJ – Bauplan export).

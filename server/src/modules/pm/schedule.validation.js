@@ -92,6 +92,13 @@ export const exportScheduleSchema = {
   }),
 };
 
+export const transferScheduleSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    target: Joi.string().valid('einsatzplanung').default('einsatzplanung'),
+  }),
+};
+
 export const updateConfirmationSchema = {
   params: Joi.object({ confId: objectId.required() }),
   body: Joi.object({

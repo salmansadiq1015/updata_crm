@@ -75,6 +75,13 @@ class ScheduleController {
         return res.send(icalData);
       }
 
+      if (format === 'excel') {
+        const { csv, filename } = await scheduleService.exportExcel(req.params.id);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        return res.send(csv);
+      }
+
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const generatedDoc = await scheduleService.exportPdf(req.params.id, req.user._id, meta);
       return res.success({ data: generatedDoc, message: 'Schedule PDF generated successfully' });

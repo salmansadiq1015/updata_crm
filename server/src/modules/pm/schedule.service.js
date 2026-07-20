@@ -602,6 +602,58 @@ class ScheduleService {
     return generatedDoc;
   }
 
+  /**
+   * Export the Bauplan / milestone plan as a spreadsheet (CSV, UTF-8 + BOM,
+   * ';' separator) that opens natively in Excel. Mirrors the PDF content:
+   * header block + Phasen table + Meilensteine table (PROJ – Bauplan export).
+   */
+  async exportExcel(projectId) {
+    const Project = (await import('./project.model.js')).default;
+    const project = await Project.findById(projectId)
+      .populate('customerId', 'name')
+      .populate('projectManagerId', 'firstName lastName');
+    if (!project) throw new NotFoundError('Project', projectId);
+
+    const entries = await scheduleRepository.findByProjectId(projectId);
+    const phases = entries.filter((e) => e.entryType === 'PHASE');
+    const milestones = entries.filter((e) => e.entryType === 'MILESTONE');
+
+    const STATUS_DE = {
+      PLANNED: 'Geplant', IN_PROGRESS: 'In Arbeit', COMPLETED: 'Abgeschlossen',
+      CANCELLED: 'Abgebrochen', WAIVED: 'Verzichtet',
+    };
+    const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('de-CH') : '');
+    const esc = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const row = (...cells) => cells.map(esc).join(';');
+
+    const lines = [
+      row('Bauplan / Terminplan'),
+      row('Projekt', project.name),
+      row('Projekt-Nr.', project.projectNumber),
+      row('Kunde', project.customerId?.name || ''),
+      row('Projektleiter', project.projectManagerId
+        ? `${project.projectManagerId.firstName} ${project.projectManagerId.lastName}` : ''),
+      row('Exportiert am', new Date().toLocaleDateString('de-CH')),
+      '',
+      row('Phasen'),
+      row('Name', 'Start', 'Ende', 'Status'),
+      ...phases.map((p) => row(p.name, fmtDate(p.startDate), fmtDate(p.endDate), STATUS_DE[p.status] || p.status)),
+      '',
+      row('Meilensteine'),
+      row('Name', 'Datum', 'Status'),
+      ...milestones.map((m) => row(m.name, fmtDate(m.milestoneDate), STATUS_DE[m.status] || m.status)),
+    ];
+
+    return {
+      csv: `\uFEFF${lines.join('\r\n')}`,
+      filename: `Bauplan_${project.projectNumber || projectId}.csv`,
+    };
+  }
+
   async exportIcal(projectId) {
     const Project = (await import('./project.model.js')).default;
     const project = await Project.findById(projectId);

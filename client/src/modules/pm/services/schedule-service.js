@@ -59,6 +59,16 @@ export const scheduleService = {
       downloadBlob(data, filename, 'text/calendar;charset=utf-8');
       return { filename };
     }
+    if (format === 'excel') {
+      const { data } = await apiClient.get(ENDPOINTS.PM.SCHEDULE_EXPORT(projectId), {
+        params: { format: 'excel' },
+        responseType: 'blob',
+        transformResponse: [(x) => x],
+      });
+      const filename = `Bauplan-${projectId}.csv`;
+      downloadBlob(data, filename, 'text/csv;charset=utf-8');
+      return { filename };
+    }
     const res = await apiClient.get(ENDPOINTS.PM.SCHEDULE_EXPORT(projectId), {
       params: { format: 'pdf' },
     });

@@ -38,7 +38,7 @@ import {
   Plus, Pencil, Trash2, Loader2, ArrowRight, Milestone,
   Send, MessageSquare, Calendar, Users, Building2,
   List, BarChart3, ChevronDown, ChevronRight, Clock, Download,
-  User, Check, AlertTriangle, CheckSquare, Square, X, FileText,
+  User, Check, AlertTriangle, CheckSquare, Square, X, FileText, FileSpreadsheet,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
@@ -932,6 +932,14 @@ export function ScheduleTab({ projectId }) {
                 title="PDF"
               >
                 <Download className="h-3.5 w-3.5" />
+              </button>
+              <button
+                className="px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
+                onClick={() => exportSchedule.mutate('excel')}
+                disabled={exportSchedule.isPending}
+                title="Excel (.csv)"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
               </button>
             </div>
           )}

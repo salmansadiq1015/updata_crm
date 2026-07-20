@@ -39,7 +39,16 @@ function calcTotals(items) {
   return { subtotal: Math.round(subtotal * 100) / 100, vatBreakdown, grandTotal };
 }
 
-const UNITS = ['Stk', 'h', 'm', 'm²', 'm³', 'kg', 'l', 'psch'];
+const UNITS = ['Stk', 'h', 'm', 'm²', 'm³', 'kg', 'l', 'psch', 'cm'];
+
+const UNIT_QTY_STEP = {
+  Stk: '1',
+  psch: '1',
+  m: '0.1',
+  cm: '0.1',
+  'm²': '0.1',
+  'm³': '0.1',
+};
 
 let _uid = 0;
 function uid() { return ++_uid; }
@@ -323,7 +332,7 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
               <Input
                 type="number"
                 min="0"
-                step="0.01"
+                step={UNIT_QTY_STEP[item.unit] || '0.01'}
                 value={item.quantity}
                 onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
                 disabled={disabled}

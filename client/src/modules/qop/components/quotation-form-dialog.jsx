@@ -23,7 +23,10 @@ import { useQopCustomerProjects, useQopCustomerSearch, useQopDepartments } from 
 import { useQuotationTemplateMutations } from '../hooks/use-qop-template-mutations';
 import { LineItemsEditor } from './line-items-editor';
 import { SelectTemplateDialog } from './select-template-dialog';
-import { CURRENCIES, DEFAULT_VALIDITY_DAYS } from '../constants/qop-constants';
+import { CURRENCIES, DEFAULT_VALIDITY_DAYS, PAYMENT_TERMS_PRESETS } from '../constants/qop-constants';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   LANGUAGE_OPTIONS, buildCustomerOptions, buildDepartmentOptions, buildProjectOptions,
 } from '../utils/document-form-utils';
@@ -420,15 +423,20 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
             {showAdvanced && (
               <div className="grid grid-cols-1 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <Label>{t('qop.form.paymentTerms', 'Payment terms')}</Label>
-                  <Textarea
-                    rows={2}
-                    value={form.paymentTerms}
-                    onChange={(e) => set('paymentTerms', e.target.value)}
-                    placeholder={t('qop.form.paymentTermsPlaceholder', 'e.g. 30 days net')}
-                    className="resize-none rounded-xl text-sm"
-                    maxLength={1000}
-                  />
+                  <Label>{t('qop.form.paymentTerms', 'Zahlungsbedingungen')}</Label>
+                  <Select
+                    value={form.paymentTerms || ''}
+                    onValueChange={(v) => set('paymentTerms', v)}
+                  >
+                    <SelectTrigger className="rounded-xl text-sm">
+                      <SelectValue placeholder={t('qop.form.paymentTermsPlaceholder', 'Zahlungsbedingung wählen...')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_TERMS_PRESETS.map((pt) => (
+                        <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>{t('qop.form.termsAndConditions', 'Terms & Conditions')}</Label>

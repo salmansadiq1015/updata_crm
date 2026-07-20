@@ -19,7 +19,10 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useOrderMutations } from '../hooks/use-qop-mutations';
 import { useQopCustomerProjects, useQopCustomerSearch, useQopDepartments } from '../hooks/use-qop-queries';
-import { CURRENCIES } from '../constants/qop-constants';
+import { CURRENCIES, PAYMENT_TERMS_PRESETS } from '../constants/qop-constants';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { LineItemsEditor } from './line-items-editor';
 import {
   LANGUAGE_OPTIONS, buildCustomerOptions, buildDepartmentOptions, buildProjectOptions,
@@ -337,13 +340,20 @@ export function OrderFormDialog({ open, onClose, order = null }) {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="flex flex-col gap-1.5">
-              <Label>{t('qop.form.paymentTerms', 'Payment Terms')}</Label>
-              <Textarea
-                rows={3}
-                value={form.paymentTerms}
-                onChange={(event) => set('paymentTerms', event.target.value)}
-                className="resize-y rounded-xl text-sm"
-              />
+              <Label>{t('qop.form.paymentTerms', 'Zahlungsbedingungen')}</Label>
+              <Select
+                value={form.paymentTerms || ''}
+                onValueChange={(v) => set('paymentTerms', v)}
+              >
+                <SelectTrigger className="rounded-xl text-sm">
+                  <SelectValue placeholder={t('qop.form.paymentTermsPlaceholder', 'Zahlungsbedingung wählen...')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_TERMS_PRESETS.map((pt) => (
+                    <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>{t('qop.form.termsAndConditions', 'Terms & Conditions')}</Label>

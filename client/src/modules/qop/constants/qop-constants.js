@@ -55,6 +55,13 @@ export const QOP_SELECTABLE_PROJECT_STATUSES = [
   'ON_HOLD',
 ];
 
+export const PAYMENT_TERMS_PRESETS = [
+  { value: '30 Tage netto', label: '30 Tage netto' },
+  { value: '10 Tage 2% Skonto, 30 Tage netto', label: '10 Tage 2% Skonto, 30 Tage netto' },
+  { value: '10 Tage netto', label: '10 Tage netto' },
+  { value: 'Sofort fällig', label: 'Sofort fällig' },
+];
+
 export const PAYMENT_METHODS = [
   { value: 'bank_transfer', label: 'Banküberweisung' },
   { value: 'cash',          label: 'Bar' },

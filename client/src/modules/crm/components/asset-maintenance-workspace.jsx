@@ -394,7 +394,7 @@ export function AssetMaintenanceWorkspace() {
     },
     {
       accessorKey: 'nextDueDate',
-      header: t('crm.assetMaintenance.due', 'Faelligkeit'),
+      header: t('crm.assetMaintenance.due', 'Fälligkeit'),
       size: 170,
       Cell: ({ row }) => {
         const maintenance = row.original.maintenance;
@@ -449,7 +449,7 @@ export function AssetMaintenanceWorkspace() {
                 {t('crm.assetMaintenance.title', 'Anlagen & Wartung')}
               </h1>
               <p className="text-[13px] text-muted-foreground">
-                {t('crm.assetMaintenance.subtitle', 'Anlagen, Wartungsfaelligkeit und Planung in einem Arbeitsfluss.')}
+                {t('crm.assetMaintenance.subtitle', 'Anlagen, Wartungsfälligkeit und Planung in einem Arbeitsfluss.')}
               </p>
             </div>
           </div>
@@ -468,8 +468,8 @@ export function AssetMaintenanceWorkspace() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Metric label={t('common.total', 'Total')} value={pageStats.total} />
-        <Metric label={t('crm.assetMaintenance.due', 'Faellig')} value={pageStats.due} tone="amber" />
-        <Metric label={t('crm.assetMaintenance.overdue', 'Ueberfaellig')} value={pageStats.overdue} tone="red" />
+        <Metric label={t('crm.assetMaintenance.due', 'Fällig')} value={pageStats.due} tone="amber" />
+        <Metric label={t('crm.assetMaintenance.overdue', 'Überfällig')} value={pageStats.overdue} tone="red" />
         <Metric label={t('crm.assetMaintenance.scheduledShort', 'Geplant')} value={pageStats.scheduled} tone="sky" />
         <Metric label={t('crm.assetMaintenance.withoutInterval', 'Ohne Intervall')} value={pageStats.withoutInterval} tone="slate" />
       </div>
@@ -543,7 +543,7 @@ export function AssetMaintenanceWorkspace() {
           {hasActiveFilters && (
             <Button variant="ghost" size="sm" className="h-8 gap-1 rounded-full text-xs" onClick={clearFilters}>
               <X className="h-3.5 w-3.5" />
-              {t('common.reset', 'Zuruecksetzen')}
+              {t('common.reset', 'Zurücksetzen')}
             </Button>
           )}
         </div>
@@ -552,7 +552,7 @@ export function AssetMaintenanceWorkspace() {
       {selectedInstallationIds.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
           <p className="text-sm font-medium text-foreground">
-            {t('crm.assetMaintenance.selectedSystems', '{count} Anlagen ausgewaehlt').replace('{count}', String(selectedInstallationIds.length))}
+            {t('crm.assetMaintenance.selectedSystems', '{count} Anlagen ausgewählt').replace('{count}', String(selectedInstallationIds.length))}
           </p>
           <div className="flex items-center gap-2">
             <Button size="sm" className="gap-2" onClick={() => setBulkDialogOpen(true)} disabled={!canWriteCrm}>
@@ -603,27 +603,33 @@ export function AssetMaintenanceWorkspace() {
           const item = row.original;
           const linkedAssignmentId = item.assignment?._id || item.maintenance?.linkedServiceOrderId;
           return (
-            <RowActionsMenu
-              items={[
-                {
-                  label: t('crm.assetMaintenance.schedule', 'Planen'),
-                  icon: CalendarClock,
-                  disabled: !canSchedule || Boolean(linkedAssignmentId),
-                  onSelect: () => openSchedule(item),
-                },
-                {
-                  label: t('crm.assetMaintenance.openInstallation', 'Anlage oeffnen'),
-                  icon: ExternalLink,
-                  onSelect: () => router.push(`/crm/installations/${item.installation?._id}`),
-                },
-                {
-                  label: t('crm.assetMaintenance.openCalendar', 'Kalender oeffnen'),
-                  icon: CalendarDays,
-                  hidden: !canReadScheduling,
-                  onSelect: () => router.push('/scheduling/calendar'),
-                },
-              ]}
-            />
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                disabled={!canSchedule || Boolean(linkedAssignmentId)}
+                onClick={() => openSchedule(item)}
+              >
+                <CalendarClock className="h-3.5 w-3.5" />
+                {t('crm.assetMaintenance.terminieren', 'Terminieren')}
+              </Button>
+              <RowActionsMenu
+                items={[
+                  {
+                    label: t('crm.assetMaintenance.openInstallation', 'Anlage öffnen'),
+                    icon: ExternalLink,
+                    onSelect: () => router.push(`/crm/installations/${item.installation?._id}`),
+                  },
+                  {
+                    label: t('crm.assetMaintenance.openCalendar', 'Kalender öffnen'),
+                    icon: CalendarDays,
+                    hidden: !canReadScheduling,
+                    onSelect: () => router.push('/scheduling/calendar'),
+                  },
+                ]}
+              />
+            </div>
           );
         }}
       />
@@ -696,7 +702,7 @@ function AssetMaintenanceEmptyState({ t }) {
         <Wrench className="h-6 w-6 text-primary/50" />
       </div>
       <p className="text-sm font-medium">{t('crm.assetMaintenance.empty', 'Keine Anlagen oder Wartungen gefunden')}</p>
-      <p className="max-w-md text-xs">{t('crm.assetMaintenance.emptyDesc', 'Filter anpassen oder Wartungsintervalle fuer ausgewaehlte Anlagen erfassen.')}</p>
+      <p className="max-w-md text-xs">{t('crm.assetMaintenance.emptyDesc', 'Filter anpassen oder Wartungsintervalle für ausgewählte Anlagen erfassen.')}</p>
     </div>
   );
 }
@@ -708,7 +714,7 @@ function BulkMaintenanceDialog({ open, onOpenChange, form, setForm, selectedCoun
         <DialogHeader>
           <DialogTitle>{t('crm.assetMaintenance.createBulk', 'Wartung erfassen')}</DialogTitle>
           <DialogDescription>
-            {t('crm.assetMaintenance.bulkDesc', 'Erstellt Wartungsintervalle fuer {count} ausgewaehlte Anlagen und ueberspringt vorhandene gleiche Intervalle.')
+            {t('crm.assetMaintenance.bulkDesc', 'Erstellt Wartungsintervalle für {count} ausgewählte Anlagen und überspringt vorhandene gleiche Intervalle.')
               .replace('{count}', String(selectedCount))}
           </DialogDescription>
         </DialogHeader>
@@ -803,7 +809,7 @@ function ScheduleDrawer({
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertTitle>{t('crm.assetMaintenance.schedulePermissionTitle', 'Keine Planungsberechtigung')}</AlertTitle>
-              <AlertDescription>{t('crm.assetMaintenance.schedulePermissionDesc', 'Sie koennen Kontext einsehen, aber keinen Techniker zuweisen.')}</AlertDescription>
+              <AlertDescription>{t('crm.assetMaintenance.schedulePermissionDesc', 'Sie können Kontext einsehen, aber keinen Techniker zuweisen.')}</AlertDescription>
             </Alert>
           )}
 
@@ -828,9 +834,15 @@ function ScheduleDrawer({
                       <a href={`mailto:${form.customerContactEmail}`}><Mail className="h-4 w-4" />{t('common.email', 'E-Mail')}</a>
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" className="gap-2" onClick={() => router.push('/scheduling/meetings')} disabled={!canCreateMeeting}>
-                    <Video className="h-4 w-4" /> Teams
-                  </Button>
+                  {form.customerContactPhone ? (
+                    <Button asChild variant="outline" size="sm" className="gap-2">
+                      <a href={`callto:${form.customerContactPhone}`}><Video className="h-4 w-4" /> Teams</a>
+                    </Button>
+                  ) : (
+                    <Button variant="outline" size="sm" className="gap-2" onClick={() => router.push('/scheduling/meetings')} disabled={!canCreateMeeting}>
+                      <Video className="h-4 w-4" /> Teams
+                    </Button>
+                  )}
                 </div>
               </ContextPanel>
 
@@ -852,7 +864,7 @@ function ScheduleDrawer({
                 <Badge variant="outline">{MAINTENANCE_STATUS_META[maintenance.maintenanceStatus]?.label || maintenance.maintenanceStatus}</Badge>
               )}
               <span className="text-sm text-muted-foreground">
-                {t('crm.assetMaintenance.nextDue', 'Naechste Faelligkeit')}: {formatDate(maintenance?.nextDueDate)}
+                {t('crm.assetMaintenance.nextDue', 'Nächste Fälligkeit')}: {formatDate(maintenance?.nextDueDate)}
               </span>
             </div>
             {assignment && (
@@ -874,14 +886,14 @@ function ScheduleDrawer({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_EMPLOYEE}>{t('crm.assetMaintenance.selectTechnician', 'Techniker auswaehlen')}</SelectItem>
+                    <SelectItem value={NO_EMPLOYEE}>{t('crm.assetMaintenance.selectTechnician', 'Techniker auswählen')}</SelectItem>
                     {employees.map((employee) => (
                       <SelectItem key={employee._id} value={employee._id}>{employeeLabel(employee)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label={t('crm.assetMaintenance.priority', 'Prioritaet')}>
+              <Field label={t('crm.assetMaintenance.priority', 'Priorität')}>
                 <Select value={form.priority} onValueChange={(value) => setForm((prev) => ({ ...prev, priority: value }))} disabled={!canSchedule}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>

@@ -50,7 +50,6 @@ const navSectionDefs = [
         basePath: '/crm', permission: 'crm:read',
         children: [
           { type: 'leaf', labelKey: 'sidebar.customers', href: '/crm/customers', icon: Contact, permission: 'crm:read' },
-          { type: 'leaf', labelKey: 'sidebar.contacts', href: '/crm/contacts', icon: Users, permission: 'crm:read' },
           { type: 'leaf', labelKey: 'sidebar.sites', href: '/crm/sites', icon: MapPinned, permission: 'crm:read' },
           { type: 'leaf', labelKey: 'sidebar.assetMaintenance', href: '/crm/asset-maintenance', icon: Wrench, permission: 'crm:read' },
           { type: 'leaf', labelKey: 'sidebar.procurement', href: '/crm/spare-parts/procurement', icon: ShoppingCart, permission: 'crm:read' },

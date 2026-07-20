@@ -14,6 +14,7 @@ export const createContactSchema = z.object({
   firstName: z.string().trim().min(1, 'Vorname erforderlich').max(100),
   lastName: z.string().trim().min(1, 'Nachname erforderlich').max(100),
   functionTitle: z.string().trim().max(100).nullable().optional().or(z.literal('')),
+  siteId: z.string().nullable().optional().or(z.literal('')),
   phone: optionalPhone,
   mobile: optionalPhone,
   email: z.union([z.string().email('Ungültige E-Mail'), z.literal(''), z.null()]).optional(),

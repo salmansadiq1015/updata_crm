@@ -251,7 +251,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
       {/* Table */}
       <div className="overflow-x-auto rounded-t-xl border border-border/70 bg-card/80 shadow-sm dark:bg-slate-950/50">
         <div className="min-w-[1040px]">
-        <div className="grid grid-cols-[2.5rem_9rem_6rem_minmax(14rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] bg-muted/40 border-b border-border/70 text-xs font-medium text-muted-foreground">
+        <div className="grid grid-cols-[2.5rem_9rem_10rem_minmax(10rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] bg-muted/40 border-b border-border/70 text-xs font-medium text-muted-foreground">
           <div className="flex items-center justify-center px-3 py-2.5">
             <Checkbox
               checked={allVisibleSelected || (someVisibleSelected ? 'indeterminate' : false)}
@@ -274,7 +274,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
         </div>
 
         {isLoading && Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="grid grid-cols-[2.5rem_9rem_6rem_minmax(14rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] border-b border-border/70 px-3 py-3 gap-2">
+          <div key={i} className="grid grid-cols-[2.5rem_9rem_10rem_minmax(10rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] border-b border-border/70 px-3 py-3 gap-2">
             {Array.from({ length: 9 }).map((_, j) => <Skeleton key={j} className="h-4 rounded" />)}
           </div>
         ))}
@@ -298,7 +298,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
           return (
             <div
               key={id}
-              className="grid grid-cols-[2.5rem_9rem_6rem_minmax(14rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] border-b border-border/70 last:border-0 hover:bg-primary/5 transition-colors group"
+              className="grid grid-cols-[2.5rem_9rem_10rem_minmax(10rem,1fr)_8rem_7rem_7rem_8rem_2.75rem] border-b border-border/70 last:border-0 hover:bg-primary/5 transition-colors group"
             >
               <div className="flex items-center justify-center px-3 py-3">
                 <Checkbox

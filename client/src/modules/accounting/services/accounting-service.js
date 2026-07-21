@@ -69,6 +69,14 @@ export const dashboardService = {
   snapshot: (params = {}) => apiClient.get(E.DASHBOARD, { params }),
 };
 
+// Suppliers are business-type CRM customers; the AP invoice form picks from them.
+// Empty query -> default suggestions; a query filters server-side via `search`.
+export const supplierService = {
+  search: (query = '') => apiClient.get(ENDPOINTS.CRM.SUPPLIERS, {
+    params: { ...(query ? { search: query } : {}), limit: 25 },
+  }),
+};
+
 export const accountingEntityService = {
   list:       (params = {}) => apiClient.get(E.ENTITIES, { params }),
   getById:    (id)          => apiClient.get(E.ENTITY_BY_ID(id)),

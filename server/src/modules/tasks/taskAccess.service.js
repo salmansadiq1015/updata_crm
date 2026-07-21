@@ -61,12 +61,31 @@ class TaskAccessService {
     return list;
   }
 
-  async assertTaskAccess(taskOrId, userId, requiredRole = 'VIEWER') {
+  isTaskOwner(task, userId) {
+    return sameId(task.assigneeId, userId)
+      || sameId(task.createdBy, userId)
+      || sameId(task.lockedBy, userId);
+  }
+
+  async assertTaskAccess(taskOrId, userId, requiredRole = 'VIEWER', { isAdmin = false } = {}) {
     const task = typeof taskOrId === 'object'
       ? taskOrId
       : await taskRepository.findById(taskOrId);
 
     if (!task) throw new NotFoundError('Task', taskOrId);
+
+    // Locked (confidential) tasks are reachable only by their owner or an admin,
+    // even for members/owners of the list the task lives in.
+    if (task.locked && !isAdmin && !this.isTaskOwner(task, userId)) {
+      throw new AppError('Task is locked', 403, ERROR_CODES.TASK_LOCKED);
+    }
+
+    // Central visibility: any non-locked task is readable by every user.
+    // Write access (EDITOR+) still follows list/ownership rules below.
+    if (requiredRole === 'VIEWER' && !task.locked) return task;
+
+    // A colleague supporting a pooled task can work on it (edit/complete).
+    if (sameId(task.poolHelperId, userId)) return task;
 
     const list = await taskListRepository.findById(task.listId);
     if (!list) {

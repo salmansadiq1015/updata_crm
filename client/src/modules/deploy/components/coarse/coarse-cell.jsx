@@ -51,8 +51,14 @@ function AllocationPicker({ current, onPick, onClear, onClose }) {
   );
 }
 
+const ASSIGNMENT_HATCH = {
+  backgroundImage:
+    'repeating-linear-gradient(45deg, rgba(148,163,184,0.28) 0, rgba(148,163,184,0.28) 4px, transparent 4px, transparent 8px)',
+};
+
 export const CoarseCell = memo(function CoarseCell({
   allocation,
+  assignmentPercent = 0,
   projectName,
   inDragRange,
   isCurrentWeek,
@@ -69,10 +75,40 @@ export const CoarseCell = memo(function CoarseCell({
   const tier = getAllocationTier(percent);
   const isSingle = allocations.length === 1;
   const isOver = percent > 100;
+  const assignmentExceeds = assignmentPercent > percent;
 
   const dragRing = inDragRange && 'ring-2 ring-inset ring-primary/70 z-10';
 
   if (!percent) {
+    // No coarse allocation. If the employee is already booked via real Einsätze,
+    // surface that load (hatched) so the week doesn't read as 100% free.
+    if (assignmentPercent > 0) {
+      return (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={onClick}
+              onMouseDown={onMouseDown}
+              onMouseEnter={onMouseEnter}
+              style={ASSIGNMENT_HATCH}
+              className={cn(
+                'relative w-full h-full min-h-[40px] border-r border-b flex items-center justify-center',
+                'text-[11px] font-semibold text-muted-foreground transition-colors hover:brightness-95',
+                isCurrentWeek && 'bg-primary/[0.03]',
+                dragRing,
+              )}
+            >
+              <span className="tabular-nums leading-none">{assignmentPercent}%</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">
+            <p className="font-semibold">{t('deploy.coarse.fromAssignments', 'Aus Einsätzen')}</p>
+            <p className="mt-0.5 text-background/70">{assignmentPercent}% {t('deploy.coarse.booked', 'gebucht')}</p>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
     return (
       <button
         type="button"
@@ -116,6 +152,13 @@ export const CoarseCell = memo(function CoarseCell({
                 {allocations.length}×
               </span>
             )}
+            {assignmentExceeds && (
+              <span
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-1"
+                style={ASSIGNMENT_HATCH}
+                aria-hidden
+              />
+            )}
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs">
@@ -142,6 +185,11 @@ export const CoarseCell = memo(function CoarseCell({
           </div>
           {allocations.some((item) => item.notes) && (
             <p className="mt-1 text-background/70">{allocations.find((item) => item.notes)?.notes}</p>
+          )}
+          {assignmentPercent > 0 && (
+            <p className="mt-1 text-background/70">
+              {t('deploy.coarse.fromAssignments', 'Aus Einsätzen')}: {assignmentPercent}%
+            </p>
           )}
         </TooltipContent>
       </Tooltip>

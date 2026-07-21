@@ -83,8 +83,13 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.crm.trend': 'Kundenwachstum',
     'dashboard.analytics.crm.trendDesc': 'Neue Kunden im Zeitverlauf.',
     'dashboard.analytics.crm.types': 'Kundentypen',
-    'dashboard.analytics.crm.cities': 'Top-Staedte',
-    'dashboard.analytics.crm.citiesDesc': 'Staedte mit den meisten Kunden.',
+    'dashboard.analytics.crm.recent.title': 'Zuletzt geoeffnet',
+    'dashboard.analytics.crm.recent.desc': 'Schnellzugriff auf die zuletzt geoeffneten Kunden.',
+    'dashboard.analytics.crm.recent.justNow': 'gerade eben',
+    'dashboard.analytics.crm.recent.minutesAgo': 'vor {n} Min.',
+    'dashboard.analytics.crm.recent.hoursAgo': 'vor {n} Std.',
+    'dashboard.analytics.crm.recent.emptyTitle': 'Noch keine geoeffneten Kunden',
+    'dashboard.analytics.crm.recent.emptyDesc': 'Oeffnen Sie einen Kunden, damit er hier zum Schnellzugriff erscheint.',
 
     'dashboard.analytics.projects.active': 'Aktive Projekte',
     'dashboard.analytics.projects.completed': 'Abgeschlossen',
@@ -219,6 +224,12 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.breakdowns.userStatus.suspended': 'Gesperrt',
     'dashboard.analytics.breakdowns.userStatus.pending': 'Ausstehend',
     'dashboard.analytics.breakdowns.userStatus.invited': 'Eingeladen',
+
+    'dashboard.config.title': 'Dashboard konfigurieren',
+    'dashboard.config.kpis': 'Kennzahlen',
+    'dashboard.config.tabs': 'Bereiche',
+    'dashboard.config.save': 'Speichern',
+    'dashboard.scope.system': 'Systemweit',
   },
 
   en: {
@@ -305,8 +316,13 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.crm.trend': 'Customer growth',
     'dashboard.analytics.crm.trendDesc': 'New customer records over time.',
     'dashboard.analytics.crm.types': 'Customer types',
-    'dashboard.analytics.crm.cities': 'Top cities',
-    'dashboard.analytics.crm.citiesDesc': 'Largest customer locations.',
+    'dashboard.analytics.crm.recent.title': 'Recently opened',
+    'dashboard.analytics.crm.recent.desc': 'Quick access to the customers you opened last.',
+    'dashboard.analytics.crm.recent.justNow': 'just now',
+    'dashboard.analytics.crm.recent.minutesAgo': '{n} min ago',
+    'dashboard.analytics.crm.recent.hoursAgo': '{n} h ago',
+    'dashboard.analytics.crm.recent.emptyTitle': 'No recently opened customers',
+    'dashboard.analytics.crm.recent.emptyDesc': 'Open a customer to see it here for quick access.',
 
     'dashboard.analytics.projects.active': 'Active projects',
     'dashboard.analytics.projects.completed': 'Completed',
@@ -441,6 +457,12 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.breakdowns.userStatus.suspended': 'Suspended',
     'dashboard.analytics.breakdowns.userStatus.pending': 'Pending',
     'dashboard.analytics.breakdowns.userStatus.invited': 'Invited',
+
+    'dashboard.config.title': 'Configure dashboard',
+    'dashboard.config.kpis': 'Key metrics',
+    'dashboard.config.tabs': 'Sections',
+    'dashboard.config.save': 'Save',
+    'dashboard.scope.system': 'System-wide',
   },
 
   fr: {
@@ -527,8 +549,13 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.crm.trend': 'Croissance clients',
     'dashboard.analytics.crm.trendDesc': 'Nouveaux dossiers clients dans le temps.',
     'dashboard.analytics.crm.types': 'Types de clients',
-    'dashboard.analytics.crm.cities': 'Principales villes',
-    'dashboard.analytics.crm.citiesDesc': 'Plus grands sites clients.',
+    'dashboard.analytics.crm.recent.title': 'Recemment ouverts',
+    'dashboard.analytics.crm.recent.desc': 'Acces rapide aux clients ouverts en dernier.',
+    'dashboard.analytics.crm.recent.justNow': "a l'instant",
+    'dashboard.analytics.crm.recent.minutesAgo': 'il y a {n} min',
+    'dashboard.analytics.crm.recent.hoursAgo': 'il y a {n} h',
+    'dashboard.analytics.crm.recent.emptyTitle': 'Aucun client ouvert recemment',
+    'dashboard.analytics.crm.recent.emptyDesc': 'Ouvrez un client pour le retrouver ici en acces rapide.',
 
     'dashboard.analytics.projects.active': 'Projets actifs',
     'dashboard.analytics.projects.completed': 'Termines',
@@ -663,6 +690,12 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.breakdowns.userStatus.suspended': 'Suspendu',
     'dashboard.analytics.breakdowns.userStatus.pending': 'En attente',
     'dashboard.analytics.breakdowns.userStatus.invited': 'Invite',
+
+    'dashboard.config.title': 'Configurer le tableau de bord',
+    'dashboard.config.kpis': 'Indicateurs cles',
+    'dashboard.config.tabs': 'Sections',
+    'dashboard.config.save': 'Enregistrer',
+    'dashboard.scope.system': 'Ensemble du systeme',
   },
 
   it: {
@@ -749,8 +782,13 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.crm.trend': 'Crescita clienti',
     'dashboard.analytics.crm.trendDesc': 'Nuovi record cliente nel tempo.',
     'dashboard.analytics.crm.types': 'Tipi cliente',
-    'dashboard.analytics.crm.cities': 'Citta principali',
-    'dashboard.analytics.crm.citiesDesc': 'Localita clienti principali.',
+    'dashboard.analytics.crm.recent.title': 'Aperti di recente',
+    'dashboard.analytics.crm.recent.desc': 'Accesso rapido agli ultimi clienti aperti.',
+    'dashboard.analytics.crm.recent.justNow': 'proprio ora',
+    'dashboard.analytics.crm.recent.minutesAgo': '{n} min fa',
+    'dashboard.analytics.crm.recent.hoursAgo': '{n} h fa',
+    'dashboard.analytics.crm.recent.emptyTitle': 'Nessun cliente aperto di recente',
+    'dashboard.analytics.crm.recent.emptyDesc': 'Apri un cliente per ritrovarlo qui in accesso rapido.',
 
     'dashboard.analytics.projects.active': 'Progetti attivi',
     'dashboard.analytics.projects.completed': 'Completati',
@@ -885,5 +923,11 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.breakdowns.userStatus.suspended': 'Sospeso',
     'dashboard.analytics.breakdowns.userStatus.pending': 'In attesa',
     'dashboard.analytics.breakdowns.userStatus.invited': 'Invitato',
+
+    'dashboard.config.title': 'Configura dashboard',
+    'dashboard.config.kpis': 'Indicatori chiave',
+    'dashboard.config.tabs': 'Sezioni',
+    'dashboard.config.save': 'Salva',
+    'dashboard.scope.system': 'Tutto il sistema',
   },
 };

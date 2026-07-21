@@ -106,32 +106,32 @@ function Step1OrderTime({ form, de, isEdit, loadOrders }) {
   return (
     <div className="space-y-5">
       <FormSection
-        title={de ? 'Auftrag & Datum' : 'Order & Date'}
-        description={de ? 'Auftrag zuordnen und Einsatzdatum festlegen' : 'Link to an order and set the service date'}
+        title={de ? 'Einsatz & Datum' : 'Assignment & Date'}
+        description={de ? 'Einsatz zuordnen und Einsatzdatum festlegen' : 'Link to an order and set the service date'}
       >
-        <FormField label={de ? 'Auftrag' : 'Order'} required error={errors.orderId?.message}>
+        <FormField label={de ? 'Einsatz' : 'Assignment'} required error={errors.orderId?.message}>
           <Select
             value={watch('orderId')}
             onValueChange={(v) => setValue('orderId', v, { shouldValidate: true })}
             disabled={isEdit}
           >
             <SelectTrigger className={errors.orderId ? 'border-destructive' : ''}>
-              <SelectValue placeholder={de ? 'Auftrag wählen…' : 'Select order…'} />
+              <SelectValue placeholder={de ? 'Einsatz wählen…' : 'Select order…'} />
             </SelectTrigger>
             <SelectContent>
               {loadOrders && ordersLoading ? (
                 <SelectItem value="__orders_loading" disabled>
-                  {de ? 'Auftraege werden geladen...' : 'Loading orders...'}
+                  {de ? 'Einsaetze werden geladen...' : 'Loading orders...'}
                 </SelectItem>
               ) : null}
               {loadOrders && !ordersLoading && ordersError ? (
                 <SelectItem value="__orders_error" disabled>
-                  {de ? 'Auftraege konnten nicht geladen werden' : 'Orders could not be loaded'}
+                  {de ? 'Einsaetze konnten nicht geladen werden' : 'Assignments could not be loaded'}
                 </SelectItem>
               ) : null}
               {loadOrders && !ordersLoading && !ordersError && orders.length === 0 ? (
                 <SelectItem value="__orders_empty" disabled>
-                  {de ? 'Keine Auftraege verfuegbar' : 'No orders available'}
+                  {de ? 'Keine Einsaetze verfuegbar' : 'No orders available'}
                 </SelectItem>
               ) : null}
               {orders.map((order) => {

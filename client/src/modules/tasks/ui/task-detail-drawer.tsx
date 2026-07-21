@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import {
   CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX,
-  Copy, ExternalLink, Flag, Paperclip, Plus, Send, Trash2,
+  Copy, ExternalLink, Flag, Lock, LockOpen, Paperclip, Plus, Send, Trash2,
   Upload, UserRound, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -60,6 +60,7 @@ type TaskDetailDrawerProps = {
   onTaskRefresh?: (id: string) => void;
   users?: WorkspaceUser[];
   onDuplicateTask?: (id: string) => void;
+  onSetLock?: (id: string, locked: boolean, expectedVersion?: number) => void;
 };
 
 type WorkspaceUser = {
@@ -150,6 +151,7 @@ export default function TaskDetailDrawer({
   onTaskRefresh,
   users,
   onDuplicateTask,
+  onSetLock,
 }: TaskDetailDrawerProps) {
   const { t } = useLanguage();
   const startInputRef = useRef<HTMLInputElement>(null);
@@ -276,6 +278,15 @@ export default function TaskDetailDrawer({
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                 {StatusIcon && <StatusIcon className={cn('h-3 w-3', taskStatusIconColor[task.status])} />}
                 <span>{getTaskStatusLabel(t, task.status)}</span>
+                {task.locked && (
+                  <>
+                    <span className="opacity-40">·</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      <Lock className="h-3 w-3" />
+                      {t('tasks.locked', 'Gesperrt')}
+                    </span>
+                  </>
+                )}
                 <span className="opacity-40">·</span>
                 <span>v{task.version}</span>
                 <span className="opacity-40">·</span>
@@ -358,6 +369,7 @@ export default function TaskDetailDrawer({
                     onPatchTask(task.id, { assigneeId: id, expectedVersion: task.version })
                   }
                   size="sm"
+                  disabled={task.locked}
                 />
               </div>
             </div>
@@ -571,6 +583,24 @@ export default function TaskDetailDrawer({
                 <Copy className="h-3.5 w-3.5" />
                 {t('common.duplicate')}
               </Button>
+              {onSetLock && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    'gap-1.5 text-xs',
+                    task.locked ? 'text-amber-600 hover:text-amber-700' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  onClick={() => onSetLock(task.id, !task.locked, task.version)}
+                  title={task.locked
+                    ? t('tasks.unlockHint', 'Sperre aufheben – Aufgabe kann wieder zugewiesen werden')
+                    : t('tasks.lockHint', 'Aufgabe sperren – bleibt vertraulich beim Bearbeiter')}
+                >
+                  {task.locked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                  {task.locked ? t('tasks.unlock', 'Entsperren') : t('tasks.lock', 'Sperren')}
+                </Button>
+              )}
               <div className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
                 <span>#{task.id.slice(-6)}</span>
               </div>

@@ -106,7 +106,8 @@ export function DataTableShell({
         id: 'actions',
         header: '',
         cell: ({ row }) => (
-          <div className="flex items-center justify-end gap-0.5">
+          // Stop propagation so action clicks never trigger the row's onRowClick.
+          <div className="flex items-center justify-end gap-0.5" onClick={(e) => e.stopPropagation()}>
             {renderRowActions({ row })}
           </div>
         ),

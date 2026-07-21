@@ -12,18 +12,29 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, UserRound, AlertCircle } from 'lucide-react';
 
 const BLANK = {
   firstName: '',
   lastName: '',
   functionTitle: '',
+  siteId: '',
   phone: '',
   mobile: '',
   email: '',
   isPrimary: false,
   notes: '',
 };
+
+const FUNCTION_PRESETS = [
+  { value: 'Eigentümer', label: 'Eigentümer' },
+  { value: 'Bewohner/Mieter', label: 'Bewohner/Mieter' },
+  { value: 'Hausverwaltung', label: 'Hausverwaltung' },
+  { value: 'Objektleiter', label: 'Objektleiter' },
+  { value: 'Ansprechpartner', label: 'Ansprechpartner' },
+  { value: 'Sonstige', label: 'Sonstige' },
+];
 
 export function ContactForm({
   open,
@@ -33,6 +44,7 @@ export function ContactForm({
   isLoading,
   contextField = null,
   isSubmitDisabled = false,
+  sites = [],
 }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
@@ -43,12 +55,14 @@ export function ContactForm({
 
   useEffect(() => {
     if (defaultValues) {
+      const siteVal = defaultValues.siteId;
       reset({
         ...BLANK,
         ...defaultValues,
         firstName: defaultValues.firstName || '',
         lastName: defaultValues.lastName || '',
         functionTitle: defaultValues.functionTitle || '',
+        siteId: (typeof siteVal === 'object' ? siteVal?._id : siteVal) || '',
         phone: defaultValues.phone || '',
         mobile: defaultValues.mobile || '',
         email: defaultValues.email || '',
@@ -61,11 +75,15 @@ export function ContactForm({
   }, [defaultValues, reset, open]);
 
   const isPrimary = useWatch({ control, name: 'isPrimary' });
+  const watchedFunctionTitle = useWatch({ control, name: 'functionTitle' });
+  const watchedSiteId = useWatch({ control, name: 'siteId' });
+  const isPresetFunction = FUNCTION_PRESETS.some((p) => p.value === watchedFunctionTitle);
 
   const submit = async (data) => {
     const cleaned = {
       ...data,
       functionTitle: data.functionTitle || null,
+      siteId: data.siteId || null,
       phone: data.phone || null,
       mobile: data.mobile || null,
       email: data.email || null,
@@ -130,13 +148,49 @@ export function ContactForm({
               </DarkField>
             </div>
 
-            <DarkField label={t('crm.contacts.functionTitle', 'Funktion / Position')} error={errors.functionTitle}>
-              <Input
-                {...register('functionTitle')}
-                placeholder={t('crm.contacts.functionPlaceholder', 'z.B. Hausverwaltung')}
-                className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
-              />
-            </DarkField>
+            <div className="grid grid-cols-2 gap-4">
+              <DarkField label={t('crm.contacts.functionTitle', 'Funktion / Rolle')} error={errors.functionTitle}>
+                <Select
+                  value={isPresetFunction ? watchedFunctionTitle : '_custom'}
+                  onValueChange={(v) => setValue('functionTitle', v === '_custom' ? '' : v, { shouldDirty: true })}
+                >
+                  <SelectTrigger className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-violet-500/50 focus:ring-violet-500/20">
+                    <SelectValue placeholder={t('crm.contacts.selectFunction', 'Rolle wählen...')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FUNCTION_PRESETS.map((p) => (
+                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                    ))}
+                    <SelectItem value="_custom">{t('crm.contacts.customFunction', 'Andere...')}</SelectItem>
+                  </SelectContent>
+                </Select>
+                {!isPresetFunction && (
+                  <Input
+                    {...register('functionTitle')}
+                    placeholder={t('crm.contacts.functionPlaceholder', 'z.B. Hausverwaltung')}
+                    className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 mt-1.5"
+                  />
+                )}
+              </DarkField>
+              {sites.length > 0 && (
+                <DarkField label={t('crm.contacts.site', 'Objekt')}>
+                  <Select
+                    value={watchedSiteId || 'none'}
+                    onValueChange={(v) => setValue('siteId', v === 'none' ? '' : v, { shouldDirty: true })}
+                  >
+                    <SelectTrigger className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-violet-500/50 focus:ring-violet-500/20">
+                      <SelectValue placeholder={t('crm.contacts.selectSite', 'Objekt wählen...')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t('crm.contacts.noSite', 'Kein Objekt (global)')}</SelectItem>
+                      {sites.map((s) => (
+                        <SelectItem key={s._id} value={s._id}>{s.name || s.street || s._id}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </DarkField>
+              )}
+            </div>
 
             <Separator className="my-5 bg-border" />
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">

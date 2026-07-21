@@ -98,7 +98,7 @@ export const updateAssignmentSchema = {
     maintenanceIntervalId: objectId.allow(null),
     colorCode: Joi.string().max(7).allow('', null),
     isCustomerAppointment: Joi.boolean(),
-    appointment: appointmentSchema.optional(),
+    appointment: appointmentSchema.allow(null).optional(),
     overrideConflicts: Joi.boolean().default(false),
     overrideReason: Joi.when('overrideConflicts', {
       is: true,

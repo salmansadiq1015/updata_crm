@@ -27,6 +27,7 @@ class ContactRepository {
 
   async findByCustomerId(customerId) {
     return Contact.find({ customerId })
+      .populate('siteId', 'name siteNumber street city')
       .sort({ isPrimary: -1, lastName: 1 })
       .lean();
   }

@@ -27,6 +27,9 @@ import {
   UsersRound,
 } from 'lucide-react';
 
+// Mirrors the server CRM PHONE_PATTERN (crm.constants.js) so client + API agree.
+const PHONE_REGEX = /^(\+[1-9]\d{0,2}[\s.-]?)?(\(?\d{1,4}\)?[\s.-]?){1,5}\d{1,4}$/;
+
 const step1Schema = z.object({
   orderType: z.string().min(1, 'Required'),
   priority: z.string().optional(),
@@ -44,8 +47,8 @@ const step3Schema = z.object({
   customerId: z.string().optional(),
   siteId: z.string().optional(),
   customerName: z.string().optional(),
-  customerPhone: z.string().optional(),
-  customerEmail: z.string().optional(),
+  customerPhone: z.string().regex(PHONE_REGEX, 'Ungültige Telefonnummer').or(z.literal('')).optional(),
+  customerEmail: z.string().email('Ungültige E-Mail-Adresse').or(z.literal('')).optional(),
   siteAddress: z.string().optional(),
   accessInstructions: z.string().optional(),
   parkingInfo: z.string().optional(),
@@ -126,11 +129,11 @@ function Step1OrderDetails({ form, de }) {
   const { register, watch, setValue, formState: { errors } } = form;
   return (
     <FormSection
-      title={de ? 'Auftragsdetails' : 'Order Details'}
-      description={de ? 'Typ, Prioritaet und Titel des Auftrags' : 'Order type, priority and title'}
+      title={de ? 'Einsatzdetails' : 'Assignment Details'}
+      description={de ? 'Typ, Prioritaet und Titel des Einsatzes' : 'Assignment type, priority and title'}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label={de ? 'Auftragstyp' : 'Order Type'} required error={errors.orderType?.message}>
+        <FormField label={de ? 'Einsatztyp' : 'Assignment Type'} required error={errors.orderType?.message}>
           <Select value={watch('orderType')} onValueChange={(value) => setValue('orderType', value, { shouldValidate: true })}>
             <SelectTrigger className={errors.orderType ? 'border-destructive' : ''}>
               <SelectValue placeholder={de ? 'Typ waehlen...' : 'Select type...'} />
@@ -160,7 +163,7 @@ function Step1OrderDetails({ form, de }) {
       <FormField label={de ? 'Titel' : 'Title'} required error={errors.title?.message}>
         <Input
           {...register('title')}
-          placeholder={de ? 'Auftragstitel...' : 'Order title...'}
+          placeholder={de ? 'Einsatztitel...' : 'Assignment title...'}
           className={errors.title ? 'border-destructive' : ''}
         />
       </FormField>
@@ -215,7 +218,7 @@ function Step2ScopeOfWork({ form, de }) {
 }
 
 function Step3CustomerSite({ form, de }) {
-  const { register, watch, setValue } = form;
+  const { register, watch, setValue, formState: { errors } } = form;
   const [projectSearch, setProjectSearch] = useState('');
   const debouncedProjectSearch = useDebounce(projectSearch, 250);
   const { data: projects = [], isFetching } = useAssignmentProjectOptions({
@@ -273,11 +276,11 @@ function Step3CustomerSite({ form, de }) {
         <FormField label={de ? 'Kundenname' : 'Customer Name'}>
           <Input {...register('customerName')} placeholder={de ? 'Firma / Name...' : 'Company / Name...'} />
         </FormField>
-        <FormField label={de ? 'Telefon' : 'Phone'}>
-          <Input {...register('customerPhone')} type="tel" placeholder="+41 79 000 00 00" />
+        <FormField label={de ? 'Telefon' : 'Phone'} error={errors.customerPhone?.message}>
+          <Input {...register('customerPhone')} type="tel" placeholder="+41 79 000 00 00" className={errors.customerPhone ? 'border-destructive' : ''} />
         </FormField>
-        <FormField label={de ? 'E-Mail' : 'Email'}>
-          <Input {...register('customerEmail')} type="email" placeholder="name@firma.ch" />
+        <FormField label={de ? 'E-Mail' : 'Email'} error={errors.customerEmail?.message}>
+          <Input {...register('customerEmail')} type="email" placeholder="name@firma.ch" className={errors.customerEmail ? 'border-destructive' : ''} />
         </FormField>
         <FormField label={de ? 'Standortadresse' : 'Site Address'}>
           <Input {...register('siteAddress')} placeholder={de ? 'Strasse, PLZ Ort...' : 'Street, ZIP City...'} />
@@ -478,7 +481,7 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
   }, [open, defaultValues, reset]);
 
   const steps = useMemo(() => [
-    { label: de ? 'Auftrag' : 'Order', icon: ClipboardList },
+    { label: de ? 'Einsatz' : 'Assignment', icon: ClipboardList },
     { label: de ? 'Leistung' : 'Scope', icon: FileText },
     { label: de ? 'Kunde' : 'Customer', icon: Building2 },
     { label: de ? 'Termin' : 'Schedule', icon: CalendarClock },
@@ -521,14 +524,17 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-3xl">
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-3xl"
+      >
         <DialogHeader className="shrink-0 border-b border-border px-6 pb-4 pt-5">
           <DialogTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
               <ClipboardList className="h-5 w-5 text-primary" />
               {isEditMode
-                ? (de ? 'Auftrag bearbeiten' : 'Edit Order')
-                : (de ? 'Neuer Auftrag' : 'New Order')}
+                ? (de ? 'Einsatz bearbeiten' : 'Edit Assignment')
+                : (de ? 'Neuer Einsatz' : 'New Assignment')}
             </span>
             <span className="text-sm font-normal text-muted-foreground">
               {de ? `Schritt ${currentStep + 1} von ${steps.length}` : `Step ${currentStep + 1} of ${steps.length}`}
@@ -569,7 +575,7 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
             cancelLabel={de ? 'Abbrechen' : 'Cancel'}
             submitLabel={isEditMode
               ? (de ? 'Speichern' : 'Save Changes')
-              : (de ? 'Auftrag erstellen' : 'Create Order')}
+              : (de ? 'Einsatz erstellen' : 'Create Assignment')}
           />
         </div>
       </DialogContent>

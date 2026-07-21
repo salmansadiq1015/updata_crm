@@ -11,15 +11,25 @@ export function cellPercent(allocations) {
   return list.reduce((sum, item) => sum + (item?.allocationPercent || 0), 0);
 }
 
+// Effective load of a (row, week) cell for capacity/utilisation: the greater of
+// the coarse allocations and the load from real assignments (Einsätze). Using
+// max avoids double-counting when the same work exists as both an allocation
+// and a concrete booking (module 08 — Grobplanung must reflect real Termine).
+export function effectivePercent(row, week) {
+  const coarse = cellPercent(row?.weekMap?.[week]);
+  const assignment = row?.assignmentMap?.[week] || 0;
+  return Math.max(coarse, assignment);
+}
+
 // Average load of a single row across the visible weeks (empty weeks count as 0).
 export function rowAverage(row, weeks) {
   if (!weeks.length) return 0;
-  const total = weeks.reduce((sum, week) => sum + cellPercent(row?.weekMap?.[week]), 0);
+  const total = weeks.reduce((sum, week) => sum + effectivePercent(row, week), 0);
   return Math.round(total / weeks.length);
 }
 
 export function isRowOverAllocated(row, weeks) {
-  return weeks.some((week) => cellPercent(row?.weekMap?.[week]) > 100);
+  return weeks.some((week) => effectivePercent(row, week) > 100);
 }
 
 // Team load per week: average of every row's cell value for that week.
@@ -31,7 +41,7 @@ export function columnAverages(rows, weeks) {
       result[week] = 0;
       return;
     }
-    const total = rows.reduce((sum, row) => sum + cellPercent(row?.weekMap?.[week]), 0);
+    const total = rows.reduce((sum, row) => sum + effectivePercent(row, week), 0);
     result[week] = Math.round(total / rows.length);
   });
   return result;
@@ -40,7 +50,7 @@ export function columnAverages(rows, weeks) {
 export function computeKpis(rows, weeks) {
   const cellValues = [];
   rows.forEach((row) => {
-    weeks.forEach((week) => cellValues.push(cellPercent(row?.weekMap?.[week])));
+    weeks.forEach((week) => cellValues.push(effectivePercent(row, week)));
   });
 
   const avgUtilization = cellValues.length

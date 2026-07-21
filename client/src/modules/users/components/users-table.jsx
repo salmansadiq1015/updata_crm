@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '@/modules/users/services/user-service';
 import { roleService } from '@/modules/roles/services/role-service';
@@ -37,13 +38,14 @@ import {
 
 const statusConfig = {
   active: { labelKey: 'users.active', fallback: 'Aktiv', variant: 'default', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-700 dark:text-emerald-400' },
-  pending_activation: { labelKey: 'users.pending', fallback: 'Ausstehend', variant: 'secondary', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-700 dark:text-amber-400' },
+  pending_activation: { labelKey: 'users.pending', fallback: 'Nicht aktiviert', variant: 'secondary', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-700 dark:text-amber-400' },
   deactivated: { labelKey: 'users.deactivated', fallback: 'Deaktiviert', variant: 'outline', dotColor: 'bg-muted-foreground/40', bgColor: 'bg-muted', textColor: 'text-muted-foreground' },
   locked: { labelKey: 'users.locked', fallback: 'Gesperrt', variant: 'destructive', dotColor: 'bg-red-500', bgColor: 'bg-red-500/10', textColor: 'text-red-700 dark:text-red-400' },
 };
 
 export function UsersTable() {
   const { t, locale } = useLanguage();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState('table');
   const [sorting, setSorting] = useState([]);
@@ -358,7 +360,7 @@ export function UsersTable() {
             trend: '+5%',
           },
           {
-            label: t('users.pending') || 'Ausstehend',
+            label: t('users.pending') || 'Nicht aktiviert',
             value: pendingCount,
             icon: Clock,
             accent: 'amber',
@@ -408,7 +410,7 @@ export function UsersTable() {
             <SelectItem value="pending_activation">
               <span className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                {t('users.pending') || 'Ausstehend'}
+                {t('users.pending') || 'Nicht aktiviert'}
               </span>
             </SelectItem>
             <SelectItem value="deactivated">
@@ -513,6 +515,7 @@ export function UsersTable() {
           enableRowSelection
           rowSelection={rowSelection}
           onRowSelectionChange={setRowSelection}
+          onRowClick={(u) => router.push(`/settings/users/${u._id}`)}
           cursorPagination={{
             pageSize,
             onPageSizeChange: setPageSize,
@@ -720,6 +723,7 @@ function UserCardGrid({ users, isLoading, onEdit, onToggle, globalFilter, onGlob
 
 function UserCard({ user, onEdit, onToggle }) {
   const { t, locale } = useLanguage();
+  const router = useRouter();
   const initials = `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase();
   const status = statusConfig[user.status] || statusConfig.active;
   const isActive = user.status === 'active' || user.isActive;
@@ -730,14 +734,17 @@ function UserCard({ user, onEdit, onToggle }) {
   const dateLocale = getUserDateLocale(locale);
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card overflow-hidden group hover:border-border/70 hover:shadow-md transition-all duration-200">
+    <div
+      onClick={() => router.push(`/settings/users/${user._id}`)}
+      className="rounded-xl border border-border/40 bg-card overflow-hidden group hover:border-border/70 hover:shadow-md transition-all duration-200 cursor-pointer"
+    >
       {/* Top gradient accent */}
       <div className={cn('h-1', isActive ? 'bg-linear-to-r from-primary/60 to-primary/20' : 'bg-linear-to-r from-muted-foreground/20 to-transparent')} />
 
       <div className="p-5">
         {/* Header: Avatar + Name + Actions */}
         <div className="flex items-start justify-between mb-4">
-          <Link href={`/settings/users/${user._id}`} className="flex items-center gap-3 group/link min-w-0">
+          <Link href={`/settings/users/${user._id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-3 group/link min-w-0">
             <div className="relative shrink-0">
               <Avatar className="h-11 w-11 border-2 border-background shadow-sm ring-1 ring-border/50">
                 <AvatarFallback className="text-sm font-bold bg-primary/8 text-primary">
@@ -757,7 +764,7 @@ function UserCard({ user, onEdit, onToggle }) {
           {/* Quick Actions */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md opacity-0 group-hover:opacity-100 transition-opacity -mt-0.5 -mr-1">
+              <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()} className="h-7 w-7 rounded-md opacity-0 group-hover:opacity-100 transition-opacity -mt-0.5 -mr-1">
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>

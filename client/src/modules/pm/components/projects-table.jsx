@@ -369,20 +369,14 @@ export function ProjectsTable() {
       </PageHeader>
 
       <Tabs defaultValue="projects" className="w-full">
-        <TabsList className="bg-transparent border-b rounded-none w-full justify-start h-auto p-0 gap-1">
-          <TabsTrigger
-            value="projects"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 gap-1.5"
-          >
-            <FolderKanban className="h-3.5 w-3.5" />
-            {t('pm.projects', 'Projects')}
+        <TabsList variant="line" className="h-10">
+          <TabsTrigger value="projects" className="gap-2 px-4 text-sm">
+            <FolderKanban className="h-4 w-4" />
+            {t('pm.projects', 'Projekte')}
           </TabsTrigger>
-          <TabsTrigger
-            value="milestones"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 pb-2 gap-1.5"
-          >
-            <Milestone className="h-3.5 w-3.5" />
-            {t('pm.upcomingMilestones', 'Upcoming Milestones')}
+          <TabsTrigger value="milestones" className="gap-2 px-4 text-sm">
+            <Milestone className="h-4 w-4" />
+            {t('pm.upcomingMilestones', 'Anstehende Meilensteine')}
           </TabsTrigger>
         </TabsList>
 

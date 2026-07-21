@@ -219,7 +219,13 @@ class AuthController {
         const docs = [];
         for await (const doc of cursor) {
           docs.push({
-            ...doc,
+            timestamp: doc.timestamp,
+            eventType: doc.eventType,
+            userId: doc.userId ? String(doc.userId) : '',
+            email: doc.email || '',
+            ipAddress: doc.ipAddress || '',
+            result: doc.result || '',
+            module: doc.module || '',
             details: doc.details ? JSON.stringify(doc.details) : '',
           });
         }

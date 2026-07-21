@@ -72,6 +72,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
   // ── Customer search state ────────────────────────────────────
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerOpen, setCustomerOpen] = useState(false);
+  const [customerNameCache, setCustomerNameCache] = useState('');
   const debouncedCustomerSearch = useDebounce(customerSearch, 300);
   const trimmedCustomerSearch = debouncedCustomerSearch.trim();
 
@@ -108,8 +109,11 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
       return defaultCustomer;
     }
 
+    // Fallback: use cached name so we never display the raw UID
+    if (customerNameCache) return { _id: watchedCustomerId, name: customerNameCache };
+
     return null;
-  }, [watchedCustomerId, customers, defaultValues]);
+  }, [watchedCustomerId, customers, defaultValues, customerNameCache]);
 
   // ── Users for review display ─────────────────────────────────
   const { data: usersData } = useQuery({
@@ -161,11 +165,13 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
       setInitialFormValues(editValues);
       if (typeof defaultValues.customerId === 'object' && defaultValues.customerId?.name) {
         setCustomerSearch(defaultValues.customerId.name);
+        setCustomerNameCache(defaultValues.customerId.name);
       }
     } else {
       reset(BLANK_VALUES);
       setInitialFormValues(BLANK_VALUES);
       setCustomerSearch('');
+      setCustomerNameCache('');
     }
   }, [open, defaultValues, reset]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -235,6 +241,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
     setCustomerSearch,
     customerOpen,
     setCustomerOpen,
+    setCustomerNameCache,
     customers,
     debouncedCustomerSearch: trimmedCustomerSearch,
     selectedCustomer,
@@ -265,7 +272,7 @@ export function ProjectForm({ open, onOpenChange, onSubmit, defaultValues, isLoa
         onOpenChange(isOpen);
       }
     }}>
-      <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto scrollbar-hide p-6">
+      <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto scrollbar-hide p-6" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">

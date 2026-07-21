@@ -22,7 +22,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { useQuotationTemplates, useRecurringItems } from '../hooks/use-qop-template-queries';
 import { useQuotationTemplateMutations } from '../hooks/use-qop-template-mutations';
 import { LineItemsEditor } from './line-items-editor';
-import { CURRENCIES } from '../constants/qop-constants';
+import { CURRENCIES, PAYMENT_TERMS_PRESETS } from '../constants/qop-constants';
 
 const EMPTY_TPL = () => ({
   name: '',
@@ -148,7 +148,16 @@ function TemplateFormDialog({ open, onClose, template = null }) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>{t('qop.templates.paymentTerms', 'Zahlungsbedingungen')}</Label>
-              <Textarea rows={2} value={form.paymentTerms} onChange={(e) => set('paymentTerms', e.target.value)} maxLength={1000} className="resize-none text-sm" />
+              <Select value={form.paymentTerms || ''} onValueChange={(v) => set('paymentTerms', v)}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="Zahlungsbedingung wählen..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_TERMS_PRESETS.map((pt) => (
+                    <SelectItem key={pt.value} value={pt.value}>{pt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="col-span-2 flex flex-col gap-1.5">
               <Label>{t('qop.templates.termsAndConditions', 'AGB')}</Label>

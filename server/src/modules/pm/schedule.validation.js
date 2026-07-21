@@ -88,7 +88,17 @@ export const bulkConfirmationSchema = {
 export const exportScheduleSchema = {
   params: Joi.object({ id: objectId.required() }),
   query: Joi.object({
-    format: Joi.string().valid('pdf', 'ical').default('pdf'),
+    format: Joi.string().valid('pdf', 'ical', 'excel').default('pdf'),
+  }),
+};
+
+export const transferScheduleSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    target: Joi.string().valid('einsatzplanung', 'grobplanung').default('einsatzplanung'),
+    // Grobplanung only: manual override of the weekly allocation; omitted =
+    // derive it from each phase's working-day coverage of the week.
+    allocationPercent: Joi.number().valid(25, 50, 75, 100),
   }),
 };
 

@@ -38,7 +38,7 @@ import {
   Plus, Pencil, Trash2, Loader2, ArrowRight, Milestone,
   Send, MessageSquare, Calendar, Users, Building2,
   List, BarChart3, ChevronDown, ChevronRight, Clock, Download,
-  User, Check, AlertTriangle, CheckSquare, Square, X, FileText,
+  User, Check, AlertTriangle, CheckSquare, Square, X, FileText, FileSpreadsheet, ArrowRightLeft,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 
@@ -637,6 +637,11 @@ export function ScheduleTab({ projectId }) {
   const [confirmResponseEntry, setConfirmResponseEntry] = useState(null);
   const [confirmResponseConf, setConfirmResponseConf] = useState(null);
 
+  // "Übernehmen" — transfer the Bauplan into deploy planning
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferTarget, setTransferTarget] = useState('einsatzplanung');
+  const [transferPercent, setTransferPercent] = useState('auto');
+
   // Multi-select + bulk confirmation
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -686,13 +691,14 @@ export function ScheduleTab({ projectId }) {
     return map;
   }, [conflictsData, entries, language]);
 
-  const { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, sendBulkConfirmations, exportSchedule } = useScheduleMutations(projectId, {
+  const { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, sendBulkConfirmations, exportSchedule, transferSchedule } = useScheduleMutations(projectId, {
     onAddEntry: () => { setFormOpen(false); entryForm.reset(defaultEntryValues); },
     onUpdateEntry: () => { setFormOpen(false); setEditEntry(null); },
     onDeleteEntry: () => setDeleteTarget(null),
     onSendConfirmation: () => { setConfirmSendOpen(false); setConfirmSendEntry(null); },
     onUpdateConfirmation: () => { setConfirmResponseOpen(false); setConfirmResponseEntry(null); setConfirmResponseConf(null); },
     onBulkConfirmation: (res) => { setBulkResults(res?.results || []); },
+    onTransfer: () => setTransferOpen(false),
   });
 
   // ── Multi-select / bulk confirmation helpers ──────────────────
@@ -916,22 +922,33 @@ export function ScheduleTab({ projectId }) {
 
         <div className="flex items-center gap-2">
           {entries.length > 0 && (
-            <div className="flex items-center rounded-lg border border-border overflow-hidden">
+            <div className="flex items-center rounded-lg border border-border overflow-hidden divide-x divide-border">
               <button
-                className="px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
                 onClick={() => exportSchedule.mutate('ical')}
                 disabled={exportSchedule.isPending}
                 title="iCal (.ics)"
               >
                 <Calendar className="h-3.5 w-3.5" />
+                iCal
               </button>
               <button
-                className="px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
                 onClick={() => exportSchedule.mutate('pdf')}
                 disabled={exportSchedule.isPending}
                 title="PDF"
               >
                 <Download className="h-3.5 w-3.5" />
+                PDF
+              </button>
+              <button
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-card hover:bg-muted transition-colors"
+                onClick={() => exportSchedule.mutate('excel')}
+                disabled={exportSchedule.isPending}
+                title="Excel (.csv)"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Excel
               </button>
             </div>
           )}
@@ -964,6 +981,13 @@ export function ScheduleTab({ projectId }) {
                 {language === 'de' ? 'Mehrfachauswahl' : 'Select'}
               </Button>
             )
+          )}
+
+          {canWrite && entries.some((e) => e.entryType === 'PHASE' && e.responsibleType === 'INTERNAL_TEAM' && e.responsibleTeamId) && (
+            <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)}>
+              <ArrowRightLeft className="h-4 w-4 mr-1.5" />
+              {t('pm.transferToPlanning', 'In Planung übernehmen')}
+            </Button>
           )}
 
           {canWrite && (
@@ -1456,6 +1480,57 @@ export function ScheduleTab({ projectId }) {
         isLoading={deleteEntry.isPending}
         variant="destructive"
       />
+
+      {/* ── "Übernehmen" — transfer the Bauplan into deploy planning ── */}
+      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('pm.transferTitle', 'In die Planung übernehmen')}</DialogTitle>
+            <DialogDescription>
+              {t('pm.transferDesc', 'Phasen mit zugewiesenem internem Mitarbeiter werden übernommen. Meilensteine bleiben Marker. Bereits Übernommenes wird übersprungen.')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>{t('pm.transferTarget', 'Ziel')}</Label>
+              <Select value={transferTarget} onValueChange={setTransferTarget}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="einsatzplanung">{t('pm.transferEinsatzplanung', 'Einsatzplanung (datierte Einsätze)')}</SelectItem>
+                  <SelectItem value="grobplanung">{t('pm.transferGrobplanung', 'Grobplanung (Wochen-Auslastung)')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {transferTarget === 'grobplanung' && (
+              <div className="space-y-1.5">
+                <Label>{t('pm.transferPercent', 'Wochen-Auslastung')}</Label>
+                <Select value={transferPercent} onValueChange={setTransferPercent}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">{t('pm.transferPercentAuto', 'Automatisch (aus Dauer berechnet)')}</SelectItem>
+                    <SelectItem value="25">25%</SelectItem>
+                    <SelectItem value="50">50%</SelectItem>
+                    <SelectItem value="75">75%</SelectItem>
+                    <SelectItem value="100">100%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setTransferOpen(false)}>{t('common.cancel', 'Abbrechen')}</Button>
+            <Button
+              onClick={() => transferSchedule.mutate({
+                target: transferTarget,
+                allocationPercent: transferTarget === 'grobplanung' && transferPercent !== 'auto' ? Number(transferPercent) : undefined,
+              })}
+              disabled={transferSchedule.isPending}
+            >
+              {t('pm.transferConfirm', 'Übernehmen')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

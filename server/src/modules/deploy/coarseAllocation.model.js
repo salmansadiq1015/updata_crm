@@ -12,6 +12,14 @@ const coarseAllocationSchema = new mongoose.Schema(
       ref: 'Project',
       required: true,
     },
+    // Set when generated from a PM schedule entry (Bauplan → Grobplanung
+    // transfer); enables per-phase re-sync from the plan.
+    sourceScheduleEntryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ScheduleEntry',
+      default: null,
+      index: true,
+    },
     calendarYear: {
       type: Number,
       required: true,

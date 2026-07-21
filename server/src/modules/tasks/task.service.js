@@ -90,7 +90,7 @@ class TaskService {
     return createdTask;
   }
 
-  async getById(id, userId) {
+  async getById(id, userId, { isAdmin = false } = {}) {
     const cacheKey = `tasks:task:${id}`;
     const task = await cacheManager.getOrSet(
       cacheKey,
@@ -117,7 +117,7 @@ class TaskService {
 
     if (!task) throw new NotFoundError('Task', id);
 
-    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER');
+    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER', { isAdmin });
 
     return task;
   }
@@ -140,17 +140,12 @@ class TaskService {
       );
     }
 
-    // Non-admins: only tasks they created or are assigned to
-    const accessibleListIds = await taskAccessService.getAccessibleListIds(userId, { includeArchived: true });
-
-    if (filters.listId && !accessibleListIds.some((id) => String(id) === String(filters.listId))) {
-      throw new AppError('Access denied to this task list', 403, ERROR_CODES.TASK_ACCESS_DENIED);
-    }
-
+    // Non-admins get central visibility: all non-locked tasks, plus their own
+    // locked ones (the repository access filter enforces this). Locked tasks of
+    // other users are excluded, so no per-list access check is needed here.
     const scopedFilters = {
       ...filters,
       accessUserId: userId,
-      accessibleListIds,
     };
     const filterKey = Object.entries(filters)
       .filter(([, v]) => v !== undefined)
@@ -172,6 +167,11 @@ class TaskService {
 
     await taskAccessService.assertTaskAccess(existing, userId, 'EDITOR');
     const { expectedVersion, ...patch } = data;
+
+    // A locked task stays with its owner — reassignment is not allowed.
+    if (existing.locked && patch.assigneeId && String(patch.assigneeId) !== String(existing.assigneeId)) {
+      throw new AppError('Locked task cannot be reassigned', 403, ERROR_CODES.TASK_LOCKED);
+    }
 
     const updated = await taskRepository.updateById(id, { ...patch, updatedBy: userId }, { expectedVersion });
     if (!updated) {
@@ -226,6 +226,185 @@ class TaskService {
     });
 
     logger.info('Task updated', { module: 'tasks', action: 'update', taskId: id, userId });
+
+    return updated;
+  }
+
+  async setLock(id, locked, userId, meta = {}) {
+    const existing = await taskRepository.findById(id);
+    if (!existing) throw new NotFoundError('Task', id);
+
+    // Only the task owner (assignee/creator/current locker) or an admin may
+    // lock or unlock — a group editor must not hide a colleague's task.
+    const isAdmin = meta.isAdmin === true;
+    if (!isAdmin && !taskAccessService.isTaskOwner(existing, userId)) {
+      throw new AppError('Only the task owner can lock or unlock this task', 403, ERROR_CODES.TASK_LOCKED);
+    }
+
+    const wantLocked = locked === true;
+    const updated = await taskRepository.updateById(
+      id,
+      {
+        locked: wantLocked,
+        lockedBy: wantLocked ? userId : null,
+        lockedAt: wantLocked ? new Date() : null,
+        updatedBy: userId,
+      },
+      { expectedVersion: meta.expectedVersion },
+    );
+    if (!updated) {
+      throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(existing.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+      taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['locked'],
+      task: updated,
+      changedBy: userId,
+    });
+
+    auditService.logEvent({
+      eventType: wantLocked ? 'task.locked' : 'task.unlocked',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id },
+      module: 'tasks',
+    });
+
+    logger.info(`Task ${wantLocked ? 'locked' : 'unlocked'}`, { module: 'tasks', action: 'setLock', taskId: id, userId });
+
+    return updated;
+  }
+
+  // Take over a task: any user can claim a non-locked task to themselves
+  // (central task management — helping out, absorbing workload). Locked tasks
+  // stay with their owner and cannot be claimed.
+  async claim(id, userId, meta = {}) {
+    const existing = await taskRepository.findById(id);
+    if (!existing) throw new NotFoundError('Task', id);
+
+    if (existing.locked) {
+      throw new AppError('Locked task cannot be taken over', 403, ERROR_CODES.TASK_LOCKED);
+    }
+    // findById populates assigneeId, so unwrap the id before comparing.
+    const currentAssigneeId = existing.assigneeId?._id ?? existing.assigneeId;
+    if (String(currentAssigneeId) === String(userId)) {
+      return existing; // already mine — no-op
+    }
+
+    const updated = await taskRepository.updateById(
+      id,
+      { assigneeId: userId, updatedBy: userId, inPool: false, poolHelperId: null },
+      { expectedVersion: meta.expectedVersion },
+    );
+    if (!updated) {
+      throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(existing.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_ASSIGNED, {
+      taskId: id,
+      assigneeId: userId,
+      previousAssigneeId: currentAssigneeId,
+      assignedBy: userId,
+      taskTitle: existing.title,
+      dueDate: existing.dueDate,
+      priority: existing.priority,
+    });
+    eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+      taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['assigneeId', 'inPool'],
+      task: updated,
+      changedBy: userId,
+    });
+
+    auditService.logEvent({
+      eventType: 'task.claimed',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, previousAssigneeId: existing.assigneeId },
+      module: 'tasks',
+    });
+
+    logger.info('Task claimed', { module: 'tasks', action: 'claim', taskId: id, userId });
+
+    return updated;
+  }
+
+  // Support a pooled task without taking ownership: the assignee stays, and the
+  // helper is recorded (poolHelperId). Removes it from the pool so it is not
+  // picked up twice. Locked tasks are never in the pool.
+  async help(id, userId, meta = {}) {
+    const existing = await taskRepository.findById(id);
+    if (!existing) throw new NotFoundError('Task', id);
+
+    if (existing.locked) {
+      throw new AppError('Locked task cannot be taken over', 403, ERROR_CODES.TASK_LOCKED);
+    }
+    if (!existing.inPool) {
+      throw new AppError('Task is not in the pool', 400, ERROR_CODES.TASK_NOT_IN_POOL);
+    }
+    // findById populates assigneeId, so unwrap the id before comparing.
+    const currentAssigneeId = existing.assigneeId?._id ?? existing.assigneeId;
+    if (String(currentAssigneeId) === String(userId)) {
+      return existing; // it's already my task — nothing to support
+    }
+
+    const updated = await taskRepository.updateById(
+      id,
+      { poolHelperId: userId, inPool: false, updatedBy: userId },
+      { expectedVersion: meta.expectedVersion },
+    );
+    if (!updated) {
+      throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(existing.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+      taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['poolHelperId', 'inPool'],
+      task: updated,
+      changedBy: userId,
+    });
+    // Let the responsible person know a colleague stepped in to support.
+    eventBus.publish(EVENT_TYPES.TASK_POOL_HELPED, {
+      taskId: id,
+      taskTitle: existing.title,
+      assigneeId: currentAssigneeId,
+      helperId: userId,
+    });
+
+    auditService.logEvent({
+      eventType: 'task.pool_helped',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, assigneeId: existing.assigneeId },
+      module: 'tasks',
+    });
+
+    logger.info('Task picked up from pool', { module: 'tasks', action: 'help', taskId: id, userId });
 
     return updated;
   }
@@ -297,6 +476,13 @@ class TaskService {
     // Handle cancellation
     if (status === 'CANCELLED') {
       updateData.cancelledAt = new Date();
+    }
+
+    // Finishing a task removes it from the shared pool (single source of truth —
+    // no duplicate or stale pool entry can linger).
+    if (status === 'COMPLETED' || status === 'CANCELLED') {
+      updateData.inPool = false;
+      updateData.poolHelperId = null;
     }
 
     // Handle reopening from completed
@@ -394,6 +580,8 @@ class TaskService {
       completedAt: now,
       completedBy: userId,
       updatedBy: userId,
+      inPool: false,
+      poolHelperId: null,
     });
 
     if (completeSubtasks) await this._completeSubtaskTree(id, userId, now);
@@ -550,6 +738,10 @@ class TaskService {
         break;
       }
       case 'reassign': {
+        const lockedIds = await taskRepository.findLockedIds(taskIds);
+        if (lockedIds.length > 0) {
+          throw new AppError('Locked tasks cannot be reassigned', 403, ERROR_CODES.TASK_LOCKED);
+        }
         result = await taskRepository.bulkUpdate(taskIds, { assigneeId: data.assigneeId, updatedBy: userId });
         break;
       }
@@ -602,6 +794,9 @@ class TaskService {
       await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
       const { expectedVersion, ...data } = update.patch;
+      if (task.locked && data.assigneeId && String(data.assigneeId) !== String(task.assigneeId)) {
+        throw new AppError('Locked task cannot be reassigned', 403, ERROR_CODES.TASK_LOCKED);
+      }
       if (expectedVersion !== undefined && task.version !== expectedVersion) {
         throw new AppError('One or more tasks were modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
       }

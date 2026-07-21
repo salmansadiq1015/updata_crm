@@ -47,6 +47,14 @@ const assignmentSchema = new mongoose.Schema(
       ref: 'Project',
       default: null,
     },
+    // Set when this assignment was generated from a PM schedule entry
+    // (Bauplan → Einsatzplanung transfer); enables dedup and re-sync from the plan.
+    sourceScheduleEntryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ScheduleEntry',
+      default: null,
+      index: true,
+    },
     assignmentType: {
       type: String,
       enum: ASSIGNMENT_TYPES,

@@ -26,6 +26,18 @@ const taskSchema = new mongoose.Schema(
     completedAt: { type: Date, default: null },
     completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     cancelledAt: { type: Date, default: null },
+    // Lock (Sperrfunktion): confidential/personal task that stays with its owner.
+    // Locked tasks cannot be reassigned/claimed, never enter the overdue pool,
+    // and are invisible to everyone except the owner (assignee/creator/lockedBy) and admins.
+    locked: { type: Boolean, default: false },
+    lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    lockedAt: { type: Date, default: null },
+    // Overdue pool (Aufgabenpool): a task overdue past the configured working-day
+    // threshold is flagged into a shared pool so colleagues can help. The task
+    // stays with its assignee; poolHelperId records who stepped in to support.
+    inPool: { type: Boolean, default: false },
+    pooledAt: { type: Date, default: null },
+    poolHelperId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
@@ -49,6 +61,7 @@ taskSchema.index({ assigneeId: 1, status: 1, dueDate: 1, isDeleted: 1 });
 taskSchema.index({ projectId: 1, status: 1, sortOrder: 1 }, { sparse: true });
 taskSchema.index({ title: 'text' }); // Full-text search
 taskSchema.index({ createdBy: 1, isDeleted: 1 });
+taskSchema.index({ inPool: 1, isDeleted: 1 });
 
 // Validation: projectId and orderId are mutually exclusive
 taskSchema.pre('validate', function () {

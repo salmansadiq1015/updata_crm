@@ -1,8 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Circle, CircleDashed, CirclePause, CircleX, ListTodo, Plus } from 'lucide-react';
+import toast from 'react-hot-toast';
+import {
+  CalendarDays, CheckCircle2, Circle, CircleDashed, CirclePause, CircleX,
+  Filter, Flag, ListTodo, Plus, Search, UserRound,
+} from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -11,24 +15,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/shared/components/empty-state';
 import { taskApi } from '@/modules/tasks/services/task-api';
+import { useWorkspaceUsers } from '@/modules/tasks/hooks/use-workspace-users';
+import { TaskListView } from '@/modules/tasks/ui/task-list-view';
+import TaskDetailDrawer from '@/modules/tasks/ui/task-detail-drawer';
 import {
   TASK_PRIORITIES,
   TASK_STATUSES,
   getTaskPriorityLabel,
   getTaskStatusLabel,
-  taskPriorityClass,
-  taskStatusClass,
+  taskStatusIconColor,
 } from '@/modules/tasks/ui/task-ui-constants';
 
 const ALL = 'ALL';
-
-const STATUS_ICON = {
-  OPEN: Circle,
-  IN_PROGRESS: CircleDashed,
-  ON_HOLD: CirclePause,
-  COMPLETED: CheckCircle2,
-  CANCELLED: CircleX,
-};
 
 function projectTaskKeys(projectId) {
   return {
@@ -37,6 +35,7 @@ function projectTaskKeys(projectId) {
   };
 }
 
+// ── Summary panel ─────────────────────────────────────────────
 export function ProjectTaskSummaryPanel({ projectId }) {
   const { t } = useLanguage();
   const keys = projectTaskKeys(projectId);
@@ -50,99 +49,73 @@ export function ProjectTaskSummaryPanel({ projectId }) {
   if (isLoading) return <Skeleton className="h-20 w-full rounded-lg" />;
   if (!summary) return null;
 
-  const completedText = `${summary.completed}/${summary.total}`;
-
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{t('pm.tasks', 'Tasks')}</p>
-          <p className="mt-1 text-sm font-medium">{completedText} {t('pm.tasksCompleted', 'completed')}</p>
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{t('pm.tasks', 'Aufgaben')}</p>
+          <p className="mt-1 text-sm font-medium">{summary.completed}/{summary.total} {t('pm.tasksCompleted', 'abgeschlossen')}</p>
         </div>
         <div className="text-right">
           <p className="text-2xl font-bold tabular-nums">{summary.completionRate}%</p>
-          <p className="text-xs text-muted-foreground">{t('pm.taskProgress', 'Task progress')}</p>
+          <p className="text-xs text-muted-foreground">{t('pm.taskProgress', 'Fortschritt')}</p>
         </div>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(summary.completionRate, 100)}%` }} />
+        <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.min(summary.completionRate, 100)}%` }} />
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-        <SummaryCount label={t('tasks.status.OPEN', 'Open')} value={summary.open} />
-        <SummaryCount label={t('tasks.status.IN_PROGRESS', 'In progress')} value={summary.inProgress} />
-        <SummaryCount label={t('tasks.status.ON_HOLD', 'On hold')} value={summary.onHold} />
-        <SummaryCount label={t('tasks.status.COMPLETED', 'Complete')} value={summary.completed} />
+        {[
+          { key: 'OPEN', label: t('tasks.status.OPEN', 'Offen'), value: summary.open },
+          { key: 'IN_PROGRESS', label: t('tasks.status.IN_PROGRESS', 'In Bearbeitung'), value: summary.inProgress },
+          { key: 'ON_HOLD', label: t('tasks.status.ON_HOLD', 'Pausiert'), value: summary.onHold },
+          { key: 'COMPLETED', label: t('tasks.status.COMPLETED', 'Abgeschlossen'), value: summary.completed },
+        ].map((item) => (
+          <div key={item.key} className="rounded-md bg-muted/60 px-3 py-2">
+            <p className="text-muted-foreground">{item.label}</p>
+            <p className="mt-0.5 font-semibold tabular-nums">{item.value}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function SummaryCount({ label, value }) {
-  return (
-    <div className="rounded-md bg-muted/60 px-3 py-2">
-      <p className="text-muted-foreground">{label}</p>
-      <p className="mt-0.5 font-semibold tabular-nums">{value}</p>
-    </div>
-  );
-}
-
-function ProjectTaskRow({ task, onStatusChange, disabled }) {
-  const { t } = useLanguage();
-  const StatusIcon = STATUS_ICON[task.status] || Circle;
-  const overdue = task.dueDate && new Date(task.dueDate) < new Date() && !['COMPLETED', 'CANCELLED'].includes(task.status);
-
-  return (
-    <div className="grid grid-cols-[minmax(220px,1fr)_160px_140px_130px] items-center gap-3 border-b border-border px-3 py-2.5 text-sm">
-      <div className="min-w-0">
-        <p className={cn('truncate font-medium', task.status === 'COMPLETED' && 'text-muted-foreground line-through')}>{task.title}</p>
-        <p className={cn('mt-0.5 text-xs', overdue ? 'text-red-600' : 'text-muted-foreground')}>
-          {task.dueDate ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(task.dueDate)) : t('tasks.noDueDate', 'No due date')}
-        </p>
-      </div>
-      <Select value={task.status} onValueChange={(status) => onStatusChange(task, status)} disabled={disabled}>
-        <SelectTrigger className={cn('h-8 text-xs', taskStatusClass[task.status])}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {TASK_STATUSES.map((status) => {
-            const Icon = STATUS_ICON[status] || Circle;
-            return (
-              <SelectItem key={status} value={status}>
-                <span className="flex items-center gap-2">
-                  <Icon className="h-3.5 w-3.5" />
-                  {getTaskStatusLabel(t, status)}
-                </span>
-              </SelectItem>
-            );
-          })}
-        </SelectContent>
-      </Select>
-      <span className={cn('inline-flex w-fit rounded-full border px-2 py-1 text-xs font-medium', taskPriorityClass[task.priority])}>
-        {getTaskPriorityLabel(t, task.priority)}
-      </span>
-      <div className="text-right text-xs text-muted-foreground tabular-nums">
-        <StatusIcon className="mr-1 inline h-3.5 w-3.5" />
-        v{task.version}
-      </div>
-    </div>
-  );
-}
-
+// ── Main tab ──────────────────────────────────────────────────
 export function ProjectTasksTab({ projectId }) {
   const { t, language } = useLanguage();
   const queryClient = useQueryClient();
-  const [title, setTitle] = useState('');
-  const [status, setStatus] = useState(ALL);
-  const [priority, setPriority] = useState(ALL);
   const keys = useMemo(() => projectTaskKeys(projectId), [projectId]);
+
+  // ── Filters ───────────────────────────────────────────────
+  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [priorityFilter, setPriorityFilter] = useState(ALL);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // ── Task creation ─────────────────────────────────────────
+  const [newTitle, setNewTitle] = useState('');
+  const [newAssignee, setNewAssignee] = useState('');
+  const [newPriority, setNewPriority] = useState('NONE');
+  const [newDueDate, setNewDueDate] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+
+  // ── Selection & detail ────────────────────────────────────
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [rowSelection, setRowSelection] = useState({});
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // ── Data ──────────────────────────────────────────────────
+  const { data: usersData } = useWorkspaceUsers();
+  const users = usersData ?? [];
 
   const params = useMemo(() => ({
     limit: 100,
     sortBy: 'dueDate',
     sortOrder: 'asc',
-    ...(status !== ALL ? { status } : {}),
-    ...(priority !== ALL ? { priority } : {}),
-  }), [priority, status]);
+    ...(statusFilter !== ALL ? { status: statusFilter } : {}),
+    ...(priorityFilter !== ALL ? { priority: priorityFilter } : {}),
+    ...(searchQuery.trim().length >= 2 ? { q: searchQuery.trim() } : {}),
+  }), [statusFilter, priorityFilter, searchQuery]);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [...keys.list, params],
@@ -151,105 +124,231 @@ export function ProjectTasksTab({ projectId }) {
     staleTime: 20_000,
   });
 
-  const invalidate = () => {
+  const tasks = data?.data || [];
+
+  const selectedTask = useMemo(
+    () => (selectedTaskId ? tasks.find((t) => t.id === selectedTaskId) : undefined),
+    [selectedTaskId, tasks],
+  );
+
+  // ── Mutations ─────────────────────────────────────────────
+  const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: keys.list });
     queryClient.invalidateQueries({ queryKey: keys.summary });
-  };
+  }, [queryClient, keys]);
 
-  const createTask = useMutation({
-    mutationFn: (taskTitle) => taskApi.create({ title: taskTitle, projectId }),
+  const createMut = useMutation({
+    mutationFn: (taskData) => taskApi.create({ ...taskData, projectId }),
     onSuccess: () => {
-      setTitle('');
+      setNewTitle('');
+      setNewAssignee('');
+      setNewPriority('NONE');
+      setNewDueDate('');
+      setShowCreateForm(false);
       invalidate();
+      toast.success(language === 'de' ? 'Aufgabe erstellt' : 'Task created');
     },
+    onError: (err) => toast.error(err.message),
   });
 
-  const updateStatus = useMutation({
-    mutationFn: ({ task, nextStatus }) => taskApi.patch(task.id, { status: nextStatus, expectedVersion: task.version }),
+  const patchMut = useMutation({
+    mutationFn: ({ id, patch }) => taskApi.patch(id, patch),
     onSuccess: invalidate,
+    onError: (err) => toast.error(err.message),
   });
 
-  const submit = (event) => {
-    event.preventDefault();
-    const trimmed = title.trim();
-    if (trimmed) createTask.mutate(trimmed);
-  };
+  const deleteMut = useMutation({
+    mutationFn: (id) => taskApi.remove(id),
+    onSuccess: () => {
+      invalidate();
+      if (selectedTaskId) { setSelectedTaskId(null); setDrawerOpen(false); }
+      toast.success(language === 'de' ? 'Aufgabe gelöscht' : 'Task deleted');
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
-  const tasks = data?.data || [];
+  const duplicateMut = useMutation({
+    mutationFn: (id) => taskApi.duplicate(id),
+    onSuccess: () => {
+      invalidate();
+      toast.success(language === 'de' ? 'Aufgabe dupliziert' : 'Task duplicated');
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // ── Handlers ──────────────────────────────────────────────
+  const handleSelectTask = useCallback((taskId) => {
+    setSelectedTaskId(taskId);
+    setDrawerOpen(true);
+  }, []);
+
+  const handlePatchTask = useCallback((id, patch) => {
+    patchMut.mutate({ id, patch });
+  }, [patchMut]);
+
+  const handleDeleteTask = useCallback((id) => {
+    deleteMut.mutate(id);
+  }, [deleteMut]);
+
+  const handleDuplicate = useCallback((id) => {
+    duplicateMut.mutate(id);
+  }, [duplicateMut]);
+
+  const handleCreateSubmit = (e) => {
+    e.preventDefault();
+    const title = newTitle.trim();
+    if (!title) return;
+    createMut.mutate({
+      title,
+      priority: newPriority,
+      ...(newAssignee ? { assigneeId: newAssignee } : {}),
+      ...(newDueDate ? { dueDate: newDueDate } : {}),
+    });
+  };
 
   return (
     <div className="space-y-4">
+      {/* Summary */}
       <div className="rounded-lg border border-border bg-card p-4">
         <ProjectTaskSummaryPanel projectId={projectId} />
       </div>
 
       <div className="rounded-lg border border-border bg-card">
+        {/* Toolbar */}
         <div className="flex flex-col gap-3 border-b border-border p-3 lg:flex-row lg:items-center">
-          <form onSubmit={submit} className="flex min-w-0 flex-1 gap-2">
-            <Input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              maxLength={500}
-              placeholder={t('pm.addProjectTask', language === 'de' ? 'Projektaufgabe hinzufuegen' : 'Add project task')}
-              className="h-9"
-            />
-            <Button type="submit" size="sm" disabled={!title.trim() || createTask.isPending} className="h-9 gap-1">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={language === 'de' ? 'Aufgaben suchen...' : 'Search tasks...'}
+                className="h-9 pl-8"
+              />
+            </div>
+            <Button
+              size="sm"
+              className="h-9 gap-1.5"
+              onClick={() => setShowCreateForm((v) => !v)}
+            >
               <Plus className="h-4 w-4" />
-              {t('common.add', 'Add')}
+              {language === 'de' ? 'Neue Aufgabe' : 'New task'}
             </Button>
-          </form>
+          </div>
           <div className="grid grid-cols-2 gap-2 lg:w-80">
-            <Select value={status} onValueChange={setStatus}>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>{t('tasks.allStatuses', 'All statuses')}</SelectItem>
-                {TASK_STATUSES.map((item) => <SelectItem key={item} value={item}>{getTaskStatusLabel(t, item)}</SelectItem>)}
+                <SelectItem value={ALL}>{language === 'de' ? 'Alle Status' : 'All statuses'}</SelectItem>
+                {TASK_STATUSES.map((s) => <SelectItem key={s} value={s}>{getTaskStatusLabel(t, s)}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={priority} onValueChange={setPriority}>
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>{t('tasks.allPriorities', 'All priorities')}</SelectItem>
-                {TASK_PRIORITIES.map((item) => <SelectItem key={item} value={item}>{getTaskPriorityLabel(t, item)}</SelectItem>)}
+                <SelectItem value={ALL}>{language === 'de' ? 'Alle Prioritäten' : 'All priorities'}</SelectItem>
+                {TASK_PRIORITIES.map((p) => <SelectItem key={p} value={p}>{getTaskPriorityLabel(t, p)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         </div>
 
+        {/* Create form */}
+        {showCreateForm && (
+          <form onSubmit={handleCreateSubmit} className="border-b border-border bg-muted/20 px-3 py-3 animate-in fade-in slide-in-from-top-1">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_160px_140px_140px_auto]">
+              <Input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder={language === 'de' ? 'Aufgabentitel...' : 'Task title...'}
+                className="h-9"
+                autoFocus
+              />
+              <Select value={newAssignee || 'none'} onValueChange={(v) => setNewAssignee(v === 'none' ? '' : v)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <UserRound className="h-3.5 w-3.5 mr-1 shrink-0 text-muted-foreground" />
+                  <SelectValue placeholder={language === 'de' ? 'Zuweisen' : 'Assign'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{language === 'de' ? 'Nicht zugewiesen' : 'Unassigned'}</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>{u.firstName} {u.lastName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={newPriority} onValueChange={setNewPriority}>
+                <SelectTrigger className="h-9 text-xs">
+                  <Flag className="h-3.5 w-3.5 mr-1 shrink-0 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TASK_PRIORITIES.map((p) => <SelectItem key={p} value={p}>{getTaskPriorityLabel(t, p)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                className="h-9 text-xs"
+              />
+              <Button type="submit" size="sm" className="h-9" disabled={!newTitle.trim() || createMut.isPending}>
+                {language === 'de' ? 'Erstellen' : 'Create'}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* Task list */}
         {isLoading ? (
           <div className="space-y-2 p-4">
-            {[1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-12 w-full" />)}
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-11 w-full" />)}
           </div>
         ) : isError ? (
           <div className="p-6">
             <EmptyState
-              title={t('pm.tasksLoadError', 'Project tasks could not be loaded')}
-              action={<Button variant="outline" size="sm" onClick={() => refetch()}>{t('common.retry', 'Retry')}</Button>}
+              title={language === 'de' ? 'Aufgaben konnten nicht geladen werden' : 'Tasks could not be loaded'}
+              action={<Button variant="outline" size="sm" onClick={() => refetch()}>{t('common.retry', 'Wiederholen')}</Button>}
             />
           </div>
         ) : tasks.length === 0 ? (
           <div className="p-6">
             <EmptyState
               icon={ListTodo}
-              title={t('pm.noProjectTasks', 'No project tasks')}
-              description={language === 'de' ? 'Aufgaben fuer dieses Projekt erscheinen hier.' : 'Tasks for this project appear here.'}
+              title={language === 'de' ? 'Keine Aufgaben' : 'No tasks'}
+              description={language === 'de' ? 'Aufgaben für dieses Projekt erscheinen hier.' : 'Tasks for this project appear here.'}
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <div className="min-w-[720px]">
-              {tasks.map((task) => (
-                <ProjectTaskRow
-                  key={task.id}
-                  task={task}
-                  disabled={updateStatus.isPending}
-                  onStatusChange={(item, nextStatus) => updateStatus.mutate({ task: item, nextStatus })}
-                />
-              ))}
-            </div>
+          <div className="h-[500px]">
+            <TaskListView
+              tasks={tasks}
+              selectedTaskId={selectedTaskId}
+              hasNextPage={false}
+              isFetchingNextPage={false}
+              onFetchNextPage={() => {}}
+              onSelectTask={handleSelectTask}
+              onPatchTask={handlePatchTask}
+              onDeleteTask={handleDeleteTask}
+              rowSelection={rowSelection}
+              onRowSelectionChange={setRowSelection}
+              users={users}
+              onDuplicateTask={handleDuplicate}
+            />
           </div>
         )}
       </div>
+
+      {/* Detail drawer */}
+      <TaskDetailDrawer
+        task={selectedTask}
+        open={drawerOpen}
+        isLoading={false}
+        onOpenChange={setDrawerOpen}
+        onPatchTask={handlePatchTask}
+        onTaskRefresh={(id) => invalidate()}
+        users={users}
+        onDuplicateTask={handleDuplicate}
+      />
     </div>
   );
 }

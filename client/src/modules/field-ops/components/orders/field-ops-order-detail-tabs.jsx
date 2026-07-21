@@ -102,9 +102,9 @@ function OverviewTab({ order, de }) {
       {/* Order info card */}
       <div className="rounded-xl border border-border bg-card p-4 space-y-0">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-          {de ? 'Auftragsdetails' : 'Order Details'}
+          {de ? 'Einsatzdetails' : 'Assignment Details'}
         </p>
-        <InfoRow icon={ClipboardList} label={de ? 'Auftrags-Nr.' : 'Order #'}>
+        <InfoRow icon={ClipboardList} label={de ? 'Einsatz-Nr.' : 'Assignment #'}>
           <span className="font-mono">{order.assignmentNumber || order.orderNumber}</span>
         </InfoRow>
         <InfoRow icon={FileText} label={de ? 'Typ' : 'Type'}>
@@ -365,7 +365,7 @@ function WorkPackagesTab({ order, orderId, de }) {
           </div>
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground/70">{de ? 'Keine Arbeitspakete' : 'No work packages'}</p>
-            <p className="text-xs text-muted-foreground">{de ? 'Erstelle naechste Schritte direkt fuer diesen Auftrag.' : 'Create next steps directly for this job.'}</p>
+            <p className="text-xs text-muted-foreground">{de ? 'Erstelle naechste Schritte direkt fuer diesen Einsatz.' : 'Create next steps directly for this job.'}</p>
           </div>
         </div>
       ) : (
@@ -503,7 +503,7 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
   if (!order) return (
     <div className="flex flex-col items-center justify-center py-24 gap-3">
       <XCircle className="h-12 w-12 text-muted-foreground/30" />
-      <p className="text-muted-foreground">{de ? 'Auftrag nicht gefunden.' : 'Order not found.'}</p>
+      <p className="text-muted-foreground">{de ? 'Einsatz nicht gefunden.' : 'Assignment not found.'}</p>
       <Button variant="ghost" size="sm" onClick={() => router.back()}>
         <ChevronLeft className="h-4 w-4 mr-1" />{de ? 'Zurück' : 'Back'}
       </Button>
@@ -536,7 +536,7 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground" onClick={() => router.back()}>
             <ChevronLeft className="h-4 w-4 mr-1" />
-            {de ? 'Aufträge' : 'Orders'}
+            {de ? 'Einsätze' : 'Assignments'}
           </Button>
 
           <div className="flex items-center gap-1">
@@ -714,9 +714,9 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={de ? 'Auftrag löschen' : 'Delete Order'}
+        title={de ? 'Einsatz löschen' : 'Delete Assignment'}
         description={de
-          ? `Auftrag "${order.title || order.assignmentNumber}" wird unwiderruflich gelöscht.`
+          ? `Einsatz "${order.title || order.assignmentNumber}" wird unwiderruflich gelöscht.`
           : `Order "${order.title || order.assignmentNumber}" will be permanently deleted.`}
         onConfirm={handleDelete}
         isLoading={deleteOrder.isPending}

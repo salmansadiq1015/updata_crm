@@ -57,6 +57,9 @@ export const ENDPOINTS = Object.freeze({
     CUSTOMERS_BULK_UPDATE: '/crm/customers/bulk-update',
     CUSTOMERS_BULK_DELETE: '/crm/customers/bulk-delete',
     CUSTOMERS_MERGE: '/crm/customers/merge',
+    CUSTOMERS_CLEANUP_AUDIT: '/crm/customers/cleanup-audit',
+    // Suppliers (business-type customers, used by accounting AP invoices)
+    SUPPLIERS: '/crm/suppliers',
     // Contacts (Phase 2)
     CONTACTS: '/crm/contacts',
     CONTACTS_OVERVIEW: '/crm/contacts/overview',
@@ -220,6 +223,7 @@ export const ENDPOINTS = Object.freeze({
     CONFIRMATIONS: (id, entryId) => `/pm/projects/${id}/schedule/entries/${entryId}/confirmations`,
     CONFIRMATION_BY_ID: (id, entryId, confId) => `/pm/projects/${id}/schedule/entries/${entryId}/confirmations/${confId}`,
     SCHEDULE_EXPORT: (id) => `/pm/projects/${id}/schedule/export`,
+    SCHEDULE_TRANSFER: (id) => `/pm/projects/${id}/schedule/transfer`,
     DOCUMENTS: (id) => `/pm/projects/${id}/documents`,
     DOCUMENTS_PREVIEW: (id) => `/pm/projects/${id}/documents/preview`,
     DOCUMENT_BY_ID: (id, docId) => `/pm/projects/${id}/documents/${docId}`,
@@ -234,6 +238,9 @@ export const ENDPOINTS = Object.freeze({
     BY_ID: (id) => `/tasks/${id}`,
     STATUS: (id) => `/tasks/${id}/status`,
     COMPLETE: (id) => `/tasks/${id}/complete`,
+    LOCK: (id) => `/tasks/${id}/lock`,
+    CLAIM: (id) => `/tasks/${id}/claim`,
+    HELP: (id) => `/tasks/${id}/help`,
     REOPEN: (id) => `/tasks/${id}/reopen`,
     MOVE: (id) => `/tasks/${id}/move`,
     PROMOTE: (id) => `/tasks/${id}/promote`,

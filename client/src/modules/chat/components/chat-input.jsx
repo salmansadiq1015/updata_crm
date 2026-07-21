@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import NextImage from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,7 +23,7 @@ function FileTypeIcon({ type, className }) {
   return <FileText className={className} />;
 }
 
-export function ChatInput({ onSend, isLoading, roomId, room, currentUserId, replyTarget, onClearReply, isBlocked, editTarget, onClearEdit }) {
+export const ChatInput = forwardRef(function ChatInput({ onSend, isLoading, roomId, room, currentUserId, replyTarget, onClearReply, isBlocked, editTarget, onClearEdit }, ref) {
   const { t } = useLanguage();
   const [text, setText] = useState('');
   const [draftSourceId, setDraftSourceId] = useState(null);
@@ -97,10 +97,8 @@ export function ChatInput({ onSend, isLoading, roomId, room, currentUserId, repl
     onKeystroke();
   }, [handleSend, onKeystroke]);
 
-  const handleFileChange = useCallback(async e => {
-    const file = e.target.files?.[0];
+  const processFile = useCallback(async file => {
     if (!file) return;
-    e.target.value = '';
 
     setUploadError('');
 
@@ -116,6 +114,15 @@ export function ChatInput({ onSend, isLoading, roomId, room, currentUserId, repl
       previewUrlRef.current = null;
     }
   }, [setUploadError, uploadAttachment]);
+
+  const handleFileChange = useCallback(e => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    processFile(file);
+  }, [processFile]);
+
+  // Let the panel forward drag-and-dropped files into the same upload flow.
+  useImperativeHandle(ref, () => ({ addFile: file => processFile(file) }), [processFile]);
 
   const handleAudioComplete = useCallback(result => {
     setShowRecorder(false);
@@ -331,4 +338,4 @@ export function ChatInput({ onSend, isLoading, roomId, room, currentUserId, repl
       )}
     </div>
   );
-}
+});

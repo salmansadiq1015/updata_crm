@@ -5,6 +5,7 @@ import { Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Flag, Plus, Tr
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import type { Task, TaskStatus } from '../types/task-types';
 import { taskPriorityIconColor } from './task-ui-constants';
 
@@ -49,6 +50,7 @@ export function TaskSubtasksPanel({
   onPatchSubtask,
   onDeleteSubtask,
 }: SubtasksPanelProps) {
+  const { language } = useLanguage();
   const [newTitle, setNewTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -69,7 +71,7 @@ export function TaskSubtasksPanel({
       {total > 0 && (
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[11px] text-muted-foreground">
-            {completed} of {total} complete
+            {completed} {language === 'de' ? 'von' : 'of'} {total} {language === 'de' ? 'erledigt' : 'complete'}
           </span>
           <div className="flex items-center gap-2">
             <div className="h-1 w-28 overflow-hidden rounded-full bg-muted">
@@ -103,7 +105,7 @@ export function TaskSubtasksPanel({
                 <button
                   type="button"
                   className="shrink-0"
-                  title={`Status: ${sub.status}. Click to cycle.`}
+                  title={language === 'de' ? `Status: ${sub.status}. Klicken zum Wechseln.` : `Status: ${sub.status}. Click to cycle.`}
                   onClick={() =>
                     onPatchSubtask(sub.id, STATUS_CYCLE[sub.status])
                   }
@@ -158,7 +160,7 @@ export function TaskSubtasksPanel({
           onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
             e.key === 'Enter' && handleAdd()
           }
-          placeholder="Add subtask…"
+          placeholder={language === 'de' ? 'Unteraufgabe hinzufügen…' : 'Add subtask…'}
           className="h-7 border-none bg-transparent px-1 text-sm shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/40"
         />
         {newTitle.trim() && (
@@ -167,7 +169,7 @@ export function TaskSubtasksPanel({
             className="h-6 shrink-0 px-2.5 text-xs"
             onClick={handleAdd}
           >
-            Add
+            {language === 'de' ? 'Hinzufügen' : 'Add'}
           </Button>
         )}
       </div>

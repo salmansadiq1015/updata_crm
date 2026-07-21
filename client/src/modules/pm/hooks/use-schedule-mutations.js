@@ -6,7 +6,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 
-export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onDeleteEntry, onSendConfirmation, onUpdateConfirmation, onBulkConfirmation } = {}) {
+export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onDeleteEntry, onSendConfirmation, onUpdateConfirmation, onBulkConfirmation, onTransfer } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -66,5 +66,23 @@ export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onD
     onError: (err) => showError(err.message),
   });
 
-  return { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, sendBulkConfirmations, exportSchedule };
+  const transferSchedule = useMutation({
+    mutationFn: (payload) => scheduleService.transferSchedule(projectId, payload),
+    onSuccess: (res) => {
+      const created = res?.createdCount ?? 0;
+      const updated = res?.updatedCount ?? 0;
+      const skipped = res?.skippedCount ?? 0;
+      const issues = (res?.conflictCount ?? 0) + (res?.overAllocatedCount ?? 0);
+      showSuccess(t('pm.transferDone', '{created} erstellt, {updated} aktualisiert, {skipped} unverändert{issues}', {
+        created,
+        updated,
+        skipped,
+        issues: issues ? t('pm.transferIssues', ', {n} mit Konflikt', { n: issues }) : '',
+      }));
+      onTransfer?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  return { addEntry, updateEntry, deleteEntry, sendConfirmation, updateConfirmation, sendBulkConfirmations, exportSchedule, transferSchedule };
 }

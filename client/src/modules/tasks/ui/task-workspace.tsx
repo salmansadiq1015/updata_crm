@@ -34,6 +34,7 @@ import { TaskListView } from './task-list-view';
 import { TaskSidebar } from './task-sidebar';
 import { InputDialog } from './input-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { useAuthStore } from '@/stores/auth-store';
 
 type TaskWorkspaceProps = {
   listId?: string;
@@ -50,14 +51,19 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     search,
     status,
     priority,
+    assigneeFilter,
     savedView,
   } = viewState;
+  const currentUserId = useAuthStore((state: { user?: { _id?: string; id?: string } | null }) =>
+    state.user?._id ?? state.user?.id ?? null,
+  );
   const setActiveView = useTaskWorkspaceStore((state) => state.setActiveView);
   const setSidebarCollapsed = useTaskWorkspaceStore((state) => state.setSidebarCollapsed);
   const setSelectedTaskId = useTaskWorkspaceStore((state) => state.setSelectedTaskId);
   const setSearch = useTaskWorkspaceStore((state) => state.setSearch);
   const setStatus = useTaskWorkspaceStore((state) => state.setStatus);
   const setPriority = useTaskWorkspaceStore((state) => state.setPriority);
+  const setAssigneeFilter = useTaskWorkspaceStore((state) => state.setAssigneeFilter);
   const setSavedView = useTaskWorkspaceStore((state) => state.setSavedView);
   const clearFilters = useTaskWorkspaceStore((state) => state.clearFilters);
   const toggleFolderCollapsed = useTaskWorkspaceStore((s) => s.toggleFolderCollapsed);
@@ -131,15 +137,22 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
 
   const debouncedSearch = useDebounce(search, 280);
 
+  const resolvedAssigneeId =
+    assigneeFilter === 'ALL' ? undefined
+    : assigneeFilter === 'ME' ? (currentUserId ?? undefined)
+    : assigneeFilter;
+
   const filters = useMemo<TaskFilters>(() => ({
     ...(listId ? { listId } : {}),
     ...(debouncedSearch ? { q: debouncedSearch } : {}),
     ...(status !== 'ALL' ? { status } : {}),
     ...(priority !== 'ALL' ? { priority } : {}),
+    ...(resolvedAssigneeId ? { assigneeId: resolvedAssigneeId } : {}),
     ...(savedView === 'dueToday' ? { dueToday: true } : {}),
     ...(savedView === 'overdue' ? { overdue: true } : {}),
+    ...(savedView === 'pool' ? { inPool: true } : {}),
     hasParent: false,
-  }), [debouncedSearch, listId, priority, savedView, status]);
+  }), [debouncedSearch, listId, priority, resolvedAssigneeId, savedView, status]);
 
   const taskPageSize = activeView === 'calendar' || activeView === 'timeline'
     ? Math.max(pageSize, 100)
@@ -161,7 +174,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   useTaskRealtime();
 
   const patchTask = (id: string, patch: TaskPatch) => mutations.patchTask.mutate({ id, patch });
-  const hasFilters = Boolean(search || status !== 'ALL' || priority !== 'ALL' || savedView !== 'none');
+  const hasFilters = Boolean(search || status !== 'ALL' || priority !== 'ALL' || assigneeFilter !== 'ALL' || savedView !== 'none');
 
   const content = (() => {
     if (tasksQuery.isLoading) return activeView === 'board' ? <TaskBoardSkeleton /> : <TaskListSkeleton />;
@@ -231,12 +244,16 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
           search={search}
           status={status}
           priority={priority}
+          assigneeFilter={assigneeFilter}
+          users={usersQuery.data ?? []}
+          currentUserId={currentUserId}
           isStale={tasksQuery.isStale}
           isFetching={tasksQuery.isFetching}
           onViewChange={setActiveView}
           onSearchChange={setSearch}
           onStatusChange={setStatus}
           onPriorityChange={setPriority}
+          onAssigneeFilterChange={setAssigneeFilter}
           onCreateTask={(title) => mutations.createTask.mutate(title)}
           pageSize={pageSize}
           onPageSizeChange={setPageSize}

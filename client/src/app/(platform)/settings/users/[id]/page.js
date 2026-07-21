@@ -30,14 +30,16 @@ import {
   Pencil, UserX, UserCheck, Mail, Phone,
   Globe, Calendar, Clock, Shield, Monitor, Activity,
   Copy, Briefcase, MapPin, ChevronRight,
-  KeyRound, ExternalLink, Hash,
+  KeyRound, ExternalLink, Hash, Wrench, Award,
 } from 'lucide-react';
 
+// Account state — one clear label per status plus a plain-language description
+// of what it means (the badge and the "Kontostatus" card both read from here).
 const statusConfig = {
-  active: { label: 'Aktiv', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-700 dark:text-emerald-400', ringColor: 'ring-emerald-500/30' },
-  pending_activation: { label: 'Ausstehend', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-700 dark:text-amber-400', ringColor: 'ring-amber-500/30' },
-  deactivated: { label: 'Deaktiviert', dotColor: 'bg-muted-foreground/40', bgColor: 'bg-muted', textColor: 'text-muted-foreground', ringColor: 'ring-muted-foreground/20' },
-  locked: { label: 'Gesperrt', dotColor: 'bg-red-500', bgColor: 'bg-red-500/10', textColor: 'text-red-700 dark:text-red-400', ringColor: 'ring-red-500/30' },
+  active: { key: 'users.active', fallback: 'Aktiv', descKey: 'users.statusActiveDesc', descFallback: 'Konto aktiv – Anmeldung möglich', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-700 dark:text-emerald-400', ringColor: 'ring-emerald-500/30' },
+  pending_activation: { key: 'users.pending', fallback: 'Nicht aktiviert', descKey: 'users.statusPendingDesc', descFallback: 'Einladung gesendet – Konto noch nicht aktiviert', dotColor: 'bg-amber-500', bgColor: 'bg-amber-500/10', textColor: 'text-amber-700 dark:text-amber-400', ringColor: 'ring-amber-500/30' },
+  deactivated: { key: 'users.deactivated', fallback: 'Deaktiviert', descKey: 'users.statusDeactivatedDesc', descFallback: 'Zugriff deaktiviert – keine Anmeldung möglich', dotColor: 'bg-muted-foreground/40', bgColor: 'bg-muted', textColor: 'text-muted-foreground', ringColor: 'ring-muted-foreground/20' },
+  locked: { key: 'users.locked', fallback: 'Gesperrt', descKey: 'users.statusLockedDesc', descFallback: 'Konto gesperrt – vorübergehend blockiert', dotColor: 'bg-red-500', bgColor: 'bg-red-500/10', textColor: 'text-red-700 dark:text-red-400', ringColor: 'ring-red-500/30' },
 };
 
 const langNames = { de: 'Deutsch', en: 'English', fr: 'Français', it: 'Italiano' };
@@ -146,7 +148,7 @@ export default function UserDetailPage() {
               <div className="flex items-center justify-center gap-2 mb-4">
                 <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full', status.bgColor, status.textColor)}>
                   <span className={cn('h-1.5 w-1.5 rounded-full', status.dotColor)} />
-                  {status.label}
+                  {t(status.key, status.fallback)}
                 </span>
                 {user.role?.name && (
                   <Badge variant="outline" className="gap-1 text-xs">
@@ -263,9 +265,39 @@ export default function UserDetailPage() {
                 <OverviewInfoCard icon={Shield} iconBg="bg-violet-500/10" iconColor="text-violet-500" label={t('users.role')} value={user.role?.name || '\u2014'} description={user.role?.description} />
                 <OverviewInfoCard icon={Globe} iconBg="bg-sky-500/10" iconColor="text-sky-500" label={t('users.language')} value={langNames[user.language] || user.language || 'Deutsch'} />
                 <OverviewInfoCard icon={Briefcase} iconBg="bg-amber-500/10" iconColor="text-amber-500" label={t('users.department') || 'Abteilung'} value={user.department || '\u2014'} description={user.position} />
-                <OverviewInfoCard icon={KeyRound} iconBg="bg-emerald-500/10" iconColor="text-emerald-500" label="Authentifizierung" value={isActive ? 'Aktiv' : 'Inaktiv'} description={user.lastLoginAt ? `Letzte Anmeldung: ${new Date(user.lastLoginAt).toLocaleDateString('de-CH')}` : 'Noch nie angemeldet'} />
+                <OverviewInfoCard icon={KeyRound} iconBg={status.bgColor} iconColor={status.textColor} label={t('users.accountStatus', 'Kontostatus')} value={t(status.key, status.fallback)} description={t(status.descKey, status.descFallback)} />
                 {fullAddress && (
                   <OverviewInfoCard icon={MapPin} iconBg="bg-rose-500/10" iconColor="text-rose-500" label={t('users.address') || 'Adresse'} value={fullAddress} className="sm:col-span-2" />
+                )}
+                {(user.schedulingSkills?.length > 0 || user.schedulingCertifications?.length > 0) && (
+                  <div className="rounded-xl border border-border/40 bg-card p-4 sm:col-span-2 ring-1 ring-foreground/5 space-y-3">
+                    {user.schedulingSkills?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Wrench className="h-3.5 w-3.5 text-emerald-500" />
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('users.skills', 'Skills / Qualifikationen')}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {user.schedulingSkills.map((s) => (
+                            <span key={s} className="inline-flex items-center rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-2.5 py-0.5 text-xs font-medium">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {user.schedulingCertifications?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Award className="h-3.5 w-3.5 text-sky-500" />
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('users.certifications', 'Zertifikate / Kompetenzen')}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {user.schedulingCertifications.map((c) => (
+                            <span key={c} className="inline-flex items-center rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-400 px-2.5 py-0.5 text-xs font-medium">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </TabsContent>

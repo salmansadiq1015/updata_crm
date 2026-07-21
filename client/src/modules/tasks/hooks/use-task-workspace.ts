@@ -167,6 +167,43 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
     },
   });
 
+  const setLock = useMutation({
+    mutationFn: ({ id, locked, expectedVersion }: { id: string; locked: boolean; expectedVersion?: number }) =>
+      taskApi.setLock(id, locked, expectedVersion),
+    onMutate: async ({ id, locked }) => {
+      await queryClient.cancelQueries({ queryKey: taskWorkspaceKeys.windows() });
+      const previousWindows = queryClient.getQueriesData<InfiniteData<TaskPage>>({
+        queryKey: taskWorkspaceKeys.windows(),
+      });
+      const previousDetail = queryClient.getQueryData<Task>(taskWorkspaceKeys.detail(id));
+      const applyLock = (task: Task): Task => ({ ...task, locked, version: task.version + 1 });
+
+      queryClient.setQueriesData<InfiniteData<TaskPage>>(
+        { queryKey: taskWorkspaceKeys.windows() },
+        (oldData) => updateTaskInPages(oldData, id, applyLock),
+      );
+      if (previousDetail) {
+        queryClient.setQueryData(taskWorkspaceKeys.detail(id), applyLock(previousDetail));
+      }
+      return { previousWindows, previousDetail };
+    },
+    onError: (error, variables, context) => {
+      for (const [key, value] of context?.previousWindows ?? []) queryClient.setQueryData(key, value);
+      if (context?.previousDetail) {
+        queryClient.setQueryData(taskWorkspaceKeys.detail(variables.id), context.previousDetail);
+      }
+      const message = error instanceof Error ? error.message : 'Lock update failed';
+      toast.error(message);
+    },
+    onSuccess: (task) => {
+      queryClient.setQueriesData<InfiniteData<TaskPage>>(
+        { queryKey: taskWorkspaceKeys.windows() },
+        (oldData) => updateTaskInPages(oldData, task.id, () => task),
+      );
+      queryClient.setQueryData(taskWorkspaceKeys.detail(task.id), task);
+    },
+  });
+
   const createTask = useMutation({
     mutationFn: (title: string) => {
       const params: Pick<Task, 'title'> & Partial<TaskPatch> = { title };
@@ -243,7 +280,7 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
     },
   });
 
-  return { patchTask, createTask, deleteTask, duplicateTask };
+  return { patchTask, setLock, createTask, deleteTask, duplicateTask };
 }
 
 export function toTaskParams(filters: TaskFilters, pageSize = TASK_PAGE_SIZE): Omit<TaskListParams, 'cursor'> {

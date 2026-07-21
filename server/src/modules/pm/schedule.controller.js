@@ -75,9 +75,28 @@ class ScheduleController {
         return res.send(icalData);
       }
 
+      if (format === 'excel') {
+        const { csv, filename } = await scheduleService.exportExcel(req.params.id);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        return res.send(csv);
+      }
+
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const generatedDoc = await scheduleService.exportPdf(req.params.id, req.user._id, meta);
       return res.success({ data: generatedDoc, message: 'Schedule PDF generated successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async transferSchedule(req, res, next) {
+    try {
+      const body = req._validatedBody || req.body || {};
+      const target = body.target || 'einsatzplanung';
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = target === 'grobplanung'
+        ? await scheduleService.transferToGrobplanung(req.params.id, { allocationPercent: body.allocationPercent }, req.user._id, meta)
+        : await scheduleService.transferToEinsatzplanung(req.params.id, req.user._id, meta);
+      return res.success({ data: result, message: `Schedule transferred to ${target}` });
     } catch (err) { next(err); }
   }
 }

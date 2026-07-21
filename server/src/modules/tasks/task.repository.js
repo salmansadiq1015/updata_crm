@@ -54,7 +54,7 @@ class TaskRepository {
     const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
 
     // Extract special filters before passing to buildFilter
-    const { overdue, dueToday, hasParent, q, dueFrom, dueTo, createdById, accessUserId, accessibleListIds, ...standardFilters } = filters;
+    const { overdue, dueToday, hasParent, q, dueFrom, dueTo, createdById, inPool, accessUserId, accessibleListIds, ...standardFilters } = filters;
 
     // Map createdById to the actual field name
     if (createdById) {
@@ -105,6 +105,11 @@ class TaskRepository {
       baseFilter.dueDate = { $gte: startOfDay, $lt: endOfDay };
     }
 
+    // Handle pool filter (shared overdue pool view)
+    if (inPool === true || inPool === 'true') {
+      baseFilter.inPool = true;
+    }
+
     // Handle hasParent filter
     if (hasParent === true || hasParent === 'true') {
       baseFilter.parentTaskId = { $ne: null };
@@ -117,14 +122,16 @@ class TaskRepository {
       baseFilter.$text = { $search: q };
     }
 
+    // Central task management: every user sees all non-locked tasks. Locked
+    // (confidential) tasks stay visible only to their owner
+    // (creator/assignee/locker); admins bypass this filter entirely upstream.
     const accessFilter = accessUserId
       ? {
           $or: [
+            { locked: { $ne: true } },
             { createdBy: accessUserId },
             { assigneeId: accessUserId },
-            ...(Array.isArray(accessibleListIds) && accessibleListIds.length > 0
-              ? [{ listId: { $in: accessibleListIds } }]
-              : []),
+            { lockedBy: accessUserId },
           ],
         }
       : {};
@@ -259,6 +266,36 @@ class TaskRepository {
       { isDeleted: true, deletedAt: new Date() },
       { returnDocument: 'after' },
     );
+  }
+
+  // Active, non-locked, not-yet-pooled tasks whose due date is on/before the
+  // working-day cutoff — candidates for the shared overdue pool.
+  async findPoolEligible(cutoffDate) {
+    return Task.find({
+      isDeleted: false,
+      dueDate: { $ne: null, $lte: cutoffDate },
+      status: { $in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
+      locked: { $ne: true },
+      inPool: { $ne: true },
+    })
+      .sort({ dueDate: 1 })
+      .lean();
+  }
+
+  async markPooled(taskIds, pooledAt) {
+    if (!taskIds.length) return 0;
+    const result = await Task.updateMany(
+      { _id: { $in: taskIds }, isDeleted: false },
+      { $set: { inPool: true, pooledAt } },
+    );
+    return result.modifiedCount;
+  }
+
+  async findLockedIds(taskIds) {
+    const docs = await Task.find({ _id: { $in: taskIds }, locked: true, isDeleted: false })
+      .select('_id')
+      .lean();
+    return docs.map((doc) => String(doc._id));
   }
 
   async bulkUpdate(taskIds, data) {

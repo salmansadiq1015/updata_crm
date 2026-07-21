@@ -1,7 +1,9 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Upload } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { showError } from '@/lib/toast';
+import { useLanguage } from '@/lib/i18n/language-context';
 import { useChatMessages } from '@/modules/chat/hooks/use-chat-messages';
 import { useChatMutations } from '@/modules/chat/hooks/use-chat-mutations';
 import { useChatRoom, useChatRooms } from '@/modules/chat/hooks/use-chat-rooms';
@@ -12,10 +14,16 @@ import { ChatMessages } from './chat-messages';
 import { ChatTypingIndicator } from './chat-typing-indicator';
 import { ChatInput } from './chat-input';
 
+const dragHasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
+
 export function ChatPanel({ roomId }) {
+  const { t } = useLanguage();
   const [replyTarget, setReplyTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragDepth = useRef(0);
+  const inputRef = useRef(null);
 
   const user = useAuthStore((s) => s.user);
   const currentUserId = user?._id;
@@ -65,9 +73,46 @@ export function ChatPanel({ roomId }) {
     }
   }
 
+  const canDrop = !!roomId && !isBlocked;
+
+  const handleDragEnter = useCallback((e) => {
+    if (!canDrop || !dragHasFiles(e)) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setIsDragging(true);
+  }, [canDrop]);
+
+  const handleDragOver = useCallback((e) => {
+    if (canDrop && dragHasFiles(e)) e.preventDefault();
+  }, [canDrop]);
+
+  const handleDragLeave = useCallback((e) => {
+    if (!canDrop || !dragHasFiles(e)) return;
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0;
+      setIsDragging(false);
+    }
+  }, [canDrop]);
+
+  const handleDrop = useCallback((e) => {
+    if (!canDrop || !dragHasFiles(e)) return;
+    e.preventDefault();
+    dragDepth.current = 0;
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) inputRef.current?.addFile(file);
+  }, [canDrop]);
+
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div
+        className="relative flex min-w-0 flex-1 flex-col"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <ChatHeader
           room={room}
           currentUserId={currentUserId}
@@ -91,6 +136,7 @@ export function ChatPanel({ roomId }) {
         />
         <ChatTypingIndicator typingUsers={typingUsers} />
         <ChatInput
+          ref={inputRef}
           onSend={handleSend}
           isLoading={sendMessage.isPending || editMessage.isPending}
           roomId={roomId}
@@ -102,6 +148,15 @@ export function ChatPanel({ roomId }) {
           editTarget={editTarget}
           onClearEdit={() => setEditTarget(null)}
         />
+
+        {isDragging && (
+          <div className="pointer-events-none absolute inset-0 z-30 m-2 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/60 bg-primary/10 backdrop-blur-sm">
+            <Upload className="h-9 w-9 text-primary" />
+            <p className="text-sm font-medium text-primary">
+              {t('chat.dropToUpload', 'Datei hier ablegen zum Senden')}
+            </p>
+          </div>
+        )}
       </div>
       <ChatContextPanel room={room} currentUserId={currentUserId} />
       <ChatSearchDialog

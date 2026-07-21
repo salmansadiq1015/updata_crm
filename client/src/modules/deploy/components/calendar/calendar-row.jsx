@@ -42,7 +42,7 @@ function computeBlockStyle(assignment, days, view) {
     const durationMin = differenceInMinutes(end, start);
     return {
       left: `${(offsetMin / totalMinutesPerDay) * 100}%`,
-      width: `${Math.max(1.5, (durationMin / totalMinutesPerDay) * 100)}%`,
+      width: `${Math.min(100, Math.max(1.5, (durationMin / totalMinutesPerDay) * 100))}%`,
       top: 2,
       height: ROW_HEIGHT - 28,
     };
@@ -51,11 +51,29 @@ function computeBlockStyle(assignment, days, view) {
   // Week view
   const dayIndex = days.findIndex((d) => isSameDay(d, start));
   if (dayIndex < 0) return null;
+  const dayWidthPercent = 100 / days.length;
+  const durationMin = differenceInMinutes(end, start);
+
+  // Full-day / multi-day assignments span whole day columns. Sizing them by
+  // minute-duration against the visible work-hours window would overflow one
+  // column and bleed into the following days (e.g. a single full day rendering
+  // through to Sunday). Fall back to a day-span, clamped to the visible week.
+  const isDaySpanBlock = assignment.isFullDay || !isSameDay(start, end) || durationMin >= totalMinutesPerDay;
+  if (isDaySpanBlock) {
+    const daySpan = Math.max(1, days.filter((d) =>
+      isWithinInterval(d, { start: startOfDay(start), end: startOfDay(end) })
+    ).length);
+    return {
+      left: `${dayIndex * dayWidthPercent}%`,
+      width: `${Math.min(days.length - dayIndex, daySpan) * dayWidthPercent}%`,
+      top: 2,
+      height: ROW_HEIGHT - 28,
+    };
+  }
+
   const dayStart = new Date(days[dayIndex]);
   dayStart.setHours(DAY_START_HOUR, 0, 0, 0);
   const offsetMin = Math.max(0, differenceInMinutes(start, dayStart));
-  const durationMin = differenceInMinutes(end, start);
-  const dayWidthPercent = 100 / days.length;
   const leftWithinDay = (offsetMin / totalMinutesPerDay) * dayWidthPercent;
   const widthPercent = Math.max(0.8, (durationMin / totalMinutesPerDay) * dayWidthPercent);
 

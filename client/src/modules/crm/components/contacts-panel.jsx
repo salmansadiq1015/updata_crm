@@ -19,8 +19,10 @@ import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import {
   Plus, Pencil, Trash2, User, Mail, Phone, Smartphone,
-  Star, StarOff, UsersIcon, Copy,
+  Star, StarOff, UsersIcon, Copy, MapPin,
 } from 'lucide-react';
+import { ENDPOINTS } from '@/lib/api/endpoints';
+import apiClient from '@/lib/api/client';
 
 export function ContactsPanel({ customerId }) {
   const { t } = useLanguage();
@@ -40,6 +42,16 @@ export function ContactsPanel({ customerId }) {
     queryFn: () => contactService.listByCustomer(customerId),
     enabled: !!customerId,
   });
+
+  const { data: sitesData = [] } = useQuery({
+    queryKey: queryKeys.crm.sites.byCustomer(customerId),
+    queryFn: async () => {
+      const res = await apiClient.get(ENDPOINTS.CRM.CUSTOMER_SITES(customerId));
+      return res.data;
+    },
+    enabled: !!customerId,
+  });
+  const sites = Array.isArray(sitesData) ? sitesData : [];
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: queryKeys.crm.contacts.byCustomer(customerId) });
@@ -257,6 +269,7 @@ export function ContactsPanel({ customerId }) {
         onSubmit={handleSubmit}
         defaultValues={editContact}
         isLoading={createMut.isPending || updateMut.isPending}
+        sites={sites}
       />
 
       <ConfirmDialog
@@ -367,6 +380,12 @@ function ContactCard({
           </p>
           {c.functionTitle && (
             <p className="text-xs text-muted-foreground truncate">{c.functionTitle}</p>
+          )}
+          {c.siteId && (typeof c.siteId === 'object') && c.siteId.name && (
+            <p className="text-xs text-muted-foreground/70 truncate flex items-center gap-1 mt-0.5">
+              <MapPin className="h-2.5 w-2.5 shrink-0" />
+              {c.siteId.name}
+            </p>
           )}
 
           <div className="mt-1.5 space-y-0.5 text-xs">

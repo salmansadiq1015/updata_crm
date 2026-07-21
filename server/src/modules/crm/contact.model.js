@@ -25,6 +25,12 @@ const contactSchema = new mongoose.Schema(
     phone: { type: String, trim: true, maxlength: 30, default: null },
     mobile: { type: String, trim: true, maxlength: 30, default: null },
     email: { type: String, trim: true, lowercase: true, maxlength: 255, default: null },
+    siteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site',
+      default: null,
+      index: true,
+    },
     isPrimary: { type: Boolean, default: false },
     notes: { type: String, maxlength: 2000, default: null },
     migration: { type: migrationTraceSchema, default: () => ({}) },

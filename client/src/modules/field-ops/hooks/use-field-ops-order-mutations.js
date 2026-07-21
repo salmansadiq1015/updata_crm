@@ -27,9 +27,9 @@ export function useFieldOpsOrderMutations() {
     mutationFn: (data) => orderService.createOrder(data),
     onSuccess: () => {
       invalidateList();
-      showSuccess(de ? 'Auftrag erstellt' : 'Order created');
+      showSuccess(de ? 'Einsatz erstellt' : 'Assignment created');
     },
-    onError: (err) => showError(err.message || (de ? 'Auftrag konnte nicht erstellt werden' : 'Order could not be created')),
+    onError: (err) => showError(err.message || (de ? 'Einsatz konnte nicht erstellt werden' : 'Assignment could not be created')),
   });
 
   const updateOrder = useMutation({
@@ -37,7 +37,7 @@ export function useFieldOpsOrderMutations() {
     onSuccess: (_, { id }) => {
       invalidateList();
       invalidateDetail(id);
-      showSuccess(de ? 'Auftrag aktualisiert' : 'Order updated');
+      showSuccess(de ? 'Einsatz aktualisiert' : 'Assignment updated');
     },
     onError: (err) => showError(err.message || (de ? 'Aktualisierung fehlgeschlagen' : 'Update failed')),
   });
@@ -46,7 +46,7 @@ export function useFieldOpsOrderMutations() {
     mutationFn: (id) => orderService.deleteOrder(id),
     onSuccess: () => {
       invalidateList();
-      showSuccess(de ? 'Auftrag geloescht' : 'Order deleted');
+      showSuccess(de ? 'Einsatz geloescht' : 'Assignment deleted');
     },
     onError: (err) => showError(err.message || (de ? 'Loeschen fehlgeschlagen' : 'Delete failed')),
   });
@@ -55,7 +55,7 @@ export function useFieldOpsOrderMutations() {
     mutationFn: (ids) => orderService.bulkDeleteOrders(ids),
     onSuccess: (_, ids) => {
       invalidateList();
-      showSuccess(de ? `${ids.length} Auftraege geloescht` : `${ids.length} orders deleted`);
+      showSuccess(de ? `${ids.length} Einsaetze geloescht` : `${ids.length} orders deleted`);
     },
     onError: (err) => showError(err.message || (de ? 'Massenloeschung fehlgeschlagen' : 'Bulk delete failed')),
   });
@@ -87,7 +87,7 @@ export function useFieldOpsOrderMutations() {
       }
       const message = variables?.dryRun
         ? (de ? 'Import geprueft' : 'Import validated')
-        : (de ? `${result?.created ?? 0} Auftraege importiert` : `${result?.created ?? 0} orders imported`);
+        : (de ? `${result?.created ?? 0} Einsaetze importiert` : `${result?.created ?? 0} orders imported`);
       showSuccess(message);
     },
     onError: (err) => showError(err.message || (de ? 'Import fehlgeschlagen' : 'Import failed')),

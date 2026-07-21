@@ -3,7 +3,20 @@ import {
   accountingEntityService, accountingSearchService, chartService, dashboardService, journalService, apService, arService, bankService, accDocService,
   cashService, reconciliationService, openItemsService, reportsService,
   exchangeRateService, fiscalPeriodService, taxService, fixedAssetService, budgetService, recurringTransactionService, inventoryAccountingService,
+  supplierService,
 } from '../services/accounting-service';
+
+// Supplier picker for AP invoices. Always enabled so the dropdown shows
+// suggestions before the user types (empty query -> default list).
+export function useSupplierSearch(query = '') {
+  return useQuery({
+    queryKey: ['accounting', 'suppliers', 'search', query],
+    queryFn: () => supplierService.search(query),
+    enabled: true,
+    select: (r) => (Array.isArray(r?.data) ? r.data : []),
+    staleTime: 30 * 1000,
+  });
+}
 
 export function useAccountingDashboard(params = {}) {
   return useQuery({

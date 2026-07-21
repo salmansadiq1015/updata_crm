@@ -394,7 +394,8 @@ export function AssetMaintenanceWorkspace() {
     },
     {
       accessorKey: 'nextDueDate',
-      header: t('crm.assetMaintenance.due', 'Faelligkeit'),
+      header: t('crm.assetMaintenance.due', 'Fälligkeit'),
+
       size: 170,
       Cell: ({ row }) => {
         const maintenance = row.original.maintenance;
@@ -449,6 +450,7 @@ export function AssetMaintenanceWorkspace() {
                 {t('crm.assetMaintenance.title', 'Anlagen & Wartung')}
               </h1>
               <p className="text-[13px] text-muted-foreground">
+
                 {t('crm.assetMaintenance.subtitle', 'Anlagen, Wartungsfaelligkeit und Planung in einem Arbeitsfluss.')}
               </p>
             </div>

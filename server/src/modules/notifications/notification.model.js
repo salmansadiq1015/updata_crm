@@ -17,7 +17,10 @@ const notificationSchema = new mongoose.Schema(
     payload: { type: mongoose.Schema.Types.Mixed, default: {} },
     channels: [{ type: String, enum: NOTIFICATION_CHANNELS }],
     recipientIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    idempotencyKey: { type: String, default: null },
+    // No `default: null`: keyless notifications must leave this field ABSENT so
+    // the unique+sparse index skips them. A stored null still counts as present
+    // and would collide across all keyless notifications.
+    idempotencyKey: { type: String },
     status: { type: String, enum: NOTIFICATION_STATUSES, default: 'QUEUED' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     processedAt: { type: Date, default: null },

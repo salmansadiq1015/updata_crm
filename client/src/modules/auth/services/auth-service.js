@@ -83,7 +83,8 @@ export const authService = {
     const res = await apiClient.get(ENDPOINTS.AUTH.AUDIT_EXPORT, {
       params,
       responseType: 'blob',
+      transformResponse: [(x) => x],
     });
-    return res;
+    return res.data ?? res;
   },
 };

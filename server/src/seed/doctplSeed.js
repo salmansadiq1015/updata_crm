@@ -38,6 +38,7 @@ const TEMPLATES = [
   { templateType: 'project_appointment_confirmation', name: 'Terminbestätigung',     sections: LETTER_SECTIONS(), tableColumns: [] },
   { templateType: 'project_status_report',            name: 'Projekt-Statusbericht', sections: LETTER_SECTIONS(), tableColumns: [] },
   { templateType: 'project_completion_certificate',   name: 'Abschlusszertifikat',   sections: LETTER_SECTIONS(), tableColumns: [] },
+  { templateType: 'project_schedule',                 name: 'Bauplan / Terminplan',  sections: LETTER_SECTIONS(), tableColumns: [] },
 ];
 
 export async function seedDoctplTemplates(adminUserId) {

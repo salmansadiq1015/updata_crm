@@ -20,6 +20,7 @@ type AssigneeSelectorProps = {
   users: WorkspaceUser[];
   onAssigneeChange: (id: string | null) => void;
   size?: 'sm' | 'default';
+  disabled?: boolean;
 };
 
 function initials(user: WorkspaceUser) {
@@ -44,7 +45,7 @@ function Avatar({ user, size = 'sm' }: { user: WorkspaceUser; size?: 'sm' | 'def
   );
 }
 
-export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = 'sm' }: AssigneeSelectorProps) {
+export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = 'sm', disabled = false }: AssigneeSelectorProps) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -57,13 +58,15 @@ export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = '
   const isSmall = size === 'sm';
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => { if (!disabled) setOpen(next); }}>
       <PopoverTrigger asChild>
         <button
           type="button"
+          disabled={disabled}
           className={cn(
             'flex w-full items-center gap-1.5 rounded-md border border-border bg-background font-normal',
             'hover:bg-accent/60 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-background',
             isSmall ? 'h-7 px-2 text-xs' : 'h-8 px-2.5 text-sm',
             !assigned && 'text-muted-foreground border-dashed',
           )}

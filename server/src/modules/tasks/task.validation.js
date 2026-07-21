@@ -52,6 +52,7 @@ export const listTasksSchema = {
     meetingId: objectId,
     overdue: Joi.boolean(),
     dueToday: Joi.boolean(),
+    inPool: Joi.boolean(),
     dueFrom: Joi.date().iso(),
     dueTo: Joi.date().iso(),
     hasParent: Joi.boolean(),
@@ -89,6 +90,28 @@ export const batchPatchSchema = {
         expectedVersion: Joi.number().integer().min(0),
       }).min(1).required(),
     })).min(1).max(100).required(),
+  }),
+};
+
+export const setLockSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    locked: Joi.boolean().required(),
+    expectedVersion: Joi.number().integer().min(0),
+  }),
+};
+
+export const claimTaskSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    expectedVersion: Joi.number().integer().min(0),
+  }),
+};
+
+export const helpTaskSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    expectedVersion: Joi.number().integer().min(0),
   }),
 };
 

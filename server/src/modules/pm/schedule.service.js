@@ -10,6 +10,24 @@ import logger from '../../shared/logger/index.js';
 
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 
+// ISO-8601 calendar week + week-year for a date (Grobplanung transfer).
+function isoWeekOf(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;       // Mon=0 … Sun=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);    // move to the Thursday of this week
+  const calendarYear = d.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(calendarYear, 0, 1));
+  const calendarWeek = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return { calendarYear, calendarWeek };
+}
+
+// Grobplanung stores discrete allocation steps (25/50/75/100). Map a raw
+// duration-derived percentage to the nearest allowed step; 0 → skip.
+function snapAllocationPercent(raw) {
+  if (raw <= 0) return 0;
+  return [25, 50, 75, 100].reduce((best, o) => (Math.abs(o - raw) < Math.abs(best - raw) ? o : best), 25);
+}
+
 class ScheduleService {
   async getSchedule(projectId) {
     const cacheKey = `pm:schedule:project:${projectId}`;
@@ -578,6 +596,23 @@ class ScheduleService {
       })),
     };
 
+    // The document renderer has no schedule-specific layout, so render the plan
+    // as a rich-text body (Phasen + Meilensteine) that the BodyRenderer draws.
+    const STATUS_DE = {
+      PLANNED: 'Geplant', IN_PROGRESS: 'In Arbeit', COMPLETED: 'Abgeschlossen',
+      CANCELLED: 'Abgebrochen', WAIVED: 'Verzichtet',
+    };
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const isoToCh = (s) => (s ? s.split('-').reverse().join('.') : '');
+    const phaseLines = templateData.phases.map((p) => `<b>${esc(p.name)}</b> — ${isoToCh(p.startDate)} – ${isoToCh(p.endDate)} · ${STATUS_DE[p.status] || p.status}`);
+    const msLines = templateData.milestones.map((m) => `<b>${esc(m.name)}</b> — ${isoToCh(m.date)} · ${STATUS_DE[m.status] || m.status}`);
+    templateData.introduction = [
+      '<b>Phasen</b>',
+      phaseLines.length ? phaseLines.join('<br>') : '—',
+      '<br><b>Meilensteine</b>',
+      msLines.length ? msLines.join('<br>') : '—',
+    ].join('<br>');
+
     const documentGenerationService = (await import('../doctpl/documentGeneration.service.js')).default;
     const generatedDoc = await documentGenerationService.generate({
       templateType: 'project_schedule',
@@ -600,6 +635,235 @@ class ScheduleService {
     });
 
     return generatedDoc;
+  }
+
+  /**
+   * Transfer the project's Bauplan into the Einsatzplanung (deploy assignments).
+   * Only PHASE entries owned by an internal team member with a valid date range
+   * are transferred — milestones stay markers (PROJ – Bauplan). Re-sync from the
+   * plan: a phase not yet transferred is created; a linked assignment whose
+   * employee/dates/title drifted from the plan is updated; an unchanged one is
+   * left alone. Conflicts are detected by the existing deploy conflict engine.
+   */
+  async transferToEinsatzplanung(projectId, userId, meta = {}) {
+    const entries = await scheduleRepository.findByProjectId(projectId);
+    const phases = entries.filter((e) => (
+      e.entryType === 'PHASE'
+      && e.responsibleType === 'INTERNAL_TEAM'
+      && e.responsibleTeamId
+      && e.startDate && e.endDate
+    ));
+
+    const Assignment = (await import('../deploy/assignment.model.js')).default;
+    const existingList = await Assignment.find({
+      sourceScheduleEntryId: { $in: phases.map((p) => p._id) },
+    }).select('sourceScheduleEntryId employeeId startDatetime endDatetime title').lean();
+    const existingByEntry = new Map(existingList.map((a) => [String(a.sourceScheduleEntryId), a]));
+
+    const assignmentService = (await import('../deploy/assignment.service.js')).default;
+    const conflicts = [];
+    let createdCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+
+    for (const phase of phases) {
+      const start = new Date(phase.startDate); start.setHours(0, 0, 0, 0);
+      const end = new Date(phase.endDate); end.setHours(23, 59, 59, 999);
+      const employeeId = (phase.responsibleTeamId && typeof phase.responsibleTeamId === 'object')
+        ? phase.responsibleTeamId._id
+        : phase.responsibleTeamId;
+      const existing = existingByEntry.get(String(phase._id));
+
+      if (!existing) {
+        const results = await assignmentService.create({
+          employeeIds: [employeeId],
+          assignmentType: 'PROJECT_WORK',
+          projectId,
+          title: phase.name,
+          startDatetime: start,
+          endDatetime: end,
+          isFullDay: true,
+          sourceScheduleEntryId: phase._id,
+        }, userId, meta);
+        createdCount += results.length;
+        for (const r of results) if (r.conflicts?.length) conflicts.push({ phase: phase.name, count: r.conflicts.length });
+        continue;
+      }
+
+      const drifted = String(existing.employeeId) !== String(employeeId)
+        || new Date(existing.startDatetime).getTime() !== start.getTime()
+        || new Date(existing.endDatetime).getTime() !== end.getTime()
+        || existing.title !== phase.name;
+      if (!drifted) { skippedCount += 1; continue; }
+
+      await assignmentService.update(existing._id, {
+        employeeIds: [employeeId],
+        title: phase.name,
+        startDatetime: start,
+        endDatetime: end,
+      }, userId, meta);
+      updatedCount += 1;
+    }
+
+    return {
+      target: 'einsatzplanung',
+      phaseCount: phases.length,
+      createdCount,
+      updatedCount,
+      skippedCount,
+      conflictCount: conflicts.length,
+      conflicts,
+    };
+  }
+
+  /**
+   * Transfer the project's Bauplan into the Grobplanung (weekly coarse
+   * allocations). Each internal-team PHASE is spread over the ISO weeks it
+   * spans; the weekly allocationPercent is derived from the phase's working-day
+   * coverage of that week (Q5) unless an explicit percent is supplied (manual
+   * override). Re-sync from the plan: a phase whose derived allocations match
+   * what is already stored (via sourceScheduleEntryId) is skipped; a phase that
+   * drifted (dates/employee/percent) has its old allocations deleted and the
+   * current ones recreated. coarseService.create enforces the ≤100 %/week cap
+   * (Ueberzuteilung), so over-allocated weeks are reported.
+   */
+  async transferToGrobplanung(projectId, { allocationPercent = null } = {}, userId, meta = {}) {
+    const entries = await scheduleRepository.findByProjectId(projectId);
+    const phases = entries.filter((e) => (
+      e.entryType === 'PHASE'
+      && e.responsibleType === 'INTERNAL_TEAM'
+      && e.responsibleTeamId
+      && e.startDate && e.endDate
+    ));
+
+    const CoarseAllocation = (await import('../deploy/coarseAllocation.model.js')).default;
+    const existingList = await CoarseAllocation.find({
+      sourceScheduleEntryId: { $in: phases.map((p) => p._id) },
+    }).select('sourceScheduleEntryId employeeId calendarYear calendarWeek allocationPercent').lean();
+    const existingByEntry = new Map();
+    for (const a of existingList) {
+      const k = String(a.sourceScheduleEntryId);
+      if (!existingByEntry.has(k)) existingByEntry.set(k, []);
+      existingByEntry.get(k).push(a);
+    }
+
+    const coarseService = (await import('../deploy/coarse.service.js')).default;
+    let createdCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const overAllocated = [];
+
+    for (const phase of phases) {
+      const employeeId = (phase.responsibleTeamId && typeof phase.responsibleTeamId === 'object')
+        ? phase.responsibleTeamId._id
+        : phase.responsibleTeamId;
+
+      // Derive the desired weekly allocation (weekKey -> percent) from the
+      // phase's working-day (Mon–Fri) coverage of each ISO week it spans.
+      const workingDaysByWeek = new Map();
+      const cursor = new Date(phase.startDate); cursor.setHours(12, 0, 0, 0);
+      const end = new Date(phase.endDate); end.setHours(12, 0, 0, 0);
+      while (cursor <= end) {
+        const dow = cursor.getDay();
+        if (dow !== 0 && dow !== 6) {
+          const { calendarYear, calendarWeek } = isoWeekOf(cursor);
+          workingDaysByWeek.set(`${calendarYear}:${calendarWeek}`, (workingDaysByWeek.get(`${calendarYear}:${calendarWeek}`) || 0) + 1);
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      const desired = new Map();
+      for (const [key, workingDays] of workingDaysByWeek) {
+        const percent = allocationPercent || snapAllocationPercent(Math.round((workingDays / 5) * 100));
+        if (percent) desired.set(key, percent);
+      }
+
+      // Compare with what this phase previously produced.
+      const existing = existingByEntry.get(String(phase._id)) || [];
+      const existingByWeek = new Map(existing.map((a) => [`${a.calendarYear}:${a.calendarWeek}`, a]));
+      const sameEmployee = existing.every((a) => String(a.employeeId) === String(employeeId));
+      const sameSet = existing.length === desired.size
+        && [...desired].every(([key, pct]) => existingByWeek.get(key)?.allocationPercent === pct);
+      if (existing.length > 0 && sameEmployee && sameSet) { skippedCount += 1; continue; }
+
+      // Drifted (or new): delete this phase's old allocations, recreate current.
+      const isUpdate = existing.length > 0;
+      for (const a of existing) await coarseService.delete(a._id, userId, meta);
+      for (const [key, percent] of desired) {
+        const [calendarYear, calendarWeek] = key.split(':').map(Number);
+        try {
+          await coarseService.create({ employeeId, projectId, calendarYear, calendarWeek, allocationPercent: percent, sourceScheduleEntryId: phase._id }, userId, meta);
+          if (isUpdate) updatedCount += 1; else createdCount += 1;
+        } catch (err) {
+          if (err instanceof ConflictError && !/already exists/i.test(err.message)) {
+            overAllocated.push({ phase: phase.name, week: `${calendarYear}-KW${calendarWeek}` });
+          } else if (!(err instanceof ConflictError)) {
+            throw err;
+          }
+        }
+      }
+    }
+
+    return {
+      target: 'grobplanung',
+      phaseCount: phases.length,
+      createdCount,
+      updatedCount,
+      skippedCount,
+      overAllocatedCount: overAllocated.length,
+      overAllocated,
+    };
+  }
+
+  /**
+   * Export the Bauplan / milestone plan as a spreadsheet (CSV, UTF-8 + BOM,
+   * ';' separator) that opens natively in Excel. Mirrors the PDF content:
+   * header block + Phasen table + Meilensteine table (PROJ – Bauplan export).
+   */
+  async exportExcel(projectId) {
+    const Project = (await import('./project.model.js')).default;
+    const project = await Project.findById(projectId)
+      .populate('customerId', 'name')
+      .populate('projectManagerId', 'firstName lastName');
+    if (!project) throw new NotFoundError('Project', projectId);
+
+    const entries = await scheduleRepository.findByProjectId(projectId);
+    const phases = entries.filter((e) => e.entryType === 'PHASE');
+    const milestones = entries.filter((e) => e.entryType === 'MILESTONE');
+
+    const STATUS_DE = {
+      PLANNED: 'Geplant', IN_PROGRESS: 'In Arbeit', COMPLETED: 'Abgeschlossen',
+      CANCELLED: 'Abgebrochen', WAIVED: 'Verzichtet',
+    };
+    const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('de-CH') : '');
+    const esc = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const row = (...cells) => cells.map(esc).join(';');
+
+    const lines = [
+      row('Bauplan / Terminplan'),
+      row('Projekt', project.name),
+      row('Projekt-Nr.', project.projectNumber),
+      row('Kunde', project.customerId?.name || ''),
+      row('Projektleiter', project.projectManagerId
+        ? `${project.projectManagerId.firstName} ${project.projectManagerId.lastName}` : ''),
+      row('Exportiert am', new Date().toLocaleDateString('de-CH')),
+      '',
+      row('Phasen'),
+      row('Name', 'Start', 'Ende', 'Status'),
+      ...phases.map((p) => row(p.name, fmtDate(p.startDate), fmtDate(p.endDate), STATUS_DE[p.status] || p.status)),
+      '',
+      row('Meilensteine'),
+      row('Name', 'Datum', 'Status'),
+      ...milestones.map((m) => row(m.name, fmtDate(m.milestoneDate), STATUS_DE[m.status] || m.status)),
+    ];
+
+    return {
+      csv: `\uFEFF${lines.join('\r\n')}`,
+      filename: `Bauplan_${project.projectNumber || projectId}.csv`,
+    };
   }
 
   async exportIcal(projectId) {

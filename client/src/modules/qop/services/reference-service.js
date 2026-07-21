@@ -3,8 +3,10 @@ import { ENDPOINTS } from '@/lib/api/endpoints';
 import { QOP_SELECTABLE_PROJECT_STATUSES } from '../constants/qop-constants';
 
 export const referenceService = {
+  // Empty query -> default customer list (suggestions before typing); a query
+  // filters server-side via `search` (the CRM list endpoint ignores `q`).
   searchCustomers: (query) => apiClient.get(ENDPOINTS.CRM.CUSTOMERS, {
-    params: { q: query, limit: 10 },
+    params: { ...(query ? { search: query } : {}), limit: 10 },
   }),
   listDepartments: () => apiClient.get('/admin/departments'),
   // Admin management view: include deactivated ones so they can be reactivated

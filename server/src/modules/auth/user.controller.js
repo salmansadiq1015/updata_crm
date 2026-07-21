@@ -224,10 +224,24 @@ class UserController {
   async updatePreferences(req, res, next) {
     try {
       const User = (await import('./user.model.js')).default;
-      const { preferredDepartmentId } = req.body || {};
+      const { preferredDepartmentId, dashboard } = req.body || {};
+      const updates = {};
+
+      if (preferredDepartmentId !== undefined) {
+        updates['preferences.preferredDepartmentId'] = preferredDepartmentId || null;
+      }
+      if (dashboard) {
+        if (Array.isArray(dashboard.hiddenKpis)) {
+          updates['preferences.dashboard.hiddenKpis'] = dashboard.hiddenKpis;
+        }
+        if (Array.isArray(dashboard.hiddenTabs)) {
+          updates['preferences.dashboard.hiddenTabs'] = dashboard.hiddenTabs;
+        }
+      }
+
       const updated = await User.findByIdAndUpdate(
         req.user._id,
-        { $set: { 'preferences.preferredDepartmentId': preferredDepartmentId || null } },
+        { $set: updates },
         { new: true, select: 'preferences' },
       ).lean();
       return res.success({ data: { preferences: updated?.preferences ?? {} } });

@@ -140,17 +140,12 @@ class TaskService {
       );
     }
 
-    // Non-admins: only tasks they created or are assigned to
-    const accessibleListIds = await taskAccessService.getAccessibleListIds(userId, { includeArchived: true });
-
-    if (filters.listId && !accessibleListIds.some((id) => String(id) === String(filters.listId))) {
-      throw new AppError('Access denied to this task list', 403, ERROR_CODES.TASK_ACCESS_DENIED);
-    }
-
+    // Non-admins get central visibility: all non-locked tasks, plus their own
+    // locked ones (the repository access filter enforces this). Locked tasks of
+    // other users are excluded, so no per-list access check is needed here.
     const scopedFilters = {
       ...filters,
       accessUserId: userId,
-      accessibleListIds,
     };
     const filterKey = Object.entries(filters)
       .filter(([, v]) => v !== undefined)

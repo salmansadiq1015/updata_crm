@@ -13,6 +13,8 @@ type TaskWorkspaceState = {
   search: string;
   status: TaskStatus | 'ALL';
   priority: TaskPriority | 'ALL';
+  // 'ALL' = everyone's tasks, 'ME' = only mine, or a specific user id.
+  assigneeFilter: string;
   savedView: TaskSavedView;
   rowSelection: Record<string, boolean>;
   visibleColumns: Record<string, boolean>;
@@ -25,6 +27,7 @@ type TaskWorkspaceState = {
   setSearch: (search: string) => void;
   setStatus: (status: TaskStatus | 'ALL') => void;
   setPriority: (priority: TaskPriority | 'ALL') => void;
+  setAssigneeFilter: (assigneeFilter: string) => void;
   setSavedView: (savedView: TaskSavedView) => void;
   setRowSelection: (selection: Record<string, boolean>) => void;
   clearFilters: () => void;
@@ -40,6 +43,7 @@ export const useTaskWorkspaceStore = create<TaskWorkspaceState>((set) => ({
   search: '',
   status: 'ALL',
   priority: 'ALL',
+  assigneeFilter: 'ALL',
   savedView: 'none',
   rowSelection: {},
   visibleColumns: {
@@ -58,9 +62,10 @@ export const useTaskWorkspaceStore = create<TaskWorkspaceState>((set) => ({
   setSearch: (search) => set({ search }),
   setStatus: (status) => set({ status, savedView: 'none' }),
   setPriority: (priority) => set({ priority, savedView: 'none' }),
+  setAssigneeFilter: (assigneeFilter) => set({ assigneeFilter }),
   setSavedView: (savedView) => set({ savedView }),
   setRowSelection: (rowSelection) => set({ rowSelection }),
-  clearFilters: () => set({ search: '', status: 'ALL', priority: 'ALL', savedView: 'none' }),
+  clearFilters: () => set({ search: '', status: 'ALL', priority: 'ALL', assigneeFilter: 'ALL', savedView: 'none' }),
   setActiveFolderId: (activeFolderId) => set({ activeFolderId }),
   toggleFolderCollapsed: (folderId) =>
     set((state) => ({
@@ -80,6 +85,7 @@ export const useTaskWorkspaceViewState = () =>
       search: state.search,
       status: state.status,
       priority: state.priority,
+      assigneeFilter: state.assigneeFilter,
       savedView: state.savedView,
       rowSelection: state.rowSelection,
       pageSize: state.pageSize,

@@ -117,18 +117,16 @@ class TaskRepository {
       baseFilter.$text = { $search: q };
     }
 
-    // Owners (creator/assignee/locker) always see their own tasks, including
-    // locked ones. List-based visibility (owned/group lists) excludes locked
-    // tasks so they stay confidential to their owner.
+    // Central task management: every user sees all non-locked tasks. Locked
+    // (confidential) tasks stay visible only to their owner
+    // (creator/assignee/locker); admins bypass this filter entirely upstream.
     const accessFilter = accessUserId
       ? {
           $or: [
+            { locked: { $ne: true } },
             { createdBy: accessUserId },
             { assigneeId: accessUserId },
             { lockedBy: accessUserId },
-            ...(Array.isArray(accessibleListIds) && accessibleListIds.length > 0
-              ? [{ listId: { $in: accessibleListIds }, locked: { $ne: true } }]
-              : []),
           ],
         }
       : {};

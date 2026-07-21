@@ -80,6 +80,10 @@ class TaskAccessService {
       throw new AppError('Task is locked', 403, ERROR_CODES.TASK_LOCKED);
     }
 
+    // Central visibility: any non-locked task is readable by every user.
+    // Write access (EDITOR+) still follows list/ownership rules below.
+    if (requiredRole === 'VIEWER' && !task.locked) return task;
+
     const list = await taskListRepository.findById(task.listId);
     if (!list) {
       if (sameId(task.createdBy, userId) || sameId(task.assigneeId, userId)) return task;

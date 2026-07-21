@@ -16,6 +16,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  UserRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,17 +45,23 @@ const STATUS_ICON = {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+type CommandBarUser = { id: string; firstName?: string; lastName?: string; email?: string };
+
 type TaskCommandBarProps = {
   activeView: TaskViewType;
   search: string;
   status: TaskStatus | 'ALL';
   priority: TaskPriority | 'ALL';
+  assigneeFilter?: string;
+  users?: CommandBarUser[];
+  currentUserId?: string | null;
   isStale: boolean;
   isFetching: boolean;
   onViewChange: (view: TaskViewType) => void;
   onSearchChange: (value: string) => void;
   onStatusChange: (status: TaskStatus | 'ALL') => void;
   onPriorityChange: (priority: TaskPriority | 'ALL') => void;
+  onAssigneeFilterChange?: (value: string) => void;
   onCreateTask: (title: string) => void;
   pageSize?: number;
   onPageSizeChange?: (size: number) => void;
@@ -125,12 +132,16 @@ export function TaskCommandBar({
   search,
   status,
   priority,
+  assigneeFilter = 'ALL',
+  users = [],
+  currentUserId,
   isStale,
   isFetching,
   onViewChange,
   onSearchChange,
   onStatusChange,
   onPriorityChange,
+  onAssigneeFilterChange,
   onCreateTask,
   pageSize,
   onPageSizeChange,
@@ -264,6 +275,56 @@ export function TaskCommandBar({
             ))}
           </SelectContent>
         </Select>
+
+        {/* Assignee scope filter: everyone's tasks / mine / a specific colleague */}
+        {onAssigneeFilterChange && (
+          <Select value={assigneeFilter} onValueChange={(v: string) => onAssigneeFilterChange(v)}>
+            <SelectTrigger className="h-8 w-44 gap-1.5 border border-border bg-background text-xs font-medium hover:bg-muted [&>svg:last-child]:shrink-0">
+              <span className="flex items-center gap-1.5 truncate">
+                <UserRound className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                <span className="truncate">
+                  {assigneeFilter === 'ALL'
+                    ? t('tasks.allAssignees', 'Alle Zugewiesenen')
+                    : assigneeFilter === 'ME'
+                    ? t('tasks.myTasks', 'Meine Aufgaben')
+                    : (() => {
+                        const u = users.find((usr) => usr.id === assigneeFilter);
+                        return u ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || u.email : t('tasks.assignee', 'Zugewiesen');
+                      })()}
+                </span>
+              </span>
+            </SelectTrigger>
+            <SelectContent className="max-h-72 w-56">
+              <SelectItem value="ALL" textValue={t('tasks.allAssignees', 'Alle Zugewiesenen')}>
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <UserRound className="h-3.5 w-3.5 opacity-40" />
+                  {t('tasks.allAssignees', 'Alle Zugewiesenen')}
+                </span>
+              </SelectItem>
+              {currentUserId && (
+                <SelectItem value="ME" textValue={t('tasks.myTasks', 'Meine Aufgaben')}>
+                  <span className="flex items-center gap-2 font-medium">
+                    <UserRound className="h-3.5 w-3.5" />
+                    {t('tasks.myTasks', 'Meine Aufgaben')}
+                  </span>
+                </SelectItem>
+              )}
+              {users
+                .filter((u) => u.id !== currentUserId)
+                .map((u) => {
+                  const label = `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || u.email || u.id;
+                  return (
+                    <SelectItem key={u.id} value={u.id} textValue={label}>
+                      <span className="flex items-center gap-2">
+                        <UserRound className="h-3.5 w-3.5 opacity-60" />
+                        {label}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Page size */}
         {onPageSizeChange && (

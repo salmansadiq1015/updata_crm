@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, Loader2, Lock, LockOpen } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, Loader2, Lock, LockOpen, UserPlus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -146,6 +146,21 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
     lockMutation.mutate({ id: task.id, locked: !task.locked, expectedVersion: task.version });
   };
 
+  // Take over (Übernehmen): assign a non-locked task to myself.
+  const claimMutation = useMutation({
+    mutationFn: ({ id, expectedVersion }: { id: string; expectedVersion?: number }) =>
+      taskApi.claim(id, expectedVersion),
+    onSuccess: (updated) => {
+      qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
+      qc.invalidateQueries({ queryKey: taskWorkspaceKeys.windows() });
+      qc.invalidateQueries({ queryKey: taskWorkspaceKeys.lists() });
+      toast.success(t('tasks.claimed', 'Aufgabe übernommen'));
+    },
+    onError: () => toast.error(t('tasks.updateFailed')),
+  });
+
+  const canClaim = Boolean(task && !task.locked && currentUserId && task.assigneeId !== currentUserId);
+
   // Subtask mutations
   const createSubtask = useCreateSubtask();
   const patchSubtask = usePatchSubtask();
@@ -229,6 +244,19 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           <span className="truncate max-w-48 font-medium text-foreground">{task.title}</span>
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          {canClaim && (
+            <Button
+              variant="default"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => claimMutation.mutate({ id: task.id, expectedVersion: task.version })}
+              disabled={claimMutation.isPending}
+              title={t('tasks.claimHint', 'Aufgabe übernehmen – wird mir zugewiesen')}
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              {t('tasks.claim', 'Übernehmen')}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

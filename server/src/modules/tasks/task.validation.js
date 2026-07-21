@@ -100,6 +100,13 @@ export const setLockSchema = {
   }),
 };
 
+export const claimTaskSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    expectedVersion: Joi.number().integer().min(0),
+  }),
+};
+
 export const completeTaskSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({

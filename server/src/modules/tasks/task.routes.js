@@ -9,7 +9,7 @@ import {
   listTasksSchema, changeStatusSchema, completeTaskSchema,
   moveTaskSchema, bulkOperationSchema, createSubtaskSchema,
   parentIdParamSchema, reorderSubtasksSchema, promoteTaskSchema,
-  batchPatchSchema, setLockSchema,
+  batchPatchSchema, setLockSchema, claimTaskSchema,
 } from './task.validation.js';
 
 const router = Router();
@@ -24,6 +24,7 @@ router.delete('/:id', authenticate, requirePermission('tasks:delete'), validate(
 router.patch('/:id/status', authenticate, requirePermission('tasks:write'), validate(changeStatusSchema), (req, res, next) => taskController.changeStatus(req, res, next));
 router.patch('/:id/complete', authenticate, requirePermission('tasks:write'), validate(completeTaskSchema), (req, res, next) => taskController.complete(req, res, next));
 router.patch('/:id/lock', authenticate, requirePermission('tasks:write'), validate(setLockSchema), (req, res, next) => taskController.setLock(req, res, next));
+router.patch('/:id/claim', authenticate, requirePermission('tasks:write'), validate(claimTaskSchema), (req, res, next) => taskController.claim(req, res, next));
 router.patch('/:id/reopen', authenticate, requirePermission('tasks:write'), validate(taskIdParamSchema), (req, res, next) => taskController.reopen(req, res, next));
 router.patch('/:id/move', authenticate, requirePermission('tasks:write'), validate(moveTaskSchema), (req, res, next) => taskController.moveToList(req, res, next));
 router.patch('/:id/promote', authenticate, requirePermission('tasks:write'), validate(promoteTaskSchema), (req, res, next) => taskController.promote(req, res, next));

@@ -256,6 +256,13 @@ export const taskApi = {
     return normalizeTask(response.data);
   },
 
+  async claim(id: string, expectedVersion?: number): Promise<Task> {
+    const body: { expectedVersion?: number } = {};
+    if (expectedVersion !== undefined) body.expectedVersion = expectedVersion;
+    const response = toApiResponse<unknown>(await apiClient.patch(ENDPOINTS.TASKS.CLAIM(id), body));
+    return normalizeTask(response.data);
+  },
+
   async remove(id: string): Promise<{ deleted: boolean }> {
     const response = toApiResponse<{ deleted?: boolean }>(await apiClient.delete(ENDPOINTS.TASKS.BY_ID(id)));
     return { deleted: response.data?.deleted ?? true };

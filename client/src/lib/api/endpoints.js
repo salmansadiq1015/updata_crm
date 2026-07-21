@@ -239,6 +239,7 @@ export const ENDPOINTS = Object.freeze({
     STATUS: (id) => `/tasks/${id}/status`,
     COMPLETE: (id) => `/tasks/${id}/complete`,
     LOCK: (id) => `/tasks/${id}/lock`,
+    CLAIM: (id) => `/tasks/${id}/claim`,
     REOPEN: (id) => `/tasks/${id}/reopen`,
     MOVE: (id) => `/tasks/${id}/move`,
     PROMOTE: (id) => `/tasks/${id}/promote`,

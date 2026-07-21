@@ -284,6 +284,66 @@ class TaskService {
     return updated;
   }
 
+  // Take over a task: any user can claim a non-locked task to themselves
+  // (central task management — helping out, absorbing workload). Locked tasks
+  // stay with their owner and cannot be claimed.
+  async claim(id, userId, meta = {}) {
+    const existing = await taskRepository.findById(id);
+    if (!existing) throw new NotFoundError('Task', id);
+
+    if (existing.locked) {
+      throw new AppError('Locked task cannot be taken over', 403, ERROR_CODES.TASK_LOCKED);
+    }
+    if (String(existing.assigneeId) === String(userId)) {
+      return existing; // already mine — no-op
+    }
+
+    const updated = await taskRepository.updateById(
+      id,
+      { assigneeId: userId, updatedBy: userId },
+      { expectedVersion: meta.expectedVersion },
+    );
+    if (!updated) {
+      throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(existing.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_ASSIGNED, {
+      taskId: id,
+      assigneeId: userId,
+      previousAssigneeId: existing.assigneeId,
+      assignedBy: userId,
+      taskTitle: existing.title,
+      dueDate: existing.dueDate,
+      priority: existing.priority,
+    });
+    eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+      taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['assigneeId'],
+      task: updated,
+      changedBy: userId,
+    });
+
+    auditService.logEvent({
+      eventType: 'task.claimed',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, previousAssigneeId: existing.assigneeId },
+      module: 'tasks',
+    });
+
+    logger.info('Task claimed', { module: 'tasks', action: 'claim', taskId: id, userId });
+
+    return updated;
+  }
+
   async remove(id, userId, meta = {}) {
     const task = await taskRepository.findById(id);
     if (!task) throw new NotFoundError('Task', id);

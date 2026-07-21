@@ -51,6 +51,8 @@ export const rawTaskSchema = z
     completedAt: z.union([z.string(), z.date(), z.null(), z.undefined()]),
     completedBy: nullableId,
     cancelledAt: z.union([z.string(), z.date(), z.null(), z.undefined()]),
+    locked: z.boolean().optional(),
+    lockedBy: nullableId,
   })
   .passthrough()
   .transform((raw) => {
@@ -88,6 +90,8 @@ export const rawTaskSchema = z
       completedAt: toIsoOrNull(raw.completedAt),
       completedBy: raw.completedBy,
       cancelledAt: toIsoOrNull(raw.cancelledAt),
+      locked: raw.locked ?? false,
+      lockedBy: raw.lockedBy,
     };
   });
 

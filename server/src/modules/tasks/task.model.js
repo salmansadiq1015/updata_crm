@@ -26,6 +26,12 @@ const taskSchema = new mongoose.Schema(
     completedAt: { type: Date, default: null },
     completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     cancelledAt: { type: Date, default: null },
+    // Lock (Sperrfunktion): confidential/personal task that stays with its owner.
+    // Locked tasks cannot be reassigned/claimed, never enter the overdue pool,
+    // and are invisible to everyone except the owner (assignee/creator/lockedBy) and admins.
+    locked: { type: Boolean, default: false },
+    lockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    lockedAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },

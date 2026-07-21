@@ -249,6 +249,13 @@ export const taskApi = {
     return normalizeTask(response.data);
   },
 
+  async setLock(id: string, locked: boolean, expectedVersion?: number): Promise<Task> {
+    const body: { locked: boolean; expectedVersion?: number } = { locked };
+    if (expectedVersion !== undefined) body.expectedVersion = expectedVersion;
+    const response = toApiResponse<unknown>(await apiClient.patch(ENDPOINTS.TASKS.LOCK(id), body));
+    return normalizeTask(response.data);
+  },
+
   async remove(id: string): Promise<{ deleted: boolean }> {
     const response = toApiResponse<{ deleted?: boolean }>(await apiClient.delete(ENDPOINTS.TASKS.BY_ID(id)));
     return { deleted: response.data?.deleted ?? true };

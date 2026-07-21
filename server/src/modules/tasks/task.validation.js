@@ -92,6 +92,14 @@ export const batchPatchSchema = {
   }),
 };
 
+export const setLockSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    locked: Joi.boolean().required(),
+    expectedVersion: Joi.number().integer().min(0),
+  }),
+};
+
 export const completeTaskSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({

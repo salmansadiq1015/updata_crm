@@ -20,7 +20,8 @@ class TaskController {
 
   async getById(req, res, next) {
     try {
-      const task = await taskService.getById(req.params.id, req.user._id);
+      const isAdmin = req.user.role?.name === 'Admin';
+      const task = await taskService.getById(req.params.id, req.user._id, { isAdmin });
       return res.success({ data: task });
     } catch (err) { next(err); }
   }
@@ -60,6 +61,19 @@ class TaskController {
         completeParentOnly: req.body.completeParentOnly === true,
       });
       return res.success({ data: task, message: 'Task status updated successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async setLock(req, res, next) {
+    try {
+      const meta = {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        isAdmin: req.user.role?.name === 'Admin',
+        expectedVersion: req.body.expectedVersion,
+      };
+      const task = await taskService.setLock(req.params.id, req.body.locked, req.user._id, meta);
+      return res.success({ data: task, message: req.body.locked ? 'Task locked successfully' : 'Task unlocked successfully' });
     } catch (err) { next(err); }
   }
 

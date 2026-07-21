@@ -90,7 +90,7 @@ class TaskService {
     return createdTask;
   }
 
-  async getById(id, userId) {
+  async getById(id, userId, { isAdmin = false } = {}) {
     const cacheKey = `tasks:task:${id}`;
     const task = await cacheManager.getOrSet(
       cacheKey,
@@ -117,7 +117,7 @@ class TaskService {
 
     if (!task) throw new NotFoundError('Task', id);
 
-    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER');
+    await taskAccessService.assertTaskAccess(task, userId, 'VIEWER', { isAdmin });
 
     return task;
   }
@@ -173,6 +173,11 @@ class TaskService {
     await taskAccessService.assertTaskAccess(existing, userId, 'EDITOR');
     const { expectedVersion, ...patch } = data;
 
+    // A locked task stays with its owner — reassignment is not allowed.
+    if (existing.locked && patch.assigneeId && String(patch.assigneeId) !== String(existing.assigneeId)) {
+      throw new AppError('Locked task cannot be reassigned', 403, ERROR_CODES.TASK_LOCKED);
+    }
+
     const updated = await taskRepository.updateById(id, { ...patch, updatedBy: userId }, { expectedVersion });
     if (!updated) {
       throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
@@ -226,6 +231,60 @@ class TaskService {
     });
 
     logger.info('Task updated', { module: 'tasks', action: 'update', taskId: id, userId });
+
+    return updated;
+  }
+
+  async setLock(id, locked, userId, meta = {}) {
+    const existing = await taskRepository.findById(id);
+    if (!existing) throw new NotFoundError('Task', id);
+
+    // Only the task owner (assignee/creator/current locker) or an admin may
+    // lock or unlock — a group editor must not hide a colleague's task.
+    const isAdmin = meta.isAdmin === true;
+    if (!isAdmin && !taskAccessService.isTaskOwner(existing, userId)) {
+      throw new AppError('Only the task owner can lock or unlock this task', 403, ERROR_CODES.TASK_LOCKED);
+    }
+
+    const wantLocked = locked === true;
+    const updated = await taskRepository.updateById(
+      id,
+      {
+        locked: wantLocked,
+        lockedBy: wantLocked ? userId : null,
+        lockedAt: wantLocked ? new Date() : null,
+        updatedBy: userId,
+      },
+      { expectedVersion: meta.expectedVersion },
+    );
+    if (!updated) {
+      throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(existing.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+      taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['locked'],
+      task: updated,
+      changedBy: userId,
+    });
+
+    auditService.logEvent({
+      eventType: wantLocked ? 'task.locked' : 'task.unlocked',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id },
+      module: 'tasks',
+    });
+
+    logger.info(`Task ${wantLocked ? 'locked' : 'unlocked'}`, { module: 'tasks', action: 'setLock', taskId: id, userId });
 
     return updated;
   }
@@ -550,6 +609,10 @@ class TaskService {
         break;
       }
       case 'reassign': {
+        const lockedIds = await taskRepository.findLockedIds(taskIds);
+        if (lockedIds.length > 0) {
+          throw new AppError('Locked tasks cannot be reassigned', 403, ERROR_CODES.TASK_LOCKED);
+        }
         result = await taskRepository.bulkUpdate(taskIds, { assigneeId: data.assigneeId, updatedBy: userId });
         break;
       }
@@ -602,6 +665,9 @@ class TaskService {
       await taskAccessService.assertTaskAccess(task, userId, 'EDITOR');
 
       const { expectedVersion, ...data } = update.patch;
+      if (task.locked && data.assigneeId && String(data.assigneeId) !== String(task.assigneeId)) {
+        throw new AppError('Locked task cannot be reassigned', 403, ERROR_CODES.TASK_LOCKED);
+      }
       if (expectedVersion !== undefined && task.version !== expectedVersion) {
         throw new AppError('One or more tasks were modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
       }

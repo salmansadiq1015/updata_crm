@@ -117,13 +117,17 @@ class TaskRepository {
       baseFilter.$text = { $search: q };
     }
 
+    // Owners (creator/assignee/locker) always see their own tasks, including
+    // locked ones. List-based visibility (owned/group lists) excludes locked
+    // tasks so they stay confidential to their owner.
     const accessFilter = accessUserId
       ? {
           $or: [
             { createdBy: accessUserId },
             { assigneeId: accessUserId },
+            { lockedBy: accessUserId },
             ...(Array.isArray(accessibleListIds) && accessibleListIds.length > 0
-              ? [{ listId: { $in: accessibleListIds } }]
+              ? [{ listId: { $in: accessibleListIds }, locked: { $ne: true } }]
               : []),
           ],
         }
@@ -259,6 +263,13 @@ class TaskRepository {
       { isDeleted: true, deletedAt: new Date() },
       { returnDocument: 'after' },
     );
+  }
+
+  async findLockedIds(taskIds) {
+    const docs = await Task.find({ _id: { $in: taskIds }, locked: true, isDeleted: false })
+      .select('_id')
+      .lean();
+    return docs.map((doc) => String(doc._id));
   }
 
   async bulkUpdate(taskIds, data) {

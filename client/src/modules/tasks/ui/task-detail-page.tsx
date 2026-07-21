@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, Loader2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, Loader2, Lock, LockOpen } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -129,6 +129,23 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
     patchMutation.mutate({ id: task.id, patch: { ...p, expectedVersion: task.version } });
   };
 
+  // Lock / unlock (Sperrfunktion): confidential task stays with its owner.
+  const lockMutation = useMutation({
+    mutationFn: ({ id, locked, expectedVersion }: { id: string; locked: boolean; expectedVersion?: number }) =>
+      taskApi.setLock(id, locked, expectedVersion),
+    onSuccess: (updated) => {
+      qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
+      qc.invalidateQueries({ queryKey: taskWorkspaceKeys.windows() });
+      qc.invalidateQueries({ queryKey: taskWorkspaceKeys.lists() });
+    },
+    onError: () => toast.error(t('tasks.updateFailed')),
+  });
+
+  const toggleLock = () => {
+    if (!task) return;
+    lockMutation.mutate({ id: task.id, locked: !task.locked, expectedVersion: task.version });
+  };
+
   // Subtask mutations
   const createSubtask = useCreateSubtask();
   const patchSubtask = usePatchSubtask();
@@ -212,6 +229,19 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           <span className="truncate max-w-48 font-medium text-foreground">{task.title}</span>
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn('h-8 gap-1.5 text-xs', task.locked && 'border-amber-300 text-amber-700 dark:text-amber-400')}
+            onClick={toggleLock}
+            disabled={lockMutation.isPending}
+            title={task.locked
+              ? t('tasks.unlockHint', 'Sperre aufheben – Aufgabe kann wieder zugewiesen werden')
+              : t('tasks.lockHint', 'Aufgabe sperren – bleibt vertraulich beim Bearbeiter')}
+          >
+            {task.locked ? <LockOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+            {task.locked ? t('tasks.unlock', 'Entsperren') : t('tasks.lock', 'Sperren')}
+          </Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleDuplicate}>
             <Copy className="h-3.5 w-3.5" />
             {t('common.duplicate')}
@@ -231,6 +261,12 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
               className="block w-full text-left text-2xl font-bold text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
               onCommit={(title) => patch({ title })}
             />
+            {task.locked && (
+              <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                <Lock className="h-3 w-3" />
+                {t('tasks.lockedNotice', 'Gesperrt – vertraulich, bleibt beim Bearbeiter')}
+              </span>
+            )}
           </div>
 
           {/* Description */}
@@ -359,6 +395,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                 assigneeId={task.assigneeId ?? null}
                 users={users}
                 size="default"
+                disabled={task.locked}
                 onAssigneeChange={(assigneeId) => patch({ assigneeId })}
               />
             </div>

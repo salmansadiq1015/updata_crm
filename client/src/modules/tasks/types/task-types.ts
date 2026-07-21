@@ -34,6 +34,8 @@ export type Task = {
   completedAt: string | null;
   completedBy: string | null;
   cancelledAt: string | null;
+  locked: boolean;
+  lockedBy: string | null;
 };
 
 export type TaskList = {

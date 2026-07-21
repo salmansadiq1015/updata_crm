@@ -13,13 +13,13 @@ export const DASHBOARD_GRANULARITIES = Object.freeze([
 
 export const DASHBOARD_TABS = Object.freeze([
   { id: 'overview', labelKey: 'dashboard.analytics.tabs.overview', fallback: 'Overview' },
-  { id: 'crm', labelKey: 'dashboard.analytics.tabs.crm', fallback: 'CRM' },
-  { id: 'projects', labelKey: 'dashboard.analytics.tabs.projects', fallback: 'Projects' },
-  { id: 'sales', labelKey: 'dashboard.analytics.tabs.sales', fallback: 'Quotes & Orders' },
-  { id: 'tasks', labelKey: 'dashboard.analytics.tabs.tasks', fallback: 'Tasks' },
-  { id: 'scheduling', labelKey: 'dashboard.analytics.tabs.scheduling', fallback: 'Scheduling' },
-  { id: 'accounting', labelKey: 'dashboard.analytics.tabs.accounting', fallback: 'Accounting' },
-  { id: 'system', labelKey: 'dashboard.analytics.tabs.system', fallback: 'System' },
+  { id: 'crm', labelKey: 'dashboard.analytics.tabs.crm', fallback: 'CRM', permission: 'crm:read' },
+  { id: 'projects', labelKey: 'dashboard.analytics.tabs.projects', fallback: 'Projects', permission: 'projects:read' },
+  { id: 'sales', labelKey: 'dashboard.analytics.tabs.sales', fallback: 'Quotes & Orders', permission: 'qop:read' },
+  { id: 'tasks', labelKey: 'dashboard.analytics.tabs.tasks', fallback: 'Tasks', permission: 'tasks:read' },
+  { id: 'scheduling', labelKey: 'dashboard.analytics.tabs.scheduling', fallback: 'Scheduling', permission: 'scheduling:read' },
+  { id: 'accounting', labelKey: 'dashboard.analytics.tabs.accounting', fallback: 'Accounting', permission: 'accounting:read' },
+  { id: 'system', labelKey: 'dashboard.analytics.tabs.system', fallback: 'System', permission: 'system:read' },
 ]);
 
 export const KPI_CONFIG = Object.freeze({
@@ -27,31 +27,43 @@ export const KPI_CONFIG = Object.freeze({
     labelKey: 'dashboard.analytics.kpi.revenue',
     fallback: 'Revenue',
     accent: 'cyan',
+    href: '/accounting',
+    permission: 'accounting:read',
   },
   customers: {
     labelKey: 'dashboard.analytics.kpi.customers',
     fallback: 'Customers',
     accent: 'violet',
+    href: '/crm',
+    permission: 'crm:read',
   },
   projects: {
     labelKey: 'dashboard.analytics.kpi.projects',
     fallback: 'Active projects',
     accent: 'blue',
+    href: '/projects',
+    permission: 'projects:read',
   },
   openTasks: {
     labelKey: 'dashboard.analytics.kpi.openTasks',
     fallback: 'Open tasks',
     accent: 'emerald',
+    href: '/tasks',
+    permission: 'tasks:read',
   },
   scheduleToday: {
     labelKey: 'dashboard.analytics.kpi.scheduleToday',
     fallback: 'Today schedule',
     accent: 'amber',
+    href: '/scheduling',
+    permission: 'scheduling:read',
   },
   outstanding: {
     labelKey: 'dashboard.analytics.kpi.outstanding',
     fallback: 'Open balance',
     accent: 'rose',
+    href: '/accounting',
+    permission: 'accounting:read',
   },
 });
 
@@ -59,22 +71,27 @@ export const WORK_QUEUE_CONFIG = Object.freeze({
   overdueTasks: {
     labelKey: 'dashboard.analytics.queue.overdueTasks',
     fallback: 'Overdue tasks',
+    href: '/tasks?filter=overdue',
   },
   overdueInvoices: {
     labelKey: 'dashboard.analytics.queue.overdueInvoices',
     fallback: 'Overdue invoices',
+    href: '/accounting/receivables',
   },
   projectRisk: {
     labelKey: 'dashboard.analytics.queue.projectRisk',
     fallback: 'Project risks',
+    href: '/projects?filter=overdue',
   },
   unconfirmedAppointments: {
     labelKey: 'dashboard.analytics.queue.unconfirmedAppointments',
     fallback: 'Unconfirmed appointments',
+    href: '/scheduling',
   },
   auditFailures: {
     labelKey: 'dashboard.analytics.queue.auditFailures',
     fallback: 'Audit failures',
+    href: '/settings/audit',
   },
 });
 

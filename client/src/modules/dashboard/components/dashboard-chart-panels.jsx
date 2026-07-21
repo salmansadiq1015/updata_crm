@@ -346,13 +346,21 @@ function WorkQueuePanel({ items, t, locale }) {
             ? 'border-amber-300/20 bg-amber-300/10 text-amber-100'
             : 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100';
 
-          return (
-            <div key={item.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5">
+          const row = (
+            <div className={cn('flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2.5', config.href && 'transition-colors hover:border-primary/40 hover:bg-accent')}>
               <span className="min-w-0 truncate text-sm text-muted-foreground">{t(config.labelKey, config.fallback)}</span>
               <span className={cn('rounded-md border px-2 py-1 text-xs font-semibold tabular-nums', tone)}>
                 {formatDashboardNumber(item.value, locale)}
               </span>
             </div>
+          );
+
+          return config.href ? (
+            <Link key={item.id} href={config.href} className="block">
+              {row}
+            </Link>
+          ) : (
+            <div key={item.id}>{row}</div>
           );
         }) : (
           <EmptyAnalyticsState title={t('dashboard.analytics.empty.queueTitle', 'No queue data')} className="min-h-[12rem]" />
@@ -468,32 +476,6 @@ function RecentCustomersPanel({ t, locale }) {
 function OverviewTab({ data, t, locale }) {
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 xl:grid-cols-12">
-        <TrendAreaPanel
-          title={t('dashboard.analytics.overview.financial', 'Revenue and pipeline')}
-          description={t('dashboard.analytics.overview.financialDesc', 'Invoices, quote pipeline, orders, and cash movement.')}
-          icon={TrendingUp}
-          data={data.overview.financialTrend}
-          t={t}
-          metrics={[
-            metric(t, 'revenue', CHART_COLORS.revenue),
-            metric(t, 'quoteValue', CHART_COLORS.quoteValue),
-            metric(t, 'orderValue', CHART_COLORS.orderValue),
-          ]}
-          locale={locale}
-          currency
-        />
-        <DonutPanel
-          title={t('dashboard.analytics.overview.featureMix', 'Feature mix')}
-          description={t('dashboard.analytics.overview.featureMixDesc', 'Open workload by product area.')}
-          icon={BriefcaseBusiness}
-          data={data.overview.featureMix}
-          locale={locale}
-          t={t}
-          labelGroup="featureMix"
-          valueKey="value"
-        />
-      </div>
       <div className="grid gap-4 xl:grid-cols-12">
         <TrendAreaPanel
           title={t('dashboard.analytics.overview.operations', 'Operations pulse')}

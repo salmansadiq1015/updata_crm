@@ -163,6 +163,10 @@ const userSchema = new mongoose.Schema(
     },
     preferences: {
       preferredDepartmentId: { type: mongoose.Schema.Types.ObjectId, default: null },
+      dashboard: {
+        hiddenKpis: { type: [String], default: [] },
+        hiddenTabs: { type: [String], default: [] },
+      },
     },
     schedulingSkills: {
       type: [String],

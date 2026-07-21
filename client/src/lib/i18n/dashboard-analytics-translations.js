@@ -224,6 +224,12 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.breakdowns.userStatus.suspended': 'Gesperrt',
     'dashboard.analytics.breakdowns.userStatus.pending': 'Ausstehend',
     'dashboard.analytics.breakdowns.userStatus.invited': 'Eingeladen',
+
+    'dashboard.config.title': 'Dashboard konfigurieren',
+    'dashboard.config.kpis': 'Kennzahlen',
+    'dashboard.config.tabs': 'Bereiche',
+    'dashboard.config.save': 'Speichern',
+    'dashboard.scope.system': 'Systemweit',
   },
 
   en: {
@@ -451,6 +457,12 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.breakdowns.userStatus.suspended': 'Suspended',
     'dashboard.analytics.breakdowns.userStatus.pending': 'Pending',
     'dashboard.analytics.breakdowns.userStatus.invited': 'Invited',
+
+    'dashboard.config.title': 'Configure dashboard',
+    'dashboard.config.kpis': 'Key metrics',
+    'dashboard.config.tabs': 'Sections',
+    'dashboard.config.save': 'Save',
+    'dashboard.scope.system': 'System-wide',
   },
 
   fr: {
@@ -678,6 +690,12 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.breakdowns.userStatus.suspended': 'Suspendu',
     'dashboard.analytics.breakdowns.userStatus.pending': 'En attente',
     'dashboard.analytics.breakdowns.userStatus.invited': 'Invite',
+
+    'dashboard.config.title': 'Configurer le tableau de bord',
+    'dashboard.config.kpis': 'Indicateurs cles',
+    'dashboard.config.tabs': 'Sections',
+    'dashboard.config.save': 'Enregistrer',
+    'dashboard.scope.system': 'Ensemble du systeme',
   },
 
   it: {
@@ -905,5 +923,11 @@ export const dashboardAnalyticsTranslations = {
     'dashboard.analytics.breakdowns.userStatus.suspended': 'Sospeso',
     'dashboard.analytics.breakdowns.userStatus.pending': 'In attesa',
     'dashboard.analytics.breakdowns.userStatus.invited': 'Invitato',
+
+    'dashboard.config.title': 'Configura dashboard',
+    'dashboard.config.kpis': 'Indicatori chiave',
+    'dashboard.config.tabs': 'Sezioni',
+    'dashboard.config.save': 'Salva',
+    'dashboard.scope.system': 'Tutto il sistema',
   },
 };

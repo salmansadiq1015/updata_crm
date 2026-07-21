@@ -138,6 +138,54 @@ export function registerNotificationsEvents() {
     }
   });
 
+  eventBus.subscribe(EVENT_TYPES.TASK_POOLED, async (data) => {
+    const payload = data.payload || data;
+    const taskTitle = payload.taskTitle || '';
+    if (payload.assigneeId) {
+      await dispatch(payload, {
+        type: 'task_pooled',
+        category: 'TASK',
+        channels: ['IN_APP', 'PUSH'],
+        recipientIds: [payload.assigneeId],
+        payload: {
+          title: 'Aufgabe im Pool',
+          body: `«${taskTitle}» wurde in den Aufgabenpool aufgenommen – Kollegen können unterstützen`,
+          taskTitle, taskId: payload.taskId, dueDate: payload.dueDate,
+        },
+        sourceModule: 'tasks',
+        sourceEvent: 'TASK_POOLED',
+        sourceEntityType: 'Task',
+        sourceEntityId: payload.taskId,
+        idempotencyKey: `task-pooled-${payload.taskId}`,
+      });
+    }
+  });
+
+  eventBus.subscribe(EVENT_TYPES.TASK_POOL_HELPED, async (data) => {
+    const payload = data.payload || data;
+    const taskTitle = payload.taskTitle || '';
+    if (payload.assigneeId && String(payload.assigneeId) !== String(payload.helperId)) {
+      await dispatch(payload, {
+        type: 'task_pool_helped',
+        category: 'TASK',
+        channels: ['IN_APP', 'PUSH'],
+        recipientIds: [payload.assigneeId],
+        payload: {
+          title: 'Unterstützung aus dem Pool',
+          body: payload.helperName
+            ? `${payload.helperName} unterstützt «${taskTitle}» aus dem Aufgabenpool`
+            : `Ein Kollege unterstützt «${taskTitle}» aus dem Aufgabenpool`,
+          taskTitle, taskId: payload.taskId, helperName: payload.helperName || '',
+        },
+        sourceModule: 'tasks',
+        sourceEvent: 'TASK_POOL_HELPED',
+        sourceEntityType: 'Task',
+        sourceEntityId: payload.taskId,
+        idempotencyKey: `task-pool-helped-${payload.taskId}-${payload.helperId}`,
+      });
+    }
+  });
+
   eventBus.subscribe(EVENT_TYPES.TASK_NOTE_ADDED, async (data) => {
     const payload = data.payload || data;
     const taskTitle = payload.taskTitle || '';
@@ -831,7 +879,7 @@ export function registerNotificationsEvents() {
     module: 'notifications',
     action: 'events.register',
     subscribedEvents: [
-      'TASK_ASSIGNED', 'TASK_COMPLETED', 'TASK_OVERDUE', 'TASK_NOTE_ADDED', 'TASK_REMINDER_FIRED',
+      'TASK_ASSIGNED', 'TASK_COMPLETED', 'TASK_OVERDUE', 'TASK_POOLED', 'TASK_POOL_HELPED', 'TASK_NOTE_ADDED', 'TASK_REMINDER_FIRED',
       'TASK_LIST_MEMBER_ADDED', 'SCHEDULE_ASSIGNMENT_CREATED', 'SCHEDULE_ASSIGNMENT_UPDATED',
       'SCHEDULE_ASSIGNMENT_MOVED', 'SCHEDULE_ASSIGNMENT_CANCELLED', 'MOBILE_CHAT_MESSAGE_SENT', 'QUOTATION_EXPIRED',
       'MEETING_CREATED', 'MEETING_UPDATED', 'MEETING_CANCELLED', 'MEETING_TASK_CREATED',

@@ -386,6 +386,13 @@ class TaskService {
       task: updated,
       changedBy: userId,
     });
+    // Let the responsible person know a colleague stepped in to support.
+    eventBus.publish(EVENT_TYPES.TASK_POOL_HELPED, {
+      taskId: id,
+      taskTitle: existing.title,
+      assigneeId: currentAssigneeId,
+      helperId: userId,
+    });
 
     auditService.logEvent({
       eventType: 'task.pool_helped',

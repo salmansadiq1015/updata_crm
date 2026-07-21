@@ -234,6 +234,7 @@ const EVENT_TYPES = Object.freeze({
   TASK_DUE: 'task.due',
   TASK_OVERDUE: 'task.overdue',
   TASK_POOLED: 'task.pooled',
+  TASK_POOL_HELPED: 'task.pool.helped',
   TASK_NOTE_ADDED: 'task.note.added',
   TASK_ATTACHMENT_ADDED: 'task.attachment.added',
   TASK_REMINDER_FIRED: 'task.reminder.fired',

@@ -131,8 +131,12 @@ class NotificationService {
       );
     }
 
+    // Only persist idempotencyKey when set — storing null would collide with
+    // every other keyless notification under the unique+sparse index.
+    const { idempotencyKey, ...rest } = data;
     const notification = await notificationRepository.create({
-      ...data,
+      ...rest,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
       status: 'QUEUED',
       createdBy: userId,
     });

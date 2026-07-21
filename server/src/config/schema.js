@@ -11,6 +11,10 @@ const configSchema = Joi.object({
   PORT: Joi.number().port().default(9097),
   HOST: Joi.string().default('0.0.0.0'),
 
+  // Tasks: after how many working days past its due date an unfinished task is
+  // copied into the shared pool so colleagues can help (client: 5–7 days).
+  TASK_POOL_AFTER_WORKING_DAYS: Joi.number().integer().min(1).max(30).default(5),
+
   // MongoDB
   MONGODB_URI: Joi.string().uri().required(),
 

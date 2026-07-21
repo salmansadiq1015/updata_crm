@@ -294,13 +294,15 @@ class TaskService {
     if (existing.locked) {
       throw new AppError('Locked task cannot be taken over', 403, ERROR_CODES.TASK_LOCKED);
     }
-    if (String(existing.assigneeId) === String(userId)) {
+    // findById populates assigneeId, so unwrap the id before comparing.
+    const currentAssigneeId = existing.assigneeId?._id ?? existing.assigneeId;
+    if (String(currentAssigneeId) === String(userId)) {
       return existing; // already mine — no-op
     }
 
     const updated = await taskRepository.updateById(
       id,
-      { assigneeId: userId, updatedBy: userId },
+      { assigneeId: userId, updatedBy: userId, inPool: false, poolHelperId: null },
       { expectedVersion: meta.expectedVersion },
     );
     if (!updated) {
@@ -313,7 +315,7 @@ class TaskService {
     eventBus.publish(EVENT_TYPES.TASK_ASSIGNED, {
       taskId: id,
       assigneeId: userId,
-      previousAssigneeId: existing.assigneeId,
+      previousAssigneeId: currentAssigneeId,
       assignedBy: userId,
       taskTitle: existing.title,
       dueDate: existing.dueDate,
@@ -324,7 +326,7 @@ class TaskService {
       listId: updated.listId,
       version: updated.version,
       updatedAt: updated.updatedAt,
-      changedFields: ['assigneeId'],
+      changedFields: ['assigneeId', 'inPool'],
       task: updated,
       changedBy: userId,
     });
@@ -340,6 +342,62 @@ class TaskService {
     });
 
     logger.info('Task claimed', { module: 'tasks', action: 'claim', taskId: id, userId });
+
+    return updated;
+  }
+
+  // Support a pooled task without taking ownership: the assignee stays, and the
+  // helper is recorded (poolHelperId). Removes it from the pool so it is not
+  // picked up twice. Locked tasks are never in the pool.
+  async help(id, userId, meta = {}) {
+    const existing = await taskRepository.findById(id);
+    if (!existing) throw new NotFoundError('Task', id);
+
+    if (existing.locked) {
+      throw new AppError('Locked task cannot be taken over', 403, ERROR_CODES.TASK_LOCKED);
+    }
+    if (!existing.inPool) {
+      throw new AppError('Task is not in the pool', 400, ERROR_CODES.TASK_NOT_IN_POOL);
+    }
+    // findById populates assigneeId, so unwrap the id before comparing.
+    const currentAssigneeId = existing.assigneeId?._id ?? existing.assigneeId;
+    if (String(currentAssigneeId) === String(userId)) {
+      return existing; // it's already my task — nothing to support
+    }
+
+    const updated = await taskRepository.updateById(
+      id,
+      { poolHelperId: userId, inPool: false, updatedBy: userId },
+      { expectedVersion: meta.expectedVersion },
+    );
+    if (!updated) {
+      throw new AppError('Task was modified by another user. Refresh and retry.', 409, ERROR_CODES.CONFLICT);
+    }
+
+    await this._invalidateTaskCache(id);
+    await this._invalidateListTasksCache(existing.listId);
+
+    eventBus.publish(EVENT_TYPES.TASK_UPDATED, {
+      taskId: id,
+      listId: updated.listId,
+      version: updated.version,
+      updatedAt: updated.updatedAt,
+      changedFields: ['poolHelperId', 'inPool'],
+      task: updated,
+      changedBy: userId,
+    });
+
+    auditService.logEvent({
+      eventType: 'task.pool_helped',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { taskId: id, assigneeId: existing.assigneeId },
+      module: 'tasks',
+    });
+
+    logger.info('Task picked up from pool', { module: 'tasks', action: 'help', taskId: id, userId });
 
     return updated;
   }
@@ -411,6 +469,13 @@ class TaskService {
     // Handle cancellation
     if (status === 'CANCELLED') {
       updateData.cancelledAt = new Date();
+    }
+
+    // Finishing a task removes it from the shared pool (single source of truth —
+    // no duplicate or stale pool entry can linger).
+    if (status === 'COMPLETED' || status === 'CANCELLED') {
+      updateData.inPool = false;
+      updateData.poolHelperId = null;
     }
 
     // Handle reopening from completed
@@ -508,6 +573,8 @@ class TaskService {
       completedAt: now,
       completedBy: userId,
       updatedBy: userId,
+      inPool: false,
+      poolHelperId: null,
     });
 
     if (completeSubtasks) await this._completeSubtaskTree(id, userId, now);

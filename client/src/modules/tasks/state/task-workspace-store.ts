@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import type { TaskPriority, TaskStatus, TaskViewType } from '../types/task-types';
 
-export type TaskSavedView = 'none' | 'dueToday' | 'overdue';
+export type TaskSavedView = 'none' | 'dueToday' | 'overdue' | 'pool';
 
 type TaskWorkspaceState = {
   activeView: TaskViewType;

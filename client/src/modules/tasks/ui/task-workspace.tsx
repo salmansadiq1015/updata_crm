@@ -150,6 +150,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     ...(resolvedAssigneeId ? { assigneeId: resolvedAssigneeId } : {}),
     ...(savedView === 'dueToday' ? { dueToday: true } : {}),
     ...(savedView === 'overdue' ? { overdue: true } : {}),
+    ...(savedView === 'pool' ? { inPool: true } : {}),
     hasParent: false,
   }), [debouncedSearch, listId, priority, resolvedAssigneeId, savedView, status]);
 

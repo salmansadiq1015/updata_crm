@@ -71,6 +71,10 @@ const config = Object.freeze({
     uri: envVars.MONGODB_URI,
   },
 
+  tasks: {
+    poolAfterWorkingDays: envVars.TASK_POOL_AFTER_WORKING_DAYS,
+  },
+
   redis: {
     url: envVars.REDIS_URL,
     password: envVars.REDIS_PASSWORD,

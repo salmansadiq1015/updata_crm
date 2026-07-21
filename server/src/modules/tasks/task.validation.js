@@ -52,6 +52,7 @@ export const listTasksSchema = {
     meetingId: objectId,
     overdue: Joi.boolean(),
     dueToday: Joi.boolean(),
+    inPool: Joi.boolean(),
     dueFrom: Joi.date().iso(),
     dueTo: Joi.date().iso(),
     hasParent: Joi.boolean(),
@@ -101,6 +102,13 @@ export const setLockSchema = {
 };
 
 export const claimTaskSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    expectedVersion: Joi.number().integer().min(0),
+  }),
+};
+
+export const helpTaskSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     expectedVersion: Joi.number().integer().min(0),

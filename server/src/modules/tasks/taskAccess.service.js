@@ -84,6 +84,9 @@ class TaskAccessService {
     // Write access (EDITOR+) still follows list/ownership rules below.
     if (requiredRole === 'VIEWER' && !task.locked) return task;
 
+    // A colleague supporting a pooled task can work on it (edit/complete).
+    if (sameId(task.poolHelperId, userId)) return task;
+
     const list = await taskListRepository.findById(task.listId);
     if (!list) {
       if (sameId(task.createdBy, userId) || sameId(task.assigneeId, userId)) return task;

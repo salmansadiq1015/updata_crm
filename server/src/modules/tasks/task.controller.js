@@ -89,6 +89,18 @@ class TaskController {
     } catch (err) { next(err); }
   }
 
+  async help(req, res, next) {
+    try {
+      const meta = {
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        expectedVersion: req.body?.expectedVersion,
+      };
+      const task = await taskService.help(req.params.id, req.user._id, meta);
+      return res.success({ data: task, message: 'Task picked up from pool successfully' });
+    } catch (err) { next(err); }
+  }
+
   async complete(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

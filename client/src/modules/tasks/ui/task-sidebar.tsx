@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Folder as FolderIcon,
   LayoutList,
+  LifeBuoy,
   MoreHorizontal,
   Palette,
   PanelLeftClose,
@@ -307,7 +308,9 @@ function SavedViewButton({
         isActive
           ? view === 'dueToday'
             ? 'bg-warning/10 text-warning'
-            : 'bg-danger/10 text-danger'
+            : view === 'pool'
+              ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+              : 'bg-danger/10 text-danger'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
@@ -492,6 +495,13 @@ export function TaskSidebar({
                   view="overdue"
                   label={t('tasks.overdue', 'Overdue')}
                   icon={AlertCircle}
+                  activeSavedView={activeSavedView}
+                  onSelectSavedView={onSelectSavedView}
+                />
+                <SavedViewButton
+                  view="pool"
+                  label={t('tasks.pool', 'Aufgabenpool')}
+                  icon={LifeBuoy}
                   activeSavedView={activeSavedView}
                   onSelectSavedView={onSelectSavedView}
                 />

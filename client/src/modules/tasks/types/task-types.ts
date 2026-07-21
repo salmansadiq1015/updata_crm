@@ -36,6 +36,8 @@ export type Task = {
   cancelledAt: string | null;
   locked: boolean;
   lockedBy: string | null;
+  inPool: boolean;
+  poolHelperId: string | null;
 };
 
 export type TaskList = {
@@ -62,6 +64,7 @@ export type TaskFilters = {
   orderId?: string;
   dueToday?: boolean;
   overdue?: boolean;
+  inPool?: boolean;
   hasParent?: boolean;
 };
 

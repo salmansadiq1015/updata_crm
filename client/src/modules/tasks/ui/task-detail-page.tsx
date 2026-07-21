@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, Loader2, Lock, LockOpen, UserPlus } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, LifeBuoy, Loader2, Lock, LockOpen, UserPlus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -161,6 +161,25 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
 
   const canClaim = Boolean(task && !task.locked && currentUserId && task.assigneeId !== currentUserId);
 
+  // Help from the pool (Aus Pool helfen): support an overdue pooled task —
+  // the owner stays assigned, I am recorded as helper.
+  const helpMutation = useMutation({
+    mutationFn: ({ id, expectedVersion }: { id: string; expectedVersion?: number }) =>
+      taskApi.help(id, expectedVersion),
+    onSuccess: (updated) => {
+      qc.setQueryData(taskWorkspaceKeys.detail(taskId), updated);
+      qc.invalidateQueries({ queryKey: taskWorkspaceKeys.windows() });
+      qc.invalidateQueries({ queryKey: taskWorkspaceKeys.lists() });
+      toast.success(t('tasks.pooledHelped', 'Sie unterstützen diese Aufgabe'));
+    },
+    onError: () => toast.error(t('tasks.updateFailed')),
+  });
+
+  const canHelp = Boolean(
+    task && task.inPool && !task.locked && currentUserId
+    && task.assigneeId !== currentUserId && task.poolHelperId !== currentUserId,
+  );
+
   // Subtask mutations
   const createSubtask = useCreateSubtask();
   const patchSubtask = usePatchSubtask();
@@ -244,6 +263,19 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           <span className="truncate max-w-48 font-medium text-foreground">{task.title}</span>
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          {canHelp && (
+            <Button
+              variant="default"
+              size="sm"
+              className="h-8 gap-1.5 bg-sky-600 text-xs hover:bg-sky-700"
+              onClick={() => helpMutation.mutate({ id: task.id, expectedVersion: task.version })}
+              disabled={helpMutation.isPending}
+              title={t('tasks.helpHint', 'Aus dem Pool unterstützen – Verantwortlicher bleibt zuständig')}
+            >
+              <LifeBuoy className="h-3.5 w-3.5" />
+              {t('tasks.help', 'Aus Pool helfen')}
+            </Button>
+          )}
           {canClaim && (
             <Button
               variant="default"
@@ -293,6 +325,12 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
               <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                 <Lock className="h-3 w-3" />
                 {t('tasks.lockedNotice', 'Gesperrt – vertraulich, bleibt beim Bearbeiter')}
+              </span>
+            )}
+            {task.inPool && (
+              <span className="mt-2 ml-2 inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/30 dark:text-sky-400">
+                <LifeBuoy className="h-3 w-3" />
+                {t('tasks.inPoolNotice', 'Im Aufgabenpool – Kollegen können unterstützen')}
               </span>
             )}
           </div>

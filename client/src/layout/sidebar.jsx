@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useState, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { useSidebarStore } from '@/stores/sidebar-store';
@@ -397,22 +398,42 @@ function SidebarLogo({ collapsed }) {
       collapsed && 'justify-center px-0'
     )}>
       {collapsed ? (
-        <div className="h-10 w-10 rounded-xl bg-linear-to-br from-violet-600 to-purple-700 flex items-center justify-center shadow-[0_0_24px_oklch(0.65_0.25_292/40%)]">
-          <Zap className="h-5 w-5 text-white" />
-        </div>
+        <Link href="/dashboard" className="flex items-center justify-center" aria-label="MB Boiler">
+          <Image
+            src="/logo-mark.png"
+            alt="MB Boiler"
+            width={329}
+            height={329}
+            priority
+            className="block h-10 w-10 object-contain dark:hidden"
+          />
+          <Image
+            src="/logo-mark-dark.png"
+            alt="MB Boiler"
+            width={329}
+            height={329}
+            priority
+            className="hidden h-10 w-10 object-contain dark:block"
+          />
+        </Link>
       ) : (
-        <Link href="/dashboard" className="flex items-center gap-3 group">
-          <div className="h-10 w-10 rounded-xl bg-linear-to-br from-violet-600 to-purple-700 flex items-center justify-center shadow-[0_0_24px_oklch(0.65_0.25_292/40%)]">
-            <Zap className="h-5 w-5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[15px] font-bold tracking-tight text-sidebar-foreground/90 block leading-tight">
-              MB Boiler
-            </span>
-            <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[oklch(0.7_0.25_292)] leading-none">
-              ERP System
-            </span>
-          </div>
+        <Link href="/dashboard" className="flex items-center group" aria-label="MB Boiler — ERP System">
+          <Image
+            src="/logo.png"
+            alt="MB Boiler — ERP System"
+            width={329}
+            height={100}
+            priority
+            className="block h-9 w-auto object-contain dark:hidden"
+          />
+          <Image
+            src="/logo-dark.png"
+            alt="MB Boiler — ERP System"
+            width={329}
+            height={100}
+            priority
+            className="hidden h-9 w-auto object-contain dark:block"
+          />
         </Link>
       )}
     </div>

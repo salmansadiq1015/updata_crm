@@ -25,6 +25,10 @@ import {
   ChevronLeft, Check, ArrowRight, AlertCircle,
 } from 'lucide-react';
 import { CH_CANTONS, CUSTOMER_TYPES_WITH_SALUTATION } from '@/modules/crm/constants/customer-constants';
+import { ImagesPanel } from '@/modules/crm/components/images-panel';
+import { CustomerAttachmentsSection } from '@/modules/crm/components/customer-attachments-section';
+import { useCustomerAttachments } from '@/modules/crm/hooks/use-customer-attachments';
+import { usePermissions } from '@/shared/hooks/use-permissions';
 import { DuplicateWarning } from './duplicate-warning';
 
 const STEPS = [
@@ -68,7 +72,7 @@ const SALUTATIONS = [
 ];
 
 export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const isEdit = !!defaultValues?._id;
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -153,6 +157,12 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   const isLastStep = currentStep === STEPS.length - 1;
   const isBusiness = typeVal === 'business';
   const showSalutation = CUSTOMER_TYPES_WITH_SALUTATION.includes(typeVal);
+  // Files attach to an existing customer only — there is no id before the first save.
+  const customerId = defaultValues?._id || null;
+  const { hasPermission } = usePermissions();
+  const canWriteFiles = hasPermission('crm:write');
+  const { data: customerAttachments = [] } = useCustomerAttachments(customerId);
+  const isGerman = locale === 'de';
   const voiceCustomerId = defaultValues?._id || null;
   const handleOpenChange = (nextOpen) => {
     if (!nextOpen) setCurrentStep(0);
@@ -570,10 +580,44 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                         maxLength={5000}
                         minHeight={120}
                         error={errors.notes}
+                        showImage={false}
                       />
                     )}
                   />
                 </DarkField>
+
+                {/* Bilder & Dokumente — upload par glisser-déposer, alimente les
+                    mêmes panneaux que la fiche client. Nécessite un client déjà
+                    enregistré (l'upload est lié à son id). */}
+                <div className="pt-2 space-y-5">
+                  {customerId ? (
+                    <>
+                      <div>
+                        <p className="text-[12px] font-medium text-muted-foreground mb-1.5">
+                          {t('crm.images', 'Bilder')}
+                        </p>
+                        <ImagesPanel entityType="customer" entityId={customerId} />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-muted-foreground mb-1.5">
+                          {t('crm.documents', 'Dokumente')}
+                        </p>
+                        <CustomerAttachmentsSection
+                          customerId={customerId}
+                          attachments={customerAttachments}
+                          canWrite={canWriteFiles}
+                          de={isGerman}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
+                      <p className="text-[13px] text-muted-foreground">
+                        {t('crm.filesAfterSave', 'Bilder und Dokumente können hochgeladen werden, sobald der Kunde gespeichert ist.')}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

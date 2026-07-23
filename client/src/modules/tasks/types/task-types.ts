@@ -38,6 +38,8 @@ export type Task = {
   lockedBy: string | null;
   inPool: boolean;
   poolHelperId: string | null;
+  projectName: string | null;
+  orderName: string | null;
 };
 
 export type TaskList = {

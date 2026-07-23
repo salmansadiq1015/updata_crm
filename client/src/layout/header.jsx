@@ -42,7 +42,7 @@ export function Header() {
         <ThemeToggle />
         <Suspense
           fallback={
-            <div className="ml-2 h-14 w-14 shrink-0 bg-gradient-to-br from-violet-500 via-purple-500 to-cyan-500" />
+            <div className="ml-2 h-14 w-14 shrink-0 bg-gradient-to-br from-brand-500 via-brand-500 to-cyan-500" />
           }
         >
           <AiAssistantButton variant="header" className="ml-2" />

@@ -14,7 +14,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 
 const TYPE_COLORS = {
   header:     'bg-blue-100 text-blue-700',
-  body:       'bg-purple-100 text-purple-700',
+  body:       'bg-brand-100 text-brand-700',
   table:      'bg-green-100 text-green-700',
   totals:     'bg-yellow-100 text-yellow-700',
   deductions: 'bg-orange-100 text-orange-700',

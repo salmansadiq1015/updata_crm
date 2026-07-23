@@ -34,7 +34,7 @@ const ACTION_META = {
 };
 
 const MODULE_ACCENTS = [
-  { bg: 'bg-violet-500/10', text: 'text-violet-500', ring: 'ring-violet-500/20' },
+  { bg: 'bg-brand-500/10', text: 'text-brand-500', ring: 'ring-brand-500/20' },
   { bg: 'bg-sky-500/10',    text: 'text-sky-500',    ring: 'ring-sky-500/20' },
   { bg: 'bg-emerald-500/10',text: 'text-emerald-500',ring: 'ring-emerald-500/20' },
   { bg: 'bg-amber-500/10',  text: 'text-amber-500',  ring: 'ring-amber-500/20' },
@@ -294,8 +294,8 @@ export function RoleForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
               <div className="px-6 pt-6 pb-3 shrink-0">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center ring-1 ring-violet-500/20">
-                      <Key className="h-4 w-4 text-violet-500" />
+                    <div className="h-9 w-9 rounded-lg bg-brand-500/10 flex items-center justify-center ring-1 ring-brand-500/20">
+                      <Key className="h-4 w-4 text-brand-500" />
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold">{t('roles.permsTitle', 'Berechtigungen')}</h3>
@@ -305,8 +305,8 @@ export function RoleForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs font-semibold">
-                      <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
                       {selectedPerms.length} / {allPerms.length} {t('roles.selected', 'ausgewählt')}
                     </span>
                     <Button type="button" variant="ghost" size="sm" onClick={selectAll}>

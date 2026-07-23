@@ -287,7 +287,7 @@ function SummaryGrid({ summary, t }) {
       label: t('crm.addressBook.summaryTotal', 'Adressen'),
       value: summary.total,
       icon: BookOpen,
-      className: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 ring-violet-500/20',
+      className: 'bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-brand-500/20',
     },
     {
       key: 'business',

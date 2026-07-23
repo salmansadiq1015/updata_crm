@@ -163,7 +163,7 @@ function PremiumHero({ title, description, count, dateFrom, dateTo, onDateFromCh
             <Upload className="h-4 w-4" />
             {t('fieldOps.time.actions.import', 'Import')}
           </Button>
-          <Button size="sm" className="h-10 gap-2 bg-gradient-to-r from-violet-500 via-sky-500 to-emerald-500 text-white shadow-[0_0_28px_rgba(14,165,233,0.28)]" disabled={exporting} onClick={onExport}>
+          <Button size="sm" className="h-10 gap-2 bg-gradient-to-r from-brand-500 via-sky-500 to-emerald-500 text-white shadow-[0_0_28px_rgba(14,165,233,0.28)]" disabled={exporting} onClick={onExport}>
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             {exporting ? t('fieldOps.time.actions.exporting', 'Exporting...') : t('fieldOps.time.actions.export', 'Export')}
           </Button>
@@ -379,7 +379,7 @@ function GroupBars({ groups, de, withControls = false }) {
                   <span className="font-mono text-muted-foreground">{hoursLabel(group.actualHours)}</span>
                 </div>
                 <div className="h-2.5 rounded-full bg-muted">
-                  <div className="h-2.5 rounded-full bg-gradient-to-r from-violet-500 via-sky-500 to-emerald-500 shadow-[0_0_16px_rgba(14,165,233,0.28)]" style={{ width }} />
+                  <div className="h-2.5 rounded-full bg-gradient-to-r from-brand-500 via-sky-500 to-emerald-500 shadow-[0_0_16px_rgba(14,165,233,0.28)]" style={{ width }} />
                 </div>
               </div>
             );

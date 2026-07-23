@@ -51,7 +51,7 @@ function MetricTile({
   const color = tone === 'emerald'
     ? 'bg-emerald-400/10 text-emerald-200 ring-emerald-300/20'
     : tone === 'violet'
-      ? 'bg-violet-400/10 text-violet-200 ring-violet-300/20'
+      ? 'bg-brand-400/10 text-brand-200 ring-brand-300/20'
       : 'bg-cyan-400/10 text-cyan-200 ring-cyan-300/20';
 
   return (

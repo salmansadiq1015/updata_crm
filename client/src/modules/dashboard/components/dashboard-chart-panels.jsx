@@ -506,7 +506,7 @@ function CrmTab({ data, t, locale }) {
           { label: t('dashboard.analytics.crm.total', 'Total customers'), value: data.crm.total, icon: Users },
           { label: t('dashboard.analytics.crm.active', 'Active customers'), value: data.crm.active, icon: CheckCircle2, className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' },
           { label: t('dashboard.analytics.crm.new', 'New customers'), value: data.crm.newCurrent, icon: TrendingUp, className: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100' },
-          { label: t('dashboard.analytics.crm.delta', 'Growth'), value: data.crm.delta, icon: Activity, className: 'border-violet-300/20 bg-violet-300/10 text-violet-100' },
+          { label: t('dashboard.analytics.crm.delta', 'Growth'), value: data.crm.delta, icon: Activity, className: 'border-brand-300/20 bg-brand-300/10 text-brand-100' },
         ]}
       />
       <div className="grid gap-4 xl:grid-cols-12">
@@ -579,7 +579,7 @@ function SalesTab({ data, t, locale }) {
         locale={locale}
         items={[
           { label: t('dashboard.analytics.sales.revenue', 'Invoice revenue'), value: data.sales.invoices.revenue, icon: TrendingUp, currency: true },
-          { label: t('dashboard.analytics.sales.pipeline', 'Open quote value'), value: data.sales.quotations.openValue, icon: FileText, currency: true, className: 'border-violet-300/20 bg-violet-300/10 text-violet-100' },
+          { label: t('dashboard.analytics.sales.pipeline', 'Open quote value'), value: data.sales.quotations.openValue, icon: FileText, currency: true, className: 'border-brand-300/20 bg-brand-300/10 text-brand-100' },
           { label: t('dashboard.analytics.sales.conversion', 'Quote conversion'), value: data.sales.quotations.conversionRate, icon: Gauge, suffix: '%', className: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100' },
           { label: t('dashboard.analytics.sales.overdue', 'Overdue invoices'), value: data.sales.invoices.overdueCount, icon: AlertTriangle, className: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
         ]}

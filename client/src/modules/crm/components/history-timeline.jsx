@@ -351,7 +351,7 @@ function describeMeta(meta) {
 
 const TYPE_CONFIG = {
   note: { icon: Info, color: 'text-slate-500', bg: 'bg-slate-500/10' },
-  image: { icon: ImageIcon, color: 'text-violet-500', bg: 'bg-violet-500/10' },
+  image: { icon: ImageIcon, color: 'text-brand-500', bg: 'bg-brand-500/10' },
   maintenance_done: { icon: Wrench, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
   maintenance_scheduled: { icon: Clock, color: 'text-sky-500', bg: 'bg-sky-500/10' },
   service_order: { icon: ClipboardList, color: 'text-amber-500', bg: 'bg-amber-500/10' },

@@ -43,7 +43,7 @@ export const NOTIFICATION_CATEGORY_ICONS = {
 export const NOTIFICATION_CATEGORY_COLORS = {
   TASK: 'text-emerald-600 bg-emerald-500/10',
   ORDER: 'text-blue-600 bg-blue-500/10',
-  CHAT: 'text-violet-600 bg-violet-500/10',
+  CHAT: 'text-brand-600 bg-brand-500/10',
   SYSTEM: 'text-slate-500 bg-slate-500/10',
   FINANCE: 'text-amber-600 bg-amber-500/10',
   MAINTENANCE: 'text-orange-600 bg-orange-500/10',

@@ -92,7 +92,7 @@ export function CustomerAttachmentsSection({ customerId, attachments, canWrite, 
     <div
       className={cn(
         'mt-5 rounded-xl transition-colors',
-        isDragOver && 'ring-2 ring-violet-500/40 bg-violet-500/5',
+        isDragOver && 'ring-2 ring-brand-500/40 bg-brand-500/5',
       )}
       onDrop={canWrite ? handleDrop : undefined}
       onDragOver={canWrite ? (e) => { e.preventDefault(); setIsDragOver(true); } : undefined}

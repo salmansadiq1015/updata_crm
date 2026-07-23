@@ -163,7 +163,7 @@ export const SCHEDULE_STATUS_CONFIG = {
   IN_PROGRESS: { label: 'In Arbeit', labelEn: 'In Progress', dotColor: 'bg-blue-500', bgColor: 'bg-blue-500/10', textColor: 'text-blue-700 dark:text-blue-400' },
   COMPLETED: { label: 'Abgeschlossen', labelEn: 'Completed', dotColor: 'bg-emerald-500', bgColor: 'bg-emerald-500/10', textColor: 'text-emerald-700 dark:text-emerald-400' },
   CANCELLED: { label: 'Storniert', labelEn: 'Cancelled', dotColor: 'bg-gray-400', bgColor: 'bg-gray-500/10', textColor: 'text-gray-500 dark:text-gray-400' },
-  WAIVED: { label: 'Verzichtet', labelEn: 'Waived', dotColor: 'bg-purple-400', bgColor: 'bg-purple-500/10', textColor: 'text-purple-700 dark:text-purple-400' },
+  WAIVED: { label: 'Verzichtet', labelEn: 'Waived', dotColor: 'bg-brand-400', bgColor: 'bg-brand-500/10', textColor: 'text-brand-700 dark:text-brand-400' },
 };
 
 // ── Responsible types ───────────────────────────────────────────
@@ -205,7 +205,7 @@ export const DOCUMENT_CATEGORY_CONFIG = {
 const ACCENT_PALETTE = [
   { bar: 'from-blue-500 to-indigo-500', bg: 'bg-blue-500/10', text: 'text-blue-600', ring: 'ring-blue-200' },
   { bar: 'from-emerald-500 to-teal-500', bg: 'bg-emerald-500/10', text: 'text-emerald-600', ring: 'ring-emerald-200' },
-  { bar: 'from-violet-500 to-purple-500', bg: 'bg-violet-500/10', text: 'text-violet-600', ring: 'ring-violet-200' },
+  { bar: 'from-brand-500 to-brand-500', bg: 'bg-brand-500/10', text: 'text-brand-600', ring: 'ring-brand-200' },
   { bar: 'from-amber-500 to-orange-500', bg: 'bg-amber-500/10', text: 'text-amber-600', ring: 'ring-amber-200' },
   { bar: 'from-rose-500 to-pink-500', bg: 'bg-rose-500/10', text: 'text-rose-600', ring: 'ring-rose-200' },
 ];

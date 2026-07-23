@@ -18,7 +18,7 @@ const isProtectedRole = (role) =>
   !!role?.isSystem || PROTECTED_ROLE_NAMES.includes(role?.name);
 
 const ROLE_ACCENTS = [
-  { bg: 'bg-violet-500/10', ring: 'ring-violet-500/20', text: 'text-violet-500', bar: 'from-violet-500 to-transparent' },
+  { bg: 'bg-brand-500/10', ring: 'ring-brand-500/20', text: 'text-brand-500', bar: 'from-brand-500 to-transparent' },
   { bg: 'bg-sky-500/10', ring: 'ring-sky-500/20', text: 'text-sky-500', bar: 'from-sky-500 to-transparent' },
   { bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20', text: 'text-emerald-500', bar: 'from-emerald-500 to-transparent' },
   { bg: 'bg-amber-500/10', ring: 'ring-amber-500/20', text: 'text-amber-500', bar: 'from-amber-500 to-transparent' },
@@ -126,8 +126,8 @@ export function RoleCard({ role, onEdit, onClone, onDelete }) {
         {/* Stats */}
         <div className="flex items-center gap-3 pt-3 border-t border-border">
           <div className="flex items-center gap-2 flex-1">
-            <div className="h-6 w-6 rounded-md bg-violet-500/10 flex items-center justify-center shrink-0">
-              <Key className="h-3 w-3 text-violet-500" />
+            <div className="h-6 w-6 rounded-md bg-brand-500/10 flex items-center justify-center shrink-0">
+              <Key className="h-3 w-3 text-brand-500" />
             </div>
             <div>
               <p className="text-sm font-semibold leading-none">{permCount}</p>

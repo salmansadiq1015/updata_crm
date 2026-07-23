@@ -19,7 +19,7 @@ export function StatsGrid() {
 
   const defaultCards = [
     { title: t('dashboard.stats.customers'), key: 'customers', icon: Users, href: '/crm', color: 'from-[#7B61FF] to-[#9F7AEA]' },
-    { title: t('dashboard.stats.projects'), key: 'projects', icon: FolderKanban, href: '/projects', color: 'from-violet-500 to-purple-600' },
+    { title: t('dashboard.stats.projects'), key: 'projects', icon: FolderKanban, href: '/projects', color: 'from-brand-500 to-brand-600' },
     { title: t('dashboard.stats.openQuotes'), key: 'openQuotes', icon: FileText, href: '/quotes', color: 'from-amber-500 to-orange-600' },
     { title: t('dashboard.stats.todayTasks'), key: 'todayTasks', icon: ClipboardList, href: '/tasks', color: 'from-emerald-500 to-green-600' },
   ];

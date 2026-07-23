@@ -29,7 +29,7 @@ export function CustomerFilterBar({
   hasActiveFilters,
   onClear,
 }) {
-  const activeTriggerCls = 'border-violet-500/30 bg-violet-500/15 text-violet-700 dark:text-violet-300';
+  const activeTriggerCls = 'border-brand-500/30 bg-brand-500/15 text-brand-700 dark:text-brand-300';
   const baseTriggerCls = 'rounded-full px-3 py-1.5 text-[12px] font-medium border border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-all h-8';
 
   return (
@@ -48,7 +48,7 @@ export function CustomerFilterBar({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={t('crm.searchPlaceholder', 'Search customers...')}
-          className="w-full h-9 pl-9 pr-3 rounded-xl border border-border bg-muted/50 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all"
+          className="w-full h-9 pl-9 pr-3 rounded-xl border border-border bg-muted/50 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all"
         />
       </div>
 

@@ -146,7 +146,7 @@ function AiPanelChatWelcome({ onSuggestionClick }) {
     <div className="flex min-h-full flex-col gap-5 px-5 py-6">
       <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4 shadow-[0_20px_70px_rgba(0,0,0,0.22)]">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-200 ring-1 ring-cyan-200/20">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-300/10 text-brand-200 ring-1 ring-brand-200/20">
             <BrainCircuit className="h-5 w-5" />
           </span>
           <div className="min-w-0">
@@ -163,10 +163,10 @@ function AiPanelChatWelcome({ onSuggestionClick }) {
           <Button
             key={key}
             variant="outline"
-            className="h-auto min-h-16 justify-start gap-2 rounded-2xl border-white/10 bg-white/[0.04] px-3 py-3 text-left text-slate-200 hover:border-cyan-300/35 hover:bg-cyan-300/10 hover:text-white"
+            className="h-auto min-h-16 justify-start gap-2 rounded-2xl border-white/10 bg-white/[0.04] px-3 py-3 text-left text-slate-200 hover:border-brand-300/35 hover:bg-brand-300/10 hover:text-white"
             onClick={() => onSuggestionClick(t(prompt, fallbackPrompt))}
           >
-            <Icon className="h-4 w-4 shrink-0 text-cyan-200" />
+            <Icon className="h-4 w-4 shrink-0 text-brand-200" />
             <span className="min-w-0 text-wrap text-sm font-semibold leading-5">{t(label, fallbackLabel)}</span>
           </Button>
         ))}
@@ -297,7 +297,7 @@ export function AiPanelChat({ onClose }) {
     <div className="relative z-10 flex h-full min-h-0 flex-col">
       <SheetHeader className="flex shrink-0 flex-row items-center justify-between border-b border-white/10 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-cyan-500 text-white shadow-[0_18px_46px_rgba(14,165,233,0.22)]">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-brand-red text-white shadow-[0_18px_46px_rgba(208,10,25,0.22)]">
             <BrainCircuit className="h-5 w-5" />
           </span>
           <div className="min-w-0">
@@ -307,7 +307,7 @@ export function AiPanelChat({ onClose }) {
                 <ShieldCheck className="h-3 w-3 shrink-0" />
                 <span className="truncate">{isRunning ? workflowLabel : t('ai.panel.ready', 'Ready')}</span>
               </span>
-              <span className="inline-flex items-center gap-1 text-cyan-200/80">
+              <span className="inline-flex items-center gap-1 text-brand-200/80">
                 <Zap className="h-3 w-3" />
                 ERP
               </span>

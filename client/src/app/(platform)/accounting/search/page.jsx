@@ -34,7 +34,7 @@ const TYPE_OPTIONS = [
 
 const TYPE_META = {
   ACCOUNT: { label: 'Account', labelDe: 'Konto', icon: FileText, className: 'text-muted-foreground bg-slate-500/15' },
-  JOURNAL_ENTRY: { label: 'Journal', labelDe: 'Journal', icon: BookOpen, className: 'text-violet-200 bg-violet-500/15' },
+  JOURNAL_ENTRY: { label: 'Journal', labelDe: 'Journal', icon: BookOpen, className: 'text-brand-200 bg-brand-500/15' },
   AR_INVOICE: { label: 'Receivable', labelDe: 'Forderung', icon: Receipt, className: 'text-emerald-200 bg-emerald-500/15' },
   AP_INVOICE: { label: 'Payable', labelDe: 'Verbindlichkeit', icon: Landmark, className: 'text-amber-200 bg-amber-500/15' },
   BANK_TRANSACTION: { label: 'Bank', labelDe: 'Bank', icon: Banknote, className: 'text-sky-200 bg-sky-500/15' },

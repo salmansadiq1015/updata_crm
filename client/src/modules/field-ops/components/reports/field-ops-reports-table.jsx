@@ -79,7 +79,7 @@ function ReportsEmptyState({ t }) {
 
 function ArchivedBadge({ t }) {
   return (
-    <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+    <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
       <Archive className="h-2.5 w-2.5" />
       {t('fieldOps.reports.archivedBadge', 'Archived')}
     </span>
@@ -103,8 +103,8 @@ const SERVER_SORT_FIELDS = {
 
 const METRIC_TONES = {
   violet: {
-    shell: 'from-violet-500/15 via-primary/10 to-transparent shadow-[0_18px_50px_rgba(124,58,237,0.16)]',
-    icon: 'bg-violet-500/15 text-violet-300 ring-violet-400/20',
+    shell: 'from-brand-500/15 via-primary/10 to-transparent shadow-[0_18px_50px_rgba(124,58,237,0.16)]',
+    icon: 'bg-brand-500/15 text-brand-300 ring-brand-400/20',
   },
   sky: {
     shell: 'from-sky-500/15 via-cyan-500/10 to-transparent shadow-[0_18px_50px_rgba(14,165,233,0.14)]',

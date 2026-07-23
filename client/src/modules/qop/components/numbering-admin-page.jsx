@@ -131,7 +131,7 @@ function NumberingHero({ summary, t, localeCode }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
       <div className="min-w-0 space-y-4">
-        <div className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-violet-300/20 bg-violet-300/10 px-3 text-xs font-semibold uppercase tracking-normal text-violet-700 dark:text-violet-200 shadow-[0_0_32px_rgba(139,92,246,0.12)]">
+        <div className="inline-flex min-h-8 items-center gap-2 rounded-lg border border-brand-300/20 bg-brand-300/10 px-3 text-xs font-semibold uppercase tracking-normal text-brand-700 dark:text-brand-200 shadow-[0_0_32px_rgba(78,116,219,0.12)]">
           <Sparkles className="h-3.5 w-3.5" />
           {t('numbering.badge', 'Premium document control')}
         </div>
@@ -172,9 +172,9 @@ function NumberingHero({ summary, t, localeCode }) {
               <p className="text-xl font-semibold text-emerald-700 dark:text-emerald-200 tabular-nums">{formatNumber(summary.activeCount, localeCode)}</p>
               <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-200/70">{t('numbering.metric.active', 'Active')}</p>
             </div>
-            <div className="rounded-md border border-violet-300/15 bg-violet-300/10 p-3">
-              <p className="text-xl font-semibold text-violet-700 dark:text-violet-200 tabular-nums">{formatNumber(summary.annualResetCount, localeCode)}</p>
-              <p className="mt-1 text-xs text-violet-700 dark:text-violet-200/70">{t('numbering.metric.reset', 'Reset')}</p>
+            <div className="rounded-md border border-brand-300/15 bg-brand-300/10 p-3">
+              <p className="text-xl font-semibold text-brand-700 dark:text-brand-200 tabular-nums">{formatNumber(summary.annualResetCount, localeCode)}</p>
+              <p className="mt-1 text-xs text-brand-700 dark:text-brand-200/70">{t('numbering.metric.reset', 'Reset')}</p>
             </div>
           </div>
         </div>
@@ -447,7 +447,7 @@ function SequenceCard({ sequence, t, localeCode, onSave, isSaving }) {
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-muted">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-300 via-cyan-300 to-emerald-300 transition-[width] duration-300"
+                  className="h-full rounded-full bg-gradient-to-r from-brand-300 via-cyan-300 to-emerald-300 transition-[width] duration-300"
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>
@@ -469,7 +469,7 @@ function SequenceCard({ sequence, t, localeCode, onSave, isSaving }) {
               type="button"
               onClick={handleSave}
               disabled={!isDirty || hasErrors || isSaving}
-              className="h-11 bg-violet-400 px-4 text-slate-950 shadow-[0_0_28px_rgba(167,139,250,0.2)] hover:bg-violet-300"
+              className="h-11 bg-brand-400 px-4 text-slate-950 shadow-[0_0_28px_rgba(78,116,219,0.2)] hover:bg-brand-300"
             >
               {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {isSaving ? t('numbering.saving', 'Saving') : t('numbering.save', 'Save')}
@@ -524,7 +524,7 @@ function NumberingError({ error, onRetry, t }) {
         <Button
           type="button"
           onClick={onRetry}
-          className="h-11 bg-violet-400 text-slate-950 hover:bg-violet-300"
+          className="h-11 bg-brand-400 text-slate-950 hover:bg-brand-300"
         >
           <RefreshCw className="h-4 w-4" />
           {t('common.retry', 'Retry')}

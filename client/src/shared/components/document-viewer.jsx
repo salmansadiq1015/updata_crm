@@ -32,7 +32,7 @@ function getFileIcon(mimeType) {
 
 function getFileColor(mimeType) {
   if (!mimeType) return 'text-muted-foreground';
-  if (mimeType.startsWith('image/')) return 'text-violet-400';
+  if (mimeType.startsWith('image/')) return 'text-brand-400';
   if (mimeType.startsWith('video/')) return 'text-pink-400';
   if (mimeType.startsWith('audio/')) return 'text-amber-400';
   if (mimeType.includes('pdf')) return 'text-red-400';

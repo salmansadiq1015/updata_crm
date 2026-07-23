@@ -22,7 +22,7 @@ const ACCOUNT_TYPES = ['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'];
 const TYPE_CONFIG = {
   ASSET: { label: 'Aktiven', labelEn: 'Assets', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
   LIABILITY: { label: 'Passiven', labelEn: 'Liabilities', badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-  EQUITY: { label: 'Eigenkapital', labelEn: 'Equity', badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' },
+  EQUITY: { label: 'Eigenkapital', labelEn: 'Equity', badge: 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400' },
   REVENUE: { label: 'Ertrag', labelEn: 'Revenue', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400' },
   EXPENSE: { label: 'Aufwand', labelEn: 'Expense', badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
 };

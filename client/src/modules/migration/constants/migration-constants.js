@@ -25,6 +25,6 @@ export const STATUS_STYLES = {
   completed: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-300',
   failed: 'bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-300',
   cancelled: 'bg-muted text-muted-foreground border-border',
-  rolled_back: 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300',
+  rolled_back: 'bg-brand-500/10 text-brand-700 border-brand-500/20 dark:text-brand-300',
   skipped: 'bg-muted text-muted-foreground border-border',
 };

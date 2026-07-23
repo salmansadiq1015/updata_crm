@@ -189,8 +189,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
     }
   };
 
-  const inputCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20';
-  const selectTriggerCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-violet-500/50 focus:ring-violet-500/20';
+  const inputCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20';
+  const selectTriggerCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-brand-500/50 focus:ring-brand-500/20';
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -370,12 +370,12 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                       className={cn(
                         'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
                         typeVal === 'partner'
-                          ? 'border-violet-500/60 bg-violet-500/8 ring-1 ring-violet-500/30'
+                          ? 'border-brand-500/60 bg-brand-500/8 ring-1 ring-brand-500/30'
                           : 'border-border bg-muted/30 hover:border-border hover:bg-muted/50',
                       )}
                     >
-                      <div className="h-10 w-10 rounded-lg bg-violet-500/10 ring-1 ring-violet-500/20 flex items-center justify-center shrink-0">
-                        <Handshake className="h-5 w-5 text-violet-700 dark:text-violet-400" />
+                      <div className="h-10 w-10 rounded-lg bg-brand-500/10 ring-1 ring-brand-500/20 flex items-center justify-center shrink-0">
+                        <Handshake className="h-5 w-5 text-brand-700 dark:text-brand-400" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground">{t('crm.typePartner', 'Partner')}</p>
@@ -535,8 +535,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
             {currentStep === 3 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
-                  <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center ring-1 ring-violet-500/20">
-                    <Bell className="h-4 w-4 text-violet-700 dark:text-violet-400" />
+                  <div className="h-9 w-9 rounded-lg bg-brand-500/10 flex items-center justify-center ring-1 ring-brand-500/20">
+                    <Bell className="h-4 w-4 text-brand-700 dark:text-brand-400" />
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">{t('crm.stepPreferences', 'Einstellungen')}</h3>
@@ -670,7 +670,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   variant={isEdit ? 'outline' : undefined}
                   className={cn(
                     'h-9 gap-1.5',
-                    !isEdit && 'bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white',
+                    !isEdit && 'bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white',
                   )}
                   onClick={(e) => {
                     e.preventDefault();
@@ -685,7 +685,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
               {(isLastStep || isEdit) && (
                 <Button
                   type="submit"
-                  className="h-9 gap-1.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white"
+                  className="h-9 gap-1.5 bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white"
                   disabled={isLoading}
                 >
                   {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

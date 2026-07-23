@@ -30,7 +30,7 @@ import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 const cantonName = (code) => CH_CANTONS.find((c) => c.code === code)?.name || code;
 
 const filterTriggerCls = 'rounded-full px-3 py-1.5 text-[12px] font-medium border border-border/70 bg-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-all h-8 dark:border-white/10 dark:bg-white/4 dark:text-white/55 dark:hover:bg-white/8 dark:hover:text-white/80';
-const activeFilterTriggerCls = 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300';
+const activeFilterTriggerCls = 'border-brand-500/30 bg-brand-500/10 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300';
 const filterSelectContentCls = 'border-border bg-popover text-popover-foreground dark:border-white/10 dark:bg-[#0D1117]';
 const filterSelectItemCls = 'text-foreground focus:bg-accent focus:text-accent-foreground dark:text-white/80 dark:focus:bg-white/5';
 
@@ -191,14 +191,14 @@ export function SitesTable() {
             <button
               type="button"
               onClick={() => setView('list')}
-              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'list' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
+              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'list' ? 'bg-brand-500/10 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
             >
               <ListIcon className="h-3.5 w-3.5" /> {t('common.list', 'List')}
             </button>
             <button
               type="button"
               onClick={() => setView('map')}
-              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'map' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
+              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'map' ? 'bg-brand-500/10 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
             >
               <MapIcon className="h-3.5 w-3.5" /> {t('common.map', 'Map')}
             </button>
@@ -227,7 +227,7 @@ export function SitesTable() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('crm.sites.searchPlaceholder', 'Search sites...')}
-            className="w-full h-9 pl-9 pr-3 rounded-xl border border-input bg-muted/40 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all dark:border-white/8 dark:bg-white/4 dark:text-white/90 dark:placeholder:text-white/25"
+            className="w-full h-9 pl-9 pr-3 rounded-xl border border-input bg-muted/40 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all dark:border-white/8 dark:bg-white/4 dark:text-white/90 dark:placeholder:text-white/25"
           />
         </div>
 

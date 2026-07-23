@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 const cards = [
   { key: 'dashboard', icon: LayoutDashboard, href: '/dashboard', gradient: 'from-[#7B61FF] to-[#5B3FD4]' },
-  { key: 'users', icon: Users, href: '/settings/users', gradient: 'from-violet-500 to-purple-600' },
+  { key: 'users', icon: Users, href: '/settings/users', gradient: 'from-brand-500 to-brand-600' },
   { key: 'roles', icon: Shield, href: '/settings/roles', gradient: 'from-emerald-500 to-green-600' },
   { key: 'audit', icon: ScrollText, href: '/settings/audit', gradient: 'from-amber-500 to-orange-600' },
 ];

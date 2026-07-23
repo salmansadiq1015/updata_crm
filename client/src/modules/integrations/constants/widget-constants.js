@@ -3,7 +3,7 @@ import { Flame, Wrench, PackagePlus, MessageCircle, Package, Clock, CheckCircle2
 export const REQUEST_TYPE_META = Object.freeze({
   heizungsstoerung:  { label: 'Heizungsstörung',    icon: Flame,         color: 'text-red-500',     bg: 'bg-red-500/10' },
   wartung:           { label: 'Wartung',             icon: Wrench,        color: 'text-amber-500',   bg: 'bg-amber-500/10' },
-  neuinstallation:   { label: 'Neuinstallation',     icon: PackagePlus,   color: 'text-violet-500',  bg: 'bg-violet-500/10' },
+  neuinstallation:   { label: 'Neuinstallation',     icon: PackagePlus,   color: 'text-brand-500',  bg: 'bg-brand-500/10' },
   beratung:          { label: 'Beratung',            icon: MessageCircle, color: 'text-sky-500',     bg: 'bg-sky-500/10' },
   sanitaer:          { label: 'Sanitär',             icon: ShowerHead,    color: 'text-cyan-500',    bg: 'bg-cyan-500/10' },
   other:             { label: 'Sonstiges',           icon: Package,       color: 'text-slate-500',   bg: 'bg-slate-500/10' },

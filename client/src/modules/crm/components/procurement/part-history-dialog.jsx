@@ -38,7 +38,7 @@ export function PartHistoryDialog({ open, onOpenChange, part }) {
       <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="h-4 w-4 text-violet-500" />
+            <History className="h-4 w-4 text-brand-500" />
             {tx('dialog.history.title')}
           </DialogTitle>
           {part && (

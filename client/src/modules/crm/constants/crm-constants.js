@@ -29,7 +29,7 @@ export const FUEL_TYPE_META = Object.freeze({
 });
 
 export const MAINTENANCE_TYPE_META = Object.freeze({
-  annual_service:     { label: 'Jährlicher Service',    icon: Wrench,        color: 'text-violet-500', bg: 'bg-violet-500/10' },
+  annual_service:     { label: 'Jährlicher Service',    icon: Wrench,        color: 'text-brand-500', bg: 'bg-brand-500/10' },
   filter_change:      { label: 'Filterwechsel',          icon: Filter,        color: 'text-sky-500',    bg: 'bg-sky-500/10' },
   chimney_sweep:      { label: 'Kaminfeger',             icon: Factory,       color: 'text-slate-500',  bg: 'bg-slate-500/10' },
   general_inspection: { label: 'Allgemeine Inspektion',  icon: ClipboardCheck,color: 'text-emerald-500',bg: 'bg-emerald-500/10' },
@@ -45,7 +45,7 @@ export const MAINTENANCE_STATUS_META = Object.freeze({
 
 export const SITE_TYPE_META = Object.freeze({
   residential: { label: 'Wohnobjekt',   color: 'text-sky-600',     bg: 'bg-sky-500/10' },
-  commercial:  { label: 'Geschäftlich', color: 'text-violet-600',  bg: 'bg-violet-500/10' },
+  commercial:  { label: 'Geschäftlich', color: 'text-brand-600',  bg: 'bg-brand-500/10' },
   industrial:  { label: 'Industriell',  color: 'text-slate-600',   bg: 'bg-slate-500/10' },
 });
 
@@ -53,13 +53,13 @@ export const NOTE_CATEGORY_META = Object.freeze({
   general:     { label: 'Allgemein',       icon: Info,           color: 'text-slate-500',  bg: 'bg-slate-500/10' },
   warning:     { label: 'Warnung',         icon: AlertTriangle,  color: 'text-red-500',    bg: 'bg-red-500/10' },
   access_info: { label: 'Zugangsinfos',    icon: Key,            color: 'text-amber-500',  bg: 'bg-amber-500/10' },
-  technical:   { label: 'Technisch',       icon: Cpu,            color: 'text-violet-500', bg: 'bg-violet-500/10' },
+  technical:   { label: 'Technisch',       icon: Cpu,            color: 'text-brand-500', bg: 'bg-brand-500/10' },
 });
 
 export const IMAGE_CATEGORY_META = Object.freeze({
   nameplate:    { label: 'Typenschild', icon: Camera,                   color: 'text-sky-500',   bg: 'bg-sky-500/10' },
   damage:       { label: 'Schaden',     icon: AlertOctagon,             color: 'text-red-500',   bg: 'bg-red-500/10' },
-  before_after: { label: 'Vorher/Nachher', icon: SplitSquareHorizontal, color: 'text-violet-500',bg: 'bg-violet-500/10' },
+  before_after: { label: 'Vorher/Nachher', icon: SplitSquareHorizontal, color: 'text-brand-500',bg: 'bg-brand-500/10' },
   general:      { label: 'Allgemein',   icon: ImageIcon,                color: 'text-slate-500', bg: 'bg-slate-500/10' },
 });
 
@@ -68,7 +68,7 @@ export const SPARE_PART_CATEGORY_META = Object.freeze({
   gasket:        { label: 'Dichtung',        color: 'text-amber-500',  bg: 'bg-amber-500/10' },
   pump_part:     { label: 'Pumpenteil',      color: 'text-blue-500',   bg: 'bg-blue-500/10' },
   valve:         { label: 'Ventil',          color: 'text-teal-500',   bg: 'bg-teal-500/10' },
-  sensor:        { label: 'Sensor',          color: 'text-violet-500', bg: 'bg-violet-500/10' },
+  sensor:        { label: 'Sensor',          color: 'text-brand-500', bg: 'bg-brand-500/10' },
   igniter:       { label: 'Zündung',         color: 'text-orange-500', bg: 'bg-orange-500/10' },
   burner_part:   { label: 'Brennerteil',     color: 'text-rose-500',   bg: 'bg-rose-500/10' },
   control_board: { label: 'Steuerplatine',   color: 'text-emerald-500',bg: 'bg-emerald-500/10' },

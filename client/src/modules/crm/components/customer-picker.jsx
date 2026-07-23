@@ -90,7 +90,7 @@ export function CustomerPicker({ selectedCustomer, onSelect, disabled = false, e
                   }}
                   className={cn(
                     'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-accent dark:text-white/80 dark:hover:bg-white/[0.06]',
-                    selected && 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/12 dark:text-white',
+                    selected && 'bg-brand-500/10 text-brand-700 dark:bg-brand-500/12 dark:text-white',
                   )}
                 >
                   <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground dark:text-white/35" />
@@ -100,7 +100,7 @@ export function CustomerPicker({ selectedCustomer, onSelect, disabled = false, e
                       <span className="block truncate text-[11px] text-muted-foreground dark:text-white/35">{customer.customerNumber}</span>
                     )}
                   </span>
-                  {selected && <Check className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-300" />}
+                  {selected && <Check className="h-3.5 w-3.5 shrink-0 text-brand-600 dark:text-brand-300" />}
                 </button>
               );
             })}

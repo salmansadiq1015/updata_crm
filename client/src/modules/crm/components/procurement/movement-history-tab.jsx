@@ -17,7 +17,7 @@ const MOVEMENT_META = {
   in: { icon: ArrowDownCircle, labelKey: 'movement.in', cls: 'text-emerald-500' },
   out: { icon: ArrowUpCircle, labelKey: 'movement.out', cls: 'text-red-500' },
   correction: { icon: RefreshCw, labelKey: 'movement.correction', cls: 'text-sky-500' },
-  receipt: { icon: ArrowDownCircle, labelKey: 'movement.receipt', cls: 'text-violet-500' },
+  receipt: { icon: ArrowDownCircle, labelKey: 'movement.receipt', cls: 'text-brand-500' },
   adjustment: { icon: RefreshCw, labelKey: 'movement.adjustment', cls: 'text-amber-500' },
 };
 

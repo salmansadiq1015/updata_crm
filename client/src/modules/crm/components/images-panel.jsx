@@ -107,8 +107,8 @@ export function ImagesPanel({ entityType, entityId }) {
         {/* Panel header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-violet-500/10">
-              <ImageIcon className="h-4 w-4 text-violet-400" />
+            <div className="p-1.5 rounded-lg bg-brand-500/10">
+              <ImageIcon className="h-4 w-4 text-brand-400" />
             </div>
             <h3 className="text-[14px] font-semibold text-foreground">{t('crm.images.title', 'Bilder')}</h3>
             {images.length > 0 && (
@@ -121,7 +121,7 @@ export function ImagesPanel({ entityType, entityId }) {
             <Button
               size="sm"
               onClick={() => fileRef.current?.click()}
-              className="h-8 gap-1.5 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 border border-violet-500/25 hover:border-violet-500/40 transition-all text-[12px] font-medium"
+              className="h-8 gap-1.5 bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 border border-brand-500/25 hover:border-brand-500/40 transition-all text-[12px] font-medium"
             >
               <Upload className="h-3 w-3" /> {t('crm.images.upload', 'Hochladen')}
             </Button>
@@ -168,15 +168,15 @@ export function ImagesPanel({ entityType, entityId }) {
               className={cn(
                 'w-full flex flex-col items-center justify-center gap-3 py-12 rounded-2xl border-2 border-dashed transition-all duration-200 cursor-pointer',
                 isDragOver
-                  ? 'border-violet-500/60 bg-violet-500/[0.07]'
-                  : 'border-border bg-muted/30 hover:border-violet-500/30 hover:bg-violet-500/[0.04] dark:border-white/[0.08] dark:bg-white/[0.02]'
+                  ? 'border-brand-500/60 bg-brand-500/[0.07]'
+                  : 'border-border bg-muted/30 hover:border-brand-500/30 hover:bg-brand-500/[0.04] dark:border-white/[0.08] dark:bg-white/[0.02]'
               )}
             >
               <div className={cn(
                 'h-14 w-14 rounded-2xl flex items-center justify-center transition-colors',
-                isDragOver ? 'bg-violet-500/20' : 'bg-muted dark:bg-white/[0.05]'
+                isDragOver ? 'bg-brand-500/20' : 'bg-muted dark:bg-white/[0.05]'
               )}>
-                <CloudUpload className={cn('h-6 w-6', isDragOver ? 'text-violet-500 dark:text-violet-400' : 'text-muted-foreground dark:text-white/25')} />
+                <CloudUpload className={cn('h-6 w-6', isDragOver ? 'text-brand-500 dark:text-brand-400' : 'text-muted-foreground dark:text-white/25')} />
               </div>
               <div className="text-center">
                 <p className="text-[13px] font-medium text-foreground">
@@ -208,10 +208,10 @@ export function ImagesPanel({ entityType, entityId }) {
             {canWrite && (
               <button
                 onClick={() => fileRef.current?.click()}
-                className="group flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/30 transition-all hover:border-violet-500/30 hover:bg-violet-500/[0.04] dark:border-white/[0.08] dark:bg-white/[0.02]"
+                className="group flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/30 transition-all hover:border-brand-500/30 hover:bg-brand-500/[0.04] dark:border-white/[0.08] dark:bg-white/[0.02]"
               >
-                <Upload className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-violet-500 dark:text-white/20 dark:group-hover:text-violet-400" />
-                <span className="text-[11px] font-medium text-muted-foreground transition-colors group-hover:text-violet-500 dark:text-white/25 dark:group-hover:text-violet-400">Hinzufügen</span>
+                <Upload className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-brand-500 dark:text-white/20 dark:group-hover:text-brand-400" />
+                <span className="text-[11px] font-medium text-muted-foreground transition-colors group-hover:text-brand-500 dark:text-white/25 dark:group-hover:text-brand-400">Hinzufügen</span>
               </button>
             )}
           </div>
@@ -378,8 +378,8 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
 
         {/* ── Fixed Header ── */}
         <div className="flex shrink-0 items-center gap-3 border-b border-border px-6 pb-4 pt-5 dark:border-white/[0.06]">
-          <div className="p-2 rounded-xl bg-violet-500/10 ring-1 ring-violet-500/20">
-            <CloudUpload className="h-5 w-5 text-violet-400" />
+          <div className="p-2 rounded-xl bg-brand-500/10 ring-1 ring-brand-500/20">
+            <CloudUpload className="h-5 w-5 text-brand-400" />
           </div>
           <div className="flex-1 min-w-0">
             <DialogTitle className="text-[16px] font-semibold leading-tight text-foreground">
@@ -461,7 +461,7 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
               value={caption}
               onChange={(e) => onCaptionChange(e.target.value)}
               placeholder={t('crm.images.captionPlaceholder', 'z.B. Typenschild Vorderseite')}
-              className="h-9 rounded-lg border-input bg-muted/40 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 dark:border-white/[0.10] dark:bg-white/[0.04] dark:text-white/90 dark:placeholder:text-white/25"
+              className="h-9 rounded-lg border-input bg-muted/40 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20 dark:border-white/[0.10] dark:bg-white/[0.04] dark:text-white/90 dark:placeholder:text-white/25"
             />
           </div>
 
@@ -518,7 +518,7 @@ function UploadImageDialog({ file, caption, category, isPending, onCaptionChange
           <Button
             onClick={onUpload}
             disabled={isPending}
-            className="gap-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-[0_0_20px_oklch(0.65_0.25_292_/_30%)] hover:shadow-[0_0_28px_oklch(0.65_0.25_292_/_45%)] transition-all px-5"
+            className="gap-2 bg-gradient-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white shadow-[0_0_20px_var(--brand-500)] hover:shadow-[0_0_28px_var(--brand-500)] transition-all px-5"
           >
             {isPending
               ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />{t('crm.images.uploading', 'Wird hochgeladen…')}</>

@@ -104,10 +104,10 @@ export function AiHelpOverlay({ onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 backdrop-blur-md sm:items-center">
       <div className="relative flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0a1020] p-5 text-slate-100 shadow-[0_28px_100px_rgba(0,0,0,0.45)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(139,92,246,0.18),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(14,165,233,0.14),transparent_30%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(78,116,219,0.18),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(208,10,25,0.14),transparent_30%)]" />
         <div className="relative z-10 mb-4 flex shrink-0 items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-200 ring-1 ring-cyan-200/20">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-300/10 text-brand-200 ring-1 ring-brand-200/20">
               <Command className="h-5 w-5" />
             </span>
             <p className="font-semibold text-sm text-white">{t('ai.panel.helpTrigger')}</p>

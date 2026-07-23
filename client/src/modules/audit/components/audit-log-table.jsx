@@ -296,7 +296,7 @@ export function AuditLogTable() {
               {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               {t('common.refresh', 'Refresh')}
             </Button>
-            <Button className="h-10 gap-2 bg-gradient-to-r from-violet-500 via-sky-500 to-emerald-500 text-white shadow-[0_0_28px_rgba(14,165,233,0.28)]" onClick={handleExport} disabled={isExporting}>
+            <Button className="h-10 gap-2 bg-gradient-to-r from-brand-500 via-sky-500 to-emerald-500 text-white shadow-[0_0_28px_rgba(14,165,233,0.28)]" onClick={handleExport} disabled={isExporting}>
               {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               {isExporting ? t('audit.exporting', 'Exporting...') : t('audit.csvExport', 'CSV Export')}
             </Button>

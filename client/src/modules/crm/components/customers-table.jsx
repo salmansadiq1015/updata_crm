@@ -360,7 +360,7 @@ export function CustomersTable() {
           <PermissionGate permission="crm:write">
             <Button
               onClick={() => { setEditCustomer(null); setFormOpen(true); }}
-              className="gap-2 h-9 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white"
+              className="gap-2 h-9 bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white"
             >
               <Plus className="h-4 w-4" />
               {t('crm.newCustomer', 'New customer')}

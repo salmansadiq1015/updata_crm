@@ -34,10 +34,10 @@ const ACCENT_STYLES = {
     bar: 'bg-rose-400',
   },
   violet: {
-    icon: 'bg-violet-400/12 text-violet-300 ring-violet-300/20',
-    glow: 'from-violet-400/18 via-fuchsia-400/8 to-transparent',
-    value: 'text-violet-100',
-    bar: 'bg-violet-400',
+    icon: 'bg-brand-400/12 text-brand-300 ring-brand-300/20',
+    glow: 'from-brand-400/18 via-brand-400/8 to-transparent',
+    value: 'text-brand-100',
+    bar: 'bg-brand-400',
   },
   lime: {
     icon: 'bg-lime-400/12 text-lime-300 ring-lime-300/20',

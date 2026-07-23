@@ -165,8 +165,8 @@ export function RolesTable() {
         const count = row.original.permissions?.length || 0;
         return (
           <div className="flex items-center gap-1.5">
-            <div className="h-5 w-5 rounded bg-violet-500/10 flex items-center justify-center">
-              <Key className="h-3 w-3 text-violet-500" />
+            <div className="h-5 w-5 rounded bg-brand-500/10 flex items-center justify-center">
+              <Key className="h-3 w-3 text-brand-500" />
             </div>
             <span className="text-sm font-medium">{count}</span>
           </div>
@@ -580,7 +580,7 @@ function RoleCardGrid({ roles, isLoading, onEdit, onClone, onDelete }) {
 
 /* ── Role accent color palette ── */
 const ROLE_ACCENTS = [
-  { bg: 'bg-violet-500/10', ring: 'ring-violet-500/20', text: 'text-violet-500' },
+  { bg: 'bg-brand-500/10', ring: 'ring-brand-500/20', text: 'text-brand-500' },
   { bg: 'bg-sky-500/10', ring: 'ring-sky-500/20', text: 'text-sky-500' },
   { bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20', text: 'text-emerald-500' },
   { bg: 'bg-amber-500/10', ring: 'ring-amber-500/20', text: 'text-amber-500' },
@@ -594,11 +594,11 @@ const ROLE_ACCENTS = [
 const ACCENT_THEMES = {
   violet: {
     glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(139_92_246_/_0.25),transparent_60%)]',
-    iconBg: 'bg-violet-500/10',
-    iconRing: 'ring-violet-500/20',
-    iconColor: 'text-violet-500',
-    valueGlow: 'text-violet-500 dark:text-violet-400',
-    bar: 'from-violet-500 to-transparent',
+    iconBg: 'bg-brand-500/10',
+    iconRing: 'ring-brand-500/20',
+    iconColor: 'text-brand-500',
+    valueGlow: 'text-brand-500 dark:text-brand-400',
+    bar: 'from-brand-500 to-transparent',
   },
   emerald: {
     glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(16_185_129_/_0.25),transparent_60%)]',

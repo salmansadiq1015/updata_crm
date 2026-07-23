@@ -376,7 +376,7 @@ export default function ExchangeRatesPage() {
 
         <form onSubmit={submitRevaluation} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300 ring-1 ring-violet-300/20">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-brand-400/10 text-brand-300 ring-1 ring-brand-300/20">
               <Scale className="size-5" />
             </span>
             <div>
@@ -417,7 +417,7 @@ export default function ExchangeRatesPage() {
           {revaluationLoading ? (
             <Skeleton className="h-24 rounded-xl" />
           ) : (
-            <div className="grid gap-2 rounded-xl border border-violet-300/20 bg-violet-400/10 p-4">
+            <div className="grid gap-2 rounded-xl border border-brand-300/20 bg-brand-400/10 p-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">{de ? 'Positionen' : 'Lines'}</span>
                 <span className="font-semibold tabular-nums">{revaluationPreview?.lineCount ?? 0}</span>
@@ -430,7 +430,7 @@ export default function ExchangeRatesPage() {
                 <span className="text-muted-foreground">{de ? 'Verlust' : 'Loss'}</span>
                 <span className="font-semibold tabular-nums">{formatMoney(revaluationPreview?.totalLoss, revaluationForm.baseCurrency)}</span>
               </div>
-              <div className="border-t border-violet-300/20 pt-2 text-right text-xl font-bold tabular-nums">
+              <div className="border-t border-brand-300/20 pt-2 text-right text-xl font-bold tabular-nums">
                 {formatMoney(revaluationPreview?.netGainLoss, revaluationForm.baseCurrency)}
               </div>
             </div>

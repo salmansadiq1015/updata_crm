@@ -257,7 +257,7 @@ export default function UserDetailPage() {
 
             <TabsContent value="overview">
               <div className="grid gap-4 sm:grid-cols-2">
-                <OverviewInfoCard icon={Shield} iconBg="bg-violet-500/10" iconColor="text-violet-500" label={t('users.role')} value={user.role?.name || '\u2014'} description={user.role?.description} />
+                <OverviewInfoCard icon={Shield} iconBg="bg-brand-500/10" iconColor="text-brand-500" label={t('users.role')} value={user.role?.name || '\u2014'} description={user.role?.description} />
                 <OverviewInfoCard icon={Globe} iconBg="bg-sky-500/10" iconColor="text-sky-500" label={t('users.language')} value={langNames[user.language] || user.language || 'Deutsch'} />
                 <OverviewInfoCard icon={Briefcase} iconBg="bg-amber-500/10" iconColor="text-amber-500" label={t('users.department') || 'Abteilung'} value={user.department || '\u2014'} description={user.position} />
                 <OverviewInfoCard icon={KeyRound} iconBg={status.bgColor} iconColor={status.textColor} label={t('users.accountStatus', 'Kontostatus')} value={t(status.key, status.fallback)} description={t(status.descKey, status.descFallback)} />
@@ -438,7 +438,7 @@ function AuditActivityTimeline({ userId }) {
     'user.created': { label: 'Konto erstellt', icon: Activity, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
     'session.revoked': { label: 'Sitzung widerrufen', icon: Monitor, color: 'text-red-500', bg: 'bg-red-500/10' },
     'account.activated': { label: 'Konto aktiviert', icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    'role.changed': { label: 'Rolle geändert', icon: Shield, color: 'text-violet-500', bg: 'bg-violet-500/10' },
+    'role.changed': { label: 'Rolle geändert', icon: Shield, color: 'text-brand-500', bg: 'bg-brand-500/10' },
   };
 
   const defaultEvent = { label: '', icon: Activity, color: 'text-muted-foreground', bg: 'bg-muted' };

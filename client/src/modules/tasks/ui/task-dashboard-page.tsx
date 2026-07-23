@@ -148,11 +148,11 @@ const SECTION_CONFIG: Record<TaskDashboardSectionKey, SectionConfig> = {
 
 const ACCENT_CLASSES: Record<Accent, { icon: string; surface: string; text: string; border: string; bar: string }> = {
   violet: {
-    icon: 'text-violet-400',
-    surface: 'bg-violet-500/10',
-    text: 'text-violet-400',
-    border: 'border-violet-500/20',
-    bar: 'from-violet-500',
+    icon: 'text-brand-400',
+    surface: 'bg-brand-500/10',
+    text: 'text-brand-400',
+    border: 'border-brand-500/20',
+    bar: 'from-brand-500',
   },
   emerald: {
     icon: 'text-emerald-400',

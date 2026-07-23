@@ -386,8 +386,8 @@ export function CustomerDetail() {
 
           {/* Metadata card */}
           <div className="rounded-xl border border-border bg-card p-4 space-y-1">
-            <SidebarRow t={t} icon={Calendar} iconBg="bg-violet-500/10" iconColor="text-violet-700 dark:text-violet-400" label={t('crm.created', 'Created')} value={formatDate(customer.createdAt)} />
-            <SidebarRow t={t} icon={Calendar} iconBg="bg-violet-500/10" iconColor="text-violet-700 dark:text-violet-400" label={t('crm.updated', 'Updated')} value={formatDate(customer.updatedAt)} />
+            <SidebarRow t={t} icon={Calendar} iconBg="bg-brand-500/10" iconColor="text-brand-700 dark:text-brand-400" label={t('crm.created', 'Created')} value={formatDate(customer.createdAt)} />
+            <SidebarRow t={t} icon={Calendar} iconBg="bg-brand-500/10" iconColor="text-brand-700 dark:text-brand-400" label={t('crm.updated', 'Updated')} value={formatDate(customer.updatedAt)} />
             <SidebarRow t={t} icon={BellRing} iconBg="bg-amber-500/10" iconColor="text-amber-700 dark:text-amber-400" label={t('crm.newsletter', 'Newsletter')} value={customer.newsletterOptIn ? t('crm.optedIn', 'Opted in') : t('crm.optedOut', 'Opted out')} />
           </div>
         </div>

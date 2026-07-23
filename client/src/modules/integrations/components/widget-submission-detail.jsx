@@ -173,8 +173,8 @@ export function WidgetSubmissionDetail() {
             <CardContent className="p-4 space-y-1">
               <SidebarRow
                 icon={Calendar}
-                iconBg="bg-violet-500/10"
-                iconColor="text-violet-500"
+                iconBg="bg-brand-500/10"
+                iconColor="text-brand-500"
                 label="Eingegangen"
                 value={submission.createdAt ? new Date(submission.createdAt).toLocaleString('de-CH') : null}
               />

@@ -38,7 +38,7 @@ const FUEL_TONE = {
 };
 
 const baseTriggerCls = 'rounded-full px-3 py-1.5 text-[12px] font-medium border border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-all h-8';
-const activeTriggerCls = 'border-violet-500/30 bg-violet-500/15 text-violet-700 dark:text-violet-300';
+const activeTriggerCls = 'border-brand-500/30 bg-brand-500/15 text-brand-700 dark:text-brand-300';
 
 export function InstallationsTable() {
   const { t } = useLanguage();
@@ -220,7 +220,7 @@ export function InstallationsTable() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('crm.installations.searchPlaceholder', 'Search by number, manufacturer, model, serial...')}
-            className="w-full h-9 pl-9 pr-3 rounded-xl border border-border bg-muted/50 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all"
+            className="w-full h-9 pl-9 pr-3 rounded-xl border border-border bg-muted/50 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all"
           />
         </div>
 

@@ -170,8 +170,8 @@
   --input: #E5E7EB;
   --ring: var(--brand-700);
 
-  --chart-1: #7B68EE;
-  --chart-2: #5B5BD6;
+  --chart-1: var(--brand-600);
+  --chart-2: #0EA5E9;
   --chart-3: #22C55E;
   --chart-4: #F59E0B;
   --chart-5: #EC4899;
@@ -233,8 +233,8 @@
   --input: #1F2937;
   --ring: var(--brand-400);
 
-  --chart-1: #9F7AEA;
-  --chart-2: #60A5FA;
+  --chart-1: var(--brand-400);
+  --chart-2: #38BDF8;
   --chart-3: #34D399;
   --chart-4: #FBBF24;
   --chart-5: #F472B6;

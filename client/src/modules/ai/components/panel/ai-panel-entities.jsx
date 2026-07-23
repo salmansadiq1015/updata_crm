@@ -37,7 +37,7 @@ function AiPanelEntitiesForm({ session, transcript, onConfirm, onCancel, isConfi
     <div className="flex min-h-full flex-col gap-4 px-5 py-6">
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-violet-200 ring-1 ring-violet-200/20">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-400/10 text-brand-200 ring-1 ring-brand-200/20">
             <ClipboardCheck className="h-5 w-5" />
           </span>
           <div>
@@ -49,10 +49,10 @@ function AiPanelEntitiesForm({ session, transcript, onConfirm, onCancel, isConfi
         </div>
       </div>
 
-      <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.05] p-4">
+      <div className="rounded-2xl border border-brand-300/15 bg-brand-400/[0.05] p-4">
         <label
           htmlFor="ai-transcript-review"
-          className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-cyan-100"
+          className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-brand-100"
         >
           <FileText className="h-4 w-4" />
           {t('ai.panel.voiceTranscript', 'Voice transcript')}
@@ -88,7 +88,7 @@ function AiPanelEntitiesForm({ session, transcript, onConfirm, onCancel, isConfi
       ) : (
         <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-sm leading-6 text-slate-300">
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-slate-400">
-            <Sparkles className="h-4 w-4 text-cyan-300" />
+            <Sparkles className="h-4 w-4 text-brand-300" />
             {t('ai.panel.noEntitiesTitle', 'No structured fields detected')}
           </div>
           {t('ai.panel.noEntitiesDescription', 'Confirm the transcript to continue with a general assistant action.')}
@@ -107,7 +107,7 @@ function AiPanelEntitiesForm({ session, transcript, onConfirm, onCancel, isConfi
         </Button>
         <Button
           size="sm"
-          className="flex-1 bg-gradient-to-r from-violet-500 to-cyan-500 text-white shadow-[0_12px_32px_rgba(14,165,233,0.18)]"
+          className="flex-1 bg-gradient-to-r from-brand-600 to-brand-red text-white shadow-[0_12px_32px_rgba(208,10,25,0.18)]"
           onClick={() => onConfirm({ corrections, transcriptText, originalTranscript: transcript.text })}
           disabled={!hasTranscript || !isReady || isConfirming}
         >

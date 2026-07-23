@@ -63,7 +63,7 @@ function DocumentCard({
         <div className={cn(
           'h-11 w-11 rounded-xl flex items-center justify-center shrink-0 transition-colors duration-200',
           doc.mimeType?.startsWith('image/')
-            ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400'
+            ? 'bg-brand-500/10 text-brand-600 dark:text-brand-400'
             : doc.mimeType?.includes('pdf')
               ? 'bg-red-500/10 text-red-600 dark:text-red-400'
               : doc.mimeType?.includes('spreadsheet') || doc.mimeType?.includes('excel')
@@ -246,7 +246,7 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
       <div className={cn(
         'h-28 flex items-center justify-center relative',
         doc.mimeType?.startsWith('image/')
-          ? 'bg-gradient-to-br from-violet-500/5 to-violet-500/10'
+          ? 'bg-gradient-to-br from-brand-500/5 to-brand-500/10'
           : doc.mimeType?.includes('pdf')
             ? 'bg-gradient-to-br from-red-500/5 to-red-500/10'
             : doc.mimeType?.includes('spreadsheet') || doc.mimeType?.includes('excel')
@@ -257,7 +257,7 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
         <FileIcon className={cn(
           'h-10 w-10',
           doc.mimeType?.startsWith('image/')
-            ? 'text-violet-500/40'
+            ? 'text-brand-500/40'
             : doc.mimeType?.includes('pdf')
               ? 'text-red-500/40'
               : doc.mimeType?.includes('spreadsheet') || doc.mimeType?.includes('excel')

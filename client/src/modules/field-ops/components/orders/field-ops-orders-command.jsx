@@ -135,7 +135,7 @@ export function FieldOpsOrdersCommand({
     <div className="space-y-4">
       <section className="relative overflow-hidden rounded-2xl border border-border/70 bg-card shadow-theme-sm">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgb(34_211_238_/_0.14),transparent_46%),radial-gradient(ellipse_at_top_right,rgb(139_92_246_/_0.16),transparent_52%),linear-gradient(135deg,rgb(255_255_255_/_0.08),transparent_48%)]" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-cyan-400/70 via-violet-400/70 to-emerald-400/60" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-cyan-400/70 via-brand-400/70 to-emerald-400/60" />
 
         <div className="relative grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="min-w-0 space-y-4">
@@ -239,7 +239,7 @@ export function FieldOpsOrdersCommand({
             </div>
             <div className="relative mt-4 h-2 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-linear-to-r from-emerald-400 via-cyan-400 to-violet-400 transition-all duration-500"
+                className="h-full rounded-full bg-linear-to-r from-emerald-400 via-cyan-400 to-brand-400 transition-all duration-500"
                 style={{ width: `${completionRate}%` }}
               />
             </div>

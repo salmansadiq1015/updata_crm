@@ -19,13 +19,13 @@ import { cn } from '@/lib/utils';
 
 const CATEGORY_META = {
   filter: { labelKey: 'category.filter', color: 'text-sky-600', bg: 'bg-sky-100 dark:bg-sky-950/40' },
-  gasket: { labelKey: 'category.gasket', color: 'text-violet-600', bg: 'bg-violet-100 dark:bg-violet-950/40' },
+  gasket: { labelKey: 'category.gasket', color: 'text-brand-600', bg: 'bg-brand-100 dark:bg-brand-900/40' },
   pump_part: { labelKey: 'category.pump_part', color: 'text-blue-600', bg: 'bg-blue-100 dark:bg-blue-950/40' },
   valve: { labelKey: 'category.valve', color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-950/40' },
   sensor: { labelKey: 'category.sensor', color: 'text-amber-600', bg: 'bg-amber-100 dark:bg-amber-950/40' },
   igniter: { labelKey: 'category.igniter', color: 'text-orange-600', bg: 'bg-orange-100 dark:bg-orange-950/40' },
   burner_part: { labelKey: 'category.burner_part', color: 'text-red-600', bg: 'bg-red-100 dark:bg-red-950/40' },
-  control_board: { labelKey: 'category.control_board', color: 'text-purple-600', bg: 'bg-purple-100 dark:bg-purple-950/40' },
+  control_board: { labelKey: 'category.control_board', color: 'text-brand-600', bg: 'bg-brand-100 dark:bg-brand-900/40' },
   other: { labelKey: 'category.other', color: 'text-gray-600', bg: 'bg-muted' },
 };
 

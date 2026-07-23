@@ -5,7 +5,7 @@ import {
 
 export const ASSIGNMENT_TYPE_META = Object.freeze({
   SERVICE_CALL: { labelKey: 'deploy.assignmentTypes.serviceCall', label: 'Serviceeinsatz', icon: Wrench, color: 'text-blue-500', bg: 'bg-blue-500/10', calendarColor: '#3b82f6' },
-  PROJECT_WORK: { labelKey: 'deploy.assignmentTypes.projectWork', label: 'Projektarbeit', icon: Hammer, color: 'text-violet-500', bg: 'bg-violet-500/10', calendarColor: '#8b5cf6' },
+  PROJECT_WORK: { labelKey: 'deploy.assignmentTypes.projectWork', label: 'Projektarbeit', icon: Hammer, color: 'text-brand-500', bg: 'bg-brand-500/10', calendarColor: '#8b5cf6' },
   MAINTENANCE: { labelKey: 'deploy.assignmentTypes.maintenance', label: 'Wartung', icon: Settings, color: 'text-emerald-500', bg: 'bg-emerald-500/10', calendarColor: '#10b981' },
   INSTALLATION: { labelKey: 'deploy.assignmentTypes.installation', label: 'Installation', icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10', calendarColor: '#f97316' },
   INSPECTION: { labelKey: 'deploy.assignmentTypes.inspection', label: 'Inspektion', icon: Search, color: 'text-amber-500', bg: 'bg-amber-500/10', calendarColor: '#f59e0b' },
@@ -56,7 +56,7 @@ export const AVAILABILITY_TYPE_META = Object.freeze({
   WORKING: { labelKey: 'deploy.availability.working', label: 'Arbeitstag', color: 'bg-emerald-100 dark:bg-emerald-900/20' },
   VACATION: { labelKey: 'deploy.availability.vacation', label: 'Urlaub', color: 'bg-blue-100 dark:bg-blue-900/20' },
   SICK: { labelKey: 'deploy.availability.sick', label: 'Krank', color: 'bg-red-100 dark:bg-red-900/20' },
-  PUBLIC_HOLIDAY: { labelKey: 'deploy.availability.publicHoliday', label: 'Feiertag', color: 'bg-purple-100 dark:bg-purple-900/20' },
+  PUBLIC_HOLIDAY: { labelKey: 'deploy.availability.publicHoliday', label: 'Feiertag', color: 'bg-brand-100 dark:bg-brand-900/20' },
   COMPANY_CLOSURE: { labelKey: 'deploy.availability.companyClosure', label: 'Betriebsschliessung', color: 'bg-gray-200 dark:bg-gray-800' },
   OTHER_ABSENCE: { labelKey: 'deploy.availability.otherAbsence', label: 'Andere Abwesenheit', color: 'bg-orange-100 dark:bg-orange-900/20' },
 });

@@ -100,8 +100,8 @@ const ACCENT_CLASSES = Object.freeze({
     line: 'from-cyan-300/70 via-cyan-300/20 to-transparent',
   },
   violet: {
-    icon: 'border-violet-300/20 bg-violet-300/10 text-violet-700 dark:text-violet-200 shadow-[0_0_30px_rgba(167,139,250,0.14)]',
-    line: 'from-violet-300/70 via-violet-300/20 to-transparent',
+    icon: 'border-brand-300/20 bg-brand-300/10 text-brand-700 dark:text-brand-200 shadow-[0_0_30px_rgba(167,139,250,0.14)]',
+    line: 'from-brand-300/70 via-brand-300/20 to-transparent',
   },
   blue: {
     icon: 'border-blue-300/20 bg-blue-300/10 text-blue-700 dark:text-blue-200 shadow-[0_0_30px_rgba(96,165,250,0.14)]',
@@ -575,7 +575,7 @@ export function PremiumDashboard() {
               <Link key={action.href} href={action.href} className="group block">
                 <GlassPanel className="transition-transform duration-200 group-hover:-translate-y-0.5">
                   <div className="flex min-h-16 items-center gap-3 p-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-violet-300/20 bg-violet-300/10 text-violet-700 dark:text-violet-200 shadow-[0_0_26px_rgba(167,139,250,0.1)]">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand-300/20 bg-brand-300/10 text-brand-700 dark:text-brand-200 shadow-[0_0_26px_rgba(78,116,219,0.1)]">
                       <Icon className="h-4 w-4" />
                     </div>
                     <span className="min-w-0 truncate text-sm font-semibold text-foreground">

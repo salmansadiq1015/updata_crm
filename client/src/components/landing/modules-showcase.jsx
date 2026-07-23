@@ -65,7 +65,7 @@ function ProjectMockup({ t }) {
   return (
     <div className="rounded-2xl border border-border/40 bg-card shadow-xl shadow-black/5 overflow-hidden">
       <div className="border-b bg-muted/30 px-5 py-3.5 flex items-center gap-2.5">
-        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center">
           <FolderKanban className="h-3.5 w-3.5 text-white" />
         </div>
         <span className="text-sm font-semibold">{t('mockup.pm.title')}</span>

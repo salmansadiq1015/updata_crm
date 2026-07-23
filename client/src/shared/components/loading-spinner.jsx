@@ -205,7 +205,7 @@ const LOADER_STYLES = `
     border: 1px solid rgba(255,255,255,0.18);
     border-radius: 14px;
     background:
-      linear-gradient(145deg, rgba(167,139,250,0.92), rgba(79,70,229,0.82)),
+      linear-gradient(145deg, rgba(78,116,219,0.92), rgba(79,70,229,0.82)),
       radial-gradient(circle at 30% 20%, rgba(255,255,255,0.38), transparent 42%);
     box-shadow: 0 0 30px rgba(123,104,238,0.48);
   }

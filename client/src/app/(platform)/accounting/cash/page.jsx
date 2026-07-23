@@ -141,7 +141,7 @@ export default function CashManagementPage() {
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? 'Nächste 30 Tage' : 'Next 30 Days'}</span>
-                <CalendarDays className="h-5 w-5 text-violet-500" />
+                <CalendarDays className="h-5 w-5 text-brand-500" />
               </div>
               <p className="mt-3 text-2xl font-bold tabular-nums">{formatMoney(periods[2]?.netPosition)}</p>
             </div>

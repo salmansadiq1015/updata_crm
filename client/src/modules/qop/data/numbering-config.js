@@ -64,10 +64,10 @@ export const YEAR_FORMAT_OPTIONS = Object.freeze([
 
 export const NUMBERING_ACCENTS = Object.freeze({
   violet: {
-    icon: 'border-violet-300/25 bg-violet-300/12 text-violet-100 shadow-[0_0_34px_rgba(167,139,250,0.16)]',
-    line: 'from-violet-300/80 via-violet-300/20 to-transparent',
-    chip: 'border-violet-300/25 bg-violet-300/10 text-violet-100',
-    glow: 'group-hover:shadow-[0_22px_70px_rgba(139,92,246,0.22)]',
+    icon: 'border-brand-300/25 bg-brand-300/12 text-brand-100 shadow-[0_0_34px_rgba(167,139,250,0.16)]',
+    line: 'from-brand-300/80 via-brand-300/20 to-transparent',
+    chip: 'border-brand-300/25 bg-brand-300/10 text-brand-100',
+    glow: 'group-hover:shadow-[0_22px_70px_rgba(78,116,219,0.22)]',
   },
   cyan: {
     icon: 'border-cyan-300/25 bg-cyan-300/12 text-cyan-100 shadow-[0_0_34px_rgba(34,211,238,0.16)]',

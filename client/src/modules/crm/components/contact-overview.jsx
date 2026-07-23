@@ -423,7 +423,7 @@ function ContactSummary({ summary, typeFilter, t }) {
       key: 'total',
       label: t('crm.contacts.summaryTotal', 'All contacts'),
       value: summary.total,
-      className: 'bg-violet-500/10 text-violet-700 dark:text-violet-400 ring-violet-500/20',
+      className: 'bg-brand-500/10 text-brand-700 dark:text-brand-400 ring-brand-500/20',
     },
     {
       key: 'private',

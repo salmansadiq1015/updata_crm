@@ -3,7 +3,22 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { MapPin, ExternalLink } from 'lucide-react';
+import { MapPin, Navigation } from 'lucide-react';
+
+/**
+ * Google Maps directions link for a site. Universal link: on mobile the
+ * installed Google Maps app intercepts it and starts navigation directly;
+ * otherwise Google Maps opens in the browser.
+ */
+export function buildGoogleMapsUrl(site) {
+  if (!site) return null;
+  const hasCoords = Number.isFinite(site.latitude) && Number.isFinite(site.longitude);
+  const destination = hasCoords
+    ? `${site.latitude},${site.longitude}`
+    : [site.street, site.postalCode, site.city, site.country || 'CH'].filter(Boolean).join(', ');
+  if (!destination) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+}
 
 /**
  * Lightweight map card using OpenStreetMap embed.
@@ -14,7 +29,7 @@ import { MapPin, ExternalLink } from 'lucide-react';
  *   - Works offline-first via tile CDN
  *
  * When coords are missing but we have a postal address, we fall back to
- * OSM's text search — still useful, just less precise.
+ * a city-level default view — still useful, just less precise.
  */
 export function SiteMapCard({ site }) {
   const { t } = useLanguage();
@@ -27,7 +42,8 @@ export function SiteMapCard({ site }) {
 
   const title = t('crm.siteMap', 'Location');
 
-  const { src, openUrl } = buildMapUrls(site, { hasCoords });
+  const src = buildEmbedSrc(site, { hasCoords });
+  const routeUrl = buildGoogleMapsUrl(site);
 
   return (
     <Card>
@@ -42,12 +58,14 @@ export function SiteMapCard({ site }) {
               </span>
             )}
           </div>
-          <Button asChild variant="ghost" size="sm" className="h-7 gap-1 text-xs">
-            <a href={openUrl} target="_blank" rel="noopener noreferrer">
-              {t('crm.openInMaps', 'Open map')}
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </Button>
+          {routeUrl && (
+            <Button asChild size="sm" className="h-7 gap-1.5 text-xs">
+              <a href={routeUrl} target="_blank" rel="noopener noreferrer">
+                <Navigation className="h-3 w-3" />
+                {t('crm.siteRoute', 'Route')}
+              </a>
+            </Button>
+          )}
         </div>
         <iframe
           title={title}
@@ -61,24 +79,13 @@ export function SiteMapCard({ site }) {
   );
 }
 
-function buildMapUrls(site, { hasCoords }) {
+function buildEmbedSrc(site, { hasCoords }) {
   if (hasCoords) {
     const lat = site.latitude;
     const lng = site.longitude;
     const pad = 0.005;
     const bbox = [lng - pad, lat - pad, lng + pad, lat + pad].join('%2C');
-    return {
-      src: `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lng}`,
-      openUrl: `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`,
-    };
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lng}`;
   }
-
-  const query = [site.street, site.postalCode, site.city, site.country || 'CH']
-    .filter(Boolean)
-    .join(', ');
-  const encoded = encodeURIComponent(query);
-  return {
-    src: `https://www.openstreetmap.org/export/embed.html?bbox=8.50%2C47.36%2C8.57%2C47.40&layer=mapnik`,
-    openUrl: `https://www.openstreetmap.org/search?query=${encoded}`,
-  };
+  return 'https://www.openstreetmap.org/export/embed.html?bbox=8.50%2C47.36%2C8.57%2C47.40&layer=mapnik';
 }

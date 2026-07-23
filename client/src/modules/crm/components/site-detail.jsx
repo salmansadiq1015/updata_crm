@@ -13,7 +13,7 @@ import { InstallationsPanel } from './installations-panel';
 import { NotesPanel } from './notes-panel';
 import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
-import { SiteMapCard } from './site-map-card';
+import { SiteMapCard, buildGoogleMapsUrl } from './site-map-card';
 import { SiteDocumentsTab } from './site-documents-tab';
 import { SiteBusinessTab } from './site-business-tab';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
@@ -130,6 +130,7 @@ export function SiteDetail() {
     [site.postalCode, site.city].filter(Boolean).join(' '),
     site.canton ? cantonName(site.canton) : null,
   ].filter(Boolean).join(', ');
+  const routeUrl = buildGoogleMapsUrl(site);
 
   return (
     <div className="space-y-6">
@@ -158,9 +159,21 @@ export function SiteDetail() {
 
             <div className="flex items-center gap-4 text-[13px] text-muted-foreground flex-wrap">
               {addressLine && (
-                <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5" /> {addressLine}
-                </span>
+                routeUrl ? (
+                  <a
+                    href={routeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={t('crm.siteRouteHint', 'In Google Maps öffnen')}
+                    className="inline-flex items-center gap-1.5 hover:text-foreground hover:underline underline-offset-2 transition-colors"
+                  >
+                    <MapPin className="h-3.5 w-3.5" /> {addressLine}
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5" /> {addressLine}
+                  </span>
+                )
               )}
               {site.floorUnit && (
                 <span className="inline-flex items-center gap-1.5">

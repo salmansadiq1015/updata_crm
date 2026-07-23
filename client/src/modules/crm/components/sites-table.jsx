@@ -21,9 +21,8 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { formatSwissAddress } from '@/lib/formatters';
-import { Building2, Eye, ExternalLink, Filter, Search, X, MapPin, Home, Map as MapIcon, List as ListIcon, Plus, UserRound } from 'lucide-react';
+import { Building2, Eye, ExternalLink, Filter, Search, X, MapPin, Home, Plus, UserRound } from 'lucide-react';
 import { DotLabel } from '@/shared/components/filter-dot';
-import { SitesMap } from '@/modules/crm/components/sites-map';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 
@@ -42,7 +41,6 @@ export function SitesTable() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [cantonFilter, setCantonFilter] = useState('all');
-  const [view, setView] = useState('list');
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -186,23 +184,6 @@ export function SitesTable() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <NewObjectFlow onCreated={reset} />
-          {/* List | Map view toggle */}
-          <div className="inline-flex items-center rounded-full border border-border/70 bg-card p-0.5 shadow-theme-sm dark:border-white/10 dark:bg-white/4 dark:shadow-none">
-            <button
-              type="button"
-              onClick={() => setView('list')}
-              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'list' ? 'bg-brand-500/10 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
-            >
-              <ListIcon className="h-3.5 w-3.5" /> {t('common.list', 'List')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('map')}
-              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'map' ? 'bg-brand-500/10 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
-            >
-              <MapIcon className="h-3.5 w-3.5" /> {t('common.map', 'Map')}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -278,44 +259,40 @@ export function SitesTable() {
         )}
       </div>
 
-      {view === 'map' ? (
-        <SitesMap sites={items} />
-      ) : (
-        <DataTableShell
-          columns={columns}
-          data={items}
-          isLoading={isFetching && items.length === 0}
-          rowCount={items.length}
-          manualPagination
-          manualSorting
-          manualFiltering
-          enableGlobalFilter={false}
-          cursorPagination={{
-            pageSize, onPageSizeChange: setPageSize, hasNext, hasPrev, isFetching, onNext, onPrev,
-          }}
-          renderRowActions={({ row }) => {
-            const s = row.original;
-            const customerId = s.customerId?._id || s.customerId;
-            return (
-              <RowActionsMenu
-                items={[
-                  {
-                    label: t('common.view', 'View'),
-                    icon: Eye,
-                    onSelect: () => router.push(`/crm/sites/${s._id}`),
-                  },
-                  {
-                    label: t('crm.openCustomer', 'Open customer'),
-                    icon: ExternalLink,
-                    hidden: !customerId,
-                    onSelect: () => router.push(`/crm/customers/${customerId}`),
-                  },
-                ]}
-              />
-            );
-          }}
-        />
-      )}
+      <DataTableShell
+        columns={columns}
+        data={items}
+        isLoading={isFetching && items.length === 0}
+        rowCount={items.length}
+        manualPagination
+        manualSorting
+        manualFiltering
+        enableGlobalFilter={false}
+        cursorPagination={{
+          pageSize, onPageSizeChange: setPageSize, hasNext, hasPrev, isFetching, onNext, onPrev,
+        }}
+        renderRowActions={({ row }) => {
+          const s = row.original;
+          const customerId = s.customerId?._id || s.customerId;
+          return (
+            <RowActionsMenu
+              items={[
+                {
+                  label: t('common.view', 'View'),
+                  icon: Eye,
+                  onSelect: () => router.push(`/crm/sites/${s._id}`),
+                },
+                {
+                  label: t('crm.openCustomer', 'Open customer'),
+                  icon: ExternalLink,
+                  hidden: !customerId,
+                  onSelect: () => router.push(`/crm/customers/${customerId}`),
+                },
+              ]}
+            />
+          );
+        }}
+      />
     </div>
   );
 }

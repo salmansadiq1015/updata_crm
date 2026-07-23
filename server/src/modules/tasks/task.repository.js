@@ -1,4 +1,5 @@
 import Task from './task.model.js';
+import User from '../auth/user.model.js';
 import {
   buildCursorQuery,
   buildCursorSort,
@@ -29,6 +30,10 @@ const POPULATE_FIELDS = [
   { path: 'orderId', select: 'assignmentNumber title status priority' },
   { path: 'meetingId', select: 'title startAt status' },
 ];
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 function combineFilters(...filters) {
   const active = filters.filter((filter) => filter && Object.keys(filter).length > 0);
@@ -117,9 +122,26 @@ class TaskRepository {
       baseFilter.parentTaskId = null;
     }
 
-    // Handle text search
+    // Handle text search: case-insensitive substring match on title/description
+    // plus assignee name/email. ($text word-stem search couldn't match partial
+    // words and never covered the assignee.)
+    let searchFilter = {};
     if (q) {
-      baseFilter.$text = { $search: q };
+      const regex = { $regex: escapeRegex(q), $options: 'i' };
+      const tokens = String(q).trim().split(/\s+/).filter(Boolean);
+      const matchedUsers = tokens.length
+        ? await User.find({
+            $and: tokens.map((token) => {
+              const tokenRegex = { $regex: escapeRegex(token), $options: 'i' };
+              return { $or: [{ firstName: tokenRegex }, { lastName: tokenRegex }, { email: tokenRegex }] };
+            }),
+          }).select('_id').lean()
+        : [];
+      const or = [{ title: regex }, { description: regex }];
+      if (matchedUsers.length > 0) {
+        or.push({ assigneeId: { $in: matchedUsers.map((u) => u._id) } });
+      }
+      searchFilter = { $or: or };
     }
 
     // Central task management: every user sees all non-locked tasks. Locked
@@ -136,7 +158,7 @@ class TaskRepository {
         }
       : {};
 
-    const filter = combineFilters(baseFilter, buildCursorQuery(cursor, safeSortBy, sortOrder), accessFilter);
+    const filter = combineFilters(baseFilter, searchFilter, buildCursorQuery(cursor, safeSortBy, sortOrder), accessFilter);
 
     const sort = buildCursorSort(safeSortBy, sortOrder);
 

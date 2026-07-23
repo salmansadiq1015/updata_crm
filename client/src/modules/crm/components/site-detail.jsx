@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { siteService } from '@/modules/crm/services/site-service';
+import { customerService } from '@/modules/crm/services/customer-service';
 import { queryKeys } from '@/lib/query/keys';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -69,6 +70,15 @@ export function SiteDetail() {
     queryKey: queryKeys.crm.sites.detail(id),
     queryFn: () => siteService.getById(id),
     enabled: !!id,
+  });
+
+  // getById does not populate the customer, so fetch it separately: the edit
+  // form needs its address to offer "Gleich wie Kunde".
+  const parentCustomerId = site?.customerId?._id || site?.customerId || null;
+  const { data: parentCustomer } = useQuery({
+    queryKey: queryKeys.crm.customers.detail(parentCustomerId),
+    queryFn: () => customerService.getCustomerById(parentCustomerId),
+    enabled: !!parentCustomerId && formOpen,
   });
 
   const updateMut = useMutation({
@@ -265,6 +275,7 @@ export function SiteDetail() {
         onOpenChange={setFormOpen}
         onSubmit={(data) => updateMut.mutateAsync(data)}
         defaultValues={site}
+        customer={parentCustomer}
         isLoading={updateMut.isPending}
       />
 

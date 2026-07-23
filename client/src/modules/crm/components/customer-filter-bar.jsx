@@ -84,10 +84,7 @@ export function CustomerFilterBar({
           <SelectItem value="all" className="text-foreground focus:bg-muted/60">{t('crm.allCantons', 'All cantons')}</SelectItem>
           {CH_CANTONS.map((c) => (
             <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/60">
-              <span className="flex items-center gap-2">
-                <span className="font-mono text-[11px] text-muted-foreground">{c.code}</span>
-                {c.name}
-              </span>
+              {c.name}
             </SelectItem>
           ))}
         </SelectContent>

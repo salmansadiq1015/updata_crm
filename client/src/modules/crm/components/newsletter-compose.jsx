@@ -300,10 +300,7 @@ export function NewsletterCompose({
                         <SelectItem value={ALL_VALUE}>{t('crm.allCantons', 'All cantons')}</SelectItem>
                         {CH_CANTONS.map((c) => (
                           <SelectItem key={c.code} value={c.code}>
-                            <span className="flex items-center gap-2">
-                              <span className="font-mono text-[11px] text-muted-foreground">{c.code}</span>
-                              {c.name}
-                            </span>
+                            {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

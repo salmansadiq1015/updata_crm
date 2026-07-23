@@ -262,9 +262,7 @@ export function SitesTable() {
             <SelectItem value="all" className={filterSelectItemCls}>{t('crm.allCantons', 'All cantons')}</SelectItem>
             {CH_CANTONS.map((c) => (
               <SelectItem key={c.code} value={c.code} className={filterSelectItemCls}>
-                <span className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] text-muted-foreground dark:text-white/35">{c.code}</span>{c.name}
-                </span>
+                {c.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -420,6 +418,7 @@ function NewObjectFlow({ onCreated }) {
       <SiteForm
         open={formOpen}
         onOpenChange={(v) => { setFormOpen(v); if (!v) setCustomer(null); }}
+        customer={customer}
         onSubmit={(data) => createMut.mutateAsync(data)}
         isLoading={createMut.isPending}
       />

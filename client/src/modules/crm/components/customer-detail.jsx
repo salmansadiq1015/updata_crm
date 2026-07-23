@@ -454,7 +454,7 @@ export function CustomerDetail() {
             </TabsContent>
 
             <TabsContent value="sites">
-              <SitesPanel customerId={customer._id} />
+              <SitesPanel customerId={customer._id} customer={customer} />
             </TabsContent>
 
             <TabsContent value="activity">

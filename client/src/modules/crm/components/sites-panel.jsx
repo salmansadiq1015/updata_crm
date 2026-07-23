@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 
-export function SitesPanel({ customerId }) {
+export function SitesPanel({ customerId, customer }) {
   const { t } = useLanguage();
   const qc = useQueryClient();
   const { hasPermission } = usePermissions();
@@ -147,6 +147,7 @@ export function SitesPanel({ customerId }) {
         onOpenChange={setFormOpen}
         onSubmit={handleSubmit}
         defaultValues={editSite}
+        customer={customer}
         isLoading={createMut.isPending || updateMut.isPending}
       />
 

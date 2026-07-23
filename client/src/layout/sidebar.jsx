@@ -3,6 +3,12 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+// Statically imported so the emitted URL carries a content hash: replacing a
+// logo file in public/ busts every browser cache automatically.
+import logoFull from '../../public/logo.png';
+import logoFullDark from '../../public/logo-dark.png';
+import logoMark from '../../public/logo-mark.png';
+import logoMarkDark from '../../public/logo-mark-dark.png';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { useSidebarStore } from '@/stores/sidebar-store';
@@ -400,18 +406,14 @@ function SidebarLogo({ collapsed }) {
       {collapsed ? (
         <Link href="/dashboard" className="flex items-center justify-center" aria-label="MB Boiler">
           <Image
-            src="/logo-mark.png"
+            src={logoMark}
             alt="MB Boiler"
-            width={329}
-            height={329}
             priority
             className="block h-10 w-10 object-contain dark:hidden"
           />
           <Image
-            src="/logo-mark-dark.png"
+            src={logoMarkDark}
             alt="MB Boiler"
-            width={329}
-            height={329}
             priority
             className="hidden h-10 w-10 object-contain dark:block"
           />
@@ -419,18 +421,14 @@ function SidebarLogo({ collapsed }) {
       ) : (
         <Link href="/dashboard" className="flex items-center group" aria-label="MB Boiler — ERP System">
           <Image
-            src="/logo.png"
+            src={logoFull}
             alt="MB Boiler — ERP System"
-            width={329}
-            height={100}
             priority
             className="block h-9 w-auto object-contain dark:hidden"
           />
           <Image
-            src="/logo-dark.png"
+            src={logoFullDark}
             alt="MB Boiler — ERP System"
-            width={329}
-            height={100}
             priority
             className="hidden h-9 w-auto object-contain dark:block"
           />

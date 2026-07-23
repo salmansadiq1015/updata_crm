@@ -541,7 +541,7 @@ export function PremiumDashboard() {
                       <TabsTrigger
                         key={tab.id}
                         value={tab.id}
-                        className="h-10 rounded-md px-3 text-sm text-muted-foreground data-active:border-violet-300/70 data-active:bg-[linear-gradient(135deg,rgba(124,58,237,0.48),rgba(88,28,135,0.34))] data-active:text-white data-active:ring-1 data-active:ring-violet-300/60 data-active:shadow-[0_0_0_1px_rgba(167,139,250,0.35),0_0_28px_rgba(139,92,246,0.34),inset_0_1px_0_rgba(255,255,255,0.16)]"
+                        className="h-10 rounded-md px-3 text-sm text-muted-foreground data-active:border-brand-400/70 data-active:bg-[linear-gradient(135deg,var(--brand-600),var(--brand-800))] data-active:text-white data-active:hover:text-white data-active:ring-1 data-active:ring-brand-400/60 data-active:shadow-[0_0_0_1px_color-mix(in_oklab,var(--brand-400)_35%,transparent),0_0_28px_color-mix(in_oklab,var(--brand-500)_34%,transparent),inset_0_1px_0_rgba(255,255,255,0.16)]"
                       >
                         <Icon className="h-4 w-4" />
                         {t(tab.labelKey, tab.fallback)}

@@ -194,7 +194,9 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col border border-border bg-card shadow-2xl">
+      <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col border border-border bg-card shadow-2xl"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         {/* Header */}
         <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">

@@ -323,7 +323,9 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[90vh] flex flex-col"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
           <DialogTitle className="text-lg font-bold">

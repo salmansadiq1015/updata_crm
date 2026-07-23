@@ -48,7 +48,7 @@ const customerSchema = new mongoose.Schema(
     notes: { type: String, maxlength: 5000, default: null },
     status: {
       type: String,
-      enum: ['active', 'archived'],
+      enum: ['active', 'inactive'],
       default: 'active',
       index: true,
     },

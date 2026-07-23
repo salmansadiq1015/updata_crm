@@ -11,7 +11,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
  * Each mutation does its own toast + cache invalidation; pages pass callbacks
  * (`onSuccess`) only when they need to close a dialog or reset selection.
  */
-export function useCustomerMutations({ onCreate, onUpdate, onArchive, onBulkArchive, onMerge, onExport } = {}) {
+export function useCustomerMutations({ onCreate, onUpdate, onDeactivate, onBulkDeactivate, onMerge, onExport } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -39,23 +39,47 @@ export function useCustomerMutations({ onCreate, onUpdate, onArchive, onBulkArch
     onError: (err) => showError(err.message),
   });
 
-  const archive = useMutation({
-    mutationFn: (id) => customerService.archiveCustomer(id),
+  const deactivate = useMutation({
+    mutationFn: (id) => customerService.deactivateCustomer(id),
     onSuccess: (res) => {
       invalidate();
-      showSuccess(t('crm.customerArchived', 'Customer archived'));
-      onArchive?.(res);
+      showSuccess(t('crm.customerDeactivated', 'Kunde deaktiviert'));
+      onDeactivate?.(res);
     },
     onError: (err) => showError(err.message),
   });
 
-  const bulkArchive = useMutation({
+  const reactivate = useMutation({
+    mutationFn: (id) => customerService.reactivateCustomer(id),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('crm.customerReactivated', 'Kunde reaktiviert'));
+      onDeactivate?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const bulkDeactivate = useMutation({
     mutationFn: (ids) => customerService.bulkArchive(ids),
     onSuccess: (res) => {
       invalidate();
       const n = res?.deactivatedCount ?? t('common.all', 'all');
-      showSuccess(t('crm.bulkArchiveSuccess', '{count} customers archived', { count: n }));
-      onBulkArchive?.(res);
+      showSuccess(t('crm.bulkDeactivateSuccess', '{count} Kunden deaktiviert', { count: n }));
+      onBulkDeactivate?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  // Reversing a merge touches the same entities as the merge itself.
+  const undoMerge = useMutation({
+    mutationFn: (mergeId) => customerService.undoMerge(mergeId),
+    onSuccess: (res) => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: queryKeys.crm.contacts.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.crm.sites.all() });
+      queryClient.invalidateQueries({ queryKey: ['crm', 'customers', 'merges'] });
+      showSuccess(t('crm.mergeUndone', 'Zusammenführung rückgängig gemacht'));
+      onMerge?.(res);
     },
     onError: (err) => showError(err.message),
   });
@@ -82,5 +106,5 @@ export function useCustomerMutations({ onCreate, onUpdate, onArchive, onBulkArch
     onError: (err) => showError(err.message),
   });
 
-  return { create, update, archive, bulkArchive, merge, exportCsv };
+  return { create, update, deactivate, reactivate, bulkDeactivate, merge, undoMerge, exportCsv };
 }

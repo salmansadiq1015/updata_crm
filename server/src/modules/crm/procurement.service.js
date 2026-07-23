@@ -439,7 +439,7 @@ class ProcurementService {
   async deleteSupplier(id, userId, meta = {}) {
     const supplier = await Customer.findOneAndUpdate(
       { _id: id, type: { $in: SUPPLIER_TYPES }, isDeleted: false },
-      { $set: { isDeleted: true, deletedAt: new Date(), status: 'archived' } },
+      { $set: { status: 'inactive' } },
       { returnDocument: 'after' },
     ).lean();
     if (!supplier) throw new NotFoundError('Supplier', id);

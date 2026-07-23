@@ -27,7 +27,7 @@ export function getCustomerTypeLabel(type, t) {
 
 export const CUSTOMER_STATUSES = Object.freeze({
   ACTIVE: 'active',
-  ARCHIVED: 'archived',
+  INACTIVE: 'inactive',
 });
 
 export const NEWSLETTER_CHANNELS = Object.freeze({

@@ -76,6 +76,7 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'crm', action: 'write', description: 'Create and update CRM data' },
   { module: 'crm', action: 'delete', description: 'Delete CRM data' },
   { module: 'crm', action: 'admin', description: 'Full CRM administration' },
+  { module: 'crm', action: 'merge', description: 'Merge duplicate customers and undo a merge (key user)' },
 
   // Projects
   { module: 'projects', action: 'read', description: 'View projects' },

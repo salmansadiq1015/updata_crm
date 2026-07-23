@@ -287,7 +287,7 @@ class CustomerRepository {
   async softDelete(id) {
     return Customer.findByIdAndUpdate(
       id,
-      { isDeleted: true, deletedAt: new Date(), status: 'archived' },
+      { status: 'inactive' },
       { returnDocument: 'after' },
     );
   }
@@ -301,10 +301,15 @@ class CustomerRepository {
     return result.modifiedCount;
   }
 
-  async bulkSoftDelete(ids) {
+  /**
+   * Customers are deactivated, never soft-deleted: they stay listed and can be
+   * reactivated. Setting isDeleted here would hide them behind the pre-find
+   * hook with no way back through the UI.
+   */
+  async bulkDeactivate(ids) {
     const result = await Customer.updateMany(
       { _id: { $in: ids }, isDeleted: false },
-      { $set: { isDeleted: true, deletedAt: new Date(), status: 'archived' } },
+      { $set: { status: 'inactive' } },
     );
     return result.modifiedCount;
   }

@@ -32,11 +32,38 @@ class CustomerController {
     } catch (err) { next(err); }
   }
 
-  async archive(req, res, next) {
+  async deactivate(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
-      await customerService.archive(req.params.id, req.user._id, meta);
-      return res.success({ message: 'Customer archived successfully' });
+      await customerService.deactivate(req.params.id, req.user._id, meta);
+      return res.success({ message: 'Customer deactivated successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async reactivate(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      await customerService.reactivate(req.params.id, req.user._id, meta);
+      return res.success({ message: 'Customer reactivated successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async listMerges(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const data = await customerService.listMerges({
+        limit: query.limit,
+        includeUndone: query.includeUndone === 'true' || query.includeUndone === true,
+      });
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  async undoMerge(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const data = await customerService.undoMerge(req.params.mergeId, req.user._id, meta);
+      return res.success({ data, message: 'Merge undone successfully' });
     } catch (err) { next(err); }
   }
 

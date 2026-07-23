@@ -49,7 +49,8 @@ export const ENDPOINTS = Object.freeze({
     // Customers
     CUSTOMERS: '/crm/customers',
     CUSTOMER_BY_ID: (id) => `/crm/customers/${id}`,
-    CUSTOMER_ARCHIVE: (id) => `/crm/customers/${id}/archive`,
+    CUSTOMER_DEACTIVATE: (id) => `/crm/customers/${id}/deactivate`,
+    CUSTOMER_REACTIVATE: (id) => `/crm/customers/${id}/reactivate`,
     CUSTOMER_ACTIVITY: (id) => `/crm/customers/${id}/activity`,
     CUSTOMERS_SEARCH: '/crm/customers/search',
     CUSTOMERS_DUPLICATES: '/crm/customers/duplicates',
@@ -57,6 +58,8 @@ export const ENDPOINTS = Object.freeze({
     CUSTOMERS_BULK_UPDATE: '/crm/customers/bulk-update',
     CUSTOMERS_BULK_DELETE: '/crm/customers/bulk-delete',
     CUSTOMERS_MERGE: '/crm/customers/merge',
+    CUSTOMERS_MERGES: '/crm/customers/merges',
+    CUSTOMERS_MERGE_UNDO: (mergeId) => `/crm/customers/merges/${mergeId}/undo`,
     CUSTOMERS_CLEANUP_AUDIT: '/crm/customers/cleanup-audit',
     // Contacts (Phase 2)
     CONTACTS: '/crm/contacts',

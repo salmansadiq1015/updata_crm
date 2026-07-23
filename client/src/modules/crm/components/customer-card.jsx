@@ -16,11 +16,11 @@ import {
 import { showSuccess } from '@/lib/toast';
 import { pickCustomerAccent } from '@/modules/crm/constants/customer-constants';
 
-export function CustomerCard({ customer, onEdit, onArchive, t }) {
+export function CustomerCard({ customer, onEdit, onDeactivate, t }) {
   const accent = pickCustomerAccent(customer);
   const isBusiness = customer.type === 'business';
   const Icon = isBusiness ? Building2 : User;
-  const isArchived = customer.status === 'archived';
+  const isInactive = customer.status === 'inactive';
   const address = [customer.postalCode, customer.city].filter(Boolean).join(' ');
 
   return (
@@ -100,15 +100,15 @@ export function CustomerCard({ customer, onEdit, onArchive, t }) {
                 </DropdownMenuItem>
               )}
               <PermissionGate permission="crm:delete">
-                {!isArchived && (
+                {!isInactive && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={onArchive}
+                      onClick={onDeactivate}
                       className="gap-2 text-destructive focus:text-destructive"
                     >
                       <Archive className="h-3.5 w-3.5" />
-                      {t('crm.archive', 'Archivieren')}
+                      {t('crm.deactivate', 'Deaktivieren')}
                     </DropdownMenuItem>
                   </>
                 )}
@@ -149,12 +149,12 @@ export function CustomerCard({ customer, onEdit, onArchive, t }) {
         <div className="flex items-center justify-between pt-3 mt-3 border-t border-border">
           <span className={cn(
             'inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full',
-            isArchived
+            isInactive
               ? 'bg-muted text-muted-foreground'
               : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
           )}>
-            <span className={cn('h-1.5 w-1.5 rounded-full', isArchived ? 'bg-muted-foreground/40' : 'bg-emerald-500')} />
-            {isArchived ? t('crm.statusArchived', 'Archiviert') : t('crm.statusActive', 'Aktiv')}
+            <span className={cn('h-1.5 w-1.5 rounded-full', isInactive ? 'bg-muted-foreground/40' : 'bg-emerald-500')} />
+            {isInactive ? t('crm.statusInactive', 'Deaktiviert') : t('crm.statusActive', 'Aktiv')}
           </span>
 
           {customer.newsletterOptIn && (

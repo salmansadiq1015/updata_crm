@@ -59,7 +59,7 @@ export function CustomerFilterBar({
         <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
           <SelectItem value="all" className="text-foreground focus:bg-muted/60"><DotLabel tone="muted">{t('crm.allStatus', 'All statuses')}</DotLabel></SelectItem>
           <SelectItem value="active" className="text-foreground focus:bg-muted/60"><DotLabel tone="emerald">{t('crm.statusActive', 'Active')}</DotLabel></SelectItem>
-          <SelectItem value="archived" className="text-foreground focus:bg-muted/60"><DotLabel tone="slate">{t('crm.statusArchived', 'Archived')}</DotLabel></SelectItem>
+          <SelectItem value="inactive" className="text-foreground focus:bg-muted/60"><DotLabel tone="slate">{t('crm.statusInactive', 'Deaktiviert')}</DotLabel></SelectItem>
         </SelectContent>
       </Select>
 

@@ -15,6 +15,7 @@ import { CustomerCard } from '@/modules/crm/components/customer-card';
 import { CustomerFilterBar } from '@/modules/crm/components/customer-filter-bar';
 import { CustomerStatsRow } from '@/modules/crm/components/customer-stats-row';
 import { CustomerMergeDialog } from '@/modules/crm/components/customer-merge-dialog';
+import { CustomerMergeHistoryDialog } from '@/modules/crm/components/customer-merge-history-dialog';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { PermissionGate } from '@/shared/components/permission-gate';
 import { BulkActionsBar } from '@/shared/components/data-table/bulk-actions-bar';
@@ -28,7 +29,7 @@ import { cn } from '@/lib/utils';
 import {
   Plus, Pencil, Archive, Eye, Building2, User,
   Users as UsersIcon, BellRing,
-  LayoutGrid, List, Mail, Download, GitMerge,
+  LayoutGrid, List, Mail, Download, GitMerge, RotateCcw,
 } from 'lucide-react';
 import { pickCustomerAccent } from '@/modules/crm/constants/customer-constants';
 
@@ -69,12 +70,13 @@ export function CustomersTable() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editCustomer, setEditCustomer] = useState(null);
-  const [archiveTarget, setArchiveTarget] = useState(null);
-  const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false);
   const [rowSelection, setRowSelection] = useState({});
-  const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
+  const [bulkDeactivateOpen, setBulkDeactivateOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeSource, setMergeSource] = useState(null);
+  const [mergeHistoryOpen, setMergeHistoryOpen] = useState(false);
 
   const apiParams = useMemo(() => {
     const p = {};
@@ -105,13 +107,13 @@ export function CustomersTable() {
     initialSize: 25,
   });
 
-  const { create, update, archive, bulkArchive, merge, exportCsv } = useCustomerMutations({
+  const { create, update, deactivate, reactivate, bulkDeactivate, merge, exportCsv } = useCustomerMutations({
     onCreate: () => setFormOpen(false),
     onUpdate: () => setFormOpen(false),
-    onArchive: () => setConfirmArchiveOpen(false),
-    onBulkArchive: () => {
+    onDeactivate: () => setConfirmDeactivateOpen(false),
+    onBulkDeactivate: () => {
       setRowSelection({});
-      setBulkArchiveOpen(false);
+      setBulkDeactivateOpen(false);
     },
     onMerge: () => {
       setMergeOpen(false);
@@ -121,7 +123,7 @@ export function CustomersTable() {
 
   const selectedIds = Object.keys(rowSelection).filter((id) => {
     const c = customers.find((x) => x._id === id);
-    return c && c.status !== 'archived';
+    return c && c.status !== 'inactive';
   });
 
   const hasActiveFilters =
@@ -277,16 +279,16 @@ export function CustomersTable() {
       header: t('crm.status', 'Status'),
       size: 130,
       Cell: ({ row }) => {
-        const isArchived = row.original.status === 'archived';
+        const isInactive = row.original.status === 'inactive';
         return (
           <span className={cn(
             'inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full',
-            isArchived
+            isInactive
               ? 'bg-muted text-muted-foreground'
               : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
           )}>
-            <span className={cn('h-1.5 w-1.5 rounded-full', isArchived ? 'bg-muted-foreground/40' : 'bg-emerald-500')} />
-            {isArchived ? t('crm.statusArchived', 'Archived') : t('crm.statusActive', 'Active')}
+            <span className={cn('h-1.5 w-1.5 rounded-full', isInactive ? 'bg-muted-foreground/40' : 'bg-emerald-500')} />
+            {isInactive ? t('crm.statusInactive', 'Deaktiviert') : t('crm.statusActive', 'Active')}
           </span>
         );
       },
@@ -357,6 +359,17 @@ export function CustomersTable() {
             </Button>
           </PermissionGate>
 
+          <PermissionGate permission="crm:merge">
+            <Button
+              variant="outline"
+              onClick={() => setMergeHistoryOpen(true)}
+              className="gap-2 h-9 border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+            >
+              <GitMerge className="h-4 w-4" />
+              {t('crm.mergeHistory', 'Zusammenführungen')}
+            </Button>
+          </PermissionGate>
+
           <PermissionGate permission="crm:write">
             <Button
               onClick={() => { setEditCustomer(null); setFormOpen(true); }}
@@ -396,10 +409,10 @@ export function CustomersTable() {
               variant="destructive"
               size="sm"
               className="h-8 text-xs"
-              onClick={() => setBulkArchiveOpen(true)}
+              onClick={() => setBulkDeactivateOpen(true)}
             >
               <Archive className="h-3.5 w-3.5 mr-1" />
-              {t('crm.bulkArchive', 'Archive {count}', { count: selectedIds.length })}
+              {t('crm.bulkDeactivate', '{count} deaktivieren', { count: selectedIds.length })}
             </Button>
           </PermissionGate>
         </BulkActionsBar>
@@ -429,10 +442,11 @@ export function CustomersTable() {
           }}
           renderRowActions={({ row }) => {
             const c = row.original;
-            const isArchived = c.status === 'archived';
+            const isInactive = c.status === 'inactive';
             const canWrite = hasPermission('crm:write');
             const canAdmin = hasPermission('crm:admin');
             const canDelete = hasPermission('crm:delete');
+            const canMerge = hasPermission('crm:merge');
             return (
               <RowActionsMenu
                 items={[
@@ -456,19 +470,25 @@ export function CustomersTable() {
                       showSuccess(t('crm.copyEmail', 'Email copied'));
                     },
                   },
-                  { type: 'separator', hidden: isArchived || (!canAdmin && !canDelete) },
+                  { type: 'separator', hidden: !canMerge && !canDelete },
                   {
                     label: t('crm.merge', 'Merge'),
                     icon: GitMerge,
-                    hidden: isArchived || !canAdmin,
+                    hidden: isInactive || !canMerge,
                     onSelect: () => { setMergeSource(c); setMergeOpen(true); },
                   },
                   {
-                    label: t('crm.archive', 'Archive'),
+                    label: t('crm.deactivate', 'Deaktivieren'),
                     icon: Archive,
                     destructive: true,
-                    hidden: isArchived || !canDelete,
-                    onSelect: () => { setArchiveTarget(c); setConfirmArchiveOpen(true); },
+                    hidden: isInactive || !canDelete,
+                    onSelect: () => { setDeactivateTarget(c); setConfirmDeactivateOpen(true); },
+                  },
+                  {
+                    label: t('crm.reactivate', 'Reaktivieren'),
+                    icon: RotateCcw,
+                    hidden: !isInactive || !canDelete,
+                    onSelect: () => reactivate.mutate(c._id),
                   },
                 ]}
               />
@@ -497,7 +517,7 @@ export function CustomersTable() {
                     customer={c}
                     t={t}
                     onEdit={() => { setEditCustomer(c); setFormOpen(true); }}
-                    onArchive={() => { setArchiveTarget(c); setConfirmArchiveOpen(true); }}
+                    onDeactivate={() => { setDeactivateTarget(c); setConfirmDeactivateOpen(true); }}
                   />
                 ))}
               </div>
@@ -529,27 +549,27 @@ export function CustomersTable() {
       />
 
       <ConfirmDialog
-        open={confirmArchiveOpen}
-        onOpenChange={setConfirmArchiveOpen}
-        title={t('crm.confirmArchive', 'Archive customer?')}
-        description={`${t('crm.archiveDesc', 'Are you sure you want to archive this customer?')} ${archiveTarget?.name ? `— "${archiveTarget.name}"` : ''}`}
-        onConfirm={() => archive.mutate(archiveTarget?._id)}
-        loading={archive.isPending}
-        confirmText={t('crm.archive', 'Archive')}
+        open={confirmDeactivateOpen}
+        onOpenChange={setConfirmDeactivateOpen}
+        title={t('crm.confirmDeactivate', 'Kunde deaktivieren?')}
+        description={`${t('crm.deactivateDesc', 'Der Kunde bleibt erhalten und kann jederzeit reaktiviert werden.')} ${deactivateTarget?.name ? `— "${deactivateTarget.name}"` : ''}`}
+        onConfirm={() => deactivate.mutate(deactivateTarget?._id)}
+        loading={deactivate.isPending}
+        confirmText={t('crm.deactivate', 'Deaktivieren')}
         variant="destructive"
       />
 
       <ConfirmDialog
-        open={bulkArchiveOpen}
-        onOpenChange={setBulkArchiveOpen}
-        title={t('crm.bulkArchiveTitle', 'Archive {count} customers?', { count: selectedIds.length })}
+        open={bulkDeactivateOpen}
+        onOpenChange={setBulkDeactivateOpen}
+        title={t('crm.bulkDeactivateTitle', '{count} Kunden deaktivieren?', { count: selectedIds.length })}
         description={t(
-          'crm.bulkArchiveDesc',
-          'The selected customers will be archived. You can restore them later via the status filter.',
+          'crm.bulkDeactivateDesc',
+          'Die gewählten Kunden werden deaktiviert. Sie bleiben erhalten und können jederzeit reaktiviert werden.',
         )}
-        onConfirm={() => bulkArchive.mutate(selectedIds)}
-        loading={bulkArchive.isPending}
-        confirmText={t('crm.bulkArchiveConfirm', 'Archive all')}
+        onConfirm={() => bulkDeactivate.mutate(selectedIds)}
+        loading={bulkDeactivate.isPending}
+        confirmText={t('crm.bulkDeactivateConfirm', 'Alle deaktivieren')}
         variant="destructive"
       />
 
@@ -559,6 +579,11 @@ export function CustomersTable() {
         source={mergeSource}
         loading={merge.isPending}
         onConfirm={({ sourceId, targetId, fieldOverrides }) => merge.mutate({ sourceId, targetId, fieldOverrides })}
+      />
+
+      <CustomerMergeHistoryDialog
+        open={mergeHistoryOpen}
+        onOpenChange={setMergeHistoryOpen}
       />
     </div>
   );

@@ -598,12 +598,12 @@ async function deleteCustomer({ context, userId, state, helpers }) {
       recordType: 'customer',
       recordId: context.customer._id,
       label: context.customer.name || context.customer.customerNumber,
-      effect: 'The customer will be archived, not hard-deleted.',
+      effect: 'The customer will be deactivated, not hard-deleted.',
     });
   }
 
   const customerService = (await import('../../crm/customer.service.js')).default;
-  await customerService.archive(context.customer._id, userId, { source: 'ai-agent' });
+  await customerService.deactivate(context.customer._id, userId, { source: 'ai-agent' });
   return deletionResult(ACTIONS.DELETE_CUSTOMER, 'customer', context.customer._id, `Customer ${context.customer.name || context.customer.customerNumber} archived.`);
 }
 

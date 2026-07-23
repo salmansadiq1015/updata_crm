@@ -189,12 +189,12 @@ export function CustomerDetail() {
   const { hasPermission } = usePermissions();
 
   const [formOpen, setFormOpen] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
 
   const canWrite = hasPermission('crm:write');
   const canDelete = hasPermission('crm:delete');
-  const canMerge = hasPermission('crm:admin');
+  const canMerge = hasPermission('crm:merge');
 
   const { data: customer, isLoading } = useQuery({
     queryKey: queryKeys.crm.customers.detail(id),
@@ -207,9 +207,9 @@ export function CustomerDetail() {
     if (customer?._id) recordRecentCustomer(customer);
   }, [customer?._id, customer?.name, customer?.city, customer?.customerNumber]);
 
-  const { update, archive, merge } = useCustomerMutations({
+  const { update, deactivate, reactivate, merge } = useCustomerMutations({
     onUpdate: () => setFormOpen(false),
-    onArchive: () => router.push('/crm/customers'),
+    onDeactivate: () => router.push('/crm/customers'),
     onMerge: () => {
       setMergeOpen(false);
       router.push('/crm/customers');
@@ -224,7 +224,7 @@ export function CustomerDetail() {
   const accent = pickCustomerAccent(customer);
   const isBusiness = customer.type === 'business';
   const Icon = isBusiness ? Building2 : User;
-  const isArchived = customer.status === 'archived';
+  const isInactive = customer.status === 'inactive';
 
   const fullAddress = [
     customer.addressSupplement,
@@ -262,12 +262,12 @@ export function CustomerDetail() {
               <div className="flex items-center justify-center gap-2 flex-wrap">
                 <span className={cn(
                   'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
-                  isArchived
+                  isInactive
                     ? 'bg-muted/60 text-muted-foreground'
                     : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
                 )}>
-                  <span className={cn('h-1.5 w-1.5 rounded-full', isArchived ? 'bg-muted' : 'bg-emerald-500')} />
-                  {isArchived ? t('crm.statusArchived', 'Archived') : t('crm.statusActive', 'Active')}
+                  <span className={cn('h-1.5 w-1.5 rounded-full', isInactive ? 'bg-muted' : 'bg-emerald-500')} />
+                  {isInactive ? t('crm.statusInactive', 'Deaktiviert') : t('crm.statusActive', 'Active')}
                 </span>
                 <span className={cn(
                   'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
@@ -327,7 +327,7 @@ export function CustomerDetail() {
                     <TooltipContent>{t('crm.copyId', 'Copy ID')}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                {canMerge && !isArchived && (
+                {canMerge && !isInactive && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -344,7 +344,7 @@ export function CustomerDetail() {
                     </Tooltip>
                   </TooltipProvider>
                 )}
-                {canDelete && !isArchived && (
+                {canDelete && !isInactive && (
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -352,12 +352,12 @@ export function CustomerDetail() {
                           variant="outline"
                           size="icon"
                           className="h-9 w-9 rounded-lg border-border bg-muted/50 text-muted-foreground hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
-                          onClick={() => setArchiveOpen(true)}
+                          onClick={() => setDeactivateOpen(true)}
                         >
                           <Archive className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{t('crm.archive', 'Archive')}</TooltipContent>
+                      <TooltipContent>{t('crm.deactivate', 'Deaktivieren')}</TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 )}
@@ -480,13 +480,13 @@ export function CustomerDetail() {
       />
 
       <ConfirmDialog
-        open={archiveOpen}
-        onOpenChange={setArchiveOpen}
-        title={t('crm.confirmArchive', 'Archive customer?')}
-        description={`${t('crm.archiveDesc', 'Are you sure you want to archive this customer?')} — "${customer.name}"`}
-        onConfirm={() => archive.mutate(id)}
-        loading={archive.isPending}
-        confirmText={t('crm.archive', 'Archive')}
+        open={deactivateOpen}
+        onOpenChange={setDeactivateOpen}
+        title={t('crm.confirmDeactivate', 'Kunde deaktivieren?')}
+        description={`${t('crm.deactivateDesc', 'Der Kunde bleibt erhalten und kann jederzeit reaktiviert werden.')} — "${customer.name}"`}
+        onConfirm={() => deactivate.mutate(id)}
+        loading={deactivate.isPending}
+        confirmText={t('crm.deactivate', 'Deaktivieren')}
         variant="destructive"
       />
 

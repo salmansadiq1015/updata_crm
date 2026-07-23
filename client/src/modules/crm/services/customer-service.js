@@ -38,8 +38,13 @@ export const customerService = {
     return res.data;
   },
 
-  async archiveCustomer(id) {
-    const res = await apiClient.post(ENDPOINTS.CRM.CUSTOMER_ARCHIVE(id));
+  async deactivateCustomer(id) {
+    const res = await apiClient.post(ENDPOINTS.CRM.CUSTOMER_DEACTIVATE(id));
+    return res.data;
+  },
+
+  async reactivateCustomer(id) {
+    const res = await apiClient.post(ENDPOINTS.CRM.CUSTOMER_REACTIVATE(id));
     return res.data;
   },
 
@@ -76,6 +81,16 @@ export const customerService = {
       targetId,
       fieldOverrides,
     });
+    return res.data;
+  },
+
+  async listMerges(params = {}) {
+    const res = await apiClient.get(ENDPOINTS.CRM.CUSTOMERS_MERGES, { params });
+    return res.data;
+  },
+
+  async undoMerge(mergeId) {
+    const res = await apiClient.post(ENDPOINTS.CRM.CUSTOMERS_MERGE_UNDO(mergeId));
     return res.data;
   },
 

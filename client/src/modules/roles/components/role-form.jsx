@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {
   Loader2, Shield, Key, Check, Search,
-  ChevronLeft, ArrowRight, Eye, Pencil, Trash2, Crown,
+  ChevronLeft, ArrowRight, Eye, Pencil, Trash2, Crown, GitMerge,
   CheckCircle2, Circle,
 } from 'lucide-react';
 
@@ -30,6 +30,7 @@ const ACTION_META = {
   read:   { icon: Eye,     color: 'text-sky-500',     bg: 'bg-sky-500/10',     ring: 'ring-sky-500/20',     selectedBg: 'bg-sky-500/15 border-sky-500/40 text-sky-700 dark:text-sky-300' },
   write:  { icon: Pencil,  color: 'text-emerald-500', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20', selectedBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300' },
   delete: { icon: Trash2,  color: 'text-rose-500',    bg: 'bg-rose-500/10',    ring: 'ring-rose-500/20',    selectedBg: 'bg-rose-500/15 border-rose-500/40 text-rose-700 dark:text-rose-300' },
+  merge:  { icon: GitMerge, color: 'text-brand-600', bg: 'bg-brand-500/10', ring: 'ring-brand-500/20', selectedBg: 'bg-brand-500/15 border-brand-500/40 text-brand-700 dark:text-brand-300' },
   admin:  { icon: Crown,   color: 'text-amber-500',   bg: 'bg-amber-500/10',   ring: 'ring-amber-500/20',   selectedBg: 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300' },
 };
 

@@ -69,7 +69,7 @@ export function useMeetingMutations() {
     }),
     remove: useMutation({
       mutationFn: (id) => meetingService.remove(id),
-      ...mutationOptions('meetings.toast.deleted', 'Meeting geloescht', (_result, id) => id),
+      ...mutationOptions('meetings.toast.deleted', 'Meeting gelöscht', (_result, id) => id),
     }),
     cancel: useMutation({
       mutationFn: ({ id, data }) => meetingService.cancel(id, data),

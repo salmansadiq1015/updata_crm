@@ -67,9 +67,9 @@ export function SessionsTable() {
 
   const sessions = Array.isArray(data) ? data : (data?.sessions ?? data?.data ?? []);
   const headers = [
-    t('sessions.deviceBrowser', 'Geraet / Browser'),
+    t('sessions.deviceBrowser', 'Gerät / Browser'),
     t('sessions.ipAddress', 'IP-Adresse'),
-    t('sessions.lastActivity', 'Letzte Aktivitaet'),
+    t('sessions.lastActivity', 'Letzte Aktivität'),
     t('sessions.created', 'Erstellt'),
     t('common.actions', 'Aktionen'),
   ];
@@ -136,9 +136,9 @@ export function SessionsTable() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t('sessions.deviceBrowser', 'Geraet / Browser')}</TableHead>
+                <TableHead>{t('sessions.deviceBrowser', 'Gerät / Browser')}</TableHead>
                 <TableHead>{t('sessions.ipAddress', 'IP-Adresse')}</TableHead>
-                <TableHead>{t('sessions.lastActivity', 'Letzte Aktivitaet')}</TableHead>
+                <TableHead>{t('sessions.lastActivity', 'Letzte Aktivität')}</TableHead>
                 <TableHead>{t('sessions.created', 'Erstellt')}</TableHead>
                 <TableHead className="text-right">{t('common.actions', 'Aktionen')}</TableHead>
               </TableRow>
@@ -209,7 +209,7 @@ export function SessionsTable() {
         open={!!revokeTarget}
         onOpenChange={(open) => !open && setRevokeTarget(null)}
         title={t('sessions.revoke', 'Sitzung beenden')}
-        description={t('sessions.revokeDescription', 'Moechten Sie diese Sitzung wirklich beenden? Das Geraet wird abgemeldet.')}
+        description={t('sessions.revokeDescription', 'Möchten Sie diese Sitzung wirklich beenden? Das Gerät wird abgemeldet.')}
         confirmText={t('sessions.logout', 'Abmelden')}
         onConfirm={() => revokeMutation.mutate(revokeTarget?.sessionId || revokeTarget?.id)}
         loading={revokeMutation.isPending}
@@ -219,7 +219,7 @@ export function SessionsTable() {
         open={showRevokeOthers}
         onOpenChange={setShowRevokeOthers}
         title={t('sessions.revokeOthers', 'Alle anderen Sitzungen beenden')}
-        description={t('sessions.revokeOthersDescription', 'Moechten Sie alle anderen Sitzungen wirklich beenden? Alle anderen Geraete werden abgemeldet.')}
+        description={t('sessions.revokeOthersDescription', 'Möchten Sie alle anderen Sitzungen wirklich beenden? Alle anderen Geräte werden abgemeldet.')}
         confirmText={t('sessions.logoutAll', 'Alle abmelden')}
         onConfirm={() => revokeOthersMutation.mutate()}
         loading={revokeOthersMutation.isPending}

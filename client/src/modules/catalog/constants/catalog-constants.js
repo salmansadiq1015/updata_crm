@@ -5,7 +5,7 @@ export const ARTICLE_AVAILABILITY_STATUSES = ['UNKNOWN', 'IN_STOCK', 'LOW_STOCK'
 
 export const ARTICLE_TYPE_CONFIG = {
   MATERIAL: { label: 'Material', labelEn: 'Material', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400', icon: '📦' },
-  SERVICE:  { label: 'Dienstleistung', labelEn: 'Service',  badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400', icon: '🔧' },
+  SERVICE:  { label: 'Dienstleistung', labelEn: 'Service',  badge: 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400', icon: '🔧' },
 };
 
 export const ARTICLE_STATUS_CONFIG = {

@@ -12,6 +12,20 @@ import logger from '../../shared/logger/index.js';
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
+/**
+ * Sites are cached per id (crm:site:<id>), so reassigning them to another
+ * customer behind the repository's back leaves stale owners in the cache.
+ */
+async function invalidateMovedSiteCaches(siteIds = []) {
+  for (const id of siteIds) await cacheManager.del(`crm:site:${id}`);
+}
+
+/** Ids matching a filter, so a bulk reassignment can be replayed in reverse. */
+async function idsOf(Model, filter) {
+  const docs = await Model.find(filter).select('_id').lean();
+  return docs.map((d) => d._id);
+}
+
 function blankToNull(value) {
   if (value === undefined) return undefined;
   const normalized = String(value ?? '').trim();
@@ -100,8 +114,8 @@ class CustomerService {
     );
   }
 
-  async search(searchTerm, limit = 25) {
-    return customerRepository.textSearch(searchTerm, limit);
+  async search(searchTerm, limit = 25, { includeInactive = false } = {}) {
+    return customerRepository.textSearch(searchTerm, limit, { includeInactive });
   }
 
   async checkDuplicates(name, postalCode) {
@@ -136,25 +150,55 @@ class CustomerService {
     return updated;
   }
 
-  async archive(id, archivedBy, meta = {}) {
+  /**
+   * Deactivate a customer. Customers are never archived away or soft-deleted:
+   * the record stays listed and searchable, only flagged inactive, and
+   * reactivate() puts it back.
+   */
+  async deactivate(id, deactivatedBy, meta = {}) {
     const customer = await customerRepository.findById(id);
     if (!customer) throw new NotFoundError('Customer', id);
-    if (customer.status === 'archived') {
-      throw new ConflictError('Customer is already archived');
+    if (customer.status === 'inactive') {
+      throw new ConflictError('Customer is already deactivated');
     }
 
-    await customerRepository.updateById(id, { status: 'archived' });
+    await customerRepository.updateById(id, { status: 'inactive' });
     await this._invalidateCustomerCache(id);
     await this._invalidateListCache();
 
     eventBus.publish(EVENT_TYPES.CUSTOMER_ARCHIVED, {
       customerId: id,
-      archivedBy,
+      deactivatedBy,
     }, { source: 'crm:customers' });
 
     auditService.logEvent({
-      eventType: 'customer.archived',
-      userId: archivedBy,
+      eventType: 'customer.deactivated',
+      userId: deactivatedBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { customerId: id, name: customer.name },
+      module: 'crm',
+    });
+  }
+
+  async reactivate(id, reactivatedBy, meta = {}) {
+    const customer = await customerRepository.findById(id);
+    if (!customer) throw new NotFoundError('Customer', id);
+    if (customer.status === 'active') {
+      throw new ConflictError('Customer is already active');
+    }
+    if (customer.mergedIntoId) {
+      throw new ConflictError('This customer was merged into another one — undo the merge instead');
+    }
+
+    await customerRepository.updateById(id, { status: 'active' });
+    await this._invalidateCustomerCache(id);
+    await this._invalidateListCache();
+
+    auditService.logEvent({
+      eventType: 'customer.reactivated',
+      userId: reactivatedBy,
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
@@ -178,16 +222,22 @@ class CustomerService {
     // Reassign contacts and sites (lazy imports to avoid circular deps)
     const Contact = (await import('./contact.model.js')).default;
     const Site = (await import('./site.model.js')).default;
-
-    await Contact.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } });
-    await Site.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } });
-
-    // Reassign entity notes that target the source customer
     const EntityNote = (await import('./entityNote.model.js')).default;
-    await EntityNote.updateMany(
-      { entityType: 'customer', entityId: sourceId },
-      { $set: { entityId: targetId } },
-    );
+
+    // Capture the ids *before* moving them: updateMany reports a count, not a
+    // list, and an undo must not hand the target's own rows to the source.
+    const moved = {
+      contacts: await idsOf(Contact, { customerId: sourceId }),
+      sites: await idsOf(Site, { customerId: sourceId }),
+      notes: await idsOf(EntityNote, { entityType: 'customer', entityId: sourceId }),
+      quotations: [],
+      orders: [],
+      invoices: [],
+    };
+
+    await Contact.updateMany({ _id: { $in: moved.contacts } }, { $set: { customerId: targetId } });
+    await Site.updateMany({ _id: { $in: moved.sites } }, { $set: { customerId: targetId } });
+    await EntityNote.updateMany({ _id: { $in: moved.notes } }, { $set: { entityId: targetId } });
 
     // Reassign QOP documents (quotations / orders / invoices).
     // The QOP module may be absent in some deployments — guard with try/catch
@@ -198,10 +248,13 @@ class CustomerService {
         import('../qop/order.model.js').then((module) => module.default),
         import('../qop/invoice.model.js').then((module) => module.default),
       ]);
+      moved.quotations = await idsOf(Quotation, { customerId: sourceId });
+      moved.orders = await idsOf(Order, { customerId: sourceId });
+      moved.invoices = await idsOf(Invoice, { customerId: sourceId });
       await Promise.all([
-        Quotation.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } }),
-        Order.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } }),
-        Invoice.updateMany({ customerId: sourceId }, { $set: { customerId: targetId } }),
+        Quotation.updateMany({ _id: { $in: moved.quotations } }, { $set: { customerId: targetId } }),
+        Order.updateMany({ _id: { $in: moved.orders } }, { $set: { customerId: targetId } }),
+        Invoice.updateMany({ _id: { $in: moved.invoices } }, { $set: { customerId: targetId } }),
       ]);
     } catch (err) {
       logger.warn('Could not reassign QOP documents during customer merge', {
@@ -213,14 +266,31 @@ class CustomerService {
     const cleanOverrides = Object.fromEntries(
       Object.entries(fieldOverrides || {}).filter(([, v]) => v !== undefined),
     );
+    const targetFieldsBefore = {};
     if (Object.keys(cleanOverrides).length > 0) {
+      // Snapshot what the overrides are about to replace, so undo can restore it.
+      Object.keys(cleanOverrides).forEach((field) => {
+        targetFieldsBefore[field] = target[field] ?? null;
+      });
       await customerRepository.updateById(targetId, cleanOverrides);
     }
 
-    // Archive source with merge pointer
+    // Deactivate source with merge pointer
     await customerRepository.updateById(sourceId, {
-      status: 'archived',
+      status: 'inactive',
       mergedIntoId: targetId,
+    });
+
+    const CustomerMerge = (await import('./customerMerge.model.js')).default;
+    const mergeRecord = await CustomerMerge.create({
+      sourceId,
+      targetId,
+      sourceName: source.name,
+      targetName: target.name,
+      moved,
+      targetFieldsBefore,
+      sourceStatusBefore: source.status || 'active',
+      mergedBy,
     });
 
     // Invalidate caches
@@ -231,6 +301,7 @@ class CustomerService {
     await cacheManager.del(`crm:contacts:customer:${targetId}`);
     await cacheManager.del(`crm:sites:customer:${sourceId}`);
     await cacheManager.del(`crm:sites:customer:${targetId}`);
+    await invalidateMovedSiteCaches(moved.sites);
 
     eventBus.publish(EVENT_TYPES.CUSTOMER_MERGED, {
       sourceId,
@@ -244,11 +315,146 @@ class CustomerService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { sourceId, targetId, sourceName: source.name, targetName: target.name },
+      details: { sourceId, targetId, sourceName: source.name, targetName: target.name, mergeId: mergeRecord._id },
       module: 'crm',
     });
 
-    logger.info('Customers merged', { module: 'crm', action: 'merge', sourceId, targetId });
+    logger.info('Customers merged', { module: 'crm', action: 'merge', sourceId, targetId, mergeId: mergeRecord._id });
+
+    return { mergeId: mergeRecord._id };
+  }
+
+  /**
+   * List merges, newest first, so a key user can pick one to reverse.
+   */
+  async listMerges({ limit = 20, includeUndone = false } = {}) {
+    const CustomerMerge = (await import('./customerMerge.model.js')).default;
+    const filter = includeUndone ? {} : { undoneAt: null };
+    const docs = await CustomerMerge.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(Math.min(Number(limit) || 20, 100))
+      .populate({ path: 'mergedBy', select: 'firstName lastName' })
+      .populate({ path: 'undoneBy', select: 'firstName lastName' })
+      .lean();
+
+    return docs.map((d) => ({
+      ...d,
+      counts: {
+        contacts: d.moved?.contacts?.length || 0,
+        sites: d.moved?.sites?.length || 0,
+        notes: d.moved?.notes?.length || 0,
+        quotations: d.moved?.quotations?.length || 0,
+        orders: d.moved?.orders?.length || 0,
+        invoices: d.moved?.invoices?.length || 0,
+      },
+    }));
+  }
+
+  /**
+   * Reverse a merge: hand every recorded document back to the source, restore
+   * the target fields the merge overwrote, and reactivate the source.
+   *
+   * Documents deleted since the merge are simply not found and stay absent —
+   * the undo is best-effort per row and never fails the whole operation.
+   */
+  async undoMerge(mergeId, undoneBy, meta = {}) {
+    const CustomerMerge = (await import('./customerMerge.model.js')).default;
+    const record = await CustomerMerge.findById(mergeId);
+    if (!record) throw new NotFoundError('Merge record', mergeId);
+    if (record.undoneAt) {
+      throw new ConflictError('This merge has already been undone');
+    }
+
+    const sourceId = String(record.sourceId);
+    const targetId = String(record.targetId);
+
+    const source = await customerRepository.findById(sourceId);
+    if (!source) throw new NotFoundError('Source customer', sourceId);
+    const target = await customerRepository.findById(targetId);
+    if (!target) throw new NotFoundError('Target customer', targetId);
+
+    const Contact = (await import('./contact.model.js')).default;
+    const Site = (await import('./site.model.js')).default;
+    const EntityNote = (await import('./entityNote.model.js')).default;
+    const moved = record.moved || {};
+
+    const restored = { contacts: 0, sites: 0, notes: 0, quotations: 0, orders: 0, invoices: 0 };
+
+    restored.contacts = (await Contact.updateMany(
+      { _id: { $in: moved.contacts || [] }, customerId: targetId },
+      { $set: { customerId: sourceId } },
+    )).modifiedCount;
+    restored.sites = (await Site.updateMany(
+      { _id: { $in: moved.sites || [] }, customerId: targetId },
+      { $set: { customerId: sourceId } },
+    )).modifiedCount;
+    restored.notes = (await EntityNote.updateMany(
+      { _id: { $in: moved.notes || [] }, entityType: 'customer', entityId: targetId },
+      { $set: { entityId: sourceId } },
+    )).modifiedCount;
+
+    try {
+      const [Quotation, Order, Invoice] = await Promise.all([
+        import('../qop/quotation.model.js').then((module) => module.default),
+        import('../qop/order.model.js').then((module) => module.default),
+        import('../qop/invoice.model.js').then((module) => module.default),
+      ]);
+      restored.quotations = (await Quotation.updateMany(
+        { _id: { $in: moved.quotations || [] }, customerId: targetId },
+        { $set: { customerId: sourceId } },
+      )).modifiedCount;
+      restored.orders = (await Order.updateMany(
+        { _id: { $in: moved.orders || [] }, customerId: targetId },
+        { $set: { customerId: sourceId } },
+      )).modifiedCount;
+      restored.invoices = (await Invoice.updateMany(
+        { _id: { $in: moved.invoices || [] }, customerId: targetId },
+        { $set: { customerId: sourceId } },
+      )).modifiedCount;
+    } catch (err) {
+      logger.warn('Could not restore QOP documents while undoing a customer merge', {
+        module: 'crm', action: 'undoMerge', sourceId, targetId, error: err.message,
+      });
+    }
+
+    // Put back the target fields the merge overwrote.
+    const before = record.targetFieldsBefore || {};
+    if (Object.keys(before).length > 0) {
+      await customerRepository.updateById(targetId, before);
+    }
+
+    // Reactivate the source and drop the merge pointer.
+    await customerRepository.updateById(sourceId, {
+      status: record.sourceStatusBefore || 'active',
+      mergedIntoId: null,
+    });
+
+    record.undoneAt = new Date();
+    record.undoneBy = undoneBy;
+    await record.save();
+
+    await this._invalidateCustomerCache(sourceId);
+    await this._invalidateCustomerCache(targetId);
+    await this._invalidateListCache();
+    await cacheManager.del(`crm:contacts:customer:${sourceId}`);
+    await cacheManager.del(`crm:contacts:customer:${targetId}`);
+    await cacheManager.del(`crm:sites:customer:${sourceId}`);
+    await cacheManager.del(`crm:sites:customer:${targetId}`);
+    await invalidateMovedSiteCaches(moved.sites);
+
+    auditService.logEvent({
+      eventType: 'customer.mergeUndone',
+      userId: undoneBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { mergeId, sourceId, targetId, restored },
+      module: 'crm',
+    });
+
+    logger.info('Customer merge undone', { module: 'crm', action: 'undoMerge', mergeId, sourceId, targetId, restored });
+
+    return { mergeId, sourceId, targetId, restored };
   }
 
   async bulkUpdate(ids, data, updatedBy, _meta = {}) {
@@ -270,7 +476,7 @@ class CustomerService {
 
   async bulkDeactivate(ids, deactivatedBy, _meta = {}) {
     if (!ids?.length) return { deactivatedCount: 0 };
-    const deactivatedCount = await customerRepository.bulkSoftDelete(ids);
+    const deactivatedCount = await customerRepository.bulkDeactivate(ids);
     for (const id of ids) await this._invalidateCustomerCache(id);
     await this._invalidateListCache();
 

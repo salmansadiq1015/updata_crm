@@ -180,7 +180,7 @@ function PaymentStatusDialog({ open, onClose, de }) {
             {file ? (
               <p className="text-sm font-medium">{file.name}</p>
             ) : (
-              <p className="text-sm text-muted-foreground">{de ? 'pain.002 XML auswaehlen' : 'Select pain.002 XML'}</p>
+              <p className="text-sm text-muted-foreground">{de ? 'pain.002 XML auswählen' : 'Select pain.002 XML'}</p>
             )}
             <input ref={fileRef} type="file" className="hidden" accept=".xml" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </div>
@@ -379,7 +379,7 @@ function TransactionsTab({ de, t }) {
             onClick={() => setCursorStack((current) => (current.length > 1 ? current.slice(0, -1) : current))}
             disabled={cursorStack.length <= 1}
           >
-            {de ? 'Zurueck' : 'Previous'}
+            {de ? 'Zurück' : 'Previous'}
           </Button>
           <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button

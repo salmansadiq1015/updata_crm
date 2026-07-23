@@ -99,7 +99,7 @@ function AssetDialog({ open, form, pending, de, onChange, onClose, onSubmit }) {
             <Input className="h-9" value={form.category} onChange={(event) => onChange('category', event.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">{de ? 'Waehrung' : 'Currency'}</Label>
+            <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
             <SelectField value={form.currency} onValueChange={(value) => onChange('currency', value)} options={ACCOUNTING_CURRENCIES} />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -175,7 +175,7 @@ function ActionDialog({ target, de, pending, depreciationForm, disposalForm, onD
                 <Input className="h-9" type="date" value={disposalForm.disposalDate} onChange={(event) => onDisposalChange('disposalDate', event.target.value)} required />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs">{de ? 'Erloes' : 'Proceeds'}</Label>
+                <Label className="text-xs">{de ? 'Erlös' : 'Proceeds'}</Label>
                 <Input className="h-9" type="number" min="0" step="0.01" value={disposalForm.proceeds} onChange={(event) => onDisposalChange('proceeds', event.target.value)} />
               </div>
             </>
@@ -193,7 +193,7 @@ function ActionDialog({ target, de, pending, depreciationForm, disposalForm, onD
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={pending}>{de ? 'Abbrechen' : 'Cancel'}</Button>
           <Button type="submit" form="fixed-asset-action-form" disabled={pending}>
-            {pending ? '...' : (de ? 'Bestaetigen' : 'Confirm')}
+            {pending ? '...' : (de ? 'Bestätigen' : 'Confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -300,7 +300,7 @@ export default function FixedAssetsPage() {
           <SelectField value={filters.status} onValueChange={(value) => setFilter('status', value)} options={FIXED_ASSET_STATUSES} includeAll />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">{de ? 'Waehrung' : 'Currency'}</Label>
+          <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
           <SelectField value={filters.currency} onValueChange={(value) => setFilter('currency', value)} options={ACCOUNTING_CURRENCIES} />
         </div>
         <div className="flex flex-col gap-1.5">

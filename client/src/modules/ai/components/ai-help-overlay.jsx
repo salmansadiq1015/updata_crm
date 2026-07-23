@@ -6,27 +6,27 @@ import { useLanguage } from '@/lib/i18n/language-context';
 
 const HELP_COMMANDS = {
   de: [
-    ['heutige auftraege', 'Oeffnet Ihre heutigen Einsaetze'],
-    ['alle auftraege anzeigen', 'Oeffnet die Auftragsliste'],
+    ['heutige aufträge', 'Öffnet Ihre heutigen Einsätze'],
+    ['alle aufträge anzeigen', 'Öffnet die Auftragsliste'],
     ['kunde mueller suchen', 'Startet die Kundensuche'],
     ['firma erstellen muster ag inhaber max muster uid che-123.456.789', 'Erstellt eine Firma mit Inhaber und UID'],
     ['neuer auftrag', 'Startet die Auftragserstellung'],
-    ['zeige dashboard', 'Oeffnet das Dashboard'],
-    ['ki assistent oeffnen', 'Oeffnet den Assistenten'],
-    ['meine aufgaben', 'Oeffnet Aufgaben'],
-    ['zeige kalender', 'Oeffnet die Einsatzplanung'],
-    ['kundenliste anzeigen', 'Oeffnet CRM Kunden'],
-    ['buchhaltung anzeigen', 'Oeffnet Finanzen'],
+    ['zeige dashboard', 'Öffnet das Dashboard'],
+    ['ki assistent öffnen', 'Öffnet den Assistenten'],
+    ['meine aufgaben', 'Öffnet Aufgaben'],
+    ['zeige kalender', 'Öffnet die Einsatzplanung'],
+    ['kundenliste anzeigen', 'Öffnet CRM Kunden'],
+    ['buchhaltung anzeigen', 'Öffnet Finanzen'],
     ['meine einsätze', 'Öffnet Field-Ops Aufträge'],
-    ['benachrichtigungen', 'Oeffnet Meldungen'],
+    ['benachrichtigungen', 'Öffnet Meldungen'],
     ['status erledigt', 'Aktualisiert den aktuellen Datensatz nach Bestätigung'],
-    ['zeige projekte', 'Oeffnet Projekte'],
-    ['materialkatalog', 'Oeffnet den Katalog'],
+    ['zeige projekte', 'Öffnet Projekte'],
+    ['materialkatalog', 'Öffnet den Katalog'],
     ['bericht diktieren', 'Startet die Berichtsdiktation'],
     ['adresse erfassen', 'Startet Adresseingabe per Sprache'],
-    ['einstellungen', 'Oeffnet Einstellungen'],
+    ['einstellungen', 'Öffnet Einstellungen'],
     ['was kann ich sagen', 'Zeigt diese Hilfe'],
-    ['team chat oeffnen', 'Oeffnet den Team-Chat'],
+    ['team chat öffnen', 'Öffnet den Team-Chat'],
   ],
   fr: [
     ['commandes du jour', 'Ouvre les interventions du jour'],
@@ -104,10 +104,10 @@ export function AiHelpOverlay({ onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-4 backdrop-blur-md sm:items-center">
       <div className="relative flex max-h-[82vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0a1020] p-5 text-slate-100 shadow-[0_28px_100px_rgba(0,0,0,0.45)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(139,92,246,0.18),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(14,165,233,0.14),transparent_30%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(78,116,219,0.18),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(208,10,25,0.14),transparent_30%)]" />
         <div className="relative z-10 mb-4 flex shrink-0 items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-200 ring-1 ring-cyan-200/20">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-300/10 text-brand-200 ring-1 ring-brand-200/20">
               <Command className="h-5 w-5" />
             </span>
             <p className="font-semibold text-sm text-white">{t('ai.panel.helpTrigger')}</p>

@@ -20,7 +20,7 @@ export function AiWaveform({ getWaveformData, stopWaveform, isActive }) {
         ref={canvasRef}
         width={320}
         height={64}
-        className="h-16 w-full rounded-xl bg-gradient-to-r from-cyan-400/5 via-violet-400/10 to-cyan-400/5"
+        className="h-16 w-full rounded-xl bg-gradient-to-r from-brand-400/5 via-brand-400/10 to-brand-400/5"
         aria-hidden="true"
       />
     </div>

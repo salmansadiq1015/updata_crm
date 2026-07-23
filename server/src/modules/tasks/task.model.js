@@ -59,7 +59,6 @@ taskSchema.index({ updatedAt: 1 }); // For sync queries
 taskSchema.index({ listId: 1, status: 1, sortOrder: 1, isDeleted: 1 });
 taskSchema.index({ assigneeId: 1, status: 1, dueDate: 1, isDeleted: 1 });
 taskSchema.index({ projectId: 1, status: 1, sortOrder: 1 }, { sparse: true });
-taskSchema.index({ title: 'text' }); // Full-text search
 taskSchema.index({ createdBy: 1, isDeleted: 1 });
 taskSchema.index({ inPool: 1, isDeleted: 1 });
 

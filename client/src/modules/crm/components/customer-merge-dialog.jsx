@@ -202,7 +202,7 @@ export function CustomerMergeDialog({
                         onClick={() => setTarget(c)}
                         className={cn(
                           'w-full text-left px-3 py-2.5 text-[13px] hover:bg-muted/60 border-b border-border last:border-b-0 flex items-center gap-2 transition-colors',
-                          target?._id === c._id && 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
+                          target?._id === c._id && 'bg-brand-500/10 text-brand-700 dark:text-brand-300',
                         )}
                       >
                         {c.type === 'business'
@@ -329,7 +329,7 @@ function FieldRow({ label, sourceValue, targetValue, hasConflict, choice, onTogg
             className={cn(
               'text-left px-2.5 py-1.5 rounded-lg text-[12px] border transition-all',
               choice === 'source'
-                ? 'border-violet-500/50 bg-violet-500/10 text-foreground ring-1 ring-violet-500/20'
+                ? 'border-brand-500/50 bg-brand-500/10 text-foreground ring-1 ring-brand-500/20'
                 : 'border-transparent bg-muted/50 text-muted-foreground hover:bg-muted/80',
             )}
           >
@@ -344,7 +344,7 @@ function FieldRow({ label, sourceValue, targetValue, hasConflict, choice, onTogg
             className={cn(
               'text-left px-2.5 py-1.5 rounded-lg text-[12px] border transition-all',
               choice === 'target'
-                ? 'border-violet-500/50 bg-violet-500/10 text-foreground ring-1 ring-violet-500/20'
+                ? 'border-brand-500/50 bg-brand-500/10 text-foreground ring-1 ring-brand-500/20'
                 : 'border-transparent bg-muted/50 text-muted-foreground hover:bg-muted/80',
             )}
           >
@@ -387,7 +387,7 @@ function MergeCustomerCard({ customer, labelKey, fallback, tone, t, empty }) {
   return (
     <div className={cn(
       'rounded-lg border p-3',
-      tone === 'primary' ? 'border-violet-500/40 ring-1 ring-violet-500/20 bg-violet-500/5' : 'border-border bg-muted/30',
+      tone === 'primary' ? 'border-brand-500/40 ring-1 ring-brand-500/20 bg-brand-500/5' : 'border-border bg-muted/30',
     )}>
       <span className="uppercase tracking-wider text-[10px] font-semibold text-muted-foreground">
         {t(labelKey, fallback)}

@@ -3,11 +3,11 @@ import { cn } from '@/lib/utils';
 const ACCENT_THEMES = {
   violet: {
     glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(139_92_246_/_0.25),transparent_60%)]',
-    iconBg: 'bg-violet-500/10',
-    iconRing: 'ring-violet-500/20',
-    iconColor: 'text-violet-500',
-    valueGlow: 'text-violet-500 dark:text-violet-400',
-    bar: 'from-violet-500 to-transparent',
+    iconBg: 'bg-brand-500/10',
+    iconRing: 'ring-brand-500/20',
+    iconColor: 'text-brand-500',
+    valueGlow: 'text-brand-500 dark:text-brand-400',
+    bar: 'from-brand-500 to-transparent',
   },
   emerald: {
     glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(16_185_129_/_0.25),transparent_60%)]',

@@ -21,16 +21,15 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { formatSwissAddress } from '@/lib/formatters';
-import { Building2, Eye, ExternalLink, Filter, Search, X, MapPin, Home, Map as MapIcon, List as ListIcon, Plus, UserRound } from 'lucide-react';
+import { Building2, Eye, ExternalLink, Filter, Search, X, MapPin, Home, Plus, UserRound } from 'lucide-react';
 import { DotLabel } from '@/shared/components/filter-dot';
-import { SitesMap } from '@/modules/crm/components/sites-map';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 
 const cantonName = (code) => CH_CANTONS.find((c) => c.code === code)?.name || code;
 
 const filterTriggerCls = 'rounded-full px-3 py-1.5 text-[12px] font-medium border border-border/70 bg-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-all h-8 dark:border-white/10 dark:bg-white/4 dark:text-white/55 dark:hover:bg-white/8 dark:hover:text-white/80';
-const activeFilterTriggerCls = 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300';
+const activeFilterTriggerCls = 'border-brand-500/30 bg-brand-500/10 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300';
 const filterSelectContentCls = 'border-border bg-popover text-popover-foreground dark:border-white/10 dark:bg-[#0D1117]';
 const filterSelectItemCls = 'text-foreground focus:bg-accent focus:text-accent-foreground dark:text-white/80 dark:focus:bg-white/5';
 
@@ -42,7 +41,6 @@ export function SitesTable() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [cantonFilter, setCantonFilter] = useState('all');
-  const [view, setView] = useState('list');
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -186,23 +184,6 @@ export function SitesTable() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <NewObjectFlow onCreated={reset} />
-          {/* List | Map view toggle */}
-          <div className="inline-flex items-center rounded-full border border-border/70 bg-card p-0.5 shadow-theme-sm dark:border-white/10 dark:bg-white/4 dark:shadow-none">
-            <button
-              type="button"
-              onClick={() => setView('list')}
-              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'list' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
-            >
-              <ListIcon className="h-3.5 w-3.5" /> {t('common.list', 'List')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('map')}
-              className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all', view === 'map' ? 'bg-violet-500/10 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' : 'text-muted-foreground hover:text-foreground dark:text-white/50 dark:hover:text-white/80')}
-            >
-              <MapIcon className="h-3.5 w-3.5" /> {t('common.map', 'Map')}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -227,7 +208,7 @@ export function SitesTable() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('crm.sites.searchPlaceholder', 'Search sites...')}
-            className="w-full h-9 pl-9 pr-3 rounded-xl border border-input bg-muted/40 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all dark:border-white/8 dark:bg-white/4 dark:text-white/90 dark:placeholder:text-white/25"
+            className="w-full h-9 pl-9 pr-3 rounded-xl border border-input bg-muted/40 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all dark:border-white/8 dark:bg-white/4 dark:text-white/90 dark:placeholder:text-white/25"
           />
         </div>
 
@@ -262,9 +243,7 @@ export function SitesTable() {
             <SelectItem value="all" className={filterSelectItemCls}>{t('crm.allCantons', 'All cantons')}</SelectItem>
             {CH_CANTONS.map((c) => (
               <SelectItem key={c.code} value={c.code} className={filterSelectItemCls}>
-                <span className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] text-muted-foreground dark:text-white/35">{c.code}</span>{c.name}
-                </span>
+                {c.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -280,44 +259,40 @@ export function SitesTable() {
         )}
       </div>
 
-      {view === 'map' ? (
-        <SitesMap sites={items} />
-      ) : (
-        <DataTableShell
-          columns={columns}
-          data={items}
-          isLoading={isFetching && items.length === 0}
-          rowCount={items.length}
-          manualPagination
-          manualSorting
-          manualFiltering
-          enableGlobalFilter={false}
-          cursorPagination={{
-            pageSize, onPageSizeChange: setPageSize, hasNext, hasPrev, isFetching, onNext, onPrev,
-          }}
-          renderRowActions={({ row }) => {
-            const s = row.original;
-            const customerId = s.customerId?._id || s.customerId;
-            return (
-              <RowActionsMenu
-                items={[
-                  {
-                    label: t('common.view', 'View'),
-                    icon: Eye,
-                    onSelect: () => router.push(`/crm/sites/${s._id}`),
-                  },
-                  {
-                    label: t('crm.openCustomer', 'Open customer'),
-                    icon: ExternalLink,
-                    hidden: !customerId,
-                    onSelect: () => router.push(`/crm/customers/${customerId}`),
-                  },
-                ]}
-              />
-            );
-          }}
-        />
-      )}
+      <DataTableShell
+        columns={columns}
+        data={items}
+        isLoading={isFetching && items.length === 0}
+        rowCount={items.length}
+        manualPagination
+        manualSorting
+        manualFiltering
+        enableGlobalFilter={false}
+        cursorPagination={{
+          pageSize, onPageSizeChange: setPageSize, hasNext, hasPrev, isFetching, onNext, onPrev,
+        }}
+        renderRowActions={({ row }) => {
+          const s = row.original;
+          const customerId = s.customerId?._id || s.customerId;
+          return (
+            <RowActionsMenu
+              items={[
+                {
+                  label: t('common.view', 'View'),
+                  icon: Eye,
+                  onSelect: () => router.push(`/crm/sites/${s._id}`),
+                },
+                {
+                  label: t('crm.openCustomer', 'Open customer'),
+                  icon: ExternalLink,
+                  hidden: !customerId,
+                  onSelect: () => router.push(`/crm/customers/${customerId}`),
+                },
+              ]}
+            />
+          );
+        }}
+      />
     </div>
   );
 }
@@ -337,7 +312,8 @@ function NewObjectFlow({ onCreated }) {
   const { data: customers = [], isFetching } = useQuery({
     queryKey: ['crm', 'customers', 'site-picker', debouncedSearch],
     queryFn: async () => normalizeCustomerList(
-      await customerService.getCustomers({ ...(debouncedSearch ? { search: debouncedSearch } : {}), limit: 20 }),
+      // status: deactivated customers must not be selectable for a new object.
+      await customerService.getCustomers({ ...(debouncedSearch ? { search: debouncedSearch } : {}), status: 'active', limit: 20 }),
     ),
     enabled: pickerOpen,
     staleTime: 30_000,
@@ -420,6 +396,7 @@ function NewObjectFlow({ onCreated }) {
       <SiteForm
         open={formOpen}
         onOpenChange={(v) => { setFormOpen(v); if (!v) setCustomer(null); }}
+        customer={customer}
         onSubmit={(data) => createMut.mutateAsync(data)}
         isLoading={createMut.isPending}
       />

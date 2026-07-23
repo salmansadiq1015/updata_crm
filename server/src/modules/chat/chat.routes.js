@@ -6,6 +6,7 @@ import {
   createDmSchema, roomIdParamSchema, listMessagesSchema,
   sendMessageSchema, messageParamSchema, reactionSchema, editMessageSchema,
   createGroupRoomSchema, joinByCodeSchema, searchMessagesSchema,
+  createProjectRoomSchema,
 } from './chat.validation.js';
 
 const router = Router();
@@ -14,6 +15,7 @@ router.use(authenticate);
 router.get('/rooms', requirePermission('chat:read'), chatController.listRooms.bind(chatController));
 router.get('/messages/search', requirePermission('chat:read'), validate(searchMessagesSchema), chatController.searchMessages.bind(chatController));
 router.post('/rooms/dm', requirePermission('chat:write'), validate(createDmSchema), chatController.createOrGetDmRoom.bind(chatController));
+router.post('/rooms/project', requirePermission('chat:read'), validate(createProjectRoomSchema), chatController.createOrGetProjectRoom.bind(chatController));
 router.post('/rooms/group', requirePermission('chat:write'), validate(createGroupRoomSchema), chatController.createGroupRoom.bind(chatController));
 router.post('/rooms/join', requirePermission('chat:write'), validate(joinByCodeSchema), chatController.joinByCode.bind(chatController));
 router.post('/rooms/:roomId/leave', requirePermission('chat:write'), validate(roomIdParamSchema), chatController.leaveRoom.bind(chatController));

@@ -207,8 +207,8 @@ export function UsersTable() {
       size: 150,
       Cell: ({ row }) => (
         <div className="flex items-center gap-1.5">
-          <div className="h-5 w-5 rounded bg-violet-500/10 flex items-center justify-center">
-            <Shield className="h-3 w-3 text-violet-500" />
+          <div className="h-5 w-5 rounded bg-brand-500/10 flex items-center justify-center">
+            <Shield className="h-3 w-3 text-brand-500" />
           </div>
           <span className="text-sm font-medium">{getUserRoleLabel(row.original.role?.name, t) || '\u2014'}</span>
         </div>
@@ -443,7 +443,7 @@ export function UsersTable() {
               </span>
             </SelectItem>
             {roles.map((r, i) => {
-              const roleColors = ['bg-violet-500', 'bg-sky-500', 'bg-rose-500', 'bg-amber-500', 'bg-emerald-500', 'bg-indigo-500', 'bg-pink-500', 'bg-teal-500'];
+              const roleColors = ['bg-brand-500', 'bg-sky-500', 'bg-rose-500', 'bg-amber-500', 'bg-emerald-500', 'bg-indigo-500', 'bg-pink-500', 'bg-teal-500'];
               return (
                 <SelectItem key={r._id} value={r._id}>
                   <span className="flex items-center gap-2">
@@ -628,8 +628,8 @@ export function UsersTable() {
         title={targetIsActive ? t('users.confirmDeactivate') : t('users.confirmActivate')}
         description={
           targetIsActive
-            ? t('users.confirmDeactivateDesc', 'Moechten Sie {name} wirklich deaktivieren?', { name: targetUserName })
-            : t('users.confirmActivateDesc', 'Moechten Sie {name} wirklich aktivieren?', { name: targetUserName })
+            ? t('users.confirmDeactivateDesc', 'Möchten Sie {name} wirklich deaktivieren?', { name: targetUserName })
+            : t('users.confirmActivateDesc', 'Möchten Sie {name} wirklich aktivieren?', { name: targetUserName })
         }
         onConfirm={handleToggleActive}
         loading={deactivateMutation.isPending || activateMutation.isPending}
@@ -641,7 +641,7 @@ export function UsersTable() {
         open={bulkDeactivateOpen}
         onOpenChange={setBulkDeactivateOpen}
         title={t('users.bulkConfirmDeactivateTitle', '{count} Benutzer deaktivieren?', { count: selectedIds.length })}
-        description={t('users.bulkConfirmDeactivateDesc', 'Die ausgewaehlten Benutzer werden deaktiviert und koennen sich nicht mehr anmelden.')}
+        description={t('users.bulkConfirmDeactivateDesc', 'Die ausgewählten Benutzer werden deaktiviert und können sich nicht mehr anmelden.')}
         onConfirm={() => bulkDeleteMutation.mutate(selectedIds)}
         loading={bulkDeleteMutation.isPending}
         confirmText={t('users.deactivateAll')}
@@ -812,8 +812,8 @@ function UserCard({ user, onEdit, onToggle }) {
         <div className="space-y-2.5">
           {/* Role */}
           <div className="flex items-center gap-2">
-            <div className="h-5 w-5 rounded bg-violet-500/10 flex items-center justify-center shrink-0">
-              <Shield className="h-3 w-3 text-violet-500" />
+            <div className="h-5 w-5 rounded bg-brand-500/10 flex items-center justify-center shrink-0">
+              <Shield className="h-3 w-3 text-brand-500" />
             </div>
               <span className="text-xs font-medium">{getUserRoleLabel(user.role?.name, t) || '\u2014'}</span>
           </div>
@@ -848,12 +848,12 @@ function UserCard({ user, onEdit, onToggle }) {
 const ACCENT_THEMES = {
   violet: {
     glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(139_92_246_/_0.25),transparent_60%)]',
-    iconBg: 'bg-violet-500/10',
-    iconRing: 'ring-violet-500/20',
-    iconColor: 'text-violet-500',
-    valueGlow: 'text-violet-500 dark:text-violet-400',
-    trendBg: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-    bar: 'from-violet-500 to-transparent',
+    iconBg: 'bg-brand-500/10',
+    iconRing: 'ring-brand-500/20',
+    iconColor: 'text-brand-500',
+    valueGlow: 'text-brand-500 dark:text-brand-400',
+    trendBg: 'bg-brand-500/10 text-brand-600 dark:text-brand-400',
+    bar: 'from-brand-500 to-transparent',
   },
   emerald: {
     glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(16_185_129_/_0.25),transparent_60%)]',

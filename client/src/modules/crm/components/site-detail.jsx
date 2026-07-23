@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { siteService } from '@/modules/crm/services/site-service';
+import { customerService } from '@/modules/crm/services/customer-service';
 import { queryKeys } from '@/lib/query/keys';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -13,7 +13,7 @@ import { InstallationsPanel } from './installations-panel';
 import { NotesPanel } from './notes-panel';
 import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
-import { SiteMapCard } from './site-map-card';
+import { SiteMapCard, buildGoogleMapsUrl } from './site-map-card';
 import { SiteDocumentsTab } from './site-documents-tab';
 import { SiteBusinessTab } from './site-business-tab';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
@@ -24,9 +24,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbTrail } from '@/stores/breadcrumb-store';
 import {
   Pencil, Archive, Building2, MapPin, Key, Home,
-  ChevronRight, Wrench, FileText, Image as ImageIcon, Activity, Files, Receipt,
+  Wrench, FileText, Image as ImageIcon, Activity, Files, Receipt,
 } from 'lucide-react';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
@@ -71,6 +72,15 @@ export function SiteDetail() {
     enabled: !!id,
   });
 
+  // getById does not populate the customer, so fetch it separately: the edit
+  // form needs its address to offer "Gleich wie Kunde".
+  const parentCustomerId = site?.customerId?._id || site?.customerId || null;
+  const { data: parentCustomer } = useQuery({
+    queryKey: queryKeys.crm.customers.detail(parentCustomerId),
+    queryFn: () => customerService.getCustomerById(parentCustomerId),
+    enabled: !!parentCustomerId && formOpen,
+  });
+
   const updateMut = useMutation({
     mutationFn: (data) => siteService.update(id, data),
     onSuccess: () => {
@@ -95,6 +105,18 @@ export function SiteDetail() {
     onError: (err) => showError(err.message),
   });
 
+  // The URL (/crm/sites/:id) has no parent customer — publish the chain so the
+  // header breadcrumb can show Kunde › Objekt.
+  useBreadcrumbTrail(id, [
+    ...(site?.customerId
+      ? [{
+          label: site.customerId?.name || '',
+          path: `/crm/customers/${site.customerId?._id || site.customerId}`,
+        }]
+      : []),
+    { label: site?.name || '' },
+  ]);
+
   if (isLoading) return <SiteDetailSkeleton />;
   if (!site) return <EmptyState title={t('crm.sites.notFound', 'Objekt nicht gefunden')} description={t('crm.sites.notFoundDesc', 'Das angeforderte Objekt existiert nicht.')} />;
 
@@ -108,23 +130,10 @@ export function SiteDetail() {
     [site.postalCode, site.city].filter(Boolean).join(' '),
     site.canton ? cantonName(site.canton) : null,
   ].filter(Boolean).join(', ');
+  const routeUrl = buildGoogleMapsUrl(site);
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/crm/customers" className="hover:text-foreground transition-colors">CRM</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        {customerId ? (
-          <Link href={`/crm/customers/${customerId}`} className="hover:text-foreground transition-colors truncate max-w-[200px]">
-            {customerName || t('crm.customer', 'Kunde')}
-          </Link>
-        ) : (
-          <span>{t('crm.customer', 'Kunde')}</span>
-        )}
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium truncate">{site.name}</span>
-      </nav>
 
       {/* Hero Header card */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6">
@@ -150,9 +159,21 @@ export function SiteDetail() {
 
             <div className="flex items-center gap-4 text-[13px] text-muted-foreground flex-wrap">
               {addressLine && (
-                <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5" /> {addressLine}
-                </span>
+                routeUrl ? (
+                  <a
+                    href={routeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={t('crm.siteRouteHint', 'In Google Maps öffnen')}
+                    className="inline-flex items-center gap-1.5 hover:text-foreground hover:underline underline-offset-2 transition-colors"
+                  >
+                    <MapPin className="h-3.5 w-3.5" /> {addressLine}
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5" /> {addressLine}
+                  </span>
+                )
               )}
               {site.floorUnit && (
                 <span className="inline-flex items-center gap-1.5">
@@ -267,6 +288,7 @@ export function SiteDetail() {
         onOpenChange={setFormOpen}
         onSubmit={(data) => updateMut.mutateAsync(data)}
         defaultValues={site}
+        customer={parentCustomer}
         isLoading={updateMut.isPending}
       />
 

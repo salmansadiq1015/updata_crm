@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { getCustomerTypeLabel } from '@/modules/crm/constants/customer-constants';
 import { useAddressBook } from '@/modules/crm/hooks/use-address-book';
 import {
   ADDRESS_TYPE_OPTIONS,
@@ -84,7 +85,7 @@ function exportCsv(entries, t) {
     e.site?.name || e.customer?.name || '',
     e.customer?.name || '',
     e.customer?.customerNumber || '',
-    e.customer?.type === 'business' ? 'Firma' : 'Privat',
+    getCustomerTypeLabel(e.customer?.type),
     e.addressType || '',
     e.address?.formatted || '',
     formatContactName(e.primaryContact),
@@ -128,7 +129,7 @@ function exportPdf(entries, t) {
       .footer{margin-top:16px;font-size:10px;color:#999}
     </style></head><body>
     <h1>${esc(t('crm.addressBook.title', 'Adressbuch'))}</h1>
-    <p class="sub">${entries.length} ${esc(t('crm.addressBook.entries', 'Eintraege'))} — ${new Date().toLocaleDateString('de-CH')}</p>
+    <p class="sub">${entries.length} ${esc(t('crm.addressBook.entries', 'Einträge'))} — ${new Date().toLocaleDateString('de-CH')}</p>
     <table>
       <thead><tr>
         <th>${esc(t('crm.addressBook.colName', 'Name'))}</th>
@@ -286,7 +287,7 @@ function SummaryGrid({ summary, t }) {
       label: t('crm.addressBook.summaryTotal', 'Adressen'),
       value: summary.total,
       icon: BookOpen,
-      className: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 ring-violet-500/20',
+      className: 'bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-brand-500/20',
     },
     {
       key: 'business',
@@ -701,7 +702,7 @@ function PaginationBar({ page, pageCount, isFetching, hasPrev, hasNext, setPagin
           onClick={() => setPagination((current) => ({ ...current, pageIndex: Math.max(0, current.pageIndex - 1) }))}
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          {t('common.previous', 'Zurueck')}
+          {t('common.previous', 'Zurück')}
         </Button>
         <Button
           variant="outline"

@@ -35,6 +35,7 @@ import { TaskSidebar } from './task-sidebar';
 import { InputDialog } from './input-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useAuthStore } from '@/stores/auth-store';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 
 type TaskWorkspaceProps = {
   listId?: string;
@@ -159,6 +160,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     : pageSize;
   const taskParams = useMemo(() => toTaskParams(filters, taskPageSize), [filters, taskPageSize]);
   const listsQuery = useTaskListsV2();
+  useBreadcrumbLabel(listId, (listsQuery.data ?? []).find((l) => l.id === listId)?.name);
   const tasksQuery = useTaskWindow(taskParams);
 
   // Compute standalone lists (not in any folder, not archived)

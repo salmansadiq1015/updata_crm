@@ -220,7 +220,7 @@ export function AiChatInput({
             className={cn(
               'relative rounded-2xl border shadow-lg shadow-black/5 transition-colors',
               isPanel
-                ? 'border-white/10 bg-white/[0.06] focus-within:border-cyan-300/45 focus-within:shadow-cyan-500/10'
+                ? 'border-white/10 bg-white/[0.06] focus-within:border-brand-300/45 focus-within:shadow-brand-500/10'
                 : 'border-border/80 bg-card/95 focus-within:border-primary/50 focus-within:shadow-primary/10',
               isListening && 'ring-2 ring-primary/35',
             )}

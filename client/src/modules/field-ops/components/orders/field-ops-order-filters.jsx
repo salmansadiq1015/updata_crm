@@ -36,7 +36,7 @@ const TYPE_OPTS = [
 ];
 
 const PRIORITY_OPTS = [
-  { value: 'all', de: 'Alle Prioritaeten', en: 'All Priorities' },
+  { value: 'all', de: 'Alle Prioritäten', en: 'All Priorities' },
   { value: ORDER_PRIORITY.NORMAL, de: 'Normal', en: 'Normal' },
   { value: ORDER_PRIORITY.HIGH, de: 'Hoch', en: 'High' },
   { value: ORDER_PRIORITY.URGENT, de: 'Dringend', en: 'Urgent' },
@@ -108,7 +108,7 @@ export function FieldOpsOrderFilters({
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder={lang === 'de' ? 'Einsaetze, Kunde, Projekt...' : 'Assignments, customer, project...'}
+            placeholder={lang === 'de' ? 'Einsätze, Kunde, Projekt...' : 'Assignments, customer, project...'}
             value={search}
             onChange={(event) => onSearch(event.target.value)}
             className="h-8 w-64 rounded-full border-dashed pl-8 text-sm"
@@ -147,7 +147,7 @@ export function FieldOpsOrderFilters({
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={onClear} className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground">
             <X className="mr-1 h-3.5 w-3.5" />
-            {lang === 'de' ? 'Zuruecksetzen' : 'Reset'}
+            {lang === 'de' ? 'Zurücksetzen' : 'Reset'}
           </Button>
         )}
       </div>
@@ -190,7 +190,7 @@ export function FieldOpsOrderFilters({
         </div>
         <Select value={projectId} onValueChange={onProject}>
           <SelectTrigger className={cn('h-8 w-auto min-w-[180px] rounded-full border-dashed text-xs', projectId !== 'all' && activeFilterClass)}>
-            <SelectValue placeholder={projectsFetching ? (lang === 'de' ? 'Laedt...' : 'Loading...') : (lang === 'de' ? 'Projekt' : 'Project')} />
+            <SelectValue placeholder={projectsFetching ? (lang === 'de' ? 'Lädt...' : 'Loading...') : (lang === 'de' ? 'Projekt' : 'Project')} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{lang === 'de' ? 'Alle Projekte' : 'All Projects'}</SelectItem>

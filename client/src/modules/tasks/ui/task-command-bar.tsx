@@ -160,19 +160,7 @@ export function TaskCommandBar({
     <div className="border-b border-border bg-card">
       {/* Top row: search + quick-add + view switcher */}
       <div className="flex items-center gap-2 px-3 py-3">
-        <div className="relative min-w-64 flex-1 max-w-xl">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={search}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
-            placeholder={t('tasks.searchTasks', 'Search tasks')}
-            className="h-8 rounded-md border-border bg-background pl-9 text-sm"
-            aria-label={t('tasks.searchTasks', 'Search tasks')}
-          />
-        </div>
-
-        <form onSubmit={submit} className="hidden min-w-72 items-center gap-2 lg:flex">
+        <form onSubmit={submit} className="hidden min-w-0 max-w-2xl flex-1 items-center gap-2 lg:flex">
           <Input
             type="text"
             value={quickTitle}
@@ -187,8 +175,20 @@ export function TaskCommandBar({
           </Button>
         </form>
 
+        <div className="relative ml-auto w-44 shrink-0 xl:w-56">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value)}
+            placeholder={t('tasks.searchTasks', 'Search tasks')}
+            className="h-8 rounded-md border-border bg-background pl-9 text-sm"
+            aria-label={t('tasks.searchTasks', 'Search tasks')}
+          />
+        </div>
+
         <div
-          className="ml-auto flex items-center gap-1 rounded-md border border-border bg-background p-0.5"
+          className="flex items-center gap-1 rounded-md border border-border bg-background p-0.5"
           role="tablist"
           aria-label={t('tasks.views', 'Task views')}
         >

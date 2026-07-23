@@ -11,7 +11,7 @@ export default function AuditLogPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('audit.title')}
-        description={t('audit.titleDesc') || 'Protokoll aller sicherheitsrelevanten Aktivitaeten im System.'}
+        description={t('audit.titleDesc') || 'Protokoll aller sicherheitsrelevanten Aktivitäten im System.'}
       />
       <AuditLogTable />
     </div>

@@ -21,7 +21,7 @@ export function DocumentHistoryTimeline({ history = [], className }) {
   if (!history.length) {
     return (
       <p className="text-sm text-muted-foreground py-4 text-center">
-        {t('qop.history.noEntries', 'Keine Verlaufseintraege.')}
+        {t('qop.history.noEntries', 'Keine Verlaufseinträge.')}
       </p>
     );
   }

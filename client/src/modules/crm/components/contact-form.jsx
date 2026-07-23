@@ -104,8 +104,8 @@ export function ContactForm({
         {/* Fixed Header */}
         <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-violet-500/10 ring-1 ring-violet-500/20 shrink-0">
-              <UserRound className="h-5 w-5 text-violet-400" />
+            <div className="p-2 rounded-xl bg-brand-500/10 ring-1 ring-brand-500/20 shrink-0">
+              <UserRound className="h-5 w-5 text-brand-400" />
             </div>
             <div>
               <DialogTitle className="text-[16px] font-semibold text-foreground">
@@ -137,13 +137,13 @@ export function ContactForm({
                 <Input
                   {...register('firstName')}
                   autoFocus
-                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20"
                 />
               </DarkField>
               <DarkField label={t('crm.contacts.lastName', 'Nachname')} required error={errors.lastName}>
                 <Input
                   {...register('lastName')}
-                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20"
                 />
               </DarkField>
             </div>
@@ -154,7 +154,7 @@ export function ContactForm({
                   value={isPresetFunction ? watchedFunctionTitle : '_custom'}
                   onValueChange={(v) => setValue('functionTitle', v === '_custom' ? '' : v, { shouldDirty: true })}
                 >
-                  <SelectTrigger className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-violet-500/50 focus:ring-violet-500/20">
+                  <SelectTrigger className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-brand-500/50 focus:ring-brand-500/20">
                     <SelectValue placeholder={t('crm.contacts.selectFunction', 'Rolle wählen...')} />
                   </SelectTrigger>
                   <SelectContent>
@@ -168,7 +168,7 @@ export function ContactForm({
                   <Input
                     {...register('functionTitle')}
                     placeholder={t('crm.contacts.functionPlaceholder', 'z.B. Hausverwaltung')}
-                    className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 mt-1.5"
+                    className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20 mt-1.5"
                   />
                 )}
               </DarkField>
@@ -178,7 +178,7 @@ export function ContactForm({
                     value={watchedSiteId || 'none'}
                     onValueChange={(v) => setValue('siteId', v === 'none' ? '' : v, { shouldDirty: true })}
                   >
-                    <SelectTrigger className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-violet-500/50 focus:ring-violet-500/20">
+                    <SelectTrigger className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-brand-500/50 focus:ring-brand-500/20">
                       <SelectValue placeholder={t('crm.contacts.selectSite', 'Objekt wählen...')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -201,13 +201,13 @@ export function ContactForm({
               <DarkField label={t('crm.phone', 'Telefon')} error={errors.phone}>
                 <Input
                   {...register('phone')}
-                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20"
                 />
               </DarkField>
               <DarkField label={t('crm.mobile', 'Mobil')} error={errors.mobile}>
                 <Input
                   {...register('mobile')}
-                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                  className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20"
                 />
               </DarkField>
             </div>
@@ -216,7 +216,7 @@ export function ContactForm({
               <Input
                 type="email"
                 {...register('email')}
-                className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20"
+                className="bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20"
               />
             </DarkField>
 
@@ -224,7 +224,7 @@ export function ContactForm({
               <Textarea
                 rows={2}
                 {...register('notes')}
-                className="bg-muted/50 border-border rounded-lg text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 resize-none"
+                className="bg-muted/50 border-border rounded-lg text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20 resize-none"
               />
             </DarkField>
 
@@ -251,7 +251,7 @@ export function ContactForm({
             <Button
               type="submit"
               disabled={isLoading || isSubmitDisabled}
-              className="bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white gap-2"
+              className="bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white gap-2"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEdit ? t('common.save', 'Speichern') : t('common.create', 'Erstellen')}

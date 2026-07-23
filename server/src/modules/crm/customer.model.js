@@ -24,7 +24,7 @@ const customerSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['private', 'business'],
+      enum: ['private', 'business', 'partner', 'supplier'],
       required: true,
     },
     street: { type: String, trim: true, maxlength: 255, default: null },
@@ -48,7 +48,7 @@ const customerSchema = new mongoose.Schema(
     notes: { type: String, maxlength: 5000, default: null },
     status: {
       type: String,
-      enum: ['active', 'archived'],
+      enum: ['active', 'inactive'],
       default: 'active',
       index: true,
     },

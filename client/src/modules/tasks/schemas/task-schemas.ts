@@ -16,7 +16,27 @@ const nullableId = z
     return value._id ?? value.id ?? null;
   });
 
+// The API populates projectId/orderId with the linked record, but nullableId
+// reduces them to ids. Lift the display name out first so the UI can show
+// "Kesselersatz Bäckerei Weber" instead of a raw object id.
+const liftContextNames = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const raw = value as Record<string, unknown>;
+  const project = raw.projectId as Record<string, unknown> | null | undefined;
+  const order = raw.orderId as Record<string, unknown> | null | undefined;
+  return {
+    ...raw,
+    projectName: project && typeof project === 'object'
+      ? (project.name ?? null)
+      : (raw.projectName ?? null),
+    orderName: order && typeof order === 'object'
+      ? (order.title ?? order.assignmentNumber ?? null)
+      : (raw.orderName ?? null),
+  };
+};
+
 export const rawTaskSchema = z
+  .preprocess(liftContextNames, z
   .object({
     _id: z.string().optional(),
     id: z.string().optional(),
@@ -55,6 +75,8 @@ export const rawTaskSchema = z
     lockedBy: nullableId,
     inPool: z.boolean().optional(),
     poolHelperId: nullableId,
+    projectName: z.string().nullable().optional(),
+    orderName: z.string().nullable().optional(),
   })
   .passthrough()
   .transform((raw) => {
@@ -96,8 +118,10 @@ export const rawTaskSchema = z
       lockedBy: raw.lockedBy,
       inPool: raw.inPool ?? false,
       poolHelperId: raw.poolHelperId,
+      projectName: raw.projectName ?? null,
+      orderName: raw.orderName ?? null,
     };
-  });
+  }));
 
 export const rawTaskListSchema = z
   .object({

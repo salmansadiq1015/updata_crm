@@ -34,6 +34,9 @@ const PERMISSIONS = Object.freeze({
   CRM_WRITE: 'crm:write',
   CRM_DELETE: 'crm:delete',
   CRM_ADMIN: 'crm:admin',
+  // Key-user capability: merging duplicate customers and reversing a merge.
+  // Deliberately separate from crm:admin so it can be granted on its own.
+  CRM_MERGE: 'crm:merge',
 
   // Projects
   PROJECTS_READ: 'projects:read',

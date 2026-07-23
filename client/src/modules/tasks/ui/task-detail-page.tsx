@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { taskApi } from '../services/task-api';
 import { useTaskDetailV2, taskWorkspaceKeys } from '../hooks/use-task-workspace';
@@ -96,6 +97,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   const remindersQuery = useTaskReminders(taskId);
 
   const task = taskQuery.data;
+  useBreadcrumbLabel(taskId, task?.title);
   const users = usersQuery.data ?? [];
 
   // Description local edit state
@@ -515,11 +517,11 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') applyDueText();
                   }}
-                  placeholder="tomorrow, +3d, next Friday"
+                  placeholder={t('tasks.dueQuickPlaceholder', 'morgen, +3d, nächsten Freitag')}
                   className="h-8 text-xs"
                 />
                 <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={applyDueText}>
-                  Set
+                  {t('common.set', 'Setzen')}
                 </Button>
               </div>
             </div>

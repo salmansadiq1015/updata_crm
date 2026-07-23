@@ -73,7 +73,7 @@ const configSchema = Joi.object({
   COMPANY_STREET: Joi.string().default('Buchenstrasse'),
   COMPANY_BUILDING_NUMBER: Joi.string().allow('').default('57B'),
   COMPANY_ZIP: Joi.string().default('4142'),
-  COMPANY_CITY: Joi.string().default('Muenchenstein'),
+  COMPANY_CITY: Joi.string().default('Münchenstein'),
   COMPANY_COUNTRY: Joi.string().default('CH'),
   COMPANY_PHONE: Joi.string().allow('').default(''),
   COMPANY_EMAIL: Joi.string().email().allow('').default(''),

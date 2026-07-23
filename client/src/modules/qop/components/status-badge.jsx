@@ -68,7 +68,7 @@ export function InvoiceTypeBadge({ type, className }) {
   const colorMap = {
     STANDARD: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-200 dark:border-slate-400/20',
     ADVANCE: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-500/10 dark:text-orange-200 dark:border-orange-400/20',
-    FINAL: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-200 dark:border-violet-400/20',
+    FINAL: 'bg-brand-50 text-brand-700 border-brand-200 dark:bg-brand-500/10 dark:text-brand-200 dark:border-brand-400/20',
     CREDIT_NOTE: 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-500/10 dark:text-pink-200 dark:border-pink-400/20',
   };
   return (

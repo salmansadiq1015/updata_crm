@@ -1,5 +1,6 @@
 'use client';
 
+import { lazy, Suspense } from 'react';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSidebarStore } from '@/stores/sidebar-store';
@@ -9,11 +10,15 @@ import { ThemeToggle } from './theme-toggle';
 import { NotificationBell } from './notification-bell';
 import { LanguageToggle } from './language-toggle';
 
+const AiAssistantButton = lazy(() =>
+  import('@/modules/ai/components/ai-assistant-button').then((m) => ({ default: m.AiAssistantButton }))
+);
+
 export function Header() {
   const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
 
   return (
-    <header className="flex items-center justify-between h-14 border-b border-border bg-card/80 backdrop-blur-md px-4 sticky top-0 z-30 shrink-0">
+    <header className="flex items-center justify-between h-14 border-b border-border bg-card/80 backdrop-blur-md pl-4 sticky top-0 z-30 shrink-0">
       {/* Left: hamburger + breadcrumbs */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <Button
@@ -35,6 +40,13 @@ export function Header() {
         <LanguageToggle />
         <NotificationBell />
         <ThemeToggle />
+        <Suspense
+          fallback={
+            <div className="ml-2 h-14 w-14 shrink-0 bg-gradient-to-br from-brand-500 via-brand-500 to-cyan-500" />
+          }
+        >
+          <AiAssistantButton variant="header" className="ml-2" />
+        </Suspense>
       </div>
     </header>
   );

@@ -61,17 +61,17 @@ function ActionDialog({ target, onClose, de }) {
     <Dialog open={!!target} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{isClose ? (de ? 'Periode schliessen' : 'Close period') : (de ? 'Periode wieder oeffnen' : 'Reopen period')}</DialogTitle>
+          <DialogTitle>{isClose ? (de ? 'Periode schliessen' : 'Close period') : (de ? 'Periode wieder öffnen' : 'Reopen period')}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">{target?.period?.name}</p>
-          <Label className="text-xs">{de ? 'Begruendung' : 'Reason'}</Label>
+          <Label className="text-xs">{de ? 'Begründung' : 'Reason'}</Label>
           <Input value={reason} onChange={(event) => setReason(event.target.value)} className="h-9" />
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={pending}>{de ? 'Abbrechen' : 'Cancel'}</Button>
           <Button type="button" onClick={handleConfirm} disabled={pending || reason.trim().length < 3}>
-            {pending ? '...' : (de ? 'Bestaetigen' : 'Confirm')}
+            {pending ? '...' : (de ? 'Bestätigen' : 'Confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -101,7 +101,7 @@ export default function FiscalPeriodsPage() {
         <div>
           <h1 className="text-2xl font-bold">{de ? 'Buchungsperioden' : 'Fiscal Periods'}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {de ? 'Offene und geschlossene Perioden fuer Buchungssperren.' : 'Open and closed periods used by accounting posting locks.'}
+            {de ? 'Offene und geschlossene Perioden für Buchungssperren.' : 'Open and closed periods used by accounting posting locks.'}
           </p>
         </div>
       </div>
@@ -161,7 +161,7 @@ export default function FiscalPeriodsPage() {
                   {period.status === 'CLOSED' && (
                     <Button size="sm" variant="outline" onClick={() => setActionTarget({ period, action: 'reopen' })}>
                       <UnlockKeyhole className="mr-1.5 h-4 w-4" />
-                      {de ? 'Oeffnen' : 'Reopen'}
+                      {de ? 'Öffnen' : 'Reopen'}
                     </Button>
                   )}
                 </td>

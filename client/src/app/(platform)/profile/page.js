@@ -172,7 +172,7 @@ export default function ProfilePage() {
                 <CardHeader className="pb-4">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <User className="h-4 w-4 text-primary" />
-                    {t('users.personalInfo') || 'Persoenliche Daten'}
+                    {t('users.personalInfo') || 'Persönliche Daten'}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -191,7 +191,7 @@ export default function ProfilePage() {
                   <div className="space-y-1.5">
                     <Label className="text-xs">{t('users.email')}</Label>
                     <Input value={user?.email || ''} disabled className="h-10 rounded-lg bg-muted/60 border-border/40" />
-                    <p className="text-[0.7rem] text-muted-foreground">{t('profile.emailReadonly') || 'E-Mail kann nicht geaendert werden.'}</p>
+                    <p className="text-[0.7rem] text-muted-foreground">{t('profile.emailReadonly') || 'E-Mail kann nicht geändert werden.'}</p>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">{t('users.phone')} (optional)</Label>

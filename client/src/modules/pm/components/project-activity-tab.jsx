@@ -24,7 +24,7 @@ const EVENT_CONFIG = {
   'project.status.changed': { label: 'Status changed', labelDe: 'Status geändert', icon: ArrowRightLeft, tone: 'text-blue-500' },
   'project.status.overridden': { label: 'Status overridden', labelDe: 'Status übersteuert', icon: ArrowRightLeft, tone: 'text-amber-500' },
   'project_document.uploaded': { label: 'Document uploaded', labelDe: 'Dokument hochgeladen', icon: FileText, tone: 'text-blue-500' },
-  'project_document.generated': { label: 'Document generated', labelDe: 'Dokument generiert', icon: FileText, tone: 'text-violet-500' },
+  'project_document.generated': { label: 'Document generated', labelDe: 'Dokument generiert', icon: FileText, tone: 'text-brand-500' },
   'project_document.updated': { label: 'Document updated', labelDe: 'Dokument aktualisiert', icon: Pencil, tone: 'text-blue-500' },
   'project_document.deleted': { label: 'Document deleted', labelDe: 'Dokument gelöscht', icon: Trash2, tone: 'text-destructive' },
   'project_document.restored': { label: 'Document restored', labelDe: 'Dokument wiederhergestellt', icon: ArchiveRestore, tone: 'text-emerald-500' },

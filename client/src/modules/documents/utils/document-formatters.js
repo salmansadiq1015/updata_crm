@@ -49,7 +49,7 @@ export const DOCUMENT_CATEGORY_OPTIONS = [
 
 export const SOURCE_BADGE_CLASS = {
   repository: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  generated: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+  generated: 'border-brand-500/30 bg-brand-500/10 text-brand-700 dark:text-brand-300',
   project: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   customer: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   accounting: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',

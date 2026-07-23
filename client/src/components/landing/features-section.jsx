@@ -11,13 +11,13 @@ import { cn } from '@/lib/utils';
 
 const featureKeys = [
   { key: 'crm', icon: Building2, gradient: 'from-[#7B61FF] to-[#5B3FD4]', href: '/crm' },
-  { key: 'pm', icon: FolderKanban, gradient: 'from-violet-500 to-purple-600', href: '/projects' },
+  { key: 'pm', icon: FolderKanban, gradient: 'from-brand-500 to-brand-600', href: '/projects' },
   { key: 'scheduling', icon: Calendar, gradient: 'from-emerald-500 to-green-600', href: '#', comingSoon: true },
   { key: 'quotes', icon: FileText, gradient: 'from-amber-500 to-orange-600', href: '#', comingSoon: true },
   { key: 'accounting', icon: Receipt, gradient: 'from-rose-500 to-pink-600', href: '#', comingSoon: true },
-  { key: 'tasks', icon: ClipboardList, gradient: 'from-indigo-500 to-violet-600', href: '#', comingSoon: true },
+  { key: 'tasks', icon: ClipboardList, gradient: 'from-indigo-500 to-brand-600', href: '#', comingSoon: true },
   { key: 'catalog', icon: Package, gradient: 'from-teal-500 to-cyan-600', href: '#', comingSoon: true },
-  { key: 'ai', icon: Bot, gradient: 'from-fuchsia-500 to-purple-600', href: '#', comingSoon: true },
+  { key: 'ai', icon: Bot, gradient: 'from-brand-500 to-brand-600', href: '#', comingSoon: true },
 ];
 
 export function FeaturesSection() {

@@ -35,7 +35,7 @@ const optionalUrl = z
 
 const customerBaseSchema = z.object({
   name: z.string().min(1, 'Name ist erforderlich').max(255),
-  type: z.enum(['private', 'business'], {
+  type: z.enum(['private', 'business', 'partner', 'supplier'], {
     errorMap: () => ({ message: 'Typ ist erforderlich' }),
   }),
   ownerName: optionalStr(255),

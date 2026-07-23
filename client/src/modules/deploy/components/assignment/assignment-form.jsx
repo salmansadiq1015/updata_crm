@@ -63,7 +63,7 @@ const DEFAULT_RECURRENCE = {
 const EMPLOYEE_PICKER_LIMIT = 80;
 const EMPLOYEE_FILTERS = [
   { value: 'ALL', labelKey: 'deploy.form.employeeFilterAll', fallback: 'Alle' },
-  { value: 'AVAILABLE', labelKey: 'deploy.form.employeeFilterAvailable', fallback: 'Verfuegbar' },
+  { value: 'AVAILABLE', labelKey: 'deploy.form.employeeFilterAvailable', fallback: 'Verfügbar' },
   { value: 'WARNING', labelKey: 'deploy.form.employeeFilterWarnings', fallback: 'Warnungen' },
   { value: 'UNAVAILABLE', labelKey: 'deploy.form.employeeFilterUnavailable', fallback: 'Abwesend' },
   { value: 'QUALIFIED', labelKey: 'deploy.form.employeeFilterQualified', fallback: 'Passend' },
@@ -72,7 +72,7 @@ const EMPLOYEE_FILTERS = [
 const EMPLOYEE_STATUS_META = {
   AVAILABLE: {
     labelKey: 'deploy.form.employeeAvailable',
-    fallback: 'Verfuegbar',
+    fallback: 'Verfügbar',
     icon: BadgeCheck,
     className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   },

@@ -9,7 +9,7 @@ const actions = ['read', 'write', 'delete', 'admin'];
 const actionLabels = {
   read: 'Lesen',
   write: 'Schreiben',
-  delete: 'Loeschen',
+  delete: 'Löschen',
   admin: 'Admin',
 };
 
@@ -20,6 +20,12 @@ const actionColors = {
   admin: 'bg-amber-500/15 text-amber-600',
 };
 
+/**
+ * The four columns cover the standard CRUD actions. Roughly half of the
+ * permissions use module-specific actions instead (crm:merge, ap:approve,
+ * project:status:override, …); those get a trailing column of badges so a role
+ * never appears to hold fewer rights than it actually does.
+ */
 export function PermissionMatrix({ permissions = [] }) {
   const permSet = new Set(
     permissions.map((p) => {
@@ -41,6 +47,16 @@ export function PermissionMatrix({ permissions = [] }) {
     return <p className="text-sm text-muted-foreground py-4 text-center">Keine Berechtigungen zugewiesen.</p>;
   }
 
+  // Everything the four standard columns cannot represent, grouped per module.
+  const extrasByModule = {};
+  permSet.forEach((key) => {
+    const [module, ...rest] = key.split(':');
+    const action = rest.join(':');
+    if (!action || actions.includes(action)) return;
+    (extrasByModule[module] ||= []).push(action);
+  });
+  const hasExtras = Object.keys(extrasByModule).length > 0;
+
   return (
     <div className="overflow-x-auto rounded-xl border border-border/40">
       <table className="w-full text-sm">
@@ -56,6 +72,13 @@ export function PermissionMatrix({ permissions = [] }) {
                 </span>
               </th>
             ))}
+            {hasExtras && (
+              <th className="text-left py-3 px-3 font-semibold text-xs uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1 rounded-md bg-brand-500/15 px-2 py-0.5 text-[0.6rem] font-bold text-brand-600 dark:text-brand-300">
+                  Weitere
+                </span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -84,6 +107,20 @@ export function PermissionMatrix({ permissions = [] }) {
                   </td>
                 );
               })}
+              {hasExtras && (
+                <td className="py-2.5 px-3">
+                  <div className="flex flex-wrap gap-1">
+                    {(extrasByModule[module] || []).sort().map((action) => (
+                      <span
+                        key={action}
+                        className="inline-flex items-center rounded-md bg-brand-500/10 px-1.5 py-0.5 text-[0.65rem] font-medium text-brand-600 dark:text-brand-300"
+                      >
+                        {action}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

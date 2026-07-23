@@ -235,7 +235,7 @@ function InvoicesTab({ orderId, onCreateInvoice }) {
               t('qop.invoices.colNumber', 'Nummer'),
               t('qop.invoices.colType', 'Typ'),
               t('qop.invoices.colStatus', 'Status'),
-              t('qop.invoices.colDue', 'Faellig'),
+              t('qop.invoices.colDue', 'Fällig'),
               t('qop.invoices.colAmount', 'Betrag'),
             ].map((h, i) => (
               <div key={i} className={`px-3 py-2 ${i === 4 ? 'text-right' : ''}`}>{h}</div>
@@ -306,7 +306,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
           ) : (
             <Tabs value={tab} onValueChange={setTab} className="mt-2">
               <TabsList className="grid w-full grid-cols-5">
-                <TabsTrigger value="overview">{t('qop.orders.tabOverview', 'Uebersicht')}</TabsTrigger>
+                <TabsTrigger value="overview">{t('qop.orders.tabOverview', 'Übersicht')}</TabsTrigger>
                 <TabsTrigger value="items">{t('qop.orders.tabItems', 'Positionen')}</TabsTrigger>
                 <TabsTrigger value="billing">{t('qop.orders.tabBilling', 'Fakturierung')}</TabsTrigger>
                 <TabsTrigger value="invoices">{t('qop.orders.tabInvoices', 'Rechnungen')}</TabsTrigger>
@@ -346,10 +346,10 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
       <Dialog open={!!transitionTarget} onOpenChange={() => setTransitionTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t('qop.orders.confirmStatusTitle', 'Status bestaetigen')}</DialogTitle>
+            <DialogTitle>{t('qop.orders.confirmStatusTitle', 'Status bestätigen')}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {t('qop.orders.confirmStatusMsg', 'Status zu "{status}" aendern?').replace('{status}', transitionTarget ?? '')}
+            {t('qop.orders.confirmStatusMsg', 'Status zu "{status}" ändern?').replace('{status}', transitionTarget ?? '')}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTransitionTarget(null)}>
@@ -359,7 +359,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
               variant={transitionTarget === 'CANCELLED' ? 'destructive' : 'default'}
               onClick={handleTransitionConfirm}
             >
-              {t('common.confirm', 'Bestaetigen')}
+              {t('common.confirm', 'Bestätigen')}
             </Button>
           </DialogFooter>
         </DialogContent>

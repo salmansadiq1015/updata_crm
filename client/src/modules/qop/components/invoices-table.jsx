@@ -133,7 +133,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
   };
 
   const handleFinalize = (id) => {
-    if (confirm(t('qop.invoices.finalizeConfirm', 'Rechnung finalisieren? Dies kann nicht rueckgaengig gemacht werden.'))) {
+    if (confirm(t('qop.invoices.finalizeConfirm', 'Rechnung finalisieren? Dies kann nicht rückgängig gemacht werden.'))) {
       finalizeInvoice.mutate(id);
     }
   };
@@ -264,7 +264,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
             t('qop.invoices.colType', 'Typ'),
             t('qop.invoices.colCustomer', 'Kunde'),
             t('qop.invoices.colStatus', 'Status'),
-            t('qop.invoices.colDue', 'Faellig'),
+            t('qop.invoices.colDue', 'Fällig'),
             t('qop.invoices.colCreated', 'Erstellt'),
             t('qop.invoices.colAmount', 'Betrag'),
             '',

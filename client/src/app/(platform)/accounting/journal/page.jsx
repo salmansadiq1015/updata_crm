@@ -36,7 +36,7 @@ const REF_TYPE_CONFIG = {
   INVOICE_PAYMENT: { label: 'Rechnungszahlung', labelEn: 'Invoice Payment', color: 'text-emerald-500' },
   AUTO_RECONCILIATION: { label: 'Auto-Abgleich', labelEn: 'Auto Reconciliation', color: 'text-indigo-500' },
   MANUAL_RECONCILIATION: { label: 'Manueller Abgleich', labelEn: 'Manual Reconciliation', color: 'text-indigo-600' },
-  CATEGORIZATION: { label: 'Kategorisierung', labelEn: 'Categorization', color: 'text-violet-500' },
+  CATEGORIZATION: { label: 'Kategorisierung', labelEn: 'Categorization', color: 'text-brand-500' },
   NETTING: { label: 'Verrechnung', labelEn: 'Netting', color: 'text-teal-600' },
 };
 

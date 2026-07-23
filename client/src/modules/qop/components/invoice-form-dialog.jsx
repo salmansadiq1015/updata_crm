@@ -599,12 +599,12 @@ export function InvoiceFormDialog({
 
           {/* Final invoice — advance deduction preview */}
           {!isEdit && type === 'FINAL' && billingPlan && (
-            <div className="flex flex-col gap-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4">
-              <p className="text-sm font-medium text-violet-700 dark:text-violet-200">
+            <div className="flex flex-col gap-3 rounded-2xl border border-brand-500/30 bg-brand-500/10 p-4">
+              <p className="text-sm font-medium text-brand-700 dark:text-brand-200">
                 {t('qop.invoices.finalPreviewTitle', 'Preview: advance payment deductions')}
               </p>
-              <div className="overflow-hidden rounded-xl border border-violet-500/20 bg-card text-sm">
-                <div className="grid grid-cols-[1fr_5rem_5rem_6rem] border-b bg-violet-500/10 px-3 py-2 text-xs font-medium text-muted-foreground">
+              <div className="overflow-hidden rounded-xl border border-brand-500/20 bg-card text-sm">
+                <div className="grid grid-cols-[1fr_5rem_5rem_6rem] border-b bg-brand-500/10 px-3 py-2 text-xs font-medium text-muted-foreground">
                   <div>{t('qop.orders.billingAdvInvoice', 'Advance invoice')}</div>
                   <div className="text-right">{t('qop.orders.billingDate', 'Date')}</div>
                   <div className="text-right">%</div>
@@ -618,7 +618,7 @@ export function InvoiceFormDialog({
                     <div className="text-right font-medium text-red-500">− {fmt(adv.grandTotalRounded)}</div>
                   </div>
                 ))}
-                <div className="grid grid-cols-[1fr_6rem] border-t bg-violet-500/10 px-3 py-2.5 font-semibold">
+                <div className="grid grid-cols-[1fr_6rem] border-t bg-brand-500/10 px-3 py-2.5 font-semibold">
                   <div>{t('qop.invoices.finalBalanceDue', 'Balance due')}</div>
                   <div className="text-right">{fmt(billingPlan.remainingForFinal)} {sourceOrder?.currency ?? 'CHF'}</div>
                 </div>
@@ -627,7 +627,7 @@ export function InvoiceFormDialog({
           )}
 
           {!isEdit && type === 'FINAL' && !billingPlan && (
-            <div className="rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4 text-sm text-violet-700 dark:text-violet-200">
+            <div className="rounded-2xl border border-brand-500/30 bg-brand-500/10 p-4 text-sm text-brand-700 dark:text-brand-200">
               {t('qop.invoices.finalHint', 'The final invoice shows the total amount minus all previous advance payments.')}
             </div>
           )}

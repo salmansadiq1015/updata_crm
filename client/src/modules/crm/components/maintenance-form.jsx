@@ -182,7 +182,7 @@ export function MaintenanceForm({ open, onOpenChange, onSubmit, defaultValues, i
             <Button
               type="submit"
               disabled={isLoading}
-              className="bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white gap-2"
+              className="bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white gap-2"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEdit ? t('common.save', 'Speichern') : t('common.create', 'Erstellen')}

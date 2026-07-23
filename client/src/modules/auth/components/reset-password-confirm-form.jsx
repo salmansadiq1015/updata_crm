@@ -71,7 +71,7 @@ export function ResetPasswordConfirmForm() {
         <Alert variant="destructive" className="rounded-xl">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            {t('auth.invalidResetToken', 'Ungueltiger oder fehlender Token. Bitte fordern Sie einen neuen Link an.')}
+            {t('auth.invalidResetToken', 'Ungültiger oder fehlender Token. Bitte fordern Sie einen neuen Link an.')}
           </AlertDescription>
         </Alert>
         <Link
@@ -112,7 +112,7 @@ export function ResetPasswordConfirmForm() {
       await authService.confirmPasswordReset(token, data.password);
       setIsSuccess(true);
     } catch (err) {
-      showError(err.message || t('auth.resetFailed', 'Passwort konnte nicht zurueckgesetzt werden'));
+      showError(err.message || t('auth.resetFailed', 'Passwort konnte nicht zurückgesetzt werden'));
     } finally {
       setIsLoading(false);
     }

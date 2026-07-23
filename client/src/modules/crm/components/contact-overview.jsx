@@ -157,7 +157,7 @@ export function ContactOverview() {
     }
 
     if (!selectedCustomer?._id) {
-      setCustomerError(t('crm.contacts.customerRequired', 'Bitte zuerst einen Kunden auswaehlen.'));
+      setCustomerError(t('crm.contacts.customerRequired', 'Bitte zuerst einen Kunden auswählen.'));
       throw new Error('customer-required');
     }
 
@@ -195,7 +195,7 @@ export function ContactOverview() {
                 {contact.isPrimary && (
                   <Badge className="h-5 shrink-0 bg-amber-500/10 px-1.5 text-[10px] text-amber-700 ring-1 ring-amber-500/20 dark:text-amber-400">
                     <Star className="mr-1 h-2.5 w-2.5 fill-current" />
-                    {t('crm.contacts.primaryBadge', 'Primaer')}
+                    {t('crm.contacts.primaryBadge', 'Primär')}
                   </Badge>
                 )}
               </div>
@@ -325,7 +325,7 @@ export function ContactOverview() {
               description={
                 hasActiveFilters
                   ? t('crm.contacts.emptyFiltered', 'No contacts match the current filters.')
-                  : t('crm.contacts.emptyDesc', 'Fuegen Sie den ersten Kontakt hinzu, um Ansprechpartner zu verwalten.')
+                  : t('crm.contacts.emptyDesc', 'Fügen Sie den ersten Kontakt hinzu, um Ansprechpartner zu verwalten.')
               }
             />
           )}
@@ -348,7 +348,7 @@ export function ContactOverview() {
                     onSelect: () => openEdit(contact),
                   },
                   {
-                    label: t('crm.contacts.setPrimary', 'Als primaer festlegen'),
+                    label: t('crm.contacts.setPrimary', 'Als primär festlegen'),
                     icon: Star,
                     hidden: !canWrite || contact.isPrimary,
                     disabled: setPrimaryContact.isPending,
@@ -423,7 +423,7 @@ function ContactSummary({ summary, typeFilter, t }) {
       key: 'total',
       label: t('crm.contacts.summaryTotal', 'All contacts'),
       value: summary.total,
-      className: 'bg-violet-500/10 text-violet-700 dark:text-violet-400 ring-violet-500/20',
+      className: 'bg-brand-500/10 text-brand-700 dark:text-brand-400 ring-brand-500/20',
     },
     {
       key: 'private',

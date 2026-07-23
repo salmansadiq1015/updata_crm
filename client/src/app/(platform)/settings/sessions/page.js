@@ -13,7 +13,7 @@ export default function SessionsPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('sessions.title')}
-        description={t('sessions.titleDesc') || 'Verwalten Sie Ihre angemeldeten Geraete und Sitzungen.'}
+        description={t('sessions.titleDesc') || 'Verwalten Sie Ihre angemeldeten Geräte und Sitzungen.'}
       />
       <SessionsTable />
     </div>

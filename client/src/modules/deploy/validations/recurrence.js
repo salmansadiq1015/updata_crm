@@ -5,7 +5,7 @@ const defaultT = (_key, fallback) => fallback;
 export function getRecurrenceSchema(t = defaultT) {
   return z.object({
     frequency: z.enum(['DAILY', 'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'CUSTOM'], {
-      errorMap: () => ({ message: t('deploy.validation.frequencyRequired', 'Haeufigkeit ist erforderlich') }),
+      errorMap: () => ({ message: t('deploy.validation.frequencyRequired', 'Häufigkeit ist erforderlich') }),
     }),
     interval: z.coerce.number().int().min(1).max(52).default(1),
     daysOfWeek: z.string().max(30).optional().or(z.literal('')),

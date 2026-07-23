@@ -1,8 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { Zap, Shield, FolderKanban, BarChart3, Users } from 'lucide-react';
+import Image from 'next/image';
+import { Shield, FolderKanban, BarChart3, Users } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
+// Static imports: the emitted URL carries a content hash, so swapping the file
+// in public/ invalidates every browser cache on its own.
+import logoFull from '../../../../public/logo.png';
+import logoFullDark from '../../../../public/logo-dark.png';
 
 const features = [
   { icon: FolderKanban, labelKey: 'auth.layout.feature.projects', fallback: 'Projektmanagement' },
@@ -19,7 +24,7 @@ export function AuthLayout({ children }) {
       {/* Left panel — branded */}
       <div className="hidden lg:flex lg:w-[480px] xl:w-[540px] relative overflow-hidden">
         {/* Gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#7B61FF] via-primary to-[#5B3FD4]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-600 via-brand-700 to-brand-900" />
 
         {/* Decorative elements */}
         <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full bg-white/5 blur-3xl -translate-y-1/2 translate-x-1/3" />
@@ -29,13 +34,9 @@ export function AuthLayout({ children }) {
         {/* Content */}
         <div className="relative flex flex-col justify-between p-10 xl:p-14 w-full">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm border border-white/10">
-              <Zap className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-xl font-bold text-white tracking-tight">
-              MB Boiler ERP
-            </span>
+          <Link href="/" className="flex items-center" aria-label="MB Boiler — ERP System">
+            {/* White variant: the panel is always the brand gradient, in both themes */}
+            <Image src={logoFullDark} alt="MB Boiler — ERP System" priority className="h-11 w-auto object-contain" />
           </Link>
 
           {/* Middle content */}
@@ -44,7 +45,7 @@ export function AuthLayout({ children }) {
               <h2 className="text-xl font-extrabold text-white tracking-tight leading-tight lg:text-2xl 2xl:text-3xl">
                 {t('auth.layout.headline1', 'Ihr zentrales')}
                 <br />
-                {t('auth.layout.headline2', 'Werkzeug fuer')}
+                {t('auth.layout.headline2', 'Werkzeug für')}
                 <br />
                 {t('auth.layout.headline3', 'den Arbeitsalltag')}
               </h2>
@@ -76,13 +77,9 @@ export function AuthLayout({ children }) {
       {/* Right panel — form */}
       <div className="flex flex-1 flex-col">
         {/* Mobile logo bar */}
-        <div className="flex items-center gap-2.5 p-6 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-gradient shadow-md shadow-primary/25">
-            <Zap className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-lg font-bold tracking-tight">
-            MB Boiler <span className="text-primary">ERP</span>
-          </span>
+        <div className="flex items-center p-6 lg:hidden">
+          <Image src={logoFull} alt="MB Boiler — ERP System" priority className="block h-9 w-auto object-contain dark:hidden" />
+          <Image src={logoFullDark} alt="MB Boiler — ERP System" priority className="hidden h-9 w-auto object-contain dark:block" />
         </div>
 
         {/* Form container */}

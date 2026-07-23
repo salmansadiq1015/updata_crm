@@ -35,10 +35,10 @@ function splitCapabilities(value) {
 }
 
 const STEPS = [
-  { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persoenlich', icon: User, fields: ['firstName', 'lastName'] },
+  { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persönlich', icon: User, fields: ['firstName', 'lastName'] },
   { id: 'contact', labelKey: 'users.step.contact', fallback: 'Kontakt', icon: Mail, fields: ['email', 'phone'] },
   { id: 'work', labelKey: 'users.step.work', fallback: 'Arbeit', icon: Briefcase, fields: ['department', 'position', 'preferredDepartmentId'] },
-  { id: 'address', labelKey: 'users.step.address', fallback: 'Adresse', icon: MapPin, fields: ['street', 'zip', 'city', 'country'] },
+  { id: 'address', labelKey: 'users.step.address', fallback: 'Adresse', icon: MapPin, fields: ['street', 'addressSupplement', 'zip', 'city', 'country'] },
   { id: 'access', labelKey: 'users.step.access', fallback: 'Zugang', icon: Shield, fields: ['roleId', 'language'] },
 ];
 
@@ -58,7 +58,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     defaultValues: {
       firstName: '', lastName: '', salutation: '', email: '', phone: '',
       department: '', position: '', skills: '', certifications: '',
-      street: '', city: '', zip: '', country: 'Schweiz',
+      street: '', addressSupplement: '', city: '', zip: '', country: 'Schweiz',
       roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
       ...defaultValues,
     },
@@ -75,6 +75,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
         department: defaultValues.department || '',
         position: defaultValues.position || '',
         street: defaultValues.street || '',
+        addressSupplement: defaultValues.addressSupplement || '',
         city: defaultValues.city || '',
         zip: defaultValues.zip || '',
         country: defaultValues.country || 'Schweiz',
@@ -88,7 +89,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       reset({
         firstName: '', lastName: '', salutation: '', email: '', phone: '',
         department: '', position: '', skills: '', certifications: '',
-        street: '', city: '', zip: '', country: 'Schweiz',
+        street: '', addressSupplement: '', city: '', zip: '', country: 'Schweiz',
         roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
       });
     }
@@ -178,7 +179,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       return {
         tone: 'warning',
         title: t('users.rolePreset.missingTitle', 'Standardrolle fehlt'),
-        description: t('users.rolePreset.missingDesc', 'Die Rolle {role} ist nicht verfuegbar. Waehlen Sie im Zugang-Schritt eine Rolle manuell aus.', {
+        description: t('users.rolePreset.missingDesc', 'Die Rolle {role} ist nicht verfügbar. Wählen Sie im Zugang-Schritt eine Rolle manuell aus.', {
           role: presetRoleLabel,
         }),
       };
@@ -188,7 +189,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       return {
         tone: 'override',
         title: t('users.rolePreset.overrideTitle', 'Manuell angepasst'),
-        description: t('users.rolePreset.overrideDesc', '{defaultRole} waere die Standardrolle fuer diese Position. Aktuell ist {currentRole} ausgewaehlt.', {
+        description: t('users.rolePreset.overrideDesc', '{defaultRole} wäre die Standardrolle für diese Position. Aktuell ist {currentRole} ausgewählt.', {
           defaultRole: presetRoleLabel,
           currentRole: getUserRoleLabel(currentRole?.name, t) || t('users.roleOther', 'eine andere Rolle'),
         }),
@@ -199,7 +200,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       return {
         tone: 'applied',
         title: t('users.rolePreset.appliedTitle', 'Zugriff automatisch gesetzt'),
-        description: t('users.rolePreset.appliedDesc', 'Die Berechtigungen werden ueber die Rolle {role} angewendet.', {
+        description: t('users.rolePreset.appliedDesc', 'Die Berechtigungen werden über die Rolle {role} angewendet.', {
           role: getUserRoleLabel(mappedRole.name, t),
         }),
       };
@@ -286,8 +287,8 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   };
 
   const handleFormSubmit = (data) => {
-    // Guard: only actually submit on the final step
-    if (currentStep < STEPS.length - 1) {
+    // Creating walks the wizard step by step; editing can be saved from any step.
+    if (!isEdit && currentStep < STEPS.length - 1) {
       return;
     }
     const { skills, certifications, ...rest } = data;
@@ -300,6 +301,13 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
     });
     handleDialogOpenChange(false);
     reset();
+  };
+
+  // With free navigation an invalid field can sit on a step we are not looking
+  // at — jump to the first step that has an error so it is actually visible.
+  const handleInvalid = (formErrors) => {
+    const failing = STEPS.findIndex((s) => s.fields.some((field) => formErrors?.[field]));
+    if (failing >= 0 && failing !== currentStep) setCurrentStep(failing);
   };
 
   const goNext = async () => {
@@ -315,7 +323,9 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[90vh] flex flex-col"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0">
           <DialogTitle className="text-lg font-bold">
@@ -340,20 +350,24 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                 <div key={s.id} className="flex items-center flex-1">
                   <button
                     type="button"
-                    onClick={() => i < currentStep && setCurrentStep(i)}
+                    onClick={() => (isEdit || i < currentStep) && setCurrentStep(i)}
                     className={cn(
                       'flex items-center gap-2 px-3 py-2 rounded-lg transition-all w-full',
                       isCurrent && 'bg-primary/10 text-primary',
                       isCompleted && 'text-emerald-600 cursor-pointer hover:bg-emerald-500/5',
-                      !isCurrent && !isCompleted && 'text-muted-foreground/50',
+                      !isCurrent && !isCompleted && (isEdit
+                        ? 'text-muted-foreground cursor-pointer hover:bg-muted'
+                        : 'text-muted-foreground/50'),
                     )}
-                    disabled={i > currentStep}
+                    disabled={!isEdit && i > currentStep}
                   >
                     <div className={cn(
                       'h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold transition-all',
                       isCurrent && 'bg-primary text-primary-foreground shadow-sm shadow-primary/30',
                       isCompleted && 'bg-emerald-500 text-white',
-                      !isCurrent && !isCompleted && 'bg-muted text-muted-foreground/50',
+                      !isCurrent && !isCompleted && (isEdit
+                        ? 'bg-muted text-muted-foreground'
+                        : 'bg-muted text-muted-foreground/50'),
                     )}>
                       {isCompleted ? <Check className="h-3.5 w-3.5" /> : i + 1}
                     </div>
@@ -375,7 +389,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
 
         {/* Form content */}
         <form
-          onSubmit={handleSubmit(handleFormSubmit)}
+          onSubmit={handleSubmit(handleFormSubmit, handleInvalid)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && currentStep < STEPS.length - 1 && e.target.tagName !== 'TEXTAREA') {
               e.preventDefault();
@@ -435,7 +449,10 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                 <FormField label={t('users.email')} error={errors.email?.message} required>
                   <Input type="email" placeholder="max.muster@mbboiler.ch" {...register('email')} autoFocus />
                 </FormField>
-                <FormField label={`${t('users.phone')} (${t('common.optional', 'optional')})`}>
+                <FormField
+                  label={`${t('users.phone')} (${t('common.optional', 'optional')})`}
+                  error={errors.phone?.message}
+                >
                   <Input placeholder="+41 79 123 45 67" {...register('phone')} />
                 </FormField>
               </div>
@@ -494,7 +511,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     disabled={assignmentTargets.length === 0}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('users.preferredTeamPlaceholder') || 'Team fuer Projektzuweisungen waehlen'} />
+                      <SelectValue placeholder={t('users.preferredTeamPlaceholder') || 'Team für Projektzuweisungen wählen'} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={EMPTY_TEAM_VALUE}>
@@ -509,7 +526,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                   </Select>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {assignmentTargets.length === 0
-                      ? (t('users.preferredTeamUnavailable') || 'Keine aktiven Teams verfuegbar.')
+                      ? (t('users.preferredTeamUnavailable') || 'Keine aktiven Teams verfügbar.')
                       : (t('users.preferredTeamHint') || 'Dieses Team wird verwendet, wenn der Benutzer einem Projekt als Team zugewiesen wird.')}
                   </p>
                 </FormField>
@@ -535,6 +552,12 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <FormField label={t('users.street') || 'Strasse'}>
                   <Input placeholder="Musterstrasse 1" {...register('street')} autoFocus />
+                </FormField>
+                <FormField
+                  label={`${t('users.addressSupplement', 'Adresszusatz')} (${t('common.optional', 'optional')})`}
+                  error={errors.addressSupplement?.message}
+                >
+                  <Input placeholder="z.B. Postfach 123, c/o Verwaltung Müller AG" {...register('addressSupplement')} />
                 </FormField>
                 <div className="grid grid-cols-3 gap-4">
                   <FormField label={t('users.zip') || 'PLZ'}>
@@ -593,7 +616,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 rounded-lg h-9" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  {t('common.back', 'Zurueck')}
+                  {t('common.back', 'Zurück')}
                 </Button>
               ) : (
                 <Button type="button" variant="ghost" className="rounded-lg h-9" onClick={() => handleDialogOpenChange(false)}>
@@ -616,14 +639,10 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                 ))}
               </div>
 
-              {isLastStep ? (
-                <Button type="submit" className="rounded-lg h-9 px-5 gap-1.5 shadow-sm" disabled={isLoading}>
-                  {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {isEdit ? t('users.save') : t('users.create')}
-                </Button>
-              ) : (
+              {!isLastStep && (
                 <Button
                   type="button"
+                  variant={isEdit ? 'outline' : 'default'}
                   className="rounded-lg h-9 px-5 gap-1.5"
                   onClick={(e) => {
                     e.preventDefault();
@@ -633,6 +652,12 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                 >
                   {t('common.next', 'Weiter')}
                   <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {(isLastStep || isEdit) && (
+                <Button type="submit" className="rounded-lg h-9 px-5 gap-1.5 shadow-sm" disabled={isLoading}>
+                  {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {isEdit ? t('users.save') : t('users.create')}
                 </Button>
               )}
             </div>

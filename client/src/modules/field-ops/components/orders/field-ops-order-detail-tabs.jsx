@@ -35,6 +35,7 @@ import {
   ORDER_TYPE_LABELS, RELEASE_STATUS_CONFIG, ACTIVITY_TYPE_LABELS,
 } from '@/modules/field-ops/constants/field-ops-constants';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
   MoreHorizontal, Pencil, Trash2, ChevronLeft,
   MapPin, Phone, Mail, User, Calendar, FileText, Clock,
@@ -349,7 +350,7 @@ function WorkPackagesTab({ order, orderId, de }) {
               handleCreate();
             }
           }}
-          placeholder={de ? 'Arbeitspaket hinzufuegen...' : 'Add work package...'}
+          placeholder={de ? 'Arbeitspaket hinzufügen...' : 'Add work package...'}
           className="h-9"
         />
         <Button size="sm" onClick={handleCreate} disabled={!title.trim() || createTask.isPending} className="gap-1.5">
@@ -365,7 +366,7 @@ function WorkPackagesTab({ order, orderId, de }) {
           </div>
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground/70">{de ? 'Keine Arbeitspakete' : 'No work packages'}</p>
-            <p className="text-xs text-muted-foreground">{de ? 'Erstelle naechste Schritte direkt fuer diesen Einsatz.' : 'Create next steps directly for this job.'}</p>
+            <p className="text-xs text-muted-foreground">{de ? 'Erstelle nächste Schritte direkt für diesen Einsatz.' : 'Create next steps directly for this job.'}</p>
           </div>
         </div>
       ) : (
@@ -386,8 +387,8 @@ function WorkPackagesTab({ order, orderId, de }) {
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {task.dueDate
-                      ? `${de ? 'Faellig' : 'Due'} ${formatDate(task.dueDate)}`
-                      : (task.priority ? `${de ? 'Prioritaet' : 'Priority'} ${task.priority}` : '')}
+                      ? `${de ? 'Fällig' : 'Due'} ${formatDate(task.dueDate)}`
+                      : (task.priority ? `${de ? 'Priorität' : 'Priority'} ${task.priority}` : '')}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -422,7 +423,7 @@ function WorkPackagesTab({ order, orderId, de }) {
                       className="h-8 gap-1.5"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
-                      {de ? 'Oeffnen' : 'Reopen'}
+                      {de ? 'Öffnen' : 'Reopen'}
                     </Button>
                   )}
                 </div>
@@ -498,6 +499,8 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
 
   const { data: order, isLoading } = useFieldOpsOrderDetail(orderId);
   const { updateOrder, deleteOrder } = useFieldOpsOrderMutations();
+
+  useBreadcrumbLabel(orderId, order?.title || order?.assignmentNumber || order?.orderNumber);
 
   if (isLoading) return <DetailSkeleton />;
   if (!order) return (

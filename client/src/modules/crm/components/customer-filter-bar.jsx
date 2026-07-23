@@ -29,7 +29,7 @@ export function CustomerFilterBar({
   hasActiveFilters,
   onClear,
 }) {
-  const activeTriggerCls = 'border-violet-500/30 bg-violet-500/15 text-violet-700 dark:text-violet-300';
+  const activeTriggerCls = 'border-brand-500/30 bg-brand-500/15 text-brand-700 dark:text-brand-300';
   const baseTriggerCls = 'rounded-full px-3 py-1.5 text-[12px] font-medium border border-border bg-muted/50 text-muted-foreground hover:bg-muted/70 hover:text-foreground transition-all h-8';
 
   return (
@@ -48,7 +48,7 @@ export function CustomerFilterBar({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={t('crm.searchPlaceholder', 'Search customers...')}
-          className="w-full h-9 pl-9 pr-3 rounded-xl border border-border bg-muted/50 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/50 transition-all"
+          className="w-full h-9 pl-9 pr-3 rounded-xl border border-border bg-muted/50 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all"
         />
       </div>
 
@@ -59,7 +59,7 @@ export function CustomerFilterBar({
         <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
           <SelectItem value="all" className="text-foreground focus:bg-muted/60"><DotLabel tone="muted">{t('crm.allStatus', 'All statuses')}</DotLabel></SelectItem>
           <SelectItem value="active" className="text-foreground focus:bg-muted/60"><DotLabel tone="emerald">{t('crm.statusActive', 'Active')}</DotLabel></SelectItem>
-          <SelectItem value="archived" className="text-foreground focus:bg-muted/60"><DotLabel tone="slate">{t('crm.statusArchived', 'Archived')}</DotLabel></SelectItem>
+          <SelectItem value="inactive" className="text-foreground focus:bg-muted/60"><DotLabel tone="slate">{t('crm.statusInactive', 'Deaktiviert')}</DotLabel></SelectItem>
         </SelectContent>
       </Select>
 
@@ -71,6 +71,8 @@ export function CustomerFilterBar({
           <SelectItem value="all" className="text-foreground focus:bg-muted/60"><DotLabel tone="muted">{t('crm.allTypes', 'All types')}</DotLabel></SelectItem>
           <SelectItem value="private" className="text-foreground focus:bg-muted/60"><DotLabel tone="blue">{t('crm.typePrivate', 'Private')}</DotLabel></SelectItem>
           <SelectItem value="business" className="text-foreground focus:bg-muted/60"><DotLabel tone="emerald">{t('crm.typeBusiness', 'Business')}</DotLabel></SelectItem>
+          <SelectItem value="partner" className="text-foreground focus:bg-muted/60"><DotLabel tone="violet">{t('crm.typePartner', 'Partner')}</DotLabel></SelectItem>
+          <SelectItem value="supplier" className="text-foreground focus:bg-muted/60"><DotLabel tone="amber">{t('crm.typeSupplier', 'Lieferant')}</DotLabel></SelectItem>
         </SelectContent>
       </Select>
 
@@ -82,10 +84,7 @@ export function CustomerFilterBar({
           <SelectItem value="all" className="text-foreground focus:bg-muted/60">{t('crm.allCantons', 'All cantons')}</SelectItem>
           {CH_CANTONS.map((c) => (
             <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/60">
-              <span className="flex items-center gap-2">
-                <span className="font-mono text-[11px] text-muted-foreground">{c.code}</span>
-                {c.name}
-              </span>
+              {c.name}
             </SelectItem>
           ))}
         </SelectContent>

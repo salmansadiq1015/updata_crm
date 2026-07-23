@@ -36,7 +36,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
     <div className="flex min-h-full flex-col gap-6 px-5 py-6">
       <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.28)]">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-200 ring-1 ring-cyan-300/20">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-400/10 text-brand-200 ring-1 ring-brand-300/20">
             <Sparkles className="h-5 w-5" />
           </span>
           <div className="min-w-0">
@@ -56,7 +56,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
         />
         {!isSupported && (
           <p className="max-w-56 text-center text-xs leading-5 text-slate-400">
-            {t('ai.panel.voiceUnsupported', 'Sprache wird in diesem Browser nicht unterstuetzt. Nutzen Sie die Texteingabe.')}
+            {t('ai.panel.voiceUnsupported', 'Sprache wird in diesem Browser nicht unterstützt. Nutzen Sie die Texteingabe.')}
           </p>
         )}
       </div>
@@ -88,7 +88,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
               type="submit"
               size="icon"
               disabled={text.trim().length < MIN_AGENT_INPUT_LENGTH || isBusy}
-              className="h-11 w-11 shrink-0 bg-gradient-to-br from-violet-500 to-cyan-500 text-white shadow-[0_12px_30px_rgba(34,211,238,0.18)] hover:from-violet-400 hover:to-cyan-400"
+              className="h-11 w-11 shrink-0 bg-gradient-to-br from-brand-600 to-brand-red text-white shadow-[0_12px_30px_rgba(208,10,25,0.18)] hover:from-brand-400 hover:to-brand-400"
               aria-label={t('ai.panel.sendCommand', 'Send command')}
             >
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
@@ -99,9 +99,9 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
         <button
           type="button"
           onClick={() => setShowHelp(true)}
-          className="mx-auto flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 text-xs font-semibold text-slate-300 transition-colors hover:border-cyan-300/30 hover:text-white"
+          className="mx-auto flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 text-xs font-semibold text-slate-300 transition-colors hover:border-brand-300/30 hover:text-white"
         >
-          <HelpCircle className="h-4 w-4 text-cyan-300" />
+          <HelpCircle className="h-4 w-4 text-brand-300" />
           {t('ai.panel.helpTrigger', 'Was kann ich sagen?')}
         </button>
       </div>

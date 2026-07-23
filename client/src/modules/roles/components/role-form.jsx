@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {
   Loader2, Shield, Key, Check, Search,
-  ChevronLeft, ArrowRight, Eye, Pencil, Trash2, Crown,
+  ChevronLeft, ArrowRight, Eye, Pencil, Trash2, Crown, GitMerge,
   CheckCircle2, Circle,
 } from 'lucide-react';
 
@@ -30,11 +30,12 @@ const ACTION_META = {
   read:   { icon: Eye,     color: 'text-sky-500',     bg: 'bg-sky-500/10',     ring: 'ring-sky-500/20',     selectedBg: 'bg-sky-500/15 border-sky-500/40 text-sky-700 dark:text-sky-300' },
   write:  { icon: Pencil,  color: 'text-emerald-500', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20', selectedBg: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300' },
   delete: { icon: Trash2,  color: 'text-rose-500',    bg: 'bg-rose-500/10',    ring: 'ring-rose-500/20',    selectedBg: 'bg-rose-500/15 border-rose-500/40 text-rose-700 dark:text-rose-300' },
+  merge:  { icon: GitMerge, color: 'text-brand-600', bg: 'bg-brand-500/10', ring: 'ring-brand-500/20', selectedBg: 'bg-brand-500/15 border-brand-500/40 text-brand-700 dark:text-brand-300' },
   admin:  { icon: Crown,   color: 'text-amber-500',   bg: 'bg-amber-500/10',   ring: 'ring-amber-500/20',   selectedBg: 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300' },
 };
 
 const MODULE_ACCENTS = [
-  { bg: 'bg-violet-500/10', text: 'text-violet-500', ring: 'ring-violet-500/20' },
+  { bg: 'bg-brand-500/10', text: 'text-brand-500', ring: 'ring-brand-500/20' },
   { bg: 'bg-sky-500/10',    text: 'text-sky-500',    ring: 'ring-sky-500/20' },
   { bg: 'bg-emerald-500/10',text: 'text-emerald-500',ring: 'ring-emerald-500/20' },
   { bg: 'bg-amber-500/10',  text: 'text-amber-500',  ring: 'ring-amber-500/20' },
@@ -294,20 +295,20 @@ export function RoleForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
               <div className="px-6 pt-6 pb-3 shrink-0">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center ring-1 ring-violet-500/20">
-                      <Key className="h-4 w-4 text-violet-500" />
+                    <div className="h-9 w-9 rounded-lg bg-brand-500/10 flex items-center justify-center ring-1 ring-brand-500/20">
+                      <Key className="h-4 w-4 text-brand-500" />
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold">{t('roles.permsTitle', 'Berechtigungen')}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {t('roles.permsDesc', 'Waehlen Sie die Zugriffsrechte fuer diese Rolle')}
+                        {t('roles.permsDesc', 'Wählen Sie die Zugriffsrechte für diese Rolle')}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs font-semibold">
-                      <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
-                      {selectedPerms.length} / {allPerms.length} {t('roles.selected', 'ausgewaehlt')}
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-xs font-semibold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+                      {selectedPerms.length} / {allPerms.length} {t('roles.selected', 'ausgewählt')}
                     </span>
                     <Button type="button" variant="ghost" size="sm" onClick={selectAll}>
                       {t('roles.selectAll', 'Alle')}
@@ -474,7 +475,7 @@ export function RoleForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 h-9" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  {t('common.back', 'Zurueck')}
+                  {t('common.back', 'Zurück')}
                 </Button>
               ) : (
                 <Button type="button" variant="ghost" className="h-9" onClick={() => onOpenChange(false)}>

@@ -56,7 +56,7 @@ export function getCustomerTypeMeta(customer, t) {
       ? t('crm.addressBook.privateAddress', 'Privatadresse')
       : t('crm.addressBook.companyAddress', 'Firmenadresse'),
     className: isPrivate
-      ? 'bg-violet-500/10 text-violet-700 ring-violet-500/20 dark:text-violet-300'
+      ? 'bg-brand-500/10 text-brand-700 ring-brand-500/20 dark:text-brand-300'
       : 'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-300',
   };
 }

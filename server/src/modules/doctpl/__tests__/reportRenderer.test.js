@@ -13,10 +13,10 @@ describe('ReportRenderer service report (DOC-004)', () => {
   const data = {
     templateType: 'service_report',
     equipment: { name: 'Viessmann Vitodens 200', model: 'B2HF', serialNumber: 'SN-12345', location: 'Keller' },
-    findings: 'Kalkablagerungen im Waermetauscher festgestellt.',
-    workPerformed: 'Waermetauscher gereinigt und entkalkt.',
+    findings: 'Kalkablagerungen im Wärmetauscher festgestellt.',
+    workPerformed: 'Wärmetauscher gereinigt und entkalkt.',
     materialsUsed: [{ description: 'Entkalker', quantity: 2, unit: 'L' }],
-    recommendations: 'Jaehrliche Wartung empfohlen.',
+    recommendations: 'Jährliche Wartung empfohlen.',
     timeSpent: '2.5 h',
     technician: { name: 'Hans Muster' },
   };
@@ -29,9 +29,9 @@ describe('ReportRenderer service report (DOC-004)', () => {
 
   test('renders findings, work performed and recommendations', () => {
     const text = render(data);
-    expect(text).toContain('Kalkablagerungen im Waermetauscher festgestellt.');
-    expect(text).toContain('Waermetauscher gereinigt und entkalkt.');
-    expect(text).toContain('Jaehrliche Wartung empfohlen.');
+    expect(text).toContain('Kalkablagerungen im Wärmetauscher festgestellt.');
+    expect(text).toContain('Wärmetauscher gereinigt und entkalkt.');
+    expect(text).toContain('Jährliche Wartung empfohlen.');
   });
 
   test('renders materials used and technician name with a signature label', () => {
@@ -46,7 +46,7 @@ describe('ReportRenderer inspection certificate (DOC-004)', () => {
   const data = {
     templateType: 'inspection_certificate',
     checklist: [
-      { label: 'Dichtheitspruefung', status: 'pass' },
+      { label: 'Dichtheitsprüfung', status: 'pass' },
       { label: 'Abgaswerte', status: 'fail' },
     ],
     overallResult: 'fail',
@@ -56,7 +56,7 @@ describe('ReportRenderer inspection certificate (DOC-004)', () => {
 
   test('renders checklist items with localized pass/fail status', () => {
     const text = render(data);
-    expect(text).toContain('Dichtheitspruefung');
+    expect(text).toContain('Dichtheitsprüfung');
     expect(text).toContain('Abgaswerte');
     expect(text).toContain('Bestanden'); // pass (de)
     expect(text).toContain('Nicht bestanden'); // fail (de)

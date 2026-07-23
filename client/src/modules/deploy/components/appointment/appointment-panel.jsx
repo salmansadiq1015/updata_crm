@@ -85,7 +85,7 @@ export function AppointmentPanel({ assignmentId }) {
   const statusActions = [
     {
       status: 'CONFIRMED',
-      label: t('deploy.appointments.markConfirmed', 'Bestaetigt'),
+      label: t('deploy.appointments.markConfirmed', 'Bestätigt'),
       icon: CheckCircle2,
       visible: ['SENT', 'RESCHEDULED'].includes(appointment.confirmationStatus),
     },

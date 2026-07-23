@@ -16,7 +16,7 @@ import { ChatInput } from './chat-input';
 
 const dragHasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
 
-export function ChatPanel({ roomId }) {
+export function ChatPanel({ roomId, variant = 'full' }) {
   const { t } = useLanguage();
   const [replyTarget, setReplyTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
@@ -158,7 +158,7 @@ export function ChatPanel({ roomId }) {
           </div>
         )}
       </div>
-      <ChatContextPanel room={room} currentUserId={currentUserId} />
+      {variant !== 'embedded' && <ChatContextPanel room={room} currentUserId={currentUserId} />}
       <ChatSearchDialog
         open={searchOpen}
         onOpenChange={setSearchOpen}

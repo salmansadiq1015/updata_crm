@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const INSTALLATION_TYPE_OPTIONS = [
   { value: 'boiler', de: 'Boiler', en: 'Boiler' },
-  { value: 'heat_pump', de: 'Waermepumpe', en: 'Heat pump' },
+  { value: 'heat_pump', de: 'Wärmepumpe', en: 'Heat pump' },
   { value: 'solar_thermal', de: 'Solarthermie', en: 'Solar thermal' },
   { value: 'radiator_system', de: 'Radiator-System', en: 'Radiator system' },
   { value: 'ventilation', de: 'Lüftung', en: 'Ventilation' },

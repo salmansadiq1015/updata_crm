@@ -32,7 +32,7 @@ const QUEUE_STATUS_COLUMNS: Array<{ key: QueueStatus; labelKey: string; fallback
   { key: 'active', labelKey: 'platform.status.active', fallback: 'Aktiv' },
   { key: 'completed', labelKey: 'platform.status.completed', fallback: 'Abgeschlossen' },
   { key: 'failed', labelKey: 'platform.status.failed', fallback: 'Fehlgeschlagen' },
-  { key: 'delayed', labelKey: 'platform.status.delayed', fallback: 'Verzoegert' },
+  { key: 'delayed', labelKey: 'platform.status.delayed', fallback: 'Verzögert' },
 ];
 const QUEUE_STATUS_FILTERS = new Set<QueueStatusFilter>([
   'all',

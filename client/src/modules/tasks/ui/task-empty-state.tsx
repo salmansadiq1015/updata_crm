@@ -16,15 +16,15 @@ export function TaskEmptyState({ type, onReset, onRetry }: TaskEmptyStateProps) 
   const Icon = type === 'offline' ? WifiOff : Inbox;
   const title = {
     empty: t('tasks.empty.title', 'Noch keine Aufgaben'),
-    filtered: t('tasks.empty.filteredTitle', 'Keine Aufgaben fuer diese Ansicht'),
+    filtered: t('tasks.empty.filteredTitle', 'Keine Aufgaben für diese Ansicht'),
     error: t('tasks.empty.errorTitle', 'Aufgaben konnten nicht geladen werden'),
     offline: t('tasks.empty.offlineTitle', 'Sie sind offline'),
   }[type];
   const body = {
     empty: t('tasks.empty.body', 'Erstellen Sie eine Aufgabe, um diesen Arbeitsbereich zu starten.'),
     filtered: t('tasks.empty.filteredBody', 'Passen Sie Suche oder Filter an, um mehr Aufgaben zu sehen.'),
-    error: t('tasks.empty.errorBody', 'Die aktuelle Ansicht bleibt nach Moeglichkeit aus dem Cache verfuegbar.'),
-    offline: t('tasks.empty.offlineBody', 'Zwischengespeicherte Aufgaben bleiben nutzbar. Aenderungen synchronisieren nach der Wiederverbindung.'),
+    error: t('tasks.empty.errorBody', 'Die aktuelle Ansicht bleibt nach Möglichkeit aus dem Cache verfügbar.'),
+    offline: t('tasks.empty.offlineBody', 'Zwischengespeicherte Aufgaben bleiben nutzbar. Änderungen synchronisieren nach der Wiederverbindung.'),
   }[type];
 
   return (
@@ -38,7 +38,7 @@ export function TaskEmptyState({ type, onReset, onRetry }: TaskEmptyStateProps) 
       </div>
       {type === 'filtered' && onReset ? (
         <Button type="button" variant="outline" size="sm" className="" onClick={onReset}>
-          {t('tasks.clearFilters', 'Filter loeschen')}
+          {t('tasks.clearFilters', 'Filter löschen')}
         </Button>
       ) : null}
       {isError && onRetry ? (

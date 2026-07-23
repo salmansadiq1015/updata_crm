@@ -6,6 +6,7 @@ import { Download, File, FileImage, FileText, FileVideo, Loader2, Trash2, Upload
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import type { TaskAttachment } from '../types/task-types';
 import { taskApi } from '../services/task-api';
 
@@ -72,6 +73,7 @@ function useResolvedUrl(taskId: string, attachmentId: string) {
 }
 
 function FilePreview({ attachment }: { attachment: TaskAttachment }) {
+  const { t } = useLanguage();
   const [zoom, setZoom] = useState(1);
   const { mimeType, fileName, taskId, id } = attachment;
   const { data: resolvedUrl, isLoading: isResolvingUrl } = useResolvedUrl(taskId, id);
@@ -80,7 +82,7 @@ function FilePreview({ attachment }: { attachment: TaskAttachment }) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin opacity-40" />
-        <p className="text-sm">Loading preview…</p>
+        <p className="text-sm">{t('tasks.files.loadingPreview', 'Vorschau wird geladen…')}</p>
       </div>
     );
   }
@@ -181,7 +183,7 @@ function FilePreview({ attachment }: { attachment: TaskAttachment }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
       <FileText className="h-16 w-16 opacity-40" />
-      <p className="text-sm">This file type cannot be previewed.</p>
+      <p className="text-sm">{t('tasks.files.noPreview', 'Dieser Dateityp kann nicht angezeigt werden.')}</p>
       <a href={resolvedUrl} download={fileName} target="_blank" rel="noopener noreferrer">
         <Button variant="outline" className="gap-2">
           <Download className="h-4 w-4" /> Download file
@@ -221,6 +223,7 @@ export function TaskFileViewer({
   onUpload,
   onDelete,
 }: FileViewerProps) {
+  const { t } = useLanguage();
   const [viewingAttachment, setViewingAttachment] = useState<TaskAttachment | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -248,7 +251,7 @@ export function TaskFileViewer({
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Attachments {attachments.length > 0 && `(${attachments.length})`}
+          {t('tasks.files.title', 'Anhänge')} {attachments.length > 0 && `(${attachments.length})`}
         </h3>
         <Button
           variant="outline"
@@ -258,7 +261,7 @@ export function TaskFileViewer({
           onClick={() => fileInputRef.current?.click()}
         >
           <Upload className="h-3.5 w-3.5" />
-          {isUploading ? 'Uploading…' : 'Upload'}
+          {isUploading ? t('tasks.files.uploading', 'Wird hochgeladen…') : t('tasks.files.upload', 'Hochladen')}
         </Button>
         <input ref={fileInputRef} type="file" className="sr-only" onChange={handleFileChange} />
       </div>
@@ -270,7 +273,7 @@ export function TaskFileViewer({
           ))}
         </div>
       ) : attachments.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No attachments yet.</p>
+        <p className="text-sm text-muted-foreground">{t('tasks.files.empty', 'Noch keine Anhänge.')}</p>
       ) : (
         <div className="space-y-1.5">
           {attachments.map((att) => {
@@ -311,7 +314,7 @@ export function TaskFileViewer({
                     e.stopPropagation();
                     handleDelete(att.id);
                   }}
-                  title={isConfirmingDelete ? 'Click again to confirm delete' : 'Delete attachment'}
+                  title={isConfirmingDelete ? t('tasks.files.confirmDelete', 'Zum Bestätigen erneut klicken') : t('tasks.files.delete', 'Anhang löschen')}
                 >
                   {isConfirmingDelete ? 'Confirm?' : <Trash2 className="h-3.5 w-3.5" />}
                 </button>

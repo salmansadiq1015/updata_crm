@@ -273,7 +273,7 @@ export function CoarseMatrix() {
             description={hasFilters
               ? t('deploy.coarse.noMatchesDesc', 'Keine Zeilen entsprechen den aktuellen Filtern.')
               : t('deploy.empty.coarseDesc', 'Weisen Sie Mitarbeitern Projekte zu, um die Grobplanung zu starten.')}
-            actionLabel={t('deploy.coarse.clearFilters', 'Filter zuruecksetzen')}
+            actionLabel={t('deploy.coarse.clearFilters', 'Filter zurücksetzen')}
             onAction={() => { setSearch(''); setOverAllocatedOnly(false); }}
             compact
           />

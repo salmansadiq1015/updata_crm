@@ -12,9 +12,9 @@ export function AiPanelAgent({ agentRun, workflowLabel }) {
 
   return (
     <div className="flex min-h-full flex-col justify-center gap-5 px-5 py-8">
-      <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.06] p-5 shadow-[0_20px_80px_rgba(14,165,233,0.12)]">
+      <div className="rounded-2xl border border-brand-300/15 bg-brand-400/[0.06] p-5 shadow-[0_20px_80px_rgba(208,10,25,0.12)]">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-300/10 text-cyan-200 ring-1 ring-cyan-200/20">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-300/10 text-brand-200 ring-1 ring-brand-200/20">
             {isRunning ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
           </span>
           <div className="min-w-0">

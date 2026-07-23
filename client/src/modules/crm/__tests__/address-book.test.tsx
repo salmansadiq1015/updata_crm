@@ -98,7 +98,7 @@ function baseHookValue() {
         },
         site: null,
         address: {
-          formatted: 'Billingstrasse 10, 8001 Zuerich, ZH, CH',
+          formatted: 'Billingstrasse 10, 8001 Zürich, ZH, CH',
         },
         coordinates: null,
         contacts: [],
@@ -140,7 +140,7 @@ function baseHookValue() {
           accessInstructions: 'Ring at caretaker.',
         },
         address: {
-          formatted: 'Objektweg 7, 8050 Zuerich, ZH, CH',
+          formatted: 'Objektweg 7, 8050 Zürich, ZH, CH',
         },
         coordinates: { latitude: 47.3769, longitude: 8.5417 },
         contacts: [],

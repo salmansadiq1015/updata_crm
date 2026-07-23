@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, MapPin, AlertCircle } from 'lucide-react';
+import { Loader2, MapPin, AlertCircle, CheckCircle2, Circle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 
@@ -44,6 +45,20 @@ const partyValues = (party) => ({
   canton: party?.canton || '',
 });
 
+const PARTY_FIELDS = ['name', 'careOf', 'street', 'postalCode', 'city', 'canton'];
+
+// The customer record uses `addressSupplement` where a site party uses `careOf`.
+const customerToParty = (customer) => (customer ? {
+  name: customer.name || '',
+  careOf: customer.addressSupplement || '',
+  street: customer.street || '',
+  postalCode: customer.postalCode || '',
+  city: customer.city || '',
+  canton: customer.canton || '',
+} : null);
+
+const sameParty = (a, b) => !!a && !!b && PARTY_FIELDS.every((f) => (a[f] || '') === (b[f] || ''));
+
 // Drop an all-empty party to null so we don't persist empty blocks.
 const cleanParty = (party) => {
   if (!party) return null;
@@ -58,13 +73,34 @@ const cleanParty = (party) => {
   return Object.values(values).some(Boolean) ? values : null;
 };
 
-export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
+export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoading, customer }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
+  const customerParty = useMemo(() => customerToParty(customer), [customer]);
+  // 'customer' | 'billing' | 'manual' — how each party block is filled.
+  const [billingMode, setBillingMode] = useState('manual');
+  const [ownerMode, setOwnerMode] = useState('manual');
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
     resolver: zodResolver(createSiteSchema),
     defaultValues: BLANK,
   });
+
+  // On open, infer the mode from the stored data so an object saved as
+  // "same as customer" reopens on that option instead of falling back to manual.
+  useEffect(() => {
+    if (!open) return;
+    const billing = partyValues(defaultValues?.billingAddress);
+    const owner = partyValues(defaultValues?.ownership);
+    if (!defaultValues) {
+      setBillingMode(customerParty ? 'customer' : 'manual');
+      setOwnerMode(customerParty ? 'customer' : 'manual');
+      return;
+    }
+    setBillingMode(sameParty(billing, customerParty) ? 'customer' : 'manual');
+    if (sameParty(owner, customerParty)) setOwnerMode('customer');
+    else if (sameParty(owner, billing)) setOwnerMode('billing');
+    else setOwnerMode('manual');
+  }, [open, defaultValues, customerParty]);
 
   useEffect(() => {
     if (defaultValues) {
@@ -93,6 +129,34 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
   const billingCanton = watch('billingAddress.canton');
   const ownerCanton = watch('ownership.canton');
 
+  const billingParty = PARTY_FIELDS.reduce((acc, f) => {
+    acc[f] = watch(`billingAddress.${f}`) || '';
+    return acc;
+  }, {});
+  // Object identity changes on every render, so effects key off the serialized form.
+  const billingKey = JSON.stringify(billingParty);
+
+  const applyParty = (prefix, source) => {
+    if (!source) return;
+    PARTY_FIELDS.forEach((f) => setValue(`${prefix}.${f}`, source[f] || '', { shouldDirty: true }));
+  };
+
+  // Mirror the source into the block for as long as a non-manual mode is active,
+  // so editing the customer's address upstream keeps the copy in sync.
+  useEffect(() => {
+    if (billingMode === 'customer') applyParty('billingAddress', customerParty);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingMode, customerParty]);
+
+  useEffect(() => {
+    if (ownerMode === 'customer') applyParty('ownership', customerParty);
+    else if (ownerMode === 'billing') applyParty('ownership', billingParty);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerMode, customerParty, billingKey]);
+
+  const billingLocked = billingMode !== 'manual';
+  const ownerLocked = ownerMode !== 'manual';
+
   const submit = async (data) => {
     const cleaned = {
       ...data,
@@ -115,6 +179,8 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 
   const inputCls = 'bg-background border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground focus-visible:border-amber-500/50 focus-visible:ring-amber-500/20';
   const selectTriggerCls = 'bg-background border-border rounded-lg h-9 text-[13px] text-foreground focus:border-amber-500/50 focus:ring-amber-500/20';
+  // Mirrored blocks stay readable but clearly not editable.
+  const lockedCls = 'bg-muted/60 text-muted-foreground cursor-not-allowed';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -186,8 +252,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                     <SelectTrigger className={selectTriggerCls}><SelectValue placeholder="—" /></SelectTrigger>
                     <SelectContent className="max-h-72 bg-card border-border">
                       {CH_CANTONS.map((c) => (
-                        <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">
-                          <span className="font-mono text-[10px] mr-1.5 text-muted-foreground">{c.code}</span>{c.name}
+                        <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">{c.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -217,31 +282,39 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.sites.billingAddress', 'Rechnungsadresse')}
             </p>
+            <FillModeSwitch
+              name={t('crm.sites.billingAddress', 'Rechnungsadresse')}
+              value={billingMode}
+              onChange={setBillingMode}
+              options={[
+                ...(customerParty ? [{ value: 'customer', label: t('crm.sites.sameAsCustomer', 'Gleich wie Kunde') }] : []),
+                { value: 'manual', label: t('crm.sites.manualEntry', 'Manuelle Eingabe') },
+              ]}
+            />
             <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
               <DarkField label={t('crm.name', 'Name')} error={errors.billingAddress?.name}>
-                <Input {...register('billingAddress.name')} placeholder="z.B. Peter Müller" className={inputCls} />
+                <Input {...register('billingAddress.name')} readOnly={billingLocked} placeholder="z.B. Peter Müller" className={cn(inputCls, billingLocked && lockedCls)} />
               </DarkField>
               <DarkField label={t('crm.sites.careOf', 'c/o')} error={errors.billingAddress?.careOf}>
-                <Input {...register('billingAddress.careOf')} placeholder="z.B. Test Liegenschaftsverwaltung AG" className={inputCls} />
+                <Input {...register('billingAddress.careOf')} readOnly={billingLocked} placeholder="z.B. Test Liegenschaftsverwaltung AG" className={cn(inputCls, billingLocked && lockedCls)} />
               </DarkField>
               <DarkField label={t('crm.street', 'Strasse')} error={errors.billingAddress?.street}>
-                <Input {...register('billingAddress.street')} className={inputCls} />
+                <Input {...register('billingAddress.street')} readOnly={billingLocked} className={cn(inputCls, billingLocked && lockedCls)} />
               </DarkField>
               <div className="grid grid-cols-[120px_1fr] gap-4">
                 <DarkField label={t('crm.postalCode', 'PLZ')} error={errors.billingAddress?.postalCode}>
-                  <Input {...register('billingAddress.postalCode')} className={inputCls} />
+                  <Input {...register('billingAddress.postalCode')} readOnly={billingLocked} className={cn(inputCls, billingLocked && lockedCls)} />
                 </DarkField>
                 <DarkField label={t('crm.city', 'Ort')} error={errors.billingAddress?.city}>
-                  <Input {...register('billingAddress.city')} className={inputCls} />
+                  <Input {...register('billingAddress.city')} readOnly={billingLocked} className={cn(inputCls, billingLocked && lockedCls)} />
                 </DarkField>
               </div>
               <DarkField label={t('crm.canton', 'Kanton')} error={errors.billingAddress?.canton}>
-                <Select value={billingCanton || ''} onValueChange={(v) => setValue('billingAddress.canton', v, { shouldDirty: true })}>
+                <Select value={billingCanton || ''} disabled={billingLocked} onValueChange={(v) => setValue('billingAddress.canton', v, { shouldDirty: true })}>
                   <SelectTrigger className={selectTriggerCls}><SelectValue placeholder="—" /></SelectTrigger>
                   <SelectContent className="max-h-72 bg-card border-border">
                     {CH_CANTONS.map((c) => (
-                      <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">
-                        <span className="font-mono text-[10px] mr-1.5 text-muted-foreground">{c.code}</span>{c.name}
+                      <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">{c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -254,28 +327,40 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.sites.ownership', 'Eigentümerschaft')}
             </p>
+            <FillModeSwitch
+              name={t('crm.sites.ownership', 'Eigentümerschaft')}
+              value={ownerMode}
+              onChange={setOwnerMode}
+              options={[
+                ...(customerParty ? [{ value: 'customer', label: t('crm.sites.sameAsCustomer', 'Gleich wie Kunde') }] : []),
+                { value: 'billing', label: t('crm.sites.sameAsBilling', 'Gleich wie Rechnungsadresse') },
+                { value: 'manual', label: t('crm.sites.manualEntry', 'Manuelle Eingabe') },
+              ]}
+            />
             <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
               <DarkField label={t('crm.name', 'Name')} error={errors.ownership?.name}>
-                <Input {...register('ownership.name')} placeholder="z.B. Peter Müller" className={inputCls} />
+                <Input {...register('ownership.name')} readOnly={ownerLocked} placeholder="z.B. Peter Müller" className={cn(inputCls, ownerLocked && lockedCls)} />
+              </DarkField>
+              <DarkField label={t('crm.sites.careOf', 'c/o')} error={errors.ownership?.careOf}>
+                <Input {...register('ownership.careOf')} readOnly={ownerLocked} placeholder="z.B. Test Liegenschaftsverwaltung AG" className={cn(inputCls, ownerLocked && lockedCls)} />
               </DarkField>
               <DarkField label={t('crm.street', 'Strasse')} error={errors.ownership?.street}>
-                <Input {...register('ownership.street')} className={inputCls} />
+                <Input {...register('ownership.street')} readOnly={ownerLocked} className={cn(inputCls, ownerLocked && lockedCls)} />
               </DarkField>
               <div className="grid grid-cols-[120px_1fr] gap-4">
                 <DarkField label={t('crm.postalCode', 'PLZ')} error={errors.ownership?.postalCode}>
-                  <Input {...register('ownership.postalCode')} className={inputCls} />
+                  <Input {...register('ownership.postalCode')} readOnly={ownerLocked} className={cn(inputCls, ownerLocked && lockedCls)} />
                 </DarkField>
                 <DarkField label={t('crm.city', 'Ort')} error={errors.ownership?.city}>
-                  <Input {...register('ownership.city')} className={inputCls} />
+                  <Input {...register('ownership.city')} readOnly={ownerLocked} className={cn(inputCls, ownerLocked && lockedCls)} />
                 </DarkField>
               </div>
               <DarkField label={t('crm.canton', 'Kanton')} error={errors.ownership?.canton}>
-                <Select value={ownerCanton || ''} onValueChange={(v) => setValue('ownership.canton', v, { shouldDirty: true })}>
+                <Select value={ownerCanton || ''} disabled={ownerLocked} onValueChange={(v) => setValue('ownership.canton', v, { shouldDirty: true })}>
                   <SelectTrigger className={selectTriggerCls}><SelectValue placeholder="—" /></SelectTrigger>
                   <SelectContent className="max-h-72 bg-card border-border">
                     {CH_CANTONS.map((c) => (
-                      <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">
-                        <span className="font-mono text-[10px] mr-1.5 text-muted-foreground">{c.code}</span>{c.name}
+                      <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">{c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -298,7 +383,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
             <Button
               type="submit"
               disabled={isLoading}
-              className="bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white gap-2"
+              className="bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white gap-2"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEdit ? t('common.save', 'Speichern') : t('crm.sites.createSite', 'Objekt anlegen')}
@@ -307,6 +392,38 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Segmented radio row that drives how a party block is filled.
+ * Options whose source is unavailable (no customer loaded) are left out.
+ */
+function FillModeSwitch({ value, onChange, options, name }) {
+  return (
+    <div role="radiogroup" aria-label={name} className="flex flex-wrap gap-1.5 mb-4">
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium transition-all',
+              active
+                ? 'border-brand-500/40 bg-brand-500/10 text-brand-700 dark:text-brand-300'
+                : 'border-border bg-background text-muted-foreground hover:text-foreground hover:border-border',
+            )}
+          >
+            {active ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5 opacity-40" />}
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

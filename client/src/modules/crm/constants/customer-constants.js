@@ -6,11 +6,28 @@
 export const CUSTOMER_TYPES = Object.freeze({
   PRIVATE: 'private',
   BUSINESS: 'business',
+  PARTNER: 'partner',
+  SUPPLIER: 'supplier',
 });
+
+// Types that can be either a person or a company, so the salutation stays available.
+export const CUSTOMER_TYPES_WITH_SALUTATION = Object.freeze(['private', 'partner', 'supplier']);
+
+const CUSTOMER_TYPE_LABELS = Object.freeze({
+  private:  { key: 'crm.typePrivate',  fallback: 'Privat' },
+  business: { key: 'crm.typeBusiness', fallback: 'Firma' },
+  partner:  { key: 'crm.typePartner',  fallback: 'Partner' },
+  supplier: { key: 'crm.typeSupplier', fallback: 'Lieferant' },
+});
+
+export function getCustomerTypeLabel(type, t) {
+  const entry = CUSTOMER_TYPE_LABELS[type] || CUSTOMER_TYPE_LABELS.private;
+  return t ? t(entry.key, entry.fallback) : entry.fallback;
+}
 
 export const CUSTOMER_STATUSES = Object.freeze({
   ACTIVE: 'active',
-  ARCHIVED: 'archived',
+  INACTIVE: 'inactive',
 });
 
 export const NEWSLETTER_CHANNELS = Object.freeze({
@@ -57,7 +74,7 @@ export const CH_CANTONS = Object.freeze([
  * roles-table for visual distinctiveness.
  */
 export const CUSTOMER_ACCENTS = Object.freeze([
-  { bg: 'bg-violet-500/10', ring: 'ring-violet-500/20', text: 'text-violet-500', bar: 'from-violet-500 to-transparent' },
+  { bg: 'bg-brand-500/10', ring: 'ring-brand-500/20', text: 'text-brand-500', bar: 'from-brand-500 to-transparent' },
   { bg: 'bg-sky-500/10', ring: 'ring-sky-500/20', text: 'text-sky-500', bar: 'from-sky-500 to-transparent' },
   { bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20', text: 'text-emerald-500', bar: 'from-emerald-500 to-transparent' },
   { bg: 'bg-amber-500/10', ring: 'ring-amber-500/20', text: 'text-amber-500', bar: 'from-amber-500 to-transparent' },

@@ -11,9 +11,6 @@ import { useKeyboardShortcuts } from '@/shared/hooks/use-keyboard-shortcuts';
 import { useAiStore } from '@/modules/ai/store/ai-store';
 import { cn } from '@/lib/utils';
 
-const AiAssistantButton = lazy(() =>
-  import('@/modules/ai/components/ai-assistant-button').then((m) => ({ default: m.AiAssistantButton }))
-);
 const AiAssistantPanel = lazy(() =>
   import('@/modules/ai/components/panel/ai-assistant-panel').then((m) => ({ default: m.AiAssistantPanel }))
 );
@@ -77,10 +74,9 @@ export default function PlatformLayout({ children }) {
       {/* Right drawer */}
       {!isAiPage && <RightDrawer />}
 
-      {/* AI Assistant floating button — hidden when already on AI page */}
+      {/* AI Assistant panel — button lives in the header; hidden on AI page */}
       {!isAiPage && (
         <Suspense fallback={null}>
-          <AiAssistantButton />
           <AiAssistantPanel />
         </Suspense>
       )}

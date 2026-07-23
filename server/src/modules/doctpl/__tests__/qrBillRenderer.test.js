@@ -18,7 +18,7 @@ function qrData() {
     amount: 1081.5,
     currency: 'CHF',
     reference: '210000000003139471430009017',
-    debtor: { name: 'Muster AG', address: 'Bahnhofstrasse 1', zip: '8001', city: 'Zuerich', country: 'CH' },
+    debtor: { name: 'Muster AG', address: 'Bahnhofstrasse 1', zip: '8001', city: 'Zürich', country: 'CH' },
     message: 'RE-2026-0001',
   };
 }

@@ -13,8 +13,8 @@ export function AiPanelProcessing({ session, uploadProgress, onCancel, isCancell
 
   return (
     <div className="flex min-h-full flex-col justify-center gap-5 px-5 py-8">
-      <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/[0.06] p-5 text-center shadow-[0_18px_70px_rgba(14,165,233,0.12)]">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-300/10 text-cyan-200 ring-1 ring-cyan-200/20">
+      <div className="rounded-2xl border border-brand-300/15 bg-brand-400/[0.06] p-5 text-center shadow-[0_18px_70px_rgba(208,10,25,0.12)]">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-300/10 text-brand-200 ring-1 ring-brand-200/20">
           {showProgress ? <RadioTower className="h-6 w-6" /> : <Loader2 className="h-6 w-6 animate-spin" />}
         </div>
         <p className="mt-4 text-sm font-semibold text-white">
@@ -30,7 +30,7 @@ export function AiPanelProcessing({ session, uploadProgress, onCancel, isCancell
       {showProgress && (
         <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-violet-400 to-cyan-300 transition-all duration-300"
+            className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-red transition-all duration-300"
             style={{ width: `${uploadProgress}%` }}
           />
         </div>

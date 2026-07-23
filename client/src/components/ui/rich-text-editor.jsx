@@ -51,7 +51,7 @@ function ToolbarGroup({ children }) {
   return <div className="flex items-center gap-0.5">{children}</div>;
 }
 
-function EditorToolbar({ editor }) {
+function EditorToolbar({ editor, showImage = true }) {
   const { t } = useLanguage();
   const [linkUrl, setLinkUrl] = useState('');
   const [linkOpen, setLinkOpen] = useState(false);
@@ -172,6 +172,7 @@ function EditorToolbar({ editor }) {
             </div>
           </PopoverContent>
         </Popover>
+        {showImage && (
         <Popover open={imageOpen} onOpenChange={setImageOpen}>
           <PopoverTrigger asChild>
             <div>
@@ -194,6 +195,7 @@ function EditorToolbar({ editor }) {
             </div>
           </PopoverContent>
         </Popover>
+        )}
       </ToolbarGroup>
 
       <Separator orientation="vertical" className="h-5 mx-1" />
@@ -235,6 +237,8 @@ export function RichTextEditor({
   minHeight = 192,
   disabled = false,
   error,
+  // The CRM customer form hides this: users mistook it for a file upload.
+  showImage = true,
 }) {
   const editor = useEditor({
     immediatelyRender: false,
@@ -289,7 +293,7 @@ export function RichTextEditor({
         error && 'border-destructive ring-[3px] ring-destructive/20',
       )}
     >
-      <EditorToolbar editor={editor} />
+      <EditorToolbar editor={editor} showImage={showImage} />
       <EditorContent
         editor={editor}
         className={cn(

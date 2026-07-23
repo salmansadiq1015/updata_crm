@@ -192,7 +192,7 @@ export function QopAdvancedFilters({ onFiltersChange }) {
 
           <div className="flex gap-2 items-end flex-wrap">
             <Button size="sm" variant="ghost" onClick={clearFilters}>
-              {t('qop.filter.clear', 'Filter loeschen')}
+              {t('qop.filter.clear', 'Filter löschen')}
             </Button>
             <div className="flex-1" />
             <Input

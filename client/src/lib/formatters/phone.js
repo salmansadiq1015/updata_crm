@@ -33,6 +33,32 @@ export function formatPhone(value, { fallback = '' } = {}) {
   return value;
 }
 
+// Separators people actually type between digits, including the Swiss apostrophe
+// (079'123'45'67) and the slash common in Swiss-German writing (044/123 45 67).
+const SEP = "[\\s.\\-/'’]*";
+
+/**
+ * Swiss number in either notation:
+ *   national        079 123 45 67 · 044/123 45 67 · 079'123'45'67
+ *   international   +41 79 123 45 67 · 0041 79 123 45 67 · +41 (0)79 123 45 67
+ * After the prefix a Swiss number always has 9 digits and never starts with 0.
+ */
+export const SWISS_PHONE_REGEX = new RegExp(
+  `^(?:(?:\\+41|0041)${SEP}(?:\\(0\\)${SEP})?|0)[1-9](?:${SEP}\\d){8}$`,
+);
+
+/** Foreign numbers, so an employee with a non-Swiss mobile is not blocked. */
+export const INTERNATIONAL_PHONE_REGEX = new RegExp(
+  `^(?:\\+|00)(?!41)[1-9]\\d{0,2}(?:${SEP}\\d){6,13}$`,
+);
+
+/** Empty is valid — callers decide whether the field is required. */
+export function isValidPhone(value) {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) return true;
+  return SWISS_PHONE_REGEX.test(trimmed) || INTERNATIONAL_PHONE_REGEX.test(trimmed);
+}
+
 /** Normalize to international format +41 … for dialing. */
 export function formatPhoneInternational(value, { defaultCountry = '+41' } = {}) {
   const raw = onlyDigits(value);

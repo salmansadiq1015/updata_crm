@@ -25,8 +25,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
-  Pencil, Trash2, Shield, Users, Calendar, ChevronRight,
+  Pencil, Trash2, Shield, Users, Calendar, 
   Copy, Lock, Key, MoreHorizontal, Eye, Hash, Sparkles,
   CheckCircle2,
 } from 'lucide-react';
@@ -36,7 +37,7 @@ const isProtectedRole = (role) =>
   !!role?.isSystem || PROTECTED_ROLE_NAMES.includes(role?.name);
 
 const ROLE_ACCENTS = [
-  { bg: 'bg-violet-500/10', ring: 'ring-violet-500/20', text: 'text-violet-500', bar: 'from-violet-500 to-transparent', glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(139_92_246_/_0.25),transparent_60%)]' },
+  { bg: 'bg-brand-500/10', ring: 'ring-brand-500/20', text: 'text-brand-500', bar: 'from-brand-500 to-transparent', glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(139_92_246_/_0.25),transparent_60%)]' },
   { bg: 'bg-sky-500/10', ring: 'ring-sky-500/20', text: 'text-sky-500', bar: 'from-sky-500 to-transparent', glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(14_165_233_/_0.25),transparent_60%)]' },
   { bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20', text: 'text-emerald-500', bar: 'from-emerald-500 to-transparent', glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(16_185_129_/_0.25),transparent_60%)]' },
   { bg: 'bg-amber-500/10', ring: 'ring-amber-500/20', text: 'text-amber-500', bar: 'from-amber-500 to-transparent', glow: 'bg-[radial-gradient(ellipse_at_top_right,rgb(245_158_11_/_0.25),transparent_60%)]' },
@@ -88,6 +89,8 @@ export default function RoleDetailPage() {
     onError: (err) => showError(err.message),
   });
 
+  useBreadcrumbLabel(id, role?.name);
+
   if (isLoading) return <RoleDetailSkeleton />;
 
   if (!role) {
@@ -114,14 +117,6 @@ export default function RoleDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/settings" className="hover:text-foreground transition-colors">Einstellungen</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/settings/roles" className="hover:text-foreground transition-colors">Rollen</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium">{role.name}</span>
-      </nav>
 
       {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-6">
@@ -223,8 +218,8 @@ export default function RoleDetailPage() {
           <div className="rounded-xl border border-border bg-card p-4 space-y-2 shadow-theme-sm">
             <SidebarStatRow
               icon={Key}
-              iconBg="bg-violet-500/10"
-              iconColor="text-violet-500"
+              iconBg="bg-brand-500/10"
+              iconColor="text-brand-500"
               label="Berechtigungen"
               value={permissions.length}
             />
@@ -284,7 +279,7 @@ export default function RoleDetailPage() {
               <TabsTrigger value="permissions" className="gap-1.5">
                 <Key className="h-3.5 w-3.5" />
                 Berechtigungen
-                <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 text-[10px] font-semibold">
+                <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 text-[10px] font-semibold">
                   {permissions.length}
                 </span>
               </TabsTrigger>
@@ -310,8 +305,8 @@ export default function RoleDetailPage() {
                         Modul- und aktionsbasierte Zugriffsrechte
                       </p>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
                       {permissions.length} aktiv
                     </span>
                   </div>

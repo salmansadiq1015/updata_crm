@@ -20,9 +20,9 @@ const CARDS = [
     key: 'openOrdersCount',
     icon: ShoppingCart,
     labelKey: 'kpi.openOrdersCount',
-    color: 'text-violet-500',
-    bg: 'bg-violet-500/10',
-    border: 'border-l-violet-500',
+    color: 'text-brand-500',
+    bg: 'bg-brand-500/10',
+    border: 'border-l-brand-500',
   },
   {
     key: 'totalArticles',

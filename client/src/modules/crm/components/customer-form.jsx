@@ -21,10 +21,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {
-  Loader2, User, Building2, Mail, MapPin, Bell,
+  Loader2, User, Building2, Handshake, Truck, Mail, MapPin, Bell,
   ChevronLeft, Check, ArrowRight, AlertCircle,
 } from 'lucide-react';
-import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
+import { CH_CANTONS, CUSTOMER_TYPES_WITH_SALUTATION } from '@/modules/crm/constants/customer-constants';
+import { ImagesPanel } from '@/modules/crm/components/images-panel';
+import { CustomerAttachmentsSection } from '@/modules/crm/components/customer-attachments-section';
+import { useCustomerAttachments } from '@/modules/crm/hooks/use-customer-attachments';
+import { usePermissions } from '@/shared/hooks/use-permissions';
 import { DuplicateWarning } from './duplicate-warning';
 
 const STEPS = [
@@ -68,7 +72,7 @@ const SALUTATIONS = [
 ];
 
 export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const isEdit = !!defaultValues?._id;
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -133,7 +137,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   });
 
   const handleFormSubmit = async (data) => {
-    if (currentStep < STEPS.length - 1) return;
+    // Creating walks the wizard; editing can be saved from any step.
+    if (!isEdit && currentStep < STEPS.length - 1) return;
     try {
       await onSubmit(data);
       handleOpenChange(false);
@@ -141,6 +146,13 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
     } catch {
       // Keep modal open so the user can fix & retry.
     }
+  };
+
+  // With free navigation an invalid field can sit on a step we are not looking
+  // at — jump to the first step that has an error so it is actually visible.
+  const handleInvalid = (formErrors) => {
+    const failing = STEPS.findIndex((step) => step.fields.some((field) => formErrors?.[field]));
+    if (failing >= 0 && failing !== currentStep) setCurrentStep(failing);
   };
 
   const goNext = async () => {
@@ -152,6 +164,13 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
 
   const isLastStep = currentStep === STEPS.length - 1;
   const isBusiness = typeVal === 'business';
+  const showSalutation = CUSTOMER_TYPES_WITH_SALUTATION.includes(typeVal);
+  // Files attach to an existing customer only — there is no id before the first save.
+  const customerId = defaultValues?._id || null;
+  const { hasPermission } = usePermissions();
+  const canWriteFiles = hasPermission('crm:write');
+  const { data: customerAttachments = [] } = useCustomerAttachments(customerId);
+  const isGerman = locale === 'de';
   const voiceCustomerId = defaultValues?._id || null;
   const handleOpenChange = (nextOpen) => {
     if (!nextOpen) setCurrentStep(0);
@@ -159,6 +178,10 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   };
   const selectCustomerType = (nextType) => {
     setValue('type', nextType, { shouldValidate: true, shouldDirty: true });
+    // Anrede is meaningless for a company — drop a stale value when switching.
+    if (nextType === 'business') {
+      setValue('salutation', '', { shouldValidate: true, shouldDirty: true });
+    }
     if (nextType !== 'business') {
       setValue('ownerName', '', { shouldValidate: true, shouldDirty: true });
       setValue('uidNumber', '', { shouldValidate: true, shouldDirty: true });
@@ -166,12 +189,14 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
     }
   };
 
-  const inputCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20';
-  const selectTriggerCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-violet-500/50 focus:ring-violet-500/20';
+  const inputCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-500/50 focus-visible:ring-brand-500/20';
+  const selectTriggerCls = 'bg-muted/50 border-border rounded-lg h-9 text-[13px] text-foreground focus:border-brand-500/50 focus:ring-brand-500/20';
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col border border-border bg-card shadow-2xl">
+      <DialogContent className="sm:max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl max-h-[92vh] flex flex-col border border-border bg-card shadow-2xl"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         {/* Header */}
         <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
@@ -203,13 +228,15 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                 <div key={s.id} className="flex items-center gap-2 flex-1">
                   <button
                     type="button"
-                    onClick={() => i < currentStep && setCurrentStep(i)}
-                    disabled={i > currentStep}
+                    onClick={() => (isEdit || i < currentStep) && setCurrentStep(i)}
+                    disabled={!isEdit && i > currentStep}
                     className={cn(
                       'flex items-center gap-2 h-9 px-3 rounded-lg transition-all text-xs font-semibold flex-1 min-w-0',
                       isCurrent && 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
                       isCompleted && 'text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400',
-                      !isCurrent && !isCompleted && 'text-muted-foreground/60',
+                      !isCurrent && !isCompleted && (isEdit
+                        ? 'text-muted-foreground hover:bg-muted cursor-pointer'
+                        : 'text-muted-foreground/60'),
                     )}
                   >
                     <div className={cn(
@@ -232,7 +259,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
 
         {/* Form */}
         <form
-          onSubmit={handleSubmit(handleFormSubmit)}
+          onSubmit={handleSubmit(handleFormSubmit, handleInvalid)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && currentStep < STEPS.length - 1 && e.target.tagName !== 'TEXTAREA') {
               e.preventDefault();
@@ -266,6 +293,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   </div>
                 </div>
 
+                {showSalutation && (
                 <DarkField label={t('crm.salutation', 'Anrede')} error={errors.salutation}>
                   <Select
                     value={selectedSalutation ? selectedSalutation : '__none__'}
@@ -283,6 +311,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     </SelectContent>
                   </Select>
                 </DarkField>
+                )}
 
                 <DarkField label={isBusiness ? t('crm.companyName', 'Firmenname') : t('crm.name', 'Name')} required error={errors.name}>
                   <Input
@@ -333,6 +362,42 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground">{t('crm.typeBusiness', 'Firma')}</p>
                         <p className="text-xs text-muted-foreground">Unternehmen / Verwaltung</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectCustomerType('partner')}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
+                        typeVal === 'partner'
+                          ? 'border-brand-500/60 bg-brand-500/8 ring-1 ring-brand-500/30'
+                          : 'border-border bg-muted/30 hover:border-border hover:bg-muted/50',
+                      )}
+                    >
+                      <div className="h-10 w-10 rounded-lg bg-brand-500/10 ring-1 ring-brand-500/20 flex items-center justify-center shrink-0">
+                        <Handshake className="h-5 w-5 text-brand-700 dark:text-brand-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{t('crm.typePartner', 'Partner')}</p>
+                        <p className="text-xs text-muted-foreground">Firma oder Privat</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectCustomerType('supplier')}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
+                        typeVal === 'supplier'
+                          ? 'border-amber-500/60 bg-amber-500/8 ring-1 ring-amber-500/30'
+                          : 'border-border bg-muted/30 hover:border-border hover:bg-muted/50',
+                      )}
+                    >
+                      <div className="h-10 w-10 rounded-lg bg-amber-500/10 ring-1 ring-amber-500/20 flex items-center justify-center shrink-0">
+                        <Truck className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{t('crm.typeSupplier', 'Lieferant')}</p>
+                        <p className="text-xs text-muted-foreground">Firma oder Privat</p>
                       </div>
                     </button>
                   </div>
@@ -434,10 +499,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                       <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
                         {CH_CANTONS.map((c) => (
                           <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/60 focus:text-foreground">
-                            <span className="flex items-center gap-2">
-                              <span className="font-mono text-[11px] text-muted-foreground">{c.code}</span>
-                              {c.name}
-                            </span>
+                            {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -473,8 +535,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
             {currentStep === 3 && (
               <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-5">
                 <div className="flex items-center gap-2.5 mb-2">
-                  <div className="h-9 w-9 rounded-lg bg-violet-500/10 flex items-center justify-center ring-1 ring-violet-500/20">
-                    <Bell className="h-4 w-4 text-violet-700 dark:text-violet-400" />
+                  <div className="h-9 w-9 rounded-lg bg-brand-500/10 flex items-center justify-center ring-1 ring-brand-500/20">
+                    <Bell className="h-4 w-4 text-brand-700 dark:text-brand-400" />
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-foreground">{t('crm.stepPreferences', 'Einstellungen')}</h3>
@@ -530,10 +592,44 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                         maxLength={5000}
                         minHeight={120}
                         error={errors.notes}
+                        showImage={false}
                       />
                     )}
                   />
                 </DarkField>
+
+                {/* Bilder & Dokumente — upload par glisser-déposer, alimente les
+                    mêmes panneaux que la fiche client. Nécessite un client déjà
+                    enregistré (l'upload est lié à son id). */}
+                <div className="pt-2 space-y-5">
+                  {customerId ? (
+                    <>
+                      <div>
+                        <p className="text-[12px] font-medium text-muted-foreground mb-1.5">
+                          {t('crm.images', 'Bilder')}
+                        </p>
+                        <ImagesPanel entityType="customer" entityId={customerId} />
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-medium text-muted-foreground mb-1.5">
+                          {t('crm.documents', 'Dokumente')}
+                        </p>
+                        <CustomerAttachmentsSection
+                          customerId={customerId}
+                          attachments={customerAttachments}
+                          canWrite={canWriteFiles}
+                          de={isGerman}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center">
+                      <p className="text-[13px] text-muted-foreground">
+                        {t('crm.filesAfterSave', 'Bilder und Dokumente können hochgeladen werden, sobald der Kunde gespeichert ist.')}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -568,19 +664,14 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                 ))}
               </div>
 
-              {isLastStep ? (
-                <Button
-                  type="submit"
-                  className="h-9 gap-1.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white"
-                  disabled={isLoading}
-                >
-                  {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {isEdit ? t('common.save', 'Speichern') : t('common.create', 'Erstellen')}
-                </Button>
-              ) : (
+              {!isLastStep && (
                 <Button
                   type="button"
-                  className="h-9 gap-1.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white"
+                  variant={isEdit ? 'outline' : undefined}
+                  className={cn(
+                    'h-9 gap-1.5',
+                    !isEdit && 'bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white',
+                  )}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -589,6 +680,16 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                 >
                   {t('common.next', 'Weiter')}
                   <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {(isLastStep || isEdit) && (
+                <Button
+                  type="submit"
+                  className="h-9 gap-1.5 bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white"
+                  disabled={isLoading}
+                >
+                  {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {isEdit ? t('common.save', 'Speichern') : t('common.create', 'Erstellen')}
                 </Button>
               )}
             </div>

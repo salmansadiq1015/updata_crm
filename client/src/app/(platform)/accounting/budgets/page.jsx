@@ -83,7 +83,7 @@ function BudgetDialog({ open, form, accounts, pending, de, onChange, onLineChang
               <Input className="h-9" type="date" value={form.endDate} onChange={(event) => onChange('endDate', event.target.value)} required />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Waehrung' : 'Currency'}</Label>
+              <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
               <SelectField value={form.currency} onValueChange={(value) => onChange('currency', value)} options={ACCOUNTING_CURRENCIES} />
             </div>
             <div className="flex flex-col gap-1.5 md:col-span-3">
@@ -110,7 +110,7 @@ function BudgetDialog({ open, form, accounts, pending, de, onChange, onLineChang
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="NONE">{de ? 'Konto waehlen' : 'Select account'}</SelectItem>
+                        <SelectItem value="NONE">{de ? 'Konto wählen' : 'Select account'}</SelectItem>
                         {accounts.map((account) => (
                           <SelectItem key={account._id} value={account._id}>
                             {account.accountNumber} - {account.name}
@@ -227,7 +227,7 @@ export default function BudgetsPage() {
           <SelectField value={filters.status} onValueChange={(value) => setFilter('status', value)} options={BUDGET_STATUSES} includeAll />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">{de ? 'Waehrung' : 'Currency'}</Label>
+          <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
           <SelectField value={filters.currency} onValueChange={(value) => setFilter('currency', value)} options={ACCOUNTING_CURRENCIES} />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -304,7 +304,7 @@ export default function BudgetsPage() {
           </div>
           {!selectedBudgetId && (
             <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-              {de ? 'Budget auswaehlen, um Varianz zu sehen.' : 'Select a budget to view variance.'}
+              {de ? 'Budget auswählen, um Varianz zu sehen.' : 'Select a budget to view variance.'}
             </div>
           )}
           {selectedBudgetId && varianceLoading && <div className="p-4"><Skeleton className="h-40 w-full" /></div>}

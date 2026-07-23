@@ -251,7 +251,13 @@ class CustomerRepository {
       .map(({ _score, ...rest }) => rest);
   }
 
-  async textSearch(searchTerm, limit = 25) {
+  /**
+   * Picker-facing search. Deactivated customers are excluded by default: they
+   * must not be selectable when creating projects, sites or documents, while
+   * staying fully visible in the customer list, which goes through
+   * findWithCursor instead. Filters that need them pass includeInactive.
+   */
+  async textSearch(searchTerm, limit = 25, { includeInactive = false } = {}) {
     const raw = (searchTerm || '').trim();
     if (!raw) return [];
 
@@ -268,7 +274,8 @@ class CustomerRepository {
       return { $or: searchFields.map((field) => ({ [field]: regex })) };
     });
 
-    const filter = wordConditions.length === 1 ? wordConditions[0] : { $and: wordConditions };
+    const matchWords = wordConditions.length === 1 ? wordConditions[0] : { $and: wordConditions };
+    const filter = includeInactive ? matchWords : { ...matchWords, status: { $ne: 'inactive' } };
 
     return Customer.find(filter)
       .sort({ name: 1 })
@@ -287,7 +294,7 @@ class CustomerRepository {
   async softDelete(id) {
     return Customer.findByIdAndUpdate(
       id,
-      { isDeleted: true, deletedAt: new Date(), status: 'archived' },
+      { status: 'inactive' },
       { returnDocument: 'after' },
     );
   }
@@ -301,10 +308,15 @@ class CustomerRepository {
     return result.modifiedCount;
   }
 
-  async bulkSoftDelete(ids) {
+  /**
+   * Customers are deactivated, never soft-deleted: they stay listed and can be
+   * reactivated. Setting isDeleted here would hide them behind the pre-find
+   * hook with no way back through the UI.
+   */
+  async bulkDeactivate(ids) {
     const result = await Customer.updateMany(
       { _id: { $in: ids }, isDeleted: false },
-      { $set: { isDeleted: true, deletedAt: new Date(), status: 'archived' } },
+      { $set: { status: 'inactive' } },
     );
     return result.modifiedCount;
   }

@@ -28,7 +28,7 @@ const FILTER_OPTIONS = [
   { value: 'empty', label: 'Ohne Aktivität (0)' },
   { value: 'low', label: 'Wenig Aktivität (1-2)' },
   { value: 'active', label: 'Mit Aktivität (3+)' },
-  { value: 'archived', label: 'Archiviert' },
+  { value: 'inactive', label: 'Deaktiviert' },
   { value: 'deleted', label: 'Gelöscht (soft)' },
   { value: 'declined', label: 'Nur Absagen' },
 ];
@@ -39,7 +39,7 @@ function filterCustomers(customers, filter, search) {
   if (filter === 'empty') filtered = filtered.filter((c) => c.totalActivity === 0);
   else if (filter === 'low') filtered = filtered.filter((c) => c.totalActivity >= 1 && c.totalActivity <= 2);
   else if (filter === 'active') filtered = filtered.filter((c) => c.totalActivity >= 3);
-  else if (filter === 'archived') filtered = filtered.filter((c) => c.status === 'archived');
+  else if (filter === 'inactive') filtered = filtered.filter((c) => c.status === 'inactive');
   else if (filter === 'deleted') filtered = filtered.filter((c) => c.isDeleted);
   else if (filter === 'declined') filtered = filtered.filter((c) => c.hasDeclined && c.totalActivity <= 1);
 
@@ -112,7 +112,7 @@ export function CleanupWorkspace() {
   const stats = useMemo(() => {
     const total = customers.length;
     const empty = customers.filter((c) => c.totalActivity === 0).length;
-    const archived = customers.filter((c) => c.status === 'archived').length;
+    const archived = customers.filter((c) => c.status === 'inactive').length;
     const withActivity = customers.filter((c) => c.totalActivity > 0).length;
     return { total, empty, archived, withActivity };
   }, [customers]);
@@ -313,11 +313,11 @@ export function CleanupWorkspace() {
                       className={cn(
                         'text-[10px] font-normal',
                         c.status === 'active' && 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300',
-                        c.status === 'archived' && 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
+                        c.status === 'inactive' && 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
                         c.isDeleted && 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300',
                       )}
                     >
-                      {c.isDeleted ? 'Gelöscht' : c.status === 'archived' ? 'Archiviert' : 'Aktiv'}
+                      {c.isDeleted ? 'Gelöscht' : c.status === 'inactive' ? 'Deaktiviert' : 'Aktiv'}
                     </Badge>
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">{c.city || '—'}</td>
@@ -362,7 +362,7 @@ export function CleanupWorkspace() {
               disabled={bulkArchive.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {bulkArchive.isPending ? 'Wird archiviert...' : `${selected.size} archivieren`}
+              {bulkArchive.isPending ? 'Wird deaktiviert...' : `${selected.size} deaktivieren`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

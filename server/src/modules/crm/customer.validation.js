@@ -29,7 +29,7 @@ const businessRequiredTaxIdentifier = Joi.when('type', {
 export const createCustomerSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(255),
-    type: Joi.string().valid('private', 'business').required(),
+    type: Joi.string().valid('private', 'business', 'partner', 'supplier').required(),
     ownerName: businessRequiredText('Owner name'),
     salutation: Joi.string().valid('herr', 'frau', 'familie', 'firma', 'herr_frau', 'frau_herr').allow('', null),
     street: Joi.string().trim().max(255).required(),
@@ -54,7 +54,7 @@ export const updateCustomerSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     name: Joi.string().trim().max(255),
-    type: Joi.string().valid('private', 'business'),
+    type: Joi.string().valid('private', 'business', 'partner', 'supplier'),
     ownerName: businessRequiredText('Owner name'),
     salutation: Joi.string().valid('herr', 'frau', 'familie', 'firma', 'herr_frau', 'frau_herr').allow('', null),
     street: Joi.string().trim().max(255).allow('', null),
@@ -77,8 +77,8 @@ export const updateCustomerSchema = {
 
 export const listCustomersSchema = {
   query: cursorPagination.keys({
-    status: Joi.string().valid('active', 'archived'),
-    type: Joi.string().valid('private', 'business'),
+    status: Joi.string().valid('active', 'inactive'),
+    type: Joi.string().valid('private', 'business', 'partner', 'supplier'),
     postalCode: swissPostalCode.allow(''),
     canton: canton.allow(''),
     newsletterOptIn: Joi.string().valid('true', 'false'),
@@ -91,6 +91,9 @@ export const searchCustomersSchema = {
   query: Joi.object({
     q: Joi.string().required().trim().min(1).max(100),
     limit: Joi.number().integer().min(1).max(50).default(25),
+    // Opt-in for filters that must still reach deactivated customers; pickers
+    // leave it off so those customers cannot be selected.
+    includeInactive: Joi.boolean().default(false),
   }),
 };
 
@@ -103,6 +106,12 @@ export const duplicateCheckSchema = {
 
 export const customerIdParamSchema = {
   params: Joi.object({ id: objectId.required() }),
+};
+
+export const undoMergeSchema = {
+  params: Joi.object({
+    mergeId: objectId.required(),
+  }),
 };
 
 export const mergeCustomersSchema = {
@@ -133,8 +142,8 @@ export const bulkUpdateCustomersSchema = {
   body: Joi.object({
     ids: Joi.array().items(objectId).min(1).max(100).required(),
     data: Joi.object({
-      status: Joi.string().valid('active', 'archived'),
-      type: Joi.string().valid('private', 'business'),
+      status: Joi.string().valid('active', 'inactive'),
+      type: Joi.string().valid('private', 'business', 'partner', 'supplier'),
       newsletterOptIn: Joi.boolean(),
       newsletterChannel: Joi.string().valid('email', 'whatsapp', 'both'),
     }).min(1).required(),
@@ -149,8 +158,8 @@ export const bulkDeleteCustomersSchema = {
 
 export const exportCustomersSchema = {
   query: Joi.object({
-    status: Joi.string().valid('active', 'archived'),
-    type: Joi.string().valid('private', 'business'),
+    status: Joi.string().valid('active', 'inactive'),
+    type: Joi.string().valid('private', 'business', 'partner', 'supplier'),
     postalCode: swissPostalCode.allow(''),
     canton: canton.allow(''),
     newsletterOptIn: Joi.string().valid('true', 'false'),

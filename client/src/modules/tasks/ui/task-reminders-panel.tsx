@@ -5,13 +5,21 @@ import { Bell, Clock, Loader2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useLanguage } from '@/lib/i18n/language-context';
 import type { TaskReminder, TaskReminderChannel, TaskReminderInput } from '../types/task-types';
 
 const RELATIVE_OPTIONS = [
-  { label: '2h before', minutes: -120 },
-  { label: '1d before', minutes: -1440 },
-  { label: '1w before', minutes: -10080 },
+  { key: 'tasks.reminders.offset2h', fallback: '2 Std. vorher', minutes: -120 },
+  { key: 'tasks.reminders.offset1d', fallback: '1 Tag vorher', minutes: -1440 },
+  { key: 'tasks.reminders.offset1w', fallback: '1 Woche vorher', minutes: -10080 },
 ];
+
+const REMINDER_STATUS_KEYS: Record<string, { key: string; fallback: string }> = {
+  PENDING:   { key: 'tasks.reminders.statusPending',   fallback: 'Geplant' },
+  FIRED:     { key: 'tasks.reminders.statusFired',     fallback: 'Ausgelöst' },
+  SNOOZED:   { key: 'tasks.reminders.statusSnoozed',   fallback: 'Zurückgestellt' },
+  CANCELLED: { key: 'tasks.reminders.statusCancelled', fallback: 'Abgebrochen' },
+};
 
 const SNOOZE_OPTIONS = [
   { label: '15m', minutes: 15 },
@@ -42,6 +50,7 @@ export function TaskRemindersPanel({
   onSnoozeReminder,
   isSaving,
 }: TaskRemindersPanelProps) {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<'RELATIVE' | 'ABSOLUTE'>('RELATIVE');
   const [offsetMinutes, setOffsetMinutes] = useState('-1440');
   const [absoluteAt, setAbsoluteAt] = useState('');
@@ -67,7 +76,7 @@ export function TaskRemindersPanel({
       <div className="flex items-center justify-between">
         <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <Bell className="h-3.5 w-3.5" />
-          Reminders
+          {t('tasks.reminders.title', 'Erinnerungen')}
         </h4>
         {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
       </div>
@@ -79,8 +88,8 @@ export function TaskRemindersPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="RELATIVE">Relative</SelectItem>
-              <SelectItem value="ABSOLUTE">At time</SelectItem>
+              <SelectItem value="RELATIVE">{t('tasks.reminders.modeRelative', 'Relativ')}</SelectItem>
+              <SelectItem value="ABSOLUTE">{t('tasks.reminders.modeAbsolute', 'Zeitpunkt')}</SelectItem>
             </SelectContent>
           </Select>
 
@@ -91,7 +100,7 @@ export function TaskRemindersPanel({
               </SelectTrigger>
               <SelectContent>
                 {RELATIVE_OPTIONS.map((option) => (
-                  <SelectItem key={option.minutes} value={String(option.minutes)}>{option.label}</SelectItem>
+                  <SelectItem key={option.minutes} value={String(option.minutes)}>{t(option.key, option.fallback)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -114,7 +123,7 @@ export function TaskRemindersPanel({
         <div className="h-12 animate-pulse rounded-md bg-muted" />
       ) : reminders.length === 0 ? (
         <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-          No reminders
+          {t('tasks.reminders.empty', 'Keine Erinnerungen')}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -124,7 +133,7 @@ export function TaskRemindersPanel({
                 <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-xs font-medium">{formatDateTime(reminder.fireAt)}</div>
-                  <div className="text-[11px] text-muted-foreground">{reminder.status}</div>
+                  <div className="text-[11px] text-muted-foreground">{t(REMINDER_STATUS_KEYS[reminder.status]?.key ?? '', REMINDER_STATUS_KEYS[reminder.status]?.fallback ?? reminder.status)}</div>
                 </div>
                 <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => onDeleteReminder(reminder.id)}>
                   <Trash2 className="h-3.5 w-3.5" />

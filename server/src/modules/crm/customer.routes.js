@@ -8,7 +8,7 @@ import { authenticate, requirePermission } from '../../shared/middleware/authent
 import {
   createCustomerSchema, updateCustomerSchema, listCustomersSchema,
   searchCustomersSchema, duplicateCheckSchema, customerIdParamSchema,
-  mergeCustomersSchema, bulkUpdateCustomersSchema, bulkDeleteCustomersSchema,
+  mergeCustomersSchema, undoMergeSchema, bulkUpdateCustomersSchema, bulkDeleteCustomersSchema,
   exportCustomersSchema, customerActivitySchema,
 } from './customer.validation.js';
 import { createNoteSchema } from './note.validation.js';
@@ -80,7 +80,12 @@ router.get('/export', authenticate, requirePermission('crm:read'), validate(expo
 router.get('/cleanup-audit', authenticate, requirePermission('crm:admin'), (req, res, next) => customerController.cleanupAudit(req, res, next));
 router.patch('/bulk-update', authenticate, requirePermission('crm:admin'), validate(bulkUpdateCustomersSchema), (req, res, next) => customerController.bulkUpdate(req, res, next));
 router.post('/bulk-delete', authenticate, requirePermission('crm:admin'), validate(bulkDeleteCustomersSchema), (req, res, next) => customerController.bulkDeactivate(req, res, next));
-router.post('/merge', authenticate, requirePermission('crm:admin'), validate(mergeCustomersSchema), (req, res, next) => customerController.merge(req, res, next));
+// Merging duplicates and reversing a merge are key-user operations, gated on
+// their own permission so they can be granted without full crm:admin.
+// Registered before /:id so "merges" is not read as a customer id.
+router.post('/merge', authenticate, requirePermission('crm:merge'), validate(mergeCustomersSchema), (req, res, next) => customerController.merge(req, res, next));
+router.get('/merges', authenticate, requirePermission('crm:merge'), (req, res, next) => customerController.listMerges(req, res, next));
+router.post('/merges/:mergeId/undo', authenticate, requirePermission('crm:merge'), validate(undoMergeSchema), (req, res, next) => customerController.undoMerge(req, res, next));
 
 // Standard CRUD
 
@@ -196,10 +201,10 @@ router.patch('/:id', authenticate, requirePermission('crm:write'), validate(upda
 
 /**
  * @swagger
- * /crm/customers/{id}/archive:
+ * /crm/customers/{id}/deactivate:
  *   post:
  *     tags: [CRM - Customers]
- *     summary: Archive (soft-delete) a customer
+ *     summary: Deactivate a customer (reversible — customers are never archived away)
  *     parameters:
  *       - in: path
  *         name: id
@@ -208,11 +213,25 @@ router.patch('/:id', authenticate, requirePermission('crm:write'), validate(upda
  *           type: string
  *     responses:
  *       200:
- *         description: Customer archived
+ *         description: Customer deactivated
  *       404:
  *         description: Customer not found
  */
-router.post('/:id/archive', authenticate, requirePermission('crm:delete'), validate(customerIdParamSchema), (req, res, next) => customerController.archive(req, res, next));
+router.post('/:id/deactivate', authenticate, requirePermission('crm:delete'), validate(customerIdParamSchema), (req, res, next) => customerController.deactivate(req, res, next));
+
+/**
+ * @swagger
+ * /crm/customers/{id}/reactivate:
+ *   post:
+ *     tags: [CRM - Customers]
+ *     summary: Reactivate a deactivated customer
+ *     responses:
+ *       200:
+ *         description: Customer reactivated
+ *       409:
+ *         description: Already active, or merged into another customer
+ */
+router.post('/:id/reactivate', authenticate, requirePermission('crm:delete'), validate(customerIdParamSchema), (req, res, next) => customerController.reactivate(req, res, next));
 
 // Notes sub-routes
 router.get('/:id/notes', authenticate, requirePermission('crm:read'), setCustomerEntity, (req, res, next) => noteController.listByEntity(req, res, next));

@@ -39,7 +39,7 @@ const TONE_CLASSES = {
   blue: 'bg-blue-500/10 text-blue-500 ring-blue-500/20',
   amber: 'bg-amber-500/10 text-amber-500 ring-amber-500/20',
   muted: 'bg-muted text-muted-foreground ring-border',
-  violet: 'bg-violet-500/10 text-violet-500 ring-violet-500/20',
+  violet: 'bg-brand-500/10 text-brand-500 ring-brand-500/20',
   sky: 'bg-sky-500/10 text-sky-500 ring-sky-500/20',
   red: 'bg-red-500/10 text-red-500 ring-red-500/20',
   orange: 'bg-orange-500/10 text-orange-500 ring-orange-500/20',

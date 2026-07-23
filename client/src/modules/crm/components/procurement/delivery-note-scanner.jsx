@@ -91,7 +91,7 @@ export function DeliveryNoteScanner({ open, onOpenChange }) {
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-violet-500" />
+            <FileText className="h-4 w-4 text-brand-500" />
             {tx('delivery.title')}
           </DialogTitle>
         </DialogHeader>

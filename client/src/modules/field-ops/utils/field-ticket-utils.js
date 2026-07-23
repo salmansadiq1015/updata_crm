@@ -31,8 +31,8 @@ export const FIELD_TICKET_STATUS_CONFIG = {
   PENDING: {
     de: 'Wartend',
     en: 'Pending',
-    className: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
-    dot: 'bg-violet-500',
+    className: 'border-brand-500/30 bg-brand-500/10 text-brand-700 dark:text-brand-300',
+    dot: 'bg-brand-500',
   },
   COMPLETED: {
     de: 'Erledigt',

@@ -139,7 +139,7 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
               <Input className="h-9 font-mono text-xs" value={form.supplierInvoiceNumber} onChange={(event) => set('supplierInvoiceNumber', event.target.value)} required />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Waehrung' : 'Currency'}</Label>
+              <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
               <Select value={form.currency} onValueChange={(value) => set('currency', value)}>
                 <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -155,7 +155,7 @@ function CreateApInvoiceDialog({ open, onClose, accounts, de }) {
               <Input type="date" className="h-9" value={form.invoiceDate} onChange={(event) => set('invoiceDate', event.target.value)} required />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Faellig' : 'Due Date'}</Label>
+              <Label className="text-xs">{de ? 'Fällig' : 'Due Date'}</Label>
               <Input type="date" className="h-9" value={form.dueDate} onChange={(event) => set('dueDate', event.target.value)} required />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -547,7 +547,7 @@ export default function PayablesPage() {
             onClick={() => setCursorStack((current) => (current.length > 1 ? current.slice(0, -1) : current))}
             disabled={cursorStack.length <= 1}
           >
-            {de ? 'Zurueck' : 'Previous'}
+            {de ? 'Zurück' : 'Previous'}
           </Button>
           <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button

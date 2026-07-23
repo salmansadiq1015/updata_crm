@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '@/modules/users/services/user-service';
 import { roleService } from '@/modules/roles/services/role-service';
@@ -26,10 +25,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
   Pencil, UserX, UserCheck, Mail, Phone,
   Globe, Calendar, Clock, Shield, Monitor, Activity,
-  Copy, Briefcase, MapPin, ChevronRight,
+  Copy, Briefcase, MapPin, 
   KeyRound, ExternalLink, Hash, Wrench, Award,
 } from 'lucide-react';
 
@@ -101,6 +101,8 @@ export default function UserDetailPage() {
     onError: (err) => showError(err.message),
   });
 
+  useBreadcrumbLabel(id, user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() : '');
+
   if (isLoading) return <DetailSkeleton />;
 
   if (!user) {
@@ -110,7 +112,8 @@ export default function UserDetailPage() {
   const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase();
   const isActive = user.status === 'active' || user.isActive;
   const status = statusConfig[user.status] || statusConfig.active;
-  const fullAddress = [user.street, user.zip && user.city ? `${user.zip} ${user.city}` : user.city, user.country].filter(Boolean).join(', ');
+  // Swiss postal order: supplement (c/o, Postfach) sits above the street — same as CRM customers.
+  const fullAddress = [user.addressSupplement, user.street, user.zip && user.city ? `${user.zip} ${user.city}` : user.city, user.country].filter(Boolean).join(', ');
 
   const handleFormSubmit = (data) => {
     updateMutation.mutate(data);
@@ -118,14 +121,6 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/settings" className="hover:text-foreground transition-colors">Einstellungen</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/settings/users" className="hover:text-foreground transition-colors">{t('users.title')}</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium">{user.firstName} {user.lastName}</span>
-      </nav>
 
       {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-6">
@@ -262,7 +257,7 @@ export default function UserDetailPage() {
 
             <TabsContent value="overview">
               <div className="grid gap-4 sm:grid-cols-2">
-                <OverviewInfoCard icon={Shield} iconBg="bg-violet-500/10" iconColor="text-violet-500" label={t('users.role')} value={user.role?.name || '\u2014'} description={user.role?.description} />
+                <OverviewInfoCard icon={Shield} iconBg="bg-brand-500/10" iconColor="text-brand-500" label={t('users.role')} value={user.role?.name || '\u2014'} description={user.role?.description} />
                 <OverviewInfoCard icon={Globe} iconBg="bg-sky-500/10" iconColor="text-sky-500" label={t('users.language')} value={langNames[user.language] || user.language || 'Deutsch'} />
                 <OverviewInfoCard icon={Briefcase} iconBg="bg-amber-500/10" iconColor="text-amber-500" label={t('users.department') || 'Abteilung'} value={user.department || '\u2014'} description={user.position} />
                 <OverviewInfoCard icon={KeyRound} iconBg={status.bgColor} iconColor={status.textColor} label={t('users.accountStatus', 'Kontostatus')} value={t(status.key, status.fallback)} description={t(status.descKey, status.descFallback)} />
@@ -443,7 +438,7 @@ function AuditActivityTimeline({ userId }) {
     'user.created': { label: 'Konto erstellt', icon: Activity, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
     'session.revoked': { label: 'Sitzung widerrufen', icon: Monitor, color: 'text-red-500', bg: 'bg-red-500/10' },
     'account.activated': { label: 'Konto aktiviert', icon: UserCheck, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    'role.changed': { label: 'Rolle geändert', icon: Shield, color: 'text-violet-500', bg: 'bg-violet-500/10' },
+    'role.changed': { label: 'Rolle geändert', icon: Shield, color: 'text-brand-500', bg: 'bg-brand-500/10' },
   };
 
   const defaultEvent = { label: '', icon: Activity, color: 'text-muted-foreground', bg: 'bg-muted' };

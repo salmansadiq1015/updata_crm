@@ -448,7 +448,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>{t('qop.form.subsidyAmount', 'Foerdergelder (Abzug)')}</Label>
+                  <Label>{t('qop.form.subsidyAmount', 'Fördergelder (Abzug)')}</Label>
                   <Input
                     type="number"
                     min="0"
@@ -460,12 +460,12 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>{t('qop.form.subsidyNote', 'Foerdergelder-Hinweis')}</Label>
+                  <Label>{t('qop.form.subsidyNote', 'Fördergelder-Hinweis')}</Label>
                   <Textarea
                     rows={2}
                     value={form.subsidyNote}
                     onChange={(e) => set('subsidyNote', e.target.value)}
-                    placeholder={t('qop.form.subsidyNotePlaceholder', 'z.B. Foerdergelder Basel-Land ...')}
+                    placeholder={t('qop.form.subsidyNotePlaceholder', 'z.B. Fördergelder Basel-Land ...')}
                     className="resize-none rounded-xl text-sm"
                     maxLength={5000}
                   />
@@ -476,7 +476,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                     rows={2}
                     value={form.clientSideWorks}
                     onChange={(e) => set('clientSideWorks', e.target.value)}
-                    placeholder={t('qop.form.clientSideWorksPlaceholder', 'z.B. Freiraeumen Arbeitsbereich ...')}
+                    placeholder={t('qop.form.clientSideWorksPlaceholder', 'z.B. Freiräumen Arbeitsbereich ...')}
                     className="resize-none rounded-xl text-sm"
                     maxLength={5000}
                   />

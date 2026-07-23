@@ -23,7 +23,7 @@ const USER_CACHE_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_CACHE_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 // Fields users can edit on their own profile
-const SELF_EDITABLE_FIELDS = ['firstName', 'lastName', 'salutation', 'language', 'phone', 'department', 'position', 'street', 'city', 'zip', 'country'];
+const SELF_EDITABLE_FIELDS = ['firstName', 'lastName', 'salutation', 'language', 'phone', 'department', 'position', 'street', 'addressSupplement', 'city', 'zip', 'country'];
 
 function applyPreferredDepartmentPatch(updateData) {
   if (!Object.prototype.hasOwnProperty.call(updateData, 'preferredDepartmentId')) {
@@ -71,6 +71,7 @@ class UserService {
       department: data.department || null,
       position: data.position || null,
       street: data.street || null,
+      addressSupplement: data.addressSupplement || null,
       city: data.city || null,
       zip: data.zip || null,
       country: data.country || 'Schweiz',

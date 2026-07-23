@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { installationService } from '@/modules/crm/services/installation-service';
 import { queryKeys } from '@/lib/query/keys';
@@ -25,8 +24,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbTrail } from '@/stores/breadcrumb-store';
 import {
-  Pencil, PowerOff, ChevronRight, Wrench, FileText, Image as ImageIcon,
+  Pencil, PowerOff, Wrench, FileText, Image as ImageIcon,
   Calendar, Zap, Hash, ShieldCheck, Thermometer, Loader2, Activity, Flame, Package,
 } from 'lucide-react';
 import {
@@ -72,6 +72,24 @@ export function InstallationDetail() {
     onError: (err) => showError(err.message),
   });
 
+  // The URL (/crm/installations/:id) has no parent chain — publish
+  // Kunde › Objekt › Anlage so the header breadcrumb keeps those links.
+  useBreadcrumbTrail(id, [
+    ...(installation?.siteId?.customerId
+      ? [{
+          label: installation.siteId.customerId?.name || '',
+          path: `/crm/customers/${installation.siteId.customerId?._id || installation.siteId.customerId}`,
+        }]
+      : []),
+    ...(installation?.siteId
+      ? [{
+          label: installation.siteId?.name || '',
+          path: `/crm/sites/${installation.siteId?._id || installation.siteId}`,
+        }]
+      : []),
+    { label: installation ? t(`crm.installations.type.${installation.type}`, installation.type || '') : '' },
+  ]);
+
   if (isLoading) return <InstallationDetailSkeleton />;
   if (!installation) return <EmptyState title={t('crm.installations.notFound', 'Installation nicht gefunden')} description={t('crm.installations.notFoundDesc', 'Die angeforderte Installation existiert nicht.')} />;
 
@@ -88,24 +106,6 @@ export function InstallationDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground flex-wrap">
-        <Link href="/crm/customers" className="hover:text-foreground transition-colors">CRM</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        {customerId ? (
-          <Link href={`/crm/customers/${customerId}`} className="hover:text-foreground transition-colors truncate max-w-[150px]">
-            {customerName || t('crm.customer', 'Kunde')}
-          </Link>
-        ) : <span>{t('crm.customer', 'Kunde')}</span>}
-        <ChevronRight className="h-3.5 w-3.5" />
-        {siteId ? (
-          <Link href={`/crm/sites/${siteId}`} className="hover:text-foreground transition-colors truncate max-w-[150px]">
-            {siteName || t('crm.sites.title', 'Objekt')}
-          </Link>
-        ) : <span>{t('crm.sites.title', 'Objekt')}</span>}
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium truncate">{t(`crm.installations.type.${installation.type}`, meta.label)}</span>
-      </nav>
 
       {/* Hero Header card */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6">

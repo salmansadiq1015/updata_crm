@@ -35,6 +35,7 @@ import {
   ORDER_TYPE_LABELS, RELEASE_STATUS_CONFIG, ACTIVITY_TYPE_LABELS,
 } from '@/modules/field-ops/constants/field-ops-constants';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
   MoreHorizontal, Pencil, Trash2, ChevronLeft,
   MapPin, Phone, Mail, User, Calendar, FileText, Clock,
@@ -498,6 +499,8 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
 
   const { data: order, isLoading } = useFieldOpsOrderDetail(orderId);
   const { updateOrder, deleteOrder } = useFieldOpsOrderMutations();
+
+  useBreadcrumbLabel(orderId, order?.title || order?.assignmentNumber || order?.orderNumber);
 
   if (isLoading) return <DetailSkeleton />;
   if (!order) return (

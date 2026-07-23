@@ -25,8 +25,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
-  Pencil, Trash2, Shield, Users, Calendar, ChevronRight,
+  Pencil, Trash2, Shield, Users, Calendar, 
   Copy, Lock, Key, MoreHorizontal, Eye, Hash, Sparkles,
   CheckCircle2,
 } from 'lucide-react';
@@ -88,6 +89,8 @@ export default function RoleDetailPage() {
     onError: (err) => showError(err.message),
   });
 
+  useBreadcrumbLabel(id, role?.name);
+
   if (isLoading) return <RoleDetailSkeleton />;
 
   if (!role) {
@@ -114,14 +117,6 @@ export default function RoleDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/settings" className="hover:text-foreground transition-colors">Einstellungen</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/settings/roles" className="hover:text-foreground transition-colors">Rollen</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium">{role.name}</span>
-      </nav>
 
       {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-6">

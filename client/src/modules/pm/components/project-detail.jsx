@@ -30,8 +30,9 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDate, formatCurrency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
-  Pencil, Copy, Archive, ArrowRight, ChevronRight, Trash2,
+  Pencil, Copy, Archive, ArrowRight, Trash2,
   FolderKanban, Building2, User, Calendar, Wallet, FileText,
   ClipboardList, Clock, ListChecks, CalendarClock, Activity, ListTodo,
 } from 'lucide-react';
@@ -100,6 +101,8 @@ export function ProjectDetail() {
     onTransition: () => setStatusDialogOpen(false),
   });
 
+  useBreadcrumbLabel(id, project?.name);
+
   if (isLoading) return <DetailSkeleton />;
   if (!project) return <EmptyState title={language === 'de' ? 'Projekt nicht gefunden' : 'Project not found'} description={language === 'de' ? 'Das angeforderte Projekt existiert nicht.' : 'The requested project does not exist.'} />;
 
@@ -117,14 +120,6 @@ export function ProjectDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/projects" className="hover:text-foreground transition-colors">
-          {t('pm.projects', 'Projects')}
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium truncate">{project.name}</span>
-      </nav>
 
       {/* Main layout */}
       <div className="flex flex-col lg:flex-row gap-6">

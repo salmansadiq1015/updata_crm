@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { customerService } from '@/modules/crm/services/customer-service';
 import { useCustomerDocuments } from '@/modules/qop/hooks/use-qop-queries';
@@ -32,9 +31,10 @@ import { showSuccess } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate, formatPhone } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
   Pencil, Archive, Building2, User, Mail, Phone, Globe, MapPin,
-  ChevronRight, Copy, Hash, Calendar, BellRing, FileText,
+  Copy, Hash, Calendar, BellRing, FileText,
   UsersIcon, ClipboardList, Activity, GitMerge,
   Upload, Download, Trash2, Loader2, X, ReceiptText,
   File, Image as ImageIcon, Paperclip,
@@ -515,6 +515,8 @@ export function CustomerDetail() {
     },
   });
 
+  useBreadcrumbLabel(id, customer?.name);
+
   if (isLoading) return <DetailSkeleton />;
   if (!customer) return <EmptyState title={t('crm.notFound', 'Customer not found')} description={t('crm.notFoundDesc', 'The requested customer does not exist.')} />;
 
@@ -535,18 +537,6 @@ export function CustomerDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/crm/customers" className="hover:text-foreground transition-colors">
-          {t('crm.title', 'CRM')}
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/crm/customers" className="hover:text-foreground transition-colors">
-          {t('sidebar.customers', 'Customers')}
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium truncate">{customer.name}</span>
-      </nav>
 
       {/* Main layout */}
       <div className="flex flex-col lg:flex-row gap-6">

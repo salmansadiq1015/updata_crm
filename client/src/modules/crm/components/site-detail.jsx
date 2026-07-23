@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { siteService } from '@/modules/crm/services/site-service';
 import { queryKeys } from '@/lib/query/keys';
@@ -24,9 +23,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbTrail } from '@/stores/breadcrumb-store';
 import {
   Pencil, Archive, Building2, MapPin, Key, Home,
-  ChevronRight, Wrench, FileText, Image as ImageIcon, Activity, Files, Receipt,
+  Wrench, FileText, Image as ImageIcon, Activity, Files, Receipt,
 } from 'lucide-react';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
@@ -95,6 +95,18 @@ export function SiteDetail() {
     onError: (err) => showError(err.message),
   });
 
+  // The URL (/crm/sites/:id) has no parent customer — publish the chain so the
+  // header breadcrumb can show Kunde › Objekt.
+  useBreadcrumbTrail(id, [
+    ...(site?.customerId
+      ? [{
+          label: site.customerId?.name || '',
+          path: `/crm/customers/${site.customerId?._id || site.customerId}`,
+        }]
+      : []),
+    { label: site?.name || '' },
+  ]);
+
   if (isLoading) return <SiteDetailSkeleton />;
   if (!site) return <EmptyState title={t('crm.sites.notFound', 'Objekt nicht gefunden')} description={t('crm.sites.notFoundDesc', 'Das angeforderte Objekt existiert nicht.')} />;
 
@@ -111,20 +123,6 @@ export function SiteDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/crm/customers" className="hover:text-foreground transition-colors">CRM</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        {customerId ? (
-          <Link href={`/crm/customers/${customerId}`} className="hover:text-foreground transition-colors truncate max-w-[200px]">
-            {customerName || t('crm.customer', 'Kunde')}
-          </Link>
-        ) : (
-          <span>{t('crm.customer', 'Kunde')}</span>
-        )}
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium truncate">{site.name}</span>
-      </nav>
 
       {/* Hero Header card */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden mb-6">

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { taskApi } from '../services/task-api';
 import { useTaskDetailV2, taskWorkspaceKeys } from '../hooks/use-task-workspace';
@@ -96,6 +97,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   const remindersQuery = useTaskReminders(taskId);
 
   const task = taskQuery.data;
+  useBreadcrumbLabel(taskId, task?.title);
   const users = usersQuery.data ?? [];
 
   // Description local edit state

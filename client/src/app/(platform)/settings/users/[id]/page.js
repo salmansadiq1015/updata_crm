@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userService } from '@/modules/users/services/user-service';
 import { roleService } from '@/modules/roles/services/role-service';
@@ -26,10 +25,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { showSuccess, showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
   Pencil, UserX, UserCheck, Mail, Phone,
   Globe, Calendar, Clock, Shield, Monitor, Activity,
-  Copy, Briefcase, MapPin, ChevronRight,
+  Copy, Briefcase, MapPin, 
   KeyRound, ExternalLink, Hash, Wrench, Award,
 } from 'lucide-react';
 
@@ -101,6 +101,8 @@ export default function UserDetailPage() {
     onError: (err) => showError(err.message),
   });
 
+  useBreadcrumbLabel(id, user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() : '');
+
   if (isLoading) return <DetailSkeleton />;
 
   if (!user) {
@@ -118,14 +120,6 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/settings" className="hover:text-foreground transition-colors">Einstellungen</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link href="/settings/users" className="hover:text-foreground transition-colors">{t('users.title')}</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground font-medium">{user.firstName} {user.lastName}</span>
-      </nav>
 
       {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-6">

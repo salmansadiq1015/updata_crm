@@ -100,17 +100,17 @@ function Step1OrderDate({ form, de, isEdit, loadOrders }) {
           <SelectContent>
             {loadOrders && ordersLoading ? (
               <SelectItem value="__orders_loading" disabled>
-                {de ? 'Einsaetze werden geladen...' : 'Loading orders...'}
+                {de ? 'Einsätze werden geladen...' : 'Loading orders...'}
               </SelectItem>
             ) : null}
             {loadOrders && !ordersLoading && ordersError ? (
               <SelectItem value="__orders_error" disabled>
-                {de ? 'Einsaetze konnten nicht geladen werden' : 'Assignments could not be loaded'}
+                {de ? 'Einsätze konnten nicht geladen werden' : 'Assignments could not be loaded'}
               </SelectItem>
             ) : null}
             {loadOrders && !ordersLoading && !ordersError && orders.length === 0 ? (
               <SelectItem value="__orders_empty" disabled>
-                {de ? 'Keine Einsaetze verfuegbar' : 'No orders available'}
+                {de ? 'Keine Einsätze verfügbar' : 'No orders available'}
               </SelectItem>
             ) : null}
             {orders.map((order) => {

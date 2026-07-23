@@ -23,7 +23,7 @@ import { useAccountingSearch, useAccounts } from '@/modules/accounting/hooks/use
 import { formatDate, formatMoney } from '@/modules/accounting/utils/accounting-ui';
 
 const TYPE_OPTIONS = [
-  { value: 'ALL', label: 'All records', labelDe: 'Alle Datensaetze' },
+  { value: 'ALL', label: 'All records', labelDe: 'Alle Datensätze' },
   { value: 'AR_INVOICE', label: 'Receivables', labelDe: 'Forderungen' },
   { value: 'AP_INVOICE', label: 'Payables', labelDe: 'Verbindlichkeiten' },
   { value: 'JOURNAL_ENTRY', label: 'Journal', labelDe: 'Journal' },
@@ -120,7 +120,7 @@ function SearchResultRow({ item, de }) {
         <span className="text-sm font-semibold tabular-nums text-foreground">
           {hasAmount ? formatMoney(item.amount, item.currency || 'CHF') : '-'}
         </span>
-        <span className="text-xs text-muted-foreground">{de ? 'Oeffnen' : 'Open'}</span>
+        <span className="text-xs text-muted-foreground">{de ? 'Öffnen' : 'Open'}</span>
       </div>
     </Link>
   );
@@ -191,7 +191,7 @@ export default function AccountingSearchPage() {
           <Select value={filters.currency} onValueChange={(value) => set('currency', value)}>
             <SelectTrigger className="h-10 border-border bg-slate-950/40 text-xs text-foreground"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">{de ? 'Alle Waehrungen' : 'All currencies'}</SelectItem>
+              <SelectItem value="ALL">{de ? 'Alle Währungen' : 'All currencies'}</SelectItem>
               <SelectItem value="CHF">CHF</SelectItem>
               <SelectItem value="EUR">EUR</SelectItem>
             </SelectContent>
@@ -258,7 +258,7 @@ export default function AccountingSearchPage() {
             {de ? 'Filter wirken serverseitig auf alle Suchquellen.' : 'Filters are applied server-side across all sources.'}
           </div>
           <Button type="button" variant="ghost" size="sm" onClick={handleClear} className="text-muted-foreground hover:text-foreground">
-            {de ? 'Zuruecksetzen' : 'Clear'}
+            {de ? 'Zurücksetzen' : 'Clear'}
           </Button>
         </div>
       </form>

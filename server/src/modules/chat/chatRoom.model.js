@@ -23,6 +23,16 @@ const chatRoomSchema = new Schema({
 }, { timestamps: true });
 
 chatRoomSchema.index({ roomType: 1, projectId: 1 });
+// Unique partial index guarding against concurrent creation of duplicate PROJECT rooms.
+// Key order inverted vs the index above: MongoDB forbids two indexes with identical key patterns.
+chatRoomSchema.index(
+  { projectId: 1, roomType: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { roomType: 'PROJECT', projectId: { $type: 'objectId' } },
+    name: 'uniq_project_room',
+  },
+);
 chatRoomSchema.index({ roomType: 1, orderId: 1 });
 chatRoomSchema.index({ roomType: 1, teamId: 1 });
 chatRoomSchema.index({ roomType: 1, departmentId: 1 });

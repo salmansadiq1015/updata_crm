@@ -628,8 +628,8 @@ export function UsersTable() {
         title={targetIsActive ? t('users.confirmDeactivate') : t('users.confirmActivate')}
         description={
           targetIsActive
-            ? t('users.confirmDeactivateDesc', 'Moechten Sie {name} wirklich deaktivieren?', { name: targetUserName })
-            : t('users.confirmActivateDesc', 'Moechten Sie {name} wirklich aktivieren?', { name: targetUserName })
+            ? t('users.confirmDeactivateDesc', 'Möchten Sie {name} wirklich deaktivieren?', { name: targetUserName })
+            : t('users.confirmActivateDesc', 'Möchten Sie {name} wirklich aktivieren?', { name: targetUserName })
         }
         onConfirm={handleToggleActive}
         loading={deactivateMutation.isPending || activateMutation.isPending}
@@ -641,7 +641,7 @@ export function UsersTable() {
         open={bulkDeactivateOpen}
         onOpenChange={setBulkDeactivateOpen}
         title={t('users.bulkConfirmDeactivateTitle', '{count} Benutzer deaktivieren?', { count: selectedIds.length })}
-        description={t('users.bulkConfirmDeactivateDesc', 'Die ausgewaehlten Benutzer werden deaktiviert und koennen sich nicht mehr anmelden.')}
+        description={t('users.bulkConfirmDeactivateDesc', 'Die ausgewählten Benutzer werden deaktiviert und können sich nicht mehr anmelden.')}
         onConfirm={() => bulkDeleteMutation.mutate(selectedIds)}
         loading={bulkDeleteMutation.isPending}
         confirmText={t('users.deactivateAll')}

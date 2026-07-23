@@ -9,7 +9,7 @@ const actions = ['read', 'write', 'delete', 'admin'];
 const actionLabels = {
   read: 'Lesen',
   write: 'Schreiben',
-  delete: 'Loeschen',
+  delete: 'Löschen',
   admin: 'Admin',
 };
 

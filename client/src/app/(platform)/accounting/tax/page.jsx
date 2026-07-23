@@ -112,11 +112,11 @@ function TaxCodeDialog({ open, form, pending, de, onChange, onClose, onSubmit })
             <Input className="h-9" type="number" min="0" max="100" step="0.01" value={form.recoverablePercent} onChange={(event) => onChange('recoverablePercent', event.target.value)} required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">{de ? 'Gueltig ab' : 'Valid from'}</Label>
+            <Label className="text-xs">{de ? 'Gültig ab' : 'Valid from'}</Label>
             <Input className="h-9" type="date" value={form.validFrom} onChange={(event) => onChange('validFrom', event.target.value)} required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">{de ? 'Gueltig bis' : 'Valid to'}</Label>
+            <Label className="text-xs">{de ? 'Gültig bis' : 'Valid to'}</Label>
             <Input className="h-9" type="date" value={form.validTo} onChange={(event) => onChange('validTo', event.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5 md:col-span-2">
@@ -181,7 +181,7 @@ export default function TaxManagementPage() {
           <h1 className="text-2xl font-bold">{de ? 'Steuern' : 'Tax Management'}</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {de
-              ? 'Steuercodes, Vorsteuer/Umsatzsteuer, Quellensteuer und periodische Steueruebersicht.'
+              ? 'Steuercodes, Vorsteuer/Umsatzsteuer, Quellensteuer und periodische Steuerübersicht.'
               : 'Tax codes, input/output tax, withholding tax, and period tax reporting.'}
           </p>
         </div>
@@ -201,7 +201,7 @@ export default function TaxManagementPage() {
           <Input className="h-9" type="date" value={filters.endDate} onChange={(event) => setFilter('endDate', event.target.value)} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">{de ? 'Waehrung' : 'Currency'}</Label>
+          <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
           <SelectField value={filters.currency} onValueChange={(value) => setFilter('currency', value)} options={ACCOUNTING_CURRENCIES} />
         </div>
         <Button type="button" variant="outline" onClick={() => setFilters(defaultTaxFilters())} className="h-9">
@@ -242,7 +242,7 @@ export default function TaxManagementPage() {
                 <th className="px-3 py-2.5 text-left">{de ? 'Name' : 'Name'}</th>
                 <th className="px-3 py-2.5 text-left">{de ? 'Typ' : 'Type'}</th>
                 <th className="px-3 py-2.5 text-right">{de ? 'Satz' : 'Rate'}</th>
-                <th className="px-3 py-2.5 text-left">{de ? 'Gueltigkeit' : 'Validity'}</th>
+                <th className="px-3 py-2.5 text-left">{de ? 'Gültigkeit' : 'Validity'}</th>
               </tr>
             </thead>
             <tbody>
@@ -278,7 +278,7 @@ export default function TaxManagementPage() {
             </span>
             <div>
               <h2 className="text-sm font-semibold">{de ? 'Steuerrechner' : 'Tax calculator'}</h2>
-              <p className="text-xs text-muted-foreground">{de ? 'Einzelposition pruefen.' : 'Check a single line.'}</p>
+              <p className="text-xs text-muted-foreground">{de ? 'Einzelposition prüfen.' : 'Check a single line.'}</p>
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -287,7 +287,7 @@ export default function TaxManagementPage() {
               <SelectField value={calcForm.direction} onValueChange={(value) => setCalc('direction', value)} options={['INPUT', 'OUTPUT', 'WITHHOLDING']} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Waehrung' : 'Currency'}</Label>
+              <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
               <SelectField value={calcForm.currency} onValueChange={(value) => setCalc('currency', value)} options={ACCOUNTING_CURRENCIES} />
             </div>
             <div className="flex flex-col gap-1.5">

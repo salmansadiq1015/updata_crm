@@ -101,7 +101,7 @@ export const PREP_ACTION_TYPES = [
 ];
 
 export const PREP_ACTION_TYPE_CONFIG = {
-  FUNDING_APPLICATION: { label: 'Foerderantrag', labelEn: 'Funding Application', icon: DollarSign },
+  FUNDING_APPLICATION: { label: 'Förderantrag', labelEn: 'Funding Application', icon: DollarSign },
   MATERIAL_ORDER: { label: 'Materialbestellung', labelEn: 'Material Order', icon: Package },
   SCHEDULING: { label: 'Terminplanung', labelEn: 'Scheduling', icon: CalendarClock },
   OTHER: { label: 'Sonstiges', labelEn: 'Other', icon: MoreHorizontal },
@@ -193,8 +193,8 @@ export const DOCUMENT_CATEGORIES = [
 ];
 
 export const DOCUMENT_CATEGORY_CONFIG = {
-  PLANS: { label: 'Plaene', labelEn: 'Plans', icon: FileText },
-  CONTRACTS: { label: 'Vertraege', labelEn: 'Contracts', icon: FileSignature },
+  PLANS: { label: 'Pläne', labelEn: 'Plans', icon: FileText },
+  CONTRACTS: { label: 'Verträge', labelEn: 'Contracts', icon: FileSignature },
   PHOTOS: { label: 'Fotos', labelEn: 'Photos', icon: CircleDot },
   CORRESPONDENCE: { label: 'Korrespondenz', labelEn: 'Correspondence', icon: FileText },
   REPORTS: { label: 'Berichte', labelEn: 'Reports', icon: FileText },

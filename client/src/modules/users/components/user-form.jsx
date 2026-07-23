@@ -35,7 +35,7 @@ function splitCapabilities(value) {
 }
 
 const STEPS = [
-  { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persoenlich', icon: User, fields: ['firstName', 'lastName'] },
+  { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persönlich', icon: User, fields: ['firstName', 'lastName'] },
   { id: 'contact', labelKey: 'users.step.contact', fallback: 'Kontakt', icon: Mail, fields: ['email', 'phone'] },
   { id: 'work', labelKey: 'users.step.work', fallback: 'Arbeit', icon: Briefcase, fields: ['department', 'position', 'preferredDepartmentId'] },
   { id: 'address', labelKey: 'users.step.address', fallback: 'Adresse', icon: MapPin, fields: ['street', 'zip', 'city', 'country'] },
@@ -178,7 +178,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       return {
         tone: 'warning',
         title: t('users.rolePreset.missingTitle', 'Standardrolle fehlt'),
-        description: t('users.rolePreset.missingDesc', 'Die Rolle {role} ist nicht verfuegbar. Waehlen Sie im Zugang-Schritt eine Rolle manuell aus.', {
+        description: t('users.rolePreset.missingDesc', 'Die Rolle {role} ist nicht verfügbar. Wählen Sie im Zugang-Schritt eine Rolle manuell aus.', {
           role: presetRoleLabel,
         }),
       };
@@ -188,7 +188,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       return {
         tone: 'override',
         title: t('users.rolePreset.overrideTitle', 'Manuell angepasst'),
-        description: t('users.rolePreset.overrideDesc', '{defaultRole} waere die Standardrolle fuer diese Position. Aktuell ist {currentRole} ausgewaehlt.', {
+        description: t('users.rolePreset.overrideDesc', '{defaultRole} wäre die Standardrolle für diese Position. Aktuell ist {currentRole} ausgewählt.', {
           defaultRole: presetRoleLabel,
           currentRole: getUserRoleLabel(currentRole?.name, t) || t('users.roleOther', 'eine andere Rolle'),
         }),
@@ -199,7 +199,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       return {
         tone: 'applied',
         title: t('users.rolePreset.appliedTitle', 'Zugriff automatisch gesetzt'),
-        description: t('users.rolePreset.appliedDesc', 'Die Berechtigungen werden ueber die Rolle {role} angewendet.', {
+        description: t('users.rolePreset.appliedDesc', 'Die Berechtigungen werden über die Rolle {role} angewendet.', {
           role: getUserRoleLabel(mappedRole.name, t),
         }),
       };
@@ -494,7 +494,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                     disabled={assignmentTargets.length === 0}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('users.preferredTeamPlaceholder') || 'Team fuer Projektzuweisungen waehlen'} />
+                      <SelectValue placeholder={t('users.preferredTeamPlaceholder') || 'Team für Projektzuweisungen wählen'} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={EMPTY_TEAM_VALUE}>
@@ -509,7 +509,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                   </Select>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {assignmentTargets.length === 0
-                      ? (t('users.preferredTeamUnavailable') || 'Keine aktiven Teams verfuegbar.')
+                      ? (t('users.preferredTeamUnavailable') || 'Keine aktiven Teams verfügbar.')
                       : (t('users.preferredTeamHint') || 'Dieses Team wird verwendet, wenn der Benutzer einem Projekt als Team zugewiesen wird.')}
                   </p>
                 </FormField>
@@ -593,7 +593,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 rounded-lg h-9" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  {t('common.back', 'Zurueck')}
+                  {t('common.back', 'Zurück')}
                 </Button>
               ) : (
                 <Button type="button" variant="ghost" className="rounded-lg h-9" onClick={() => handleDialogOpenChange(false)}>

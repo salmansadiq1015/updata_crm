@@ -76,7 +76,7 @@ const WORKSPACES = [
     label: 'Exchange Rates',
     labelDe: 'Wechselkurse',
     description: 'Historical FX rates, conversions, and revaluation foundation.',
-    descriptionDe: 'Historische FX-Kurse, Umrechnung und Grundlage fuer Neubewertung.',
+    descriptionDe: 'Historische FX-Kurse, Umrechnung und Grundlage für Neubewertung.',
     icon: Globe2,
     accent: 'cyan',
   },
@@ -85,7 +85,7 @@ const WORKSPACES = [
     label: 'Accounting Structure',
     labelDe: 'Accounting-Struktur',
     description: 'Company and branch master data for scoped ledgers and reporting.',
-    descriptionDe: 'Firmen und Niederlassungen fuer gescopte Ledger und Berichte.',
+    descriptionDe: 'Firmen und Niederlassungen für gescopte Ledger und Berichte.',
     icon: Building2,
     accent: 'violet',
   },
@@ -103,7 +103,7 @@ const WORKSPACES = [
     label: 'Fixed Assets',
     labelDe: 'Anlagen',
     description: 'Asset register, depreciation postings, book value, and disposals.',
-    descriptionDe: 'Anlagenregister, Abschreibungen, Buchwert und Abgaenge.',
+    descriptionDe: 'Anlagenregister, Abschreibungen, Buchwert und Abgänge.',
     icon: Package,
     accent: 'lime',
   },
@@ -164,9 +164,9 @@ const WORKSPACES = [
   {
     href: '/accounting/cash',
     label: 'Cash Flow',
-    labelDe: 'Liquiditaet',
+    labelDe: 'Liquidität',
     description: 'Cash position, 30-day forecast, balances, and liquidity alerts.',
-    descriptionDe: 'Cash-Position, 30-Tage-Prognose, Salden und Liquiditaetsrisiken.',
+    descriptionDe: 'Cash-Position, 30-Tage-Prognose, Salden und Liquiditätsrisiken.',
     icon: WalletCards,
     accent: 'cyan',
   },
@@ -184,7 +184,7 @@ const WORKSPACES = [
     label: 'Open Items',
     labelDe: 'Offene Posten',
     description: 'Combined AR/AP exposure with due dates and payment pressure.',
-    descriptionDe: 'Gemeinsame AR/AP Sicht mit Faelligkeiten und Zahlungsdruck.',
+    descriptionDe: 'Gemeinsame AR/AP Sicht mit Fälligkeiten und Zahlungsdruck.',
     icon: Clock,
     accent: 'rose',
   },
@@ -202,7 +202,7 @@ const WORKSPACES = [
     label: 'Fiscal Periods',
     labelDe: 'Perioden',
     description: 'Open, close, and protect posting periods for finance control.',
-    descriptionDe: 'Buchungsperioden oeffnen, schliessen und kontrollieren.',
+    descriptionDe: 'Buchungsperioden öffnen, schliessen und kontrollieren.',
     icon: CalendarDays,
     accent: 'amber',
   },
@@ -273,7 +273,7 @@ export default function AccountingDashboard() {
       href: '/accounting/receivables',
     },
     {
-      label: de ? 'Ueberfaellig' : 'Overdue',
+      label: de ? 'Überfällig' : 'Overdue',
       value: formatAmount(kpis.overdueReceivables),
       sub: de ? 'kritische Forderungen' : 'receivables at risk',
       icon: AlertTriangle,
@@ -300,7 +300,7 @@ export default function AccountingDashboard() {
     {
       label: de ? '30 Tage Cash' : '30-Day Cash',
       value: formatAmount(kpis.projectedCashPosition ?? projectedBalance),
-      sub: `${de ? 'Faellige Zahlungen' : 'Due outflows'} ${formatAmount(upcomingOutflows)}`,
+      sub: `${de ? 'Fällige Zahlungen' : 'Due outflows'} ${formatAmount(upcomingOutflows)}`,
       icon: WalletCards,
       accent: 'cyan',
       href: '/accounting/cash',
@@ -324,7 +324,7 @@ export default function AccountingDashboard() {
         title={de ? 'Buchhaltung' : 'Accounting'}
         description={
           de
-            ? 'Finanzlage, Liquiditaet und offene Verpflichtungen in einer hochwertigen Management-Sicht.'
+            ? 'Finanzlage, Liquidität und offene Verpflichtungen in einer hochwertigen Management-Sicht.'
             : 'A premium management view for liquidity, open obligations, exposure, and financial health.'
         }
         chips={[
@@ -355,14 +355,14 @@ export default function AccountingDashboard() {
       <div className="grid gap-4 lg:grid-cols-2">
         <AccountingAgingPanel
           buckets={arAging?.buckets}
-          label={de ? 'Forderungen nach Faelligkeit' : 'AR Aging'}
+          label={de ? 'Forderungen nach Fälligkeit' : 'AR Aging'}
           rows={agingRows}
           totalLabel={de ? 'Offene Kundenpositionen' : 'Open customer exposure'}
           format={formatAmount}
         />
         <AccountingAgingPanel
           buckets={apAging?.buckets}
-          label={de ? 'Verbindlichkeiten nach Faelligkeit' : 'AP Aging'}
+          label={de ? 'Verbindlichkeiten nach Fälligkeit' : 'AP Aging'}
           rows={agingRows}
           totalLabel={de ? 'Offene Lieferantenpositionen' : 'Open vendor obligations'}
           format={formatAmount}

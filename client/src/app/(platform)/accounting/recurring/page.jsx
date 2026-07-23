@@ -114,7 +114,7 @@ function RecurringDialog({ open, form, error, pending, de, onChange, onClose, on
               <Input className="h-9" type="date" value={form.startDate} onChange={(event) => onChange('startDate', event.target.value)} required />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Naechster Lauf' : 'Next run'}</Label>
+              <Label className="text-xs">{de ? 'Nächster Lauf' : 'Next run'}</Label>
               <Input className="h-9" type="date" value={form.nextRunDate} onChange={(event) => onChange('nextRunDate', event.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -122,7 +122,7 @@ function RecurringDialog({ open, form, error, pending, de, onChange, onClose, on
               <Input className="h-9" type="date" value={form.endDate} onChange={(event) => onChange('endDate', event.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">{de ? 'Max. Laeufe' : 'Max runs'}</Label>
+              <Label className="text-xs">{de ? 'Max. Läufe' : 'Max runs'}</Label>
               <Input className="h-9" type="number" min="1" value={form.maxRuns} onChange={(event) => onChange('maxRuns', event.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5 md:col-span-4">
@@ -216,7 +216,7 @@ export default function RecurringTransactionsPage() {
             disabled={runDueRecurringTransactions.isPending}
           >
             <Sparkles className="mr-1.5 h-4 w-4" />
-            {de ? 'Faellige ausfuehren' : 'Run Due'}
+            {de ? 'Fällige ausführen' : 'Run Due'}
           </Button>
           <Button type="button" onClick={() => setDialogOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -233,7 +233,7 @@ export default function RecurringTransactionsPage() {
             <MetricTile label={de ? 'Total' : 'Total'} value={summary?.total ?? 0} />
             <MetricTile label={de ? 'Aktiv' : 'Active'} value={summary?.activeCount ?? 0} />
             <MetricTile label={de ? 'Pausiert' : 'Paused'} value={summary?.pausedCount ?? 0} />
-            <MetricTile label={de ? 'Faellig' : 'Due'} value={summary?.dueCount ?? 0} />
+            <MetricTile label={de ? 'Fällig' : 'Due'} value={summary?.dueCount ?? 0} />
           </>
         )}
       </section>
@@ -262,7 +262,7 @@ export default function RecurringTransactionsPage() {
                 <th className="px-3 py-2.5 text-left">{de ? 'Vorlage' : 'Template'}</th>
                 <th className="px-3 py-2.5 text-left">{de ? 'Plan' : 'Schedule'}</th>
                 <th className="px-3 py-2.5 text-left">Status</th>
-                <th className="px-3 py-2.5 text-right">{de ? 'Laeufe' : 'Runs'}</th>
+                <th className="px-3 py-2.5 text-right">{de ? 'Läufe' : 'Runs'}</th>
                 <th className="px-3 py-2.5 text-right">{de ? 'Aktion' : 'Action'}</th>
               </tr>
             </thead>
@@ -286,7 +286,7 @@ export default function RecurringTransactionsPage() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="font-medium">{item.frequency} / {item.interval || 1}</div>
-                    <div className="text-xs text-muted-foreground">{de ? 'Naechster Lauf' : 'Next'}: {formatDate(item.nextRunDate) || '-'}</div>
+                    <div className="text-xs text-muted-foreground">{de ? 'Nächster Lauf' : 'Next'}: {formatDate(item.nextRunDate) || '-'}</div>
                   </td>
                   <td className="px-3 py-3"><StatusBadge status={item.status} /></td>
                   <td className="px-3 py-3 text-right tabular-nums">{item.runCount || 0}{item.maxRuns ? ` / ${item.maxRuns}` : ''}</td>
@@ -310,8 +310,8 @@ export default function RecurringTransactionsPage() {
                             type="button"
                             size="icon"
                             variant="outline"
-                            aria-label={de ? 'Ausfuehren' : 'Run'}
-                            title={de ? 'Ausfuehren' : 'Run'}
+                            aria-label={de ? 'Ausführen' : 'Run'}
+                            title={de ? 'Ausführen' : 'Run'}
                             onClick={() => runRecurringTransaction.mutateAsync({ id: item._id, data: {} })}
                           >
                             <CheckCircle2 className="h-4 w-4" />
@@ -350,14 +350,14 @@ export default function RecurringTransactionsPage() {
 
         <aside className="rounded-xl border border-border bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{de ? 'Letzte Laeufe' : 'Recent Runs'}</h2>
+            <h2 className="text-sm font-semibold">{de ? 'Letzte Läufe' : 'Recent Runs'}</h2>
             <Repeat2 className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="grid gap-2">
             {runsLoading && Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-14 rounded-lg" />)}
             {!runsLoading && runs.length === 0 && (
               <div className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-                {de ? 'Noch keine Laeufe.' : 'No runs yet.'}
+                {de ? 'Noch keine Läufe.' : 'No runs yet.'}
               </div>
             )}
             {!runsLoading && runs.map((run) => (

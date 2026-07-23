@@ -44,7 +44,7 @@ export function AuthLayout({ children }) {
               <h2 className="text-xl font-extrabold text-white tracking-tight leading-tight lg:text-2xl 2xl:text-3xl">
                 {t('auth.layout.headline1', 'Ihr zentrales')}
                 <br />
-                {t('auth.layout.headline2', 'Werkzeug fuer')}
+                {t('auth.layout.headline2', 'Werkzeug für')}
                 <br />
                 {t('auth.layout.headline3', 'den Arbeitsalltag')}
               </h2>

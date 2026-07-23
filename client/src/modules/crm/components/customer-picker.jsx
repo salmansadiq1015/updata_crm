@@ -122,7 +122,7 @@ export function CustomerPicker({ selectedCustomer, onSelect, disabled = false, e
               <p className="py-6 text-center text-xs text-muted-foreground">
                 {debouncedSearch.length >= 2
                   ? t('crm.contacts.noCustomersFound', 'Keine Kunden gefunden')
-                  : t('crm.contacts.noCustomersAvailable', 'Keine Kunden verfuegbar')}
+                  : t('crm.contacts.noCustomersAvailable', 'Keine Kunden verfügbar')}
               </p>
             )}
           </div>

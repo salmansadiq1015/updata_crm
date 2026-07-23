@@ -321,7 +321,7 @@ function PremiumPagination({ page, pageSize, pageCount, total, onPageChange, onP
         <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label={de ? 'Vorherige Seite' : 'Previous page'}>
           <ChevronLeft className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} aria-label={de ? 'Naechste Seite' : 'Next page'}>
+        <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} aria-label={de ? 'Nächste Seite' : 'Next page'}>
           <ChevronRight className="h-3.5 w-3.5" />
         </Button>
         <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" disabled={page >= pageCount} onClick={() => onPageChange(pageCount)} aria-label={de ? 'Letzte Seite' : 'Last page'}>
@@ -351,7 +351,7 @@ function GroupBars({ groups, de, withControls = false }) {
   const pagination = usePagedItems(filtered, 5);
 
   if (!groups?.length) {
-    return <PremiumEmptyState icon={BarChart3} title={de ? 'Keine Gruppierung verfuegbar.' : 'No grouping data available.'} description={de ? 'Passen Sie den Zeitraum oder Filter an.' : 'Adjust the period or filters.'} />;
+    return <PremiumEmptyState icon={BarChart3} title={de ? 'Keine Gruppierung verfügbar.' : 'No grouping data available.'} description={de ? 'Passen Sie den Zeitraum oder Filter an.' : 'Adjust the period or filters.'} />;
   }
 
   const rows = withControls ? pagination.pageItems : filtered.slice(0, 12);
@@ -367,7 +367,7 @@ function GroupBars({ groups, de, withControls = false }) {
         />
       )}
       {!filtered.length ? (
-        <PremiumEmptyState icon={Search} title={de ? 'Keine Treffer gefunden.' : 'No matches found.'} description={de ? 'Suchbegriff oder Filter zuruecksetzen.' : 'Reset search or filters.'} />
+        <PremiumEmptyState icon={Search} title={de ? 'Keine Treffer gefunden.' : 'No matches found.'} description={de ? 'Suchbegriff oder Filter zurücksetzen.' : 'Reset search or filters.'} />
       ) : (
         <div className="space-y-3">
           {rows.map((group) => {
@@ -634,7 +634,7 @@ function RejectLeaveDialog({ request, onOpenChange, onSubmit, isLoading, de }) {
           <DialogDescription>{request ? `${employeeName(request.employeeId)} - ${request.leaveType}` : ''}</DialogDescription>
         </DialogHeader>
         <DialogBody>
-          <Label>{de ? 'Begruendung' : 'Decision note'}</Label>
+          <Label>{de ? 'Begründung' : 'Decision note'}</Label>
           <Textarea className="mt-2" value={reason} onChange={(event) => setReason(event.target.value)} />
         </DialogBody>
         <DialogFooter>
@@ -673,7 +673,7 @@ function BalanceDialog({ balance, onOpenChange, onSubmit, isLoading, de }) {
               <Input type="number" min="0" step="0.5" value={form.annualEntitlementDays} onChange={(event) => setForm((current) => ({ ...current, annualEntitlementDays: event.target.value }))} />
             </div>
             <div className="space-y-2">
-              <Label>{de ? 'Uebertrag' : 'Carryover'}</Label>
+              <Label>{de ? 'Übertrag' : 'Carryover'}</Label>
               <Input type="number" step="0.5" value={form.carryoverDays} onChange={(event) => setForm((current) => ({ ...current, carryoverDays: event.target.value }))} />
             </div>
             <div className="space-y-2">
@@ -734,7 +734,7 @@ function OverviewTab({ overview, employees, isLoading, de }) {
             filters={[{ key: 'department', value: department, onValueChange: setDepartment, options: departmentOptions }]}
           />
           {isLoading ? <LoadingRows rows={6} /> : !filtered.length ? (
-            <PremiumEmptyState icon={Users} title={de ? 'Keine Mitarbeiterdaten gefunden.' : 'No employee data found.'} description={de ? 'Zeitraum, Suche oder Filter pruefen.' : 'Check the period, search, or filters.'} />
+            <PremiumEmptyState icon={Users} title={de ? 'Keine Mitarbeiterdaten gefunden.' : 'No employee data found.'} description={de ? 'Zeitraum, Suche oder Filter prüfen.' : 'Check the period, search, or filters.'} />
           ) : (
             <DataShell
               pagination={<PremiumPagination de={de} page={pagination.page} pageSize={pagination.pageSize} pageCount={pagination.pageCount} total={pagination.total} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} />}
@@ -745,7 +745,7 @@ function OverviewTab({ overview, employees, isLoading, de }) {
                     <th className="px-4 py-3 text-left">{de ? 'Mitarbeiter' : 'Employee'}</th>
                     <th className="px-4 py-3 text-right">{de ? 'Soll' : 'Target'}</th>
                     <th className="px-4 py-3 text-right">{de ? 'Ist' : 'Actual'}</th>
-                    <th className="px-4 py-3 text-right">{de ? 'Ueberzeit' : 'Overtime'}</th>
+                    <th className="px-4 py-3 text-right">{de ? 'Überzeit' : 'Overtime'}</th>
                     <th className="px-4 py-3 text-right">{de ? 'Defizit' : 'Deficit'}</th>
                   </tr>
                 </thead>
@@ -834,7 +834,7 @@ function LeaveTab({ requests, isLoading, error, employees, mutations, de }) {
         )}
       />
       {!filtered.length ? (
-        <PremiumEmptyState icon={CalendarCheck} title={de ? 'Keine Abwesenheitsantraege gefunden.' : 'No leave requests found.'} description={de ? 'Neue Abwesenheiten koennen direkt hier erfasst werden.' : 'Create new leave requests directly from this workspace.'} />
+        <PremiumEmptyState icon={CalendarCheck} title={de ? 'Keine Abwesenheitsanträge gefunden.' : 'No leave requests found.'} description={de ? 'Neue Abwesenheiten können direkt hier erfasst werden.' : 'Create new leave requests directly from this workspace.'} />
       ) : (
         <DataShell pagination={<PremiumPagination de={de} page={pagination.page} pageSize={pagination.pageSize} pageCount={pagination.pageCount} total={pagination.total} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} />}>
           <table className="w-full min-w-[940px] text-sm">
@@ -929,7 +929,7 @@ function BalanceTab({ balances, isLoading, error, mutations, de }) {
         }]}
       />
       {!filtered.length ? (
-        <PremiumEmptyState icon={Hourglass} title={de ? 'Keine Ferienguthaben gefunden.' : 'No vacation balances found.'} description={de ? 'Suche, Jahr oder Filter pruefen.' : 'Check search, year, or filters.'} />
+        <PremiumEmptyState icon={Hourglass} title={de ? 'Keine Ferienguthaben gefunden.' : 'No vacation balances found.'} description={de ? 'Suche, Jahr oder Filter prüfen.' : 'Check search, year, or filters.'} />
       ) : (
         <DataShell pagination={<PremiumPagination de={de} page={pagination.page} pageSize={pagination.pageSize} pageCount={pagination.pageCount} total={pagination.total} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} />}>
           <table className="w-full min-w-[860px] text-sm">
@@ -939,7 +939,7 @@ function BalanceTab({ balances, isLoading, error, mutations, de }) {
                 <th className="px-4 py-3 text-right">{de ? 'Anspruch' : 'Entitlement'}</th>
                 <th className="px-4 py-3 text-right">{de ? 'Genutzt' : 'Used'}</th>
                 <th className="px-4 py-3 text-right">{de ? 'Geplant' : 'Planned'}</th>
-                <th className="px-4 py-3 text-right">{de ? 'Verfuegbar' : 'Available'}</th>
+                <th className="px-4 py-3 text-right">{de ? 'Verfügbar' : 'Available'}</th>
                 <th className="px-4 py-3 text-right">{de ? 'Aktionen' : 'Actions'}</th>
               </tr>
             </thead>
@@ -995,7 +995,7 @@ function CalendarTab({ calendar, isLoading, error, de }) {
   if (error) return <ErrorInline message={apiMessage(error, de ? 'Kalender konnte nicht geladen werden.' : 'Calendar could not be loaded.')} />;
 
   if (!employees.length || !days.length) {
-    return <PremiumEmptyState icon={CalendarDays} title={de ? 'Keine Kalenderdaten gefunden.' : 'No calendar data found.'} description={de ? 'Zeitraum oder Mitarbeiterfilter pruefen.' : 'Check the period or employee filters.'} />;
+    return <PremiumEmptyState icon={CalendarDays} title={de ? 'Keine Kalenderdaten gefunden.' : 'No calendar data found.'} description={de ? 'Zeitraum oder Mitarbeiterfilter prüfen.' : 'Check the period or employee filters.'} />;
   }
 
   return (
@@ -1017,7 +1017,7 @@ function CalendarTab({ calendar, isLoading, error, de }) {
         }]}
       />
       {!filtered.length ? (
-        <PremiumEmptyState icon={Search} title={de ? 'Keine Kalendertreffer.' : 'No calendar matches.'} description={de ? 'Suchbegriff oder Filter zuruecksetzen.' : 'Reset search or filters.'} />
+        <PremiumEmptyState icon={Search} title={de ? 'Keine Kalendertreffer.' : 'No calendar matches.'} description={de ? 'Suchbegriff oder Filter zurücksetzen.' : 'Reset search or filters.'} />
       ) : (
         <DataShell pagination={<PremiumPagination de={de} page={pagination.page} pageSize={pagination.pageSize} pageCount={pagination.pageCount} total={pagination.total} onPageChange={pagination.setPage} onPageSizeChange={pagination.setPageSize} />}>
           <table className="w-full min-w-[960px] text-xs">
@@ -1094,7 +1094,7 @@ function AnalyticsTab({ analytics, aiContext, isLoading, error, groupBy, setGrou
         </PremiumPanel>
         <PremiumPanel title={de ? 'AI Kontext' : 'AI context'} icon={Activity}>
           <div className="grid gap-2 text-sm">
-            <Badge variant="outline">{de ? 'Ueberzeit' : 'Overtime'}: {aiContext?.topOvertime?.length || 0}</Badge>
+            <Badge variant="outline">{de ? 'Überzeit' : 'Overtime'}: {aiContext?.topOvertime?.length || 0}</Badge>
             <Badge variant="outline">{de ? 'Defizit' : 'Deficit'}: {aiContext?.topDeficit?.length || 0}</Badge>
             <Badge variant="outline">{de ? 'Ferienrisiko' : 'Leave pressure'}: {aiContext?.leavePressure?.length || 0}</Badge>
           </div>
@@ -1149,13 +1149,13 @@ export function TimeManagementWorkspace() {
       />
 
       {overviewQuery.error && (
-        <ErrorInline message={apiMessage(overviewQuery.error, de ? 'Uebersicht konnte nicht geladen werden.' : 'Overview could not be loaded.')} />
+        <ErrorInline message={apiMessage(overviewQuery.error, de ? 'Übersicht konnte nicht geladen werden.' : 'Overview could not be loaded.')} />
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <PremiumStatCard icon={Hourglass} label={de ? 'Sollstunden' : 'Target'} value={hoursLabel(totals.targetHours)} />
         <PremiumStatCard icon={TimerReset} label={de ? 'Iststunden' : 'Actual'} value={hoursLabel(totals.actualHours)} tone="info" />
-        <PremiumStatCard icon={AlertTriangle} label={de ? 'Ueberzeit' : 'Overtime'} value={hoursLabel(totals.overtimeHours)} tone="warning" />
+        <PremiumStatCard icon={AlertTriangle} label={de ? 'Überzeit' : 'Overtime'} value={hoursLabel(totals.overtimeHours)} tone="warning" />
         <PremiumStatCard icon={AlertTriangle} label={de ? 'Defizit' : 'Deficit'} value={hoursLabel(totals.deficitHours)} tone="danger" />
         <PremiumStatCard icon={Check} label={de ? 'Freigegeben' : 'Released'} value={totals.releasedEntries || 0} tone="success" />
         <PremiumStatCard icon={CalendarDays} label={de ? 'Offene Abwesenheit' : 'Pending leave'} value={totals.pendingLeaveRequests || 0} tone="warning" />
@@ -1164,7 +1164,7 @@ export function TimeManagementWorkspace() {
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <div className="overflow-x-auto">
           <TabsList variant="line" className="min-w-max">
-            <TabsTrigger value="overview">{de ? 'Uebersicht' : 'Overview'}</TabsTrigger>
+            <TabsTrigger value="overview">{de ? 'Übersicht' : 'Overview'}</TabsTrigger>
             <TabsTrigger value="records">{de ? 'Zeiten' : 'Records'}</TabsTrigger>
             <TabsTrigger value="leave">{de ? 'Abwesenheiten' : 'Leave'}</TabsTrigger>
             <TabsTrigger value="balances">{de ? 'Ferien' : 'Balances'}</TabsTrigger>

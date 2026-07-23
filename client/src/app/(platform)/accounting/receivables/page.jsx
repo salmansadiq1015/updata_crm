@@ -197,7 +197,7 @@ function ReceivablesTab({ de, t }) {
             onClick={() => setCursorStack((current) => (current.length > 1 ? current.slice(0, -1) : current))}
             disabled={cursorStack.length <= 1}
           >
-            {de ? 'Zurueck' : 'Previous'}
+            {de ? 'Zurück' : 'Previous'}
           </Button>
           <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button

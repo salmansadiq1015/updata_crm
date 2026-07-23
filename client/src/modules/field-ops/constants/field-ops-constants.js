@@ -8,7 +8,7 @@ export { ORDER_STATUS, ORDER_TYPE, ORDER_PRIORITY, REPORT_STATUS, ACTIVITY_TYPE,
 
 export const ORDER_STATUS_CONFIG = {
   PLANNED:     { label: 'Geplant',       labelEn: 'Planned',      dot: 'bg-slate-400',   badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
-  CONFIRMED:   { label: 'Bestaetigt',    labelEn: 'Confirmed',    dot: 'bg-cyan-400',    badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300' },
+  CONFIRMED:   { label: 'Bestätigt',    labelEn: 'Confirmed',    dot: 'bg-cyan-400',    badge: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300' },
   IN_PROGRESS: { label: 'In Arbeit',     labelEn: 'In Progress',  dot: 'bg-amber-400',   badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' },
   PAUSED:      { label: 'Pausiert',      labelEn: 'Paused',       dot: 'bg-orange-400',  badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300' },
   COMPLETED:   { label: 'Abgeschlossen', labelEn: 'Completed',    dot: 'bg-emerald-400', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' },

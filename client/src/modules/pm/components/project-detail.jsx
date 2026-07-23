@@ -20,6 +20,8 @@ import { ScheduleTab } from './schedule-tab';
 import { DocumentsTab } from './documents-tab';
 import { ProjectActivityTab } from './project-activity-tab';
 import { ProjectTasksTab, ProjectTaskSummaryPanel } from './project-tasks-tab';
+import { ProjectChatTab } from './project-chat-tab';
+import { useProjectChatUnread } from '@/modules/chat/hooks/use-chat-rooms';
 import { RichTextContent } from '@/components/ui/rich-text-content';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
@@ -34,7 +36,7 @@ import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
   Pencil, Copy, Archive, ArrowRight, Trash2,
   FolderKanban, Building2, User, Calendar, Wallet, FileText,
-  ClipboardList, Clock, ListChecks, CalendarClock, Activity, ListTodo,
+  ClipboardList, Clock, ListChecks, CalendarClock, Activity, ListTodo, MessagesSquare,
 } from 'lucide-react';
 
 function DetailSkeleton() {
@@ -81,6 +83,9 @@ export function ProjectDetail() {
   const canWrite = hasPermission('projects:write');
   const canDelete = hasPermission('projects:delete');
   const canOverride = hasPermission('projects:admin');
+  const canChat = hasPermission('chat:read');
+
+  const { unreadCount } = useProjectChatUnread(id, { enabled: canChat });
 
   const { data: project, isLoading } = useQuery({
     queryKey: queryKeys.pm.projects.detail(id),
@@ -271,6 +276,16 @@ export function ProjectDetail() {
               <TabsTrigger value="tasks" className="gap-1.5">
                 <ListTodo className="h-3.5 w-3.5" /> {t('pm.tasks', 'Aufgaben')}
               </TabsTrigger>
+              {canChat && (
+                <TabsTrigger value="chat" className="gap-1.5">
+                  <MessagesSquare className="h-3.5 w-3.5" /> {t('pm.chatTab', 'Chat')}
+                  {unreadCount > 0 && (
+                    <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </TabsTrigger>
+              )}
               <TabsTrigger value="activity" className="gap-1.5">
                 <Activity className="h-3.5 w-3.5" /> {t('pm.activity', 'Aktivität')}
               </TabsTrigger>
@@ -335,6 +350,12 @@ export function ProjectDetail() {
             <TabsContent value="tasks" className="mt-6">
               <ProjectTasksTab projectId={id} />
             </TabsContent>
+
+            {canChat && (
+              <TabsContent value="chat" className="mt-6">
+                <ProjectChatTab projectId={id} />
+              </TabsContent>
+            )}
 
             <TabsContent value="activity" className="mt-6">
               <ProjectActivityTab projectId={id} />

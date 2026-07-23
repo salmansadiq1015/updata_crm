@@ -286,7 +286,7 @@ export function RolesTable() {
           value={systemCount}
           icon={Lock}
           accent="amber"
-          sublabel="geschuetzt"
+          sublabel="geschützt"
         />
         <PremiumStatCard
           label="Berechtigungen"
@@ -513,7 +513,7 @@ export function RolesTable() {
         }`}
         onConfirm={() => deleteMutation.mutate(deleteTarget?._id)}
         loading={deleteMutation.isPending}
-        confirmText="Loeschen"
+        confirmText="Löschen"
         variant="destructive"
       />
 

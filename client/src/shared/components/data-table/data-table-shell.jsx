@@ -232,7 +232,7 @@ export function DataTableShell({
                       <div className="h-12 w-12 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center">
                         <Inbox className="h-6 w-6 text-primary/40" />
                       </div>
-                      <p className="text-sm font-medium">{t('common.noResults', 'Keine Eintraege vorhanden')}</p>
+                      <p className="text-sm font-medium">{t('common.noResults', 'Keine Einträge vorhanden')}</p>
                     </div>
                   )}
                 </TableCell>
@@ -294,7 +294,7 @@ export function DataTableShell({
               disabled={!cursorPagination.hasPrev || cursorPagination.isFetching}
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              {t('common.back', 'Zurueck')}
+              {t('common.back', 'Zurück')}
             </Button>
             <Button
               variant="ghost"

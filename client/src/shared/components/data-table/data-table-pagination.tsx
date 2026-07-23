@@ -37,7 +37,7 @@ export function DataTablePagination<TData>({
       <div className="flex items-center gap-4">
         {selectedCount > 0 && (
           <span className="text-sm text-muted-foreground">
-            {t('common.selectedCount', '{selected} von {total} ausgewaehlt', {
+            {t('common.selectedCount', '{selected} von {total} ausgewählt', {
               selected: selectedCount,
               total: totalCount,
             })}
@@ -96,7 +96,7 @@ export function DataTablePagination<TData>({
           className="h-8 w-8 rounded-lg"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
-          aria-label={t('common.nextPage', 'Zur naechsten Seite')}
+          aria-label={t('common.nextPage', 'Zur nächsten Seite')}
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </Button>

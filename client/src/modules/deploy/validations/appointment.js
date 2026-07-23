@@ -7,7 +7,7 @@ export function getAppointmentSchema(t = defaultT) {
     .union([
       z.string().max(50).regex(
         /^(\+[1-9]\d{0,2}[\s.\-]?)?(\(?\d{1,4}\)?[\s.\-]?){1,5}\d{1,4}$/,
-        t('deploy.validation.validPhone', 'Bitte gueltige Telefonnummer eingeben')
+        t('deploy.validation.validPhone', 'Bitte gültige Telefonnummer eingeben')
       ),
       z.literal(''),
     ])
@@ -15,7 +15,7 @@ export function getAppointmentSchema(t = defaultT) {
 
   const optionalEmail = z
     .union([
-      z.string().email(t('deploy.validation.validEmail', 'Bitte gueltige E-Mail eingeben')).max(255),
+      z.string().email(t('deploy.validation.validEmail', 'Bitte gültige E-Mail eingeben')).max(255),
       z.literal(''),
     ])
     .optional();

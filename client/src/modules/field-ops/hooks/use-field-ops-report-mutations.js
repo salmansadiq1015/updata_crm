@@ -153,7 +153,7 @@ export function useFieldOpsReportMutations({
         queryClient.invalidateQueries({ queryKey: REPORTS_KEY });
       }
       const message = variables?.dryRun
-        ? (de ? 'Import geprueft.' : 'Import validated.')
+        ? (de ? 'Import geprüft.' : 'Import validated.')
         : (de ? `${result?.created ?? 0} Berichte importiert.` : `${result?.created ?? 0} reports imported.`);
       showSuccess(message);
       onImport?.(result);

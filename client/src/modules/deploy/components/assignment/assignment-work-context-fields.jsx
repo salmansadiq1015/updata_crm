@@ -197,7 +197,7 @@ export function AssignmentWorkContextFields({ control, setValue, errors, default
           <ContextPicker
             icon={FolderKanban}
             label={t('deploy.form.loadingProjects', 'Projekte werden geladen...')}
-            placeholder={t('deploy.form.selectProject', 'Projekt auswaehlen')}
+            placeholder={t('deploy.form.selectProject', 'Projekt auswählen')}
             searchPlaceholder={t('deploy.form.searchProjects', 'Projekt suchen...')}
             clearLabel={t('deploy.form.noProject', 'Kein Projekt')}
             value={projectId}
@@ -222,14 +222,14 @@ export function AssignmentWorkContextFields({ control, setValue, errors, default
         <FormField label={t('deploy.form.order', 'Auftrag')} error={errors.orderId?.message}>
           <ContextPicker
             icon={ClipboardList}
-            label={t('deploy.form.loadingOrders', 'Auftraege werden geladen...')}
-            placeholder={t('deploy.form.selectOrder', 'Auftrag auswaehlen')}
+            label={t('deploy.form.loadingOrders', 'Aufträge werden geladen...')}
+            placeholder={t('deploy.form.selectOrder', 'Auftrag auswählen')}
             searchPlaceholder={t('deploy.form.searchOrders', 'Auftrag suchen...')}
             clearLabel={t('deploy.form.noOrder', 'Kein Auftrag')}
             value={orderId}
             options={orders}
             isFetching={ordersFetching}
-            emptyLabel={t('deploy.form.noOrders', 'Keine Auftraege gefunden')}
+            emptyLabel={t('deploy.form.noOrders', 'Keine Aufträge gefunden')}
             onSearch={setOrderSearch}
             onSelect={applyOrder}
             onClear={clearOrder}

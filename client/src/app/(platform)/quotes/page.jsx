@@ -104,14 +104,14 @@ function StatsBar({ de }) {
       <KpiCard
         icon={Package}
         iconColor="bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-200"
-        label={de ? 'Aktive Auftraege' : 'Active Orders'}
+        label={de ? 'Aktive Aufträge' : 'Active Orders'}
         value={activeCount}
         loading={pLoading}
       />
       <KpiCard
         icon={AlertTriangle}
         iconColor="bg-red-500/10 text-red-600 ring-red-500/20 dark:text-red-200"
-        label={de ? 'Ueberfaellige Rechnungen' : 'Overdue Invoices'}
+        label={de ? 'Überfällige Rechnungen' : 'Overdue Invoices'}
         value={overdueCount}
         sub={overdueValue > 0 ? fmt(overdueValue) : undefined}
         loading={aLoading}
@@ -186,9 +186,9 @@ export default function QuotesPage() {
   return (
     <div className="flex w-full min-w-0 flex-col gap-5">
       <PageHeader
-        title={t('qop.page.title', de ? 'Offerten, Auftraege & Rechnungen' : 'Quotations, Orders & Invoices')}
+        title={t('qop.page.title', de ? 'Offerten, Aufträge & Rechnungen' : 'Quotations, Orders & Invoices')}
         description={t('qop.page.description', de
-          ? 'Kundenangebote erstellen, Auftraege verwalten und Rechnungen stellen'
+          ? 'Kundenangebote erstellen, Aufträge verwalten und Rechnungen stellen'
           : 'Create customer quotes, manage orders and issue invoices')}
       />
 

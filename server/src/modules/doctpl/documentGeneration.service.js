@@ -237,7 +237,7 @@ class DocumentGenerationService {
   _buildFilename(templateType, data, _language) {
     const typeMap = {
       quotation: 'Offerte',
-      order_confirmation: 'Auftragsbestaetigung',
+      order_confirmation: 'Auftragsbestätigung',
       invoice_standard: 'Rechnung',
       invoice_advance: 'Akontorechnung',
       invoice_final: 'Schlussrechnung',

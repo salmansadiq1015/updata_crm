@@ -129,7 +129,7 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{de ? 'OCR pruefen' : 'Review OCR'}</DialogTitle>
+          <DialogTitle>{de ? 'OCR prüfen' : 'Review OCR'}</DialogTitle>
         </DialogHeader>
         {isLoading ? (
           <Skeleton className="h-64 rounded-xl" />
@@ -144,7 +144,7 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
                 </div>
               ) : (
                 <div className="flex h-96 items-center justify-center p-6 text-center text-sm text-muted-foreground">
-                  {de ? 'Keine Vorschau verfuegbar. Download zum Pruefen verwenden.' : 'No preview available. Use download to inspect the source document.'}
+                  {de ? 'Keine Vorschau verfügbar. Download zum Prüfen verwenden.' : 'No preview available. Use download to inspect the source document.'}
                 </div>
               )}
             </div>
@@ -169,7 +169,7 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
                     <Input type="date" className={inputClass('invoiceDate')} value={form.invoiceDate || ''} onChange={(event) => setOcrField('invoiceDate', event.target.value)} />
                   </label>
                   <label className="grid gap-1 text-xs font-medium">
-                    {de ? 'Faellig' : 'Due'}
+                    {de ? 'Fällig' : 'Due'}
                     <Input type="date" className={inputClass('dueDate')} value={form.dueDate || ''} onChange={(event) => setOcrField('dueDate', event.target.value)} />
                   </label>
                 </div>
@@ -183,7 +183,7 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
                     <Input type="number" min="0" step="0.01" className={inputClass('vat')} value={form.vat ?? ''} onChange={(event) => setOcrField('vat', event.target.value)} />
                   </label>
                   <label className="grid gap-1 text-xs font-medium">
-                    {de ? 'Waehr.' : 'Curr.'}
+                    {de ? 'Währ.' : 'Curr.'}
                     <Select value={form.currency || 'CHF'} onValueChange={(value) => setOcrField('currency', value)}>
                       <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -196,7 +196,7 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
               </div>
             </div>
             <div className="rounded-xl border border-border p-3 md:col-start-2">
-              <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-3">{de ? 'Qualitaet' : 'Quality'}</h3>
+              <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-3">{de ? 'Qualität' : 'Quality'}</h3>
               <p className="text-sm">
                 {de ? 'Status' : 'Status'}: <span className="font-semibold">{result.status}</span>
               </p>
@@ -215,7 +215,7 @@ function OcrReviewDialog({ document, open, onClose, de, t }) {
         )}
         <DialogFooter>
           <Button variant="outline" onClick={handleReject} disabled={!result || rejectOcr.isPending}>{de ? 'Ablehnen' : 'Reject'}</Button>
-          <Button onClick={handleConfirm} disabled={!canConfirm || confirmOcr.isPending}>{de ? 'Bestaetigen' : 'Confirm'}</Button>
+          <Button onClick={handleConfirm} disabled={!canConfirm || confirmOcr.isPending}>{de ? 'Bestätigen' : 'Confirm'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -259,7 +259,7 @@ function AssignDocumentDialog({ document, documentIds, open, onClose, de }) {
           </p>
           <Select value={userId} onValueChange={setUserId}>
             <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder={isLoading ? (de ? 'Laedt...' : 'Loading...') : (de ? 'Mitarbeiter auswaehlen' : 'Select employee')} />
+              <SelectValue placeholder={isLoading ? (de ? 'Lädt...' : 'Loading...') : (de ? 'Mitarbeiter auswählen' : 'Select employee')} />
             </SelectTrigger>
             <SelectContent>
               {users.map((user) => (
@@ -364,7 +364,7 @@ export default function AccountingDocumentsPage() {
 
       {selectedIds.size > 0 && (
         <div className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
-          <span className="text-sm font-medium">{selectedIds.size} {de ? 'Belege ausgewaehlt' : 'documents selected'}</span>
+          <span className="text-sm font-medium">{selectedIds.size} {de ? 'Belege ausgewählt' : 'documents selected'}</span>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setAssignTarget({ bulk: true })}>
               <UserPlus className="h-4 w-4 mr-1.5" />
@@ -422,7 +422,7 @@ export default function AccountingDocumentsPage() {
                       className="h-7 px-2 text-xs"
                       onClick={() => triggerOcr.mutate(document._id)}
                       disabled={!canRunOcr || triggerOcr.isPending}
-                      title={canRunOcr ? 'OCR' : (de ? 'OCR fuer diesen Typ nicht verfuegbar' : 'OCR unavailable for this type')}
+                      title={canRunOcr ? 'OCR' : (de ? 'OCR für diesen Typ nicht verfügbar' : 'OCR unavailable for this type')}
                     >
                       OCR
                     </Button>
@@ -443,7 +443,7 @@ export default function AccountingDocumentsPage() {
           </tbody>
         </table>
         <div className="flex items-center justify-between border-t border-border px-3 py-2">
-          <Button size="sm" variant="outline" onClick={() => setCursorStack((current) => current.length > 1 ? current.slice(0, -1) : current)} disabled={cursorStack.length <= 1}>{de ? 'Zurueck' : 'Previous'}</Button>
+          <Button size="sm" variant="outline" onClick={() => setCursorStack((current) => current.length > 1 ? current.slice(0, -1) : current)} disabled={cursorStack.length <= 1}>{de ? 'Zurück' : 'Previous'}</Button>
           <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button size="sm" variant="outline" onClick={() => pagination?.nextCursor && setCursorStack((current) => [...current, pagination.nextCursor])} disabled={!pagination?.hasNext}>{de ? 'Weiter' : 'Next'}</Button>
         </div>

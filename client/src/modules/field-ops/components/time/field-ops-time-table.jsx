@@ -396,7 +396,7 @@ export function FieldOpsTimeTable({ filters = {}, compact = false }) {
               <Input
                 value={searchFilter}
                 onChange={(event) => setFilterAndResetPage(setSearchFilter)(event.target.value)}
-                placeholder={de ? 'Zeiteintraege suchen...' : 'Search time records...'}
+                placeholder={de ? 'Zeiteinträge suchen...' : 'Search time records...'}
                 className="h-9 rounded-lg bg-background/70 pl-9 text-sm"
               />
             </div>

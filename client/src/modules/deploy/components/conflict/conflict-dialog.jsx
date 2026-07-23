@@ -84,7 +84,7 @@ export function ConflictDialog({ open, conflicts, onOverride, onCancel }) {
               </DialogTitle>
               <DialogDescription className="leading-6">
                 {hasHardConflicts
-                  ? t('deploy.conflicts.hardInfo', 'Diese Verschiebung enthaelt harte Konflikte und kann nicht uebersteuert werden.')
+                  ? t('deploy.conflicts.hardInfo', 'Diese Verschiebung enthält harte Konflikte und kann nicht übersteuert werden.')
                   : t('deploy.conflicts.planInfo', 'Die Planung verursacht folgende Konflikte:')}
               </DialogDescription>
             </div>
@@ -134,12 +134,12 @@ export function ConflictDialog({ open, conflicts, onOverride, onCancel }) {
           </div>
 
           {canOverride && (
-            <FormField label={t('deploy.conflicts.overrideReason', 'Begruendung')} required error={error}>
+            <FormField label={t('deploy.conflicts.overrideReason', 'Begründung')} required error={error}>
               <Textarea
                 aria-invalid={error ? 'true' : undefined}
                 className="min-h-36 resize-y text-sm leading-6"
                 rows={OVERRIDE_REASON_MIN_ROWS}
-                placeholder={t('deploy.conflicts.reasonPlaceholder', 'Warum soll der Konflikt uebersteuert werden?')}
+                placeholder={t('deploy.conflicts.reasonPlaceholder', 'Warum soll der Konflikt übersteuert werden?')}
                 value={overrideReason}
                 onChange={(event) => { setOverrideReason(event.target.value); setError(''); }}
               />
@@ -159,7 +159,7 @@ export function ConflictDialog({ open, conflicts, onOverride, onCancel }) {
               disabled={!isOverrideReasonValid}
             >
               <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
-              {t('deploy.conflicts.override', 'Uebersteuern')}
+              {t('deploy.conflicts.override', 'Übersteuern')}
             </Button>
           )}
         </DialogFooter>

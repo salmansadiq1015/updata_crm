@@ -30,7 +30,7 @@ export function useAssetMaintenanceMutations({ onBulkCreated, onScheduled } = {}
     onSuccess: (data) => {
       invalidateAssetMaintenance();
       showSuccess(
-        t('crm.assetMaintenance.bulkCreated', 'Wartungseintraege verarbeitet: {count} erstellt')
+        t('crm.assetMaintenance.bulkCreated', 'Wartungseinträge verarbeitet: {count} erstellt')
           .replace('{count}', String(data?.created?.length || 0)),
       );
       onBulkCreated?.(data);

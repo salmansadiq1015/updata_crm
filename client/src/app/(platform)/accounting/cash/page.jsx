@@ -64,7 +64,7 @@ function ManualBalanceDialog({ open, onClose, accounts, de }) {
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs">{de ? 'Bankkonto' : 'Bank account'}</Label>
             <Select value={form.bankAccountId} onValueChange={(value) => set('bankAccountId', value)}>
-              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder={de ? 'Auswaehlen' : 'Select'} /></SelectTrigger>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder={de ? 'Auswählen' : 'Select'} /></SelectTrigger>
               <SelectContent>
                 {accounts.map((account) => (
                   <SelectItem key={account._id} value={account._id}>{account.displayName}</SelectItem>
@@ -115,7 +115,7 @@ export default function CashManagementPage() {
     <div className="flex flex-col gap-5 max-w-7xl mx-auto">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{de ? 'Liquiditaet' : 'Cash Management'}</h1>
+          <h1 className="text-2xl font-bold">{de ? 'Liquidität' : 'Cash Management'}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {de ? 'Bankguthaben und 90-Tage-Cashflow.' : 'Bank balances and 90-day cash flow.'}
           </p>
@@ -140,7 +140,7 @@ export default function CashManagementPage() {
             </div>
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? 'Naechste 30 Tage' : 'Next 30 Days'}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? 'Nächste 30 Tage' : 'Next 30 Days'}</span>
                 <CalendarDays className="h-5 w-5 text-violet-500" />
               </div>
               <p className="mt-3 text-2xl font-bold tabular-nums">{formatMoney(periods[2]?.netPosition)}</p>

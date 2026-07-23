@@ -56,7 +56,7 @@ export function AiPanelIdle({ onStartRecording, onTextSubmit, isSupported, isCre
         />
         {!isSupported && (
           <p className="max-w-56 text-center text-xs leading-5 text-slate-400">
-            {t('ai.panel.voiceUnsupported', 'Sprache wird in diesem Browser nicht unterstuetzt. Nutzen Sie die Texteingabe.')}
+            {t('ai.panel.voiceUnsupported', 'Sprache wird in diesem Browser nicht unterstützt. Nutzen Sie die Texteingabe.')}
           </p>
         )}
       </div>

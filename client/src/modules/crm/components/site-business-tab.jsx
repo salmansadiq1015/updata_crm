@@ -15,7 +15,7 @@ import { FileText, ClipboardCheck, Receipt } from 'lucide-react';
 
 const SECTIONS = [
   { type: 'quotation', titleKey: 'crm.sites.offerten', title: 'Offerten', icon: FileText, labels: QUOTATION_STATUS_LABELS, colors: QUOTATION_STATUS_COLORS },
-  { type: 'order', titleKey: 'crm.sites.auftraege', title: 'Aufträge', icon: ClipboardCheck, labels: ORDER_STATUS_LABELS, colors: ORDER_STATUS_COLORS },
+  { type: 'order', titleKey: 'crm.sites.aufträge', title: 'Aufträge', icon: ClipboardCheck, labels: ORDER_STATUS_LABELS, colors: ORDER_STATUS_COLORS },
   { type: 'invoice', titleKey: 'crm.sites.rechnungen', title: 'Rechnungen', icon: Receipt, labels: INVOICE_STATUS_LABELS, colors: INVOICE_STATUS_COLORS },
 ];
 

@@ -30,7 +30,7 @@ export function AiAgentConfirm({ agentRun, onConfirm, onCancel, isConfirming }) 
           <div>
             <p className="text-sm font-semibold text-white">{t('ai.confirm.title', 'Confirmation required')}</p>
             <p className="mt-1 text-xs leading-5 text-amber-50/70">
-              {t('ai.confirm.desc', 'Der AI Assistent moechte die folgende Aktion ausfuehren:')}
+              {t('ai.confirm.desc', 'Der AI Assistent möchte die folgende Aktion ausführen:')}
             </p>
           </div>
         </div>
@@ -57,7 +57,7 @@ export function AiAgentConfirm({ agentRun, onConfirm, onCancel, isConfirming }) 
           disabled={isConfirming}
         >
           {!isConfirming && <ShieldCheck className="mr-1.5 h-4 w-4" />}
-          {isConfirming ? t('ai.confirm.confirming', 'Wird bestaetigt...') : t('common.confirm', 'Bestaetigen')}
+          {isConfirming ? t('ai.confirm.confirming', 'Wird bestätigt...') : t('common.confirm', 'Bestätigen')}
         </Button>
       </div>
     </div>

@@ -130,13 +130,13 @@ function Step1OrderDetails({ form, de }) {
   return (
     <FormSection
       title={de ? 'Einsatzdetails' : 'Assignment Details'}
-      description={de ? 'Typ, Prioritaet und Titel des Einsatzes' : 'Assignment type, priority and title'}
+      description={de ? 'Typ, Priorität und Titel des Einsatzes' : 'Assignment type, priority and title'}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label={de ? 'Einsatztyp' : 'Assignment Type'} required error={errors.orderType?.message}>
           <Select value={watch('orderType')} onValueChange={(value) => setValue('orderType', value, { shouldValidate: true })}>
             <SelectTrigger className={errors.orderType ? 'border-destructive' : ''}>
-              <SelectValue placeholder={de ? 'Typ waehlen...' : 'Select type...'} />
+              <SelectValue placeholder={de ? 'Typ wählen...' : 'Select type...'} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ORDER_TYPE.SERVICE_CALL}>{de ? 'Serviceeinsatz' : 'Service Call'}</SelectItem>
@@ -148,7 +148,7 @@ function Step1OrderDetails({ form, de }) {
           </Select>
         </FormField>
 
-        <FormField label={de ? 'Prioritaet' : 'Priority'}>
+        <FormField label={de ? 'Priorität' : 'Priority'}>
           <Select value={watch('priority')} onValueChange={(value) => setValue('priority', value)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -192,7 +192,7 @@ function Step2ScopeOfWork({ form, de }) {
     >
       <FormField
         label={de ? 'Leistungsumfang' : 'Scope of Work'}
-        description={de ? 'Geplante Arbeiten, Checklisten, Pruefpunkte' : 'Planned work, checklists, inspection points'}
+        description={de ? 'Geplante Arbeiten, Checklisten, Prüfpunkte' : 'Planned work, checklists, inspection points'}
       >
         <RichTextEditor
           value={watch('scopeOfWork')}
@@ -204,7 +204,7 @@ function Step2ScopeOfWork({ form, de }) {
 
       <FormField
         label={de ? 'Sonderhinweise' : 'Special Instructions'}
-        description={de ? 'Sicherheitshinweise, Zugangscodes, Kundenwuensche' : 'Safety notes, access codes, customer requests'}
+        description={de ? 'Sicherheitshinweise, Zugangscodes, Kundenwünsche' : 'Safety notes, access codes, customer requests'}
       >
         <RichTextEditor
           value={watch('specialInstructions')}
@@ -259,7 +259,7 @@ function Step3CustomerSite({ form, de }) {
             </div>
             <Select value={watch('projectId') || 'none'} onValueChange={applyProject}>
               <SelectTrigger>
-                <SelectValue placeholder={isFetching ? (de ? 'Laedt...' : 'Loading...') : (de ? 'Projekt waehlen' : 'Select project')} />
+                <SelectValue placeholder={isFetching ? (de ? 'Lädt...' : 'Loading...') : (de ? 'Projekt wählen' : 'Select project')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">{de ? 'Kein Projekt' : 'No Project'}</SelectItem>
@@ -286,7 +286,7 @@ function Step3CustomerSite({ form, de }) {
           <Input {...register('siteAddress')} placeholder={de ? 'Strasse, PLZ Ort...' : 'Street, ZIP City...'} />
         </FormField>
         <FormField label={de ? 'Zugangshinweise' : 'Access Instructions'}>
-          <Input {...register('accessInstructions')} placeholder={de ? 'Schluessel bei...' : 'Key available at...'} />
+          <Input {...register('accessInstructions')} placeholder={de ? 'Schlüssel bei...' : 'Key available at...'} />
         </FormField>
         <FormField label={de ? 'Parkinginfo' : 'Parking Info'}>
           <Input {...register('parkingInfo')} placeholder={de ? 'Parkplatz vorne...' : 'Parking in front...'} />
@@ -342,7 +342,7 @@ function Step4Assignment({ form, de }) {
           <FormField label={de ? 'Mitarbeiter' : 'Employee'}>
             <Select value={watch('employeeId') || 'none'} onValueChange={(value) => setValue('employeeId', value === 'none' ? '' : value, { shouldValidate: true })}>
               <SelectTrigger>
-                <SelectValue placeholder={de ? 'Mitarbeiter waehlen' : 'Select employee'} />
+                <SelectValue placeholder={de ? 'Mitarbeiter wählen' : 'Select employee'} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">{de ? 'Nicht zugewiesen' : 'Unassigned'}</SelectItem>
@@ -358,7 +358,7 @@ function Step4Assignment({ form, de }) {
           <FormField label={targetType === 'TEAM' ? (de ? 'Team' : 'Team') : (de ? 'Abteilung' : 'Department')}>
             <Select value={watch('assignmentTargetId') || 'none'} onValueChange={handleGroupTarget}>
               <SelectTrigger>
-                <SelectValue placeholder={de ? 'Ziel waehlen' : 'Select target'} />
+                <SelectValue placeholder={de ? 'Ziel wählen' : 'Select target'} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">{de ? 'Kein Ziel' : 'No target'}</SelectItem>
@@ -382,7 +382,7 @@ function Step4Assignment({ form, de }) {
         <UsersRound className="h-4 w-4 shrink-0" />
         <span>
           {de
-            ? 'Team- und Abteilungsauftraege bleiben sichtbar fuer passende Mitarbeiter in der App.'
+            ? 'Team- und Abteilungsaufträge bleiben sichtbar für passende Mitarbeiter in der App.'
             : 'Team and department jobs stay visible to matching employees in the app.'}
         </span>
       </div>
@@ -571,7 +571,7 @@ export function FieldOpsCreateOrderDialog({ open, onOpenChange, onCreate, isLoad
             onCancel={() => handleOpenChange(false)}
             isLoading={isLoading}
             nextLabel={de ? 'Weiter' : 'Next'}
-            backLabel={de ? 'Zurueck' : 'Back'}
+            backLabel={de ? 'Zurück' : 'Back'}
             cancelLabel={de ? 'Abbrechen' : 'Cancel'}
             submitLabel={isEditMode
               ? (de ? 'Speichern' : 'Save Changes')

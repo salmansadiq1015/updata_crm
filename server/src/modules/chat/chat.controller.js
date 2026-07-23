@@ -17,6 +17,13 @@ class ChatController {
     } catch (err) { next(err); }
   }
 
+  async createOrGetProjectRoom(req, res, next) {
+    try {
+      const room = await chatRoomService.getOrCreateProjectRoom(req.body.projectId, req.user);
+      return res.success({ data: room });
+    } catch (err) { next(err); }
+  }
+
   async getRoom(req, res, next) {
     try {
       await chatRoomService.assertMembership(req.params.roomId, req.user);

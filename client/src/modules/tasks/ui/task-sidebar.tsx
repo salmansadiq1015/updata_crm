@@ -124,7 +124,7 @@ function ListItem({
           <button
             type="button"
             className="absolute right-1 top-1 opacity-0 group-hover/listitem:opacity-100 h-6 w-6 flex items-center justify-center rounded hover:bg-accent transition-opacity"
-            aria-label={t('tasks.listOptions', 'Optionen fuer Liste {name}', { name: list.name })}
+            aria-label={t('tasks.listOptions', 'Optionen für Liste {name}', { name: list.name })}
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
@@ -223,7 +223,7 @@ function FolderItem({
             <button
               type="button"
               className="opacity-0 group-hover/folder:opacity-100 h-6 w-6 flex items-center justify-center rounded hover:bg-accent transition-opacity"
-              aria-label={t('tasks.folderOptions', 'Optionen fuer Ordner {name}', { name: folder.name })}
+              aria-label={t('tasks.folderOptions', 'Optionen für Ordner {name}', { name: folder.name })}
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>

@@ -30,7 +30,7 @@ describe('DocumentRenderer end-to-end (DOC-006)', () => {
     const data = {
       templateType: 'quotation',
       documentNumber: 'OFF-2026-0042',
-      customer: { name: 'Muster AG', addressLine1: 'Bahnhofstrasse 1', zip: '8001', city: 'Zuerich' },
+      customer: { name: 'Muster AG', addressLine1: 'Bahnhofstrasse 1', zip: '8001', city: 'Zürich' },
       introduction: 'Gerne unterbreiten wir Ihnen folgende Offerte.',
       lineItems: [
         { position: 1, description: 'Boiler service', unit: 'Stk', quantity: 1, unitPrice: 1200, total: 1200 },

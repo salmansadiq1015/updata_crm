@@ -370,7 +370,7 @@ function groupByMonth(items, t) {
         sortValue: valid ? date.getFullYear() * 12 + date.getMonth() : Number.POSITIVE_INFINITY,
         label: valid
           ? date.toLocaleDateString('de-CH', { month: 'long', year: 'numeric' })
-          : t('crm.maintenance.noDueDate', 'Kein Faelligkeitsdatum'),
+          : t('crm.maintenance.noDueDate', 'Kein Fälligkeitsdatum'),
         items: [],
       });
     }

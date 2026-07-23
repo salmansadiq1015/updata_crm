@@ -125,7 +125,7 @@ function AccountFormDialog({ open, onClose, parentAccount, de }) {
           </div>
           {parentAccount && (
             <p className="text-xs text-muted-foreground">
-              {de ? 'Uebergeordnet' : 'Parent'}: <span className="font-mono">{parentAccount.accountNumber}</span> {parentAccount.name}
+              {de ? 'Übergeordnet' : 'Parent'}: <span className="font-mono">{parentAccount.accountNumber}</span> {parentAccount.name}
             </p>
           )}
           <DialogFooter>
@@ -209,7 +209,7 @@ function AccountOverviewDialog({ account, open, onClose, de }) {
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">{de ? 'Keine Kontoauswertung verfuegbar.' : 'No account overview available.'}</p>
+          <p className="text-sm text-muted-foreground">{de ? 'Keine Kontoauswertung verfügbar.' : 'No account overview available.'}</p>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={handleExport} disabled={!account?._id}>
@@ -276,7 +276,7 @@ function AccountRow({ account, depth = 0, de, allAccounts, onAddChild, onOpenOve
               type="button"
               onClick={() => onAddChild(account)}
               className="text-xs text-muted-foreground hover:text-primary"
-              title={de ? 'Unterkonto hinzufuegen' : 'Add sub-account'}
+              title={de ? 'Unterkonto hinzufügen' : 'Add sub-account'}
             >
               <Plus className="h-3.5 w-3.5" />
             </button>

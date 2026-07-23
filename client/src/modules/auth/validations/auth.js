@@ -23,7 +23,7 @@ export const createLoginSchema = (t = fallbackT) => z.object({
 export const createChangePasswordSchema = (t = fallbackT) => z.object({
   currentPassword: z.string().min(1, message(t, 'auth.validation.currentPasswordRequired', 'Aktuelles Passwort eingeben')),
   newPassword: passwordPolicy(t),
-  confirmPassword: z.string().min(1, message(t, 'auth.validation.confirmPasswordRequired', 'Passwort bestaetigen')),
+  confirmPassword: z.string().min(1, message(t, 'auth.validation.confirmPasswordRequired', 'Passwort bestätigen')),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: message(t, 'auth.validation.passwordMismatch', 'Passwörter stimmen nicht überein'),
   path: ['confirmPassword'],
@@ -38,7 +38,7 @@ export const createResetPasswordRequestSchema = (t = fallbackT) => z.object({
 
 export const createResetPasswordConfirmSchema = (t = fallbackT) => z.object({
   password: passwordPolicy(t),
-  confirmPassword: z.string().min(1, message(t, 'auth.validation.confirmPasswordRequired', 'Passwort bestaetigen')),
+  confirmPassword: z.string().min(1, message(t, 'auth.validation.confirmPasswordRequired', 'Passwort bestätigen')),
 }).refine((data) => data.password === data.confirmPassword, {
   message: message(t, 'auth.validation.passwordMismatch', 'Passwörter stimmen nicht überein'),
   path: ['confirmPassword'],
@@ -46,7 +46,7 @@ export const createResetPasswordConfirmSchema = (t = fallbackT) => z.object({
 
 export const createActivateAccountSchema = (t = fallbackT) => z.object({
   password: passwordPolicy(t),
-  confirmPassword: z.string().min(1, message(t, 'auth.validation.confirmPasswordRequired', 'Passwort bestaetigen')),
+  confirmPassword: z.string().min(1, message(t, 'auth.validation.confirmPasswordRequired', 'Passwort bestätigen')),
 }).refine((data) => data.password === data.confirmPassword, {
   message: message(t, 'auth.validation.passwordMismatch', 'Passwörter stimmen nicht überein'),
   path: ['confirmPassword'],

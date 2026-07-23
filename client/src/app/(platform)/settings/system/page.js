@@ -44,7 +44,7 @@ export default function SystemPage() {
     <div className="space-y-6">
       <PageHeader
         title={t('system.title') || 'Systemstatus'}
-        description={t('system.desc') || 'Ueberwachung der Systemkomponenten und Abhaengigkeiten.'}
+        description={t('system.desc') || 'Überwachung der Systemkomponenten und Abhängigkeiten.'}
       >
         <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
           <RefreshCw className="h-3.5 w-3.5" />

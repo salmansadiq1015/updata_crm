@@ -3,17 +3,19 @@ import '../crm/customer.model.js';
 
 const chatRoomRepository = {
   async findOrCreateProjectRoom(projectId, createdByUserId, memberIds = []) {
-    let room = await ChatRoom.findOne({ roomType: 'PROJECT', projectId });
-    if (!room) {
-      const members = [...new Set([String(createdByUserId), ...memberIds.map(String)])];
-      room = await ChatRoom.create({
-        roomType: 'PROJECT',
-        projectId,
-        createdBy: createdByUserId,
-        members: members.map((userId) => ({ userId })),
-      });
-    }
-    return room;
+    const members = [...new Set([String(createdByUserId), ...memberIds.map(String)])];
+    return ChatRoom.findOneAndUpdate(
+      { roomType: 'PROJECT', projectId },
+      {
+        $setOnInsert: {
+          roomType: 'PROJECT',
+          projectId,
+          createdBy: createdByUserId,
+          members: members.map((userId) => ({ userId })),
+        },
+      },
+      { upsert: true, new: true },
+    );
   },
 
   async findOrCreateDmRoom(userIdA, userIdB) {

@@ -168,7 +168,7 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
 
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="overview">{t('qop.invoice.tabOverview', 'Uebersicht')}</TabsTrigger>
+                <TabsTrigger value="overview">{t('qop.invoice.tabOverview', 'Übersicht')}</TabsTrigger>
                 <TabsTrigger value="payments">{t('qop.invoice.tabPayments', 'Zahlungen')}</TabsTrigger>
                 <TabsTrigger value="history">{t('qop.invoice.tabHistory', 'Verlauf')}</TabsTrigger>
               </TabsList>
@@ -179,7 +179,7 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
                     [t('qop.invoice.fieldNumber', 'Nummer'), <span key="n" className="font-mono">{invoice?.invoiceNumber}</span>],
                     [t('qop.invoice.fieldType', 'Typ'), <InvoiceTypeBadge key="t" type={invoice?.invoiceType} />],
                     [t('qop.invoice.fieldCustomer', 'Kunde'), invoice?.customerName],
-                    [t('qop.invoice.fieldDueDate', 'Faellig am'), fmtDate(invoice?.dueDate, language)],
+                    [t('qop.invoice.fieldDueDate', 'Fällig am'), fmtDate(invoice?.dueDate, language)],
                     [t('qop.invoice.fieldAmount', 'Betrag'), <AmountDisplay key="a" amount={invoice?.grandTotalRounded} currency={invoice?.currency} className="font-semibold" />],
                     [t('qop.invoice.fieldAmountDue', 'Offener Betrag'), <AmountDisplay key="d" amount={invoice?.amountDue} currency={invoice?.currency} />],
                   ].map(([label, value], i) => (
@@ -194,7 +194,7 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
                 {invoice?.invoiceType === 'FINAL' && (invoice?.advanceDeductions ?? []).length > 0 && (
                   <div className="mt-4 flex flex-col gap-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      {t('qop.invoice.advanceDeductions', 'Abzuege Akontozahlungen')}
+                      {t('qop.invoice.advanceDeductions', 'Abzüge Akontozahlungen')}
                     </p>
                     {invoice.advanceDeductions.map((d, i) => (
                       <div key={i} className="flex justify-between text-sm">

@@ -70,7 +70,7 @@ export function ActivateAccountForm() {
         <Alert variant="destructive" className="rounded-xl">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            {t('auth.invalidActivationToken', 'Ungueltiger oder fehlender Token. Bitte kontaktieren Sie Ihren Administrator.')}
+            {t('auth.invalidActivationToken', 'Ungültiger oder fehlender Token. Bitte kontaktieren Sie Ihren Administrator.')}
           </AlertDescription>
         </Alert>
       </div>

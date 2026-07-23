@@ -77,7 +77,7 @@ export function useContactOverview() {
     mutationFn: ({ id }) => contactService.setPrimary(id),
     onSuccess: (_data, variables) => {
       invalidateContacts(variables.customerId);
-      showSuccess(t('crm.contacts.primarySetToast', 'Primaerkontakt gesetzt'));
+      showSuccess(t('crm.contacts.primarySetToast', 'Primärkontakt gesetzt'));
     },
     onError: (error) => showError(error.message),
   });

@@ -46,9 +46,9 @@ export function useFieldOpsOrderMutations() {
     mutationFn: (id) => orderService.deleteOrder(id),
     onSuccess: () => {
       invalidateList();
-      showSuccess(de ? 'Einsatz geloescht' : 'Assignment deleted');
+      showSuccess(de ? 'Einsatz gelöscht' : 'Assignment deleted');
     },
-    onError: (err) => showError(err.message || (de ? 'Loeschen fehlgeschlagen' : 'Delete failed')),
+    onError: (err) => showError(err.message || (de ? 'Löschen fehlgeschlagen' : 'Delete failed')),
   });
 
   const bulkDelete = useMutation({
@@ -57,7 +57,7 @@ export function useFieldOpsOrderMutations() {
       invalidateList();
       showSuccess(de ? `${ids.length} Einsaetze geloescht` : `${ids.length} orders deleted`);
     },
-    onError: (err) => showError(err.message || (de ? 'Massenloeschung fehlgeschlagen' : 'Bulk delete failed')),
+    onError: (err) => showError(err.message || (de ? 'Massenlöschung fehlgeschlagen' : 'Bulk delete failed')),
   });
 
   const updateStatus = useMutation({
@@ -86,7 +86,7 @@ export function useFieldOpsOrderMutations() {
         invalidateList();
       }
       const message = variables?.dryRun
-        ? (de ? 'Import geprueft' : 'Import validated')
+        ? (de ? 'Import geprüft' : 'Import validated')
         : (de ? `${result?.created ?? 0} Einsaetze importiert` : `${result?.created ?? 0} orders imported`);
       showSuccess(message);
     },

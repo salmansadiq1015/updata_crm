@@ -333,6 +333,7 @@ export const queryKeys = {
   chat: {
     rooms:    ()       => ['chat', 'rooms'],
     room:     (id)     => ['chat', 'room', id],
+    projectRoom: (projectId) => ['chat', 'projectRoom', projectId],
     messages: (roomId) => ['chat', 'messages', roomId],
     search:   (params) => ['chat', 'search', params],
   },

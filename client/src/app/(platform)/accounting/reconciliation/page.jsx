@@ -204,7 +204,7 @@ export default function ReconciliationPage() {
             </tbody>
           </table>
           <div className="flex items-center justify-between border-t border-border px-3 py-2">
-            <Button size="sm" variant="outline" onClick={handlePrev} disabled={cursorStack.length <= 1}>{de ? 'Zurueck' : 'Previous'}</Button>
+            <Button size="sm" variant="outline" onClick={handlePrev} disabled={cursorStack.length <= 1}>{de ? 'Zurück' : 'Previous'}</Button>
             <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
             <Button size="sm" variant="outline" onClick={handleNext} disabled={!pagination?.hasNext}>{de ? 'Weiter' : 'Next'}</Button>
           </div>
@@ -216,7 +216,7 @@ export default function ReconciliationPage() {
             <h2 className="text-sm font-semibold">{de ? 'Zuordnung' : 'Matching'}</h2>
           </div>
           {!selectedTx ? (
-            <p className="text-sm text-muted-foreground">{de ? 'Transaktion auswaehlen.' : 'Select a transaction.'}</p>
+            <p className="text-sm text-muted-foreground">{de ? 'Transaktion auswählen.' : 'Select a transaction.'}</p>
           ) : (
             <div className="flex flex-col gap-4">
               <div>
@@ -226,7 +226,7 @@ export default function ReconciliationPage() {
 
               {Number(selectedTx.amount || 0) > 0 && (
                 <div className="flex flex-col gap-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? 'Vorschlaege' : 'Suggestions'}</h3>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? 'Vorschläge' : 'Suggestions'}</h3>
                   {suggestionsLoading ? <Skeleton className="h-16 rounded-lg" /> : suggestions.slice(0, 5).map((suggestion) => (
                     <button
                       key={suggestion.invoiceId}
@@ -245,7 +245,7 @@ export default function ReconciliationPage() {
                     </button>
                   ))}
                   {!suggestionsLoading && suggestions.length === 0 && (
-                    <p className="text-xs text-muted-foreground">{de ? 'Keine Rechnungsvorschlaege.' : 'No invoice suggestions.'}</p>
+                    <p className="text-xs text-muted-foreground">{de ? 'Keine Rechnungsvorschläge.' : 'No invoice suggestions.'}</p>
                   )}
                 </div>
               )}
@@ -283,7 +283,7 @@ export default function ReconciliationPage() {
               <div className="flex flex-col gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{de ? 'Kategorisieren' : 'Categorize'}</h3>
                 <Select value={categoryAccountId} onValueChange={setCategoryAccountId}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder={de ? 'Konto auswaehlen' : 'Select account'} /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder={de ? 'Konto auswählen' : 'Select account'} /></SelectTrigger>
                   <SelectContent>
                     {postingAccounts.filter((account) => !account.isGroup).map((account) => (
                       <SelectItem key={account._id} value={account._id}>

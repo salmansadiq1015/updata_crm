@@ -208,12 +208,12 @@ export default function ExchangeRatesPage() {
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-sky-300/20 bg-sky-400/10 px-3 py-1 text-xs font-semibold text-sky-200">
             <Globe2 className="h-3.5 w-3.5" />
-            {de ? 'Multi-Waehrung' : 'Multi-currency'}
+            {de ? 'Multi-Währung' : 'Multi-currency'}
           </div>
           <h1 className="text-2xl font-bold">{de ? 'Wechselkurse' : 'Exchange Rates'}</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {de
-              ? 'Historische Kurse fuer Buchungen, Reporting, Umrechnung und spaetere Neubewertung.'
+              ? 'Historische Kurse für Buchungen, Reporting, Umrechnung und spätere Neubewertung.'
               : 'Historical rates for postings, reporting, conversion, and the revaluation foundation.'}
           </p>
         </div>
@@ -300,7 +300,7 @@ export default function ExchangeRatesPage() {
                   <td colSpan={5} className="px-3 py-12 text-center text-sm text-muted-foreground">
                     {isError
                       ? (de ? 'Kurse konnten nicht geladen werden.' : 'Could not load exchange rates.')
-                      : (de ? 'Keine Wechselkurse fuer diese Filter.' : 'No exchange rates for these filters.')}
+                      : (de ? 'Keine Wechselkurse für diese Filter.' : 'No exchange rates for these filters.')}
                   </td>
                 </tr>
               )}
@@ -454,14 +454,14 @@ export default function ExchangeRatesPage() {
 
         <section className="rounded-xl border border-border bg-card p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{de ? 'FX Laeufe' : 'FX Runs'}</h2>
+            <h2 className="text-sm font-semibold">{de ? 'FX Läufe' : 'FX Runs'}</h2>
             <Scale className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="grid gap-2">
             {revaluationRunsLoading && Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-12 rounded-lg" />)}
             {!revaluationRunsLoading && revaluationRuns.length === 0 && (
               <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-                {de ? 'Keine Laeufe.' : 'No runs.'}
+                {de ? 'Keine Läufe.' : 'No runs.'}
               </div>
             )}
             {!revaluationRunsLoading && revaluationRuns.map((run) => (

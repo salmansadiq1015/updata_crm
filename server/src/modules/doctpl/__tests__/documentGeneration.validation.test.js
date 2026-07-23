@@ -68,7 +68,7 @@ describe('documentGeneration _prepareRenderData (DOC-003)', () => {
     const result = documentGenerationService._prepareRenderData('invoice_standard', {
       documentNumber: 'RE-1',
       amountDue: 1081.5,
-      customer: { name: 'Muster AG', addressLine1: 'Bahnhofstrasse 1', plz: '8001', city: 'Zuerich' },
+      customer: { name: 'Muster AG', addressLine1: 'Bahnhofstrasse 1', plz: '8001', city: 'Zürich' },
     }, ci);
     expect(result.qrBill.iban).toBe('CH4431999123000889012');
     expect(result.qrBill.amount).toBe(1081.5);

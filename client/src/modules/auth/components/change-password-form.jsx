@@ -32,10 +32,10 @@ export function ChangePasswordForm() {
       newPassword: data.newPassword,
     }),
     onSuccess: () => {
-      showSuccess(t('auth.passwordChanged', 'Passwort geaendert'));
+      showSuccess(t('auth.passwordChanged', 'Passwort geändert'));
       reset();
     },
-    onError: (err) => showError(err.message || t('auth.changePasswordFailed', 'Passwort konnte nicht geaendert werden')),
+    onError: (err) => showError(err.message || t('auth.changePasswordFailed', 'Passwort konnte nicht geändert werden')),
   });
 
   const onSubmit = (data) => {
@@ -45,8 +45,8 @@ export function ChangePasswordForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('auth.changePassword', 'Passwort aendern')}</CardTitle>
-        <CardDescription>{t('auth.changePasswordDesc', 'Waehlen Sie ein sicheres Passwort mit mindestens 10 Zeichen.')}</CardDescription>
+        <CardTitle>{t('auth.changePassword', 'Passwort ändern')}</CardTitle>
+        <CardDescription>{t('auth.changePasswordDesc', 'Wählen Sie ein sicheres Passwort mit mindestens 10 Zeichen.')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -61,14 +61,14 @@ export function ChangePasswordForm() {
             {errors.newPassword && <p className="text-sm text-destructive">{errors.newPassword.message}</p>}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">{t('auth.confirmPassword', 'Passwort bestaetigen')}</Label>
+            <Label htmlFor="confirmPassword">{t('auth.confirmPassword', 'Passwort bestätigen')}</Label>
             <Input id="confirmPassword" type="password" {...register('confirmPassword')} />
             {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>}
           </div>
           <div className="flex justify-end pt-2">
             <Button type="submit" disabled={mutation.isPending}>
               {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t('auth.changePassword', 'Passwort aendern')}
+              {t('auth.changePassword', 'Passwort ändern')}
             </Button>
           </div>
         </form>

@@ -383,7 +383,7 @@ export function FieldOpsOrdersTable() {
     },
     {
       accessorKey: 'priority',
-      header: de ? 'Prioritaet' : 'Priority',
+      header: de ? 'Priorität' : 'Priority',
       size: 120,
       enableSorting: false,
       Cell: ({ row }) => {
@@ -424,7 +424,7 @@ export function FieldOpsOrdersTable() {
                   ? 'bg-red-500/10 text-red-700 dark:text-red-300'
                   : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
               )}>
-                {overdue ? (de ? 'Ueberfaellig' : 'Overdue') : (de ? 'Heute' : 'Today')}
+                {overdue ? (de ? 'Überfällig' : 'Overdue') : (de ? 'Heute' : 'Today')}
               </span>
             )}
           </div>
@@ -557,14 +557,14 @@ export function FieldOpsOrdersTable() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        title={de ? 'Einsatz loeschen' : 'Delete Assignment'}
+        title={de ? 'Einsatz löschen' : 'Delete Assignment'}
         description={de
           ? `Einsatz "${deleteTarget?.title || deleteTarget?.assignmentNumber}" wird unwiderruflich geloescht.`
           : `Order "${deleteTarget?.title || deleteTarget?.assignmentNumber}" will be permanently deleted.`}
         onConfirm={handleDelete}
         isLoading={deleteOrder.isPending}
         variant="destructive"
-        confirmText={de ? 'Loeschen' : 'Delete'}
+        confirmText={de ? 'Löschen' : 'Delete'}
       />
 
       <ConfirmDialog
@@ -577,7 +577,7 @@ export function FieldOpsOrdersTable() {
         onConfirm={handleBulkDelete}
         isLoading={bulkDelete.isPending}
         variant="destructive"
-        confirmText={de ? 'Alle loeschen' : 'Delete All'}
+        confirmText={de ? 'Alle löschen' : 'Delete All'}
       />
 
       <section className="relative overflow-hidden rounded-xl border border-border/60 bg-card/95 p-4 shadow-theme-sm">
@@ -612,8 +612,8 @@ export function FieldOpsOrdersTable() {
           <div className="flex items-start gap-3">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
             <div>
-              <p className="font-semibold">{de ? 'Einsaetze konnten nicht geladen werden' : 'Assignments could not be loaded'}</p>
-              <p className="text-xs opacity-80">{de ? 'Pruefen Sie die Verbindung und versuchen Sie es erneut.' : 'Check the connection and retry.'}</p>
+              <p className="font-semibold">{de ? 'Einsätze konnten nicht geladen werden' : 'Assignments could not be loaded'}</p>
+              <p className="text-xs opacity-80">{de ? 'Prüfen Sie die Verbindung und versuchen Sie es erneut.' : 'Check the connection and retry.'}</p>
             </div>
           </div>
           <Button size="sm" variant="outline" onClick={() => refetch()} className="w-fit gap-2 border-red-500/30 bg-background/80">
@@ -635,14 +635,14 @@ export function FieldOpsOrdersTable() {
               <div className="absolute inset-[-6px] rounded-3xl bg-primary/15 blur-xl" />
               <AlertCircle className="h-6 w-6 text-primary/40" />
             </div>
-            <p className="text-sm font-semibold text-foreground">{de ? 'Keine Einsaetze gefunden' : 'No orders found'}</p>
+            <p className="text-sm font-semibold text-foreground">{de ? 'Keine Einsätze gefunden' : 'No orders found'}</p>
             <p className="max-w-sm text-center text-xs">
-              {de ? 'Aendern Sie die Filter oder erstellen Sie einen neuen Einsatz.' : 'Adjust filters or create a new order.'}
+              {de ? 'Ändern Sie die Filter oder erstellen Sie einen neuen Einsatz.' : 'Adjust filters or create a new order.'}
             </p>
             <div className="mt-2 flex flex-wrap justify-center gap-2">
               <Button size="sm" variant="outline" onClick={clear} className="h-8 gap-2 rounded-lg">
                 <RefreshCw className="h-3.5 w-3.5" />
-                {de ? 'Filter zuruecksetzen' : 'Reset Filters'}
+                {de ? 'Filter zurücksetzen' : 'Reset Filters'}
               </Button>
               <Button size="sm" onClick={() => setShowCreate(true)} className="h-8 rounded-lg">
                 {de ? 'Neuer Einsatz' : 'New Assignment'}
@@ -670,7 +670,7 @@ export function FieldOpsOrdersTable() {
         renderRowActions={({ row }) => (
           <RowActionsMenu items={[
             {
-              label: de ? 'Oeffnen' : 'View',
+              label: de ? 'Öffnen' : 'View',
               icon: Eye,
               onSelect: () => router.push(`/field-ops/orders/${row.original.id || row.original._id}`),
             },
@@ -681,7 +681,7 @@ export function FieldOpsOrdersTable() {
             },
             { type: 'separator' },
             {
-              label: de ? 'Loeschen' : 'Delete',
+              label: de ? 'Löschen' : 'Delete',
               icon: Trash2,
               destructive: true,
               onSelect: () => setDeleteTarget(row.original),

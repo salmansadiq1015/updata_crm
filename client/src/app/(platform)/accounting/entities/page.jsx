@@ -171,7 +171,7 @@ export default function AccountingEntitiesPage() {
           <div className="mb-4">
             <h1 className="text-xl font-bold">{de ? 'Accounting-Struktur' : 'Accounting Structure'}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {de ? 'Firmen und Niederlassungen fuer mehrdimensionale Finanzberichte.' : 'Companies and branches used by scoped ledgers and financial reports.'}
+              {de ? 'Firmen und Niederlassungen für mehrdimensionale Finanzberichte.' : 'Companies and branches used by scoped ledgers and financial reports.'}
             </p>
           </div>
 
@@ -218,7 +218,7 @@ export default function AccountingEntitiesPage() {
                 <Label className="text-xs text-muted-foreground">{de ? 'Firma' : 'Company'}</Label>
                 <Select value={form.parentId} onValueChange={(value) => set('parentId', value)} disabled={companies.length === 0}>
                   <SelectTrigger className="h-9 border-border bg-card text-foreground">
-                    <SelectValue placeholder={de ? 'Firma waehlen' : 'Select company'} />
+                    <SelectValue placeholder={de ? 'Firma wählen' : 'Select company'} />
                   </SelectTrigger>
                   <SelectContent>
                     {companies.map((company) => (
@@ -231,7 +231,7 @@ export default function AccountingEntitiesPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs text-muted-foreground">{de ? 'Basiswaehrung' : 'Base Currency'}</Label>
+                <Label className="text-xs text-muted-foreground">{de ? 'Basiswährung' : 'Base Currency'}</Label>
                 <Select value={form.baseCurrency} onValueChange={(value) => set('baseCurrency', value)}>
                   <SelectTrigger className="h-9 border-border bg-card text-foreground">
                     <SelectValue />
@@ -266,7 +266,7 @@ export default function AccountingEntitiesPage() {
             <div>
               <h2 className="text-lg font-bold">{de ? 'Ledger Scope Master Data' : 'Ledger Scope Master Data'}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                {de ? 'Diese IDs koennen fuer Journal-, Report- und Dashboard-Scope genutzt werden.' : 'These IDs can scope journal, report, and dashboard data.'}
+                {de ? 'Diese IDs können für Journal-, Report- und Dashboard-Scope genutzt werden.' : 'These IDs can scope journal, report, and dashboard data.'}
               </p>
             </div>
           </div>

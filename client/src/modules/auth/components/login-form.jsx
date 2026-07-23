@@ -53,8 +53,8 @@ export function LoginForm() {
           : null;
         setLockMessage(
           lockedUntil
-            ? t('auth.accountLockedUntil', 'Konto gesperrt bis {time}. Bitte versuchen Sie es spaeter erneut.', { time: lockedUntil })
-            : t('auth.accountLocked', 'Konto gesperrt. Bitte versuchen Sie es spaeter erneut.')
+            ? t('auth.accountLockedUntil', 'Konto gesperrt bis {time}. Bitte versuchen Sie es später erneut.', { time: lockedUntil })
+            : t('auth.accountLocked', 'Konto gesperrt. Bitte versuchen Sie es später erneut.')
         );
       } else {
         showError(err.message || t('auth.loginFailed', 'Anmeldung fehlgeschlagen'));

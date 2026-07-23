@@ -255,13 +255,13 @@ export function FieldOpsOrdersCommand({
           accent="blue"
         />
         <PremiumStatCard
-          label={de ? 'Heute faellig' : 'Due Today'}
+          label={de ? 'Heute fällig' : 'Due Today'}
           value={metrics.dueToday}
           icon={CalendarClock}
           accent="emerald"
         />
         <PremiumStatCard
-          label={de ? 'Hohe Prioritaet' : 'High Attention'}
+          label={de ? 'Hohe Priorität' : 'High Attention'}
           value={metrics.highAttention}
           icon={AlertTriangle}
           accent={metrics.highAttention > 0 ? 'amber' : 'violet'}
@@ -298,7 +298,7 @@ export function FieldOpsOrdersCommand({
         </span>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 py-1.5">
           <AlertTriangle className="h-3.5 w-3.5" />
-          {de ? 'Ueberfaellig' : 'Overdue'} {metrics.overdue}
+          {de ? 'Überfällig' : 'Overdue'} {metrics.overdue}
         </span>
       </div>
     </div>

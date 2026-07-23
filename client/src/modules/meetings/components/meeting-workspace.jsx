@@ -309,7 +309,7 @@ function OptionSearch({ type, value, label, onSelect, onClear }) {
               {t('common.noResults', 'No records found')}
             </p>
           )}
-          {query.isFetching && <p className="text-xs text-muted-foreground">{t('common.searching', 'Suche laeuft...')}</p>}
+          {query.isFetching && <p className="text-xs text-muted-foreground">{t('common.searching', 'Suche läuft...')}</p>}
         </>
       )}
     </div>
@@ -900,8 +900,8 @@ function MeetingDetail({ meetingId, onEdit }) {
     return (
       <div className="flex min-h-[560px] flex-col items-center justify-center rounded-lg border border-dashed bg-card text-center">
         <Video className="h-10 w-10 text-muted-foreground" />
-        <p className="mt-3 text-sm font-medium">{t('meetings.detail.emptyTitle', 'Meeting auswaehlen')}</p>
-        <p className="mt-1 max-w-sm text-xs text-muted-foreground">{t('meetings.detail.emptyDesc', 'Waehlen Sie links ein Meeting aus, um Agenda, Teilnehmer, Protokoll und Folgeaufgaben zu bearbeiten.')}</p>
+        <p className="mt-3 text-sm font-medium">{t('meetings.detail.emptyTitle', 'Meeting auswählen')}</p>
+        <p className="mt-1 max-w-sm text-xs text-muted-foreground">{t('meetings.detail.emptyDesc', 'Wählen Sie links ein Meeting aus, um Agenda, Teilnehmer, Protokoll und Folgeaufgaben zu bearbeiten.')}</p>
       </div>
     );
   }
@@ -960,7 +960,7 @@ function MeetingDetail({ meetingId, onEdit }) {
 
         <Tabs defaultValue="overview" className="gap-4">
           <TabsList variant="line" className="flex-wrap">
-            <TabsTrigger value="overview">{t('meetings.tabs.overview', 'Uebersicht')}</TabsTrigger>
+            <TabsTrigger value="overview">{t('meetings.tabs.overview', 'Übersicht')}</TabsTrigger>
             <TabsTrigger value="people">{t('meetings.tabs.people', 'Teilnehmer')}</TabsTrigger>
             <TabsTrigger value="minutes">{t('meetings.tabs.minutes', 'Protokoll')}</TabsTrigger>
             <TabsTrigger value="decisions">{t('meetings.tabs.decisions', 'Entscheidungen')}</TabsTrigger>
@@ -974,7 +974,7 @@ function MeetingDetail({ meetingId, onEdit }) {
             </div>
             <div className="grid gap-4 xl:grid-cols-2">
               <div className="rounded-lg border p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('meetings.detail.links', 'Verknuepfungen')}</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('meetings.detail.links', 'Verknüpfungen')}</p>
                 <div className="mt-3 space-y-2 text-sm">
                   <p>{t('meetings.form.project', 'Projekt')}: {meeting.projectId?.name || meeting.projectId?.projectNumber || '-'}</p>
                   <p>{t('meetings.form.customer', 'Kunde')}: {meeting.customerId?.name || meeting.customerId?.customerNumber || '-'}</p>
@@ -1034,7 +1034,7 @@ function MeetingDetail({ meetingId, onEdit }) {
                 <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder={t('meetings.note.placeholder', 'Kurze Notiz...')} />
                 <Button onClick={() => {
                   mutations.note.mutate({ id: meeting._id, data: { content: note } }, { onSuccess: () => setNote('') });
-                }}>{t('common.add', 'Hinzufuegen')}</Button>
+                }}>{t('common.add', 'Hinzufügen')}</Button>
               </div>
             </div>
           </TabsContent>
@@ -1045,8 +1045,8 @@ function MeetingDetail({ meetingId, onEdit }) {
               <Input type="date" value={decision.dueDate} onChange={(event) => setDecision((current) => ({ ...current, dueDate: event.target.value }))} />
               <Button onClick={() => {
                 mutations.decision.mutate({ id: meeting._id, data: decision }, { onSuccess: () => setDecision({ title: '', description: '', ownerId: '', dueDate: '' }) });
-              }}>{t('common.add', 'Hinzufuegen')}</Button>
-              <Textarea className="xl:col-span-3" value={decision.description} onChange={(event) => setDecision((current) => ({ ...current, description: event.target.value }))} placeholder={t('meetings.decision.description', 'Begruendung / Kontext')} />
+              }}>{t('common.add', 'Hinzufügen')}</Button>
+              <Textarea className="xl:col-span-3" value={decision.description} onChange={(event) => setDecision((current) => ({ ...current, description: event.target.value }))} placeholder={t('meetings.decision.description', 'Begründung / Kontext')} />
             </div>
 
             {(meeting.decisions || []).map((item) => (
@@ -1102,7 +1102,7 @@ function MeetingDetail({ meetingId, onEdit }) {
 
           <TabsContent value="files" className="space-y-4">
             <div className="rounded-lg border border-dashed p-4">
-              <Label>{t('meetings.files.upload', 'Dokument anhaengen')}</Label>
+              <Label>{t('meetings.files.upload', 'Dokument anhängen')}</Label>
               <Input
                 className="mt-2"
                 type="file"
@@ -1114,7 +1114,7 @@ function MeetingDetail({ meetingId, onEdit }) {
               />
             </div>
             <div className="space-y-2">
-              {files.length === 0 && <p className="text-sm text-muted-foreground">{t('meetings.files.empty', 'Keine Dokumente angehaengt')}</p>}
+              {files.length === 0 && <p className="text-sm text-muted-foreground">{t('meetings.files.empty', 'Keine Dokumente angehängt')}</p>}
               {files.map((file) => (
                 <div key={file._id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
                   <span className="flex min-w-0 items-center gap-2 text-sm"><Paperclip className="h-4 w-4" /><span className="truncate">{file.originalName}</span></span>
@@ -1191,7 +1191,7 @@ export function MeetingWorkspace() {
     <div className="space-y-5 p-4 lg:p-6">
       <PageHeader
         title={t('meetings.title', 'Meetings')}
-        description={t('meetings.description', 'Planen, durchfuehren und verfolgen Sie Besprechungen mit Teilnehmern, Protokollen, Entscheidungen und Folgeaufgaben.')}
+        description={t('meetings.description', 'Planen, durchführen und verfolgen Sie Besprechungen mit Teilnehmern, Protokollen, Entscheidungen und Folgeaufgaben.')}
         icon={Video}
         count={meetings.length}
       >

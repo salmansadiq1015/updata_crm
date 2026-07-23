@@ -82,7 +82,7 @@ export default function InventoryAccountingPage() {
           <h1 className="text-2xl font-bold">{de ? 'Inventory Accounting' : 'Inventory Accounting'}</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             {de
-              ? 'Bewertung, Kostenmethode und Journalbuchungen fuer Lagerbewegungen.'
+              ? 'Bewertung, Kostenmethode und Journalbuchungen für Lagerbewegungen.'
               : 'Valuation, costing method, and journal postings for stock movements.'}
           </p>
         </div>
@@ -111,7 +111,7 @@ export default function InventoryAccountingPage() {
 
       <section className="grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-[10rem_14rem_10rem_10rem_auto] md:items-end">
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">{de ? 'Waehrung' : 'Currency'}</Label>
+          <Label className="text-xs">{de ? 'Währung' : 'Currency'}</Label>
           <SelectField value={filters.currency} onValueChange={(value) => setFilter('currency', value)} options={ACCOUNTING_CURRENCIES} />
         </div>
         <div className="flex flex-col gap-1.5">

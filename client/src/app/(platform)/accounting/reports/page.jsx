@@ -48,7 +48,7 @@ const REFERENCE_TYPE_OPTIONS = [
   { value: 'AR_PAYMENT', label: 'AR Zahlung', labelEn: 'AR Payment' },
   { value: 'AP_INVOICE', label: 'AP Rechnung', labelEn: 'AP Invoice' },
   { value: 'AP_PAYMENT', label: 'AP Zahlung', labelEn: 'AP Payment' },
-  { value: 'BANK_FEE', label: 'Bankgebuehr', labelEn: 'Bank Fee' },
+  { value: 'BANK_FEE', label: 'Bankgebühr', labelEn: 'Bank Fee' },
   { value: 'MANUAL', label: 'Manuell', labelEn: 'Manual' },
   { value: 'REVERSAL', label: 'Storno', labelEn: 'Reversal' },
   { value: 'WRITE_OFF', label: 'Abschreibung', labelEn: 'Write-Off' },
@@ -242,7 +242,7 @@ function GeneralLedgerRows({
       </table>
       <div className="flex items-center justify-between border-t border-border px-3 py-2">
         <Button size="sm" variant="outline" onClick={onPrevious} disabled={cursorStack.length <= 1}>
-          {de ? 'Zurueck' : 'Previous'}
+          {de ? 'Zurück' : 'Previous'}
         </Button>
         <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
         <Button size="sm" variant="outline" onClick={onNext} disabled={!pagination?.hasNext}>
@@ -335,7 +335,7 @@ export default function AccountingReportsPage() {
         <div>
           <h1 className="text-2xl font-bold">{de ? 'Finanzberichte' : 'Financial Reports'}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {de ? 'Journalbasierte Bilanz, Erfolgsrechnung und Liquiditaetsauswertung.' : 'Journal-based balance sheet, P&L, trial balance, and cash-flow reports.'}
+            {de ? 'Journalbasierte Bilanz, Erfolgsrechnung und Liquiditätsauswertung.' : 'Journal-based balance sheet, P&L, trial balance, and cash-flow reports.'}
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">

@@ -300,14 +300,14 @@ export function RoleForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                     <div>
                       <h3 className="text-sm font-semibold">{t('roles.permsTitle', 'Berechtigungen')}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {t('roles.permsDesc', 'Waehlen Sie die Zugriffsrechte fuer diese Rolle')}
+                        {t('roles.permsDesc', 'Wählen Sie die Zugriffsrechte für diese Rolle')}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs font-semibold">
                       <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
-                      {selectedPerms.length} / {allPerms.length} {t('roles.selected', 'ausgewaehlt')}
+                      {selectedPerms.length} / {allPerms.length} {t('roles.selected', 'ausgewählt')}
                     </span>
                     <Button type="button" variant="ghost" size="sm" onClick={selectAll}>
                       {t('roles.selectAll', 'Alle')}
@@ -474,7 +474,7 @@ export function RoleForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
               {currentStep > 0 ? (
                 <Button type="button" variant="ghost" className="gap-1.5 h-9" onClick={goBack}>
                   <ChevronLeft className="h-4 w-4" />
-                  {t('common.back', 'Zurueck')}
+                  {t('common.back', 'Zurück')}
                 </Button>
               ) : (
                 <Button type="button" variant="ghost" className="h-9" onClick={() => onOpenChange(false)}>

@@ -48,6 +48,10 @@ export const createDmSchema = {
   body: Joi.object({ targetUserId: Joi.string().hex().length(24).required() }),
 };
 
+export const createProjectRoomSchema = {
+  body: Joi.object({ projectId: Joi.string().hex().length(24).required() }),
+};
+
 export const reactionSchema = {
   params: Joi.object({
     roomId: Joi.string().hex().length(24).required(),

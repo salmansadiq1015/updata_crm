@@ -16,6 +16,7 @@ function normalizeList(payload) {
 export const chatService = {
   listRooms: ()                                => apiClient.get(ENDPOINTS.CHAT.ROOMS).then(r => r.data || []),
   getOrCreateDmRoom: (targetUserId)            => apiClient.post(ENDPOINTS.CHAT.DM_ROOM, { targetUserId }).then(r => r.data),
+  getOrCreateProjectRoom: (projectId)          => apiClient.post(ENDPOINTS.CHAT.PROJECT_ROOM, { projectId }).then(r => r.data),
   getRoom: (roomId)                            => apiClient.get(ENDPOINTS.CHAT.ROOM_BY_ID(roomId)).then(r => r.data),
   listMessages: (roomId, params)               => apiClient.get(ENDPOINTS.CHAT.ROOM_MESSAGES(roomId), { params }).then(r => r.data || []),
   searchMessages: (params)                     => apiClient.get(ENDPOINTS.CHAT.SEARCH, { params }).then(r => r.data || []),

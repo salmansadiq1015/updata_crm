@@ -118,7 +118,7 @@ export default function OpenItemsPage() {
 
       {selectedTotal > 0 && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
-          <span className="text-sm font-medium">{selectedTotal} {de ? 'ausgewaehlt' : 'selected'}</span>
+          <span className="text-sm font-medium">{selectedTotal} {de ? 'ausgewählt' : 'selected'}</span>
           <Button size="sm" onClick={handleNetting} disabled={!selectedAr.length || !selectedAp.length || netItems.isPending}>
             <Merge className="h-4 w-4 mr-1.5" />
             {de ? 'Verrechnen' : 'Net Items'}
@@ -134,7 +134,7 @@ export default function OpenItemsPage() {
               <th className="px-3 py-2.5 text-left">{de ? 'Typ' : 'Type'}</th>
               <th className="px-3 py-2.5 text-left">{de ? 'Partner' : 'Entity'}</th>
               <th className="px-3 py-2.5 text-left">{de ? 'Referenz' : 'Reference'}</th>
-              <th className="px-3 py-2.5 text-left">{de ? 'Faellig' : 'Due'}</th>
+              <th className="px-3 py-2.5 text-left">{de ? 'Fällig' : 'Due'}</th>
               <th className="px-3 py-2.5 text-right">{de ? 'Offen' : 'Outstanding'}</th>
               <th className="px-3 py-2.5 w-24" />
             </tr>
@@ -175,7 +175,7 @@ export default function OpenItemsPage() {
           </tbody>
         </table>
         <div className="flex items-center justify-between border-t border-border px-3 py-2">
-          <Button size="sm" variant="outline" onClick={() => setCursorStack((current) => current.length > 1 ? current.slice(0, -1) : current)} disabled={cursorStack.length <= 1}>{de ? 'Zurueck' : 'Previous'}</Button>
+          <Button size="sm" variant="outline" onClick={() => setCursorStack((current) => current.length > 1 ? current.slice(0, -1) : current)} disabled={cursorStack.length <= 1}>{de ? 'Zurück' : 'Previous'}</Button>
           <span className="text-xs text-muted-foreground">{cursorPageLabel(cursorStack.length - 1, t)}</span>
           <Button size="sm" variant="outline" onClick={() => pagination?.nextCursor && setCursorStack((current) => [...current, pagination.nextCursor])} disabled={!pagination?.hasNext}>{de ? 'Weiter' : 'Next'}</Button>
         </div>

@@ -37,16 +37,16 @@ export function TaskBulkActionBar({
     <>
     <ConfirmDialog
       open={confirmOpen}
-      title={t('tasks.deleteSelectedTitle', 'Aufgaben loeschen')}
-      description={t('tasks.deleteSelectedDesc', '{count} Aufgabe(n) loeschen? Diese Aktion kann nicht rueckgaengig gemacht werden.', { count: selectedIds.length })}
-      confirmLabel={t('common.delete', 'Loeschen')}
+      title={t('tasks.deleteSelectedTitle', 'Aufgaben löschen')}
+      description={t('tasks.deleteSelectedDesc', '{count} Aufgabe(n) löschen? Diese Aktion kann nicht rückgängig gemacht werden.', { count: selectedIds.length })}
+      confirmLabel={t('common.delete', 'Löschen')}
       destructive
       onConfirm={() => { setConfirmOpen(false); onDelete(); }}
       onCancel={() => setConfirmOpen(false)}
     />
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-xl border border-border bg-card shadow-2xl px-4 py-2.5 animate-in slide-in-from-bottom-2">
       <span className="text-sm font-medium text-foreground whitespace-nowrap">
-        {t('common.selectedCountShort', '{count} ausgewaehlt', { count: selectedIds.length })}
+        {t('common.selectedCountShort', '{count} ausgewählt', { count: selectedIds.length })}
       </span>
 
       <div className="w-px h-5 bg-border mx-1" />
@@ -71,7 +71,7 @@ export function TaskBulkActionBar({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
-            {t('tasks.priority', 'Prioritaet')}
+            {t('tasks.priority', 'Priorität')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
@@ -93,7 +93,7 @@ export function TaskBulkActionBar({
         onClick={() => setConfirmOpen(true)}
       >
         <Trash2 className="h-3.5 w-3.5" />
-        {t('common.delete', 'Loeschen')}
+        {t('common.delete', 'Löschen')}
       </Button>
 
       {/* Clear selection */}

@@ -89,7 +89,7 @@ function LineImageControl({ image, disabled, onChange, t }) {
   const handleFile = async (file) => {
     if (!file) return;
     if (!LINE_IMAGE_MIME.includes(file.type)) {
-      showError(t('qop.lineItems.imageType', 'Nur PNG- oder JPG-Bilder werden auf der Offerte unterstuetzt.'));
+      showError(t('qop.lineItems.imageType', 'Nur PNG- oder JPG-Bilder werden auf der Offerte unterstützt.'));
       return;
     }
     if (file.size > LINE_IMAGE_MAX_BYTES) {
@@ -149,7 +149,7 @@ function LineImageControl({ image, disabled, onChange, t }) {
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={busy}
-        title={t('qop.lineItems.imageAdd', 'Bild hinzufuegen')}
+        title={t('qop.lineItems.imageAdd', 'Bild hinzufügen')}
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:opacity-50"
       >
         <ImagePlus className="h-3.5 w-3.5" />

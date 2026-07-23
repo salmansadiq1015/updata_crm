@@ -128,7 +128,7 @@ function exportPdf(entries, t) {
       .footer{margin-top:16px;font-size:10px;color:#999}
     </style></head><body>
     <h1>${esc(t('crm.addressBook.title', 'Adressbuch'))}</h1>
-    <p class="sub">${entries.length} ${esc(t('crm.addressBook.entries', 'Eintraege'))} — ${new Date().toLocaleDateString('de-CH')}</p>
+    <p class="sub">${entries.length} ${esc(t('crm.addressBook.entries', 'Einträge'))} — ${new Date().toLocaleDateString('de-CH')}</p>
     <table>
       <thead><tr>
         <th>${esc(t('crm.addressBook.colName', 'Name'))}</th>
@@ -701,7 +701,7 @@ function PaginationBar({ page, pageCount, isFetching, hasPrev, hasNext, setPagin
           onClick={() => setPagination((current) => ({ ...current, pageIndex: Math.max(0, current.pageIndex - 1) }))}
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          {t('common.previous', 'Zurueck')}
+          {t('common.previous', 'Zurück')}
         </Button>
         <Button
           variant="outline"

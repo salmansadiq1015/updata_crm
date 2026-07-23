@@ -91,7 +91,7 @@ export function ProfileForm() {
     <Card>
       <CardHeader>
         <CardTitle>{t('profile.title', 'Profil')}</CardTitle>
-        <CardDescription>{t('profile.description', 'Aktualisieren Sie Ihre persoenlichen Daten.')}</CardDescription>
+        <CardDescription>{t('profile.description', 'Aktualisieren Sie Ihre persönlichen Daten.')}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -119,7 +119,7 @@ export function ProfileForm() {
           <div className="space-y-2">
             <Label htmlFor="profile-email">{t('users.email', 'E-Mail')}</Label>
             <Input id="profile-email" value={user?.email || ''} disabled className="bg-muted" />
-            <p className="text-xs text-muted-foreground">{t('profile.emailLocked', 'E-Mail kann nicht geaendert werden.')}</p>
+            <p className="text-xs text-muted-foreground">{t('profile.emailLocked', 'E-Mail kann nicht geändert werden.')}</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="profile-phone">{t('users.phone', 'Telefon')}</Label>

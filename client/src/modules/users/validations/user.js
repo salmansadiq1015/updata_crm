@@ -1,11 +1,14 @@
 import { z } from 'zod';
+import { isValidPhone } from '@/lib/formatters/phone';
 
 export const createUserSchema = z.object({
   firstName: z.string().min(1, 'Vorname ist erforderlich').max(100),
   lastName: z.string().min(1, 'Nachname ist erforderlich').max(100),
   salutation: z.enum(['herr', 'frau']).or(z.literal('')).optional(),
   email: z.string().email('Bitte gültige E-Mail-Adresse eingeben'),
-  phone: z.string().max(30).optional().or(z.literal('')),
+  phone: z.string().max(30)
+    .refine(isValidPhone, 'Ungültige Telefonnummer (z. B. 079 123 45 67 oder +41 79 123 45 67)')
+    .optional().or(z.literal('')),
   department: z.string().max(100).optional().or(z.literal('')),
   position: z.string().max(100).optional().or(z.literal('')),
   street: z.string().max(200).optional().or(z.literal('')),

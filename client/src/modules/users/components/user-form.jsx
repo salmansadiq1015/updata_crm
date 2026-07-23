@@ -435,7 +435,10 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                 <FormField label={t('users.email')} error={errors.email?.message} required>
                   <Input type="email" placeholder="max.muster@mbboiler.ch" {...register('email')} autoFocus />
                 </FormField>
-                <FormField label={`${t('users.phone')} (${t('common.optional', 'optional')})`}>
+                <FormField
+                  label={`${t('users.phone')} (${t('common.optional', 'optional')})`}
+                  error={errors.phone?.message}
+                >
                   <Input placeholder="+41 79 123 45 67" {...register('phone')} />
                 </FormField>
               </div>

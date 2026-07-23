@@ -29,7 +29,7 @@ const businessRequiredTaxIdentifier = Joi.when('type', {
 export const createCustomerSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(255),
-    type: Joi.string().valid('private', 'business').required(),
+    type: Joi.string().valid('private', 'business', 'partner', 'supplier').required(),
     ownerName: businessRequiredText('Owner name'),
     salutation: Joi.string().valid('herr', 'frau', 'familie', 'firma', 'herr_frau', 'frau_herr').allow('', null),
     street: Joi.string().trim().max(255).required(),
@@ -54,7 +54,7 @@ export const updateCustomerSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     name: Joi.string().trim().max(255),
-    type: Joi.string().valid('private', 'business'),
+    type: Joi.string().valid('private', 'business', 'partner', 'supplier'),
     ownerName: businessRequiredText('Owner name'),
     salutation: Joi.string().valid('herr', 'frau', 'familie', 'firma', 'herr_frau', 'frau_herr').allow('', null),
     street: Joi.string().trim().max(255).allow('', null),
@@ -78,7 +78,7 @@ export const updateCustomerSchema = {
 export const listCustomersSchema = {
   query: cursorPagination.keys({
     status: Joi.string().valid('active', 'archived'),
-    type: Joi.string().valid('private', 'business'),
+    type: Joi.string().valid('private', 'business', 'partner', 'supplier'),
     postalCode: swissPostalCode.allow(''),
     canton: canton.allow(''),
     newsletterOptIn: Joi.string().valid('true', 'false'),
@@ -134,7 +134,7 @@ export const bulkUpdateCustomersSchema = {
     ids: Joi.array().items(objectId).min(1).max(100).required(),
     data: Joi.object({
       status: Joi.string().valid('active', 'archived'),
-      type: Joi.string().valid('private', 'business'),
+      type: Joi.string().valid('private', 'business', 'partner', 'supplier'),
       newsletterOptIn: Joi.boolean(),
       newsletterChannel: Joi.string().valid('email', 'whatsapp', 'both'),
     }).min(1).required(),
@@ -150,7 +150,7 @@ export const bulkDeleteCustomersSchema = {
 export const exportCustomersSchema = {
   query: Joi.object({
     status: Joi.string().valid('active', 'archived'),
-    type: Joi.string().valid('private', 'business'),
+    type: Joi.string().valid('private', 'business', 'partner', 'supplier'),
     postalCode: swissPostalCode.allow(''),
     canton: canton.allow(''),
     newsletterOptIn: Joi.string().valid('true', 'false'),

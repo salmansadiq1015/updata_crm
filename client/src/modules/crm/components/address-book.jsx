@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { getCustomerTypeLabel } from '@/modules/crm/constants/customer-constants';
 import { useAddressBook } from '@/modules/crm/hooks/use-address-book';
 import {
   ADDRESS_TYPE_OPTIONS,
@@ -84,7 +85,7 @@ function exportCsv(entries, t) {
     e.site?.name || e.customer?.name || '',
     e.customer?.name || '',
     e.customer?.customerNumber || '',
-    e.customer?.type === 'business' ? 'Firma' : 'Privat',
+    getCustomerTypeLabel(e.customer?.type),
     e.addressType || '',
     e.address?.formatted || '',
     formatContactName(e.primaryContact),

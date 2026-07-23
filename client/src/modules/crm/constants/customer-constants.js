@@ -6,7 +6,24 @@
 export const CUSTOMER_TYPES = Object.freeze({
   PRIVATE: 'private',
   BUSINESS: 'business',
+  PARTNER: 'partner',
+  SUPPLIER: 'supplier',
 });
+
+// Types that can be either a person or a company, so the salutation stays available.
+export const CUSTOMER_TYPES_WITH_SALUTATION = Object.freeze(['private', 'partner', 'supplier']);
+
+const CUSTOMER_TYPE_LABELS = Object.freeze({
+  private:  { key: 'crm.typePrivate',  fallback: 'Privat' },
+  business: { key: 'crm.typeBusiness', fallback: 'Firma' },
+  partner:  { key: 'crm.typePartner',  fallback: 'Partner' },
+  supplier: { key: 'crm.typeSupplier', fallback: 'Lieferant' },
+});
+
+export function getCustomerTypeLabel(type, t) {
+  const entry = CUSTOMER_TYPE_LABELS[type] || CUSTOMER_TYPE_LABELS.private;
+  return t ? t(entry.key, entry.fallback) : entry.fallback;
+}
 
 export const CUSTOMER_STATUSES = Object.freeze({
   ACTIVE: 'active',

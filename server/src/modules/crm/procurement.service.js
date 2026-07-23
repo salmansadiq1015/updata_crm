@@ -16,6 +16,9 @@ import logger from '../../shared/logger/index.js';
 
 const LIST_TTL = { l1Ttl: 20, l2Ttl: 90 };
 const ENTITY_TTL = { l1Ttl: 45, l2Ttl: 180 };
+// A supplier is a business customer, or one explicitly typed 'supplier' in the CRM.
+const SUPPLIER_TYPES = ['business', 'supplier'];
+
 const SUPPLIER_SELECT = '_id customerNumber name email phone street postalCode city';
 const PART_SELECT = '_id partNumber name manufacturer category unitPrice currency unit currentStock minStockLevel supplierId supplierPartNumber';
 const ACTIVE_ORDER_STATUSES = ['draft', 'sent', 'partial'];
@@ -358,7 +361,7 @@ class ProcurementService {
       search,
     } = query;
     const filter = {
-      type: 'business',
+      type: { $in: SUPPLIER_TYPES },
       status: 'active',
       isDeleted: false,
       ...buildCursorQuery(cursor, sortBy, sortOrder),
@@ -375,7 +378,7 @@ class ProcurementService {
   }
 
   async getSupplierById(id) {
-    const supplier = await Customer.findOne({ _id: id, type: 'business', isDeleted: false })
+    const supplier = await Customer.findOne({ _id: id, type: { $in: SUPPLIER_TYPES }, isDeleted: false })
       .select(SUPPLIER_SELECT)
       .lean();
     if (!supplier) throw new NotFoundError('Supplier', id);
@@ -384,7 +387,7 @@ class ProcurementService {
 
   async searchSuppliers(q, limit = 25) {
     const filter = {
-      type: 'business',
+      type: { $in: SUPPLIER_TYPES },
       status: 'active',
       isDeleted: false,
       ...buildSearchFilter(q, ['name', 'customerNumber', 'email', 'city']),
@@ -423,8 +426,8 @@ class ProcurementService {
 
   async updateSupplier(id, data, userId, meta = {}) {
     const supplier = await Customer.findOneAndUpdate(
-      { _id: id, type: 'business', isDeleted: false },
-      { $set: { ...data, type: 'business' } },
+      { _id: id, type: { $in: SUPPLIER_TYPES }, isDeleted: false },
+      { $set: { ...data } },
       { returnDocument: 'after', runValidators: true },
     ).select(SUPPLIER_SELECT).lean();
     if (!supplier) throw new NotFoundError('Supplier', id);
@@ -435,7 +438,7 @@ class ProcurementService {
 
   async deleteSupplier(id, userId, meta = {}) {
     const supplier = await Customer.findOneAndUpdate(
-      { _id: id, type: 'business', isDeleted: false },
+      { _id: id, type: { $in: SUPPLIER_TYPES }, isDeleted: false },
       { $set: { isDeleted: true, deletedAt: new Date(), status: 'archived' } },
       { returnDocument: 'after' },
     ).lean();

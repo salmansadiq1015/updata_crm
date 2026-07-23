@@ -8,6 +8,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { getCustomerTypeLabel } from '@/modules/crm/constants/customer-constants';
 import {
   Building2, User, Mail, Phone, MapPin, MoreHorizontal,
   Eye, Pencil, Copy, Archive, BellRing,
@@ -56,7 +57,7 @@ export function CustomerCard({ customer, onEdit, onArchive, t }) {
                     : 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
                 )}>
                   <span className={cn('h-1 w-1 rounded-full', isBusiness ? 'bg-emerald-500' : 'bg-blue-500')} />
-                  {isBusiness ? (t('crm.typeBusiness', 'Firma')) : (t('crm.typePrivate', 'Privat'))}
+                  {getCustomerTypeLabel(customer.type, t)}
                 </span>
               </div>
             </div>

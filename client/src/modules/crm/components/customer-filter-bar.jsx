@@ -71,6 +71,8 @@ export function CustomerFilterBar({
           <SelectItem value="all" className="text-foreground focus:bg-muted/60"><DotLabel tone="muted">{t('crm.allTypes', 'All types')}</DotLabel></SelectItem>
           <SelectItem value="private" className="text-foreground focus:bg-muted/60"><DotLabel tone="blue">{t('crm.typePrivate', 'Private')}</DotLabel></SelectItem>
           <SelectItem value="business" className="text-foreground focus:bg-muted/60"><DotLabel tone="emerald">{t('crm.typeBusiness', 'Business')}</DotLabel></SelectItem>
+          <SelectItem value="partner" className="text-foreground focus:bg-muted/60"><DotLabel tone="violet">{t('crm.typePartner', 'Partner')}</DotLabel></SelectItem>
+          <SelectItem value="supplier" className="text-foreground focus:bg-muted/60"><DotLabel tone="amber">{t('crm.typeSupplier', 'Lieferant')}</DotLabel></SelectItem>
         </SelectContent>
       </Select>
 

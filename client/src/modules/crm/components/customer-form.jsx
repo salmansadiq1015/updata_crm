@@ -21,10 +21,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {
-  Loader2, User, Building2, Mail, MapPin, Bell,
+  Loader2, User, Building2, Handshake, Truck, Mail, MapPin, Bell,
   ChevronLeft, Check, ArrowRight, AlertCircle,
 } from 'lucide-react';
-import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
+import { CH_CANTONS, CUSTOMER_TYPES_WITH_SALUTATION } from '@/modules/crm/constants/customer-constants';
 import { DuplicateWarning } from './duplicate-warning';
 
 const STEPS = [
@@ -152,6 +152,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
 
   const isLastStep = currentStep === STEPS.length - 1;
   const isBusiness = typeVal === 'business';
+  const showSalutation = CUSTOMER_TYPES_WITH_SALUTATION.includes(typeVal);
   const voiceCustomerId = defaultValues?._id || null;
   const handleOpenChange = (nextOpen) => {
     if (!nextOpen) setCurrentStep(0);
@@ -159,6 +160,10 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   };
   const selectCustomerType = (nextType) => {
     setValue('type', nextType, { shouldValidate: true, shouldDirty: true });
+    // Anrede is meaningless for a company — drop a stale value when switching.
+    if (nextType === 'business') {
+      setValue('salutation', '', { shouldValidate: true, shouldDirty: true });
+    }
     if (nextType !== 'business') {
       setValue('ownerName', '', { shouldValidate: true, shouldDirty: true });
       setValue('uidNumber', '', { shouldValidate: true, shouldDirty: true });
@@ -266,6 +271,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                   </div>
                 </div>
 
+                {showSalutation && (
                 <DarkField label={t('crm.salutation', 'Anrede')} error={errors.salutation}>
                   <Select
                     value={selectedSalutation ? selectedSalutation : '__none__'}
@@ -283,6 +289,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                     </SelectContent>
                   </Select>
                 </DarkField>
+                )}
 
                 <DarkField label={isBusiness ? t('crm.companyName', 'Firmenname') : t('crm.name', 'Name')} required error={errors.name}>
                   <Input
@@ -333,6 +340,42 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-foreground">{t('crm.typeBusiness', 'Firma')}</p>
                         <p className="text-xs text-muted-foreground">Unternehmen / Verwaltung</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectCustomerType('partner')}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
+                        typeVal === 'partner'
+                          ? 'border-violet-500/60 bg-violet-500/8 ring-1 ring-violet-500/30'
+                          : 'border-border bg-muted/30 hover:border-border hover:bg-muted/50',
+                      )}
+                    >
+                      <div className="h-10 w-10 rounded-lg bg-violet-500/10 ring-1 ring-violet-500/20 flex items-center justify-center shrink-0">
+                        <Handshake className="h-5 w-5 text-violet-700 dark:text-violet-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{t('crm.typePartner', 'Partner')}</p>
+                        <p className="text-xs text-muted-foreground">Firma oder Privat</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectCustomerType('supplier')}
+                      className={cn(
+                        'flex items-center gap-3 rounded-xl border p-4 text-left transition-all',
+                        typeVal === 'supplier'
+                          ? 'border-amber-500/60 bg-amber-500/8 ring-1 ring-amber-500/30'
+                          : 'border-border bg-muted/30 hover:border-border hover:bg-muted/50',
+                      )}
+                    >
+                      <div className="h-10 w-10 rounded-lg bg-amber-500/10 ring-1 ring-amber-500/20 flex items-center justify-center shrink-0">
+                        <Truck className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{t('crm.typeSupplier', 'Lieferant')}</p>
+                        <p className="text-xs text-muted-foreground">Firma oder Privat</p>
                       </div>
                     </button>
                   </div>
@@ -434,10 +477,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                       <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
                         {CH_CANTONS.map((c) => (
                           <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/60 focus:text-foreground">
-                            <span className="flex items-center gap-2">
-                              <span className="font-mono text-[11px] text-muted-foreground">{c.code}</span>
-                              {c.name}
-                            </span>
+                            {c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

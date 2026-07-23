@@ -188,7 +188,7 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
       className={cn(
         'group relative flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] font-medium transition-all duration-200',
         isActive
-          ? 'bg-gradient-to-r from-[oklch(0.65_0.25_292_/_15%)] to-transparent text-sidebar-foreground sidebar-active-glow'
+          ? 'bg-gradient-to-r from-sidebar-primary/15 to-transparent text-sidebar-foreground sidebar-active-glow'
           : 'text-sidebar-foreground/35 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground/65',
         leaf.disabled && 'opacity-20 pointer-events-none',
         collapsed && 'justify-center px-0 py-2.5',
@@ -198,17 +198,17 @@ function LeafLink({ leaf, collapsed, nested, onNavigate, unreadCount }) {
       {isActive && !nested && (
         <motion.div
           layoutId="sidebar-active-pill"
-          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full bg-[oklch(0.75_0.25_292)] shadow-[0_0_8px_oklch(0.65_0.25_292/70%)]"
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-full bg-sidebar-primary shadow-[0_0_8px_color-mix(in_oklab,var(--sidebar-primary)_70%,transparent)]"
           transition={{ type: 'spring', stiffness: 380, damping: 28 }}
         />
       )}
       {isActive && nested && (
-        <span className="w-1.5 h-1.5 rounded-full bg-[oklch(0.75_0.25_292)] shadow-[0_0_6px_oklch(0.65_0.25_292/60%)] mr-1 shrink-0" />
+        <span className="w-1.5 h-1.5 rounded-full bg-sidebar-primary shadow-[0_0_6px_color-mix(in_oklab,var(--sidebar-primary)_60%,transparent)] mr-1 shrink-0" />
       )}
       <span className="relative shrink-0">
         <Icon className={cn(
           'h-[18px] w-[18px] transition-all duration-200',
-          isActive ? 'text-[oklch(0.78_0.22_292)]' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55',
+          isActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55',
           nested && 'h-[14px] w-[14px]'
         )} />
         {leaf.href === '/notifications' && unreadCount > 0 && (
@@ -277,7 +277,7 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
                   groupActive ? 'bg-sidebar-foreground/[0.08] text-sidebar-foreground sidebar-active-glow' : 'text-sidebar-foreground/45 hover:bg-sidebar-foreground/[0.05]'
                 )}
               >
-                <Icon className={cn('h-[18px] w-[18px]', groupActive ? 'text-[oklch(0.75_0.18_292)]' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55')} />
+                <Icon className={cn('h-[18px] w-[18px]', groupActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55')} />
               </button>
             </PopoverTrigger>
           </TooltipTrigger>
@@ -286,7 +286,7 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
           </TooltipContent>
         </Tooltip>
         <PopoverContent side="right" sideOffset={12} align="start" className="w-52 p-2 bg-popover border border-border rounded-xl shadow-2xl">
-          <p className="px-2 py-1 text-[10px] text-violet-400 uppercase tracking-wider font-semibold">{label}</p>
+          <p className="px-2 py-1 text-[10px] text-sidebar-primary uppercase tracking-wider font-semibold">{label}</p>
           <div className="space-y-0.5">
             {children.map((leaf) => (
               <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested={false} onNavigate={onNavigate} unreadCount={unreadCount} />
@@ -309,10 +309,10 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
           groupActive ? 'text-sidebar-foreground' : 'text-sidebar-foreground/50 hover:bg-sidebar-foreground/[0.05] hover:text-sidebar-foreground/80'
         )}
       >
-        <Icon className={cn('h-[18px] w-[18px] shrink-0', groupActive ? 'text-[oklch(0.75_0.22_292)]' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55')} />
+        <Icon className={cn('h-[18px] w-[18px] shrink-0', groupActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/30 group-hover:text-sidebar-foreground/55')} />
         <span className={cn('truncate whitespace-nowrap flex-1 text-left', groupActive ? 'text-sidebar-foreground/85' : 'text-sidebar-foreground/50')}>{label}</span>
         {groupActive && (
-          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[oklch(0.75_0.25_292)] shadow-[0_0_6px_oklch(0.65_0.25_292)]" />
+          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-sidebar-primary shadow-[0_0_6px_var(--sidebar-primary)]" />
         )}
         <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 text-sidebar-foreground/20 transition-transform duration-200 group-hover:text-sidebar-foreground/40', expanded && 'rotate-180')} />
       </button>
@@ -327,7 +327,7 @@ function SidebarGroup({ group, collapsed, onNavigate, unreadCount }) {
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            <div className="mt-0.5 space-y-0.5 border-l-2 border-[oklch(0.65_0.25_292_/_18%)] ml-[22px]">
+            <div className="mt-0.5 space-y-0.5 border-l-2 border-sidebar-primary/20 ml-[22px]">
               {children.map((leaf) => (
                 <LeafLink key={leaf.href} leaf={leaf} collapsed={false} nested onNavigate={onNavigate} unreadCount={unreadCount} />
               ))}
@@ -461,7 +461,7 @@ function SidebarUserCard({ collapsed }) {
       'bg-sidebar-foreground/[0.03] hover:bg-sidebar-foreground/[0.06] border border-sidebar-border hover:border-sidebar-border',
       collapsed && 'justify-center px-0 py-2.5'
     )}>
-      <Avatar className="h-8 w-8 ring-2 ring-[oklch(0.65_0.25_292/35%)] shadow-[0_0_16px_oklch(0.65_0.25_292/20%)]">
+      <Avatar className="h-8 w-8 ring-2 ring-sidebar-primary/35 shadow-[0_0_16px_color-mix(in_oklab,var(--sidebar-primary)_20%,transparent)]">
         <AvatarFallback className="text-[11px] font-bold bg-primary-gradient text-white">
           {initials}
         </AvatarFallback>
@@ -471,7 +471,7 @@ function SidebarUserCard({ collapsed }) {
           <p className="text-[13px] font-semibold truncate text-sidebar-foreground/85 leading-tight">
             {user?.firstName} {user?.lastName}
           </p>
-          <span className="text-[10px] font-medium bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded-full">
+          <span className="text-[10px] font-medium bg-sidebar-primary/10 text-sidebar-primary px-2 py-0.5 rounded-full">
             {roleName || user?.email}
           </span>
         </div>

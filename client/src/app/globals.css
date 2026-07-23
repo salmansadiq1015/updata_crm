@@ -103,6 +103,20 @@
    Design System — Light Theme (hex-based)
    ═══════════════════════════════════════════ */
 :root {
+  /* MB Boiler brand scale, anchored on the logo navy #1C388E (= 700).
+     Light mode uses the brand navy itself; dark mode needs a lighter step
+     (the navy only reaches 1.87:1 on the dark background). */
+  --brand-50:  #EEF2FB;
+  --brand-100: #D9E1F5;
+  --brand-200: #B3C3EB;
+  --brand-300: #8AA4F0;
+  --brand-400: #6E8BE8;
+  --brand-500: #4E74DB;
+  --brand-600: #2F52B8;
+  --brand-700: #1C388E;
+  --brand-800: #162C6F;
+  --brand-900: #101F4E;
+
   --background: #F7F8FC;
   --surface: #FFFFFF;
   --foreground: #111827;
@@ -111,18 +125,18 @@
   --popover: #FFFFFF;
   --popover-foreground: #111827;
 
-  --primary: #7B68EE;
+  --primary: var(--brand-700);
   --primary-foreground: #FFFFFF;
-  --primary-light: #7B68EE;
+  --primary-light: var(--brand-500);
 
-  --secondary: #5B5BD6;
+  --secondary: var(--brand-600);
   --secondary-foreground: #FFFFFF;
 
   --muted: #F1F5F9;
   --muted-foreground: #6B7280;
 
-  --accent: #EEF2FF;
-  --accent-foreground: #4F46E5;
+  --accent: var(--brand-50);
+  --accent-foreground: var(--brand-700);
 
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
@@ -137,7 +151,7 @@
 
   --border: #E5E7EB;
   --input: #E5E7EB;
-  --ring: #7B68EE;
+  --ring: var(--brand-700);
 
   --chart-1: #7B68EE;
   --chart-2: #5B5BD6;
@@ -154,12 +168,12 @@
   /* Sidebar — light theme (follows the light/dark switch) */
   --sidebar: #FFFFFF;
   --sidebar-foreground: #111827;
-  --sidebar-primary: oklch(0.7 0.25 292);
+  --sidebar-primary: var(--brand-700);
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #F1F5F9;
   --sidebar-accent-foreground: #111827;
   --sidebar-border: #E5E7EB;
-  --sidebar-ring: #7B68EE;
+  --sidebar-ring: var(--brand-700);
 }
 
 /* ═══════════════════════════════════════════
@@ -174,9 +188,9 @@
   --popover: #111827;
   --popover-foreground: #E5E7EB;
 
-  --primary: #9F7AEA;
+  --primary: var(--brand-500);
   --primary-foreground: #FFFFFF;
-  --primary-light: #B794F4;
+  --primary-light: var(--brand-300);
 
   --secondary: #1F2937;
   --secondary-foreground: #E5E7EB;
@@ -184,8 +198,8 @@
   --muted: #1F2937;
   --muted-foreground: #9CA3AF;
 
-  --accent: #312E81;
-  --accent-foreground: #C7D2FE;
+  --accent: var(--brand-800);
+  --accent-foreground: var(--brand-200);
 
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
@@ -200,7 +214,7 @@
 
   --border: #1F2937;
   --input: #1F2937;
-  --ring: #9F7AEA;
+  --ring: var(--brand-400);
 
   --chart-1: #9F7AEA;
   --chart-2: #60A5FA;
@@ -215,12 +229,12 @@
   /* Sidebar — same dark obsidian */
   --sidebar: #080C14;
   --sidebar-foreground: #E5E7EB;
-  --sidebar-primary: oklch(0.7 0.25 292);
+  --sidebar-primary: var(--brand-400);
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #1F2937;
   --sidebar-accent-foreground: #E5E7EB;
   --sidebar-border: rgba(255,255,255,0.05);
-  --sidebar-ring: #9F7AEA;
+  --sidebar-ring: var(--brand-400);
 }
 
 /* ═══════════════════════════════════════════
@@ -335,7 +349,7 @@
 
 /* Gradient text */
 .text-gradient {
-  background: linear-gradient(135deg, #7B61FF, #9F7AEA);
+  background: linear-gradient(135deg, var(--brand-700), var(--brand-500));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -356,10 +370,10 @@
 
 /* Primary gradient background */
 .bg-primary-gradient {
-  background: linear-gradient(135deg, #7B61FF, #9F7AEA);
+  background: linear-gradient(135deg, var(--brand-700), var(--brand-500));
 }
 .bg-primary-gradient:hover {
-  background: linear-gradient(135deg, #6A4DFF, #8E6AE0);
+  background: linear-gradient(135deg, var(--brand-800), var(--brand-600));
 }
 
 /* Thin scrollbar */
@@ -384,10 +398,10 @@
 
 /* Sidebar glassmorphic utilities (always dark) */
 .sidebar-active-glow {
-  background: linear-gradient(90deg, oklch(0.65 0.25 292 / 14%) 0%, oklch(0.65 0.25 292 / 6%) 100%);
+  background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 14%, transparent) 0%, color-mix(in oklab, var(--primary) 6%, transparent) 100%);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.07),
-    0 0 20px oklch(0.65 0.25 292 / 18%);
+    0 0 20px color-mix(in oklab, var(--primary) 18%, transparent);
 }
 .sidebar-inner-glow {
   /* Light theme: subtle edge shadow (the border-r does the separation). */
@@ -401,7 +415,7 @@
 }
 .sidebar-ambient {
   background:
-    radial-gradient(ellipse 140% 45% at 50% 0%, oklch(0.65 0.25 292 / 7%) 0%, transparent 55%),
+    radial-gradient(ellipse 140% 45% at 50% 0%, color-mix(in oklab, var(--primary) 7%, transparent) 0%, transparent 55%),
     radial-gradient(ellipse 60% 35% at 0% 60%, oklch(0.6 0.22 260 / 5%) 0%, transparent 50%),
     radial-gradient(ellipse 80% 30% at 100% 90%, oklch(0.55 0.2 310 / 4%) 0%, transparent 50%);
 }

@@ -25,6 +25,7 @@ const labelMap = {
   'asset-maintenance': { key: 'sidebar.assetMaintenance', fallback: 'Systems & Maintenance' },
   projects: { key: 'sidebar.projects', fallback: 'Projects' },
   tasks: { key: 'sidebar.tasks', fallback: 'Tasks' },
+  all: { key: 'tasks.allTasks', fallback: 'Alle Aufgaben' },
   scheduling: { key: 'sidebar.scheduling', fallback: 'Scheduling' },
   accounting: { key: 'sidebar.accounting', fallback: 'Accounting' },
   catalog: { key: 'sidebar.catalog', fallback: 'Catalog' },

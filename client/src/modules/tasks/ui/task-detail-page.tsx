@@ -517,11 +517,11 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') applyDueText();
                   }}
-                  placeholder="tomorrow, +3d, next Friday"
+                  placeholder={t('tasks.dueQuickPlaceholder', 'morgen, +3d, nächsten Freitag')}
                   className="h-8 text-xs"
                 />
                 <Button type="button" variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={applyDueText}>
-                  Set
+                  {t('common.set', 'Setzen')}
                 </Button>
               </div>
             </div>

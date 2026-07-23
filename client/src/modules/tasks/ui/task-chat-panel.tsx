@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { Send, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 import type { TaskNote } from '../types/task-types';
 import type { WorkspaceUser } from '../hooks/use-workspace-users';
 
@@ -47,6 +48,7 @@ export function TaskChatPanel({
   onDeleteNote,
   isCreating,
 }: ChatPanelProps) {
+  const { t } = useLanguage();
   const [text, setText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -63,7 +65,7 @@ export function TaskChatPanel({
   return (
     <section>
       <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Activity {notes.length > 0 && `(${notes.length})`}
+        {t('tasks.activity.title', 'Aktivität')} {notes.length > 0 && `(${notes.length})`}
       </h3>
 
       {isLoading ? (
@@ -79,7 +81,7 @@ export function TaskChatPanel({
           ))}
         </div>
       ) : notes.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No comments yet. Be the first to comment.</p>
+        <p className="text-sm text-muted-foreground">{t('tasks.activity.empty', 'Noch keine Kommentare. Schreiben Sie den ersten.')}</p>
       ) : (
         <div className="space-y-4">
           {notes.map((note) => {
@@ -91,7 +93,7 @@ export function TaskChatPanel({
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center gap-2">
                     <span className="text-xs font-semibold">
-                      {author ? `${author.firstName} ${author.lastName}` : 'Unknown'}
+                      {author ? `${author.firstName} ${author.lastName}` : t('common.unknown', 'Unbekannt')}
                     </span>
                     <span className="text-[10px] text-muted-foreground">{timeAgo(note.createdAt)}</span>
                     {note.isEdited && (
@@ -129,7 +131,7 @@ export function TaskChatPanel({
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend();
             }}
-            placeholder="Write a comment… (Ctrl+Enter to send)"
+            placeholder={t('tasks.activity.placeholder', 'Kommentar schreiben… (Ctrl+Enter zum Senden)')}
             rows={3}
             className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 placeholder:text-muted-foreground/50"
           />
@@ -141,7 +143,7 @@ export function TaskChatPanel({
               onClick={handleSend}
             >
               <Send className="h-3 w-3" />
-              {isCreating ? 'Sending…' : 'Send'}
+              {isCreating ? t('tasks.activity.sending', 'Senden…') : t('tasks.activity.send', 'Senden')}
             </Button>
           </div>
         </div>

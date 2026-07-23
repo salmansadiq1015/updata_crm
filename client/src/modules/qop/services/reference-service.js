@@ -6,7 +6,8 @@ export const referenceService = {
   // Empty query -> default customer list (suggestions before typing); a query
   // filters server-side via `search` (the CRM list endpoint ignores `q`).
   searchCustomers: (query) => apiClient.get(ENDPOINTS.CRM.CUSTOMERS, {
-    params: { ...(query ? { search: query } : {}), limit: 10 },
+    // Deactivated customers stay out of document dropdowns.
+    params: { ...(query ? { search: query } : {}), status: 'active', limit: 10 },
   }),
   listDepartments: () => apiClient.get('/admin/departments'),
   // Admin management view: include deactivated ones so they can be reactivated

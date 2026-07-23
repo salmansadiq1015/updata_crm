@@ -251,7 +251,13 @@ class CustomerRepository {
       .map(({ _score, ...rest }) => rest);
   }
 
-  async textSearch(searchTerm, limit = 25) {
+  /**
+   * Picker-facing search. Deactivated customers are excluded by default: they
+   * must not be selectable when creating projects, sites or documents, while
+   * staying fully visible in the customer list, which goes through
+   * findWithCursor instead. Filters that need them pass includeInactive.
+   */
+  async textSearch(searchTerm, limit = 25, { includeInactive = false } = {}) {
     const raw = (searchTerm || '').trim();
     if (!raw) return [];
 
@@ -268,7 +274,8 @@ class CustomerRepository {
       return { $or: searchFields.map((field) => ({ [field]: regex })) };
     });
 
-    const filter = wordConditions.length === 1 ? wordConditions[0] : { $and: wordConditions };
+    const matchWords = wordConditions.length === 1 ? wordConditions[0] : { $and: wordConditions };
+    const filter = includeInactive ? matchWords : { ...matchWords, status: { $ne: 'inactive' } };
 
     return Customer.find(filter)
       .sort({ name: 1 })

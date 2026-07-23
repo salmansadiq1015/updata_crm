@@ -191,7 +191,7 @@ function OptionSearch({ type, value, label, onSelect, onClear }) {
   const isSearching = debounced.trim().length >= 2;
   const recentParams = isProject
     ? { limit: 12, sortBy: 'updatedAt', sortOrder: 'desc' }
-    : { limit: 12, sortBy: 'name', sortOrder: 'asc' };
+    : { limit: 12, sortBy: 'name', sortOrder: 'asc', status: 'active' };
 
   const query = useQuery({
     queryKey: isProject

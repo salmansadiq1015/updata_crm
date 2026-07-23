@@ -335,7 +335,8 @@ function NewObjectFlow({ onCreated }) {
   const { data: customers = [], isFetching } = useQuery({
     queryKey: ['crm', 'customers', 'site-picker', debouncedSearch],
     queryFn: async () => normalizeCustomerList(
-      await customerService.getCustomers({ ...(debouncedSearch ? { search: debouncedSearch } : {}), limit: 20 }),
+      // status: deactivated customers must not be selectable for a new object.
+      await customerService.getCustomers({ ...(debouncedSearch ? { search: debouncedSearch } : {}), status: 'active', limit: 20 }),
     ),
     enabled: pickerOpen,
     staleTime: 30_000,

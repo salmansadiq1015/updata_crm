@@ -48,9 +48,13 @@ export const customerService = {
     return res.data;
   },
 
-  async searchCustomers(q, limit = 25) {
+  /**
+   * Deactivated customers are excluded server-side by default, so pickers
+   * cannot select them. Pass includeInactive for filters over existing data.
+   */
+  async searchCustomers(q, limit = 25, { includeInactive = false } = {}) {
     const res = await apiClient.get(ENDPOINTS.CRM.CUSTOMERS_SEARCH, {
-      params: { q, limit },
+      params: { q, limit, ...(includeInactive ? { includeInactive: true } : {}) },
     });
     return res.data;
   },

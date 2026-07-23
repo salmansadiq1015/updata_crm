@@ -114,8 +114,8 @@ class CustomerService {
     );
   }
 
-  async search(searchTerm, limit = 25) {
-    return customerRepository.textSearch(searchTerm, limit);
+  async search(searchTerm, limit = 25, { includeInactive = false } = {}) {
+    return customerRepository.textSearch(searchTerm, limit, { includeInactive });
   }
 
   async checkDuplicates(name, postalCode) {

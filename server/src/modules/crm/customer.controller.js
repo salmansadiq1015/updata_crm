@@ -70,7 +70,9 @@ class CustomerController {
   async search(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
-      const data = await customerService.search(query.q, query.limit);
+      const data = await customerService.search(query.q, query.limit, {
+        includeInactive: query.includeInactive === true || query.includeInactive === 'true',
+      });
       return res.success({ data });
     } catch (err) { next(err); }
   }

@@ -149,7 +149,10 @@ function CustomerPickerFilter({ value, onChange }) {
   // Search results: flexible partial match (shown when user types 1+ chars)
   const { data: searchResults = [] } = useQuery({
     queryKey: queryKeys.crm.customers.search(debouncedSearch),
-    queryFn: () => customerService.searchCustomers(debouncedSearch, 20),
+    // This is a filter over existing projects, not a picker for new data: a
+    // project may well belong to a customer that has since been deactivated,
+    // so those must stay reachable here.
+    queryFn: () => customerService.searchCustomers(debouncedSearch, 20, { includeInactive: true }),
     enabled: debouncedSearch.length >= 1,
   });
 

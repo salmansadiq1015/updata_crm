@@ -91,6 +91,9 @@ export const searchCustomersSchema = {
   query: Joi.object({
     q: Joi.string().required().trim().min(1).max(100),
     limit: Joi.number().integer().min(1).max(50).default(25),
+    // Opt-in for filters that must still reach deactivated customers; pickers
+    // leave it off so those customers cannot be selected.
+    includeInactive: Joi.boolean().default(false),
   }),
 };
 

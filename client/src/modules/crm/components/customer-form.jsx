@@ -137,7 +137,8 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
   });
 
   const handleFormSubmit = async (data) => {
-    if (currentStep < STEPS.length - 1) return;
+    // Creating walks the wizard; editing can be saved from any step.
+    if (!isEdit && currentStep < STEPS.length - 1) return;
     try {
       await onSubmit(data);
       handleOpenChange(false);
@@ -145,6 +146,13 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
     } catch {
       // Keep modal open so the user can fix & retry.
     }
+  };
+
+  // With free navigation an invalid field can sit on a step we are not looking
+  // at — jump to the first step that has an error so it is actually visible.
+  const handleInvalid = (formErrors) => {
+    const failing = STEPS.findIndex((step) => step.fields.some((field) => formErrors?.[field]));
+    if (failing >= 0 && failing !== currentStep) setCurrentStep(failing);
   };
 
   const goNext = async () => {
@@ -218,13 +226,15 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                 <div key={s.id} className="flex items-center gap-2 flex-1">
                   <button
                     type="button"
-                    onClick={() => i < currentStep && setCurrentStep(i)}
-                    disabled={i > currentStep}
+                    onClick={() => (isEdit || i < currentStep) && setCurrentStep(i)}
+                    disabled={!isEdit && i > currentStep}
                     className={cn(
                       'flex items-center gap-2 h-9 px-3 rounded-lg transition-all text-xs font-semibold flex-1 min-w-0',
                       isCurrent && 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
                       isCompleted && 'text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400',
-                      !isCurrent && !isCompleted && 'text-muted-foreground/60',
+                      !isCurrent && !isCompleted && (isEdit
+                        ? 'text-muted-foreground hover:bg-muted cursor-pointer'
+                        : 'text-muted-foreground/60'),
                     )}
                   >
                     <div className={cn(
@@ -247,7 +257,7 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
 
         {/* Form */}
         <form
-          onSubmit={handleSubmit(handleFormSubmit)}
+          onSubmit={handleSubmit(handleFormSubmit, handleInvalid)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && currentStep < STEPS.length - 1 && e.target.tagName !== 'TEXTAREA') {
               e.preventDefault();
@@ -652,19 +662,14 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                 ))}
               </div>
 
-              {isLastStep ? (
-                <Button
-                  type="submit"
-                  className="h-9 gap-1.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white"
-                  disabled={isLoading}
-                >
-                  {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {isEdit ? t('common.save', 'Speichern') : t('common.create', 'Erstellen')}
-                </Button>
-              ) : (
+              {!isLastStep && (
                 <Button
                   type="button"
-                  className="h-9 gap-1.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white"
+                  variant={isEdit ? 'outline' : undefined}
+                  className={cn(
+                    'h-9 gap-1.5',
+                    !isEdit && 'bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white',
+                  )}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -673,6 +678,16 @@ export function CustomerForm({ open, onOpenChange, onSubmit, defaultValues, isLo
                 >
                   {t('common.next', 'Weiter')}
                   <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {(isLastStep || isEdit) && (
+                <Button
+                  type="submit"
+                  className="h-9 gap-1.5 bg-linear-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white"
+                  disabled={isLoading}
+                >
+                  {isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {isEdit ? t('common.save', 'Speichern') : t('common.create', 'Erstellen')}
                 </Button>
               )}
             </div>

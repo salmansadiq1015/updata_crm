@@ -12,6 +12,7 @@ export const createUserSchema = z.object({
   department: z.string().max(100).optional().or(z.literal('')),
   position: z.string().max(100).optional().or(z.literal('')),
   street: z.string().max(200).optional().or(z.literal('')),
+  addressSupplement: z.string().max(255).optional().or(z.literal('')),
   city: z.string().max(100).optional().or(z.literal('')),
   zip: z.string().max(20).optional().or(z.literal('')),
   country: z.string().max(100).optional().or(z.literal('')),

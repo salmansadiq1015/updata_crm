@@ -112,7 +112,8 @@ export default function UserDetailPage() {
   const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase();
   const isActive = user.status === 'active' || user.isActive;
   const status = statusConfig[user.status] || statusConfig.active;
-  const fullAddress = [user.street, user.zip && user.city ? `${user.zip} ${user.city}` : user.city, user.country].filter(Boolean).join(', ');
+  // Swiss postal order: supplement (c/o, Postfach) sits above the street — same as CRM customers.
+  const fullAddress = [user.addressSupplement, user.street, user.zip && user.city ? `${user.zip} ${user.city}` : user.city, user.country].filter(Boolean).join(', ');
 
   const handleFormSubmit = (data) => {
     updateMutation.mutate(data);

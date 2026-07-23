@@ -67,6 +67,13 @@ const userSchema = new mongoose.Schema(
       maxlength: 200,
       default: null,
     },
+    // Optional second address line: c/o, Postfach, z.Hd. … (same as CRM customers)
+    addressSupplement: {
+      type: String,
+      trim: true,
+      maxlength: 255,
+      default: null,
+    },
     city: {
       type: String,
       trim: true,

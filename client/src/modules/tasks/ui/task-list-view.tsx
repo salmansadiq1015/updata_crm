@@ -36,7 +36,6 @@ import {
   taskPriorityIconColor,
   taskStatusIconColor,
 } from './task-ui-constants';
-import { TaskInlineField } from './task-inline-field';
 import { taskApi } from '../services/task-api';
 
 // ── Status cycle for subtask toggle ──────────────────────────────────────────
@@ -272,14 +271,13 @@ const TaskRow = memo(function TaskRow({
           />
         </div>
 
-        {/* Title */}
+        {/* Title — display only: clicking the row opens the detail page, where
+            the title can be renamed. Inline rename here collided with that
+            navigation (client feedback). */}
         <div role="gridcell" className="min-w-0">
-          <TaskInlineField
-            value={task.title}
-            ariaLabel={t('tasks.editTitleFor', 'Titel bearbeiten: {title}', { title: task.title })}
-            className="block max-w-full truncate text-left font-medium text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onCommit={(title) => onPatchTask(task.id, { title, expectedVersion: task.version })}
-          />
+          <span className="block max-w-full truncate text-left font-medium text-foreground group-hover:text-primary">
+            {task.title}
+          </span>
         </div>
 
         {/* Status — icon + label dropdown */}

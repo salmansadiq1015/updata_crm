@@ -65,8 +65,8 @@ export const scheduleService = {
         responseType: 'blob',
         transformResponse: [(x) => x],
       });
-      const filename = `Bauplan-${projectId}.csv`;
-      downloadBlob(data, filename, 'text/csv;charset=utf-8');
+      const filename = `Terminplan-${projectId}.xlsx`;
+      downloadBlob(data, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       return { filename };
     }
     // PDF is generated + stored server-side (for the document archive) and the

@@ -892,50 +892,120 @@ class ScheduleService {
    * ';' separator) that opens natively in Excel. Mirrors the PDF content:
    * header block + Phasen table + Meilensteine table (PROJ – Bauplan export).
    */
+  /**
+   * Terminplan as a real .xlsx mirroring the PDF: header block, then one
+   * weekly grid after another with coloured Morgen/NM cells. Shares
+   * _buildTerminplanData with the PDF so both always show the same plan.
+   */
   async exportExcel(projectId) {
-    const Project = (await import('./project.model.js')).default;
-    const project = await Project.findById(projectId)
-      .populate('customerId', 'name')
-      .populate('projectManagerId', 'firstName lastName');
-    if (!project) throw new NotFoundError('Project', projectId);
+    const data = await this._buildTerminplanData(projectId);
+    const ExcelJS = (await import('exceljs')).default;
 
-    const entries = await scheduleRepository.findByProjectId(projectId);
-    const phases = entries.filter((e) => e.entryType === 'PHASE');
-    const milestones = entries.filter((e) => e.entryType === 'MILESTONE');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Terminplan', {
+      pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    });
 
-    const STATUS_DE = {
-      PLANNED: 'Geplant', IN_PROGRESS: 'In Arbeit', COMPLETED: 'Abgeschlossen',
-      CANCELLED: 'Abgebrochen', WAIVED: 'Verzichtet',
-    };
-    const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('de-CH') : '');
-    const esc = (v) => {
-      if (v === null || v === undefined) return '';
-      const s = String(v);
-      return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const row = (...cells) => cells.map(esc).join(';');
+    const DAY_NAMES = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
+    const chDate = (d) => new Date(d).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const argb = (hex) => `FF${hex.replace('#', '').toUpperCase()}`;
+    const NAVY = { argb: 'FF1F3864' };
+    const thin = { style: 'thin', color: { argb: 'FF000000' } };
+    const box = { top: thin, left: thin, bottom: thin, right: thin };
 
-    const lines = [
-      row('Bauplan / Terminplan'),
-      row('Projekt', project.name),
-      row('Projekt-Nr.', project.projectNumber),
-      row('Kunde', project.customerId?.name || ''),
-      row('Projektleiter', project.projectManagerId
-        ? `${project.projectManagerId.firstName} ${project.projectManagerId.lastName}` : ''),
-      row('Exportiert am', new Date().toLocaleDateString('de-CH')),
-      '',
-      row('Phasen'),
-      row('Name', 'Start', 'Ende', 'Status'),
-      ...phases.map((p) => row(p.name, fmtDate(p.startDate), fmtDate(p.endDate), STATUS_DE[p.status] || p.status)),
-      '',
-      row('Meilensteine'),
-      row('Name', 'Datum', 'Status'),
-      ...milestones.map((m) => row(m.name, fmtDate(m.milestoneDate), STATUS_DE[m.status] || m.status)),
+    // 3 label columns + 10 half-day slots
+    ws.columns = [
+      { width: 26 }, { width: 22 }, { width: 14 },
+      ...Array.from({ length: 10 }, () => ({ width: 10.5 })),
     ];
 
+    // ── header block ──
+    ws.mergeCells('A1:F1');
+    ws.getCell('A1').value = data.title;
+    ws.getCell('A1').font = { bold: true, size: 16, color: NAVY };
+    ws.getCell('A2').value = 'Projekt:';
+    ws.getCell('A2').font = { color: NAVY };
+    ws.getCell('B2').value = data.projectName;
+    ws.getCell('B2').font = { bold: true };
+    ws.getCell('A3').value = 'Zeitraum:';
+    ws.getCell('A3').font = { color: NAVY };
+    ws.getCell('B3').value = data.periodLabel;
+    ws.getCell('B3').font = { bold: true };
+    ws.getCell('G2').value = 'Kunde:';
+    ws.getCell('G2').font = { color: NAVY };
+    ws.getCell('H2').value = data.customerName;
+    ws.getCell('H2').font = { bold: true };
+    ws.getCell('G3').value = 'Telefon:';
+    ws.getCell('G3').font = { color: NAVY };
+    ws.getCell('H3').value = data.customerPhone;
+    ws.getCell('H3').font = { bold: true };
+    data.contacts.forEach((line, i) => {
+      const cell = ws.getCell(`J${2 + i}`);
+      cell.value = line;
+      cell.font = { size: 8, color: { argb: 'FF333333' } };
+    });
+
+    // ── one grid per week ──
+    let r = 5;
+    for (const week of data.weeks) {
+      ws.getCell(r, 1).value = `Woche ${week.index}:`;
+      ws.getCell(r, 1).font = { bold: true, color: NAVY };
+      week.days.forEach((day, i) => {
+        ws.mergeCells(r, 4 + i * 2, r, 5 + i * 2);
+        const cell = ws.getCell(r, 4 + i * 2);
+        cell.value = chDate(day);
+        cell.font = { bold: true, size: 9 };
+        cell.alignment = { horizontal: 'center' };
+      });
+      r += 1;
+
+      // day header row
+      const heads = ['Arbeit', 'Firma', 'Telefon',
+        ...Array.from({ length: 10 }, (_, i) => `${DAY_NAMES[Math.floor(i / 2)]} ${i % 2 === 0 ? 'Morgen' : 'NM'}`)];
+      heads.forEach((label, c) => {
+        const cell = ws.getCell(r, c + 1);
+        cell.value = label;
+        cell.font = { bold: true, size: 8 };
+        cell.border = box;
+        cell.alignment = { vertical: 'bottom', wrapText: true };
+      });
+      ws.getRow(r).height = 24;
+      r += 1;
+
+      // task rows
+      for (const row of week.rows) {
+        ws.getCell(r, 1).value = row.task.name;
+        ws.getCell(r, 2).value = row.task.company || '';
+        ws.getCell(r, 3).value = row.task.phone || '';
+        for (let c = 1; c <= 13; c++) {
+          const cell = ws.getCell(r, c);
+          cell.border = box;
+          cell.font = { size: 9 };
+          if (c > 3 && row.cells[c - 4]) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(row.task.color) } };
+          }
+        }
+        r += 1;
+      }
+      r += 2; // gap between weeks
+    }
+
+    // ── milestones ──
+    if (data.milestones.length) {
+      ws.getCell(r, 1).value = 'Meilensteine';
+      ws.getCell(r, 1).font = { bold: true, color: NAVY };
+      r += 1;
+      for (const ms of data.milestones) {
+        ws.getCell(r, 1).value = ms.date ? chDate(ms.date) : '—';
+        ws.getCell(r, 2).value = ms.name;
+        r += 1;
+      }
+    }
+
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
     return {
-      csv: `\uFEFF${lines.join('\r\n')}`,
-      filename: `Bauplan_${project.projectNumber || projectId}.csv`,
+      buffer,
+      filename: `Terminplan_${data.project.projectNumber || projectId}.xlsx`,
     };
   }
 

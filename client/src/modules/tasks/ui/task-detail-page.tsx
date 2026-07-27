@@ -2,10 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  ArrowLeft, Building2, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX,
-  Copy, Flag, LifeBuoy, Loader2, Lock, LockOpen, MapPin, UserPlus,
-} from 'lucide-react';
+import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, LifeBuoy, Loader2, Lock, LockOpen, UserPlus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -543,27 +540,6 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
             }}
             onClear={() => patch({ projectId: null, orderId: null })}
           />
-
-          {/* Customer + job-site, derived from the linked project/order. */}
-          {(task.customerName || task.siteName || task.siteAddress) && (
-            <div className="mt-3 space-y-2 rounded-md border border-border bg-background px-3 py-2.5 text-sm">
-              {task.customerName && (
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate text-foreground">{task.customerName}</span>
-                </div>
-              )}
-              {(task.siteName || task.siteAddress) && (
-                <div className="flex items-start gap-2">
-                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 text-foreground">
-                    {task.siteName && <span className="block truncate font-medium">{task.siteName}</span>}
-                    {task.siteAddress && <span className="block text-xs text-muted-foreground">{task.siteAddress}</span>}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="my-5 border-t border-border" />
 

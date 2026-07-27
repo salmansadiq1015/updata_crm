@@ -19,39 +19,19 @@ const nullableId = z
 // The API populates projectId/orderId with the linked record, but nullableId
 // reduces them to ids. Lift the display name out first so the UI can show
 // "Kesselersatz Bäckerei Weber" instead of a raw object id.
-// Build "Strasse, PLZ Ort" from a populated site record.
-const formatSiteAddress = (site: Record<string, unknown> | null | undefined): string | null => {
-  if (!site || typeof site !== 'object') return null;
-  const locality = [site.postalCode, site.city].filter(Boolean).join(' ');
-  const parts = [site.street, locality].filter(Boolean);
-  return parts.length ? parts.map(String).join(', ') : null;
-};
-
 const liftContextNames = (value: unknown) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const raw = value as Record<string, unknown>;
   const project = raw.projectId as Record<string, unknown> | null | undefined;
   const order = raw.orderId as Record<string, unknown> | null | undefined;
-  const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
-
-  // Customer + job-site come from whichever context the task is linked to:
-  // a project carries a denormalized customerName; an assignment links both.
-  const projectSite = isObj(project) ? (project.siteId as Record<string, unknown>) : null;
-  const orderSite = isObj(order) ? (order.siteId as Record<string, unknown>) : null;
-  const orderCustomer = isObj(order) ? (order.customerId as Record<string, unknown>) : null;
-
-  const customerName = isObj(project)
-    ? (project.customerName ?? null)
-    : (isObj(orderCustomer) ? (orderCustomer.name ?? null) : (raw.customerName ?? null));
-  const site = projectSite ?? orderSite ?? null;
-
   return {
     ...raw,
-    projectName: isObj(project) ? (project.name ?? null) : (raw.projectName ?? null),
-    orderName: isObj(order) ? (order.title ?? order.assignmentNumber ?? null) : (raw.orderName ?? null),
-    customerName,
-    siteName: isObj(site) ? (site.name ?? null) : (raw.siteName ?? null),
-    siteAddress: formatSiteAddress(site) ?? (raw.siteAddress as string ?? null),
+    projectName: project && typeof project === 'object'
+      ? (project.name ?? null)
+      : (raw.projectName ?? null),
+    orderName: order && typeof order === 'object'
+      ? (order.title ?? order.assignmentNumber ?? null)
+      : (raw.orderName ?? null),
   };
 };
 
@@ -97,9 +77,6 @@ export const rawTaskSchema = z
     poolHelperId: nullableId,
     projectName: z.string().nullable().optional(),
     orderName: z.string().nullable().optional(),
-    customerName: z.string().nullable().optional(),
-    siteName: z.string().nullable().optional(),
-    siteAddress: z.string().nullable().optional(),
   })
   .passthrough()
   .transform((raw) => {
@@ -143,9 +120,6 @@ export const rawTaskSchema = z
       poolHelperId: raw.poolHelperId,
       projectName: raw.projectName ?? null,
       orderName: raw.orderName ?? null,
-      customerName: raw.customerName ?? null,
-      siteName: raw.siteName ?? null,
-      siteAddress: raw.siteAddress ?? null,
     };
   }));
 

@@ -40,9 +40,6 @@ export type Task = {
   poolHelperId: string | null;
   projectName: string | null;
   orderName: string | null;
-  customerName: string | null;
-  siteName: string | null;
-  siteAddress: string | null;
 };
 
 export type TaskList = {

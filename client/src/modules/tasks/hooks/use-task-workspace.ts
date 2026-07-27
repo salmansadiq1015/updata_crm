@@ -205,11 +205,15 @@ export function useTaskWorkspaceMutations(activeParams: Omit<TaskListParams, 'cu
   });
 
   const createTask = useMutation({
-    mutationFn: (title: string) => {
+    // Accepts a bare title (command bar, list row) or { title, status } for
+    // the board's per-column quick add, where the column decides the status.
+    mutationFn: (input: string | { title: string; status?: Task['status'] }) => {
+      const { title, status: statusOverride } = typeof input === 'string' ? { title: input, status: undefined } : input;
       const params: Pick<Task, 'title'> & Partial<TaskPatch> = { title };
       if (activeParams.listId) params.listId = activeParams.listId;
       if (activeParams.priority) params.priority = activeParams.priority;
-      if (activeParams.status && activeParams.status !== 'ALL') params.status = activeParams.status;
+      if (statusOverride) params.status = statusOverride;
+      else if (activeParams.status && activeParams.status !== 'ALL') params.status = activeParams.status;
       return taskApi.create(params);
     },
     onSuccess: (task) => {

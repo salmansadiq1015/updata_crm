@@ -6,6 +6,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { CalendarDays, GripVertical, MessageSquare, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { TaskQuickAdd } from './task-quick-add';
 import type { Task, TaskPatch, TaskStatus } from '../types/task-types';
 import { TASK_STATUSES, getTaskPriorityLabel, getTaskStatusLabel, taskPriorityClass, taskStatusClass } from './task-ui-constants';
 
@@ -14,6 +15,7 @@ type TaskBoardViewProps = {
   selectedTaskId: string | null;
   onSelectTask: (taskId: string) => void;
   onPatchTask: (id: string, patch: TaskPatch) => void;
+  onCreateTask?: (title: string, status: TaskStatus) => void;
   users?: WorkspaceUser[];
 };
 
@@ -166,12 +168,14 @@ function TaskBoardColumn({
   selectedTaskId,
   users,
   onSelectTask,
+  onCreateTask,
 }: {
   status: TaskStatus;
   tasks: Task[];
   selectedTaskId: string | null;
   users: WorkspaceUser[];
   onSelectTask: (taskId: string) => void;
+  onCreateTask?: (title: string, status: TaskStatus) => void;
 }) {
   const { t } = useLanguage();
   const statusLabel = getTaskStatusLabel(t, status);
@@ -227,11 +231,24 @@ function TaskBoardColumn({
           </div>
         )}
       </div>
+
+      {/* Per-column quick add — the column's status is applied directly. */}
+      {onCreateTask && (
+        <footer className="shrink-0 border-t border-border p-1.5">
+          <TaskQuickAdd
+            asRow
+            onCreate={(title) => onCreateTask(title, status)}
+            label={t('tasks.addTaskRow', 'Aufgabe hinzufügen')}
+            triggerClassName="py-1.5 text-xs"
+            inputClassName="h-7 text-xs"
+          />
+        </footer>
+      )}
     </section>
   );
 }
 
-export function TaskBoardView({ tasks, selectedTaskId, onSelectTask, onPatchTask, users }: TaskBoardViewProps) {
+export function TaskBoardView({ tasks, selectedTaskId, onSelectTask, onPatchTask, onCreateTask, users }: TaskBoardViewProps) {
   const { t } = useLanguage();
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const grouped = useMemo(() => {
@@ -288,6 +305,7 @@ export function TaskBoardView({ tasks, selectedTaskId, onSelectTask, onPatchTask
             selectedTaskId={selectedTaskId}
             users={users ?? []}
             onSelectTask={onSelectTask}
+            onCreateTask={onCreateTask}
           />
         ))}
       </div>

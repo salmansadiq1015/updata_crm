@@ -21,7 +21,7 @@ import { DeployEmptyState } from '../shared/deploy-empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Clock, FileText, User, Hash, Pencil, Trash2, Loader2,
-  CalendarCheck, ClipboardList, SearchX,
+  CalendarCheck, ClipboardList, SearchX, MapPin, Building2,
 } from 'lucide-react';
 
 function DetailRow({ icon: Icon, label, children }) {
@@ -123,6 +123,25 @@ export function AssignmentDetailDrawer({ assignmentId, open, onOpenChange, onEdi
                 <DetailRow icon={User} label={t('deploy.detail.employee', 'Mitarbeiter')}>
                   {assignment.employeeId?.firstName} {assignment.employeeId?.lastName}
                 </DetailRow>
+
+                {(assignment.customerId?.name || assignment.projectId?.customerName) && (
+                  <DetailRow icon={Building2} label={t('deploy.detail.customer', 'Kunde')}>
+                    {assignment.customerId?.name || assignment.projectId?.customerName}
+                  </DetailRow>
+                )}
+
+                {(() => {
+                  const site = assignment.siteId || assignment.projectId?.siteId;
+                  if (!site) return null;
+                  const addressLine = [site.street, [site.postalCode, site.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                  if (!addressLine) return null;
+                  return (
+                    <DetailRow icon={MapPin} label={t('deploy.detail.address', 'Adresse')}>
+                      {site.name && <div className="font-medium">{site.name}</div>}
+                      {addressLine}
+                    </DetailRow>
+                  );
+                })()}
 
                 {assignment.orderId && (
                   <DetailRow icon={ClipboardList} label={t('deploy.detail.order', 'Auftrag')}>

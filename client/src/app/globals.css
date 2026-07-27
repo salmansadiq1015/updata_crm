@@ -260,7 +260,13 @@
 
 *::-webkit-scrollbar{
   display: none;
-}   
+}
+
+@page {
+  size: landscape;
+  margin: 10mm;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

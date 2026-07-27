@@ -28,16 +28,44 @@ function determineMaintenanceStatus(nextDueDate, now = new Date()) {
 }
 
 class InstallationService {
+  /**
+   * Additional supplied objects must exist and belong to the same customer as
+   * the primary object (client decision: a shared component never crosses
+   * customers). Returns the cleaned list: deduped, primary site excluded.
+   */
+  async _validateAdditionalSiteIds(primarySite, additionalSiteIds = []) {
+    if (!primarySite) throw new NotFoundError('Site', 'primary');
+    const unique = [...new Set(additionalSiteIds.map(String))]
+      .filter((id) => id !== String(primarySite._id));
+    if (!unique.length) return [];
+
+    const siteRepository = (await import('./site.repository.js')).default;
+    const primaryCustomerId = String(primarySite.customerId?._id ?? primarySite.customerId);
+    for (const id of unique) {
+      const site = await siteRepository.findById(id);
+      if (!site) throw new NotFoundError('Site', id);
+      const customerId = String(site.customerId?._id ?? site.customerId);
+      if (customerId !== primaryCustomerId) {
+        throw new ConflictError('All supplied objects must belong to the same customer');
+      }
+    }
+    return unique;
+  }
+
   async create(siteId, data, createdBy, meta = {}) {
     // Verify site exists (lazy import to avoid circular deps)
     const siteRepository = (await import('./site.repository.js')).default;
     const site = await siteRepository.findById(siteId);
     if (!site) throw new NotFoundError('Site', siteId);
 
+    const { additionalSiteIds: rawAdditional, ...rest } = data;
+    const additionalSiteIds = await this._validateAdditionalSiteIds(site, rawAdditional);
+
     const installationNumber = await counterService.getNextInstallationNumber();
 
     const installation = await installationRepository.create({
-      ...data,
+      ...rest,
+      additionalSiteIds,
       siteId,
       installationNumber,
       createdBy,
@@ -46,6 +74,7 @@ class InstallationService {
     await this._createDefaultMaintenanceIntervals(installation);
 
     await this._invalidateSiteInstallationsCache(siteId);
+    for (const linked of additionalSiteIds) await this._invalidateSiteInstallationsCache(linked);
 
     eventBus.publish(EVENT_TYPES.INSTALLATION_CREATED, {
       installationId: installation._id,
@@ -120,9 +149,22 @@ class InstallationService {
     const existing = await installationRepository.findById(id);
     if (!existing) throw new NotFoundError('Installation', id);
 
-    const updated = await installationRepository.updateById(id, data);
+    const payload = { ...data };
+    if (payload.additionalSiteIds !== undefined) {
+      // findById populates siteId — hand the populated doc to the validator.
+      payload.additionalSiteIds = await this._validateAdditionalSiteIds(existing.siteId, payload.additionalSiteIds);
+    }
+
+    const updated = await installationRepository.updateById(id, payload);
     await this._invalidateInstallationCache(id);
-    await this._invalidateSiteInstallationsCache(existing.siteId);
+    // Old and new linked sites both cached this installation's list.
+    const primarySiteId = existing.siteId?._id ?? existing.siteId;
+    const touchedSites = new Set([
+      String(primarySiteId),
+      ...(existing.additionalSiteIds || []).map((s) => String(s?._id ?? s)),
+      ...(payload.additionalSiteIds || []).map(String),
+    ]);
+    for (const sid of touchedSites) await this._invalidateSiteInstallationsCache(sid);
 
     eventBus.publish(EVENT_TYPES.INSTALLATION_UPDATED, {
       installationId: id,

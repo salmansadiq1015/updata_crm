@@ -14,12 +14,14 @@ import {
   Loader2,
   Mail,
   Phone,
+  Plus,
   Search,
   Video,
   Wrench,
   X,
 } from 'lucide-react';
 import { assetMaintenanceService } from '@/modules/crm/services/asset-maintenance-service';
+import { NewComponentFlow, NewMaintenanceFlow } from '@/modules/crm/components/component-create-dialogs';
 import { useAssetMaintenanceContext, useAssetMaintenanceMutations } from '@/modules/crm/hooks/use-asset-maintenance';
 import { useCursorList } from '@/modules/crm/hooks/use-cursor-list';
 import { useDeployEmployees } from '@/modules/deploy/hooks/use-deploy-employees';
@@ -163,6 +165,8 @@ export function AssetMaintenanceWorkspace() {
   const [dueTo, setDueTo] = useState('');
   const [rowSelection, setRowSelection] = useState({});
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [newComponentOpen, setNewComponentOpen] = useState(false);
+  const [newMaintenanceOpen, setNewMaintenanceOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState(DEFAULT_BULK_FORM);
   const [activeItem, setActiveItem] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -457,6 +461,18 @@ export function AssetMaintenanceWorkspace() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canWriteCrm && (
+            <>
+              <Button size="sm" className="gap-2 bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white" onClick={() => setNewComponentOpen(true)}>
+                <Plus className="h-4 w-4" />
+                {t('crm.installations.newComponent', 'Neue Komponente')}
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => setNewMaintenanceOpen(true)}>
+                <Plus className="h-4 w-4" />
+                {t('crm.maintenance.newMaintenance', 'Neue Wartung')}
+              </Button>
+            </>
+          )}
           <Button variant="outline" size="sm" className="gap-2" onClick={() => router.push('/scheduling/calendar')} disabled={!canReadScheduling}>
             <CalendarDays className="h-4 w-4" />
             {t('crm.assetMaintenance.calendar', 'Kalender')}
@@ -656,6 +672,9 @@ export function AssetMaintenanceWorkspace() {
         onSubmit={submitSchedule}
         t={t}
       />
+
+      <NewComponentFlow open={newComponentOpen} onOpenChange={setNewComponentOpen} />
+      <NewMaintenanceFlow open={newMaintenanceOpen} onOpenChange={setNewMaintenanceOpen} />
     </div>
   );
 }

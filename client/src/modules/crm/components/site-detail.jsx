@@ -260,7 +260,7 @@ export function SiteDetail() {
 
         <TabsContent value="installations">
           <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
-            <InstallationsPanel siteId={id} />
+            <InstallationsPanel siteId={id} customerId={customerId} />
             <div className="space-y-4">
               <SiteMapCard site={site} />
             </div>

@@ -18,6 +18,8 @@ export const createInstallationSchema = z.object({
   fuelType: z.enum(FUEL_TYPES).nullable().optional(),
   yearOfManufacture: z.number().int().min(1900).max(2100).nullable().optional(),
   technicalNotes: z.string().max(5000).optional().or(z.literal('')),
+  // Additional supplied objects (same customer) — the multi-object linkage.
+  additionalSiteIds: z.array(z.string()).max(50).optional(),
 });
 
 export const updateInstallationSchema = createInstallationSchema.partial();

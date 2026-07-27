@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { INSTALLATION_TYPE_META, FUEL_TYPE_META } from '@/modules/crm/constants/crm-constants';
 
-export function InstallationsPanel({ siteId }) {
+export function InstallationsPanel({ siteId, customerId }) {
   const { t } = useLanguage();
   const qc = useQueryClient();
   const { hasPermission } = usePermissions();
@@ -115,6 +115,8 @@ export function InstallationsPanel({ siteId }) {
         onSubmit={handleSubmit}
         defaultValues={editInstallation}
         isLoading={createMut.isPending || updateMut.isPending}
+        customerId={customerId}
+        primarySiteId={editInstallation ? (editInstallation.siteId?._id || editInstallation.siteId) : siteId}
       />
 
       <Dialog open={!!decommTarget} onOpenChange={(v) => !v && setDecommTarget(null)}>
@@ -161,6 +163,8 @@ function InstallationCard({ installation: i, canWrite, canDelete, onEdit, onDeco
   const Icon = meta.icon;
   const fuelMeta = i.fuelType ? FUEL_TYPE_META[i.fuelType] : null;
   const isActive = i.status !== 'decommissioned';
+  // Shared component supplying several objects (Heizzentrale case).
+  const suppliedCount = 1 + (i.additionalSiteIds?.length || 0);
 
   return (
     <div className={cn(
@@ -180,6 +184,11 @@ function InstallationCard({ installation: i, canWrite, canDelete, onEdit, onDeco
             >
               {t(`crm.installations.type.${i.type}`, meta.label)}
             </Link>
+            {suppliedCount > 1 && (
+              <span className="inline-flex items-center rounded-full bg-brand-500/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-700 dark:text-brand-300">
+                {t('crm.installations.suppliesCount', 'Versorgt {count} Objekte', { count: suppliedCount })}
+              </span>
+            )}
             {fuelMeta && (
               <span className={cn('text-[10px] font-medium', fuelMeta.color)}>{t(`crm.installations.fuel.${i.fuelType}`, fuelMeta.label)}</span>
             )}

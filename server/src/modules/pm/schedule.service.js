@@ -624,14 +624,24 @@ class ScheduleService {
       ? [[`${pm.firstName} ${pm.lastName}`, pm.phone, pm.email].filter(Boolean).join(', ')]
       : [];
 
-    // CI logo, same asset the doctpl renderer uses.
+    // Logo: CI configuration first (same asset as other doctpl documents),
+    // otherwise the bundled company logo — the same image the sidebar shows.
     let logoBuffer = null;
     try {
       const CIConfiguration = (await import('../doctpl/ciConfiguration.model.js')).default;
       const { default: ciRenderAssetsService } = await import('../doctpl/ciRenderAssets.service.js');
       const ciConfig = await CIConfiguration.findOne({ isActive: true }).lean();
       if (ciConfig) logoBuffer = (await ciRenderAssetsService.prepare(ciConfig))?.logoBuffer || null;
-    } catch { /* no CI configured — export renders without logo */ }
+    } catch { /* no CI configured — fall through to the bundled logo */ }
+    if (!logoBuffer) {
+      try {
+        const { readFile } = await import('fs/promises');
+        const { fileURLToPath } = await import('url');
+        const path = await import('path');
+        const here = path.dirname(fileURLToPath(import.meta.url));
+        logoBuffer = await readFile(path.join(here, '../../assets/logo.png'));
+      } catch { /* asset missing — export renders without logo */ }
+    }
 
     return {
       project,
@@ -944,6 +954,11 @@ class ScheduleService {
       cell.value = line;
       cell.font = { size: 8, color: { argb: 'FF333333' } };
     });
+    if (data.logoBuffer) {
+      // Same asset as the PDF header, anchored top-right (source is 329×100).
+      const imgId = wb.addImage({ buffer: data.logoBuffer, extension: 'png' });
+      ws.addImage(imgId, { tl: { col: 11.2, row: 0.1 }, ext: { width: 132, height: 40 } });
+    }
 
     // ── one grid per week ──
     let r = 5;

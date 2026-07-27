@@ -13,6 +13,7 @@ import {
   CircleX,
   Copy,
   Flag,
+  MapPin,
   MoreHorizontal,
   Trash2,
 } from 'lucide-react';
@@ -239,7 +240,7 @@ const TaskRow = memo(function TaskRow({
         role="row"
         tabIndex={0}
         className={cn(
-          'group grid h-11 items-center gap-3 border-b border-border border-l-2 px-3 text-sm outline-none transition-colors hover:bg-muted/40 focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring',
+          'group grid min-h-11 items-center gap-3 border-b border-border border-l-2 px-3 py-1.5 text-sm outline-none transition-colors hover:bg-muted/40 focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring',
           columns,
           taskPriorityBorderClass[task.priority ?? 'NONE'],
           selected && 'bg-primary/5',
@@ -273,11 +274,24 @@ const TaskRow = memo(function TaskRow({
 
         {/* Title — display only: clicking the row opens the detail page, where
             the title can be renamed. Inline rename here collided with that
-            navigation (client feedback). */}
+            navigation (client feedback). Second line shows the linked
+            customer and job-site address when the task has a context. */}
         <div role="gridcell" className="min-w-0">
           <span className="block max-w-full truncate text-left font-medium text-foreground group-hover:text-primary">
             {task.title}
           </span>
+          {(task.customerName || task.siteAddress) && (
+            <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+              {task.customerName && <span className="truncate">{task.customerName}</span>}
+              {task.customerName && task.siteAddress && <span className="text-muted-foreground/40">·</span>}
+              {task.siteAddress && (
+                <span className="flex min-w-0 items-center gap-1 truncate">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{task.siteAddress}</span>
+                </span>
+              )}
+            </span>
+          )}
         </div>
 
         {/* Status — icon + label dropdown */}

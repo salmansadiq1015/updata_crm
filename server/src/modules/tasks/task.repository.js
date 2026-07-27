@@ -23,11 +23,26 @@ const ALLOWED_FILTERS = {
 
 const ALLOWED_SORT_FIELDS = ['createdAt', 'dueDate', 'priority', 'title', 'sortOrder', '_id'];
 
+// Nested populate of the linked site gives the UI the customer name and the
+// job-site address (client feedback). Projects carry a denormalized
+// customerName; assignments link the customer, so populate it there.
+const SITE_SELECT = 'name street postalCode city canton';
 const POPULATE_FIELDS = [
   { path: 'assigneeId', select: 'firstName lastName email role' },
   { path: 'createdBy', select: 'firstName lastName email' },
-  { path: 'projectId', select: 'name projectNumber customerName status' },
-  { path: 'orderId', select: 'assignmentNumber title status priority' },
+  {
+    path: 'projectId',
+    select: 'name projectNumber customerName status siteId',
+    populate: { path: 'siteId', select: SITE_SELECT },
+  },
+  {
+    path: 'orderId',
+    select: 'assignmentNumber title status priority customerId siteId',
+    populate: [
+      { path: 'customerId', select: 'name' },
+      { path: 'siteId', select: SITE_SELECT },
+    ],
+  },
   { path: 'meetingId', select: 'title startAt status' },
 ];
 

@@ -63,6 +63,7 @@ export function CoarseSummary({ kpis, viewMode, weekCount }) {
         label={t('deploy.coarse.freeCapacity', 'Freie Kapazität')}
         value={kpis.freeCapacity}
         suffix="%"
+        hint={t('deploy.coarse.freeCapacityHint', 'in der meistbelegten Woche')}
       />
       <StatCard
         icon={AlertTriangle}

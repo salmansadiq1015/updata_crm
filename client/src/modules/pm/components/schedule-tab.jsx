@@ -756,7 +756,7 @@ export function ScheduleTab({ projectId }) {
   // ── Entry form ──────────────────────────────────────────────
 
   const isEdit = !!editEntry;
-  const defaultEntryValues = { name: '', entryType: 'PHASE', startDate: '', endDate: '', milestoneDate: '', responsibleType: 'INTERNAL_TEAM', responsibleTeamId: null, partnerCompanyId: null, predecessorId: null, notes: '', sortOrder: 0 };
+  const defaultEntryValues = { name: '', entryType: 'PHASE', startDate: '', endDate: '', startHalf: 'morning', endHalf: 'afternoon', milestoneDate: '', responsibleType: 'INTERNAL_TEAM', responsibleTeamId: null, partnerCompanyId: null, predecessorId: null, notes: '', sortOrder: 0 };
 
   const entryForm = useForm({
     resolver: zodResolver(isEdit ? updateEntrySchema : createEntrySchema),
@@ -785,6 +785,8 @@ export function ScheduleTab({ projectId }) {
       startDate: entry.startDate ? new Date(entry.startDate).toISOString().split('T')[0] : '',
       endDate: entry.endDate ? new Date(entry.endDate).toISOString().split('T')[0] : '',
       milestoneDate: entry.milestoneDate ? new Date(entry.milestoneDate).toISOString().split('T')[0] : '',
+      startHalf: entry.startHalf || 'morning',
+      endHalf: entry.endHalf || 'afternoon',
       responsibleType: entry.responsibleType || 'INTERNAL_TEAM',
       responsibleTeamId: entry.responsibleTeamId || null,
       partnerCompanyId: entry.partnerCompanyId || null,
@@ -1139,10 +1141,35 @@ export function ScheduleTab({ projectId }) {
                 {watchEntryType === 'PHASE' ? (
                   <>
                     <FormField label={t('pm.startDate', 'Start Date')} required error={entryForm.formState.errors.startDate?.message}>
-                      <Input type="date" {...entryForm.register('startDate')} />
+                      <div className="flex gap-2">
+                        <Input type="date" {...entryForm.register('startDate')} className="flex-1" />
+                        {/* Half-day precision for the Terminplan export (Morgen/NM) */}
+                        <Select
+                          value={entryForm.watch('startHalf') || 'morning'}
+                          onValueChange={(v) => entryForm.setValue('startHalf', v, { shouldDirty: true })}
+                        >
+                          <SelectTrigger className="w-28 shrink-0"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="morning">{language === 'de' ? 'ab Morgen' : 'from AM'}</SelectItem>
+                            <SelectItem value="afternoon">{language === 'de' ? 'ab NM' : 'from PM'}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </FormField>
                     <FormField label={t('pm.endDate', 'End Date')} required error={entryForm.formState.errors.endDate?.message}>
-                      <Input type="date" {...entryForm.register('endDate')} />
+                      <div className="flex gap-2">
+                        <Input type="date" {...entryForm.register('endDate')} className="flex-1" />
+                        <Select
+                          value={entryForm.watch('endHalf') || 'afternoon'}
+                          onValueChange={(v) => entryForm.setValue('endHalf', v, { shouldDirty: true })}
+                        >
+                          <SelectTrigger className="w-28 shrink-0"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="morning">{language === 'de' ? 'bis Morgen' : 'to AM'}</SelectItem>
+                            <SelectItem value="afternoon">{language === 'de' ? 'bis NM' : 'to PM'}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </FormField>
                   </>
                 ) : (

@@ -25,6 +25,10 @@ const scheduleEntrySchema = new mongoose.Schema(
     },
     startDate: { type: Date, default: null },
     endDate: { type: Date, default: null },
+    // Half-day precision for the Terminplan export (Morgen/Nachmittag).
+    // Defaults describe full days, so existing entries are unaffected.
+    startHalf: { type: String, enum: ['morning', 'afternoon'], default: 'morning' },
+    endHalf: { type: String, enum: ['morning', 'afternoon'], default: 'afternoon' },
     milestoneDate: { type: Date, default: null },
     responsibleType: {
       type: String,

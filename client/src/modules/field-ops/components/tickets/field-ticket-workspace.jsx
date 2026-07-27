@@ -278,7 +278,7 @@ function CreateTicketDialog({ open, onOpenChange, users, onSubmit, isPending, lo
               <Input value={form.projectName} onChange={(event) => update('projectName', event.target.value)} maxLength={200} />
             </label>
             <label className="space-y-1.5">
-              <span className="text-xs font-medium text-muted-foreground">{locale === 'de' ? 'Anlage' : 'Asset'}</span>
+              <span className="text-xs font-medium text-muted-foreground">{locale === 'de' ? 'Komponente' : 'Asset'}</span>
               <Input value={form.assetName} onChange={(event) => update('assetName', event.target.value)} maxLength={200} />
             </label>
             <label className="space-y-1.5">
@@ -377,7 +377,7 @@ function DetailPanel({ ticket, isLoading, users, mutations, locale }) {
         <Info label={locale === 'de' ? 'Team' : 'Team'} value={ticket.teamName || '—'} />
         <Info label={locale === 'de' ? 'Kunde' : 'Customer'} value={ticket.customerName || '—'} />
         <Info label={locale === 'de' ? 'Projekt' : 'Project'} value={ticket.projectName || '—'} />
-        <Info label={locale === 'de' ? 'Anlage' : 'Asset'} value={ticket.assetName || '—'} />
+        <Info label={locale === 'de' ? 'Komponente' : 'Asset'} value={ticket.assetName || '—'} />
         <Info label={locale === 'de' ? 'Fällig' : 'Due'} value={ticket.dueAt ? formatDate(ticket.dueAt) : '—'} />
       </div>
 

@@ -677,7 +677,7 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
             <TabsTrigger value="time"      className="text-xs gap-1.5"><Clock className="h-3.5 w-3.5" />{de ? 'Zeiten' : 'Time'}</TabsTrigger>
             <TabsTrigger value="work"      className="text-xs gap-1.5"><ListChecks className="h-3.5 w-3.5" />{de ? 'Arbeit' : 'Work'}</TabsTrigger>
             <TabsTrigger value="photos"    className="text-xs gap-1.5"><Camera className="h-3.5 w-3.5" />{de ? 'Fotos' : 'Photos'}</TabsTrigger>
-            <TabsTrigger value="installations" className="text-xs gap-1.5"><Wrench className="h-3.5 w-3.5" />{de ? 'Anlagen' : 'Installations'}</TabsTrigger>
+            <TabsTrigger value="installations" className="text-xs gap-1.5"><Wrench className="h-3.5 w-3.5" />{de ? 'Komponenten' : 'Components'}</TabsTrigger>
             <TabsTrigger value="history"   className="text-xs gap-1.5"><History className="h-3.5 w-3.5" />{de ? 'Historie' : 'History'}</TabsTrigger>
           </TabsList>
 

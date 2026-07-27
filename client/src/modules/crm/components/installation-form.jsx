@@ -128,11 +128,11 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
             <div>
               <DialogTitle className="text-[16px] font-semibold text-foreground">
                 {isEdit
-                  ? t('crm.installations.editInstallation', 'Installation bearbeiten')
-                  : t('crm.installations.newInstallation', 'Neue Installation')}
+                  ? t('crm.installations.editInstallation', 'Komponente bearbeiten')
+                  : t('crm.installations.newInstallation', 'Neue Komponente')}
               </DialogTitle>
               <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-                {t('crm.installations.formDesc', 'Anlage / Gerät am Standort (Heizkessel, Wärmepumpe, etc.).')}
+                {t('crm.installations.formDesc', 'Komponente am Objekt (Heizkessel, Wärmepumpe, etc.).')}
               </DialogDescription>
             </div>
           </div>
@@ -299,7 +299,7 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
               className="bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white gap-2"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isEdit ? t('common.save', 'Speichern') : t('crm.installations.createInstallation', 'Installation anlegen')}
+              {isEdit ? t('common.save', 'Speichern') : t('crm.installations.createInstallation', 'Komponente anlegen')}
             </Button>
           </div>
         </form>

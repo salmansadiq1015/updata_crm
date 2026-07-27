@@ -196,7 +196,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                 {isEdit ? t('crm.sites.editSite', 'Objekt bearbeiten') : t('crm.sites.newSite', 'Neues Objekt')}
               </DialogTitle>
               <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-                {t('crm.sites.formDesc', 'Gebäude oder Standort, an dem Installationen betrieben werden.')}
+                {t('crm.sites.formDesc', 'Gebäude oder Standort, an dem Komponenten betrieben werden.')}
               </DialogDescription>
             </div>
           </div>

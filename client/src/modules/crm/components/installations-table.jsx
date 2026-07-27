@@ -86,7 +86,7 @@ export function InstallationsTable() {
   const columns = useMemo(() => [
     {
       accessorKey: 'installationNumber',
-      header: t('crm.installations.title', 'Installation'),
+      header: t('crm.installations.title', 'Komponente'),
       size: 280,
       Cell: ({ row }) => {
         const i = row.original;
@@ -192,7 +192,7 @@ export function InstallationsTable() {
         </div>
         <div className="min-w-0">
           <h1 className="text-[18px] font-semibold text-foreground leading-tight">
-            {t('crm.installations.listTitle', 'Installations')}
+            {t('crm.installations.listTitle', 'Komponenten')}
           </h1>
           <p className="text-[13px] text-muted-foreground mt-0.5">
             {items.length} {t('crm.installations.listDesc', 'installations across all sites')}

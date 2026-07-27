@@ -47,19 +47,19 @@ export function InstallationsPanel({ siteId, customerId }) {
 
   const createMut = useMutation({
     mutationFn: (data) => installationService.createForSite(siteId, data),
-    onSuccess: () => { invalidate(); showSuccess(t('crm.installations.createdToast', 'Installation erstellt')); },
+    onSuccess: () => { invalidate(); showSuccess(t('crm.installations.createdToast', 'Komponente erstellt')); },
     onError: (err) => showError(err.message),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, data }) => installationService.update(id, data),
-    onSuccess: () => { invalidate(); showSuccess(t('crm.installations.updatedToast', 'Installation aktualisiert')); },
+    onSuccess: () => { invalidate(); showSuccess(t('crm.installations.updatedToast', 'Komponente aktualisiert')); },
     onError: (err) => showError(err.message),
   });
   const decommMut = useMutation({
     mutationFn: ({ id, reason }) => installationService.decommission(id, reason),
     onSuccess: () => {
       invalidate();
-      showSuccess(t('crm.installations.decommissionedToast', 'Installation ausser Betrieb'));
+      showSuccess(t('crm.installations.decommissionedToast', 'Komponente ausser Betrieb'));
       setDecommTarget(null);
       setDecommReason('');
     },
@@ -80,18 +80,18 @@ export function InstallationsPanel({ siteId, customerId }) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Wrench className="h-4 w-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">{t('crm.installations.title', 'Installationen')}</h3>
+            <h3 className="text-sm font-semibold">{t('crm.installations.title', 'Komponenten')}</h3>
             <span className="text-xs text-muted-foreground">({installations.length})</span>
           </div>
           <PermissionGate permission="crm:write">
             <Button size="sm" className="h-8 gap-1.5" onClick={() => { setEditInstallation(null); setFormOpen(true); }}>
-              <Plus className="h-3.5 w-3.5" /> {t('crm.installations.newInstallation', 'Neue Installation')}
+              <Plus className="h-3.5 w-3.5" /> {t('crm.installations.newInstallation', 'Neue Komponente')}
             </Button>
           </PermissionGate>
         </div>
 
         {installations.length === 0 ? (
-          <EmptyState title={t('crm.installations.empty', 'Keine Installationen')} description={t('crm.installations.emptyDesc', 'Fügen Sie Heizkessel, Wärmepumpen, etc. hinzu.')} />
+          <EmptyState title={t('crm.installations.empty', 'Keine Komponenten')} description={t('crm.installations.emptyDesc', 'Fügen Sie Heizkessel, Wärmepumpen, etc. hinzu.')} />
         ) : (
           <div className="grid gap-2 md:grid-cols-2">
             {installations.map((i) => (
@@ -122,11 +122,11 @@ export function InstallationsPanel({ siteId, customerId }) {
       <Dialog open={!!decommTarget} onOpenChange={(v) => !v && setDecommTarget(null)}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>{t('crm.installations.decommissionTitle', 'Installation ausser Betrieb nehmen')}</DialogTitle>
+            <DialogTitle>{t('crm.installations.decommissionTitle', 'Komponente ausser Betrieb nehmen')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
             <p className="text-sm text-muted-foreground">
-              {t('crm.installations.decommissionDescLong', 'Die Installation wird als ausser Betrieb markiert. Dieser Vorgang kann nicht direkt rückgängig gemacht werden.')}
+              {t('crm.installations.decommissionDescLong', 'Die Komponente wird als ausser Betrieb markiert. Dieser Vorgang kann nicht direkt rückgängig gemacht werden.')}
             </p>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">{t('crm.installations.decommissionReason', 'Grund')}*</Label>

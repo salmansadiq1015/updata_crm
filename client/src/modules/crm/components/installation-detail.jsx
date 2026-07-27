@@ -59,7 +59,7 @@ export function InstallationDetail() {
     mutationFn: (data) => installationService.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.crm.installations.detail(id) });
-      showSuccess(t('crm.installations.updatedToast', 'Installation aktualisiert'));
+      showSuccess(t('crm.installations.updatedToast', 'Komponente aktualisiert'));
     },
     onError: (err) => showError(err.message),
   });
@@ -67,7 +67,7 @@ export function InstallationDetail() {
   const decommMut = useMutation({
     mutationFn: (r) => installationService.decommission(id, r),
     onSuccess: () => {
-      showSuccess(t('crm.installations.decommissionedToast', 'Installation ausser Betrieb'));
+      showSuccess(t('crm.installations.decommissionedToast', 'Komponente ausser Betrieb'));
       if (installation?.siteId) router.push(`/crm/sites/${installation.siteId?._id || installation.siteId}`);
       else router.back();
     },
@@ -93,7 +93,7 @@ export function InstallationDetail() {
   ]);
 
   if (isLoading) return <InstallationDetailSkeleton />;
-  if (!installation) return <EmptyState title={t('crm.installations.notFound', 'Installation nicht gefunden')} description={t('crm.installations.notFoundDesc', 'Die angeforderte Installation existiert nicht.')} />;
+  if (!installation) return <EmptyState title={t('crm.installations.notFound', 'Komponente nicht gefunden')} description={t('crm.installations.notFoundDesc', 'Die angeforderte Komponente existiert nicht.')} />;
 
   const meta = INSTALLATION_TYPE_META[installation.type] || INSTALLATION_TYPE_META.other;
   const fuelMeta = installation.fuelType ? FUEL_TYPE_META[installation.fuelType] : null;
@@ -306,12 +306,12 @@ export function InstallationDetail() {
                 <PowerOff className="h-5 w-5 text-red-400" />
               </div>
               <DialogTitle className="text-[16px] font-semibold text-foreground">
-                {t('crm.installations.decommissionTitle', 'Installation ausser Betrieb nehmen')}
+                {t('crm.installations.decommissionTitle', 'Komponente ausser Betrieb nehmen')}
               </DialogTitle>
             </div>
           </DialogHeader>
           <div className="px-6 py-5 space-y-4">
-            <p className="text-[13px] text-muted-foreground">{t('crm.installations.decommissionDesc', 'Die Installation wird als ausser Betrieb markiert.')}</p>
+            <p className="text-[13px] text-muted-foreground">{t('crm.installations.decommissionDesc', 'Die Komponente wird als ausser Betrieb markiert.')}</p>
             <div className="space-y-1.5">
               <Label className="text-[12px] font-medium text-muted-foreground block">
                 {t('crm.installations.decommissionReason', 'Grund')} <span className="text-red-400">*</span>

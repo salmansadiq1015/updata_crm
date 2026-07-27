@@ -42,12 +42,12 @@ export function FieldOpsInstallationsTable({ siteId }) {
         </div>
         <div className="space-y-1">
           <p className="text-sm font-medium text-foreground/70">
-            {de ? 'Keine Anlagen gefunden' : 'No installations found'}
+            {de ? 'Keine Komponenten gefunden' : 'No components found'}
           </p>
           <p className="text-xs text-muted-foreground">
             {de
-              ? 'Anlagen werden im CRM-Modul gepflegt und dem Standort zugeordnet.'
-              : 'Installations are managed in the CRM module and linked to a site.'}
+              ? 'Komponenten werden im CRM-Modul gepflegt und dem Objekt zugeordnet.'
+              : 'Components are managed in the CRM module and linked to an object.'}
           </p>
         </div>
       </div>

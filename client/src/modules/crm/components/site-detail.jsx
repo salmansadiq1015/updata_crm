@@ -239,7 +239,7 @@ export function SiteDetail() {
       <Tabs defaultValue="installations" className="space-y-6">
         <TabsList variant="line">
           <TabsTrigger value="installations" className="gap-1.5">
-            <Wrench className="h-3.5 w-3.5" /> {t('crm.installations.title', 'Installationen')}
+            <Wrench className="h-3.5 w-3.5" /> {t('crm.installations.title', 'Komponenten')}
           </TabsTrigger>
           <TabsTrigger value="notes" className="gap-1.5">
             <FileText className="h-3.5 w-3.5" /> {t('crm.notes.title', 'Notizen')}

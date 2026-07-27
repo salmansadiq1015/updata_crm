@@ -565,63 +565,136 @@ class ScheduleService {
     return updated;
   }
 
-  async exportPdf(projectId, userId, meta = {}) {
+  /**
+   * Everything the Terminplan template needs: project header data, phases as
+   * colourable tasks (Firma + Telefon resolved from the partner company or the
+   * internal responsible), milestones, and the CI logo. Shared by the PDF and
+   * Excel exports so both always show the same plan.
+   */
+  async _buildTerminplanData(projectId) {
     const Project = (await import('./project.model.js')).default;
     const project = await Project.findById(projectId)
-      .populate('customerId', 'name')
-      .populate('projectManagerId', 'firstName lastName');
+      .populate('customerId', 'name phone mobile')
+      .populate('projectManagerId', 'firstName lastName phone email');
     if (!project) throw new NotFoundError('Project', projectId);
 
+    const { TASK_COLORS, buildTerminplanWeeks } = await import('./terminplan.renderer.js');
+
     const entries = await scheduleRepository.findByProjectId(projectId);
+    const phases = entries.filter((e) => e.entryType === 'PHASE');
 
-    const templateData = {
-      documentNumber: project.projectNumber,
-      documentDate: new Date().toISOString().split('T')[0],
-      projectName: project.name,
-      projectNumber: project.projectNumber,
-      customer: project.customerId ? { name: project.customerId.name } : null,
-      projectManager: project.projectManagerId
-        ? `${project.projectManagerId.firstName} ${project.projectManagerId.lastName}`
-        : null,
-      phases: entries.filter(e => e.entryType === 'PHASE').map(e => ({
+    // Resolve Firma / Telefon per phase without N+1 queries.
+    const Customer = (await import('../crm/customer.model.js')).default;
+    const User = (await import('../auth/user.model.js')).default;
+    const partnerIds = [...new Set(phases.map((p) => p.partnerCompanyId).filter(Boolean).map(String))];
+    const internalIds = [...new Set(phases.map((p) => p.responsibleTeamId).filter(Boolean).map(String))];
+    const [partners, internals] = await Promise.all([
+      partnerIds.length ? Customer.find({ _id: { $in: partnerIds } }).select('name phone mobile').lean() : [],
+      internalIds.length ? User.find({ _id: { $in: internalIds } }).select('firstName lastName phone').lean() : [],
+    ]);
+    const partnerById = new Map(partners.map((c) => [String(c._id), c]));
+    const internalById = new Map(internals.map((u) => [String(u._id), u]));
+
+    const tasks = phases.map((p, i) => {
+      const partner = p.partnerCompanyId ? partnerById.get(String(p.partnerCompanyId)) : null;
+      const internal = p.responsibleTeamId ? internalById.get(String(p.responsibleTeamId)) : null;
+      return {
+        name: p.name,
+        company: partner?.name
+          || (internal ? `${internal.firstName} ${internal.lastName}` : ''),
+        phone: partner?.phone || partner?.mobile || internal?.phone || '',
+        startDate: p.startDate,
+        endDate: p.endDate,
+        startHalf: p.startHalf || 'morning',
+        endHalf: p.endHalf || 'afternoon',
+        color: TASK_COLORS[i % TASK_COLORS.length],
+      };
+    });
+
+    const weeks = buildTerminplanWeeks(tasks);
+
+    const dated = tasks.filter((t) => t.startDate && t.endDate);
+    const chDate = (d) => new Date(d).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const periodLabel = dated.length
+      ? `${chDate(new Date(Math.min(...dated.map((t) => new Date(t.startDate)))))}-${chDate(new Date(Math.max(...dated.map((t) => new Date(t.endDate)))))}`
+      : '';
+
+    const pm = project.projectManagerId;
+    const contacts = pm
+      ? [[`${pm.firstName} ${pm.lastName}`, pm.phone, pm.email].filter(Boolean).join(', ')]
+      : [];
+
+    // CI logo, same asset the doctpl renderer uses.
+    let logoBuffer = null;
+    try {
+      const CIConfiguration = (await import('../doctpl/ciConfiguration.model.js')).default;
+      const { default: ciRenderAssetsService } = await import('../doctpl/ciRenderAssets.service.js');
+      const ciConfig = await CIConfiguration.findOne({ isActive: true }).lean();
+      if (ciConfig) logoBuffer = (await ciRenderAssetsService.prepare(ciConfig))?.logoBuffer || null;
+    } catch { /* no CI configured — export renders without logo */ }
+
+    return {
+      project,
+      title: `Terminplan ${project.name || ''}`.trim(),
+      projectName: [project.projectNumber, project.name].filter(Boolean).join(' — '),
+      periodLabel,
+      customerName: project.customerId?.name || '',
+      customerPhone: project.customerId?.phone || project.customerId?.mobile || '',
+      contacts,
+      logoBuffer,
+      tasks,
+      weeks,
+      milestones: entries.filter((e) => e.entryType === 'MILESTONE').map((e) => ({
         name: e.name,
-        startDate: e.startDate?.toISOString().split('T')[0],
-        endDate: e.endDate?.toISOString().split('T')[0],
-        status: e.status,
-      })),
-      milestones: entries.filter(e => e.entryType === 'MILESTONE').map(e => ({
-        name: e.name,
-        date: e.milestoneDate?.toISOString().split('T')[0],
-        status: e.status,
+        date: e.milestoneDate,
       })),
     };
+  }
 
-    // The document renderer has no schedule-specific layout, so render the plan
-    // as a rich-text body (Phasen + Meilensteine) that the BodyRenderer draws.
-    const STATUS_DE = {
-      PLANNED: 'Geplant', IN_PROGRESS: 'In Arbeit', COMPLETED: 'Abgeschlossen',
-      CANCELLED: 'Abgebrochen', WAIVED: 'Verzichtet',
-    };
-    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const isoToCh = (s) => (s ? s.split('-').reverse().join('.') : '');
-    const phaseLines = templateData.phases.map((p) => `<b>${esc(p.name)}</b> — ${isoToCh(p.startDate)} – ${isoToCh(p.endDate)} · ${STATUS_DE[p.status] || p.status}`);
-    const msLines = templateData.milestones.map((m) => `<b>${esc(m.name)}</b> — ${isoToCh(m.date)} · ${STATUS_DE[m.status] || m.status}`);
-    templateData.introduction = [
-      '<b>Phasen</b>',
-      phaseLines.length ? phaseLines.join('<br>') : '—',
-      '<br><b>Meilensteine</b>',
-      msLines.length ? msLines.join('<br>') : '—',
-    ].join('<br>');
+  async exportPdf(projectId, userId, meta = {}) {
+    const data = await this._buildTerminplanData(projectId);
+    const { renderTerminplanPdf } = await import('./terminplan.renderer.js');
+    const { buffer, pageCount } = await renderTerminplanPdf(data);
 
-    const documentGenerationService = (await import('../doctpl/documentGeneration.service.js')).default;
-    const generatedDoc = await documentGenerationService.generate({
-      templateType: 'project_schedule',
+    // Persist through the same path as doctpl documents so the export keeps
+    // appearing in the archive and the client download flow stays unchanged.
+    const fileName = `Terminplan_${data.project.projectNumber || projectId}.pdf`;
+    const { default: fileService } = await import('../files/file.service.js');
+    const fileMeta = await fileService.upload({
+      buffer,
+      originalName: fileName,
+      mimeType: 'application/pdf',
+      sizeBytes: buffer.length,
+      module: 'doctpl',
+      entityType: 'project_schedule',
+      entityId: projectId,
+      uploadedBy: userId,
+      bucket: 'documents',
+      folderPath: `pm/project_schedule`,
+      category: 'project_schedule',
+    });
+
+    // The template no longer drives the layout (the grid is drawn directly),
+    // but the archive record still links to it — same requirement as before.
+    const DocumentTemplate = (await import('../doctpl/documentTemplate.model.js')).default;
+    const template = await DocumentTemplate.findOne({ templateType: 'project_schedule', isActive: true, isDeleted: false }).lean();
+    if (!template) throw new NotFoundError('DocumentTemplate', 'type:project_schedule');
+    const { default: generatedDocumentRepository } = await import('../doctpl/generatedDocument.repository.js');
+    const generatedDoc = await generatedDocumentRepository.create({
+      templateId: template._id,
+      templateVersion: template.currentVersion,
+      documentType: 'project_schedule',
       sourceModule: 'pm',
       sourceRecordId: projectId,
-      data: templateData,
       language: 'de',
+      fileId: fileMeta._id,
+      fileName,
+      fileSizeBytes: buffer.length,
+      pageCount,
+      sourceCustomerId: data.project.customerId?._id || null,
+      sourceProjectId: data.project._id,
+      ownerUserId: userId,
       generatedBy: userId,
-      meta,
     });
 
     auditService.logEvent({

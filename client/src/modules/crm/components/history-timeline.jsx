@@ -230,7 +230,11 @@ function TimelineItem({ entry }) {
   // Audit entries carry a raw eventType as their title; translate it and, for
   // meetings, surface the meeting name (client feedback).
   const eventType = entry.type === 'audit' ? entry.meta?.eventType : null;
-  const displayTitle = eventType ? getActivityEventLabel(t, eventType) : (entry.title || 'Ereignis');
+  const displayTitle = eventType
+    ? getActivityEventLabel(t, eventType)
+    : entry.titleKey
+      ? t(entry.titleKey, entry.title || '', entry.titleVars || {})
+      : (entry.title || 'Ereignis');
   const auditDetail = entry.type === 'audit' ? (entry.meta?.details?.meetingTitle || '') : '';
   const date = entry.timestamp ? new Date(entry.timestamp) : null;
   const dateStr = date ? date.toLocaleDateString('de-CH', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';

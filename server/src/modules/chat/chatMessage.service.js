@@ -5,6 +5,7 @@ import chatAccessService from './chatAccess.service.js';
 import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { NotFoundError, AuthorizationError, ValidationError } from '../../shared/errors/AppError.js';
+import logger from '../../shared/logger/index.js';
 
 function userIdOf(user) {
   return String(user?._id ?? user);
@@ -115,7 +116,48 @@ const chatMessageService = {
       projectTeamIds,
     }, { source: 'chat' });
 
+    // Files/images shared in a project chat are also filed under the project so
+    // they are stored and visible there. Non-fatal: never block sending.
+    await chatMessageService._linkAttachmentToProject(room, message, senderId);
+
     return message;
+  },
+
+  /**
+   * Register a chat attachment as a project document so it appears in the
+   * project's Documents tab. Only for rooms linked to a project; skips when the
+   * same file is already linked. Failures are swallowed (the message is sent).
+   * @private
+   */
+  async _linkAttachmentToProject(room, message, uploadedBy) {
+    try {
+      const projectId = idOf(room.projectId);
+      if (!projectId || !message.attachmentFileId) return;
+
+      const FileMetadata = (await import('../files/file.model.js')).default;
+      const file = await FileMetadata.findById(message.attachmentFileId)
+        .select('originalName mimeType').lean();
+      if (!file) return;
+
+      // Skip if this exact file is already filed under the project.
+      const ProjectDocument = (await import('../pm/projectDocument.model.js')).default;
+      const existing = await ProjectDocument.findOne({ projectId, fileId: message.attachmentFileId })
+        .select('_id').lean();
+      if (existing) return;
+
+      const isImage = String(file.mimeType || '').startsWith('image/');
+      const documentService = (await import('../pm/document.service.js')).default;
+      await documentService.createFromStoredFile(projectId, {
+        fileId: message.attachmentFileId,
+        fileName: file.originalName || 'Chat-Anhang',
+        category: isImage ? 'PHOTOS' : 'OTHER',
+        uploadedBy,
+      });
+    } catch (err) {
+      logger.warn('Failed to file chat attachment under project', {
+        module: 'chat', roomId: String(room?._id), error: err.message,
+      });
+    }
   },
 
   async searchMessages(user, {

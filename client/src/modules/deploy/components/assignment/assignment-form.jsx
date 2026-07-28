@@ -190,7 +190,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const debouncedEmployeeSearch = useDebounce(employeeSearch, 250);
 
   const {
-    register, handleSubmit, reset, setValue, control,
+    register, handleSubmit, reset, setValue, getValues, control,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(assignmentSchema),
@@ -255,6 +255,33 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
 
   const employeeStartDatetime = normalizeDateTime(startDatetime, { isFullDay });
   const employeeEndDatetime = normalizeDateTime(endDatetime, { isFullDay, isEnd: true });
+
+  // Toggling Ganztägig switches the inputs between type="date" and
+  // type="datetime-local". The two accept different value formats, so the
+  // browser silently clears a value it can't parse — wiping dates the user
+  // already picked (e.g. from the calendar). Convert the current values on
+  // toggle so they survive: truncate to the day for full-day, and add a
+  // default working time when switching back to a timed assignment.
+  const handleFullDayToggle = (nextFullDay) => {
+    const convert = (value, isEnd) => {
+      if (!value) return value;
+      const datePart = value.slice(0, 10);
+      if (nextFullDay) return datePart;
+      return value.length > 10 ? value : `${datePart}T${isEnd ? '17:00' : '08:00'}`;
+    };
+    // Snapshot the values before flipping the type. Order matters: the inputs
+    // switch between type="date" and type="datetime-local" on isFullDay, and a
+    // browser clears a value the *current* type can't parse. So flip the type
+    // first, then write the converted values on the next frame — once the
+    // inputs have re-rendered with the type that accepts them.
+    const start = getValues('startDatetime');
+    const end = getValues('endDatetime');
+    setValue('isFullDay', nextFullDay);
+    requestAnimationFrame(() => {
+      setValue('startDatetime', convert(start, false), { shouldValidate: true });
+      setValue('endDatetime', convert(end, true), { shouldValidate: true });
+    });
+  };
   const { data: employees = [], isFetching: employeesFetching } = useDeployEmployees({
     enabled: open,
     search: debouncedEmployeeSearch,
@@ -330,7 +357,9 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
       recommendedCertifications: splitList(data.recommendedCertifications),
       colorCode: data.colorCode || null,
       recurrence: showRecurrence ? data.recurrence : null,
-      appointment: isCustomerAppointment ? data.appointment : null,
+      appointment: isCustomerAppointment && data.appointment && Object.values(data.appointment).some(Boolean)
+        ? data.appointment
+        : null,
     };
 
     try {
@@ -651,7 +680,7 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
               <div className="mb-3 flex items-center gap-3 rounded-xl border border-border/70 bg-background/50 px-3 py-2.5">
                 <Switch
                   checked={isFullDay}
-                  onCheckedChange={(v) => setValue('isFullDay', v)}
+                  onCheckedChange={handleFullDayToggle}
                 />
                 <Label className="text-sm font-medium">{t('deploy.form.fullDay', 'Ganztägig')}</Label>
               </div>

@@ -23,6 +23,7 @@ import { useQopCustomerProjects, useQopCustomerSearch, useQopDepartments } from 
 import { useQuotationTemplateMutations } from '../hooks/use-qop-template-mutations';
 import { LineItemsEditor } from './line-items-editor';
 import { SelectTemplateDialog } from './select-template-dialog';
+import { TextBlockPickerDialog } from '@/modules/catalog';
 import { CURRENCIES, DEFAULT_VALIDITY_DAYS, PAYMENT_TERMS_PRESETS } from '../constants/qop-constants';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -69,6 +70,8 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   const debouncedProjectQuery = useDebounce(projectQuery.trim(), 250);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // Which text field the Textbaustein picker fills: 'introduction' | 'termsAndConditions' | 'clientSideWorks'
+  const [textBlockTarget, setTextBlockTarget] = useState(null);
 
   const { createQuotation, updateQuotation } = useQuotationMutations();
   const { recordUsage } = useQuotationTemplateMutations();
@@ -127,6 +130,26 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   }, [quotation, open]);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+
+  // Insert a chosen Textbaustein into the targeted field. Einleitung and AGB are
+  // rich-text (append the HTML); Bauseitige Arbeiten renders as plain text in the
+  // PDF, so append the block's text without markup.
+  const applyTextBlock = (block) => {
+    const field = textBlockTarget;
+    if (!field) return;
+    const html = block?.bodyHtml || '';
+    setForm((f) => {
+      const current = f[field] || '';
+      if (field === 'clientSideWorks') {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const text = (tmp.textContent || '').trim();
+        return { ...f, clientSideWorks: current ? `${current}\n${text}` : text };
+      }
+      return { ...f, [field]: `${current}${html}` };
+    });
+    setTextBlockTarget(null);
+  };
 
   const applyTemplate = (tpl) => {
     if (!tpl) return;
@@ -364,7 +387,17 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
 
             {/* Introduction — rich text */}
             <div className="flex flex-col gap-1.5">
-              <Label>{t('qop.form.introduction', 'Introduction')}</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label>{t('qop.form.introduction', 'Introduction')}</Label>
+                <button
+                  type="button"
+                  onClick={() => setTextBlockTarget('introduction')}
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  {t('qop.form.insertTextBlock', 'Textbaustein einfügen')}
+                </button>
+              </div>
               <RichTextEditor
                 value={form.introduction}
                 onChange={(html) => set('introduction', html)}
@@ -439,7 +472,17 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>{t('qop.form.termsAndConditions', 'Terms & Conditions')}</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>{t('qop.form.termsAndConditions', 'Terms & Conditions')}</Label>
+                    <button
+                      type="button"
+                      onClick={() => setTextBlockTarget('termsAndConditions')}
+                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      {t('qop.form.insertTextBlock', 'Textbaustein einfügen')}
+                    </button>
+                  </div>
                   <RichTextEditor
                     value={form.termsAndConditions}
                     onChange={(html) => set('termsAndConditions', html)}
@@ -471,7 +514,17 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>{t('qop.form.clientSideWorks', 'Bauseitige Arbeiten und Lieferungen')}</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>{t('qop.form.clientSideWorks', 'Bauseitige Arbeiten und Lieferungen')}</Label>
+                    <button
+                      type="button"
+                      onClick={() => setTextBlockTarget('clientSideWorks')}
+                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      {t('qop.form.insertTextBlock', 'Textbaustein einfügen')}
+                    </button>
+                  </div>
                   <Textarea
                     rows={2}
                     value={form.clientSideWorks}
@@ -518,6 +571,12 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
           applyTemplate(tpl);
           setShowTemplateDialog(false);
         }}
+      />
+
+      <TextBlockPickerDialog
+        open={!!textBlockTarget}
+        onClose={() => setTextBlockTarget(null)}
+        onSelect={applyTextBlock}
       />
     </>
   );

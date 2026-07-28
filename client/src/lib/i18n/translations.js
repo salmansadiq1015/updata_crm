@@ -3438,6 +3438,7 @@ export const translations = {
     'qop.form.language': 'Dokument-Sprache',
     'qop.form.globalDiscount': 'Globalrabatt %',
     'qop.form.introduction': 'Einleitung',
+    'qop.form.insertTextBlock': 'Textbaustein einfügen',
     'qop.form.introductionPlaceholder': 'Einleitungstext für das Dokument...',
     'qop.form.positions': 'Positionen',
     'qop.form.notes': 'Bemerkungen',
@@ -7683,6 +7684,7 @@ export const translations = {
     'qop.form.language': 'Document Language',
     'qop.form.globalDiscount': 'Global Discount %',
     'qop.form.introduction': 'Introduction',
+    'qop.form.insertTextBlock': 'Insert text block',
     'qop.form.introductionPlaceholder': 'Introduction text for the document...',
     'qop.form.positions': 'Line Items',
     'qop.form.notes': 'Notes',
@@ -11406,6 +11408,7 @@ export const translations = {
     'qop.form.subsidyNote': 'Note sur les subventions',
     'qop.form.subsidyNotePlaceholder': 'p.ex. Subventions Bale-Campagne ...',
     'qop.form.clientSideWorks': 'Travaux et fournitures a charge du client',
+    'qop.form.insertTextBlock': 'Insérer un bloc de texte',
     'qop.form.clientSideWorksPlaceholder': 'p.ex. Degager la zone de travail ...',
 
     // Accounting module
@@ -13393,6 +13396,7 @@ export const translations = {
     'qop.form.subsidyNote': 'Nota sulle sovvenzioni',
     'qop.form.subsidyNotePlaceholder': 'es. Sovvenzioni Basilea Campagna ...',
     'qop.form.clientSideWorks': 'Lavori e forniture a carico del cliente',
+    'qop.form.insertTextBlock': 'Inserisci blocco di testo',
     'qop.form.clientSideWorksPlaceholder': 'es. Liberare la zona di lavoro ...',
 
     // Accounting module

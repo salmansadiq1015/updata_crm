@@ -497,9 +497,12 @@ class AssignmentService {
 
   async _recordOverriddenConflicts(assignmentId, conflicts, userId, overrideReason) {
     const conflictService = (await import('./conflict.service.js')).default;
+    // Overridden, not resolved: keep it in the active list so it stays visible
+    // and can be reassigned when capacity frees up. resolvedBy stays null until
+    // it is actually resolved.
     return conflictService.recordConflicts(assignmentId, conflicts, {
-      resolved: true,
-      resolvedBy: userId,
+      overridden: true,
+      resolved: false,
       overrideReason,
     });
   }

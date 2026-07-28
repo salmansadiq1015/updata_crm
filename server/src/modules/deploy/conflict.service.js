@@ -204,6 +204,7 @@ class ConflictService {
       description: c.description,
       conflictingWithId: c.conflictingWithId || null,
       resolved: resolution.resolved || false,
+      overridden: resolution.overridden || false,
       resolvedBy: resolution.resolvedBy || null,
       overrideReason: resolution.overrideReason || null,
     }));

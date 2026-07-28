@@ -65,9 +65,46 @@ class MeetingService {
     const meeting = await this.getById(meetingId);
     this._publishMeetingEvent(EVENT_TYPES.MEETING_CREATED, meeting, userId, { reason: 'created' });
     await this._logAudit('meeting.created', userId, meetingId, meta, { title: meeting.title });
+    await this._logCrmActivity('meeting.created', meeting, userId, meta);
     await this._invalidateCaches(meetingId);
 
     return meeting;
+  }
+
+  /**
+   * Mirror the meeting into the customer's and object's activity timeline
+   * (client feedback): a CRM-scoped audit event carries the customer and the
+   * linked project's site, so both crm/customers/:id and the object's history
+   * show that a meeting was created — with its name. Central, cross-area trace.
+   */
+  async _logCrmActivity(eventType, meeting, userId, meta = {}) {
+    const customerId = meeting.customerId?._id || meeting.customerId || null;
+    const project = meeting.projectId && typeof meeting.projectId === 'object' ? meeting.projectId : null;
+    let siteId = project?.siteId?._id || project?.siteId || null;
+    // getById may not populate the project's site; resolve it when a project is linked.
+    if (!siteId && (meeting.projectId?._id || meeting.projectId)) {
+      try {
+        const Project = (await import('../pm/project.model.js')).default;
+        const proj = await Project.findById(meeting.projectId?._id || meeting.projectId).select('siteId').lean();
+        siteId = proj?.siteId || null;
+      } catch { /* project module absent — customer entry still logged */ }
+    }
+    if (!customerId && !siteId) return; // nothing to attach it to
+
+    auditService.logEvent({
+      eventType,
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: {
+        meetingId: meeting._id?.toString?.() || String(meeting._id),
+        meetingTitle: meeting.title,
+        ...(customerId ? { customerId: String(customerId) } : {}),
+        ...(siteId ? { siteId: String(siteId) } : {}),
+      },
+      module: 'crm',
+    });
   }
 
   async list(queryParams = {}) {

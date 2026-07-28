@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/select';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
+import { getActivityEventLabel } from '@/modules/crm/constants/activity-events';
 import {
   Activity, FileText, Wrench, Clock, AlertTriangle, Info, ChevronRight,
   ShoppingCart, Receipt, Image as ImageIcon, ClipboardList, History,
@@ -222,8 +224,14 @@ function Toolbar({
 }
 
 function TimelineItem({ entry }) {
+  const { t } = useLanguage();
   const config = getTypeConfig(entry);
   const Icon = config.icon;
+  // Audit entries carry a raw eventType as their title; translate it and, for
+  // meetings, surface the meeting name (client feedback).
+  const eventType = entry.type === 'audit' ? entry.meta?.eventType : null;
+  const displayTitle = eventType ? getActivityEventLabel(t, eventType) : (entry.title || 'Ereignis');
+  const auditDetail = entry.type === 'audit' ? (entry.meta?.details?.meetingTitle || '') : '';
   const date = entry.timestamp ? new Date(entry.timestamp) : null;
   const dateStr = date ? date.toLocaleDateString('de-CH', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
   const timeStr = date ? date.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) : '';
@@ -242,7 +250,7 @@ function TimelineItem({ entry }) {
       </div>
       <div className="min-w-0 flex-1 pb-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-semibold">{entry.title || 'Ereignis'}</p>
+          <p className="text-sm font-semibold">{displayTitle}</p>
           {entry.status && (
             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
               {entry.status}
@@ -258,9 +266,9 @@ function TimelineItem({ entry }) {
           </span>
           {href && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
         </div>
-        {entry.summary && (
+        {(auditDetail || entry.summary) && (
           <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2 break-words">
-            {entry.summary}
+            {auditDetail || entry.summary}
           </p>
         )}
         {(metaLine || entry.actor) && (

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { useCoarseMutations } from '../../hooks/use-coarse-mutations';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { CoarseProjectPicker } from './coarse-project-picker';
 
 export function CoarseBulkDialog({ open, onOpenChange, employeeId, year, weekFrom, weekTo }) {
   const { t } = useLanguage();
@@ -47,14 +48,8 @@ export function CoarseBulkDialog({ open, onOpenChange, employeeId, year, weekFro
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label className="text-xs">{t('deploy.coarse.projectId', 'Projekt-ID')}</Label>
-            <Input
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              placeholder={t('deploy.coarse.projectIdPlaceholder', 'Projekt-ID eingeben')}
-              className="h-8 text-xs"
-              required
-            />
+            <Label className="text-xs">{t('deploy.coarse.project', 'Projekt')}</Label>
+            <CoarseProjectPicker value={projectId} onChange={setProjectId} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Input } from '@/components/ui/input';
@@ -22,17 +22,28 @@ const FIELDS = [
 ];
 
 function RichTextEditor({ value, onChange, labelList }) {
+  // Tiptap registers onUpdate once, so calling `onChange` directly would capture
+  // a stale closure. Route it through a ref so keystrokes always reach the
+  // latest handler and are never dropped.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
   const editor = useEditor({
     // Next.js renders this on the server first; Tiptap must defer its initial
     // render to the client to avoid an SSR hydration mismatch (crashes the tab).
     immediatelyRender: false,
     extensions: [StarterKit],
     content: value || '',
-    onUpdate: ({ editor: activeEditor }) => onChange(activeEditor.getHTML()),
+    onUpdate: ({ editor: activeEditor }) => onChangeRef.current(activeEditor.getHTML()),
   });
 
   useEffect(() => {
-    if (editor && editor.getHTML() !== value) {
+    if (!editor) return;
+    // Only pull in external value changes when the user isn't typing. Resetting
+    // while focused (or from a stale/delayed value after save) would wipe what
+    // was just entered — the reported "text is lost after saving" bug.
+    if (editor.isFocused) return;
+    if (editor.getHTML() !== (value || '')) {
       editor.commands.setContent(value || '', false);
     }
   }, [editor, value]);

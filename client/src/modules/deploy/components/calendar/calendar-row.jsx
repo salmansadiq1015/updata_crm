@@ -86,6 +86,72 @@ function computeBlockStyle(assignment, days, view) {
 }
 
 /**
+ * On a time conflict, overlapping assignments are laid out one below the other
+ * (lanes) inside the row so every Einsatz stays fully visible (client feedback).
+ * Horizontal position encodes time, so two blocks conflict when their
+ * [left, left+width] ranges intersect. Each block keeps its horizontal
+ * placement; conflicting ones split the vertical band into greedy columns.
+ * A block with no conflict keeps its full height.
+ *
+ * Input: [{ assignment, style }] (style.left/width as "NN%"). Returns the same,
+ * with style.top/height adjusted for stacked blocks.
+ */
+function applyConflictLanes(blocks) {
+  const EPS = 0.05;
+  const items = blocks
+    .map((b, index) => ({
+      block: b,
+      index,
+      start: parseFloat(b.style.left) || 0,
+      end: (parseFloat(b.style.left) || 0) + (parseFloat(b.style.width) || 0),
+    }))
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const lane = new Map();       // index -> column
+  const laneCount = new Map();  // index -> total columns in its cluster
+
+  let cluster = [];
+  let clusterEnd = -Infinity;
+  const flush = () => {
+    if (!cluster.length) return;
+    const colEnds = [];
+    for (const it of cluster) {
+      let col = colEnds.findIndex((endPos) => it.start >= endPos - EPS);
+      if (col === -1) { col = colEnds.length; colEnds.push(it.end); }
+      else colEnds[col] = it.end;
+      lane.set(it.index, col);
+    }
+    for (const it of cluster) laneCount.set(it.index, colEnds.length);
+    cluster = [];
+    clusterEnd = -Infinity;
+  };
+
+  for (const it of items) {
+    if (cluster.length && it.start >= clusterEnd - EPS) flush();
+    cluster.push(it);
+    clusterEnd = Math.max(clusterEnd, it.end);
+  }
+  flush();
+
+  return blocks.map((b, index) => {
+    const count = laneCount.get(index) || 1;
+    if (count <= 1) return b;
+    const baseTop = typeof b.style.top === 'number' ? b.style.top : 2;
+    const band = typeof b.style.height === 'number' ? b.style.height : 20;
+    const laneHeight = band / count;
+    const col = lane.get(index) || 0;
+    return {
+      ...b,
+      style: {
+        ...b.style,
+        top: baseTop + col * laneHeight,
+        height: Math.max(12, laneHeight - 1),
+      },
+    };
+  });
+}
+
+/**
  * Position a PM schedule entry (full-day, date-based) across the day columns.
  * PM entries have no time-of-day, so they span whole days. Returns null when
  * the entry does not intersect the visible days.
@@ -255,21 +321,22 @@ export const CalendarRow = memo(function CalendarRow({
           );
         })}
 
-        {/* Assignment blocks positioned absolutely over the grid */}
-        {assignments.map((assignment) => {
-          const blockStyle = computeBlockStyle(assignment, days, view);
-          if (!blockStyle) return null;
-          return (
-            <CalendarAssignmentBlock
-              key={assignment._id}
-              assignment={assignment}
-              style={blockStyle}
-              canDrag={canWrite}
-              onClick={onAssignmentClick}
-              onResizeStart={canWrite ? onResizeStart : undefined}
-            />
-          );
-        })}
+        {/* Assignment blocks positioned absolutely over the grid. Overlapping
+            ones are stacked into lanes so no Einsatz is hidden behind another. */}
+        {applyConflictLanes(
+          assignments
+            .map((assignment) => ({ assignment, style: computeBlockStyle(assignment, days, view) }))
+            .filter((b) => b.style),
+        ).map(({ assignment, style }) => (
+          <CalendarAssignmentBlock
+            key={assignment._id}
+            assignment={assignment}
+            style={style}
+            canDrag={canWrite}
+            onClick={onAssignmentClick}
+            onResizeStart={canWrite ? onResizeStart : undefined}
+          />
+        ))}
 
         {/* Read-only PM schedule entries (project work) as a bottom band */}
         {pmScheduleEntries.map((entry) => {

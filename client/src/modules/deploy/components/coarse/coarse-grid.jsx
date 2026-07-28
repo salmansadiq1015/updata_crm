@@ -64,7 +64,7 @@ export function CoarseGrid({
             <div key={row.id} className="group flex border-b border-border/40 last:border-b-0 hover:bg-muted/20">
               <div className={cn(
                 NAME_COL,
-                'sticky left-0 z-10 flex items-center justify-between gap-2 border-r border-border/60 bg-card px-3 py-2 transition-colors group-hover:bg-muted/30',
+                'sticky left-0 z-10 flex flex-col justify-center gap-1.5 border-r border-border/60 bg-card px-3 py-2 transition-colors group-hover:bg-muted/30',
               )}
               >
                 <div className="flex min-w-0 items-center gap-2">
@@ -80,15 +80,18 @@ export function CoarseGrid({
                     ? <span className="truncate text-xs font-medium">{row.name}</span>
                     : <EmployeeAvatarRow name={row.name} />}
                 </div>
+                {/* Explicit, always-visible entry point to multi-week planning —
+                    it used to be a hover-only icon that users never found. */}
                 {!isProjectView && (
                   <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 w-fit gap-1 rounded-md px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
                     onClick={() => onBulkRow(row.id)}
                     aria-label={t('deploy.coarse.bulkTitle', 'Mehrwochen-Zuteilung')}
                   >
-                    <Layers className="h-3.5 w-3.5" />
+                    <Layers className="h-3 w-3 shrink-0" />
+                    {t('deploy.coarse.bulkTitle', 'Mehrwochen-Zuteilung')}
                   </Button>
                 )}
               </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Search, Plus, MoreHorizontal, FileText, CheckCircle,
+  Search, Plus, MoreHorizontal, FileText, CheckCircle, Eye,
   Send, DollarSign, History, Download, XCircle, Edit, Trash2, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -363,7 +363,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem onClick={() => handleGeneratePdf(id)}>
-                      <Download className="h-4 w-4 mr-2" />{t('qop.invoices.downloadPdf', 'PDF herunterladen')}
+                      <Eye className="h-4 w-4 mr-2" />{t('qop.actions.preview', 'Vorschau')}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setHistoryFor(id)}>

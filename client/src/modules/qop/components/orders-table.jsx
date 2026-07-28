@@ -16,8 +16,10 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { showError } from '@/lib/toast';
 import { useOrders } from '../hooks/use-qop-queries';
 import { useOrderMutations } from '../hooks/use-qop-mutations';
+import { orderService } from '../services/order-service';
 import { OrderStatusBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
 import { OrderDetailDialog } from './order-detail-dialog';
@@ -110,6 +112,17 @@ export function OrdersTable({ advancedFilters = {} }) {
     const id = order._id ?? order.id;
     if (!id) return;
     if (confirm(t('qop.orders.deleteConfirm', 'Delete this order?'))) deleteOrder.mutate(id);
+  };
+
+  const handlePreviewPdf = async (id) => {
+    try {
+      const res = await orderService.generateDocument(id);
+      const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
+      if (url) window.open(url, '_blank');
+      else showError(t('qop.actions.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    } catch (err) {
+      showError(err?.message || t('qop.actions.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    }
   };
 
   const handleBulkDelete = async () => {
@@ -262,6 +275,9 @@ export function OrdersTable({ advancedFilters = {} }) {
                     <DropdownMenuContent align="end" className="w-48">
                       <DropdownMenuItem onClick={() => setDetailId(id)}>
                         <Eye className="mr-2 h-4 w-4" />{t('qop.orders.viewDetails', 'View Details')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handlePreviewPdf(id)}>
+                        <FileText className="mr-2 h-4 w-4" />{t('qop.actions.preview', 'Vorschau')}
                       </DropdownMenuItem>
                       {!['COMPLETED', 'CANCELLED'].includes(order.status) && (
                         <DropdownMenuItem onClick={() => openEdit(order)}>

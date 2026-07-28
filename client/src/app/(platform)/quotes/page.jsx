@@ -21,7 +21,7 @@ const TAB_TRANSLATIONS = {
 const TAB_STATUSES = {
   quotations: ['DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED'],
   orders: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
-  invoices: ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'],
+  invoices: ['DRAFT', 'FINALIZED', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'],
 };
 
 function fmt(amount, currency = 'CHF') {

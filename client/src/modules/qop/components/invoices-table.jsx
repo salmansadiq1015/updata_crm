@@ -35,7 +35,7 @@ import { InvoiceDetailDialog } from './invoice-detail-dialog';
 import { QopBulkActionBar, QopPaginationControls, useQopCursorPagination } from './qop-pagination';
 import { VALID_INVOICE_TRANSITIONS } from '../constants/qop-constants';
 
-const INV_STATUSES = ['', 'DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
+const INV_STATUSES = ['', 'DRAFT', 'FINALIZED', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
 
 function fmtDate(d, lang) {
   if (!d) return '—';
@@ -295,7 +295,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
         {items.map((inv) => {
           const id = inv._id ?? inv.id;
           const canFinalize = inv.status === 'DRAFT';
-          const canSend     = inv.status === 'DRAFT';
+          const canSend     = inv.status === 'DRAFT' || inv.status === 'FINALIZED';
           const canPay      = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status);
           const canWriteOff = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status);
 

@@ -151,14 +151,14 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
                 <Download className="h-4 w-4 mr-1.5" />PDF
               </Button>
               {invoice?.status === 'DRAFT' && (
-                <>
-                  <Button size="sm" variant="outline" onClick={() => finalizeInvoice.mutate(invoiceId)}>
-                    {t('qop.invoice.finalize', 'Abschliessen')}
-                  </Button>
-                  <Button size="sm" onClick={() => sendInvoice.mutate(invoiceId)}>
-                    <Send className="h-4 w-4 mr-1.5" />{t('qop.invoice.send', 'Senden')}
-                  </Button>
-                </>
+                <Button size="sm" variant="outline" onClick={() => finalizeInvoice.mutate(invoiceId)}>
+                  {t('qop.invoice.finalize', 'Abschliessen')}
+                </Button>
+              )}
+              {['DRAFT', 'FINALIZED'].includes(invoice?.status) && (
+                <Button size="sm" onClick={() => sendInvoice.mutate(invoiceId)}>
+                  <Send className="h-4 w-4 mr-1.5" />{t('qop.invoice.send', 'Senden')}
+                </Button>
               )}
               {isCancellable && (
                 <Button

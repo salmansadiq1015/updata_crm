@@ -198,11 +198,40 @@ class OrderService {
     const cacheKey = `qop:order:${id}`;
     const order = await cacheManager.getOrSet(
       cacheKey,
-      () => orderRepository.findById(id),
+      async () => {
+        const doc = await orderRepository.findById(id);
+        if (!doc) return null;
+        // Surface the site's billing address (Rechnungsadresse) and ownership
+        // (Eigentümer) so the order detail can show them alongside the customer.
+        const parties = await this._resolveSiteParties(doc.projectId);
+        return { ...doc, ...parties };
+      },
       ENTITY_TTL,
     );
     if (!order) throw new NotFoundError('Order', id);
     return order;
+  }
+
+  // Resolve the parties attached to the order's site (via its project). Returns
+  // only parties that actually carry content; failures are non-fatal.
+  async _resolveSiteParties(projectId) {
+    const empty = { siteBillingAddress: null, siteOwnership: null };
+    const pid = projectId && typeof projectId === 'object' ? projectId._id : projectId;
+    if (!pid) return empty;
+    const hasContent = (p) => Boolean(p && (p.name || p.street || p.city));
+    try {
+      const Project = (await import('../pm/project.model.js')).default;
+      const project = await Project.findById(pid).select('siteId').lean();
+      if (!project?.siteId) return empty;
+      const Site = (await import('../crm/site.model.js')).default;
+      const site = await Site.findById(project.siteId).select('billingAddress ownership').lean();
+      return {
+        siteBillingAddress: hasContent(site?.billingAddress) ? site.billingAddress : null,
+        siteOwnership: hasContent(site?.ownership) ? site.ownership : null,
+      };
+    } catch {
+      return empty;
+    }
   }
 
   async list(queryParams) {

@@ -43,6 +43,22 @@ function InfoRow({ label, value, mono = false }) {
   );
 }
 
+// Billing address (Rechnungsadresse) / ownership (Eigentümer) carried by the
+// order's site — shown read-only; maintained on the site itself.
+function PartyBlock({ title, party }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <div className="mb-1.5 text-xs font-semibold text-muted-foreground">{title}</div>
+      <div className="space-y-0.5 text-[13px] text-foreground">
+        {party.name && <p className="font-medium">{party.name}</p>}
+        {party.careOf && <p className="text-muted-foreground">c/o {party.careOf}</p>}
+        {party.street && <p>{party.street}</p>}
+        {(party.postalCode || party.city) && <p>{[party.postalCode, party.city].filter(Boolean).join(' ')}</p>}
+      </div>
+    </div>
+  );
+}
+
 function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading }) {
   const { locale: language, t } = useLanguage();
   const allowed = ORDER_TRANSITIONS[order?.status] ?? [];
@@ -66,6 +82,17 @@ function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading }) {
           value={<AmountDisplay amount={order?.grandTotalRounded ?? order?.grandTotal} currency={order?.currency} className="font-semibold" />}
         />
       </div>
+
+      {(order?.siteBillingAddress || order?.siteOwnership) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {order?.siteBillingAddress && (
+            <PartyBlock title={t('qop.orders.billingAddress', 'Rechnungsadresse')} party={order.siteBillingAddress} />
+          )}
+          {order?.siteOwnership && (
+            <PartyBlock title={t('qop.orders.ownership', 'Eigentümer')} party={order.siteOwnership} />
+          )}
+        </div>
+      )}
 
       <div className="flex gap-2 flex-wrap">
         {allowed.map((s) => {

@@ -154,7 +154,15 @@ class DocumentGenerationService {
 
     const bankDetails = ciConfig?.companyDetails?.bankDetails || {};
     const customer = renderData.customer || {};
-    const amount = Number(renderData.amountDue ?? renderData.grandTotalRounded ?? renderData.grandTotal ?? 0);
+    // QR-bill amount: use the outstanding balance so a partially-paid invoice's
+    // slip asks for what is left. But once fully paid (amountDue === 0) fall back
+    // to the billed amount — net of advance deductions for a final invoice — so
+    // the document can still be regenerated with a valid, non-zero QR amount.
+    const billedAmount = renderData.invoiceType === 'invoice_final'
+      ? Number(renderData.netBalance ?? renderData.grandTotalRounded ?? renderData.grandTotal ?? 0)
+      : Number(renderData.grandTotalRounded ?? renderData.grandTotal ?? 0);
+    const outstanding = Number(renderData.amountDue ?? 0);
+    const amount = outstanding > 0 ? outstanding : billedAmount;
     const iban = bankDetails.qrIban || bankDetails.iban || renderData.qrIban || renderData.iban;
 
     renderData.qrBill = {

@@ -25,6 +25,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { useInvoices, useInvoiceHistory } from '../hooks/use-qop-queries';
 import { useInvoiceMutations } from '../hooks/use-qop-mutations';
 import { invoiceService } from '../services/invoice-service';
+import { showError } from '@/lib/toast';
 import { InvoiceStatusBadge, InvoiceTypeBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
@@ -129,7 +130,10 @@ export function InvoicesTable({ advancedFilters = {} }) {
       const res = await invoiceService.generateDocument(id);
       const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
       if (url) window.open(url, '_blank');
-    } catch { /* silently fail */ }
+      else showError(t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    } catch (err) {
+      showError(err?.message || t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    }
   };
 
   const handleFinalize = (id) => {

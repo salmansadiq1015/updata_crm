@@ -337,6 +337,9 @@ export function InvoicesTable({ advancedFilters = {} }) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => setDetail(id)}>
+                      <FileText className="h-4 w-4 mr-2" />{t('qop.table.details', 'Details')}
+                    </DropdownMenuItem>
                     {inv.status === 'DRAFT' && (
                       <DropdownMenuItem onClick={() => setEditingInvoice(inv)}>
                         <Edit className="h-4 w-4 mr-2" />{t('qop.table.edit', 'Edit')}

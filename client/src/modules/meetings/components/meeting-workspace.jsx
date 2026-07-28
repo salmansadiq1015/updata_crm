@@ -1225,6 +1225,21 @@ export function MeetingWorkspace() {
     if (id && id !== selectedId) setSelectedId(id);
   }, [searchParams, selectedId]);
 
+  // One-click RSVP from the invitation email: ?meetingId=X&rsvp=ACCEPTED|DECLINED
+  // records the logged-in user's response, then drops the param from the URL.
+  const rsvpAppliedRef = useRef(false);
+  useEffect(() => {
+    const id = searchParams.get('meetingId');
+    const rsvp = (searchParams.get('rsvp') || '').toUpperCase();
+    if (!id || (rsvp !== 'ACCEPTED' && rsvp !== 'DECLINED') || rsvpAppliedRef.current) return;
+    rsvpAppliedRef.current = true;
+    mutations.rsvp.mutate({ id, rsvpStatus: rsvp });
+    // Drop the rsvp param immediately, so a later refresh can't re-apply a stale
+    // response over a choice the user has since changed in the app.
+    router.replace(`/scheduling/meetings?meetingId=${id}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const filters = useMemo(() => ({
     q: debouncedSearch || undefined,
     status,

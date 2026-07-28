@@ -16,6 +16,7 @@ export type Task = {
   priority: TaskPriority;
   listId: string | null;
   assigneeId: string | null;
+  assigneeIds: string[];
   createdBy: string | null;
   updatedBy: string | null;
   parentTaskId: string | null;
@@ -87,7 +88,7 @@ export type TaskPage = {
 };
 
 export type TaskPatch = Partial<
-  Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'assigneeId' | 'startDate' | 'dueDate' | 'listId' | 'sortOrder' | 'projectId' | 'orderId'>
+  Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'assigneeId' | 'assigneeIds' | 'startDate' | 'dueDate' | 'listId' | 'sortOrder' | 'projectId' | 'orderId'>
 > & {
   expectedVersion?: number;
   completeSubtasks?: boolean;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, UserRound, Check } from 'lucide-react';
+import { ChevronDown, UserRound, Users, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -16,9 +16,9 @@ type WorkspaceUser = {
 };
 
 type AssigneeSelectorProps = {
-  assigneeId: string | null;
+  assigneeIds: string[];
   users: WorkspaceUser[];
-  onAssigneeChange: (id: string | null) => void;
+  onAssigneeChange: (ids: string[]) => void;
   size?: 'sm' | 'default';
   disabled?: boolean;
 };
@@ -45,17 +45,30 @@ function Avatar({ user, size = 'sm' }: { user: WorkspaceUser; size?: 'sm' | 'def
   );
 }
 
-export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = 'sm', disabled = false }: AssigneeSelectorProps) {
+export function AssigneeSelector({ assigneeIds, users, onAssigneeChange, size = 'sm', disabled = false }: AssigneeSelectorProps) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
-  const assigned = users.find((u) => u.id === assigneeId) ?? null;
+  const selectedSet = new Set(assigneeIds ?? []);
+  const assignedUsers = users.filter((u) => selectedSet.has(u.id));
   const filtered = users.filter((u) =>
     `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(search.toLowerCase())
   );
 
   const isSmall = size === 'sm';
+
+  const toggleUser = (userId: string) => {
+    const next = selectedSet.has(userId)
+      ? assigneeIds.filter((id) => id !== userId)
+      : [...assigneeIds, userId];
+    onAssigneeChange(next);
+  };
+
+  const clearAll = () => {
+    onAssigneeChange([]);
+    setSearch('');
+  };
 
   return (
     <Popover open={open} onOpenChange={(next) => { if (!disabled) setOpen(next); }}>
@@ -68,14 +81,20 @@ export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = '
             'hover:bg-accent/60 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-background',
             isSmall ? 'h-7 px-2 text-xs' : 'h-8 px-2.5 text-sm',
-            !assigned && 'text-muted-foreground border-dashed',
+            assignedUsers.length === 0 && 'text-muted-foreground border-dashed',
           )}
         >
-          {assigned ? (
+          {assignedUsers.length > 0 ? (
             <>
-              <Avatar user={assigned} size={size} />
+              <div className="flex -space-x-1.5 shrink-0">
+                {assignedUsers.slice(0, 3).map((u) => (
+                  <Avatar key={u.id} user={u} size={size} />
+                ))}
+              </div>
               <span className="flex-1 truncate text-left font-medium">
-                {assigned.firstName} {assigned.lastName}
+                {assignedUsers.length === 1
+                  ? `${assignedUsers[0].firstName} ${assignedUsers[0].lastName}`
+                  : `${assignedUsers.length} ${t('tasks.assignees', 'Zugewiesene')}`}
               </span>
             </>
           ) : (
@@ -100,47 +119,50 @@ export function AssigneeSelector({ assigneeId, users, onAssigneeChange, size = '
         </div>
 
         <div className="max-h-56 overflow-y-auto py-1">
-          {/* Unassign option */}
+          {/* Unassign all option */}
           <button
             type="button"
             className={cn(
               'w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-accent rounded-sm mx-0',
-              !assigneeId && 'bg-accent/70',
+              assignedUsers.length === 0 && 'bg-accent/70',
             )}
-            onClick={() => { onAssigneeChange(null); setOpen(false); setSearch(''); }}
+            onClick={clearAll}
           >
             <span className="h-6 w-6 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center shrink-0">
               <UserRound className="h-3 w-3 text-muted-foreground/60" />
             </span>
             <span className="text-xs text-muted-foreground">{t('tasks.unassigned', 'Unassigned')}</span>
-            {!assigneeId && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
+            {assignedUsers.length === 0 && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
           </button>
 
-          {/* User list */}
-          {filtered.map((user) => (
-            <button
-              type="button"
-              key={user.id}
-              className={cn(
-                'w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-accent',
-                user.id === assigneeId && 'bg-accent/70',
-              )}
-              onClick={() => { onAssigneeChange(user.id); setOpen(false); setSearch(''); }}
-            >
-              <Avatar user={user} size="default" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-medium leading-tight">
-                  {user.firstName} {user.lastName}
+          {/* User list — multi-select */}
+          {filtered.map((user) => {
+            const isSelected = selectedSet.has(user.id);
+            return (
+              <button
+                type="button"
+                key={user.id}
+                className={cn(
+                  'w-full flex items-center gap-2.5 px-2.5 py-2 text-left transition-colors hover:bg-accent',
+                  isSelected && 'bg-accent/70',
+                )}
+                onClick={() => toggleUser(user.id)}
+              >
+                <Avatar user={user} size="default" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium leading-tight">
+                    {user.firstName} {user.lastName}
+                  </div>
+                  <div className="truncate text-[10px] text-muted-foreground leading-tight mt-0.5">
+                    {user.email}
+                  </div>
                 </div>
-                <div className="truncate text-[10px] text-muted-foreground leading-tight mt-0.5">
-                  {user.email}
-                </div>
-              </div>
-              {user.id === assigneeId && (
-                <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />
-              )}
-            </button>
-          ))}
+                {isSelected && (
+                  <Check className="ml-auto h-3.5 w-3.5 text-primary shrink-0" />
+                )}
+              </button>
+            );
+          })}
 
           {filtered.length === 0 && (
             <p className="px-3 py-3 text-xs text-muted-foreground text-center">{t('tasks.noMembers', 'No members found')}</p>

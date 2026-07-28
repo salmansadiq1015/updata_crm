@@ -12,6 +12,7 @@ const taskSchema = new mongoose.Schema(
     priority: { type: String, enum: TASK_PRIORITIES, default: 'NONE' },
     listId: { type: mongoose.Schema.Types.ObjectId, ref: 'TaskList', required: true },
     assigneeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    assigneeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     parentTaskId: { type: mongoose.Schema.Types.ObjectId, ref: 'Task', default: null },
@@ -47,6 +48,7 @@ const taskSchema = new mongoose.Schema(
 // Indexes
 taskSchema.index({ listId: 1, isDeleted: 1 });
 taskSchema.index({ assigneeId: 1, isDeleted: 1 });
+taskSchema.index({ assigneeIds: 1, isDeleted: 1 });
 taskSchema.index({ status: 1 });
 taskSchema.index({ priority: 1 });
 taskSchema.index({ startDate: 1 });

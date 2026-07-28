@@ -1,7 +1,7 @@
 import Joi from 'joi';
 import { objectId } from '../../shared/validation/commonSchemas.js';
 
-const ASSIGNMENT_TYPES = ['SERVICE_CALL', 'PROJECT_WORK', 'MAINTENANCE', 'INSTALLATION', 'INSPECTION', 'OTHER'];
+const ASSIGNMENT_TYPES = ['SERVICE_CALL', 'PROJECT_WORK', 'MAINTENANCE', 'INSTALLATION', 'INSPECTION', 'WAREHOUSE_MAINTENANCE', 'OTHER'];
 const ASSIGNMENT_STATUSES = ['PLANNED', 'CONFIRMED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED'];
 const ASSIGNMENT_TARGET_TYPES = ['EMPLOYEE', 'TEAM', 'DEPARTMENT'];
 const PRIORITIES = ['NORMAL', 'HIGH', 'URGENT'];
@@ -19,7 +19,7 @@ const appointmentSchema = Joi.object({
   appointmentWindow: optionalText(100),
   confirmationMethod: Joi.string().valid(...CONFIRMATION_METHODS).allow('', null),
   customerNotes: optionalLongText(2000),
-}).min(1);
+});
 
 const recurrenceSchema = Joi.object({
   frequency: Joi.string().valid(...RECURRENCE_FREQUENCIES).required(),

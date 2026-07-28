@@ -363,10 +363,10 @@ export default function TaskDetailDrawer({
 
               <div className="ml-auto">
                 <AssigneeSelector
-                  assigneeId={task.assigneeId ?? null}
+                  assigneeIds={task.assigneeIds ?? (task.assigneeId ? [task.assigneeId] : [])}
                   users={users ?? []}
-                  onAssigneeChange={(id) =>
-                    onPatchTask(task.id, { assigneeId: id, expectedVersion: task.version })
+                  onAssigneeChange={(ids) =>
+                    onPatchTask(task.id, { assigneeIds: ids, expectedVersion: task.version })
                   }
                   size="sm"
                   disabled={task.locked}

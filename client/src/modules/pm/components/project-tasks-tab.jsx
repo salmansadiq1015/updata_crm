@@ -18,6 +18,7 @@ import { taskApi } from '@/modules/tasks/services/task-api';
 import { useWorkspaceUsers } from '@/modules/tasks/hooks/use-workspace-users';
 import { TaskListView } from '@/modules/tasks/ui/task-list-view';
 import TaskDetailDrawer from '@/modules/tasks/ui/task-detail-drawer';
+import { AssigneeSelector } from '@/modules/tasks/ui/assignee-selector';
 import {
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -94,7 +95,7 @@ export function ProjectTasksTab({ projectId }) {
 
   // ── Task creation ─────────────────────────────────────────
   const [newTitle, setNewTitle] = useState('');
-  const [newAssignee, setNewAssignee] = useState('');
+  const [newAssignees, setNewAssignees] = useState([]);
   const [newPriority, setNewPriority] = useState('NONE');
   const [newDueDate, setNewDueDate] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -201,7 +202,7 @@ export function ProjectTasksTab({ projectId }) {
     createMut.mutate({
       title,
       priority: newPriority,
-      ...(newAssignee ? { assigneeId: newAssignee } : {}),
+      ...(newAssignees.length ? { assigneeIds: newAssignees } : {}),
       ...(newDueDate ? { dueDate: newDueDate } : {}),
     });
   };
@@ -264,18 +265,12 @@ export function ProjectTasksTab({ projectId }) {
                 className="h-9"
                 autoFocus
               />
-              <Select value={newAssignee || 'none'} onValueChange={(v) => setNewAssignee(v === 'none' ? '' : v)}>
-                <SelectTrigger className="h-9 text-xs">
-                  <UserRound className="h-3.5 w-3.5 mr-1 shrink-0 text-muted-foreground" />
-                  <SelectValue placeholder={language === 'de' ? 'Zuweisen' : 'Assign'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{language === 'de' ? 'Nicht zugewiesen' : 'Unassigned'}</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>{u.firstName} {u.lastName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <AssigneeSelector
+                assigneeIds={newAssignees}
+                users={users}
+                onAssigneeChange={setNewAssignees}
+                size="default"
+              />
               <Select value={newPriority} onValueChange={setNewPriority}>
                 <SelectTrigger className="h-9 text-xs">
                   <Flag className="h-3.5 w-3.5 mr-1 shrink-0 text-muted-foreground" />

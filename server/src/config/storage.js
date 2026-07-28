@@ -71,6 +71,10 @@ export const ALLOWED_MIME_TYPES = {
     'image/webp',
     'image/heic',
     'image/heif',
+    // Emails: meeting/project documents often include forwarded mails
+    // (.eml = message/rfc822, .msg = Outlook).
+    'message/rfc822',
+    'application/vnd.ms-outlook',
   ],
   photos: [
     'image/jpeg',

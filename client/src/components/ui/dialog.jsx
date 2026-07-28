@@ -52,15 +52,28 @@ function DialogContent({
   children,
   showCloseButton = true,
   hideClose,
+  // Modals hold in-progress input, so a stray click outside must not discard
+  // it: by default the dialog no longer closes on an outside interaction
+  // (client feedback, applied project-wide). Escape and the close button still
+  // work. A dialog that genuinely wants outside-click dismissal opts in with
+  // dismissableOnOutsideClick; an explicit onInteractOutside still wins.
+  onInteractOutside,
+  dismissableOnOutsideClick = false,
   ...props
 }) {
   const { t } = useLanguage();
+
+  const handleInteractOutside = (event) => {
+    if (onInteractOutside) { onInteractOutside(event); return; }
+    if (!dismissableOnOutsideClick) event.preventDefault();
+  };
 
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
+        onInteractOutside={handleInteractOutside}
         className={cn(
           "fixed top-1/2 left-1/2 z-50 flex w-[calc(100%-1rem)] max-h-[92dvh] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/95 p-0 text-sm text-card-foreground shadow-[0_28px_90px_rgba(0,0,0,0.42)] ring-1 ring-foreground/[0.06] duration-200 outline-none supports-backdrop-filter:backdrop-blur-xl sm:w-full sm:max-w-4xl data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.97] data-open:slide-in-from-bottom-2 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-[0.97] data-closed:slide-out-to-bottom-2",
           className,

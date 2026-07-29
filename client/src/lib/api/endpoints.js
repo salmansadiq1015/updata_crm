@@ -145,6 +145,7 @@ export const ENDPOINTS = Object.freeze({
     NEWSLETTER_SCHEDULE: (id) => `/crm/newsletters/${id}/schedule`,
     NEWSLETTER_CANCEL: (id) => `/crm/newsletters/${id}/cancel`,
     NEWSLETTER_SEND: (id) => `/crm/newsletters/${id}/send`,
+    NEWSLETTER_REVERT: (id) => `/crm/newsletters/${id}/revert`,
     NEWSLETTER_STATS: (id) => `/crm/newsletters/${id}/stats`,
     NEWSLETTER_COUNT_RECIPIENTS: '/crm/newsletters/count-recipients',
   },

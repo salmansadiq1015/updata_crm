@@ -335,6 +335,59 @@ class NewsletterService {
   }
 
   /**
+   * Revert a sent/sending newsletter back to draft status.
+   */
+  async revertToDraft(id, userId, meta = {}) {
+    const existing = await this.getById(id);
+
+    if (!['sent', 'sending'].includes(existing.status)) {
+      throw new ConflictError(`Cannot revert newsletter in '${existing.status}' status — only sent or sending newsletters can be reverted`);
+    }
+
+    const updated = await newsletterRepository.updateById(id, {
+      $set: {
+        status: 'draft',
+        sentAt: null,
+        updatedBy: userId,
+      },
+      $unset: {
+        'stats.sent': '',
+        'stats.delivered': '',
+        'stats.failed': '',
+        'stats.opened': '',
+      },
+    });
+
+    await this._invalidateEntityCache(id);
+    await this._invalidateListCache();
+
+    eventBus.publish(EVENT_TYPES.NEWSLETTER_CANCELLED, {
+      newsletterId: id,
+      userId,
+      action: 'revert_to_draft',
+    }, { source: 'crm:newsletters' });
+
+    auditService.logEvent({
+      eventType: 'newsletter.reverted',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { newsletterId: id, previousStatus: existing.status },
+      module: 'crm',
+    });
+
+    logger.info('Newsletter reverted to draft', {
+      module: 'crm',
+      action: 'newsletter.revert',
+      newsletterId: id,
+      previousStatus: existing.status,
+    });
+
+    return updated;
+  }
+
+  /**
    * Get delivery stats for a newsletter.
    */
   async getStats(id) {

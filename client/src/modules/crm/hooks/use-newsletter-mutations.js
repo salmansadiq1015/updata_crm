@@ -18,6 +18,7 @@ export function useNewsletterMutations({
   onSchedule,
   onCancel,
   onSend,
+  onRevert,
 } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
@@ -86,5 +87,15 @@ export function useNewsletterMutations({
     onError: (err) => showError(err.message),
   });
 
-  return { create, update, remove, schedule, cancel, send };
+  const revert = useMutation({
+    mutationFn: (id) => newsletterService.revertToDraft(id),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('crm.newsletterReverted', 'Newsletter reverted to draft'));
+      onRevert?.(res);
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  return { create, update, remove, schedule, cancel, send, revert };
 }

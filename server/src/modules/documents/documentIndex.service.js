@@ -63,6 +63,15 @@ function compactObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== null && entry !== ''));
 }
 
+// Section split (Dokumente / Dokumente mit Visum / Archiv). Only project
+// documents carry the archived/visum flags; every other source is an ordinary
+// current document (falls in "documents").
+function matchesSection(doc, section) {
+  if (!section || section === 'all') return true;
+  const docSection = doc.archived ? 'archiv' : (doc.visum ? 'visum' : 'documents');
+  return docSection === section;
+}
+
 function sortDocuments(items, sortOrder) {
   const direction = sortOrder === 'asc' ? 1 : -1;
   return items.sort((left, right) => {
@@ -141,7 +150,8 @@ class DocumentIndexService {
       this._listMobileDocuments(query, fetchLimit, permissions, user),
     ]);
 
-    const sorted = sortDocuments(sources.flat().filter((item) => isAfterCursor(item, cursor, query.sortOrder)), query.sortOrder);
+    const flat = sources.flat().filter((item) => matchesSection(item, query.section));
+    const sorted = sortDocuments(flat.filter((item) => isAfterCursor(item, cursor, query.sortOrder)), query.sortOrder);
     const pageItems = sorted.slice(0, limit);
     const hasNext = sorted.length > limit;
     return {

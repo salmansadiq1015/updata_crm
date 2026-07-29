@@ -9,6 +9,8 @@ export const listDocumentsSchema = {
   query: cursorPagination.keys({
     source: Joi.string().valid(...DOCUMENT_SOURCES, 'all').default('all'),
     origin: Joi.string().valid(...DOCUMENT_ORIGINS, 'all').default('all'),
+    // Document section: Dokumente / Dokumente mit Visum / Archiv.
+    section: Joi.string().valid('all', 'documents', 'visum', 'archiv').default('all'),
     documentType: Joi.string().trim().max(100),
     category: Joi.string().trim().max(100),
     status: Joi.string().trim().max(80),

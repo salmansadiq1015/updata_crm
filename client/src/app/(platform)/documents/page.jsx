@@ -9,6 +9,8 @@ import { useDebounce } from '@/shared/hooks/use-debounce';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { cn } from '@/lib/utils';
+import { DOCUMENT_SECTIONS } from '@/modules/pm/constants/pm-constants';
 import { showError, showSuccess } from '@/lib/toast';
 import { DocumentPreviewDrawer } from '@/modules/doctpl/components/DocumentPreviewDrawer';
 import { DocumentRepositoryFilters } from '@/modules/documents/components/document-repository-filters';
@@ -23,6 +25,7 @@ import {
 const PAGE_SIZE = 25;
 
 export default function DocumentsPage() {
+  const [section, setSection] = useState('documents');
   const [source, setSource] = useState('all');
   const [origin, setOrigin] = useState('all');
   const [search, setSearch] = useState('');
@@ -38,7 +41,7 @@ export default function DocumentsPage() {
   const [busyId, setBusyId] = useState(null);
 
   const debouncedSearch = useDebounce(search, 300).trim();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { hasPermission, isAdmin } = usePermissions();
   const canWrite = isAdmin || hasPermission(PERMISSIONS.DOCUMENTS_WRITE);
   const canDelete = isAdmin || hasPermission(PERMISSIONS.DOCUMENTS_DELETE);
@@ -46,6 +49,7 @@ export default function DocumentsPage() {
 
   const filters = useMemo(() => ({
     limit: PAGE_SIZE,
+    section,
     source,
     origin,
     sortOrder,
@@ -55,7 +59,7 @@ export default function DocumentsPage() {
     ...(category.trim() ? { category: category.trim() } : {}),
     ...(dateFrom ? { dateFrom } : {}),
     ...(dateTo ? { dateTo } : {}),
-  }), [activeCursor, category, dateFrom, dateTo, debouncedSearch, documentType, origin, sortOrder, source]);
+  }), [activeCursor, category, dateFrom, dateTo, debouncedSearch, documentType, origin, sortOrder, source, section]);
 
   const { data, isLoading, isFetching, error, refetch } = useDocumentRepository(filters);
   const download = useDownloadRepositoryDocument();
@@ -166,6 +170,28 @@ export default function DocumentsPage() {
           </Button>
         ) : null}
       </PageHeader>
+
+      {/* Section tabs — Dokumente / Dokumente mit Visum / Archiv */}
+      <div className="flex items-center gap-1 border-b border-border/60">
+        {DOCUMENT_SECTIONS.map((sec) => {
+          const SectionIcon = sec.icon;
+          const active = section === sec.id;
+          return (
+            <button
+              key={sec.id}
+              type="button"
+              onClick={() => { setSection(sec.id); resetPaging(); }}
+              className={cn(
+                'relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                active ? sec.activeCls : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <SectionIcon className="h-3.5 w-3.5" />
+              {language === 'de' ? sec.label : sec.labelEn}
+            </button>
+          );
+        })}
+      </div>
 
       <DocumentRepositoryFilters
         search={search}

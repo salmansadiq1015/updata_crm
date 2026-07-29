@@ -394,16 +394,26 @@ export default function TaskDetailDrawer({
                         {formatDate(task.startDate, t('tasks.notSet'))}
                       </span>
                       {task.startDate && (
-                        <button
-                          type="button"
+                        /* span, not button — a button cannot nest inside the row's button */
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          aria-label={t('tasks.clearStartDate', 'Startdatum entfernen')}
                           className="ml-1 rounded p-0.5 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
                           onClick={(e) => {
                             e.stopPropagation();
                             onPatchTask(task.id, { startDate: null, expectedVersion: task.version });
                           }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onPatchTask(task.id, { startDate: null, expectedVersion: task.version });
+                            }
+                          }}
                         >
                           <X className="h-3 w-3 text-muted-foreground" />
-                        </button>
+                        </span>
                       )}
                       <input
                         ref={startInputRef}
@@ -521,8 +531,10 @@ export default function TaskDetailDrawer({
                         {t('tasks.noActivity')}
                       </p>
                     )}
-                    {(notesQuery.data ?? []).map((note) => (
-                      <ActivityNote key={note.id} note={note} users={users} />
+                    {(notesQuery.data ?? []).map((note, index) => (
+                      /* Some realtime-appended notes arrive without an id yet —
+                         fall back to a positional key so React doesn't warn. */
+                      <ActivityNote key={note.id || `note-${index}`} note={note} users={users} />
                     ))}
 
                     {/* Add note */}

@@ -51,6 +51,18 @@ const projectDocumentSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    // Visum (sign-off): a document with visumBy set is "visiert" and appears in
+    // the "Dokumente mit Visum" section. Cleared to move it back to "Dokumente".
+    visumBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    visumAt: { type: Date, default: null },
+    // Archived documents (typically superseded old versions) move to the
+    // "Archiv" section and out of the two current-document sections.
+    archived: { type: Boolean, default: false, index: true },
+    archivedAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
   },
@@ -61,6 +73,7 @@ const projectDocumentSchema = new mongoose.Schema(
 
 // --- Indexes ---
 projectDocumentSchema.index({ projectId: 1, category: 1 });
+projectDocumentSchema.index({ projectId: 1, archived: 1 });
 projectDocumentSchema.index({ isDeleted: 1 });
 projectDocumentSchema.index({ fileId: 1 });
 

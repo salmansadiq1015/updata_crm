@@ -378,6 +378,7 @@ class DocumentIndexService {
 
     const docs = await ProjectDocument.find(filter)
       .populate({ path: 'fileId', select: 'originalName mimeType sizeBytes folderPath category' })
+      .populate({ path: 'visumBy', select: 'firstName lastName' })
       .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
       .limit(limit)
       .lean();
@@ -548,6 +549,17 @@ class DocumentIndexService {
       uploadedBy: toStringId(doc.uploadedBy),
       createdAt: normalizeDate(doc.createdAt),
       updatedAt: normalizeDate(doc.updatedAt),
+      // Section flags for the 3-way split (Dokumente / mit Visum / Archiv).
+      archived: Boolean(doc.archived),
+      visum: doc.visumBy
+        ? {
+            by: toStringId(doc.visumBy),
+            byName: (doc.visumBy && typeof doc.visumBy === 'object')
+              ? [doc.visumBy.firstName, doc.visumBy.lastName].filter(Boolean).join(' ')
+              : null,
+            at: normalizeDate(doc.visumAt),
+          }
+        : null,
       metadata: { version: doc.version, previousVersionId: toStringId(doc.previousVersionId), isGenerated: Boolean(doc.isGenerated) },
       canDelete: true,
     });

@@ -15,6 +15,7 @@ import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
 import { SiteMapCard, buildGoogleMapsUrl } from './site-map-card';
 import { SiteDocumentsTab } from './site-documents-tab';
+import { SiteEmailButton } from './site-email-dialog';
 import { SiteBusinessTab } from './site-business-tab';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
@@ -191,6 +192,9 @@ export function SiteDetail() {
           </div>
 
           <div className="flex items-center gap-2">
+            {canWrite && (
+              <SiteEmailButton siteId={id} defaultTo={parentCustomer?.email} />
+            )}
             {canWrite && isActive && (
               <Button
                 variant="outline"

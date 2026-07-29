@@ -28,6 +28,7 @@ import { useBreadcrumbTrail } from '@/stores/breadcrumb-store';
 import {
   Pencil, Archive, Building2, MapPin, Key, Home,
   Wrench, FileText, Image as ImageIcon, Activity, Files, Receipt,
+  User, Phone, Smartphone, Mail,
 } from 'lucide-react';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
@@ -73,12 +74,13 @@ export function SiteDetail() {
   });
 
   // getById does not populate the customer, so fetch it separately: the edit
-  // form needs its address to offer "Gleich wie Kunde".
+  // form needs its address to offer "Gleich wie Kunde", and the header shows the
+  // customer's contact data on every tab. Loaded whenever a parent exists.
   const parentCustomerId = site?.customerId?._id || site?.customerId || null;
   const { data: parentCustomer } = useQuery({
     queryKey: queryKeys.crm.customers.detail(parentCustomerId),
     queryFn: () => customerService.getCustomerById(parentCustomerId),
-    enabled: !!parentCustomerId && formOpen,
+    enabled: !!parentCustomerId,
   });
 
   const updateMut = useMutation({
@@ -211,6 +213,42 @@ export function SiteDetail() {
             )}
           </div>
         </div>
+
+        {/* Customer contact — kept in the persistent header so it stays visible
+            on every tab (client requirement). */}
+        {customerId && (
+          <div className="px-6 pb-5">
+            <div className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400">
+                <User className="h-3.5 w-3.5" /> {t('crm.sites.customerLabel', 'Kunde')}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px]">
+                <button
+                  type="button"
+                  onClick={() => router.push(`/crm/customers/${customerId}`)}
+                  className="font-medium text-foreground hover:underline underline-offset-2"
+                >
+                  {parentCustomer?.name || customerName || '—'}
+                </button>
+                {parentCustomer?.phone && (
+                  <a href={`tel:${parentCustomer.phone}`} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+                    <Phone className="h-3.5 w-3.5" /> {parentCustomer.phone}
+                  </a>
+                )}
+                {parentCustomer?.mobile && (
+                  <a href={`tel:${parentCustomer.mobile}`} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+                    <Smartphone className="h-3.5 w-3.5" /> {parentCustomer.mobile}
+                  </a>
+                )}
+                {parentCustomer?.email && (
+                  <a href={`mailto:${parentCustomer.email}`} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
+                    <Mail className="h-3.5 w-3.5" /> {parentCustomer.email}
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {site.accessInstructions && (
           <div className="px-6 pb-5">

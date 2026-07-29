@@ -52,6 +52,7 @@ import notificationsRoutes, {
 } from './modules/notifications/notifications.routes.js';
 import integrationsRoutes, { calendarSyncRoutes } from './modules/integrations/integrations.routes.js';
 import widgetPublicRoutes from './modules/integrations/widgetPublic.routes.js';
+import newsletterImageRoutes from './modules/crm/newsletter/newsletterImage.routes.js';
 import aiRoutes from './modules/ai/ai.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 import chatRoutes from './modules/chat/chat.routes.js';
@@ -173,6 +174,7 @@ export function createApp() {
   app.use("/api/v1/ai", aiRoutes);
   app.use("/api/v1/admin/integrations", integrationsRoutes);
   app.use("/api/v1/public/widget", widgetPublicRoutes);
+  app.use("/api/v1/public/newsletter-images", newsletterImageRoutes);
   app.use("/api/v1/users/me/calendar", calendarSyncRoutes);
   app.use("/api/v1/webhooks/email", webhookRoutes);
   app.use("/api/v1/files", fileRoutes);

@@ -6,6 +6,23 @@ import logger from '../shared/logger/index.js';
 const BATCH_SIZE = 100;
 
 /**
+ * Rewrite newsletter image URLs from presigned S3 URLs to stable proxy URLs.
+ *
+ * Looks for `<img>` tags with a `data-file-id` attribute and replaces the
+ * `src` with the public proxy endpoint so images remain accessible after
+ * the presigned URL expires.
+ */
+function rewriteImageUrls(html, baseUrl) {
+  return html.replace(
+    /<img([^>]*?)data-file-id="([a-f0-9]{24})"([^>]*?)>/gi,
+    (match, _before, fileId) => {
+      const proxyUrl = `${baseUrl}/api/v1/public/newsletter-images/${fileId}`;
+      return match.replace(/src="[^"]*"/, `src="${proxyUrl}"`);
+    },
+  );
+}
+
+/**
  * Newsletter dispatch job.
  *
  * Processes newsletter deliveries in batches of 100.
@@ -66,7 +83,7 @@ export class NewsletterDispatchWorker extends BaseWorker {
             + `&token=${encodeURIComponent(token)}`;
           const unsubscribeFooter = `<p style="font-size:12px;color:#888">Abmelden / Unsubscribe: `
             + `<a href="${unsubscribeUrl}">hier</a></p>`;
-          const bodyHtml = `${newsletter.bodyHtml || ''}${unsubscribeFooter}`;
+          const bodyHtml = rewriteImageUrls(newsletter.bodyHtml || '', config.client.uri) + unsubscribeFooter;
 
           // Enqueue individual email via the existing email dispatch infrastructure
           const sendMail = (await import('../shared/mail/mail.js')).default;

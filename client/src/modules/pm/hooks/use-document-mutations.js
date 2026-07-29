@@ -65,5 +65,23 @@ export function useDocumentMutations(projectId, {
     onError: (err) => showError(err.message),
   });
 
-  return { upload, updateMetadata, remove, restore, generate, saveDraft, emailDocument };
+  const setVisum = useMutation({
+    mutationFn: ({ docId, visiert = true }) => documentService.setVisum(projectId, docId, visiert),
+    onSuccess: (_, v) => {
+      invalidate();
+      showSuccess(v.visiert === false ? t('documents.visumRemoved', 'Visum entfernt') : t('documents.visumSet', 'Dokument visiert'));
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  const setArchived = useMutation({
+    mutationFn: ({ docId, archived = true }) => documentService.setArchived(projectId, docId, archived),
+    onSuccess: (_, v) => {
+      invalidate();
+      showSuccess(v.archived === false ? t('documents.restoredFromArchive', 'Aus Archiv wiederhergestellt') : t('documents.archived', 'Ins Archiv verschoben'));
+    },
+    onError: (err) => showError(err.message),
+  });
+
+  return { upload, updateMetadata, remove, restore, generate, saveDraft, emailDocument, setVisum, setArchived };
 }

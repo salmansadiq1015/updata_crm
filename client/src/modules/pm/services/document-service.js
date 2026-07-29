@@ -44,6 +44,20 @@ export const documentService = {
     return res.data;
   },
 
+  // Visum (sign-off): visiert=true signs off, false clears it.
+  async setVisum(projectId, docId, visiert = true) {
+    const url = ENDPOINTS.PM.DOCUMENT_VISUM(projectId, docId);
+    const res = visiert ? await apiClient.post(url) : await apiClient.delete(url);
+    return res.data;
+  },
+
+  // Archive: archived=true moves to Archiv, false restores it.
+  async setArchived(projectId, docId, archived = true) {
+    const url = ENDPOINTS.PM.DOCUMENT_ARCHIVE(projectId, docId);
+    const res = archived ? await apiClient.post(url) : await apiClient.delete(url);
+    return res.data;
+  },
+
   async generateDocument(projectId, { templateType, overrides = {}, draftId = null } = {}) {
     const res = await apiClient.post(ENDPOINTS.PM.DOCUMENTS_GENERATE(projectId), {
       templateType,

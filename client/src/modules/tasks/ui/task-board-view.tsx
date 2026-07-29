@@ -25,17 +25,26 @@ type WorkspaceUser = {
   lastName?: string;
 };
 
-function AssigneeCell({ assigneeId, users = [] }: { assigneeId: string | null; users: WorkspaceUser[] }) {
-  const user = users.find((u) => u.id === assigneeId);
-  if (!user) return null;
-  const inits = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
+function AssigneeCell({ assigneeIds, assigneeId, users = [] }: { assigneeIds?: string[]; assigneeId?: string | null; users: WorkspaceUser[] }) {
+  const ids = assigneeIds?.length ? assigneeIds : (assigneeId ? [assigneeId] : []);
+  const matched = ids.map((id) => users.find((u) => u.id === id)).filter(Boolean) as WorkspaceUser[];
+  if (matched.length === 0) return null;
   return (
-    <span
-      className="h-5 w-5 rounded-full bg-primary/20 text-primary text-[9px] font-medium flex items-center justify-center shrink-0"
-      title={`${user.firstName} ${user.lastName}`}
-    >
-      {inits}
-    </span>
+    <div className="flex -space-x-1.5">
+      {matched.slice(0, 3).map((user) => {
+        const inits = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
+        return (
+          <span
+            key={user.id}
+            className="h-5 w-5 rounded-full bg-primary/20 text-primary text-[9px] font-medium flex items-center justify-center shrink-0 ring-1 ring-background"
+            title={`${user.firstName} ${user.lastName}`}
+          >
+            {inits}
+          </span>
+        );
+      })}
+      {matched.length > 3 && <span className="text-[10px] text-muted-foreground ml-1">+{matched.length - 3}</span>}
+    </div>
   );
 }
 
@@ -114,7 +123,7 @@ function TaskCardSurface({
         {task.noteCount > 0 ? <span className="inline-flex items-center gap-1"><MessageSquare className="h-3 w-3" />{task.noteCount}</span> : null}
         {task.attachmentCount > 0 ? <span className="inline-flex items-center gap-1"><Paperclip className="h-3 w-3" />{task.attachmentCount}</span> : null}
         <span className="ml-auto">
-          <AssigneeCell assigneeId={task.assigneeId} users={users} />
+          <AssigneeCell assigneeIds={task.assigneeIds} assigneeId={task.assigneeId} users={users} />
         </span>
       </div>
     </article>

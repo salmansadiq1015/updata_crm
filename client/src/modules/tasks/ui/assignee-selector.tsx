@@ -50,7 +50,8 @@ export function AssigneeSelector({ assigneeIds, users, onAssigneeChange, size = 
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
-  const selectedSet = new Set(assigneeIds ?? []);
+  const ids = Array.isArray(assigneeIds) ? assigneeIds : [];
+  const selectedSet = new Set(ids);
   const assignedUsers = users.filter((u) => selectedSet.has(u.id));
   const filtered = users.filter((u) =>
     `${u.firstName} ${u.lastName} ${u.email}`.toLowerCase().includes(search.toLowerCase())
@@ -60,8 +61,8 @@ export function AssigneeSelector({ assigneeIds, users, onAssigneeChange, size = 
 
   const toggleUser = (userId: string) => {
     const next = selectedSet.has(userId)
-      ? assigneeIds.filter((id) => id !== userId)
-      : [...assigneeIds, userId];
+      ? ids.filter((id) => id !== userId)
+      : [...ids, userId];
     onAssigneeChange(next);
   };
 

@@ -460,11 +460,11 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">{t('tasks.assignee')}</label>
               <AssigneeSelector
-                assigneeId={task.assigneeId ?? null}
+                assigneeIds={task.assigneeIds ?? (task.assigneeId ? [task.assigneeId] : [])}
                 users={users}
                 size="default"
                 disabled={task.locked}
-                onAssigneeChange={(assigneeId) => patch({ assigneeId })}
+                onAssigneeChange={(ids) => patch({ assigneeIds: ids })}
               />
             </div>
 

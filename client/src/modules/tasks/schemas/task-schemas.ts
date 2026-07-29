@@ -46,6 +46,8 @@ export const rawTaskSchema = z
     priority: taskPrioritySchema.default('NONE'),
     listId: nullableId,
     assigneeId: nullableId,
+    // Populated by the API as user objects; reduced to plain ids.
+    assigneeIds: z.array(nullableId).optional(),
     createdBy: nullableId,
     updatedBy: nullableId,
     parentTaskId: nullableId,
@@ -88,6 +90,10 @@ export const rawTaskSchema = z
       return value instanceof Date ? value.toISOString() : value;
     };
 
+    // Multi-assignee list; tasks created before the feature only carry
+    // assigneeId, so fall back to it when the array is empty.
+    const assigneeIds = (raw.assigneeIds ?? []).filter((v): v is string => Boolean(v));
+
     return {
       id,
       title: raw.title,
@@ -96,6 +102,7 @@ export const rawTaskSchema = z
       priority: raw.priority,
       listId: raw.listId,
       assigneeId: raw.assigneeId,
+      assigneeIds: assigneeIds.length ? assigneeIds : (raw.assigneeId ? [raw.assigneeId] : []),
       createdBy: raw.createdBy,
       updatedBy: raw.updatedBy,
       parentTaskId: raw.parentTaskId,

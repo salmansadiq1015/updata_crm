@@ -36,7 +36,7 @@ const labelMap = {
   orders: { key: 'sidebar.fieldOpsOrders', fallback: 'Einsätze' },
   reports: { key: 'sidebar.fieldOpsReports', fallback: 'Arbeitsberichte' },
   time: { key: 'sidebar.fieldOpsTime', fallback: 'Zeiterfassung' },
-  chat: { key: 'sidebar.fieldOpsChat', fallback: 'Projekt-Chat' },
+  chat: { key: 'sidebar.fieldOpsChat', fallback: 'Global-Chat' },
   // Administration
   admin: { key: 'sidebar.admin', fallback: 'Verwaltung' },
   audit: { key: 'sidebar.audit', fallback: 'Audit-Protokoll' },

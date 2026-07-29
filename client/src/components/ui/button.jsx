@@ -45,9 +45,15 @@ function Button({
   variant = "default",
   size = "default",
   asChild = false,
+  type,
   ...props
 }) {
   const Comp = asChild ? Slot.Root : "button"
+  // A native <button> without a type defaults to "submit", which inside a form
+  // caused accidental submissions (e.g. the image-upload button closing the
+  // customer edit dialog). Default to "button"; an explicit type ("submit")
+  // still wins. Leave asChild untouched — the rendered child owns its type.
+  const resolvedType = asChild ? type : (type ?? "button")
 
   return (
     <Comp
@@ -55,6 +61,7 @@ function Button({
       data-variant={variant}
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
+      type={resolvedType}
       {...props} />
   );
 }

@@ -34,7 +34,10 @@ function blankToNull(value) {
 
 function normalizeCustomerPayload(data = {}) {
   const normalized = { ...data };
-  for (const key of ['name', 'ownerName', 'street', 'postalCode', 'city', 'canton', 'country', 'phone', 'mobile', 'email', 'website', 'uidNumber', 'vatNumber']) {
+  // salutation included: the form sends '' for "(keine)", but the model enum
+  // only accepts the values or null — coerce blank to null to avoid a
+  // validation error on save.
+  for (const key of ['name', 'ownerName', 'street', 'postalCode', 'city', 'canton', 'country', 'phone', 'mobile', 'email', 'website', 'uidNumber', 'vatNumber', 'salutation']) {
     if (normalized[key] !== undefined) normalized[key] = blankToNull(normalized[key]);
   }
   if (normalized.type && normalized.type !== 'business') {

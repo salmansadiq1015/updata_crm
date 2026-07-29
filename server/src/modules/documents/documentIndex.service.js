@@ -546,6 +546,9 @@ class DocumentIndexService {
       origin,
       title: doc.fileName,
       fileName: file?.originalName || doc.fileName,
+      // Underlying stored-file id — lets the client attach the document to an
+      // email directly, without downloading it first.
+      fileId: toStringId(file?._id),
       mimeType: file?.mimeType || '',
       fileSizeBytes: file?.sizeBytes || 0,
       documentType: doc.templateType || doc.category || 'OTHER',

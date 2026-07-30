@@ -234,7 +234,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-border bg-card shadow-2xl">
+      <DialogContent className="sm:max-w-4xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-border bg-card shadow-2xl">
         {/* Fixed Header */}
         <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
@@ -254,37 +254,43 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 
         {/* Scrollable Body */}
         <form onSubmit={handleSubmit(submit)} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin space-y-4">
-            <DarkField label={t('crm.sites.label', 'Bezeichnung')} required error={errors.name}>
-              <Input
-                {...register('name')}
-                autoFocus
-                placeholder={t('crm.sites.labelPlaceholder', 'z.B. Mehrfamilienhaus Mustergasse')}
-                className={inputCls}
-              />
-            </DarkField>
+          <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin space-y-5">
+            {/* Grunddaten — full width */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DarkField label={t('crm.sites.label', 'Bezeichnung')} required error={errors.name}>
+                <Input
+                  {...register('name')}
+                  autoFocus
+                  placeholder={t('crm.sites.labelPlaceholder', 'z.B. Mehrfamilienhaus Mustergasse')}
+                  className={inputCls}
+                />
+              </DarkField>
 
-            <DarkField label={t('crm.sites.type', 'Objekttyp')} error={errors.siteType}>
-              <Select value={siteType} onValueChange={(v) => setValue('siteType', v, { shouldDirty: true })}>
-                <SelectTrigger className={selectTriggerCls}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  {Object.entries(SITE_TYPE_META).map(([key, meta]) => (
-                    <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/50 focus:text-foreground">
-                      {t(`crm.sites.type.${key}`, meta.label)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </DarkField>
+              <DarkField label={t('crm.sites.type', 'Objekttyp')} error={errors.siteType}>
+                <Select value={siteType} onValueChange={(v) => setValue('siteType', v, { shouldDirty: true })}>
+                  <SelectTrigger className={selectTriggerCls}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    {Object.entries(SITE_TYPE_META).map(([key, meta]) => (
+                      <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/50 focus:text-foreground">
+                        {t(`crm.sites.type.${key}`, meta.label)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </DarkField>
+            </div>
 
-            <Separator className="my-5 bg-muted/50" />
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              {t('crm.address', 'Adresse')}
-            </p>
+            {/* Two columns: addresses (left) | Objektinformationen (right) */}
+            <div className="grid items-start gap-x-6 gap-y-5 lg:grid-cols-2">
+              {/* LEFT — Adressen */}
+              <div className="space-y-5">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  {t('crm.address', 'Adresse')}
+                </p>
 
-            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+                <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
               <DarkField label={t('crm.street', 'Strasse')} error={errors.street}>
                 <Input {...register('street')} className={inputCls} />
               </DarkField>
@@ -417,15 +423,16 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                 </Select>
               </DarkField>
             </div>
+              </div>
 
-            {/* Objektinformationen: Notheizung / Schlüsselbox / Werbetafel */}
-            <Separator className="my-5 bg-muted/50" />
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              {t('crm.sites.objectInfo', 'Objektinformationen')}
-            </p>
+              {/* RIGHT — Objektinformationen */}
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  {t('crm.sites.objectInfo', 'Objektinformationen')}
+                </p>
 
-            {/* Notheizung */}
-            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+                {/* Notheizung */}
+                <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-foreground">
                   <Flame className="h-4 w-4 text-orange-500" /> {t('crm.sites.emergencyHeating', 'Notheizung')}
@@ -486,6 +493,8 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
               <DarkField label={t('crm.sites.advertisingLocation', 'Standort')} error={errors.advertisingBoard?.location}>
                 <Input {...register('advertisingBoard.location')} placeholder="z.B. Eingang / Fassade" className={inputCls} />
               </DarkField>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -93,6 +93,7 @@ export const exportScheduleSchema = {
   params: Joi.object({ id: objectId.required() }),
   query: Joi.object({
     format: Joi.string().valid('pdf', 'ical', 'excel').default('pdf'),
+    variant: Joi.string().valid('internal', 'external').default('internal'),
   }),
 };
 

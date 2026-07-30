@@ -571,7 +571,7 @@ class ScheduleService {
    * internal responsible), milestones, and the CI logo. Shared by the PDF and
    * Excel exports so both always show the same plan.
    */
-  async _buildTerminplanData(projectId) {
+  async _buildTerminplanData(projectId, variant = 'internal') {
     const Project = (await import('./project.model.js')).default;
     const project = await Project.findById(projectId)
       .populate('customerId', 'name phone mobile')
@@ -643,17 +643,38 @@ class ScheduleService {
       } catch { /* asset missing — export renders without logo */ }
     }
 
+    // Internal-only extras: who is responsible for each phase (Zuständigkeiten)
+    // and the internal phase notes. The external protocol omits these.
+    const projectManagerName = pm ? `${pm.firstName || ''} ${pm.lastName || ''}`.trim() : '';
+    let companyName = 'MB Boiler & Heizung AG';
+    try {
+      const CIConfiguration = (await import('../doctpl/ciConfiguration.model.js')).default;
+      const ci = await CIConfiguration.findOne({ isActive: true }).lean();
+      companyName = ci?.companyName || ci?.name || companyName;
+    } catch { /* no CI configured — keep default */ }
+    const responsibilities = tasks
+      .filter((t) => t.company)
+      .map((t) => ({ name: t.name, company: t.company, phone: t.phone }));
+    const internalNotes = phases
+      .filter((p) => p.notes && p.notes.trim())
+      .map((p) => ({ name: p.name, notes: p.notes.trim() }));
+
     return {
       project,
+      variant,
       title: `Terminplan ${project.name || ''}`.trim(),
       projectName: [project.projectNumber, project.name].filter(Boolean).join(' — '),
       periodLabel,
       customerName: project.customerId?.name || '',
       customerPhone: project.customerId?.phone || project.customerId?.mobile || '',
+      companyName,
+      projectManagerName,
       contacts,
       logoBuffer,
       tasks,
       weeks,
+      responsibilities,
+      internalNotes,
       milestones: entries.filter((e) => e.entryType === 'MILESTONE').map((e) => ({
         name: e.name,
         date: e.milestoneDate,
@@ -662,13 +683,15 @@ class ScheduleService {
   }
 
   async exportPdf(projectId, userId, meta = {}) {
-    const data = await this._buildTerminplanData(projectId);
+    const variant = meta.variant === 'external' ? 'external' : 'internal';
+    const data = await this._buildTerminplanData(projectId, variant);
     const { renderTerminplanPdf } = await import('./terminplan.renderer.js');
     const { buffer, pageCount } = await renderTerminplanPdf(data);
 
     // Persist through the same path as doctpl documents so the export keeps
     // appearing in the archive and the client download flow stays unchanged.
-    const fileName = `Terminplan_${data.project.projectNumber || projectId}.pdf`;
+    const variantTag = variant === 'external' ? 'extern' : 'intern';
+    const fileName = `Terminprotokoll_${variantTag}_${data.project.projectNumber || projectId}.pdf`;
     const { default: fileService } = await import('../files/file.service.js');
     const fileMeta = await fileService.upload({
       buffer,
@@ -705,6 +728,7 @@ class ScheduleService {
       sourceProjectId: data.project._id,
       ownerUserId: userId,
       generatedBy: userId,
+      metadata: { variant, title: data.title },
     });
 
     auditService.logEvent({
@@ -718,6 +742,28 @@ class ScheduleService {
     });
 
     return generatedDoc;
+  }
+
+  /**
+   * List the Terminprotokoll PDFs generated for a project (newest first), with
+   * their variant (internal/external) so the Protokolle tab can label them.
+   * They also remain visible in the project's Dokumente (same generatedDocument).
+   */
+  async listProtocols(projectId) {
+    const { default: generatedDocumentRepository } = await import('../doctpl/generatedDocument.repository.js');
+    const docs = await generatedDocumentRepository.findBySource('pm', projectId);
+    return docs
+      .filter((d) => d.documentType === 'project_schedule')
+      .map((d) => ({
+        id: String(d._id),
+        fileId: String(d.fileId),
+        fileName: d.fileName,
+        variant: d.metadata?.variant || 'internal',
+        title: d.metadata?.title || d.fileName,
+        pageCount: d.pageCount || null,
+        fileSizeBytes: d.fileSizeBytes || null,
+        generatedAt: d.generatedAt || d.createdAt || null,
+      }));
   }
 
   /**

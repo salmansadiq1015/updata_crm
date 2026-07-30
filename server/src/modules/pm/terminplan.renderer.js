@@ -90,6 +90,8 @@ const GRID = '#000000';
 export function renderTerminplanPdf({
   title, projectName, periodLabel, customerName, customerPhone,
   contacts = [], logoBuffer, weeks, milestones = [],
+  variant = 'internal', companyName = '', projectManagerName = '',
+  responsibilities = [], internalNotes = [],
 }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: PAGE.margin });
@@ -98,8 +100,15 @@ export function renderTerminplanPdf({
     doc.on('end', () => resolve({ buffer: Buffer.concat(chunks), pageCount: doc.bufferedPageRange().count }));
     doc.on('error', reject);
 
+    // External protocol hides the internal "Firma / Telefon" columns (who does
+    // what) — the customer only sees the schedule itself. Their width is handed
+    // to the day slots so the grid stays full-bleed.
+    const isExternal = variant === 'external';
+    const cols = isExternal ? { arbeit: 160, firma: 0, telefon: 0 } : { arbeit: 130, firma: 120, telefon: 78 };
+    const labelWidth = cols.arbeit + cols.firma + cols.telefon;
+
     const innerWidth = PAGE.width - 2 * PAGE.margin;
-    const slotWidth = (innerWidth - COLS.arbeit - COLS.firma - COLS.telefon) / 10;
+    const slotWidth = (innerWidth - labelWidth) / 10;
     const gridX = PAGE.margin;
 
     // ── header ──
@@ -108,9 +117,12 @@ export function renderTerminplanPdf({
       doc.font('Helvetica-Bold').fontSize(16).fillColor(NAVY);
       const titleH = doc.heightOfString(title, { width: 380 });
       doc.text(title, gridX, top, { width: 380 });
+      // variant subtitle right under the title
+      const subtitle = isExternal ? 'Externes Protokoll – für den Kunden' : 'Internes Protokoll';
+      doc.font('Helvetica').fontSize(9).fillColor('#666').text(subtitle, gridX, top + titleH + 1, { width: 380 });
 
-      // left block — Projekt / Zeitraum, below the (possibly wrapped) title
-      const leftY = top + titleH + 8;
+      // left block — Projekt / Zeitraum / Projektleiter, below the title
+      const leftY = top + titleH + 16;
       doc.fontSize(9).fillColor(NAVY);
       doc.font('Helvetica').text('Projekt:', gridX, leftY);
       doc.font('Helvetica-Bold').fillColor('#000')
@@ -118,6 +130,9 @@ export function renderTerminplanPdf({
       doc.font('Helvetica').fillColor(NAVY).text('Zeitraum:', gridX, leftY + 14);
       doc.font('Helvetica-Bold').fillColor('#000')
         .text(periodLabel || '—', gridX + 55, leftY + 14, { width: 300, lineBreak: false });
+      doc.font('Helvetica').fillColor(NAVY).text('Projektleiter:', gridX, leftY + 28);
+      doc.font('Helvetica-Bold').fillColor('#000')
+        .text(projectManagerName || '—', gridX + 55, leftY + 28, { width: 300, lineBreak: false });
 
       // centre block — Kunde / Telefon
       const cx = gridX + 340;
@@ -128,20 +143,30 @@ export function renderTerminplanPdf({
       doc.font('Helvetica-Bold').fillColor('#000')
         .text(customerPhone || '—', cx + 50, top + 16, { width: 200 });
 
-      // right block — logo + contacts
+      // right block — logo + company + contacts
       const logoW = 120;
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, PAGE.width - PAGE.margin - logoW, top, { fit: [logoW, 40] });
         } catch { /* corrupt/unsupported logo asset — header stays text-only */ }
       }
-      doc.font('Helvetica').fontSize(7.5).fillColor('#333');
-      contacts.forEach((line, i) => {
-        doc.text(line, PAGE.width - PAGE.margin - 290, top + 46 + i * 10, { width: 290, align: 'right' });
-      });
+      let rY = top + 46;
+      if (companyName) {
+        doc.font('Helvetica-Bold').fontSize(8.5).fillColor(NAVY)
+          .text(companyName, PAGE.width - PAGE.margin - 290, rY, { width: 290, align: 'right' });
+        rY += 11;
+      }
+      // Internal shows the internal contacts; external keeps it to the company.
+      if (!isExternal) {
+        doc.font('Helvetica').fontSize(7.5).fillColor('#333');
+        contacts.forEach((line) => {
+          doc.text(line, PAGE.width - PAGE.margin - 290, rY, { width: 290, align: 'right' });
+          rY += 10;
+        });
+      }
       doc.fillColor('#000');
-      const leftBottom = leftY + 28;
-      const rightBottom = top + 46 + Math.max(contacts.length, 1) * 10;
+      const leftBottom = leftY + 42;
+      const rightBottom = rY;
       return Math.max(leftBottom, rightBottom) + 14;
     };
 
@@ -165,21 +190,23 @@ export function renderTerminplanPdf({
       doc.font('Helvetica-Bold').fontSize(10).fillColor(NAVY).text(`Woche ${week.index}:`, gridX, y);
       doc.fontSize(8).fillColor('#000');
       week.days.forEach((day, i) => {
-        const x = gridX + COLS.arbeit + COLS.firma + COLS.telefon + i * 2 * slotWidth;
+        const x = gridX + labelWidth + i * 2 * slotWidth;
         doc.text(chDate(day), x, y + 1, { width: 2 * slotWidth, align: 'center' });
       });
       y += 14;
 
       const tableX = gridX;
       const tableW = innerWidth;
-      const daysX = tableX + COLS.arbeit + COLS.firma + COLS.telefon;
+      const daysX = tableX + labelWidth;
 
       // day header row (Montag Morgen / NM …)
       doc.lineWidth(0.7).rect(tableX, y, tableW, dayRowH).stroke(GRID);
       doc.font('Helvetica-Bold').fontSize(7);
       doc.text('Arbeit', tableX + 3, y + dayRowH - 10);
-      doc.text('Firma', tableX + COLS.arbeit + 3, y + dayRowH - 10);
-      doc.text('Telefon', tableX + COLS.arbeit + COLS.firma + 3, y + dayRowH - 10);
+      if (!isExternal) {
+        doc.text('Firma', tableX + cols.arbeit + 3, y + dayRowH - 10);
+        doc.text('Telefon', tableX + cols.arbeit + cols.firma + 3, y + dayRowH - 10);
+      }
       for (let i = 0; i < 10; i++) {
         const x = daysX + i * slotWidth;
         doc.moveTo(x, y).lineTo(x, y + dayRowH).stroke(GRID);
@@ -188,8 +215,10 @@ export function renderTerminplanPdf({
         doc.text(day, x + 1.5, y + 2, { width: slotWidth - 3, lineBreak: false });
         doc.text(half, x + 1.5, y + 10, { width: slotWidth - 3, lineBreak: false });
       }
-      doc.moveTo(tableX + COLS.arbeit, y).lineTo(tableX + COLS.arbeit, y + dayRowH).stroke(GRID);
-      doc.moveTo(tableX + COLS.arbeit + COLS.firma, y).lineTo(tableX + COLS.arbeit + COLS.firma, y + dayRowH).stroke(GRID);
+      if (!isExternal) {
+        doc.moveTo(tableX + cols.arbeit, y).lineTo(tableX + cols.arbeit, y + dayRowH).stroke(GRID);
+        doc.moveTo(tableX + cols.arbeit + cols.firma, y).lineTo(tableX + cols.arbeit + cols.firma, y + dayRowH).stroke(GRID);
+      }
       y += dayRowH;
 
       // task rows
@@ -197,9 +226,11 @@ export function renderTerminplanPdf({
       for (const row of week.rows) {
         doc.rect(tableX, y, tableW, rowH).stroke(GRID);
         doc.fillColor('#000');
-        doc.text(row.task.name || '', tableX + 3, y + 4, { width: COLS.arbeit - 6, lineBreak: false });
-        doc.text(row.task.company || '', tableX + COLS.arbeit + 3, y + 4, { width: COLS.firma - 6, lineBreak: false });
-        doc.text(row.task.phone || '', tableX + COLS.arbeit + COLS.firma + 3, y + 4, { width: COLS.telefon - 6, lineBreak: false });
+        doc.text(row.task.name || '', tableX + 3, y + 4, { width: cols.arbeit - 6, lineBreak: false });
+        if (!isExternal) {
+          doc.text(row.task.company || '', tableX + cols.arbeit + 3, y + 4, { width: cols.firma - 6, lineBreak: false });
+          doc.text(row.task.phone || '', tableX + cols.arbeit + cols.firma + 3, y + 4, { width: cols.telefon - 6, lineBreak: false });
+        }
         row.cells.forEach((active, i) => {
           const x = daysX + i * slotWidth;
           if (active) {
@@ -208,8 +239,10 @@ export function renderTerminplanPdf({
           }
           doc.moveTo(x, y).lineTo(x, y + rowH).stroke(GRID);
         });
-        doc.moveTo(tableX + COLS.arbeit, y).lineTo(tableX + COLS.arbeit, y + rowH).stroke(GRID);
-        doc.moveTo(tableX + COLS.arbeit + COLS.firma, y).lineTo(tableX + COLS.arbeit + COLS.firma, y + rowH).stroke(GRID);
+        if (!isExternal) {
+          doc.moveTo(tableX + cols.arbeit, y).lineTo(tableX + cols.arbeit, y + rowH).stroke(GRID);
+          doc.moveTo(tableX + cols.arbeit + cols.firma, y).lineTo(tableX + cols.arbeit + cols.firma, y + rowH).stroke(GRID);
+        }
         y += rowH;
       }
       y += 18;
@@ -225,6 +258,37 @@ export function renderTerminplanPdf({
         doc.text(`${ms.date ? chDate(new Date(ms.date)) : '—'}  ${ms.name}`, gridX + 4, y);
         y += 11;
       }
+    }
+
+    // ── internal-only sections: Zuständigkeiten + Interne Notizen ──
+    if (!isExternal && responsibilities.length) {
+      ensureSpace(16 + responsibilities.length * 11);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY).text('Zuständigkeiten', gridX, y + 6);
+      y += 19;
+      doc.font('Helvetica').fontSize(8).fillColor('#000');
+      for (const r of responsibilities) {
+        doc.text(`${r.name}: ${r.company}${r.phone ? ' · ' + r.phone : ''}`, gridX + 4, y);
+        y += 11;
+      }
+    }
+    if (!isExternal && internalNotes.length) {
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY);
+      ensureSpace(20);
+      doc.text('Interne Notizen', gridX, y + 6);
+      y += 19;
+      doc.font('Helvetica').fontSize(8).fillColor('#000');
+      for (const n of internalNotes) {
+        const line = `${n.name}: ${n.notes}`;
+        const h = doc.heightOfString(line, { width: innerWidth - 8 });
+        ensureSpace(h + 4);
+        doc.text(line, gridX + 4, y, { width: innerWidth - 8 });
+        y += h + 4;
+      }
+    }
+    if (isExternal) {
+      ensureSpace(16);
+      doc.font('Helvetica-Oblique').fontSize(7.5).fillColor('#888')
+        .text('Externes Protokoll – ohne interne Details.', gridX, y + 6);
     }
 
     doc.end();

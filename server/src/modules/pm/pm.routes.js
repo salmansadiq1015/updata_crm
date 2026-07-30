@@ -159,6 +159,12 @@ scheduleRouter.get(
   validate(exportScheduleSchema),
   (req, res, next) => scheduleController.exportSchedule(req, res, next),
 );
+scheduleRouter.get(
+  '/protocols',
+  authenticate,
+  requirePermission('projects:read'),
+  (req, res, next) => scheduleController.listProtocols(req, res, next),
+);
 scheduleRouter.post(
   '/transfer',
   authenticate,

@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Truck, Pencil, Trash2, Fuel, Calendar, Gauge, Wrench, User, ClipboardCheck,
-  FileText, IdCard, Package, StickyNote, Activity, LayoutGrid, Hash,
+  FileText, IdCard, Package, StickyNote, Activity, LayoutGrid, Hash, ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -74,6 +75,14 @@ export function VehicleDetail() {
 
   return (
     <div className="space-y-6">
+      {/* Back to list */}
+      <Link
+        href="/vehicles"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" /> {t('vehicles.backToList', 'Zurück zu Fahrzeuge')}
+      </Link>
+
       {/* Hero header */}
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="h-1 w-full bg-linear-to-r from-brand-500 via-brand-400 to-transparent" />

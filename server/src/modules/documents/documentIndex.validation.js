@@ -3,7 +3,7 @@ import { cursorPagination, objectId } from '../../shared/validation/commonSchema
 import { DOCUMENT_ORIGINS, DOCUMENT_SOURCES } from './documentIndex.model.js';
 
 const CENTRAL_RECORD_ID = /^(repository|generated|project|customer|accounting|mobile):[0-9a-fA-F]{24}$/;
-const LINK_TYPES = ['', 'customer', 'project', 'job', 'employee'];
+const LINK_TYPES = ['', 'customer', 'project', 'job', 'employee', 'vehicle'];
 
 export const listDocumentsSchema = {
   query: cursorPagination.keys({

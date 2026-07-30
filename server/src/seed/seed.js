@@ -141,6 +141,10 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'documents', action: 'read', description: 'View generated PDFs and document repository records' },
   { module: 'documents', action: 'write', description: 'Upload and organize central document repository records' },
   { module: 'documents', action: 'delete', description: 'Delete generated document repository records' },
+
+  // Vehicles (fleet)
+  { module: 'vehicles', action: 'read', description: 'View vehicles and their details' },
+  { module: 'vehicles', action: 'write', description: 'Create, update and manage vehicles' },
   { module: 'templates', action: 'read', description: 'View document templates and generated documents' },
   { module: 'templates', action: 'write', description: 'Create, update, preview, and generate document templates' },
   { module: 'templates', action: 'delete', description: 'Delete document templates and generated documents' },

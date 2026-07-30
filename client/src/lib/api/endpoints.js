@@ -161,6 +161,18 @@ export const ENDPOINTS = Object.freeze({
     BY_ID: (id) => `/documents/${id}`,
     DOWNLOAD: (id) => `/documents/${id}/download`,
   },
+  VEHICLES: {
+    LIST: '/vehicles',
+    BY_ID: (id) => `/vehicles/${id}`,
+    DRIVER: (id) => `/vehicles/${id}/driver`,
+    SERVICES: (id) => `/vehicles/${id}/services`,
+    SERVICE_BY_ID: (id, subId) => `/vehicles/${id}/services/${subId}`,
+    MATERIALS: (id) => `/vehicles/${id}/materials`,
+    MATERIAL_BY_ID: (id, subId) => `/vehicles/${id}/materials/${subId}`,
+    NOTES: (id) => `/vehicles/${id}/notes`,
+    NOTE_BY_ID: (id, subId) => `/vehicles/${id}/notes/${subId}`,
+    HISTORY: (id) => `/vehicles/${id}/history`,
+  },
   INTEGRATIONS: {
     LIST: '/admin/integrations',
     DASHBOARD: '/admin/integrations/dashboard',

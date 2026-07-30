@@ -10,6 +10,9 @@ import Vehicle from '../modules/vehicles/vehicle.model.js';
 import VehicleServiceEntry from '../modules/vehicles/vehicleServiceEntry.model.js';
 import VehicleMaterial from '../modules/vehicles/vehicleMaterial.model.js';
 import VehicleNote from '../modules/vehicles/vehicleNote.model.js';
+import Customer from '../modules/crm/customer.model.js';
+import Site from '../modules/crm/site.model.js';
+import crmCounter from '../modules/crm/counter.service.js';
 import { hashPassword } from '../shared/utils/crypto.js';
 import cacheManager from '../shared/cache/CacheManager.js';
 import config from '../config/index.js';
@@ -472,6 +475,61 @@ async function seedStarterVehicles() {
   logger.info(`Seeded starter fleet (${count} vehicles)`, { module: 'seed' });
 }
 
+/**
+ * Seed one starter object (site) with its Objektinformationen — ONLY on a
+ * completely empty sites collection. Same prod-safe contract as the fleet:
+ * countDocuments ignores the soft-delete hook, so an object the customer later
+ * deletes still counts → this never runs again and never modifies real objects.
+ * On a fresh DB the starter object lives under a clearly-labelled "Muster"
+ * customer that the customer can edit or delete.
+ */
+async function seedStarterObject() {
+  const existing = await Site.countDocuments();
+  if (existing > 0) {
+    logger.info('Objects already present — skipping starter object seed', { module: 'seed', count: existing });
+    return;
+  }
+
+  const adminRole = await Role.findOne({ name: 'Admin' });
+  let creator = config.admin?.email
+    ? await User.findOne({ email: config.admin.email.toLowerCase() })
+    : null;
+  if (!creator && adminRole) creator = await User.findOne({ role: adminRole._id });
+  const creatorId = creator?._id || null;
+  // Customer/Site require createdBy — without an admin there is nothing to seed.
+  if (!creatorId) {
+    logger.info('No admin user yet — skipping starter object seed', { module: 'seed' });
+    return;
+  }
+
+  // Dedicated demo customer (never attach the demo object to a real customer).
+  let customer = await Customer.findOne({ name: 'Muster Immobilien AG' });
+  if (!customer) {
+    customer = await Customer.create({
+      customerNumber: await crmCounter.getNextCustomerNumber(),
+      name: 'Muster Immobilien AG',
+      type: 'business',
+      street: 'Musterstrasse 1', postalCode: '4001', city: 'Basel', canton: 'BS',
+      status: 'active', createdBy: creatorId,
+    });
+  }
+
+  await Site.create({
+    customerId: customer._id,
+    siteNumber: await crmCounter.getNextSiteNumber(customer._id),
+    name: 'MFH Musterweg 12',
+    street: 'Musterweg 12', postalCode: '4001', city: 'Basel', canton: 'BS',
+    floorUnit: '4. OG',
+    siteType: 'residential',
+    accessInstructions: 'Schlüssel bei Hauswart Muster.',
+    emergencyHeating: { present: true, number: 'NH-2023-07' },
+    keyBox: { present: true, code: '2580', depositedBy: 'Klaus Huber', depositedAt: new Date('2024-03-12') },
+    advertisingBoard: { count: 2, type: 'MB Boiler Standard', location: 'Eingang / Fassade' },
+    createdBy: creatorId,
+  });
+  logger.info('Seeded starter object with Objektinformationen', { module: 'seed' });
+}
+
 export async function seedDatabase() {
   try {
     // 1. Upsert all permissions — runs on every startup so new entries reach existing DBs
@@ -588,6 +646,9 @@ export async function seedDatabase() {
 
     // 7. Seed a small starter fleet (only when the vehicles collection is empty)
     await seedStarterVehicles();
+
+    // 8. Seed a starter object with Objektinformationen (only when sites empty)
+    await seedStarterObject();
 
     logger.info('Database seeding complete', { module: 'seed' });
   } catch (err) {

@@ -15,6 +15,34 @@ const siteAddressPartySchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Object-specific facility info (client feedback — Objektinformationen).
+const emergencyHeatingSchema = new mongoose.Schema(
+  {
+    present: { type: Boolean, default: false },
+    number: { type: String, trim: true, maxlength: 100, default: null },
+  },
+  { _id: false },
+);
+
+const keyBoxSchema = new mongoose.Schema(
+  {
+    present: { type: Boolean, default: false },
+    code: { type: String, trim: true, maxlength: 100, default: null },
+    depositedBy: { type: String, trim: true, maxlength: 255, default: null },
+    depositedAt: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
+const advertisingBoardSchema = new mongoose.Schema(
+  {
+    count: { type: Number, min: 0, default: null },
+    type: { type: String, trim: true, maxlength: 255, default: null },
+    location: { type: String, trim: true, maxlength: 255, default: null },
+  },
+  { _id: false },
+);
+
 const siteSchema = new mongoose.Schema(
   {
     customerId: {
@@ -44,6 +72,10 @@ const siteSchema = new mongoose.Schema(
     // for the object — client feedback #10. Free-form, optional.
     billingAddress: { type: siteAddressPartySchema, default: null },
     ownership: { type: siteAddressPartySchema, default: null },
+    // Objektinformationen (client feedback): emergency heating, key box, boards.
+    emergencyHeating: { type: emergencyHeatingSchema, default: null },
+    keyBox: { type: keyBoxSchema, default: null },
+    advertisingBoard: { type: advertisingBoardSchema, default: null },
     siteType: {
       type: String,
       enum: ['residential', 'commercial', 'industrial'],

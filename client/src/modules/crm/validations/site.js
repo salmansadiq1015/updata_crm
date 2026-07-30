@@ -17,6 +17,35 @@ const addressParty = z
   .partial()
   .optional();
 
+// Objektinformationen blocks (client feedback). Form values are strings; the
+// submit handler coerces count/present/date before sending.
+const emergencyHeating = z
+  .object({
+    present: z.boolean().optional(),
+    number: z.string().trim().max(100).optional().or(z.literal('')),
+  })
+  .partial()
+  .optional();
+
+const keyBox = z
+  .object({
+    present: z.boolean().optional(),
+    code: z.string().trim().max(100).optional().or(z.literal('')),
+    depositedBy: z.string().trim().max(255).optional().or(z.literal('')),
+    depositedAt: z.string().optional().or(z.literal('')),
+  })
+  .partial()
+  .optional();
+
+const advertisingBoard = z
+  .object({
+    count: z.string().optional().or(z.literal('')),
+    type: z.string().trim().max(255).optional().or(z.literal('')),
+    location: z.string().trim().max(255).optional().or(z.literal('')),
+  })
+  .partial()
+  .optional();
+
 export const createSiteSchema = z.object({
   name: z.string().trim().min(1, 'Name erforderlich').max(255),
   street: z.string().trim().max(255).optional().or(z.literal('')),
@@ -41,6 +70,9 @@ export const createSiteSchema = z.object({
   longitude: z.number().min(-180).max(180).nullable().optional(),
   billingAddress: addressParty,
   ownership: addressParty,
+  emergencyHeating,
+  keyBox,
+  advertisingBoard,
 });
 
 export const updateSiteSchema = createSiteSchema.partial();

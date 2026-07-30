@@ -392,7 +392,7 @@ export function SiteDetail() {
         </div>
 
         <TabsContent value="overview">
-          <SiteOverviewTab siteId={id} onNavigate={setActiveTab} />
+          <SiteOverviewTab siteId={id} site={site} onNavigate={setActiveTab} />
         </TabsContent>
         <TabsContent value="projects">
           <SiteProjectsTab siteId={id} />

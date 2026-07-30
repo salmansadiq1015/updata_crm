@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Wrench, CalendarClock, CalendarCheck, FolderKanban, Layers, ChevronRight,
+  Flame, KeyRound, MonitorSpeaker,
 } from 'lucide-react';
 import { installationService } from '@/modules/crm/services/installation-service';
 import { maintenanceService } from '@/modules/crm/services/maintenance-service';
@@ -21,7 +22,7 @@ const fmt = (v) => (v ? new Date(v).toLocaleDateString('de-CH', { day: '2-digit'
  * Object landing tab: quick access counts + current projects. Purely derived
  * from existing data (components, maintenance, projects) — no new data model.
  */
-export function SiteOverviewTab({ siteId, onNavigate }) {
+export function SiteOverviewTab({ siteId, site, onNavigate }) {
   const { t, language } = useLanguage();
 
   const { data: installations = [], isLoading: loadingInst } = useQuery({
@@ -59,6 +60,7 @@ export function SiteOverviewTab({ siteId, onNavigate }) {
   ];
 
   return (
+    <div className="space-y-4">
     <div className="grid gap-4 lg:grid-cols-2">
       {/* Schnellzugriff */}
       <div className="rounded-xl border border-border bg-card p-5">
@@ -119,5 +121,82 @@ export function SiteOverviewTab({ siteId, onNavigate }) {
         )}
       </div>
     </div>
+
+      <ObjectInfoCards site={site} t={t} />
+    </div>
+  );
+}
+
+/** Objektinformationen cards: Notheizung / Schlüsselbox / Werbetafel. */
+function ObjectInfoCards({ site, t }) {
+  const eh = site?.emergencyHeating;
+  const kb = site?.keyBox;
+  const ab = site?.advertisingBoard;
+  const ehHas = eh && (eh.present || eh.number);
+  const kbHas = kb && (kb.present || kb.code || kb.depositedBy || kb.depositedAt);
+  const abHas = ab && ((ab.count != null && ab.count !== 0) || ab.type || ab.location);
+  if (!ehHas && !kbHas && !abHas) return null;
+
+  return (
+    <div>
+      <h3 className="mb-3 text-sm font-semibold">{t('crm.sites.objectInfo', 'Objektinformationen')}</h3>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {ehHas && (
+          <InfoCard icon={Flame} accent="text-orange-500" bg="bg-orange-500/10" title={t('crm.sites.emergencyHeating', 'Notheizung')}>
+            <PresentBadge present={eh.present} t={t} />
+            {eh.number && <InfoLine label={t('crm.sites.number', 'Nummer')} value={eh.number} />}
+          </InfoCard>
+        )}
+        {kbHas && (
+          <InfoCard icon={KeyRound} accent="text-sky-500" bg="bg-sky-500/10" title={t('crm.sites.keyBox', 'Schlüsselbox')}>
+            <PresentBadge present={kb.present} t={t} />
+            {kb.code && <InfoLine label={t('crm.sites.keyBoxCode', 'Code')} value={kb.code} />}
+            {kb.depositedBy && <InfoLine label={t('crm.sites.keyBoxDepositedBy', 'Deponiert von')} value={kb.depositedBy} />}
+            {kb.depositedAt && <InfoLine label={t('crm.sites.keyBoxDepositedAt', 'Deponiert am')} value={fmt(kb.depositedAt)} />}
+          </InfoCard>
+        )}
+        {abHas && (
+          <InfoCard icon={MonitorSpeaker} accent="text-violet-500" bg="bg-violet-500/10" title={t('crm.sites.advertisingBoard', 'Werbetafeln')}>
+            {ab.count != null && <InfoLine label={t('crm.sites.advertisingCount', 'Anzahl')} value={ab.count} />}
+            {ab.type && <InfoLine label={t('crm.sites.advertisingType', 'Typ')} value={ab.type} />}
+            {ab.location && <InfoLine label={t('crm.sites.advertisingLocation', 'Standort')} value={ab.location} />}
+          </InfoCard>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InfoCard({ icon: Icon, accent, bg, title, children }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div className="mb-2 flex items-center gap-2">
+        <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', bg)}>
+          <Icon className={cn('h-4 w-4', accent)} />
+        </div>
+        <span className="text-xs font-semibold uppercase tracking-wide text-foreground">{title}</span>
+      </div>
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+function PresentBadge({ present, t }) {
+  return present ? (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {t('crm.sites.present', 'Vorhanden')}
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" /> {t('crm.sites.notPresent', 'Nicht vorhanden')}
+    </span>
+  );
+}
+
+function InfoLine({ label, value }) {
+  return (
+    <p className="text-[13px] text-foreground">
+      <span className="text-muted-foreground">{label}: </span>{value}
+    </p>
   );
 }

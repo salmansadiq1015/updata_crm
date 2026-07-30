@@ -29,6 +29,14 @@ import {
 
 const siteMaintKey = (siteId) => ['crm', 'maintenance', 'site', siteId];
 
+// Accent- and case-insensitive search normalisation (ä→a, ö→o, é→e, …).
+const norm = (s) => (s || '')
+  .toString()
+  .normalize('NFD')
+  .replace(/\p{Diacritic}/gu, '')
+  .toLowerCase()
+  .trim();
+
 function componentLabel(inst, t) {
   if (!inst) return t('crm.maintenance.unknownComponent', 'Unbekannte Komponente');
   const meta = INSTALLATION_TYPE_META[inst.type] || INSTALLATION_TYPE_META.other;
@@ -278,11 +286,14 @@ function ComponentPickerDialog({ open, onOpenChange, siteId, onPick, t }) {
   });
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = norm(search);
     if (!q) return installations;
-    return installations.filter((i) =>
-      [i.installationNumber, i.manufacturer, i.model, i.type].filter(Boolean).join(' ').toLowerCase().includes(q));
-  }, [installations, search]);
+    return installations.filter((i) => {
+      const typeLabel = t(`crm.installations.type.${i.type}`, INSTALLATION_TYPE_META[i.type]?.label || i.type);
+      const haystack = norm([componentLabel(i, t), typeLabel, i.manufacturer, i.model, i.installationNumber].filter(Boolean).join(' '));
+      return haystack.includes(q);
+    });
+  }, [installations, search, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -291,37 +302,39 @@ function ComponentPickerDialog({ open, onOpenChange, siteId, onPick, t }) {
           <DialogTitle>{t('crm.maintenance.pickComponent', 'Komponente wählen')}</DialogTitle>
           <DialogDescription>{t('crm.maintenance.pickComponentDesc', 'Für welche Komponente soll die Wartung erfasst werden?')}</DialogDescription>
         </DialogHeader>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('crm.maintenance.searchComponent', 'Komponente suchen…')} className="pl-9" autoFocus />
-        </div>
-        <div className="max-h-[320px] space-y-1 overflow-y-auto">
-          {isLoading ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">{t('common.loading', 'Wird geladen…')}</p>
-          ) : filtered.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">{t('crm.maintenance.noComponents', 'Keine Komponenten vorhanden')}</p>
-          ) : (
-            filtered.map((i) => {
-              const meta = INSTALLATION_TYPE_META[i.type] || INSTALLATION_TYPE_META.other;
-              const Icon = meta?.icon || Wrench;
-              return (
-                <button
-                  key={i._id}
-                  type="button"
-                  onClick={() => onPick(i._id)}
-                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted"
-                >
-                  <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', meta?.bg)}>
-                    <Icon className={cn('h-4 w-4', meta?.color)} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{componentLabel(i, t)}</p>
-                    {i.installationNumber && <p className="truncate font-mono text-[11px] text-muted-foreground">{i.installationNumber}</p>}
-                  </div>
-                </button>
-              );
-            })
-          )}
+        <div className="space-y-3 px-5 py-5 sm:px-6">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('crm.maintenance.searchComponent', 'Komponente suchen…')} className="pl-10" autoFocus />
+          </div>
+          <div className="max-h-[320px] space-y-1 overflow-y-auto">
+            {isLoading ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">{t('common.loading', 'Wird geladen…')}</p>
+            ) : filtered.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">{t('crm.maintenance.noComponents', 'Keine Komponenten vorhanden')}</p>
+            ) : (
+              filtered.map((i) => {
+                const meta = INSTALLATION_TYPE_META[i.type] || INSTALLATION_TYPE_META.other;
+                const Icon = meta?.icon || Wrench;
+                return (
+                  <button
+                    key={i._id}
+                    type="button"
+                    onClick={() => onPick(i._id)}
+                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted"
+                  >
+                    <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', meta?.bg)}>
+                      <Icon className={cn('h-4 w-4', meta?.color)} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{componentLabel(i, t)}</p>
+                      {i.installationNumber && <p className="truncate font-mono text-[11px] text-muted-foreground">{i.installationNumber}</p>}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

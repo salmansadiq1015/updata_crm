@@ -43,7 +43,7 @@ export function SiteProjectsTab({ siteId }) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {projects.map((p) => {
         const cfg = PROJECT_STATUS_CONFIG[p.status] || PROJECT_STATUS_CONFIG.DRAFT;
         const dates = [fmt(p.plannedStartDate), fmt(p.plannedEndDate)].filter(Boolean).join(' – ');

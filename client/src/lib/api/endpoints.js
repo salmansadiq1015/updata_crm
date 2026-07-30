@@ -92,6 +92,7 @@ export const ENDPOINTS = Object.freeze({
     MAINTENANCE_EXPORT: '/crm/maintenance/export',
     MAINTENANCE_BY_ID: (id) => `/crm/maintenance/${id}`,
     INSTALLATION_MAINTENANCE: (installationId) => `/crm/installations/${installationId}/maintenance`,
+    SITE_MAINTENANCE: (siteId) => `/crm/sites/${siteId}/maintenance`,
     ASSET_MAINTENANCE_WORK_ITEMS: '/crm/asset-maintenance/work-items',
     ASSET_MAINTENANCE_CONTEXT: (installationId) => `/crm/asset-maintenance/context/${installationId}`,
     ASSET_MAINTENANCE_BULK: '/crm/asset-maintenance/bulk-maintenance',

@@ -17,6 +17,13 @@ class MaintenanceController {
     } catch (err) { next(err); }
   }
 
+  async listBySite(req, res, next) {
+    try {
+      const data = await maintenanceIntervalService.listBySite(req.params.id);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async update(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

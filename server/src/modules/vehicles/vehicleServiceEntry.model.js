@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 // A single service / maintenance record in a vehicle's log (Service & Wartung).
 const vehicleServiceEntrySchema = new mongoose.Schema(
   {
-    vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true, index: true },
+    vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true },
     date: { type: Date, required: true },
     mileageKm: { type: Number, min: 0, default: null },
     description: { type: String, required: true, trim: true, maxlength: 1000 },

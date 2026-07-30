@@ -5,7 +5,7 @@ export const VEHICLE_NOTE_CATEGORIES = ['general', 'warning', 'service', 'other'
 // A note attached to a vehicle (Notizen tab).
 const vehicleNoteSchema = new mongoose.Schema(
   {
-    vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true, index: true },
+    vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true },
     body: { type: String, required: true, trim: true, maxlength: 5000 },
     category: { type: String, enum: VEHICLE_NOTE_CATEGORIES, default: 'general' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

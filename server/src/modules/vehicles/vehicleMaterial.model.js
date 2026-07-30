@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 // A free-form material/equipment line carried by the vehicle (Materialliste).
 const vehicleMaterialSchema = new mongoose.Schema(
   {
-    vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true, index: true },
+    vehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', required: true },
     name: { type: String, required: true, trim: true, maxlength: 255 },
     quantity: { type: Number, min: 0, default: 1 },
     unit: { type: String, trim: true, maxlength: 20, default: null },

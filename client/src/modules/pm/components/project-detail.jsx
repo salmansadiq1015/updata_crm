@@ -37,7 +37,9 @@ import {
   Pencil, Copy, Archive, ArrowRight, Trash2,
   FolderKanban, Building2, User, Calendar, Wallet, FileText,
   ClipboardList, Clock, ListChecks, CalendarClock, Activity, ListTodo, MessagesSquare,
+  ScrollText,
 } from 'lucide-react';
+import { ProjectProtocolsTab } from './project-protocols-tab';
 
 function DetailSkeleton() {
   return (
@@ -273,6 +275,9 @@ export function ProjectDetail() {
               <TabsTrigger value="documents" className="gap-1.5">
                 <FileText className="h-3.5 w-3.5" /> {t('pm.documents', 'Dokumente')}
               </TabsTrigger>
+              <TabsTrigger value="protocols" className="gap-1.5">
+                <ScrollText className="h-3.5 w-3.5" /> {t('pm.protocols', 'Protokolle')}
+              </TabsTrigger>
               <TabsTrigger value="tasks" className="gap-1.5">
                 <ListTodo className="h-3.5 w-3.5" /> {t('pm.tasks', 'Aufgaben')}
               </TabsTrigger>
@@ -345,6 +350,10 @@ export function ProjectDetail() {
 
             <TabsContent value="documents" className="mt-6">
               <DocumentsTab projectId={id} />
+            </TabsContent>
+
+            <TabsContent value="protocols" className="mt-6">
+              <ProjectProtocolsTab projectId={id} />
             </TabsContent>
 
             <TabsContent value="tasks" className="mt-6">

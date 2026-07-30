@@ -59,8 +59,14 @@ export function useScheduleMutations(projectId, { onAddEntry, onUpdateEntry, onD
   });
 
   const exportSchedule = useMutation({
-    mutationFn: (format) => scheduleService.exportSchedule(projectId, format),
+    // Accepts a plain format string ('ical'|'excel'|'pdf') or an object
+    // { format, variant } for the internal/external Terminprotokoll.
+    mutationFn: (arg) => {
+      const { format = 'pdf', variant = 'internal' } = typeof arg === 'string' ? { format: arg } : (arg || {});
+      return scheduleService.exportSchedule(projectId, format, variant);
+    },
     onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['pm', 'schedule', 'protocols', projectId] });
       showSuccess(t('pm.exportReady', 'Export ready') + (res?.filename ? ` — ${res.filename}` : ''));
     },
     onError: (err) => showError(err.message),

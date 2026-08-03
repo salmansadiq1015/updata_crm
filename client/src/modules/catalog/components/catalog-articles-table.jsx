@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Search, Plus, MoreHorizontal, Pencil, Trash2, ToggleLeft, Upload, History, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -26,6 +27,7 @@ const toPlainText = (value = '') =>
 export function CatalogArticlesTable({ filters: externalFilters = {} }) {
   const { t } = useLanguage();
   const [search, setSearch] = useState('');
+  const [searchField, setSearchField] = useState('all');
   const [cursor, setCursor] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
@@ -34,7 +36,10 @@ export function CatalogArticlesTable({ filters: externalFilters = {} }) {
   const [historyArticle, setHistoryArticle] = useState(null);
 
   const queryFilters = { ...externalFilters, limit: 50, cursor };
-  if (search.trim()) queryFilters.search = search.trim();
+  if (search.trim()) {
+    queryFilters.search = search.trim();
+    if (searchField !== 'all') queryFilters.searchField = searchField;
+  }
 
   const { data: result = { data: [], pagination: null }, isLoading, isError } = useArticles(queryFilters);
   const { data: recentSearches = [] } = useRecentCatalogSearches();
@@ -71,6 +76,18 @@ export function CatalogArticlesTable({ filters: externalFilters = {} }) {
               className="h-11 rounded-xl border-border/80 bg-background/70 pl-10 text-sm shadow-sm"
             />
           </div>
+          {/* Scope the search to a single field (precision on large catalogs) */}
+          <Select value={searchField} onValueChange={(v) => { setSearchField(v); setCursor(''); }}>
+            <SelectTrigger className="h-11 w-40 shrink-0 rounded-xl border-border/80 bg-background/70 text-sm shadow-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('catalog.search.all', 'Alle Felder')}</SelectItem>
+              <SelectItem value="name">{t('catalog.search.name', 'Nur Titel')}</SelectItem>
+              <SelectItem value="number">{t('catalog.search.number', 'Nur Artikel-Nr.')}</SelectItem>
+              <SelectItem value="ean">{t('catalog.search.ean', 'Nur EAN')}</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex shrink-0 flex-wrap gap-2">
             <Button variant="outline" className="h-10 gap-2 rounded-xl" onClick={() => setImportOpen(true)}>
               <Upload className="h-4 w-4" />

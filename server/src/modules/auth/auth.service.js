@@ -213,6 +213,9 @@ class AuthService {
       avatarUrl,
       role: user.role,
       status: user.status,
+      // Preferences drive the client's start-page resolution (personal override
+      // over the role's configured start page).
+      preferences: user.preferences || {},
       lastLoginAt: new Date(),
     };
 

@@ -13,6 +13,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { showSuccess, showError } from '@/lib/toast';
 import { AvatarUpload } from '@/shared/components/avatar-upload';
 import { ChangePasswordForm } from '@/modules/auth/components/change-password-form';
+import { StartPageCard } from '@/modules/auth/components/start-page-card';
 import { CalendarSyncCard } from '@/modules/integrations/components/calendar-sync-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -284,6 +285,8 @@ export default function ProfilePage() {
               </Button>
             </div>
           </form>
+
+          <StartPageCard />
         </TabsContent>
 
         {/* Password Tab */}

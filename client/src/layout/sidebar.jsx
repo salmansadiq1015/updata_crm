@@ -39,6 +39,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { authService } from '@/modules/auth/services/auth-service';
 import { useUnreadCount } from '@/modules/notifications/hooks/use-notification-feed';
+import { useUiConfig, applySidebarConfig } from '@/shared/hooks/use-ui-config';
+import { UiPreviewBanner } from '@/shared/components/ui-preview-banner';
 
 // Nav model. A section item is either a leaf (link) or a group (parent w/ children).
 const navSectionDefs = [
@@ -350,12 +352,16 @@ function SidebarNav({ collapsed, onNavigate }) {
   const { hasPermission } = usePermissions();
   const { t } = useLanguage();
   const notificationUnread = useUnreadCount();
+  const uiConfig = useUiConfig();
 
   return (
     <LayoutGroup id={collapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}>
+      <UiPreviewBanner collapsed={collapsed} />
       <nav className="space-y-1 px-2">
         {navSectionDefs.map((section, sIdx) => {
-          const visibleItems = section.items.filter((item) => isItemVisible(item, hasPermission));
+          // Permission gating first, then the role's Key-User config (hide/order).
+          const permitted = section.items.filter((item) => isItemVisible(item, hasPermission));
+          const visibleItems = applySidebarConfig(permitted, uiConfig);
           if (visibleItems.length === 0) return null;
 
           return (

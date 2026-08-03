@@ -37,6 +37,10 @@ type TaskWorkspaceState = {
   setActiveFolderId: (id: string | null) => void;
   toggleFolderCollapsed: (folderId: string) => void;
   setPageSize: (n: number) => void;
+  // Role defaults (Key User config) — applied once per session, before the user
+  // touches any filter, so their own choices are never overridden.
+  seededDefaults: boolean;
+  seedDefaults: (config: { assigneeFilter?: string | null; savedView?: string | null; status?: string | null; view?: string | null } | null | undefined) => void;
 };
 
 export const useTaskWorkspaceStore = create<TaskWorkspaceState>((set) => ({
@@ -79,6 +83,18 @@ export const useTaskWorkspaceStore = create<TaskWorkspaceState>((set) => ({
         : [...state.collapsedFolderIds, folderId],
     })),
   setPageSize: (pageSize) => set({ pageSize }),
+  seededDefaults: false,
+  seedDefaults: (config) =>
+    set((state) => {
+      if (state.seededDefaults) return {};
+      if (!config) return { seededDefaults: true };
+      const patch: Record<string, unknown> = { seededDefaults: true };
+      if (config.assigneeFilter) patch.assigneeFilter = config.assigneeFilter;
+      if (config.savedView && config.savedView !== 'none') patch.savedView = config.savedView;
+      if (config.status && config.status !== 'ALL') patch.status = config.status;
+      if (config.view) patch.activeView = config.view;
+      return patch;
+    }),
 }));
 
 export const useTaskWorkspaceViewState = () =>

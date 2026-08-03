@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useTaskRealtime } from '../hooks/use-task-realtime';
@@ -35,6 +35,8 @@ import { TaskQuickAdd } from './task-quick-add';
 import { TaskSidebar } from './task-sidebar';
 import { InputDialog } from './input-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
+// eslint-disable-next-line import/no-unresolved
+import { useUiConfig } from '@/shared/hooks/use-ui-config';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 
@@ -74,6 +76,13 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const setPageSize = useTaskWorkspaceStore((s) => s.setPageSize);
   const department = useTaskWorkspaceStore((s) => s.department);
   const setDepartment = useTaskWorkspaceStore((s) => s.setDepartment);
+
+  // Apply the role's default filters/view (Key User config) once per session.
+  const uiConfig = useUiConfig();
+  const seedDefaults = useTaskWorkspaceStore((s) => s.seedDefaults);
+  useEffect(() => {
+    seedDefaults(uiConfig.taskDefaults);
+  }, [seedDefaults, uiConfig.taskDefaults]);
 
   // Folder / user / bulk data
   const foldersQuery = useFolders();

@@ -55,6 +55,7 @@ import {
   DASHBOARD_TABS,
   KPI_CONFIG,
 } from '@/modules/dashboard/data/dashboard-config';
+import { DashboardGreeting } from './dashboard-greeting';
 import {
   formatDashboardMetric,
   formatDelta,
@@ -492,6 +493,9 @@ export function PremiumDashboard() {
             </div>
           </div>
         </div>
+
+        {/* Day summary + shortcuts (client feedback — role start page) */}
+        <DashboardGreeting />
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-2.5 py-1.5">

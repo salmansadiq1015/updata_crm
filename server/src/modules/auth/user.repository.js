@@ -41,7 +41,7 @@ class UserRepository {
     if (options.populateRole !== false) {
       query = query.populate('permissions' in (options.populateRole || {})
         ? { path: 'role', populate: { path: 'permissions' } }
-        : { path: 'role', select: 'name permissions isSystem' });
+        : { path: 'role', select: 'name permissions isSystem uiConfig' });
     }
 
     return query.lean();
@@ -59,7 +59,7 @@ class UserRepository {
     }
 
     if (options.populateRole !== false) {
-      query = query.populate('role', 'name permissions isSystem');
+      query = query.populate('role', 'name permissions isSystem uiConfig');
     }
 
     return query.lean();

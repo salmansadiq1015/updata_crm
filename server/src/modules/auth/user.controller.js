@@ -224,8 +224,12 @@ class UserController {
   async updatePreferences(req, res, next) {
     try {
       const User = (await import('./user.model.js')).default;
-      const { preferredDepartmentId, dashboard, siteDetail } = req.body || {};
+      const { preferredDepartmentId, dashboard, siteDetail, startPage } = req.body || {};
       const updates = {};
+
+      if (startPage !== undefined) {
+        updates['preferences.startPage'] = (typeof startPage === 'string' && startPage.trim()) ? startPage.trim().slice(0, 200) : null;
+      }
 
       if (preferredDepartmentId !== undefined) {
         updates['preferences.preferredDepartmentId'] = preferredDepartmentId || null;

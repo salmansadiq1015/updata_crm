@@ -21,6 +21,25 @@ class TaskController {
     } catch (err) { next(err); }
   }
 
+  // Resolve (and lazily create) the chat room for a task: project task → the
+  // project's chat; otherwise a dedicated task room.
+  async resolveChat(req, res, next) {
+    try {
+      const isAdmin = req.user.role?.name === 'Admin';
+      const task = await taskService.getById(req.params.id, req.user._id, { isAdmin });
+      const chatRoomService = (await import('../chat/chatRoom.service.js')).default;
+      const room = await chatRoomService.getOrCreateTaskRoom(task, req.user);
+      return res.success({
+        data: {
+          roomId: String(room._id),
+          roomType: room.roomType,
+          name: room.name || task.title,
+          projectId: room.projectId ? String(room.projectId) : null,
+        },
+      });
+    } catch (err) { next(err); }
+  }
+
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;

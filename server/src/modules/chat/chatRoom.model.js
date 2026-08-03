@@ -2,9 +2,10 @@ import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 const chatRoomSchema = new Schema({
-  roomType:        { type: String, enum: ['PROJECT', 'ORDER', 'DM', 'GROUP', 'TEAM', 'DEPARTMENT'], required: true },
+  roomType:        { type: String, enum: ['PROJECT', 'ORDER', 'DM', 'GROUP', 'TEAM', 'DEPARTMENT', 'TASK'], required: true },
   projectId:       { type: Schema.Types.ObjectId, ref: 'Project', default: null },
   orderId:         { type: Schema.Types.ObjectId, ref: 'Order', default: null },
+  taskId:          { type: Schema.Types.ObjectId, ref: 'Task', default: null },
   customerId:      { type: Schema.Types.ObjectId, ref: 'Customer', default: null },
   teamId:          { type: Schema.Types.ObjectId, default: null },
   departmentId:    { type: Schema.Types.ObjectId, default: null },
@@ -34,6 +35,14 @@ chatRoomSchema.index(
   },
 );
 chatRoomSchema.index({ roomType: 1, orderId: 1 });
+chatRoomSchema.index(
+  { taskId: 1, roomType: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { roomType: 'TASK', taskId: { $type: 'objectId' } },
+    name: 'uniq_task_room',
+  },
+);
 chatRoomSchema.index({ roomType: 1, teamId: 1 });
 chatRoomSchema.index({ roomType: 1, departmentId: 1 });
 chatRoomSchema.index({ 'members.userId': 1, lastMessageAt: -1 });

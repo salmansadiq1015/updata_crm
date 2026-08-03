@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Flag, MessageSquare, Loader2, ListTodo } from 'lucide-react';
 import { taskService } from '../services/task-service';
@@ -23,6 +22,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { showError, showSuccess } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { TaskChatDialog } from './task-chat-dialog';
 
 const STATUS_META = {
   OPEN: { de: 'Neu', en: 'New', cls: 'bg-blue-500/10 text-blue-600' },
@@ -48,7 +48,6 @@ const idOf = (v) => (v && typeof v === 'object' ? (v._id || v.id) : v);
 export function TaskDepartmentBoard() {
   const { t, language } = useLanguage();
   const de = language === 'de';
-  const router = useRouter();
   const { hasPermission, isAdmin } = usePermissions();
   const canWrite = isAdmin || hasPermission('tasks:write');
 
@@ -63,6 +62,7 @@ export function TaskDepartmentBoard() {
   const taskFilters = useMemo(() => ({ ...(activeId ? { departmentId: activeId } : {}), limit: 100 }), [activeId]);
   const { data: tasks = [], isLoading } = useTasks(taskFilters);
   const [createOpen, setCreateOpen] = useState(false);
+  const [chatTask, setChatTask] = useState(null);
 
   const activeDept = departments.find((d) => String(idOf(d)) === String(activeId));
 
@@ -122,7 +122,7 @@ export function TaskDepartmentBoard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tasks.map((task) => <TaskRow key={task._id} task={task} de={de} router={router} />)}
+              {tasks.map((task) => <TaskRow key={task._id} task={task} de={de} onChat={setChatTask} />)}
             </TableBody>
           </Table>
         </div>
@@ -136,11 +136,13 @@ export function TaskDepartmentBoard() {
         de={de}
         t={t}
       />
+
+      <TaskChatDialog task={chatTask} open={!!chatTask} onOpenChange={(v) => !v && setChatTask(null)} />
     </div>
   );
 }
 
-function TaskRow({ task, de, router }) {
+function TaskRow({ task, de, onChat }) {
   const src = sourceMeta(task.source?.type);
   const SrcIcon = src.icon;
   const dept = task.departmentId;
@@ -150,7 +152,6 @@ function TaskRow({ task, de, router }) {
   const prio = PRIORITY_META[task.priority] || PRIORITY_META.NONE;
   const subtitle = task.source?.label || task.projectId?.name || task.orderId?.title || null;
   const originLabel = de ? src.labelDe : src.labelEn;
-  const listId = idOf(task.listId);
 
   return (
     <TableRow>
@@ -199,7 +200,7 @@ function TaskRow({ task, de, router }) {
           variant="outline"
           size="sm"
           className="h-7 gap-1.5"
-          onClick={() => listId && router.push(`/tasks/${listId}/${task._id}`)}
+          onClick={() => onChat(task)}
         >
           <MessageSquare className="h-3.5 w-3.5" /> Chat
         </Button>

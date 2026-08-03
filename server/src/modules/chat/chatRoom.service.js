@@ -17,6 +17,26 @@ const chatRoomService = {
     return chatRoomRepository.findById(room._id);
   },
 
+  /**
+   * Resolve the chat for a task: a task linked to a project uses the project's
+   * chat room; any other task gets its own dedicated TASK room. Members are the
+   * creator + assignee(s).
+   */
+  async getOrCreateTaskRoom(task, user) {
+    if (task.projectId) {
+      const projectId = task.projectId._id || task.projectId;
+      return this.getOrCreateProjectRoom(projectId, user);
+    }
+    const memberIds = [
+      ...(task.assigneeIds || []).map((a) => String(a._id || a)),
+      task.assigneeId ? String(task.assigneeId._id || task.assigneeId) : null,
+      task.createdBy ? String(task.createdBy._id || task.createdBy) : null,
+    ].filter(Boolean);
+    const room = await chatRoomRepository.findOrCreateTaskRoom(task._id, userIdOf(user), memberIds, task.title);
+    await chatAccessService.hydrateRoomMembers(room._id, [...new Set([...memberIds, userIdOf(user)])]);
+    return chatRoomRepository.findById(room._id);
+  },
+
   async getOrCreateDmRoom(userIdA, userIdB) {
     const target = await User.findOne({ _id: userIdB, isDeleted: false, status: 'active' }).select('_id').lean();
     if (!target) throw new NotFoundError('User', userIdB);

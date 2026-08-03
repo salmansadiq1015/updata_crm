@@ -16,6 +16,21 @@ class IghController {
     } catch (err) { next(err); }
   }
 
+  async uploadImport(req, res, next) {
+    try {
+      if (!req.file?.buffer) {
+        return res.fail({ message: 'No file uploaded', statusCode: 400 });
+      }
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const job = await ighService.previewUpload(
+        { buffer: req.file.buffer, originalName: req.file.originalname, mimeType: req.file.mimetype },
+        req.user._id,
+        meta,
+      );
+      return res.success({ data: job, message: 'Catalog file parsed — review and approve the import', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
   async previewImport(req, res, next) {
     try {
       const data = await ighService.previewImport(req.user._id, req.body?.type || 'FULL');

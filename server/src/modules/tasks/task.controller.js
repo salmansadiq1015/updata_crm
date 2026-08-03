@@ -1,11 +1,42 @@
 import taskService from './task.service.js';
 
 class TaskController {
+  // Departments (Sparten) available for the task board — task-scoped, ordered.
+  async listDepartments(req, res, next) {
+    try {
+      const Department = (await import('../qop/department.model.js')).default;
+      const departments = await Department.find({ isActive: true, scopeTasks: { $ne: false } })
+        .sort({ sortOrder: 1, name: 1 })
+        .select('name code color icon sortOrder')
+        .lean();
+      return res.success({ data: departments });
+    } catch (err) { next(err); }
+  }
+
   async create(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const task = await taskService.create(req.body, req.user._id, meta);
       return res.success({ data: task, message: 'Task created successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
+  // Resolve (and lazily create) the chat room for a task: project task → the
+  // project's chat; otherwise a dedicated task room.
+  async resolveChat(req, res, next) {
+    try {
+      const isAdmin = req.user.role?.name === 'Admin';
+      const task = await taskService.getById(req.params.id, req.user._id, { isAdmin });
+      const chatRoomService = (await import('../chat/chatRoom.service.js')).default;
+      const room = await chatRoomService.getOrCreateTaskRoom(task, req.user);
+      return res.success({
+        data: {
+          roomId: String(room._id),
+          roomType: room.roomType,
+          name: room.name || task.title,
+          projectId: room.projectId ? String(room.projectId) : null,
+        },
+      });
     } catch (err) { next(err); }
   }
 

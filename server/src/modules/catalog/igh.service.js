@@ -79,6 +79,67 @@ class IghService {
     return job;
   }
 
+  /**
+   * Upload-based import (yearly supplier catalog, e.g. Nussbaum DataExpert XML).
+   * Parses the file, stores it (the worker re-reads it on approval) and creates
+   * a PREVIEW job in the same review pipeline as URL imports. Deliberately does
+   * NOT require the IGH endpoint configuration — file upload works standalone.
+   */
+  async previewUpload({ buffer, originalName, mimeType }, userId, meta = {}) {
+    const xml = buffer.toString('utf-8');
+    const { parseDataExpertXml, isDataExpertXml, parseIghXml } = await import('./igh-import-adapters.js');
+    const articles = isDataExpertXml(xml) ? parseDataExpertXml(xml) : parseIghXml(xml);
+    if (!articles.length) {
+      throw new AppError(
+        'No articles found — the file is not a recognized IGH/DataExpert catalog',
+        400,
+        ERROR_CODES.VALIDATION_ERROR,
+      );
+    }
+
+    const { default: fileService } = await import('../files/file.service.js');
+    const fileMeta = await fileService.upload({
+      buffer,
+      originalName,
+      mimeType: mimeType || 'application/xml',
+      sizeBytes: buffer.length,
+      module: 'catalog',
+      entityType: 'igh_import',
+      uploadedBy: userId,
+      bucket: 'documents',
+      folderPath: 'catalog/igh-imports',
+      category: 'igh_import',
+    });
+
+    const previewData = await this._buildPreviewData(articles);
+    const job = await ighImportJobRepository.create({
+      type: 'UPLOAD',
+      status: 'PREVIEW',
+      articlesCreated: previewData.newCount,
+      articlesUpdated: previewData.updatedCount,
+      articlesSkipped: previewData.obsoleteCount,
+      errorsCount: previewData.validationErrors.length,
+      previewData,
+      sourceChecksum: crypto.createHash('sha256').update(xml).digest('hex'),
+      sourceFileId: fileMeta._id,
+      sourceFileName: originalName,
+      log: `File "${originalName}" (${articles.length} articles) parsed. New: ${previewData.newCount}, Updated: ${previewData.updatedCount}, Errors: ${previewData.validationErrors.length}`,
+      createdBy: userId,
+    });
+
+    auditService.logEvent({
+      eventType: 'catalog.igh.upload_previewed',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { jobId: job._id, fileName: originalName, articles: articles.length },
+      module: 'catalog',
+    });
+
+    return job;
+  }
+
   async approveImport(jobId, userId, meta = {}) {
     const job = await ighImportJobRepository.findById(jobId);
     if (!job) throw new NotFoundError('IghImportJob', jobId);

@@ -23,6 +23,12 @@ const UNIT_ALIASES = new Map([
   ['M³', 'M3'],
   ['CBM', 'M3'],
   ['SET.', 'SET'],
+  // UNECE/ISO codes used by IGH DataExpert catalogs (e.g. Nussbaum).
+  ['PCE', 'STK'],
+  ['MTR', 'M'],
+  ['LTR', 'L'],
+  ['KGM', 'KG'],
+  ['HUR', 'H'],
 ]);
 
 const TOKEN_MIN_LENGTH = 3;

@@ -15,6 +15,8 @@ type TaskWorkspaceState = {
   priority: TaskPriority | 'ALL';
   // 'ALL' = everyone's tasks, 'ME' = only mine, or a specific user id.
   assigneeFilter: string;
+  // 'ALL' = every department, or a specific department id.
+  department: string;
   savedView: TaskSavedView;
   rowSelection: Record<string, boolean>;
   visibleColumns: Record<string, boolean>;
@@ -28,12 +30,17 @@ type TaskWorkspaceState = {
   setStatus: (status: TaskStatus | 'ALL') => void;
   setPriority: (priority: TaskPriority | 'ALL') => void;
   setAssigneeFilter: (assigneeFilter: string) => void;
+  setDepartment: (department: string) => void;
   setSavedView: (savedView: TaskSavedView) => void;
   setRowSelection: (selection: Record<string, boolean>) => void;
   clearFilters: () => void;
   setActiveFolderId: (id: string | null) => void;
   toggleFolderCollapsed: (folderId: string) => void;
   setPageSize: (n: number) => void;
+  // Role defaults (Key User config) — applied once per session, before the user
+  // touches any filter, so their own choices are never overridden.
+  seededDefaults: boolean;
+  seedDefaults: (config: { assigneeFilter?: string | null; savedView?: string | null; status?: string | null; view?: string | null } | null | undefined) => void;
 };
 
 export const useTaskWorkspaceStore = create<TaskWorkspaceState>((set) => ({
@@ -44,6 +51,7 @@ export const useTaskWorkspaceStore = create<TaskWorkspaceState>((set) => ({
   status: 'ALL',
   priority: 'ALL',
   assigneeFilter: 'ALL',
+  department: 'ALL',
   savedView: 'none',
   rowSelection: {},
   visibleColumns: {
@@ -63,9 +71,10 @@ export const useTaskWorkspaceStore = create<TaskWorkspaceState>((set) => ({
   setStatus: (status) => set({ status, savedView: 'none' }),
   setPriority: (priority) => set({ priority, savedView: 'none' }),
   setAssigneeFilter: (assigneeFilter) => set({ assigneeFilter }),
+  setDepartment: (department) => set({ department }),
   setSavedView: (savedView) => set({ savedView }),
   setRowSelection: (rowSelection) => set({ rowSelection }),
-  clearFilters: () => set({ search: '', status: 'ALL', priority: 'ALL', assigneeFilter: 'ALL', savedView: 'none' }),
+  clearFilters: () => set({ search: '', status: 'ALL', priority: 'ALL', assigneeFilter: 'ALL', department: 'ALL', savedView: 'none' }),
   setActiveFolderId: (activeFolderId) => set({ activeFolderId }),
   toggleFolderCollapsed: (folderId) =>
     set((state) => ({
@@ -74,6 +83,18 @@ export const useTaskWorkspaceStore = create<TaskWorkspaceState>((set) => ({
         : [...state.collapsedFolderIds, folderId],
     })),
   setPageSize: (pageSize) => set({ pageSize }),
+  seededDefaults: false,
+  seedDefaults: (config) =>
+    set((state) => {
+      if (state.seededDefaults) return {};
+      if (!config) return { seededDefaults: true };
+      const patch: Record<string, unknown> = { seededDefaults: true };
+      if (config.assigneeFilter) patch.assigneeFilter = config.assigneeFilter;
+      if (config.savedView && config.savedView !== 'none') patch.savedView = config.savedView;
+      if (config.status && config.status !== 'ALL') patch.status = config.status;
+      if (config.view) patch.activeView = config.view;
+      return patch;
+    }),
 }));
 
 export const useTaskWorkspaceViewState = () =>

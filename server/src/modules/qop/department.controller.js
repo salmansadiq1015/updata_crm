@@ -5,27 +5,34 @@ class DepartmentController {
   async list(req, res, next) {
     try {
       const filter = req.query.includeInactive === 'true' ? {} : { isActive: true };
-      const departments = await Department.find(filter).sort({ name: 1 }).lean();
+      // Scope: 'qop' → commercial (numbering) departments; 'tasks' → task-board
+      // departments; omitted → all. Backward compatible (QOP passes scope=qop).
+      if (req.query.scope === 'qop') filter.scopeQop = { $ne: false };
+      else if (req.query.scope === 'tasks') filter.scopeTasks = { $ne: false };
+      const departments = await Department.find(filter).sort({ sortOrder: 1, name: 1 }).lean();
       return res.success({ data: departments });
     } catch (err) { next(err); }
   }
 
   async create(req, res, next) {
     try {
-      const { name, code } = req.body;
+      const { name, code, color, icon, sortOrder, scopeQop, scopeTasks } = req.body;
       const existing = await Department.findOne({ code: code.toUpperCase() });
       if (existing) throw new ConflictError(`Department code '${code}' already exists`);
-      const department = await Department.create({ name, code });
+      const department = await Department.create({ name, code, color, icon, sortOrder, scopeQop, scopeTasks });
       return res.success({ data: department, statusCode: 201 });
     } catch (err) { next(err); }
   }
 
   async update(req, res, next) {
     try {
-      const { name, isActive } = req.body;
+      const updates = {};
+      for (const f of ['name', 'isActive', 'color', 'icon', 'sortOrder', 'scopeQop', 'scopeTasks']) {
+        if (req.body[f] !== undefined) updates[f] = req.body[f];
+      }
       const department = await Department.findByIdAndUpdate(
         req.params.id,
-        { name, isActive },
+        updates,
         { new: true, runValidators: true },
       );
       if (!department) throw new NotFoundError('Department not found');

@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 export const IGH_JOB_TYPES = Object.freeze({
   FULL: 'FULL',
   DELTA: 'DELTA',
+  // Manual upload of a supplier catalog file (IGH DataExpert XML, yearly).
+  UPLOAD: 'UPLOAD',
 });
 
 export const IGH_JOB_STATUSES = Object.freeze({
@@ -55,6 +57,17 @@ const ighImportJobSchema = new mongoose.Schema(
     sourceChecksum: {
       type: String,
       maxlength: 128,
+      default: null,
+    },
+    // Uploaded catalog file (type UPLOAD): the worker re-reads it on approval.
+    sourceFileId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FileMetadata',
+      default: null,
+    },
+    sourceFileName: {
+      type: String,
+      maxlength: 255,
       default: null,
     },
     approvedBy: {

@@ -44,11 +44,24 @@ class TaskService {
       );
     }
 
+    // Default Herkunft (source) from the linked record when not explicitly set.
+    let source = data.source && data.source.type ? data.source : null;
+    if (!source) {
+      if (data.projectId) source = { type: 'PROJECT', refId: data.projectId };
+      else if (data.orderId) source = { type: 'ORDER', refId: data.orderId };
+      else if (data.meetingId) source = { type: 'MEETING', refId: data.meetingId };
+      else source = { type: 'MANUAL' };
+    }
+    // Default department from the assignee's department when not explicitly set.
+    const departmentId = data.departmentId || await this._resolveDepartmentForUser(assigneeId);
+
     const task = await taskRepository.create({
       ...data,
       listId,
       assigneeId,
       assigneeIds,
+      source,
+      departmentId,
       createdBy: userId,
     });
     const createdTask = await taskRepository.findById(task._id);
@@ -162,6 +175,25 @@ class TaskService {
       () => taskRepository.findWithCursor({ cursor, limit, sortBy, sortOrder, filters: scopedFilters }),
       LIST_TTL,
     );
+  }
+
+  /** Resolve a default department for a task from the assignee's department string. */
+  async _resolveDepartmentForUser(userId) {
+    if (!userId) return null;
+    try {
+      const User = (await import('../auth/user.model.js')).default;
+      const Department = (await import('../qop/department.model.js')).default;
+      const user = await User.findById(userId).select('department').lean();
+      if (!user?.department) return null;
+      const dep = await Department.findOne({
+        name: new RegExp(`^${String(user.department).trim()}$`, 'i'),
+        isActive: true,
+        scopeTasks: { $ne: false },
+      }).select('_id').lean();
+      return dep?._id || null;
+    } catch {
+      return null;
+    }
   }
 
   async update(id, data, userId, meta = {}) {

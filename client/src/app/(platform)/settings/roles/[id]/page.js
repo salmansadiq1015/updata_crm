@@ -10,6 +10,7 @@ import { queryKeys } from '@/lib/query/keys';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { RoleForm } from '@/modules/roles/components/role-form';
 import { PermissionMatrix } from '@/modules/roles/components/permission-matrix';
+import { RoleUiConfigEditor } from '@/modules/roles/components/role-ui-config-editor';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { EmptyState } from '@/shared/components/empty-state';
 import { Button } from '@/components/ui/button';
@@ -27,8 +28,8 @@ import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 import {
-  Pencil, Trash2, Shield, Users, Calendar, 
-  Copy, Lock, Key, MoreHorizontal, Eye, Hash, Sparkles,
+  Pencil, Trash2, Shield, Users, Calendar,
+  Copy, Lock, Key, MoreHorizontal, Eye, Hash, Sparkles, LayoutDashboard,
   CheckCircle2,
 } from 'lucide-react';
 
@@ -290,6 +291,10 @@ export default function RoleDetailPage() {
                   {assignedUsers.length}
                 </span>
               </TabsTrigger>
+              <TabsTrigger value="startview" className="gap-1.5">
+                <LayoutDashboard className="h-3.5 w-3.5" />
+                Startseite & Navigation
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="permissions">
@@ -371,6 +376,10 @@ export default function RoleDetailPage() {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="startview">
+              <RoleUiConfigEditor role={role} />
             </TabsContent>
           </Tabs>
         </div>

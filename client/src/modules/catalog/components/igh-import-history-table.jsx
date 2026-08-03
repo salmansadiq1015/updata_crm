@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { RefreshCw, Download, ChevronDown, ChevronRight } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { RefreshCw, Download, ChevronDown, ChevronRight, Loader2, Upload } from 'lucide-react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -13,6 +13,7 @@ import { useIghImportHistory, useIghImportJob, useIghConfig } from '../hooks/use
 import { useIghMutations } from '../hooks/use-igh-mutations';
 import { IghImportPreviewDialog } from './igh-import-preview-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { showError } from '@/lib/toast';
 
 const STATUS_VARIANT = {
   PREVIEW: 'secondary',
@@ -85,45 +86,68 @@ function JobRow({ job }) {
 export function IghImportHistoryTable() {
   const { t } = useLanguage();
   const { data: jobs = [], isLoading } = useIghImportHistory();
-  const { previewImport, approveImport, importDelta } = useIghMutations();
+  const { previewImport, uploadImport, approveImport, importDelta } = useIghMutations();
   const { data: config } = useIghConfig();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState(null);
+  const fileInputRef = useRef(null);
 
-  if (!config?.isEnabled) {
-    return (
-      <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
-        {t('catalog.igh.disabledNotice')}
-      </div>
-    );
-  }
+  const handleFilePicked = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const result = await uploadImport.mutateAsync(file);
+      setPreview(result?.data ?? result);
+      setPreviewOpen(true);
+    } catch (err) {
+      showError(err?.response?.data?.message || err?.message || err);
+    }
+  };
 
   return (
     <>
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Yearly supplier catalog upload (IGH DataExpert XML) — works without
+              the endpoint configuration below. */}
+          <input ref={fileInputRef} type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={handleFilePicked} />
           <Button
             size="sm"
-            variant="outline"
-            disabled={previewImport.isPending || approveImport.isPending}
-            onClick={async () => {
-              const result = await previewImport.mutateAsync();
-              setPreview(result?.data ?? result);
-              setPreviewOpen(true);
-            }}
+            disabled={uploadImport.isPending || approveImport.isPending}
+            onClick={() => fileInputRef.current?.click()}
           >
-            <Download className="w-4 h-4 mr-2" />
-            {previewImport.isPending ? t('common.loading') : t('catalog.igh.importFull')}
+            {uploadImport.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+            {uploadImport.isPending ? t('catalog.igh.uploadParsing', 'Datei wird verarbeitet…') : t('catalog.igh.uploadFile', 'Katalogdatei importieren (XML)')}
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={importDelta.isPending}
-            onClick={() => importDelta.mutate()}
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            {t('catalog.igh.importDelta')}
-          </Button>
+          {config?.isEnabled ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={previewImport.isPending || approveImport.isPending}
+                onClick={async () => {
+                  const result = await previewImport.mutateAsync();
+                  setPreview(result?.data ?? result);
+                  setPreviewOpen(true);
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {previewImport.isPending ? t('common.loading') : t('catalog.igh.importFull')}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={importDelta.isPending}
+                onClick={() => importDelta.mutate()}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {t('catalog.igh.importDelta')}
+              </Button>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">{t('catalog.igh.disabledNotice')}</span>
+          )}
         </div>
 
         <div className="rounded-md border">

@@ -19,7 +19,7 @@ export function LoginForm() {
   const { t, locale } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/dashboard';
+  const redirectTo = searchParams.get('redirect');
   const [isLoading, setIsLoading] = useState(false);
   const [lockMessage, setLockMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -39,7 +39,12 @@ export function LoginForm() {
         ? `${result.user.firstName}`
         : result?.user?.email || data.email;
       showSuccess(t('auth.loginSuccess', 'Welcome back, {name}!', { name }));
-      router.push(redirectTo);
+      // Role-dependent start page (Key User config); a personal preference and
+      // an explicit ?redirect= both take precedence.
+      const startPage = result?.user?.preferences?.startPage
+        || result?.user?.role?.uiConfig?.desktop?.startPage
+        || '/dashboard';
+      router.push(redirectTo || startPage);
     } catch (err) {
       const status = err.response?.status ?? err.statusCode;
       const body = err.response?.data ?? err;

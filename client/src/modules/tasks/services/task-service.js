@@ -7,6 +7,16 @@ export const taskService = {
     return res.data;
   },
 
+  async listDepartments() {
+    const res = await apiClient.get(ENDPOINTS.TASKS.DEPARTMENTS);
+    return res.data;
+  },
+
+  async resolveChat(taskId) {
+    const res = await apiClient.get(ENDPOINTS.TASKS.CHAT(taskId));
+    return res.data;
+  },
+
   async getById(id) {
     const res = await apiClient.get(ENDPOINTS.TASKS.BY_ID(id));
     return res.data;

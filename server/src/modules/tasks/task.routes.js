@@ -14,11 +14,13 @@ import {
 
 const router = Router();
 
+router.get('/departments', authenticate, requirePermission('tasks:read'), (req, res, next) => taskController.listDepartments(req, res, next));
 router.get('/', authenticate, requirePermission('tasks:read'), validate(listTasksSchema), (req, res, next) => taskController.list(req, res, next));
 router.post('/', authenticate, requirePermission('tasks:write'), validate(createTaskSchema), (req, res, next) => taskController.create(req, res, next));
 router.post('/bulk', authenticate, requirePermission('tasks:write'), validate(bulkOperationSchema), (req, res, next) => taskController.bulkOperation(req, res, next));
 router.patch('/batch', authenticate, requirePermission('tasks:write'), validate(batchPatchSchema), (req, res, next) => taskController.batchPatch(req, res, next));
 router.get('/:id', authenticate, requirePermission('tasks:read'), validate(taskIdParamSchema), (req, res, next) => taskController.getById(req, res, next));
+router.get('/:id/chat', authenticate, requirePermission('tasks:read'), validate(taskIdParamSchema), (req, res, next) => taskController.resolveChat(req, res, next));
 router.put('/:id', authenticate, requirePermission('tasks:write'), validate(updateTaskSchema), (req, res, next) => taskController.update(req, res, next));
 router.delete('/:id', authenticate, requirePermission('tasks:delete'), validate(taskIdParamSchema), (req, res, next) => taskController.remove(req, res, next));
 router.patch('/:id/status', authenticate, requirePermission('tasks:write'), validate(changeStatusSchema), (req, res, next) => taskController.changeStatus(req, res, next));

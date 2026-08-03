@@ -153,6 +153,9 @@ class RoleService {
     // Get all users with this role and invalidate their permission cache
     // Using a pattern invalidation since we can't efficiently query all user IDs here
     await cacheManager.invalidatePattern(`${config.redis.keyPrefix}auth:permissions:*`);
+    // Cached /me responses embed the populated role (incl. uiConfig) — clear them
+    // so a Key-User config change reaches users without waiting for the TTL.
+    await cacheManager.invalidatePattern(`${config.redis.keyPrefix}auth:user:*`);
   }
 }
 

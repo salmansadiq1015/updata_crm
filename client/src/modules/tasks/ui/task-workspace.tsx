@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useTaskRealtime } from '../hooks/use-task-realtime';
@@ -35,6 +35,8 @@ import { TaskQuickAdd } from './task-quick-add';
 import { TaskSidebar } from './task-sidebar';
 import { InputDialog } from './input-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
+// eslint-disable-next-line import/no-unresolved
+import { useUiConfig } from '@/shared/hooks/use-ui-config';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBreadcrumbLabel } from '@/stores/breadcrumb-store';
 
@@ -72,6 +74,15 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const setRowSelection = useTaskWorkspaceStore((s) => s.setRowSelection);
   const pageSize = useTaskWorkspaceStore((s) => s.pageSize);
   const setPageSize = useTaskWorkspaceStore((s) => s.setPageSize);
+  const department = useTaskWorkspaceStore((s) => s.department);
+  const setDepartment = useTaskWorkspaceStore((s) => s.setDepartment);
+
+  // Apply the role's default filters/view (Key User config) once per session.
+  const uiConfig = useUiConfig();
+  const seedDefaults = useTaskWorkspaceStore((s) => s.seedDefaults);
+  useEffect(() => {
+    seedDefaults(uiConfig.taskDefaults);
+  }, [seedDefaults, uiConfig.taskDefaults]);
 
   // Folder / user / bulk data
   const foldersQuery = useFolders();
@@ -150,11 +161,12 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     ...(status !== 'ALL' ? { status } : {}),
     ...(priority !== 'ALL' ? { priority } : {}),
     ...(resolvedAssigneeId ? { assigneeId: resolvedAssigneeId } : {}),
+    ...(department !== 'ALL' ? { departmentId: department } : {}),
     ...(savedView === 'dueToday' ? { dueToday: true } : {}),
     ...(savedView === 'overdue' ? { overdue: true } : {}),
     ...(savedView === 'pool' ? { inPool: true } : {}),
     hasParent: false,
-  }), [debouncedSearch, listId, priority, resolvedAssigneeId, savedView, status]);
+  }), [debouncedSearch, department, listId, priority, resolvedAssigneeId, savedView, status]);
 
   const taskPageSize = activeView === 'calendar' || activeView === 'timeline'
     ? Math.max(pageSize, 100)
@@ -258,6 +270,8 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
           onStatusChange={setStatus}
           onPriorityChange={setPriority}
           onAssigneeFilterChange={setAssigneeFilter}
+          department={department}
+          onDepartmentChange={setDepartment}
           onCreateTask={(title) => mutations.createTask.mutate(title)}
           pageSize={pageSize}
           onPageSizeChange={setPageSize}

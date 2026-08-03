@@ -5,7 +5,6 @@ import {
   buildCursorResponse,
 } from '../../shared/utils/pagination.js';
 import { buildFilter } from '../../shared/utils/queryBuilder.js';
-import { buildSearchTokens } from './catalogNormalization.js';
 
 const ALLOWED_FILTERS = {
   categoryId: 'objectId',
@@ -62,20 +61,31 @@ class ArticleRepository {
     };
 
     if (search) {
-      const searchTokens = buildSearchTokens(search);
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { articleNumber: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { supplierName: { $regex: search, $options: 'i' } },
-        { supplierReference: { $regex: search, $options: 'i' } },
-        { manufacturerName: { $regex: search, $options: 'i' } },
-        { manufacturerPartNumber: { $regex: search, $options: 'i' } },
-        { productGroup: { $regex: search, $options: 'i' } },
-        { externalCatalogItemId: { $regex: search, $options: 'i' } },
-        ...(searchTokens.length ? [{ searchTokens: { $in: searchTokens } }] : []),
-      ];
+      // Precise search: EVERY word of the query must match at least one field
+      // (AND across words, OR across fields). The old behaviour OR'ed 3-char
+      // trigram tokens ($in on searchTokens), so a precise title matched almost
+      // the whole catalog. `searchField` narrows the fields (name/number/ean).
+      const SEARCH_FIELD_SETS = {
+        name: ['name'],
+        number: ['articleNumber', 'ighArticleNumber', 'manufacturerPartNumber', 'supplierReference', 'externalCatalogItemId'],
+        ean: ['ean'],
+        all: [
+          'name', 'articleNumber', 'description', 'supplierName', 'supplierReference',
+          'manufacturerName', 'manufacturerPartNumber', 'productGroup',
+          'externalCatalogItemId', 'ighArticleNumber', 'ean',
+        ],
+      };
+      const fields = SEARCH_FIELD_SETS[filters.searchField] || SEARCH_FIELD_SETS.all;
+      const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const words = String(search).trim().split(/\s+/).filter(Boolean).slice(0, 8);
+      const wordClauses = words.map((word) => ({
+        $or: fields.map((field) => ({ [field]: { $regex: escapeRegex(word), $options: 'i' } })),
+      }));
+      if (wordClauses.length) {
+        filter.$and = [...(filter.$and || []), ...wordClauses];
+      }
     }
+    delete filters.searchField;
 
     // Price range filters
     if (filters.priceMin !== undefined || filters.priceMax !== undefined) {

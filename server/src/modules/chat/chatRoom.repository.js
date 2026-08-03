@@ -2,6 +2,23 @@ import ChatRoom from './chatRoom.model.js';
 import '../crm/customer.model.js';
 
 const chatRoomRepository = {
+  async findOrCreateTaskRoom(taskId, createdByUserId, memberIds = [], name = null) {
+    const members = [...new Set([String(createdByUserId), ...memberIds.map(String)])];
+    return ChatRoom.findOneAndUpdate(
+      { roomType: 'TASK', taskId },
+      {
+        $setOnInsert: {
+          roomType: 'TASK',
+          taskId,
+          name,
+          createdBy: createdByUserId,
+          members: members.map((userId) => ({ userId })),
+        },
+      },
+      { upsert: true, new: true },
+    );
+  },
+
   async findOrCreateProjectRoom(projectId, createdByUserId, memberIds = []) {
     const members = [...new Set([String(createdByUserId), ...memberIds.map(String)])];
     return ChatRoom.findOneAndUpdate(

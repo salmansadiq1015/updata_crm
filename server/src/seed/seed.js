@@ -623,17 +623,37 @@ export async function seedDatabase() {
     // 5. Seed default departments (Abteilungen) — required to create quotations /
     // orders / invoices (and their per-department numbering). Without at least one,
     // a fresh install is blocked from the entire commercial flow. Idempotent by code.
+    // Commercial departments (scopeQop) drive QOP numbering; the operational ones
+    // (Projekte/Disposition/Buchhaltung/Administration) are task-board only.
     const DEFAULT_DEPARTMENTS = [
-      { name: 'Heizung', code: 'HZ' },
-      { name: 'Sanitär', code: 'SA' },
-      { name: 'Service', code: 'SV' },
+      { name: 'Heizung', code: 'HZ', color: '#EF4444', icon: 'Flame', sortOrder: 1, scopeQop: true, scopeTasks: true },
+      { name: 'Sanitär', code: 'SA', color: '#3B82F6', icon: 'Droplet', sortOrder: 2, scopeQop: true, scopeTasks: true },
+      { name: 'Projekte', code: 'PR', color: '#8B5CF6', icon: 'FolderKanban', sortOrder: 3, scopeQop: false, scopeTasks: true },
+      { name: 'Service', code: 'SV', color: '#22C55E', icon: 'Wrench', sortOrder: 4, scopeQop: true, scopeTasks: true },
+      { name: 'Disposition', code: 'DI', color: '#F59E0B', icon: 'ClipboardList', sortOrder: 5, scopeQop: false, scopeTasks: true },
+      { name: 'Buchhaltung', code: 'BU', color: '#14B8A6', icon: 'Receipt', sortOrder: 6, scopeQop: false, scopeTasks: true },
+      { name: 'Administration', code: 'AD', color: '#64748B', icon: 'Building2', sortOrder: 7, scopeQop: false, scopeTasks: true },
     ];
     for (const dept of DEFAULT_DEPARTMENTS) {
-      await Department.updateOne(
+      const before = await Department.findOneAndUpdate(
         { code: dept.code },
-        { $setOnInsert: { name: dept.name, code: dept.code, isActive: true } },
-        { upsert: true },
+        {
+          $setOnInsert: {
+            name: dept.name, code: dept.code, isActive: true,
+            color: dept.color, icon: dept.icon, sortOrder: dept.sortOrder,
+            scopeQop: dept.scopeQop, scopeTasks: dept.scopeTasks,
+          },
+        },
+        { upsert: true, new: false },
       );
+      // Backfill presentation/scope on departments created before these fields
+      // existed (only when missing, so admin edits are preserved).
+      if (before && before.color == null) {
+        await Department.updateOne(
+          { code: dept.code },
+          { $set: { color: dept.color, icon: dept.icon, sortOrder: dept.sortOrder, scopeQop: dept.scopeQop, scopeTasks: dept.scopeTasks } },
+        );
+      }
     }
     logger.info('Seeded default departments', { module: 'seed', count: DEFAULT_DEPARTMENTS.length });
 

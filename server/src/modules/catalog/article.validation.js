@@ -61,6 +61,7 @@ export const listArticlesSchema = {
   query: cursorPagination.keys({
     q: Joi.string().trim().max(200),
     search: Joi.string().trim().max(200),
+    searchField: Joi.string().valid('all', 'name', 'number', 'ean').default('all'),
     categoryId: objectId,
     catalogConnectionId: objectId,
     supplierId: objectId,

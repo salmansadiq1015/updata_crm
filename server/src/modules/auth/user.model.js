@@ -178,6 +178,8 @@ const userSchema = new mongoose.Schema(
       siteDetail: {
         hiddenTabs: { type: [String], default: [] },
       },
+      // Personal start page — overrides the role's configured start page.
+      startPage: { type: String, trim: true, maxlength: 200, default: null },
     },
     schedulingSkills: {
       type: [String],

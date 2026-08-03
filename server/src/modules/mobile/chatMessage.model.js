@@ -39,6 +39,10 @@ const chatMessageSchema = new mongoose.Schema(
       ref: 'FileMetadata',
       default: null,
     },
+    // Voice message transcription (auto) + on-demand translations (lang → text).
+    transcript: { type: String, default: null },
+    transcriptStatus: { type: String, enum: ['none', 'pending', 'done', 'failed'], default: 'none' },
+    translations: { type: Map, of: String, default: undefined },
     mentions: [{ type: mongoose.Schema.Types.ObjectId }],
     sentAt: { type: Date, required: true, default: Date.now },
     isDeleted: { type: Boolean, default: false },

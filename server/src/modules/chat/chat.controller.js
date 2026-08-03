@@ -66,6 +66,18 @@ class ChatController {
     } catch (err) { next(err); }
   }
 
+  async translateMessage(req, res, next) {
+    try {
+      const result = await chatMessageService.translateMessage(
+        req.params.roomId,
+        req.params.msgId,
+        req.body?.lang || 'de',
+        req.user,
+      );
+      return res.success({ data: result });
+    } catch (err) { next(err); }
+  }
+
   async markRead(req, res, next) {
     try {
       await chatMessageService.markRoomRead(req.params.roomId, req.user);

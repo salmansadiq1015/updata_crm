@@ -27,6 +27,7 @@ router.post('/rooms/:roomId/messages', requirePermission('chat:write'), validate
 router.put('/rooms/:roomId/read', requirePermission('chat:read'), validate(roomIdParamSchema), chatController.markRead.bind(chatController));
 router.post('/rooms/:roomId/messages/:msgId/reactions', requirePermission('chat:write'), validate(reactionSchema), chatController.addReaction.bind(chatController));
 router.delete('/rooms/:roomId/messages/:msgId/reactions', requirePermission('chat:write'), validate(reactionSchema), chatController.removeReaction.bind(chatController));
+router.post('/rooms/:roomId/messages/:msgId/translate', requirePermission('chat:read'), validate(messageParamSchema), chatController.translateMessage.bind(chatController));
 router.delete('/rooms/:roomId/messages/:msgId', requirePermission('chat:write'), validate(messageParamSchema), chatController.deleteMessage.bind(chatController));
 router.patch('/rooms/:roomId/messages/:msgId', requirePermission('chat:write'), validate(editMessageSchema), chatController.editMessage.bind(chatController));
 router.post('/rooms/:roomId/block', requirePermission('chat:write'), validate(roomIdParamSchema), chatController.blockUser.bind(chatController));

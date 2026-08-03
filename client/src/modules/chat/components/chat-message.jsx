@@ -8,9 +8,10 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Reply, Smile, Trash2, Pencil, MoreHorizontal, Check, CheckCheck, FileText } from 'lucide-react';
+import { Reply, Smile, Trash2, Pencil, MoreHorizontal, Check, CheckCheck, FileText, Languages, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { chatService } from '../services/chat-service';
 import { ChatReactionBar } from './chat-reaction-bar';
 import { ChatEmojiPicker } from './chat-emoji-picker';
 
@@ -33,6 +34,21 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
   const [pickerOpen, setPickerOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [translated, setTranslated] = useState(null);
+  const [translating, setTranslating] = useState(false);
+
+  const handleTranslate = async () => {
+    if (translating) return;
+    setTranslating(true);
+    try {
+      const res = await chatService.translateMessage(message.roomId, message._id, locale);
+      setTranslated(res?.text || '');
+    } catch {
+      setTranslated(null);
+    } finally {
+      setTranslating(false);
+    }
+  };
 
   const senderName = message.senderName || message.sender_name || '?';
   const ts = message.sentAt || message.created_at || message.createdAt;
@@ -67,6 +83,12 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
         return (
           <div className="flex flex-col gap-1">
             <audio controls src={message.attachmentUrl} className="h-10 max-w-[220px]" />
+            {message.transcriptStatus === 'pending' && (
+              <span className="text-[11px] italic opacity-70">{t('chat.transcribing', 'Wird transkribiert…')}</span>
+            )}
+            {message.transcript && (
+              <span className="text-[13px] leading-snug whitespace-pre-wrap opacity-90">{message.transcript}</span>
+            )}
           </div>
         );
       case 'VIDEO':
@@ -132,6 +154,27 @@ export function ChatMessage({ message, isMine, showSenderName, showTimestamp, cu
           )}
 
           {renderContent()}
+
+          {/* On-demand translation (text + transcribed voice) */}
+          {!isDeleted && (message.content?.trim() || message.transcript) && (
+            <div className="mt-1">
+              {translated != null ? (
+                <div className={cn('rounded-md px-2 py-1 text-[13px] leading-snug', isMine ? 'bg-white/10' : 'bg-muted/50')}>
+                  <span className="mr-1 text-[10px] uppercase opacity-60">{t('chat.translation', 'Übersetzung')}:</span>{translated}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleTranslate}
+                  disabled={translating}
+                  className={cn('inline-flex items-center gap-1 text-[11px] opacity-70 hover:opacity-100', isMine ? 'text-white' : 'text-muted-foreground')}
+                >
+                  {translating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Languages className="h-3 w-3" />}
+                  {t('chat.translate', 'Übersetzen')}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Time + read tick */}
           {showTimestamp && (

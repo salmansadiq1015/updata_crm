@@ -21,6 +21,7 @@ export const chatService = {
   listMessages: (roomId, params)               => apiClient.get(ENDPOINTS.CHAT.ROOM_MESSAGES(roomId), { params }).then(r => r.data || []),
   searchMessages: (params)                     => apiClient.get(ENDPOINTS.CHAT.SEARCH, { params }).then(r => r.data || []),
   sendMessage: (roomId, data)                  => apiClient.post(ENDPOINTS.CHAT.ROOM_MESSAGES(roomId), data).then(r => r.data),
+  translateMessage: (roomId, msgId, lang)      => apiClient.post(ENDPOINTS.CHAT.MESSAGE_TRANSLATE(roomId, msgId), { lang }).then(r => r.data),
   markRead: (roomId)                           => apiClient.put(ENDPOINTS.CHAT.ROOM_READ(roomId)).then(r => r.data),
   addReaction: (roomId, msgId, emoji)          => apiClient.post(ENDPOINTS.CHAT.MESSAGE_REACTIONS(roomId, msgId), { emoji }).then(r => r.data),
   removeReaction: (roomId, msgId, emoji)       => apiClient.delete(ENDPOINTS.CHAT.MESSAGE_REACTIONS(roomId, msgId), { data: { emoji } }).then(r => r.data),

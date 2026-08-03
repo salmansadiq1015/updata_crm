@@ -6,6 +6,7 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import { NotFoundError, AuthorizationError, ValidationError } from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
+import config from '../../config/index.js';
 
 function userIdOf(user) {
   return String(user?._id ?? user);
@@ -72,6 +73,7 @@ const chatMessageService = {
       content: data.content || '',
       attachmentUrl: data.attachmentUrl || null,
       attachmentFileId: data.attachmentFileId || null,
+      transcriptStatus: (data.messageType === 'AUDIO' && data.attachmentFileId) ? 'pending' : 'none',
       mentions: data.mentions || [],
       replyToId: data.replyToId || null,
       replyToSnippet,
@@ -120,7 +122,72 @@ const chatMessageService = {
     // they are stored and visible there. Non-fatal: never block sending.
     await chatMessageService._linkAttachmentToProject(room, message, senderId);
 
+    // Voice messages: transcribe in the background (never blocks sending).
+    if (message.messageType === 'AUDIO' && message.attachmentFileId) {
+      chatMessageService._transcribeAudioMessage(message).catch(() => {});
+    }
+
     return message;
+  },
+
+  /**
+   * Transcribe a voice message via the STT gateway (Whisper) and store the text
+   * on the message. Emits a socket update so the client shows the transcript.
+   * Best-effort: failures mark the status 'failed', never throw.
+   * @private
+   */
+  async _transcribeAudioMessage(message) {
+    try {
+      const { default: fileService } = await import('../files/file.service.js');
+      const { default: sttGateway } = await import('../ai/sttGateway.service.js');
+      const meta = await fileService.getById(message.attachmentFileId);
+      if (!meta?.key) throw new Error('No audio file');
+      const buffer = await fileService.downloadBuffer(meta.key);
+      if (!buffer) throw new Error('No audio buffer');
+      const result = await sttGateway.transcribe(buffer, { mimeType: meta.mimeType || 'audio/webm' });
+      const text = (result?.text || '').trim();
+      await ChatMessage.updateOne(
+        { _id: message._id },
+        { $set: { transcript: text || null, transcriptStatus: text ? 'done' : 'failed' } },
+      );
+      const updated = await ChatMessage.findById(message._id).lean();
+      global.io?.to(`room:${message.roomId}`).emit('chat:message_updated', { roomId: String(message.roomId), message: updated });
+    } catch {
+      await ChatMessage.updateOne({ _id: message._id }, { $set: { transcriptStatus: 'failed' } }).catch(() => {});
+    }
+  },
+
+  /**
+   * Translate a message (its transcript or text) into a target language on
+   * demand, caching the result per language on the message.
+   */
+  async translateMessage(roomId, messageId, targetLang, user) {
+    await chatRoomService.assertMembership(roomId, user);
+    const message = await ChatMessage.findOne({ _id: messageId, roomId });
+    if (!message) throw new NotFoundError('ChatMessage', messageId);
+    const lang = String(targetLang || 'de').slice(0, 5).toLowerCase();
+    const cached = message.translations?.get?.(lang);
+    if (cached) return { lang, text: cached, cached: true };
+
+    const sourceText = (message.transcript || message.content || '').trim();
+    if (!sourceText) return { lang, text: '', cached: false };
+
+    const { default: OpenAI } = await import('openai');
+    const openai = new OpenAI({ apiKey: config.ai.apiKey });
+    const langName = { de: 'German', en: 'English', fr: 'French', it: 'Italian' }[lang] || lang;
+    const resp = await openai.chat.completions.create({
+      model: config.ai.model || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: `Translate the user message into ${langName}. Return only the translation, no quotes, no explanation.` },
+        { role: 'user', content: sourceText },
+      ],
+      temperature: 0,
+    });
+    const text = (resp.choices?.[0]?.message?.content || '').trim();
+    if (text) {
+      await ChatMessage.updateOne({ _id: messageId }, { $set: { [`translations.${lang}`]: text } });
+    }
+    return { lang, text, cached: false };
   },
 
   /**

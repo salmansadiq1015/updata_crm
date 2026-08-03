@@ -494,6 +494,7 @@ export const ENDPOINTS = Object.freeze({
     ROOM_BLOCK:        (id)      => `/chat/rooms/${id}/block`,
     MESSAGE:           (rId,mId) => `/chat/rooms/${rId}/messages/${mId}`,
     MESSAGE_REACTIONS: (rId,mId) => `/chat/rooms/${rId}/messages/${mId}/reactions`,
+    MESSAGE_TRANSLATE: (rId,mId) => `/chat/rooms/${rId}/messages/${mId}/translate`,
     GROUP_ROOM:        '/chat/rooms/group',
     JOIN_ROOM:         '/chat/rooms/join',
     LEAVE_ROOM:        (id)      => `/chat/rooms/${id}/leave`,

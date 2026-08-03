@@ -76,15 +76,22 @@ class ScheduleController {
       }
 
       if (format === 'excel') {
-        const { csv, filename } = await scheduleService.exportExcel(req.params.id);
-        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        const { buffer, filename } = await scheduleService.exportExcel(req.params.id);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        return res.send(csv);
+        return res.send(buffer);
       }
 
-      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent'), variant: query.variant };
       const generatedDoc = await scheduleService.exportPdf(req.params.id, req.user._id, meta);
       return res.success({ data: generatedDoc, message: 'Schedule PDF generated successfully' });
+    } catch (err) { next(err); }
+  }
+
+  async listProtocols(req, res, next) {
+    try {
+      const data = await scheduleService.listProtocols(req.params.id);
+      return res.success({ data });
     } catch (err) { next(err); }
   }
 

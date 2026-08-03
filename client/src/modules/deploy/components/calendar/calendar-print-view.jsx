@@ -33,6 +33,8 @@ export function CalendarPrintView({ employees, days, title }) {
                   <th className="text-left py-1 pr-2 w-[120px]">{t('deploy.print.date', 'Datum')}</th>
                   <th className="text-left py-1 pr-2 w-[80px]">{t('deploy.print.time', 'Zeit')}</th>
                   <th className="text-left py-1 pr-2">{t('deploy.print.assignment', 'Einsatz')}</th>
+                  <th className="text-left py-1 pr-2">{t('deploy.print.customer', 'Kunde')}</th>
+                  <th className="text-left py-1 pr-2">{t('deploy.print.address', 'Adresse')}</th>
                   <th className="text-left py-1 pr-2 w-[100px]">{t('deploy.print.type', 'Typ')}</th>
                   <th className="text-left py-1 w-[80px]">{t('deploy.print.status', 'Status')}</th>
                 </tr>
@@ -59,6 +61,8 @@ export function CalendarPrintView({ employees, days, title }) {
                             {a.title}
                             <span className="text-gray-400 ml-1">({t('deploy.pmSchedule.badge', 'Projektarbeit')})</span>
                           </td>
+                          <td className="py-1 pr-2"></td>
+                          <td className="py-1 pr-2"></td>
                           <td className="py-1 pr-2">{pmLabel}</td>
                           <td className="py-1">{a.status}</td>
                         </tr>
@@ -78,6 +82,14 @@ export function CalendarPrintView({ employees, days, title }) {
                         <td className="py-1 pr-2 font-medium">
                           {a.title || typeLabel}
                           {a.assignmentNumber && <span className="text-gray-400 ml-1">#{a.assignmentNumber}</span>}
+                        </td>
+                        <td className="py-1 pr-2">{a.customerId?.name || a.projectId?.customerName || ''}</td>
+                        <td className="py-1 pr-2">
+                          {(() => {
+                            const site = a.siteId || a.projectId?.siteId;
+                            if (!site) return '';
+                            return [site.street, [site.postalCode, site.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+                          })()}
                         </td>
                         <td className="py-1 pr-2">{typeLabel}</td>
                         <td className="py-1">{translateMetaLabel(t, statusMeta, a.status)}</td>

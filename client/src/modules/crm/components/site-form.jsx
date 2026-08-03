@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, MapPin, AlertCircle, CheckCircle2, Circle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Loader2, MapPin, AlertCircle, CheckCircle2, Circle, Flame, KeyRound, MonitorSpeaker } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
@@ -33,7 +34,24 @@ const BLANK = {
   longitude: null,
   billingAddress: { ...BLANK_PARTY },
   ownership: { ...BLANK_PARTY },
+  emergencyHeating: { present: false, number: '' },
+  keyBox: { present: false, code: '', depositedBy: '', depositedAt: '' },
+  advertisingBoard: { count: '', type: '', location: '' },
 };
+
+// Coerce stored Objektinformationen (nullable) into blank-safe form values.
+const emergencyHeatingValues = (v) => ({ present: !!v?.present, number: v?.number || '' });
+const keyBoxValues = (v) => ({
+  present: !!v?.present,
+  code: v?.code || '',
+  depositedBy: v?.depositedBy || '',
+  depositedAt: v?.depositedAt ? String(v.depositedAt).slice(0, 10) : '',
+});
+const advertisingBoardValues = (v) => ({
+  count: v?.count != null ? String(v.count) : '',
+  type: v?.type || '',
+  location: v?.location || '',
+});
 
 // Coerce a stored party (nullable fields) into blank-safe form values.
 const partyValues = (party) => ({
@@ -71,6 +89,30 @@ const cleanParty = (party) => {
     canton: party.canton || null,
   };
   return Object.values(values).some(Boolean) ? values : null;
+};
+
+// Drop all-empty Objektinformationen blocks to null; coerce types for the API.
+const cleanEmergencyHeating = (v) => {
+  if (!v) return null;
+  const number = v.number?.trim() || null;
+  if (!v.present && !number) return null;
+  return { present: !!v.present, number };
+};
+const cleanKeyBox = (v) => {
+  if (!v) return null;
+  const code = v.code?.trim() || null;
+  const depositedBy = v.depositedBy?.trim() || null;
+  const depositedAt = v.depositedAt || null;
+  if (!v.present && !code && !depositedBy && !depositedAt) return null;
+  return { present: !!v.present, code, depositedBy, depositedAt };
+};
+const cleanBoard = (v) => {
+  if (!v) return null;
+  const count = v.count !== '' && v.count != null ? Number(v.count) : null;
+  const type = v.type?.trim() || null;
+  const location = v.location?.trim() || null;
+  if ((count == null || Number.isNaN(count)) && !type && !location) return null;
+  return { count: Number.isFinite(count) ? count : null, type, location };
 };
 
 export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoading, customer }) {
@@ -118,6 +160,9 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
         siteType: defaultValues.siteType || 'residential',
         billingAddress: partyValues(defaultValues.billingAddress),
         ownership: partyValues(defaultValues.ownership),
+        emergencyHeating: emergencyHeatingValues(defaultValues.emergencyHeating),
+        keyBox: keyBoxValues(defaultValues.keyBox),
+        advertisingBoard: advertisingBoardValues(defaultValues.advertisingBoard),
       });
     } else {
       reset(BLANK);
@@ -128,6 +173,8 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
   const siteType = watch('siteType');
   const billingCanton = watch('billingAddress.canton');
   const ownerCanton = watch('ownership.canton');
+  const ehPresent = watch('emergencyHeating.present');
+  const kbPresent = watch('keyBox.present');
 
   const billingParty = PARTY_FIELDS.reduce((acc, f) => {
     acc[f] = watch(`billingAddress.${f}`) || '';
@@ -168,6 +215,9 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
       accessInstructions: data.accessInstructions || null,
       billingAddress: cleanParty(data.billingAddress),
       ownership: cleanParty(data.ownership),
+      emergencyHeating: cleanEmergencyHeating(data.emergencyHeating),
+      keyBox: cleanKeyBox(data.keyBox),
+      advertisingBoard: cleanBoard(data.advertisingBoard),
     };
     try {
       await onSubmit(cleaned);
@@ -184,7 +234,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-border bg-card shadow-2xl">
+      <DialogContent className="sm:max-w-4xl p-0 gap-0 flex flex-col max-h-[92vh] rounded-2xl border border-border bg-card shadow-2xl">
         {/* Fixed Header */}
         <DialogHeader className="px-6 pt-5 pb-4 border-b border-border shrink-0">
           <div className="flex items-center gap-3">
@@ -196,7 +246,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                 {isEdit ? t('crm.sites.editSite', 'Objekt bearbeiten') : t('crm.sites.newSite', 'Neues Objekt')}
               </DialogTitle>
               <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-                {t('crm.sites.formDesc', 'Gebäude oder Standort, an dem Installationen betrieben werden.')}
+                {t('crm.sites.formDesc', 'Gebäude oder Standort, an dem Komponenten betrieben werden.')}
               </DialogDescription>
             </div>
           </div>
@@ -204,37 +254,43 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
 
         {/* Scrollable Body */}
         <form onSubmit={handleSubmit(submit)} className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin space-y-4">
-            <DarkField label={t('crm.sites.label', 'Bezeichnung')} required error={errors.name}>
-              <Input
-                {...register('name')}
-                autoFocus
-                placeholder={t('crm.sites.labelPlaceholder', 'z.B. Mehrfamilienhaus Mustergasse')}
-                className={inputCls}
-              />
-            </DarkField>
+          <div className="flex-1 overflow-y-auto px-6 py-5 scrollbar-thin space-y-5">
+            {/* Grunddaten — full width */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <DarkField label={t('crm.sites.label', 'Bezeichnung')} required error={errors.name}>
+                <Input
+                  {...register('name')}
+                  autoFocus
+                  placeholder={t('crm.sites.labelPlaceholder', 'z.B. Mehrfamilienhaus Mustergasse')}
+                  className={inputCls}
+                />
+              </DarkField>
 
-            <DarkField label={t('crm.sites.type', 'Objekttyp')} error={errors.siteType}>
-              <Select value={siteType} onValueChange={(v) => setValue('siteType', v, { shouldDirty: true })}>
-                <SelectTrigger className={selectTriggerCls}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-card border-border">
-                  {Object.entries(SITE_TYPE_META).map(([key, meta]) => (
-                    <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/50 focus:text-foreground">
-                      {t(`crm.sites.type.${key}`, meta.label)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </DarkField>
+              <DarkField label={t('crm.sites.type', 'Objekttyp')} error={errors.siteType}>
+                <Select value={siteType} onValueChange={(v) => setValue('siteType', v, { shouldDirty: true })}>
+                  <SelectTrigger className={selectTriggerCls}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    {Object.entries(SITE_TYPE_META).map(([key, meta]) => (
+                      <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/50 focus:text-foreground">
+                        {t(`crm.sites.type.${key}`, meta.label)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </DarkField>
+            </div>
 
-            <Separator className="my-5 bg-muted/50" />
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              {t('crm.address', 'Adresse')}
-            </p>
+            {/* Two columns: addresses (left) | Objektinformationen (right) */}
+            <div className="grid items-start gap-x-6 gap-y-5 lg:grid-cols-2">
+              {/* LEFT — Adressen */}
+              <div className="space-y-5">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  {t('crm.address', 'Adresse')}
+                </p>
 
-            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+                <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
               <DarkField label={t('crm.street', 'Strasse')} error={errors.street}>
                 <Input {...register('street')} className={inputCls} />
               </DarkField>
@@ -366,6 +422,79 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                   </SelectContent>
                 </Select>
               </DarkField>
+            </div>
+              </div>
+
+              {/* RIGHT — Objektinformationen */}
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  {t('crm.sites.objectInfo', 'Objektinformationen')}
+                </p>
+
+                {/* Notheizung */}
+                <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                  <Flame className="h-4 w-4 text-orange-500" /> {t('crm.sites.emergencyHeating', 'Notheizung')}
+                </span>
+                <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
+                  {t('crm.sites.present', 'Vorhanden')}
+                  <Switch checked={!!ehPresent} onCheckedChange={(v) => setValue('emergencyHeating.present', v, { shouldDirty: true })} />
+                </label>
+              </div>
+              {ehPresent && (
+                <DarkField label={t('crm.sites.emergencyHeatingNumber', 'Nummer der Notheizung')} error={errors.emergencyHeating?.number}>
+                  <Input {...register('emergencyHeating.number')} placeholder="z.B. NH-2023-07" className={inputCls} />
+                </DarkField>
+              )}
+            </div>
+
+            {/* Schlüsselbox */}
+            <div className="mt-4 rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                  <KeyRound className="h-4 w-4 text-sky-500" /> {t('crm.sites.keyBox', 'Schlüsselbox')}
+                </span>
+                <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
+                  {t('crm.sites.present', 'Vorhanden')}
+                  <Switch checked={!!kbPresent} onCheckedChange={(v) => setValue('keyBox.present', v, { shouldDirty: true })} />
+                </label>
+              </div>
+              {kbPresent && (
+                <>
+                  <DarkField label={t('crm.sites.keyBoxCode', 'Code')} error={errors.keyBox?.code}>
+                    <Input {...register('keyBox.code')} placeholder="z.B. 2580" className={inputCls} />
+                  </DarkField>
+                  <div className="grid grid-cols-[1fr_150px] gap-4">
+                    <DarkField label={t('crm.sites.keyBoxDepositedBy', 'Deponiert von')} error={errors.keyBox?.depositedBy}>
+                      <Input {...register('keyBox.depositedBy')} placeholder="z.B. Klaus Huber" className={inputCls} />
+                    </DarkField>
+                    <DarkField label={t('crm.sites.keyBoxDepositedAt', 'Deponiert am')} error={errors.keyBox?.depositedAt}>
+                      <Input type="date" {...register('keyBox.depositedAt')} className={inputCls} />
+                    </DarkField>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Werbetafel */}
+            <div className="mt-4 rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+              <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                <MonitorSpeaker className="h-4 w-4 text-violet-500" /> {t('crm.sites.advertisingBoard', 'Werbetafel')}
+              </span>
+              <div className="grid grid-cols-[110px_1fr] gap-4">
+                <DarkField label={t('crm.sites.advertisingCount', 'Anzahl')} error={errors.advertisingBoard?.count}>
+                  <Input type="number" min="0" {...register('advertisingBoard.count')} placeholder="0" className={inputCls} />
+                </DarkField>
+                <DarkField label={t('crm.sites.advertisingType', 'Art der Werbetafel')} error={errors.advertisingBoard?.type}>
+                  <Input {...register('advertisingBoard.type')} placeholder="z.B. MB Boiler Standard" className={inputCls} />
+                </DarkField>
+              </div>
+              <DarkField label={t('crm.sites.advertisingLocation', 'Standort')} error={errors.advertisingBoard?.location}>
+                <Input {...register('advertisingBoard.location')} placeholder="z.B. Eingang / Fassade" className={inputCls} />
+              </DarkField>
+                </div>
+              </div>
             </div>
           </div>
 

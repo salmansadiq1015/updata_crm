@@ -30,7 +30,7 @@ import {
   BookOpen, ClipboardList, MessageSquare, Bell, Smartphone,
   FileCheck, Clock4, Files, LayoutTemplate,
   Type, TrendingUp, Ruler, RefreshCw, CalendarDays, Grid3X3, AlertTriangle,
-  ShoppingCart, PlugZap, Percent, Video, Building2, Eraser,
+  ShoppingCart, PlugZap, Percent, Video, Building2, Eraser, Truck,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import {
@@ -104,6 +104,7 @@ const navSectionDefs = [
         ],
       },
       { type: 'leaf', labelKey: 'sidebar.documents', href: '/documents', icon: Files, permission: PERMISSIONS.DOCUMENTS_READ },
+      { type: 'leaf', labelKey: 'sidebar.vehicles', href: '/vehicles', icon: Truck, permission: 'vehicles:read' },
       { type: 'leaf', labelKey: 'sidebar.tasks', href: '/tasks', icon: CheckSquare, permission: 'tasks:read' },
       { type: 'leaf', labelKey: 'sidebar.notifications', href: '/notifications', icon: Bell, permission: 'notifications:feed' },
       { type: 'leaf', labelKey: 'sidebar.ai', href: '/ai', icon: Sparkles },

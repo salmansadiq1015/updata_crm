@@ -382,6 +382,9 @@ class NotificationService {
         content.priority = notification.priority || 'NORMAL';
         content.deepLink = notification.payload?.deepLink
           || buildNotificationDeepLink(notification.sourceEntityType, notification.sourceEntityId);
+        // Meeting invitations get Zusage/Absage buttons in the email so the
+        // recipient can confirm or decline directly (client feedback).
+        content.showRsvp = notification.type === 'meeting_invitation';
         content.icon = notification.payload?.icon || null;
         content.whatsappTemplateId = notification.payload?.whatsappTemplateId || null;
         content.language = notification.payload?.language || 'de';

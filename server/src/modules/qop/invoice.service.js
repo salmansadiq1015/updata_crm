@@ -16,7 +16,8 @@ const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 const INVOICE_TRANSITIONS = {
-  DRAFT: ['SENT', 'CANCELLED'],
+  DRAFT: ['FINALIZED', 'SENT', 'CANCELLED'],
+  FINALIZED: ['SENT', 'CANCELLED'],
   SENT: ['PARTIALLY_PAID', 'PAID', 'OVERDUE', 'WRITTEN_OFF'],
   PARTIALLY_PAID: ['PAID', 'OVERDUE', 'WRITTEN_OFF'],
   PAID: [],
@@ -826,8 +827,10 @@ class InvoiceService {
       throw new ConflictError(`Cannot transition invoice from ${currentStatus} to ${targetStatus}`);
     }
 
-    if (targetStatus === 'CANCELLED' && currentStatus !== 'DRAFT') {
-      throw new ConflictError('Finalized invoices can only be cancelled by issuing a credit note');
+    // A not-yet-sent invoice (draft or finalized) can still be cancelled
+    // directly; once sent it can only be reversed with a credit note.
+    if (targetStatus === 'CANCELLED' && !['DRAFT', 'FINALIZED'].includes(currentStatus)) {
+      throw new ConflictError('Sent invoices can only be cancelled by issuing a credit note');
     }
     if (targetStatus === 'WRITTEN_OFF' && !reason) {
       throw new ConflictError('Write-off reason is required');
@@ -906,11 +909,15 @@ class InvoiceService {
 
     await fiscalPeriodService.assertPostingDateOpen(invoice.invoiceDate);
 
+    // Move the draft into the finalized state so it visibly leaves "Entwurf"
+    // and can no longer be edited; sending later transitions it to SENT.
+    invoice.status = 'FINALIZED';
     await invoice.save();
 
     await this._generateDoctplInvoicePdf(id, userId, meta);
 
     await this._invalidateInvoiceCache(id);
+    await this._invalidateListCache();
 
     eventBus.publish(EVENT_TYPES.INVOICE_FINALIZED, {
       invoiceId: id,
@@ -953,9 +960,12 @@ class InvoiceService {
     const invoice = await Invoice.findById(id);
     if (!invoice) throw new NotFoundError('Invoice', id);
 
-    if (invoice.status !== 'DRAFT') {
+    // A draft can be sent directly (it is finalized on the fly below); a
+    // finalized invoice is simply sent.
+    if (!['DRAFT', 'FINALIZED'].includes(invoice.status)) {
       throw new ConflictError(`Cannot send invoice in ${invoice.status} status`);
     }
+    const fromStatus = invoice.status;
 
     if (!invoice.pdfDocumentId) {
       await this._generateDoctplInvoicePdf(id, userId, meta);
@@ -968,7 +978,7 @@ class InvoiceService {
 
     // Log status transition
     const { default: documentStatusLogService } = await import('./documentStatusLog.service.js');
-    await documentStatusLogService.logTransition('invoice', id, 'DRAFT', 'SENT', userId);
+    await documentStatusLogService.logTransition('invoice', id, fromStatus, 'SENT', userId);
 
     await this._invalidateInvoiceCache(id);
     await this._invalidateListCache();

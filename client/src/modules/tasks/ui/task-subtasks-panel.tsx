@@ -99,7 +99,7 @@ export function TaskSubtasksPanel({
             const Icon = STATUS_ICON[sub.status];
             return (
               <div
-                key={sub.id}
+                key={sub.id ?? sub._id}
                 className="group flex items-center gap-2 rounded-lg border border-transparent px-3 py-2 transition-colors hover:border-border/50 hover:bg-muted/30"
               >
                 <button

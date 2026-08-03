@@ -3,6 +3,7 @@ import multer from 'multer';
 import siteController from './site.controller.js';
 import noteController from './note.controller.js';
 import imageController from './image.controller.js';
+import maintenanceController from './maintenance.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
@@ -27,6 +28,9 @@ router.patch('/:id', authenticate, requirePermission('crm:write'), validate(upda
 router.post('/:id/deactivate', authenticate, requirePermission('crm:delete'), validate(siteIdParamSchema), (req, res, next) => siteController.deactivate(req, res, next));
 router.get('/:id/activity/export', authenticate, requirePermission('crm:read'), validate(siteActivityExportSchema), (req, res, next) => siteController.exportActivity(req, res, next));
 router.get('/:id/activity', authenticate, requirePermission('crm:read'), validate(siteActivitySchema), (req, res, next) => siteController.getActivity(req, res, next));
+
+// Aggregated maintenance across the site's installations (Objekt Wartungen tab)
+router.get('/:id/maintenance', authenticate, requirePermission('crm:read'), validate(siteIdParamSchema), (req, res, next) => maintenanceController.listBySite(req, res, next));
 
 // Notes sub-routes
 router.get('/:id/notes', authenticate, requirePermission('crm:read'), setSiteEntity, (req, res, next) => noteController.listByEntity(req, res, next));

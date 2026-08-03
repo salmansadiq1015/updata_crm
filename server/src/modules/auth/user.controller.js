@@ -224,7 +224,7 @@ class UserController {
   async updatePreferences(req, res, next) {
     try {
       const User = (await import('./user.model.js')).default;
-      const { preferredDepartmentId, dashboard } = req.body || {};
+      const { preferredDepartmentId, dashboard, siteDetail } = req.body || {};
       const updates = {};
 
       if (preferredDepartmentId !== undefined) {
@@ -238,12 +238,17 @@ class UserController {
           updates['preferences.dashboard.hiddenTabs'] = dashboard.hiddenTabs;
         }
       }
+      if (siteDetail && Array.isArray(siteDetail.hiddenTabs)) {
+        updates['preferences.siteDetail.hiddenTabs'] = siteDetail.hiddenTabs;
+      }
 
       const updated = await User.findByIdAndUpdate(
         req.user._id,
         { $set: updates },
         { new: true, select: 'preferences' },
       ).lean();
+      // Invalidate the cached /me so a reload returns the updated preferences.
+      await cacheManager.del(`auth:user:${req.user._id}`);
       return res.success({ data: { preferences: updated?.preferences ?? {} } });
     } catch (err) { next(err); }
   }

@@ -1,5 +1,5 @@
 import {
-  Wrench, Hammer, Settings, Flame, Search, MoreHorizontal,
+  Wrench, Hammer, Settings, Flame, Search, MoreHorizontal, Package,
   AlertTriangle, AlertOctagon, Clock, CalendarOff, Timer, Route,
 } from 'lucide-react';
 
@@ -9,6 +9,7 @@ export const ASSIGNMENT_TYPE_META = Object.freeze({
   MAINTENANCE: { labelKey: 'deploy.assignmentTypes.maintenance', label: 'Wartung', icon: Settings, color: 'text-emerald-500', bg: 'bg-emerald-500/10', calendarColor: '#10b981' },
   INSTALLATION: { labelKey: 'deploy.assignmentTypes.installation', label: 'Installation', icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/10', calendarColor: '#f97316' },
   INSPECTION: { labelKey: 'deploy.assignmentTypes.inspection', label: 'Inspektion', icon: Search, color: 'text-amber-500', bg: 'bg-amber-500/10', calendarColor: '#f59e0b' },
+  WAREHOUSE_MAINTENANCE: { labelKey: 'deploy.assignmentTypes.warehouseMaintenance', label: 'Lagerunterhalt', icon: Package, color: 'text-cyan-500', bg: 'bg-cyan-500/10', calendarColor: '#06b6d4' },
   OTHER: { labelKey: 'deploy.assignmentTypes.other', label: 'Sonstiges', icon: MoreHorizontal, color: 'text-slate-500', bg: 'bg-slate-500/10', calendarColor: '#64748b' },
 });
 

@@ -34,6 +34,7 @@ import qopRoutes from './modules/qop/qop.routes.js';
 import departmentRoutes from './modules/qop/department.routes.js';
 import doctplRoutes from './modules/doctpl/doctpl.routes.js';
 import documentIndexRoutes from './modules/documents/documentIndex.routes.js';
+import vehicleRoutes from './modules/vehicles/vehicle.routes.js';
 import webhookRoutes from './modules/doctpl/webhook.routes.js';
 import catalogRoutes from './modules/catalog/catalog.routes.js';
 import accountingRoutes from './modules/accounting/accounting.routes.js';
@@ -52,6 +53,7 @@ import notificationsRoutes, {
 } from './modules/notifications/notifications.routes.js';
 import integrationsRoutes, { calendarSyncRoutes } from './modules/integrations/integrations.routes.js';
 import widgetPublicRoutes from './modules/integrations/widgetPublic.routes.js';
+import newsletterImageRoutes from './modules/crm/newsletter/newsletterImage.routes.js';
 import aiRoutes from './modules/ai/ai.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 import chatRoutes from './modules/chat/chat.routes.js';
@@ -148,6 +150,7 @@ export function createApp() {
   app.use("/api/v1/admin/departments", departmentRoutes);
   app.use("/api/v1/doctpl", doctplRoutes);
   app.use("/api/v1/documents", documentIndexRoutes);
+  app.use("/api/v1/vehicles", vehicleRoutes);
   app.use("/api/v1/catalog", catalogRoutes);
   app.use("/api/v1/accounting", accountingRoutes);
   app.use("/api/v1/tasks", tasksRoutes);
@@ -173,6 +176,7 @@ export function createApp() {
   app.use("/api/v1/ai", aiRoutes);
   app.use("/api/v1/admin/integrations", integrationsRoutes);
   app.use("/api/v1/public/widget", widgetPublicRoutes);
+  app.use("/api/v1/public/newsletter-images", newsletterImageRoutes);
   app.use("/api/v1/users/me/calendar", calendarSyncRoutes);
   app.use("/api/v1/webhooks/email", webhookRoutes);
   app.use("/api/v1/files", fileRoutes);

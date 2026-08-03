@@ -45,6 +45,15 @@ export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
   const customerName = assignment.customerId?.name || assignment.projectId?.customerName || '';
   const siteAddress = formatAddress(assignment.siteId || assignment.projectId?.siteId);
   const timeLabel = `${format(new Date(assignment.startDatetime), 'HH:mm')} - ${format(new Date(assignment.endDatetime), 'HH:mm')}`;
+  const shortTimeLabel = `${format(new Date(assignment.startDatetime), 'HH:mm')}–${format(new Date(assignment.endDatetime), 'HH:mm')}`;
+
+  const site = assignment.siteId || assignment.projectId?.siteId;
+  const shortAddress = site ? [site.street, site.city].filter(Boolean).join(', ') : '';
+
+  const employee = assignment.employeeId;
+  const employeeInitials = employee?.firstName && employee?.lastName
+    ? `${employee.firstName[0]}${employee.lastName[0]}`.toUpperCase()
+    : '';
 
   const bgColor = assignment.colorCode || typeMeta.calendarColor;
   const {
@@ -92,11 +101,21 @@ export const CalendarAssignmentBlock = memo(function CalendarAssignmentBlock({
         >
           <div className="truncate">
             {assignment.title || typeLabel}
+            {shortTimeLabel && <span className="text-white/70"> · {shortTimeLabel}</span>}
           </div>
           {style?.height > 28 && (
-            <div className="truncate text-white/80 text-[9px]">
-              {assignment.assignmentNumber || customerName || timeLabel}
-            </div>
+            <>
+              {customerName && (
+                <div className="truncate text-white/90 text-[9px]">
+                  {customerName}
+                </div>
+              )}
+              {(shortAddress || employeeInitials) && (
+                <div className="truncate text-white/70 text-[9px]">
+                  {[shortAddress, employeeInitials].filter(Boolean).join(' · ')}
+                </div>
+              )}
+            </>
           )}
           {onResizeStart && (
             <div

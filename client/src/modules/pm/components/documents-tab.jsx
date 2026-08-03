@@ -13,6 +13,7 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n/language-context';
 import {
   DOCUMENT_CATEGORY_CONFIG, PROJECT_DOCUMENT_MAX_UPLOAD_MB, exceedsUploadLimit,
+  DOCUMENT_SECTIONS, documentSectionOf,
 } from '@/modules/pm/constants/pm-constants';
 import { showError } from '@/lib/toast';
 import { EmptyState } from '@/shared/components/empty-state';
@@ -35,19 +36,22 @@ import {
   FileText, Search, X, FolderOpen, Eye,
   CloudUpload, FileUp, Grid3X3, List, LayoutGrid,
   Sparkles, Mail, RefreshCw, FilePen, ArchiveRestore,
+  FileCheck2, Archive,
 } from 'lucide-react';
 
 // ── Document card (premium) ──────────────────────────────────
 
 function DocumentCard({
   doc, language, canWrite, onEdit, onDelete, onDownload, onPreview,
-  onEmail, onRegenerate, onResumeDraft, onRestore,
+  onEmail, onRegenerate, onResumeDraft, onRestore, onVisum, onArchive,
 }) {
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
   const CategoryIcon = categoryCfg?.icon || FileText;
   const isDraft = doc.status === 'DRAFT';
   const isDeleted = !!doc.isDeleted;
+  const hasVisum = !!doc.visumBy;
+  const isArchived = !!doc.archived;
 
   return (
     <div
@@ -91,6 +95,14 @@ function DocumentCard({
             ) : doc.isGenerated && (
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium">
                 {language === 'de' ? 'Generiert' : 'Generated'}
+              </Badge>
+            )}
+            {hasVisum && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium border-emerald-500/60 text-emerald-600 dark:text-emerald-400 gap-1">
+                <FileCheck2 className="h-3 w-3" />
+                {doc.visumByName
+                  ? `${language === 'de' ? 'visiert von' : 'signed by'} ${doc.visumByName}`
+                  : (language === 'de' ? 'Visum' : 'Sign-off')}
               </Badge>
             )}
           </div>
@@ -198,6 +210,32 @@ function DocumentCard({
                 </Button>
               )}
               {canWrite && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn('h-8 w-8 rounded-lg', hasVisum && 'text-emerald-600 dark:text-emerald-400')}
+                  onClick={(e) => { e.stopPropagation(); onVisum?.(doc); }}
+                  title={hasVisum
+                    ? (language === 'de' ? 'Visum entfernen' : 'Remove sign-off')
+                    : (language === 'de' ? 'Visieren' : 'Sign off')}
+                >
+                  <FileCheck2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {canWrite && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn('h-8 w-8 rounded-lg', isArchived && 'text-amber-600 dark:text-amber-400')}
+                  onClick={(e) => { e.stopPropagation(); onArchive?.(doc); }}
+                  title={isArchived
+                    ? (language === 'de' ? 'Aus Archiv wiederherstellen' : 'Restore from archive')
+                    : (language === 'de' ? 'Ins Archiv verschieben' : 'Move to archive')}
+                >
+                  {isArchived ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                </Button>
+              )}
+              {canWrite && (
                 <>
                   <Button
                     variant="ghost"
@@ -227,11 +265,13 @@ function DocumentCard({
 
 // ── Document grid card ───────────────────────────────────────
 
-function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview, onResumeDraft, onRestore }) {
+function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview, onResumeDraft, onRestore, onVisum, onArchive }) {
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
   const isDraft = doc.status === 'DRAFT';
   const isDeleted = !!doc.isDeleted;
+  const hasVisum = !!doc.visumBy;
+  const isArchived = !!doc.archived;
 
   return (
     <div
@@ -305,6 +345,12 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
               </Button>
               {canWrite && (
                 <>
+                  <Button variant="secondary" size="icon" className={cn('h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm', hasVisum && 'text-emerald-600 dark:text-emerald-400')} onClick={(e) => { e.stopPropagation(); onVisum?.(doc); }} title={hasVisum ? (language === 'de' ? 'Visum entfernen' : 'Remove sign-off') : (language === 'de' ? 'Visieren' : 'Sign off')}>
+                    <FileCheck2 className="h-3 w-3" />
+                  </Button>
+                  <Button variant="secondary" size="icon" className={cn('h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm', isArchived && 'text-amber-600 dark:text-amber-400')} onClick={(e) => { e.stopPropagation(); onArchive?.(doc); }} title={isArchived ? (language === 'de' ? 'Aus Archiv wiederherstellen' : 'Restore from archive') : (language === 'de' ? 'Ins Archiv' : 'To archive')}>
+                    {isArchived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+                  </Button>
                   <Button variant="secondary" size="icon" className="h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); onEdit(doc); }}>
                     <Pencil className="h-3 w-3" />
                   </Button>
@@ -329,6 +375,11 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
           <span className="inline-flex items-center gap-1 bg-muted/60 rounded-md px-1.5 py-0.5">
             {language === 'de' ? categoryCfg?.label : categoryCfg?.labelEn}
           </span>
+          {hasVisum && (
+            <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 border border-emerald-500/60 text-emerald-600 dark:text-emerald-400">
+              <FileCheck2 className="h-3 w-3" /> {language === 'de' ? 'Visum' : 'Sign-off'}
+            </span>
+          )}
           {doc.fileSize && <span className="tabular-nums">{formatFileSize(doc.fileSize)}</span>}
         </div>
       </div>
@@ -451,6 +502,8 @@ export function DocumentsTab({ projectId }) {
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission('projects:write');
 
+  const [activeSection, setActiveSection] = useState('documents');
+  const [supersededId, setSupersededId] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -493,19 +546,51 @@ export function DocumentsTab({ projectId }) {
     return Array.isArray(raw) ? raw : [];
   }, [docData]);
 
-  const filteredDocs = useMemo(() => {
-    if (!searchTerm) return documents;
-    const q = searchTerm.toLowerCase();
-    return documents.filter((d) =>
-      (d.originalName || d.fileName || '').toLowerCase().includes(q) ||
-      (d.description || '').toLowerCase().includes(q)
-    );
-  }, [documents, searchTerm]);
+  // Count documents per section (Dokumente / mit Visum / Archiv) from the full set.
+  const sectionCounts = useMemo(() => {
+    const counts = { documents: 0, visum: 0, archiv: 0 };
+    for (const d of documents) {
+      if (d.isDeleted) continue;
+      counts[documentSectionOf(d)] += 1;
+    }
+    return counts;
+  }, [documents]);
 
-  const { upload, updateMetadata, remove, restore, generate, emailDocument } = useDocumentMutations(projectId, {
+  const filteredDocs = useMemo(() => {
+    // Deleted docs only surface via the "Gelöschte" toggle, in their own pass.
+    let list = includeDeleted
+      ? documents.filter((d) => d.isDeleted)
+      : documents.filter((d) => !d.isDeleted && documentSectionOf(d) === activeSection);
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      list = list.filter((d) =>
+        (d.originalName || d.fileName || '').toLowerCase().includes(q) ||
+        (d.description || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [documents, activeSection, searchTerm, includeDeleted]);
+
+  const { upload, updateMetadata, remove, restore, generate, emailDocument, setVisum, setArchived } = useDocumentMutations(projectId, {
     onDelete: () => setDeleteTarget(null),
     onEmail: () => { setEmailDoc(null); setEmailTo(''); setEmailMessage(''); },
+    // On a replacement upload (same filename → new version), offer to move the
+    // superseded previous version to the Archiv in one click.
+    onUpload: (doc) => { if (doc?.previousVersionId) setSupersededId(doc.previousVersionId); },
   });
+
+  const handleVisum = useCallback((doc) => {
+    setVisum.mutate({ docId: doc._id, visiert: !doc.visumBy });
+  }, [setVisum]);
+
+  const handleArchive = useCallback((doc) => {
+    setArchived.mutate({ docId: doc._id, archived: !doc.archived });
+  }, [setArchived]);
+
+  const archiveSuperseded = useCallback(() => {
+    if (supersededId) setArchived.mutate({ docId: supersededId, archived: true });
+    setSupersededId(null);
+  }, [supersededId, setArchived]);
 
   const handleRestore = useCallback((doc) => {
     restore.mutate(doc._id);
@@ -630,6 +715,51 @@ export function DocumentsTab({ projectId }) {
             onUpload={handleUpload}
             isUploading={upload.isPending}
           />
+        </div>
+      )}
+
+      {/* Section tabs — Dokumente / Dokumente mit Visum / Archiv */}
+      <div className="flex items-center gap-1 border-b border-border/60">
+        {DOCUMENT_SECTIONS.map((section) => {
+          const SectionIcon = section.icon;
+          const active = activeSection === section.id && !includeDeleted;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => { setActiveSection(section.id); setIncludeDeleted(false); }}
+              className={cn(
+                'relative -mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                active ? section.activeCls : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <SectionIcon className="h-3.5 w-3.5" />
+              {language === 'de' ? section.label : section.labelEn}
+              <span className={cn('ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums', active ? section.badgeCls : 'bg-muted text-muted-foreground')}>
+                {sectionCounts[section.id]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* One-click archive of the superseded previous version after a replacement */}
+      {supersededId && !includeDeleted && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[13px]">
+          <span className="text-amber-700 dark:text-amber-300">
+            {language === 'de'
+              ? 'Eine neue Version wurde hochgeladen. Vorherige Version ins Archiv verschieben?'
+              : 'A new version was uploaded. Move the previous version to the archive?'}
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" className="h-7 gap-1.5" onClick={archiveSuperseded}>
+              <Archive className="h-3.5 w-3.5" />
+              {language === 'de' ? 'Ins Archiv' : 'To archive'}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7" onClick={() => setSupersededId(null)}>
+              {language === 'de' ? 'Später' : 'Later'}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -759,6 +889,8 @@ export function DocumentsTab({ projectId }) {
               onRegenerate={handleRegenerate}
               onResumeDraft={openResumeDraft}
               onRestore={handleRestore}
+              onVisum={handleVisum}
+              onArchive={handleArchive}
             />
           ))}
         </div>
@@ -776,6 +908,8 @@ export function DocumentsTab({ projectId }) {
               onPreview={handlePreview}
               onResumeDraft={openResumeDraft}
               onRestore={handleRestore}
+              onVisum={handleVisum}
+              onArchive={handleArchive}
             />
           ))}
         </div>

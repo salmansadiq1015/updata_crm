@@ -6,6 +6,13 @@ import Role from '../modules/auth/role.model.js';
 import User from '../modules/auth/user.model.js';
 import PasswordHistory from '../modules/auth/passwordHistory.model.js';
 import Department from '../modules/qop/department.model.js';
+import Vehicle from '../modules/vehicles/vehicle.model.js';
+import VehicleServiceEntry from '../modules/vehicles/vehicleServiceEntry.model.js';
+import VehicleMaterial from '../modules/vehicles/vehicleMaterial.model.js';
+import VehicleNote from '../modules/vehicles/vehicleNote.model.js';
+import Customer from '../modules/crm/customer.model.js';
+import Site from '../modules/crm/site.model.js';
+import crmCounter from '../modules/crm/counter.service.js';
 import { hashPassword } from '../shared/utils/crypto.js';
 import cacheManager from '../shared/cache/CacheManager.js';
 import config from '../config/index.js';
@@ -141,6 +148,10 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'documents', action: 'read', description: 'View generated PDFs and document repository records' },
   { module: 'documents', action: 'write', description: 'Upload and organize central document repository records' },
   { module: 'documents', action: 'delete', description: 'Delete generated document repository records' },
+
+  // Vehicles (fleet)
+  { module: 'vehicles', action: 'read', description: 'View vehicles and their details' },
+  { module: 'vehicles', action: 'write', description: 'Create, update and manage vehicles' },
   { module: 'templates', action: 'read', description: 'View document templates and generated documents' },
   { module: 'templates', action: 'write', description: 'Create, update, preview, and generate document templates' },
   { module: 'templates', action: 'delete', description: 'Delete document templates and generated documents' },
@@ -349,6 +360,176 @@ export const ROLE_DEFINITIONS = [
   },
 ];
 
+/**
+ * Seed a small starter fleet — ONLY on a completely empty vehicles collection.
+ *
+ * Prod-safe by design:
+ *  - Runs once on a fresh DB. `countDocuments` ignores the soft-delete hook, so a
+ *    vehicle the customer later deletes still counts → seeding never runs again and
+ *    never resurrects removed vehicles.
+ *  - Drivers are resolved from real active users (first available non-admin
+ *    employees). If none exist yet, vehicles are seeded without a driver and the
+ *    customer assigns one in the UI. No demo user accounts are created.
+ */
+async function seedStarterVehicles() {
+  const existing = await Vehicle.countDocuments();
+  if (existing > 0) {
+    logger.info('Vehicles already present — skipping starter fleet seed', { module: 'seed', count: existing });
+    return;
+  }
+
+  const DAY = 24 * 60 * 60 * 1000;
+  const daysFromNow = (n) => new Date(Date.now() + n * DAY);
+  const monthsAgo = (n) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - n);
+    return d;
+  };
+
+  // createdBy: the seeded admin (if configured), else any Admin-role user.
+  const adminRole = await Role.findOne({ name: 'Admin' });
+  let creator = config.admin?.email
+    ? await User.findOne({ email: config.admin.email.toLowerCase() })
+    : null;
+  if (!creator && adminRole) creator = await User.findOne({ role: adminRole._id });
+  const creatorId = creator?._id || null;
+
+  // Driver pool: real active employees (exclude admins). Assigned round-robin so
+  // the seeded vehicles link to whoever actually exists in this environment.
+  const driverFilter = { status: 'active' };
+  if (adminRole) driverFilter.role = { $ne: adminRole._id };
+  const driverPool = await User.find(driverFilter).sort({ createdAt: 1 }).limit(5).select('_id').lean();
+  const driverAt = (i) => driverPool[i]?._id || null;
+
+  const defs = [
+    {
+      kennzeichen: 'ZH 128 540', label: 'Servicebus 1', make: 'VW', model: 'Crafter',
+      fuelType: 'diesel', year: 2021, mileageKm: 84200, status: 'in_use', driverId: driverAt(0),
+      lastServiceDate: monthsAgo(3), lastServiceKm: 78000, lastServiceGarage: 'Garage Müller AG',
+      nextServiceDate: daysFromNow(75), nextServiceKm: 95000,
+      services: [
+        { date: monthsAgo(3), mileageKm: 78000, description: 'Grosser Service, Ölwechsel und Bremsen hinten', garage: 'Garage Müller AG', cost: 1240 },
+      ],
+      materials: [
+        { name: 'Werkzeugkoffer Sanitär', quantity: 1, unit: 'Set' },
+        { name: 'Warndreieck', quantity: 1, unit: 'Stk' },
+        { name: 'Feuerlöscher 2 kg', quantity: 1, unit: 'Stk' },
+      ],
+      notes: [
+        { body: 'Winterreifen eingelagert bei der Garage.', category: 'service' },
+      ],
+    },
+    {
+      kennzeichen: 'BE 245 118', label: 'Servicebus 2', make: 'Ford', model: 'Transit',
+      fuelType: 'diesel', year: 2020, mileageKm: 112500, status: 'available', driverId: driverAt(1),
+      lastServiceDate: monthsAgo(5), lastServiceKm: 104000, lastServiceGarage: 'AMAG',
+      nextServiceDate: daysFromNow(30), nextServiceKm: 120000,
+      services: [
+        { date: monthsAgo(5), mileageKm: 104000, description: 'Service inkl. Zahnriemenwechsel', garage: 'AMAG', cost: 1580 },
+      ],
+      materials: [
+        { name: 'Wärmepumpen-Messgerät', quantity: 1, unit: 'Stk' },
+      ],
+      notes: [
+        { body: 'Nächster Service bald fällig – Termin vereinbaren.', category: 'warning' },
+      ],
+    },
+    {
+      kennzeichen: 'ZH 401 992', label: 'Poolfahrzeug', make: 'Renault', model: 'Zoe',
+      fuelType: 'electric', year: 2023, mileageKm: 18300, status: 'available', driverId: null,
+      lastServiceDate: monthsAgo(8), lastServiceKm: 9000, lastServiceGarage: 'Renault Retail',
+      nextServiceDate: daysFromNow(120), nextServiceKm: 30000,
+      services: [
+        { date: monthsAgo(8), mileageKm: 9000, description: 'Erstservice Elektrofahrzeug', garage: 'Renault Retail', cost: 260 },
+      ],
+      materials: [
+        { name: 'Ladekabel Typ 2', quantity: 1, unit: 'Stk' },
+      ],
+      notes: [
+        { body: 'Poolfahrzeug – kein fester Fahrer.', category: 'general' },
+      ],
+    },
+  ];
+
+  let count = 0;
+  for (const d of defs) {
+    const vehicle = await Vehicle.create({
+      kennzeichen: d.kennzeichen, label: d.label, make: d.make, model: d.model,
+      fuelType: d.fuelType, year: d.year, mileageKm: d.mileageKm, status: d.status,
+      currentDriverId: d.driverId,
+      lastServiceDate: d.lastServiceDate, lastServiceKm: d.lastServiceKm, lastServiceGarage: d.lastServiceGarage,
+      nextServiceDate: d.nextServiceDate, nextServiceKm: d.nextServiceKm,
+      createdBy: creatorId, updatedBy: creatorId,
+    });
+    if (d.services?.length) {
+      await VehicleServiceEntry.insertMany(d.services.map((s) => ({ ...s, vehicleId: vehicle._id, createdBy: creatorId })));
+    }
+    if (d.materials?.length) {
+      await VehicleMaterial.insertMany(d.materials.map((m) => ({ ...m, vehicleId: vehicle._id, createdBy: creatorId })));
+    }
+    if (d.notes?.length) {
+      await VehicleNote.insertMany(d.notes.map((n) => ({ ...n, vehicleId: vehicle._id, createdBy: creatorId })));
+    }
+    count += 1;
+  }
+  logger.info(`Seeded starter fleet (${count} vehicles)`, { module: 'seed' });
+}
+
+/**
+ * Seed one starter object (site) with its Objektinformationen — ONLY on a
+ * completely empty sites collection. Same prod-safe contract as the fleet:
+ * countDocuments ignores the soft-delete hook, so an object the customer later
+ * deletes still counts → this never runs again and never modifies real objects.
+ * On a fresh DB the starter object lives under a clearly-labelled "Muster"
+ * customer that the customer can edit or delete.
+ */
+async function seedStarterObject() {
+  const existing = await Site.countDocuments();
+  if (existing > 0) {
+    logger.info('Objects already present — skipping starter object seed', { module: 'seed', count: existing });
+    return;
+  }
+
+  const adminRole = await Role.findOne({ name: 'Admin' });
+  let creator = config.admin?.email
+    ? await User.findOne({ email: config.admin.email.toLowerCase() })
+    : null;
+  if (!creator && adminRole) creator = await User.findOne({ role: adminRole._id });
+  const creatorId = creator?._id || null;
+  // Customer/Site require createdBy — without an admin there is nothing to seed.
+  if (!creatorId) {
+    logger.info('No admin user yet — skipping starter object seed', { module: 'seed' });
+    return;
+  }
+
+  // Dedicated demo customer (never attach the demo object to a real customer).
+  let customer = await Customer.findOne({ name: 'Muster Immobilien AG' });
+  if (!customer) {
+    customer = await Customer.create({
+      customerNumber: await crmCounter.getNextCustomerNumber(),
+      name: 'Muster Immobilien AG',
+      type: 'business',
+      street: 'Musterstrasse 1', postalCode: '4001', city: 'Basel', canton: 'BS',
+      status: 'active', createdBy: creatorId,
+    });
+  }
+
+  await Site.create({
+    customerId: customer._id,
+    siteNumber: await crmCounter.getNextSiteNumber(customer._id),
+    name: 'MFH Musterweg 12',
+    street: 'Musterweg 12', postalCode: '4001', city: 'Basel', canton: 'BS',
+    floorUnit: '4. OG',
+    siteType: 'residential',
+    accessInstructions: 'Schlüssel bei Hauswart Muster.',
+    emergencyHeating: { present: true, number: 'NH-2023-07' },
+    keyBox: { present: true, code: '2580', depositedBy: 'Klaus Huber', depositedAt: new Date('2024-03-12') },
+    advertisingBoard: { count: 2, type: 'MB Boiler Standard', location: 'Eingang / Fassade' },
+    createdBy: creatorId,
+  });
+  logger.info('Seeded starter object with Objektinformationen', { module: 'seed' });
+}
+
 export async function seedDatabase() {
   try {
     // 1. Upsert all permissions — runs on every startup so new entries reach existing DBs
@@ -462,6 +643,12 @@ export async function seedDatabase() {
     // 6. Seed AI assistant vocabulary and voice commands
     await seedAiVocabulary();
     await seedAiCommands();
+
+    // 7. Seed a small starter fleet (only when the vehicles collection is empty)
+    await seedStarterVehicles();
+
+    // 8. Seed a starter object with Objektinformationen (only when sites empty)
+    await seedStarterObject();
 
     logger.info('Database seeding complete', { module: 'seed' });
   } catch (err) {

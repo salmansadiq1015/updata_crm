@@ -41,6 +41,22 @@ class MaintenanceIntervalRepository {
       .lean();
   }
 
+  /**
+   * All maintenance intervals for every installation of a site, populated with
+   * the owning installation so the object-level Wartungen tab can group/label
+   * them. Sorted by next due date so the soonest maintenance surfaces first.
+   */
+  async findBySiteId(siteId) {
+    const Installation = (await import('./installation.model.js')).default;
+    const installations = await Installation.find({ siteId }).select('_id').lean();
+    const ids = installations.map((installation) => installation._id);
+    if (!ids.length) return [];
+    return MaintenanceInterval.find({ installationId: { $in: ids } })
+      .populate('installationId', 'installationNumber type manufacturer model status')
+      .sort({ nextDueDate: 1 })
+      .lean();
+  }
+
   async updateById(id, data) {
     return MaintenanceInterval.findByIdAndUpdate(id, data, {
       returnDocument: 'after',

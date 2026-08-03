@@ -16,6 +16,7 @@ import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
 import { RecordPaymentDialog } from './record-payment-dialog';
 import { invoiceService } from '../services/invoice-service';
+import { showError } from '@/lib/toast';
 
 function fmt(n) {
   return new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
@@ -118,9 +119,12 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
   const handleDownloadPdf = async () => {
     try {
       const res = await invoiceService.generateDocument(invoiceId);
-      const url = res?.data?.url ?? res?.url;
+      const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
       if (url) window.open(url, '_blank');
-    } catch { /* silently fail */ }
+      else showError(t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    } catch (err) {
+      showError(err?.message || t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    }
   };
 
   return (
@@ -147,14 +151,14 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
                 <Download className="h-4 w-4 mr-1.5" />PDF
               </Button>
               {invoice?.status === 'DRAFT' && (
-                <>
-                  <Button size="sm" variant="outline" onClick={() => finalizeInvoice.mutate(invoiceId)}>
-                    {t('qop.invoice.finalize', 'Abschliessen')}
-                  </Button>
-                  <Button size="sm" onClick={() => sendInvoice.mutate(invoiceId)}>
-                    <Send className="h-4 w-4 mr-1.5" />{t('qop.invoice.send', 'Senden')}
-                  </Button>
-                </>
+                <Button size="sm" variant="outline" onClick={() => finalizeInvoice.mutate(invoiceId)}>
+                  {t('qop.invoice.finalize', 'Abschliessen')}
+                </Button>
+              )}
+              {['DRAFT', 'FINALIZED'].includes(invoice?.status) && (
+                <Button size="sm" onClick={() => sendInvoice.mutate(invoiceId)}>
+                  <Send className="h-4 w-4 mr-1.5" />{t('qop.invoice.send', 'Senden')}
+                </Button>
               )}
               {isCancellable && (
                 <Button

@@ -27,6 +27,10 @@ export const maintenanceService = {
     const res = await apiClient.get(ENDPOINTS.CRM.INSTALLATION_MAINTENANCE(installationId));
     return res.data;
   },
+  async listBySite(siteId) {
+    const res = await apiClient.get(ENDPOINTS.CRM.SITE_MAINTENANCE(siteId));
+    return res.data;
+  },
   async createForInstallation(installationId, data) {
     const res = await apiClient.post(ENDPOINTS.CRM.INSTALLATION_MAINTENANCE(installationId), data);
     return res.data;

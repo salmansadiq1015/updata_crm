@@ -174,6 +174,10 @@ const userSchema = new mongoose.Schema(
         hiddenKpis: { type: [String], default: [] },
         hiddenTabs: { type: [String], default: [] },
       },
+      // Per-user visibility of the object (site) detail registers/tabs.
+      siteDetail: {
+        hiddenTabs: { type: [String], default: [] },
+      },
     },
     schedulingSkills: {
       type: [String],

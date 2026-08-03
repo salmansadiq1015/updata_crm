@@ -2,6 +2,7 @@ import {
   FileText, Hammer, Wrench, FileSignature, MoreHorizontal,
   DollarSign, Package, CalendarClock, CircleDot,
   ArrowRight, Milestone, Building2, Users,
+  FileCheck2, Archive,
 } from 'lucide-react';
 
 // ── Document upload limit (PROJ-006 AC-8) ───────────────────────
@@ -200,6 +201,42 @@ export const DOCUMENT_CATEGORY_CONFIG = {
   REPORTS: { label: 'Berichte', labelEn: 'Reports', icon: FileText },
   OTHER: { label: 'Sonstiges', labelEn: 'Other', icon: MoreHorizontal },
 };
+
+// ── Document sections (Dokumente / Dokumente mit Visum / Archiv) ─
+// Colored top-level navigation shared by the project and object document tabs.
+// `active` = current, valid documents (not archived); the two active sections
+// split on whether the document carries a Visum (sign-off).
+export const DOCUMENT_SECTIONS = [
+  {
+    id: 'documents',
+    labelKey: 'documents.section.current', label: 'Dokumente', labelEn: 'Documents',
+    icon: FileText,
+    activeCls: 'border-blue-500 text-blue-600 dark:text-blue-400',
+    badgeCls: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  },
+  {
+    id: 'visum',
+    labelKey: 'documents.section.visum', label: 'Dokumente mit Visum', labelEn: 'Documents with sign-off',
+    icon: FileCheck2,
+    activeCls: 'border-emerald-500 text-emerald-600 dark:text-emerald-400',
+    badgeCls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  },
+  {
+    id: 'archiv',
+    labelKey: 'documents.section.archive', label: 'Archiv', labelEn: 'Archive',
+    icon: Archive,
+    activeCls: 'border-amber-500 text-amber-600 dark:text-amber-400',
+    badgeCls: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  },
+];
+
+// Classify a document into one of the three sections. Tolerates both shapes:
+// project documents expose `visumBy`; the object (site) view exposes `visum`.
+export function documentSectionOf(doc) {
+  if (doc?.archived) return 'archiv';
+  if (doc?.visumBy || doc?.visum) return 'visum';
+  return 'documents';
+}
 
 // ── Color accent picker (for project cards) ─────────────────────
 const ACCENT_PALETTE = [

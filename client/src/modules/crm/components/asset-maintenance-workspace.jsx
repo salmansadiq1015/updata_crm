@@ -14,12 +14,14 @@ import {
   Loader2,
   Mail,
   Phone,
+  Plus,
   Search,
   Video,
   Wrench,
   X,
 } from 'lucide-react';
 import { assetMaintenanceService } from '@/modules/crm/services/asset-maintenance-service';
+import { NewComponentFlow, NewMaintenanceFlow } from '@/modules/crm/components/component-create-dialogs';
 import { useAssetMaintenanceContext, useAssetMaintenanceMutations } from '@/modules/crm/hooks/use-asset-maintenance';
 import { useCursorList } from '@/modules/crm/hooks/use-cursor-list';
 import { useDeployEmployees } from '@/modules/deploy/hooks/use-deploy-employees';
@@ -101,7 +103,7 @@ function systemLabel(installation) {
     installation?.installationNumber,
     installation?.manufacturer,
     installation?.model,
-  ].filter(Boolean).join(' - ') || 'Anlage';
+  ].filter(Boolean).join(' - ') || 'Komponente';
 }
 
 function dateTimeLocal(offsetDays = 1, hour = 8) {
@@ -163,6 +165,8 @@ export function AssetMaintenanceWorkspace() {
   const [dueTo, setDueTo] = useState('');
   const [rowSelection, setRowSelection] = useState({});
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [newComponentOpen, setNewComponentOpen] = useState(false);
+  const [newMaintenanceOpen, setNewMaintenanceOpen] = useState(false);
   const [bulkForm, setBulkForm] = useState(DEFAULT_BULK_FORM);
   const [activeItem, setActiveItem] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -345,7 +349,7 @@ export function AssetMaintenanceWorkspace() {
   const columns = useMemo(() => [
     {
       accessorKey: 'customer',
-      header: t('crm.assetMaintenance.customerSystem', 'Kunde / Anlage'),
+      header: t('crm.assetMaintenance.customerSystem', 'Kunde / Komponente'),
       size: 360,
       Cell: ({ row }) => {
         const item = row.original;
@@ -447,16 +451,28 @@ export function AssetMaintenanceWorkspace() {
             </span>
             <div>
               <h1 className="text-[18px] font-semibold leading-tight text-foreground">
-                {t('crm.assetMaintenance.title', 'Anlagen & Wartung')}
+                {t('crm.assetMaintenance.title', 'Komponenten & Wartungen')}
               </h1>
               <p className="text-[13px] text-muted-foreground">
 
-                {t('crm.assetMaintenance.subtitle', 'Anlagen, Wartungsfälligkeit und Planung in einem Arbeitsfluss.')}
+                {t('crm.assetMaintenance.subtitle', 'Komponenten, Wartungsfälligkeit und Planung in einem Arbeitsfluss.')}
               </p>
             </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canWriteCrm && (
+            <>
+              <Button size="sm" className="gap-2 bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white" onClick={() => setNewComponentOpen(true)}>
+                <Plus className="h-4 w-4" />
+                {t('crm.installations.newComponent', 'Neue Komponente')}
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2" onClick={() => setNewMaintenanceOpen(true)}>
+                <Plus className="h-4 w-4" />
+                {t('crm.maintenance.newMaintenance', 'Neue Wartung')}
+              </Button>
+            </>
+          )}
           <Button variant="outline" size="sm" className="gap-2" onClick={() => router.push('/scheduling/calendar')} disabled={!canReadScheduling}>
             <CalendarDays className="h-4 w-4" />
             {t('crm.assetMaintenance.calendar', 'Kalender')}
@@ -485,14 +501,14 @@ export function AssetMaintenanceWorkspace() {
           <div className="h-5 w-px bg-border" />
           <FilterInput icon={Search} value={search} onChange={setSearch} placeholder={t('crm.assetMaintenance.search', 'Suchen...')} />
           <FilterInput value={customerSearch} onChange={setCustomerSearch} placeholder={t('crm.assetMaintenance.customerFilter', 'Kunde filtern')} />
-          <FilterInput value={installationSearch} onChange={setInstallationSearch} placeholder={t('crm.assetMaintenance.systemFilter', 'Anlage filtern')} />
+          <FilterInput value={installationSearch} onChange={setInstallationSearch} placeholder={t('crm.assetMaintenance.systemFilter', 'Komponente filtern')} />
 
           <Select value={installationStatus} onValueChange={setInstallationStatus}>
             <SelectTrigger className="h-9 w-42 rounded-xl text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}><DotLabel>{t('crm.assetMaintenance.allSystemStatus', 'Alle Anlagenstatus')}</DotLabel></SelectItem>
+              <SelectItem value={ALL}><DotLabel>{t('crm.assetMaintenance.allSystemStatus', 'Alle Komponentenstatus')}</DotLabel></SelectItem>
               {INSTALLATION_STATUS_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   <DotLabel tone={option.tone}>{option.label}</DotLabel>
@@ -554,7 +570,7 @@ export function AssetMaintenanceWorkspace() {
       {selectedInstallationIds.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
           <p className="text-sm font-medium text-foreground">
-            {t('crm.assetMaintenance.selectedSystems', '{count} Anlagen ausgewählt').replace('{count}', String(selectedInstallationIds.length))}
+            {t('crm.assetMaintenance.selectedSystems', '{count} Komponenten ausgewählt').replace('{count}', String(selectedInstallationIds.length))}
           </p>
           <div className="flex items-center gap-2">
             <Button size="sm" className="gap-2" onClick={() => setBulkDialogOpen(true)} disabled={!canWriteCrm}>
@@ -614,7 +630,7 @@ export function AssetMaintenanceWorkspace() {
                   onSelect: () => openSchedule(item),
                 },
                 {
-                  label: t('crm.assetMaintenance.openInstallation', 'Anlage öffnen'),
+                  label: t('crm.assetMaintenance.openInstallation', 'Komponente öffnen'),
                   icon: ExternalLink,
                   onSelect: () => router.push(`/crm/installations/${item.installation?._id}`),
                 },
@@ -656,6 +672,9 @@ export function AssetMaintenanceWorkspace() {
         onSubmit={submitSchedule}
         t={t}
       />
+
+      <NewComponentFlow open={newComponentOpen} onOpenChange={setNewComponentOpen} />
+      <NewMaintenanceFlow open={newMaintenanceOpen} onOpenChange={setNewMaintenanceOpen} />
     </div>
   );
 }
@@ -697,8 +716,8 @@ function AssetMaintenanceEmptyState({ t }) {
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/10 bg-primary/5">
         <Wrench className="h-6 w-6 text-primary/50" />
       </div>
-      <p className="text-sm font-medium">{t('crm.assetMaintenance.empty', 'Keine Anlagen oder Wartungen gefunden')}</p>
-      <p className="max-w-md text-xs">{t('crm.assetMaintenance.emptyDesc', 'Filter anpassen oder Wartungsintervalle für ausgewählte Anlagen erfassen.')}</p>
+      <p className="text-sm font-medium">{t('crm.assetMaintenance.empty', 'Keine Komponenten oder Wartungen gefunden')}</p>
+      <p className="max-w-md text-xs">{t('crm.assetMaintenance.emptyDesc', 'Filter anpassen oder Wartungsintervalle für ausgewählte Komponenten erfassen.')}</p>
     </div>
   );
 }
@@ -710,7 +729,7 @@ function BulkMaintenanceDialog({ open, onOpenChange, form, setForm, selectedCoun
         <DialogHeader>
           <DialogTitle>{t('crm.assetMaintenance.createBulk', 'Wartung erfassen')}</DialogTitle>
           <DialogDescription>
-            {t('crm.assetMaintenance.bulkDesc', 'Erstellt Wartungsintervalle für {count} ausgewählte Anlagen und überspringt vorhandene gleiche Intervalle.')
+            {t('crm.assetMaintenance.bulkDesc', 'Erstellt Wartungsintervalle für {count} ausgewählte Komponenten und überspringt vorhandene gleiche Intervalle.')
               .replace('{count}', String(selectedCount))}
           </DialogDescription>
         </DialogHeader>
@@ -836,7 +855,7 @@ function ScheduleDrawer({
                 </div>
               </ContextPanel>
 
-              <ContextPanel title={t('crm.assetMaintenance.systemContext', 'Anlage')}>
+              <ContextPanel title={t('crm.assetMaintenance.systemContext', 'Komponente')}>
                 <p className="text-sm font-medium text-foreground">{systemLabel(installation)}</p>
                 <p className="text-xs text-muted-foreground">{installation?.serialNumber || t('crm.assetMaintenance.noSerial', 'Keine Seriennummer')}</p>
                 <p className="mt-2 text-xs text-muted-foreground">{site?.name || '-'} {site?.city ? `- ${site.city}` : ''}</p>

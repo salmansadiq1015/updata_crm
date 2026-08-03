@@ -48,7 +48,12 @@ export const scheduleService = {
     return res?.data?.downloadUrl || res?.downloadUrl || null;
   },
 
-  async exportSchedule(projectId, format = 'ical') {
+  async listProtocols(projectId) {
+    const res = await apiClient.get(ENDPOINTS.PM.SCHEDULE_PROTOCOLS(projectId));
+    return res.data;
+  },
+
+  async exportSchedule(projectId, format = 'ical', variant = 'internal') {
     if (format === 'ical') {
       const { data } = await apiClient.get(ENDPOINTS.PM.SCHEDULE_EXPORT(projectId), {
         params: { format: 'ical' },
@@ -65,15 +70,15 @@ export const scheduleService = {
         responseType: 'blob',
         transformResponse: [(x) => x],
       });
-      const filename = `Bauplan-${projectId}.csv`;
-      downloadBlob(data, filename, 'text/csv;charset=utf-8');
+      const filename = `Terminplan-${projectId}.xlsx`;
+      downloadBlob(data, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       return { filename };
     }
     // PDF is generated + stored server-side (for the document archive) and the
     // endpoint returns its metadata — unlike iCal/Excel which stream a blob. So
     // resolve the generated document's download URL and open it for the user.
     const res = await apiClient.get(ENDPOINTS.PM.SCHEDULE_EXPORT(projectId), {
-      params: { format: 'pdf' },
+      params: { format: 'pdf', variant },
     });
     const generatedDoc = res?.data || {};
     const documentId = generatedDoc.documentId || generatedDoc._id;

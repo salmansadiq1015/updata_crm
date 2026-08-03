@@ -21,6 +21,25 @@ const addressParty = Joi.object({
   canton: canton.allow('', null),
 }).allow(null);
 
+// Objektinformationen blocks (client feedback).
+const emergencyHeating = Joi.object({
+  present: Joi.boolean().default(false),
+  number: Joi.string().trim().max(100).allow('', null),
+}).allow(null);
+
+const keyBox = Joi.object({
+  present: Joi.boolean().default(false),
+  code: Joi.string().trim().max(100).allow('', null),
+  depositedBy: Joi.string().trim().max(255).allow('', null),
+  depositedAt: Joi.date().iso().allow(null),
+}).allow(null);
+
+const advertisingBoard = Joi.object({
+  count: Joi.number().integer().min(0).allow(null),
+  type: Joi.string().trim().max(255).allow('', null),
+  location: Joi.string().trim().max(255).allow('', null),
+}).allow(null);
+
 export const createSiteSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(255),
@@ -36,6 +55,9 @@ export const createSiteSchema = {
     longitude: Joi.number().min(-180).max(180).allow(null),
     billingAddress: addressParty,
     ownership: addressParty,
+    emergencyHeating,
+    keyBox,
+    advertisingBoard,
   }),
 };
 
@@ -55,6 +77,9 @@ export const updateSiteSchema = {
     longitude: Joi.number().min(-180).max(180).allow(null),
     billingAddress: addressParty,
     ownership: addressParty,
+    emergencyHeating,
+    keyBox,
+    advertisingBoard,
   }).min(1),
 };
 

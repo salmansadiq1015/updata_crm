@@ -47,6 +47,11 @@ export const newsletterService = {
     return res.data;
   },
 
+  async revertToDraft(id) {
+    const res = await apiClient.post(ENDPOINTS.CRM.NEWSLETTER_REVERT(id));
+    return res.data;
+  },
+
   async getStats(id) {
     const res = await apiClient.get(ENDPOINTS.CRM.NEWSLETTER_STATS(id));
     return res.data;

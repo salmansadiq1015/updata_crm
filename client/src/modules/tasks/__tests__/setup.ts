@@ -11,6 +11,24 @@ vi.mock('@/stores/auth-store', () => ({
   },
 }));
 
+// jsdom's localStorage is broken in this environment (setItem is not a
+// function), which crashed every test that sets the locale before rendering.
+// Install a minimal in-memory Storage stub when that happens.
+if (typeof window !== 'undefined' && typeof window.localStorage?.setItem !== 'function') {
+  const store = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+      setItem: (key: string, value: string) => { store.set(key, String(value)); },
+      removeItem: (key: string) => { store.delete(key); },
+      clear: () => { store.clear(); },
+      key: (index: number) => [...store.keys()][index] ?? null,
+      get length() { return store.size; },
+    },
+  });
+}
+
 // crypto.randomUUID polyfill for older jsdom environments
 if (typeof globalThis.crypto?.randomUUID === 'undefined') {
   Object.defineProperty(globalThis, 'crypto', {

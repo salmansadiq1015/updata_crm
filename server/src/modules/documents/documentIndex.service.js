@@ -63,6 +63,15 @@ function compactObject(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== null && entry !== ''));
 }
 
+// Section split (Dokumente / Dokumente mit Visum / Archiv). Only project
+// documents carry the archived/visum flags; every other source is an ordinary
+// current document (falls in "documents").
+function matchesSection(doc, section) {
+  if (!section || section === 'all') return true;
+  const docSection = doc.archived ? 'archiv' : (doc.visum ? 'visum' : 'documents');
+  return docSection === section;
+}
+
 function sortDocuments(items, sortOrder) {
   const direction = sortOrder === 'asc' ? 1 : -1;
   return items.sort((left, right) => {
@@ -141,7 +150,8 @@ class DocumentIndexService {
       this._listMobileDocuments(query, fetchLimit, permissions, user),
     ]);
 
-    const sorted = sortDocuments(sources.flat().filter((item) => isAfterCursor(item, cursor, query.sortOrder)), query.sortOrder);
+    const flat = sources.flat().filter((item) => matchesSection(item, query.section));
+    const sorted = sortDocuments(flat.filter((item) => isAfterCursor(item, cursor, query.sortOrder)), query.sortOrder);
     const pageItems = sorted.slice(0, limit);
     const hasNext = sorted.length > limit;
     return {
@@ -378,6 +388,7 @@ class DocumentIndexService {
 
     const docs = await ProjectDocument.find(filter)
       .populate({ path: 'fileId', select: 'originalName mimeType sizeBytes folderPath category' })
+      .populate({ path: 'visumBy', select: 'firstName lastName' })
       .sort({ createdAt: query.sortOrder === 'asc' ? 1 : -1, _id: query.sortOrder === 'asc' ? 1 : -1 })
       .limit(limit)
       .lean();
@@ -535,6 +546,9 @@ class DocumentIndexService {
       origin,
       title: doc.fileName,
       fileName: file?.originalName || doc.fileName,
+      // Underlying stored-file id — lets the client attach the document to an
+      // email directly, without downloading it first.
+      fileId: toStringId(file?._id),
       mimeType: file?.mimeType || '',
       fileSizeBytes: file?.sizeBytes || 0,
       documentType: doc.templateType || doc.category || 'OTHER',
@@ -548,6 +562,17 @@ class DocumentIndexService {
       uploadedBy: toStringId(doc.uploadedBy),
       createdAt: normalizeDate(doc.createdAt),
       updatedAt: normalizeDate(doc.updatedAt),
+      // Section flags for the 3-way split (Dokumente / mit Visum / Archiv).
+      archived: Boolean(doc.archived),
+      visum: doc.visumBy
+        ? {
+            by: toStringId(doc.visumBy),
+            byName: (doc.visumBy && typeof doc.visumBy === 'object')
+              ? [doc.visumBy.firstName, doc.visumBy.lastName].filter(Boolean).join(' ')
+              : null,
+            at: normalizeDate(doc.visumAt),
+          }
+        : null,
       metadata: { version: doc.version, previousVersionId: toStringId(doc.previousVersionId), isGenerated: Boolean(doc.isGenerated) },
       canDelete: true,
     });

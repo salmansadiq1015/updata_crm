@@ -15,6 +15,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  ShieldAlert,
   ShieldCheck,
   X,
 } from 'lucide-react';
@@ -215,11 +216,23 @@ function ConflictCard({ conflict, onResolve, isResolving, t }) {
                 <Badge variant="secondary" className="rounded-md">
                   {labels.typeLabel}
                 </Badge>
+                {conflict.overridden && !conflict.resolved && (
+                  <Badge variant="outline" className="gap-1.5 rounded-md border-amber-400/50 text-amber-600 dark:text-amber-400">
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    {t('deploy.conflicts.overridden', 'Übersteuert')}
+                  </Badge>
+                )}
               </div>
 
               <p className="mt-3 text-sm font-medium leading-6 text-foreground">
                 {conflict.description || t('deploy.conflicts.detected', 'Scheduling conflict detected')}
               </p>
+
+              {conflict.overridden && !conflict.resolved && conflict.overrideReason && (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {t('deploy.conflicts.overrideReasonLabel', 'Übersteuerung')}: {conflict.overrideReason}
+                </p>
+              )}
 
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background/45 px-2 py-1">

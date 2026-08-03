@@ -69,6 +69,14 @@ class NewsletterController {
     } catch (err) { next(err); }
   }
 
+  async revertToDraft(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const newsletter = await newsletterService.revertToDraft(req.params.id, req.user._id, meta);
+      return res.success({ data: newsletter, message: 'Newsletter reverted to draft' });
+    } catch (err) { next(err); }
+  }
+
   async getStats(req, res, next) {
     try {
       const stats = await newsletterService.getStats(req.params.id);

@@ -64,6 +64,17 @@ export const ALLOWED_MIME_TYPES = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'text/csv',
     'text/plain',
+    // Images belong in project/customer document folders too (site photos,
+    // scans) — the upload zones advertise "PDF, Bilder, Dokumente".
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    // Emails: meeting/project documents often include forwarded mails
+    // (.eml = message/rfc822, .msg = Outlook).
+    'message/rfc822',
+    'application/vnd.ms-outlook',
   ],
   photos: [
     'image/jpeg',

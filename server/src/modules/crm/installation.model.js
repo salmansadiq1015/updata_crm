@@ -14,6 +14,13 @@ const installationSchema = new mongoose.Schema(
       ref: 'Site',
       required: true,
     },
+    // A component may supply several objects (Heizzentrale case): siteId stays
+    // the primary object — everything referencing it keeps working — and these
+    // are the additional supplied objects, restricted to the same customer.
+    additionalSiteIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Site' }],
+      default: [],
+    },
     type: {
       type: String,
       enum: ['boiler', 'heat_pump', 'solar_thermal', 'radiator_system', 'ventilation', 'hot_water', 'other'],
@@ -58,6 +65,7 @@ const installationSchema = new mongoose.Schema(
 
 // --- Indexes ---
 installationSchema.index({ siteId: 1 });
+installationSchema.index({ additionalSiteIds: 1 });
 installationSchema.index({ type: 1 });
 installationSchema.index({ manufacturer: 1 });
 installationSchema.index(

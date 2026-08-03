@@ -88,6 +88,11 @@ class MaintenanceIntervalService {
     );
   }
 
+  /** All maintenance intervals across a site's installations (Objekt Wartungen tab). */
+  async listBySite(siteId) {
+    return maintenanceIntervalRepository.findBySiteId(siteId);
+  }
+
   async update(id, data, updatedBy, meta = {}) {
     const existing = await maintenanceIntervalRepository.findById(id);
     if (!existing) throw new NotFoundError('MaintenanceInterval', id);

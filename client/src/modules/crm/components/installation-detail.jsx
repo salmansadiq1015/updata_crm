@@ -25,9 +25,11 @@ import { Separator } from '@/components/ui/separator';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useBreadcrumbTrail } from '@/stores/breadcrumb-store';
+import Link from 'next/link';
 import {
   Pencil, PowerOff, Wrench, FileText, Image as ImageIcon,
   Calendar, Zap, Hash, ShieldCheck, Thermometer, Loader2, Activity, Flame, Package,
+  Building2, MapPin, Star,
 } from 'lucide-react';
 import {
   INSTALLATION_TYPE_META, FUEL_TYPE_META,
@@ -57,7 +59,7 @@ export function InstallationDetail() {
     mutationFn: (data) => installationService.update(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.crm.installations.detail(id) });
-      showSuccess(t('crm.installations.updatedToast', 'Installation aktualisiert'));
+      showSuccess(t('crm.installations.updatedToast', 'Komponente aktualisiert'));
     },
     onError: (err) => showError(err.message),
   });
@@ -65,7 +67,7 @@ export function InstallationDetail() {
   const decommMut = useMutation({
     mutationFn: (r) => installationService.decommission(id, r),
     onSuccess: () => {
-      showSuccess(t('crm.installations.decommissionedToast', 'Installation ausser Betrieb'));
+      showSuccess(t('crm.installations.decommissionedToast', 'Komponente ausser Betrieb'));
       if (installation?.siteId) router.push(`/crm/sites/${installation.siteId?._id || installation.siteId}`);
       else router.back();
     },
@@ -91,7 +93,7 @@ export function InstallationDetail() {
   ]);
 
   if (isLoading) return <InstallationDetailSkeleton />;
-  if (!installation) return <EmptyState title={t('crm.installations.notFound', 'Installation nicht gefunden')} description={t('crm.installations.notFoundDesc', 'Die angeforderte Installation existiert nicht.')} />;
+  if (!installation) return <EmptyState title={t('crm.installations.notFound', 'Komponente nicht gefunden')} description={t('crm.installations.notFoundDesc', 'Die angeforderte Komponente existiert nicht.')} />;
 
   const meta = INSTALLATION_TYPE_META[installation.type] || INSTALLATION_TYPE_META.other;
   const fuelMeta = installation.fuelType ? FUEL_TYPE_META[installation.fuelType] : null;
@@ -103,6 +105,11 @@ export function InstallationDetail() {
   const customerName = installation.siteId?.customerId?.name;
 
   const warrantyValid = installation.warrantyEndDate && new Date(installation.warrantyEndDate) > new Date();
+
+  // All supplied objects: primary first, then the additional ones (populated
+  // by the API). Shown whenever the component supplies more than one object.
+  const additionalSites = (installation.additionalSiteIds || []).filter((s) => s && s._id);
+  const suppliesMultiple = additionalSites.length > 0;
 
   return (
     <div className="space-y-6">
@@ -132,6 +139,12 @@ export function InstallationDetail() {
               {!isActive && (
                 <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
                   {t('crm.installations.decommissioned', 'Ausser Betrieb')}
+                </span>
+              )}
+              {suppliesMultiple && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-700 dark:text-brand-300">
+                  <Building2 className="h-3 w-3" />
+                  {t('crm.installations.suppliesCount', 'Versorgt {count} Objekte', { count: additionalSites.length + 1 })}
                 </span>
               )}
             </div>
@@ -187,6 +200,46 @@ export function InstallationDetail() {
           />
         </div>
 
+        {/* Versorgt / Zugewiesen — every object this component supplies, with
+            direct navigation (client requirement for shared components). */}
+        {suppliesMultiple && (
+          <div className="px-6 pb-6">
+            <div className="rounded-lg border border-brand-500/20 bg-brand-500/5 p-4">
+              <p className="text-[11px] font-semibold mb-3 text-brand-700 dark:text-brand-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5" />
+                {t('crm.installations.suppliedObjects', 'Versorgt / Zugewiesen {count} Objekte', { count: additionalSites.length + 1 })}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  { site: installation.siteId, primary: true },
+                  ...additionalSites.map((site) => ({ site, primary: false })),
+                ].map(({ site, primary }) => site && (
+                  <Link
+                    key={site._id || 'primary'}
+                    href={`/crm/sites/${site._id}`}
+                    className="group flex items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:border-brand-500/40 hover:bg-brand-500/5"
+                  >
+                    <MapPin className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-brand-600 dark:group-hover:text-brand-300" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-medium text-foreground">{site.name}</span>
+                      {(site.street || site.city) && (
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {[site.street, [site.postalCode, site.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')}
+                        </span>
+                      )}
+                    </span>
+                    {primary && (
+                      <span className="ml-auto inline-flex items-center gap-1 shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        <Star className="h-2.5 w-2.5" /> {t('crm.installations.primaryObject', 'Hauptobjekt')}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {installation.technicalNotes && (
           <div className="px-6 pb-6">
             <div className="rounded-lg border border-border bg-muted/30 p-4">
@@ -240,6 +293,8 @@ export function InstallationDetail() {
         onSubmit={(data) => updateMut.mutateAsync(data)}
         defaultValues={installation}
         isLoading={updateMut.isPending}
+        customerId={customerId}
+        primarySiteId={siteId}
       />
 
       {/* Decommission dialog */}
@@ -251,12 +306,12 @@ export function InstallationDetail() {
                 <PowerOff className="h-5 w-5 text-red-400" />
               </div>
               <DialogTitle className="text-[16px] font-semibold text-foreground">
-                {t('crm.installations.decommissionTitle', 'Installation ausser Betrieb nehmen')}
+                {t('crm.installations.decommissionTitle', 'Komponente ausser Betrieb nehmen')}
               </DialogTitle>
             </div>
           </DialogHeader>
           <div className="px-6 py-5 space-y-4">
-            <p className="text-[13px] text-muted-foreground">{t('crm.installations.decommissionDesc', 'Die Installation wird als ausser Betrieb markiert.')}</p>
+            <p className="text-[13px] text-muted-foreground">{t('crm.installations.decommissionDesc', 'Die Komponente wird als ausser Betrieb markiert.')}</p>
             <div className="space-y-1.5">
               <Label className="text-[12px] font-medium text-muted-foreground block">
                 {t('crm.installations.decommissionReason', 'Grund')} <span className="text-red-400">*</span>

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Search, Plus, MoreHorizontal, FileText, CheckCircle,
+  Search, Plus, MoreHorizontal, FileText, CheckCircle, Eye,
   Send, DollarSign, History, Download, XCircle, Edit, Trash2, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { useInvoices, useInvoiceHistory } from '../hooks/use-qop-queries';
 import { useInvoiceMutations } from '../hooks/use-qop-mutations';
 import { invoiceService } from '../services/invoice-service';
+import { showError } from '@/lib/toast';
 import { InvoiceStatusBadge, InvoiceTypeBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
@@ -34,7 +35,7 @@ import { InvoiceDetailDialog } from './invoice-detail-dialog';
 import { QopBulkActionBar, QopPaginationControls, useQopCursorPagination } from './qop-pagination';
 import { VALID_INVOICE_TRANSITIONS } from '../constants/qop-constants';
 
-const INV_STATUSES = ['', 'DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
+const INV_STATUSES = ['', 'DRAFT', 'FINALIZED', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
 
 function fmtDate(d, lang) {
   if (!d) return '—';
@@ -129,7 +130,10 @@ export function InvoicesTable({ advancedFilters = {} }) {
       const res = await invoiceService.generateDocument(id);
       const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
       if (url) window.open(url, '_blank');
-    } catch { /* silently fail */ }
+      else showError(t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    } catch (err) {
+      showError(err?.message || t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    }
   };
 
   const handleFinalize = (id) => {
@@ -291,7 +295,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
         {items.map((inv) => {
           const id = inv._id ?? inv.id;
           const canFinalize = inv.status === 'DRAFT';
-          const canSend     = inv.status === 'DRAFT';
+          const canSend     = inv.status === 'DRAFT' || inv.status === 'FINALIZED';
           const canPay      = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status);
           const canWriteOff = ['SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(inv.status);
 
@@ -333,6 +337,9 @@ export function InvoicesTable({ advancedFilters = {} }) {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => setDetail(id)}>
+                      <FileText className="h-4 w-4 mr-2" />{t('qop.table.details', 'Details')}
+                    </DropdownMenuItem>
                     {inv.status === 'DRAFT' && (
                       <DropdownMenuItem onClick={() => setEditingInvoice(inv)}>
                         <Edit className="h-4 w-4 mr-2" />{t('qop.table.edit', 'Edit')}
@@ -359,7 +366,7 @@ export function InvoicesTable({ advancedFilters = {} }) {
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem onClick={() => handleGeneratePdf(id)}>
-                      <Download className="h-4 w-4 mr-2" />{t('qop.invoices.downloadPdf', 'PDF herunterladen')}
+                      <Eye className="h-4 w-4 mr-2" />{t('qop.actions.preview', 'Vorschau')}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => setHistoryFor(id)}>

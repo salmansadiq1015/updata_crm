@@ -32,6 +32,8 @@ class TaskService {
 
     // Default assignee to creator
     const assigneeId = data.assigneeId || userId;
+    // Sync assigneeIds: if provided use it, otherwise derive from assigneeId
+    const assigneeIds = data.assigneeIds?.length ? data.assigneeIds : [assigneeId];
 
     // Validate projectId and orderId are not both set
     if (data.projectId && data.orderId) {
@@ -46,6 +48,7 @@ class TaskService {
       ...data,
       listId,
       assigneeId,
+      assigneeIds,
       createdBy: userId,
     });
     const createdTask = await taskRepository.findById(task._id);
@@ -171,6 +174,14 @@ class TaskService {
     // A locked task stays with its owner — reassignment is not allowed.
     if (existing.locked && patch.assigneeId && String(patch.assigneeId) !== String(existing.assigneeId)) {
       throw new AppError('Locked task cannot be reassigned', 403, ERROR_CODES.TASK_LOCKED);
+    }
+
+    // Keep assigneeId and assigneeIds in sync
+    if (patch.assigneeIds) {
+      patch.assigneeId = patch.assigneeIds[0] || null;
+    } else if (patch.assigneeId !== undefined && !patch.assigneeIds) {
+      // Single assignee changed — update the array too
+      patch.assigneeIds = patch.assigneeId ? [patch.assigneeId] : [];
     }
 
     const updated = await taskRepository.updateById(id, { ...patch, updatedBy: userId }, { expectedVersion });

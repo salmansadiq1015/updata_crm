@@ -64,7 +64,7 @@ export function CoarseGrid({
             <div key={row.id} className="group flex border-b border-border/40 last:border-b-0 hover:bg-muted/20">
               <div className={cn(
                 NAME_COL,
-                'sticky left-0 z-10 flex items-center justify-between gap-2 border-r border-border/60 bg-card px-3 py-2 transition-colors group-hover:bg-muted/30',
+                'sticky left-0 z-10 flex flex-col justify-center gap-1.5 border-r border-border/60 bg-card px-3 py-2 transition-colors group-hover:bg-muted/30',
               )}
               >
                 <div className="flex min-w-0 items-center gap-2">
@@ -80,15 +80,18 @@ export function CoarseGrid({
                     ? <span className="truncate text-xs font-medium">{row.name}</span>
                     : <EmployeeAvatarRow name={row.name} />}
                 </div>
+                {/* Explicit, always-visible entry point to multi-week planning —
+                    it used to be a hover-only icon that users never found. */}
                 {!isProjectView && (
                   <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 w-fit gap-1 rounded-md px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
                     onClick={() => onBulkRow(row.id)}
                     aria-label={t('deploy.coarse.bulkTitle', 'Mehrwochen-Zuteilung')}
                   >
-                    <Layers className="h-3.5 w-3.5" />
+                    <Layers className="h-3 w-3 shrink-0" />
+                    {t('deploy.coarse.bulkTitle', 'Mehrwochen-Zuteilung')}
                   </Button>
                 )}
               </div>
@@ -127,30 +130,56 @@ export function CoarseGrid({
           );
         })}
 
-        {/* Footer: team load per week */}
-        <div className="sticky bottom-0 z-10 flex border-t border-border/60 bg-muted/40 backdrop-blur-sm">
-          <div className={cn(NAME_COL, 'sticky left-0 z-10 border-r border-border/60 bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground')}>
-            {t('deploy.coarse.teamLoad', 'Team-Auslastung')}
+        {/* Footer: team load + free capacity per week */}
+        <div className="sticky bottom-0 z-10 border-t border-border/60 bg-muted/40 backdrop-blur-sm">
+          {/* Team load per week */}
+          <div className="flex">
+            <div className={cn(NAME_COL, 'sticky left-0 z-10 border-r border-border/60 bg-muted/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground')}>
+              {t('deploy.coarse.teamLoad', 'Team-Auslastung')}
+            </div>
+            {weeks.map((week) => {
+              const value = columnAvgs[week] || 0;
+              const tier = getAllocationTier(value);
+              return (
+                <div
+                  key={week}
+                  className={cn(
+                    'min-w-[58px] flex-1 border-r border-border/40 py-2 text-center text-[11px] font-bold tabular-nums last:border-r-0',
+                    value > 100 ? 'text-red-500' : value > 0 ? 'text-foreground' : 'text-muted-foreground/50',
+                    week === currentWeek && 'bg-primary/10',
+                  )}
+                >
+                  <span className={cn('inline-block rounded-md px-1.5 py-0.5', tier?.bg, tier?.text)}>
+                    {value}%
+                  </span>
+                </div>
+              );
+            })}
+            <div className={cn(SUM_COL, 'border-l border-border/60')} />
           </div>
-          {weeks.map((week) => {
-            const value = columnAvgs[week] || 0;
-            const tier = getAllocationTier(value);
-            return (
-              <div
-                key={week}
-                className={cn(
-                  'min-w-[58px] flex-1 border-r border-border/40 py-2 text-center text-[11px] font-bold tabular-nums last:border-r-0',
-                  value > 100 ? 'text-red-500' : value > 0 ? 'text-foreground' : 'text-muted-foreground/50',
-                  week === currentWeek && 'bg-primary/10',
-                )}
-              >
-                <span className={cn('inline-block rounded-md px-1.5 py-0.5', tier?.bg, tier?.text)}>
-                  {value}%
-                </span>
-              </div>
-            );
-          })}
-          <div className={cn(SUM_COL, 'border-l border-border/60')} />
+          {/* Free capacity per week — the complement, so a booked week visibly
+              lowers the number (module 08 client feedback). */}
+          <div className="flex border-t border-border/40">
+            <div className={cn(NAME_COL, 'sticky left-0 z-10 border-r border-border/60 bg-muted/40 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70')}>
+              {t('deploy.coarse.freeCapacity', 'Freie Kapazität')}
+            </div>
+            {weeks.map((week) => {
+              const free = Math.max(0, 100 - (columnAvgs[week] || 0));
+              return (
+                <div
+                  key={week}
+                  className={cn(
+                    'min-w-[58px] flex-1 border-r border-border/40 py-1.5 text-center text-[11px] tabular-nums last:border-r-0',
+                    free === 0 ? 'font-bold text-red-500' : free < 50 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400',
+                    week === currentWeek && 'bg-primary/10',
+                  )}
+                >
+                  {free}%
+                </div>
+              );
+            })}
+            <div className={cn(SUM_COL, 'border-l border-border/60')} />
+          </div>
         </div>
       </div>
     </div>

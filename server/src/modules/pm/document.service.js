@@ -18,6 +18,11 @@ class DocumentService {
       doc.fileSize = doc.fileId.sizeBytes || null;
       doc.fileId = doc.fileId._id;
     }
+    // Flatten the populated visum author to a display name, keep the id.
+    if (doc.visumBy && typeof doc.visumBy === 'object') {
+      doc.visumByName = [doc.visumBy.firstName, doc.visumBy.lastName].filter(Boolean).join(' ') || null;
+      doc.visumBy = doc.visumBy._id;
+    }
     return doc;
   }
 
@@ -199,6 +204,53 @@ class DocumentService {
       module: 'pm',
     });
 
+    return updated;
+  }
+
+  // --- Visum (sign-off) & Archive ---------------------------------------------
+
+  // Sign off a document (moves it to "Dokumente mit Visum"); pass visiert=false
+  // to clear the sign-off (back to "Dokumente").
+  async setVisum(id, userId, visiert = true, meta = {}) {
+    const existing = await documentRepository.findById(id);
+    if (!existing) throw new NotFoundError('ProjectDocument', id);
+
+    const updated = this._enrichDocument(await documentRepository.updateById(id, visiert
+      ? { visumBy: userId, visumAt: new Date() }
+      : { visumBy: null, visumAt: null }));
+
+    await this._invalidateCache(existing.projectId);
+    auditService.logEvent({
+      eventType: visiert ? 'project_document.visum_set' : 'project_document.visum_cleared',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: id, projectId: existing.projectId },
+      module: 'pm',
+    });
+    return updated;
+  }
+
+  // Move a document to the Archiv section; pass archived=false to restore it.
+  async setArchived(id, userId, archived = true, meta = {}) {
+    const existing = await documentRepository.findById(id);
+    if (!existing) throw new NotFoundError('ProjectDocument', id);
+
+    const updated = this._enrichDocument(await documentRepository.updateById(id, archived
+      ? { archived: true, archivedAt: new Date() }
+      : { archived: false, archivedAt: null }));
+
+    await this._invalidateCache(existing.projectId);
+    auditService.logEvent({
+      eventType: archived ? 'project_document.archived' : 'project_document.unarchived',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: id, projectId: existing.projectId },
+      module: 'pm',
+    });
     return updated;
   }
 

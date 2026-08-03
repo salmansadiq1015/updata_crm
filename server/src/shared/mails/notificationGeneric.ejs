@@ -32,7 +32,21 @@
         <%- body %>
       </div>
       <% if (deepLink) { %>
-        <a href="<%= clientUrl %><%= deepLink %>" class="btn">Details ansehen</a>
+        <%# Inline styles + an inner span force white text: several mail clients
+            override link colours on <a>, which made the button blue-on-blue. %>
+        <a href="<%= clientUrl %><%= deepLink %>" style="display:inline-block;background:#1C388E;color:#ffffff;padding:10px 24px;text-decoration:none;border-radius:6px;margin-top:16px;font-weight:600;">
+          <span style="color:#ffffff;">Details ansehen</span>
+        </a>
+      <% } %>
+      <% if (typeof rsvpDeepLink !== 'undefined' && rsvpDeepLink) { %>
+        <div style="margin-top:16px;">
+          <a href="<%= clientUrl %><%= rsvpDeepLink %>&rsvp=ACCEPTED" style="display:inline-block;background:#16a34a;color:#ffffff;padding:10px 24px;text-decoration:none;border-radius:6px;margin-right:8px;font-weight:600;">
+            <span style="color:#ffffff;">Zusage</span>
+          </a>
+          <a href="<%= clientUrl %><%= rsvpDeepLink %>&rsvp=DECLINED" style="display:inline-block;background:#dc2626;color:#ffffff;padding:10px 24px;text-decoration:none;border-radius:6px;font-weight:600;">
+            <span style="color:#ffffff;">Absage</span>
+          </a>
+        </div>
       <% } %>
     </div>
     <div class="footer">

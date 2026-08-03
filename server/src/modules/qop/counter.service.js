@@ -65,6 +65,11 @@ class QOPCounterService {
       const now = new Date();
       const year = now.getFullYear();
 
+      // Year string is part of both the number and the reconciliation prefix.
+      let yearStr = '';
+      if (yearFormat === 'YYYY') yearStr = String(year);
+      else if (yearFormat === 'YY') yearStr = String(year).slice(-2);
+
       // 3. Annual reset check
       if (sequence && resetsAnnually && sequence.currentYear < year) {
         await DocumentNumberSequence.findByIdAndUpdate(sequence._id, {
@@ -72,12 +77,19 @@ class QOPCounterService {
         });
       }
 
-      // 4. Atomic counter increment
+      // 4. Atomic counter increment, reconciled with the highest number already
+      //    used for this scope. If the stored counter has fallen behind the real
+      //    data (e.g. after a data import, seed or manual insert), this heals it
+      //    automatically on the next generation instead of throwing duplicate-key
+      //    errors. The $max keeps the sequence monotonic under concurrency: a
+      //    stale maxUsed can never lower the counter.
       const counterId = buildCounterId(documentType, departmentId, resetsAnnually, year);
+      const numberPrefix = [prefix, yearStr].filter(Boolean).join(separator) + separator;
+      const maxUsed = await this._maxUsedSequence(documentType, numberPrefix, separator);
       const counter = await Counter.findOneAndUpdate(
         { _id: counterId },
-        { $inc: { seq: 1 } },
-        { returnDocument: 'after', upsert: true },
+        [{ $set: { seq: { $add: [{ $max: [{ $ifNull: ['$seq', 0] }, maxUsed] }, 1] } } }],
+        { returnDocument: 'after', upsert: true, updatePipeline: true },
       );
 
       if (sequence) {
@@ -87,10 +99,6 @@ class QOPCounterService {
       }
 
       // 5. Format the number
-      let yearStr = '';
-      if (yearFormat === 'YYYY') yearStr = String(year);
-      else if (yearFormat === 'YY') yearStr = String(year).slice(-2);
-
       const seq = String(counter.seq).padStart(paddingLength, '0');
 
       const parts = [prefix];
@@ -106,6 +114,43 @@ class QOPCounterService {
         ERROR_CODES.QOP_COUNTER_FAILED,
       );
     }
+  }
+
+  /**
+   * Resolve the document collection + number field for a QOP document type.
+   * @private
+   */
+  async _docCollection(documentType) {
+    if (documentType === 'invoice') {
+      return { model: (await import('./invoice.model.js')).default, field: 'invoiceNumber' };
+    }
+    if (documentType === 'order') {
+      return { model: (await import('./order.model.js')).default, field: 'orderNumber' };
+    }
+    if (documentType === 'quotation') {
+      return { model: (await import('./quotation.model.js')).default, field: 'quotationNumber' };
+    }
+    return null;
+  }
+
+  /**
+   * Highest sequence number already used by an existing document whose number
+   * starts with `numberPrefix` (e.g. "RE-2026-"). Includes soft-deleted records
+   * so their numbers are never reused. Returns 0 when none exist.
+   * @private
+   */
+  async _maxUsedSequence(documentType, numberPrefix, separator) {
+    const meta = await this._docCollection(documentType);
+    if (!meta) return 0;
+    const { model, field } = meta;
+    const escaped = numberPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rows = await model.aggregate([
+      { $match: { [field]: { $regex: `^${escaped}\\d+$` } } },
+      { $project: { n: { $toInt: { $arrayElemAt: [{ $split: [`$${field}`, separator] }, -1] } } } },
+      { $sort: { n: -1 } },
+      { $limit: 1 },
+    ]);
+    return rows[0]?.n ?? 0;
   }
 
   /**
@@ -132,8 +177,12 @@ class QOPCounterService {
       resetsAnnually,
       year,
     );
+    // Mirror generation: reconcile with the highest number actually in use so
+    // the preview matches what the next document will get.
+    const numberPrefix = [prefix, yearStr].filter(Boolean).join(separator) + separator;
+    const maxUsed = await this._maxUsedSequence(sequence.documentType, numberPrefix, separator);
     const counter = await Counter.findById(counterId).lean();
-    const currentValue = counter?.seq ?? sequence.currentValue ?? 0;
+    const currentValue = Math.max(counter?.seq ?? sequence.currentValue ?? 0, maxUsed);
     const nextSeq = String(currentValue + 1).padStart(paddingLength, '0');
 
     const parts = [prefix];

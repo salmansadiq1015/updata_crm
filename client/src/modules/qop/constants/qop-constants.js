@@ -89,6 +89,7 @@ export const ORDER_STATUS_COLORS = {
 
 export const INVOICE_STATUS_COLORS = {
   DRAFT:          'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-200 dark:border-slate-400/20',
+  FINALIZED:      'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-200 dark:border-indigo-400/20',
   SENT:           'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-200 dark:border-blue-400/20',
   PARTIALLY_PAID: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:border-amber-400/20',
   PAID:           'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-200 dark:border-emerald-400/20',
@@ -121,11 +122,11 @@ export const ORDER_STATUS_LABELS = {
 
 export const INVOICE_STATUS_LABELS = {
   de: {
-    DRAFT: 'Entwurf', SENT: 'Gesendet', PARTIALLY_PAID: 'Teilbezahlt',
+    DRAFT: 'Entwurf', FINALIZED: 'Finalisiert', SENT: 'Gesendet', PARTIALLY_PAID: 'Teilbezahlt',
     PAID: 'Bezahlt', OVERDUE: 'Überfällig', CANCELLED: 'Storniert',
   },
   en: {
-    DRAFT: 'Draft', SENT: 'Sent', PARTIALLY_PAID: 'Partially Paid',
+    DRAFT: 'Draft', FINALIZED: 'Finalized', SENT: 'Sent', PARTIALLY_PAID: 'Partially Paid',
     PAID: 'Paid', OVERDUE: 'Overdue', CANCELLED: 'Cancelled',
   },
 };

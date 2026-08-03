@@ -3,12 +3,14 @@ import { cursorPagination, objectId } from '../../shared/validation/commonSchema
 import { DOCUMENT_ORIGINS, DOCUMENT_SOURCES } from './documentIndex.model.js';
 
 const CENTRAL_RECORD_ID = /^(repository|generated|project|customer|accounting|mobile):[0-9a-fA-F]{24}$/;
-const LINK_TYPES = ['', 'customer', 'project', 'job', 'employee'];
+const LINK_TYPES = ['', 'customer', 'project', 'job', 'employee', 'vehicle'];
 
 export const listDocumentsSchema = {
   query: cursorPagination.keys({
     source: Joi.string().valid(...DOCUMENT_SOURCES, 'all').default('all'),
     origin: Joi.string().valid(...DOCUMENT_ORIGINS, 'all').default('all'),
+    // Document section: Dokumente / Dokumente mit Visum / Archiv.
+    section: Joi.string().valid('all', 'documents', 'visum', 'archiv').default('all'),
     documentType: Joi.string().trim().max(100),
     category: Joi.string().trim().max(100),
     status: Joi.string().trim().max(80),

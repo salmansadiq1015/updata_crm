@@ -68,7 +68,9 @@ function ContextRow({ icon: Icon, label, value, href }) {
     </div>
   );
 
-  return href ? <Link href={href}>{content}</Link> : content;
+  // `block` so the section's vertical spacing (space-y) applies — a default
+  // inline <a> would ignore the margin and stick the rows together.
+  return href ? <Link href={href} className="block">{content}</Link> : content;
 }
 
 export function ChatContextPanel({ room, currentUserId }) {

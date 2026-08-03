@@ -54,6 +54,24 @@ class DocumentController {
     } catch (err) { next(err); }
   }
 
+  async setVisum(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const visiert = req.method !== 'DELETE';
+      const doc = await documentService.setVisum(req.params.docId, req.user._id, visiert, meta);
+      return res.success({ data: doc, message: visiert ? 'Document signed off' : 'Sign-off removed' });
+    } catch (err) { next(err); }
+  }
+
+  async setArchived(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const archived = req.method !== 'DELETE';
+      const doc = await documentService.setArchived(req.params.docId, req.user._id, archived, meta);
+      return res.success({ data: doc, message: archived ? 'Document archived' : 'Document restored from archive' });
+    } catch (err) { next(err); }
+  }
+
   async delete(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

@@ -125,13 +125,19 @@ export default function TemplateDetailPage() {
   };
 
   const handlePreview = async () => {
-    const response = await preview.mutateAsync({
-      id,
-      sampleData: {},
-      language: 'de',
-      draftTemplate: draft || undefined,
-    });
-    setPreviewUrl(response?.data?.downloadUrl || null);
+    try {
+      const response = await preview.mutateAsync({
+        id,
+        sampleData: {},
+        language: 'de',
+        draftTemplate: draft || undefined,
+      });
+      const url = response?.data?.downloadUrl || null;
+      if (url) setPreviewUrl(url);
+      else showError(t('doctpl.templates.previewFailed', 'Die Vorschau konnte nicht erstellt werden.'));
+    } catch (error) {
+      showError(error);
+    }
   };
 
   if (isLoading) {

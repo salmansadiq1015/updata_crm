@@ -19,13 +19,12 @@ import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useInvoiceMutations } from '../hooks/use-qop-mutations';
 import { useBillingPlan, useOrders, useQopCustomerProjects, useQopDepartments } from '../hooks/use-qop-queries';
 import { LineItemsEditor } from './line-items-editor';
-import { CURRENCIES } from '../constants/qop-constants';
+import { CURRENCIES, PAYMENT_TERMS_PRESETS } from '../constants/qop-constants';
 import {
-  LANGUAGE_OPTIONS, buildDepartmentOptions, buildOrderOptions, buildPaymentTermOptions, buildProjectOptions,
+  LANGUAGE_OPTIONS, buildDepartmentOptions, buildOrderOptions, buildProjectOptions,
   getEntityId, mapLineItemsForPayload, toDateInputValue, withEditableLineIds,
 } from '../utils/document-form-utils';
 
-const PAYMENT_TERMS = [7, 10, 14, 20, 30, 45, 60];
 const ORDER_PICKER_LIMIT = 25;
 const ORDER_SEARCH_DEBOUNCE_MS = 250;
 
@@ -33,6 +32,18 @@ function addDays(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+// The invoice reuses the same Zahlungsbedingungen presets as quotations/orders,
+// but still needs a net-day count to derive the due date. Read the "netto" clause
+// ("… 30 Tage netto" → 30); "Sofort fällig" is due immediately (0 days).
+function presetToNetDays(preset) {
+  if (!preset) return 30;
+  if (/sofort/i.test(preset)) return 0;
+  const nettoMatch = preset.match(/(\d+)\s*Tage?\s*netto/i);
+  if (nettoMatch) return Number(nettoMatch[1]);
+  const anyNum = preset.match(/(\d+)/);
+  return anyNum ? Number(anyNum[1]) : 30;
 }
 
 const fmt = (n) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
@@ -53,7 +64,7 @@ const EMPTY_FORM = () => ({
   currency: 'CHF',
   globalDiscountPercent: 0,
   paymentTermsDays: 30,
-  paymentTermsText: '',
+  paymentTermsText: '30 Tage netto',
   dueDate: addDays(30),
   sourceOrderId: '',
   lineItems: [],
@@ -123,10 +134,8 @@ export function InvoiceFormDialog({
   const departmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
   const projectOptions = useMemo(() => buildProjectOptions(projects), [projects]);
   const projectPickerLoading = projectsLoading || projectQuery.trim() !== debouncedProjectQuery;
-  const paymentTermOptions = useMemo(
-    () => buildPaymentTermOptions(PAYMENT_TERMS, t('qop.invoices.daysNet', 'days net')),
-    [t],
-  );
+  // Same options as quotations/orders (qop-constants PAYMENT_TERMS_PRESETS).
+  const paymentTermOptions = PAYMENT_TERMS_PRESETS;
 
   const selectedOrder = useMemo(
     () => sourceOrder
@@ -200,22 +209,39 @@ export function InvoiceFormDialog({
   useEffect(() => {
     if (isEdit || !open || !effectiveSourceOrder) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setForm((current) => ({
-      ...current,
-      currency: effectiveSourceOrder.currency || current.currency,
-      ...(type === 'STANDARD'
-        ? { lineItems: (effectiveSourceOrder.lineItems ?? []).map((li, i) => ({ ...li, _uid: i })) }
-        : {}),
-    }));
+    setForm((current) => {
+      // Carry the order's payment terms onto the invoice and re-derive the due date.
+      const sourceTerms = effectiveSourceOrder.paymentTerms;
+      const termFields = sourceTerms
+        ? {
+            paymentTermsText: sourceTerms,
+            paymentTermsDays: presetToNetDays(sourceTerms),
+            dueDate: addDays(presetToNetDays(sourceTerms)),
+          }
+        : {};
+      return {
+        ...current,
+        currency: effectiveSourceOrder.currency || current.currency,
+        ...termFields,
+        ...(type === 'STANDARD'
+          ? { lineItems: (effectiveSourceOrder.lineItems ?? []).map((li, i) => ({ ...li, _uid: i })) }
+          : {}),
+      };
+    });
   }, [effectiveSourceOrder, isEdit, open, type]);
 
   const { data: billingPlan } = useBillingPlan(!isEdit && type === 'FINAL' ? effectiveSourceOrderId : null);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
-  const handleTermChange = (days) => {
-    set('paymentTermsDays', days);
-    set('dueDate', addDays(Number(days)));
+  const handleTermChange = (preset) => {
+    const days = presetToNetDays(preset);
+    setForm((f) => ({
+      ...f,
+      paymentTermsText: preset,
+      paymentTermsDays: days,
+      dueDate: addDays(days),
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -436,8 +462,9 @@ export function InvoiceFormDialog({
                     searchable={false}
                     triggerIcon={Clock}
                     options={paymentTermOptions}
-                    value={String(form.paymentTermsDays)}
+                    value={form.paymentTermsText || ''}
                     onChange={handleTermChange}
+                    placeholder={t('qop.form.paymentTermsPlaceholder', 'Zahlungsbedingung wählen...')}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -521,8 +548,9 @@ export function InvoiceFormDialog({
                   searchable={false}
                   triggerIcon={Clock}
                   options={paymentTermOptions}
-                  value={String(form.paymentTermsDays)}
+                  value={form.paymentTermsText || ''}
                   onChange={handleTermChange}
+                  placeholder={t('qop.form.paymentTermsPlaceholder', 'Zahlungsbedingung wählen...')}
                 />
               </div>
               <div className="flex flex-col gap-1.5">

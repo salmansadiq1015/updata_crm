@@ -1,7 +1,6 @@
 'use client';
 
-import type { ChangeEvent, FormEvent } from 'react';
-import { useState } from 'react';
+import type { ChangeEvent } from 'react';
 import {
   CalendarDays,
   Check,
@@ -13,7 +12,6 @@ import {
   Columns3,
   Flag,
   List,
-  Plus,
   Search,
   SlidersHorizontal,
   UserRound,
@@ -23,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { TaskQuickAdd } from './task-quick-add';
 import type { TaskPriority, TaskStatus, TaskViewType } from '../types/task-types';
 import {
   TASK_PRIORITIES,
@@ -147,33 +146,19 @@ export function TaskCommandBar({
   onPageSizeChange,
 }: TaskCommandBarProps) {
   const { t } = useLanguage();
-  const [quickTitle, setQuickTitle] = useState('');
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const title = quickTitle.trim() || t('tasks.newTask', 'New task');
-    onCreateTask(title);
-    setQuickTitle('');
-  };
 
   return (
     <div className="border-b border-border bg-card">
-      {/* Top row: search + quick-add + view switcher */}
+      {/* Top row: quick-add + search + view switcher. Add-first flow (client
+          feedback): the button comes first, the title field appears on click. */}
       <div className="flex items-center gap-2 px-3 py-3">
-        <form onSubmit={submit} className="hidden min-w-0 max-w-2xl flex-1 items-center gap-2 lg:flex">
-          <Input
-            type="text"
-            value={quickTitle}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setQuickTitle(e.target.value)}
-            placeholder={t('tasks.quickAdd', 'Quick add task')}
-            className="h-8 rounded-md border-border bg-background text-sm"
-            aria-label={t('tasks.quickAddTitle', 'Quick add task title')}
+        <div className="hidden min-w-0 max-w-2xl flex-1 items-center lg:flex">
+          <TaskQuickAdd
+            onCreate={onCreateTask}
+            label={t('tasks.addTask', 'Hinzufügen')}
+            className="w-full"
           />
-          <Button type="submit" size="sm" className="h-8 gap-1">
-            <Plus className="h-4 w-4" />
-            {t('common.add', 'Add')}
-          </Button>
-        </form>
+        </div>
 
         <div className="relative ml-auto w-44 shrink-0 xl:w-56">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

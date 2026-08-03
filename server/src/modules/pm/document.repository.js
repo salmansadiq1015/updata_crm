@@ -3,6 +3,7 @@ import ProjectDocument from './projectDocument.model.js';
 const POPULATE_FIELDS = [
   { path: 'fileId', select: 'originalName mimeType sizeBytes' },
   { path: 'uploadedBy', select: 'firstName lastName' },
+  { path: 'visumBy', select: 'firstName lastName' },
 ];
 
 class DocumentRepository {

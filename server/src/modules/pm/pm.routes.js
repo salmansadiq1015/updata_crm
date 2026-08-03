@@ -159,6 +159,12 @@ scheduleRouter.get(
   validate(exportScheduleSchema),
   (req, res, next) => scheduleController.exportSchedule(req, res, next),
 );
+scheduleRouter.get(
+  '/protocols',
+  authenticate,
+  requirePermission('projects:read'),
+  (req, res, next) => scheduleController.listProtocols(req, res, next),
+);
 scheduleRouter.post(
   '/transfer',
   authenticate,
@@ -282,6 +288,36 @@ documentRouter.post(
   requirePermission('projects:write'),
   validate(restoreDocumentSchema),
   (req, res, next) => documentController.restore(req, res, next),
+);
+// Visum (sign-off): POST to sign off, DELETE to clear.
+documentRouter.post(
+  '/:docId/visum',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(documentIdParamSchema),
+  (req, res, next) => documentController.setVisum(req, res, next),
+);
+documentRouter.delete(
+  '/:docId/visum',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(documentIdParamSchema),
+  (req, res, next) => documentController.setVisum(req, res, next),
+);
+// Archive: POST to archive, DELETE to restore from archive.
+documentRouter.post(
+  '/:docId/archive',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(documentIdParamSchema),
+  (req, res, next) => documentController.setArchived(req, res, next),
+);
+documentRouter.delete(
+  '/:docId/archive',
+  authenticate,
+  requirePermission('projects:write'),
+  validate(documentIdParamSchema),
+  (req, res, next) => documentController.setArchived(req, res, next),
 );
 documentRouter.delete(
   '/:docId',

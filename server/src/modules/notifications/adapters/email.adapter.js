@@ -54,6 +54,9 @@ class EmailAdapter {
           title: content.subject || '',
           body,
           deepLink: content.deepLink || null,
+          // Present only for meeting invitations — the template renders
+          // Zusage/Absage buttons that append &rsvp=ACCEPTED|DECLINED.
+          rsvpDeepLink: content.showRsvp && content.deepLink ? content.deepLink : null,
           recipientName: content.recipientName || '',
         },
         attachments: attachments.length > 0 ? attachments : undefined,

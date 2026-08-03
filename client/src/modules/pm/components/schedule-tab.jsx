@@ -39,8 +39,10 @@ import {
   Send, MessageSquare, Calendar, Users, Building2,
   List, BarChart3, ChevronDown, ChevronRight, Clock, Download,
   User, Check, AlertTriangle, CheckSquare, Square, X, FileText, FileSpreadsheet, ArrowRightLeft,
+  GanttChartSquare,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ScheduleGantt } from './schedule-gantt';
 
 // ── Form pickers (mirror project-filter-bar.jsx patterns) ───────
 
@@ -756,7 +758,7 @@ export function ScheduleTab({ projectId }) {
   // ── Entry form ──────────────────────────────────────────────
 
   const isEdit = !!editEntry;
-  const defaultEntryValues = { name: '', entryType: 'PHASE', startDate: '', endDate: '', milestoneDate: '', responsibleType: 'INTERNAL_TEAM', responsibleTeamId: null, partnerCompanyId: null, predecessorId: null, notes: '', sortOrder: 0 };
+  const defaultEntryValues = { name: '', entryType: 'PHASE', startDate: '', endDate: '', startHalf: 'morning', endHalf: 'afternoon', milestoneDate: '', responsibleType: 'INTERNAL_TEAM', responsibleTeamId: null, partnerCompanyId: null, predecessorId: null, notes: '', sortOrder: 0 };
 
   const entryForm = useForm({
     resolver: zodResolver(isEdit ? updateEntrySchema : createEntrySchema),
@@ -785,6 +787,8 @@ export function ScheduleTab({ projectId }) {
       startDate: entry.startDate ? new Date(entry.startDate).toISOString().split('T')[0] : '',
       endDate: entry.endDate ? new Date(entry.endDate).toISOString().split('T')[0] : '',
       milestoneDate: entry.milestoneDate ? new Date(entry.milestoneDate).toISOString().split('T')[0] : '',
+      startHalf: entry.startHalf || 'morning',
+      endHalf: entry.endHalf || 'afternoon',
       responsibleType: entry.responsibleType || 'INTERNAL_TEAM',
       responsibleTeamId: entry.responsibleTeamId || null,
       partnerCompanyId: entry.partnerCompanyId || null,
@@ -964,8 +968,16 @@ export function ScheduleTab({ projectId }) {
             <button
               className={cn('px-2.5 py-1.5 text-xs font-medium transition-colors', viewMode === 'timeline' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-muted')}
               onClick={() => setViewMode('timeline')}
+              title={language === 'de' ? 'Zeitleiste' : 'Timeline'}
             >
               <BarChart3 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              className={cn('border-l border-border px-2.5 py-1.5 text-xs font-medium transition-colors', viewMode === 'gantt' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-muted')}
+              onClick={() => setViewMode('gantt')}
+              title="Gantt"
+            >
+              <GanttChartSquare className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -1033,6 +1045,11 @@ export function ScheduleTab({ projectId }) {
           title={t('pm.schedule', 'Schedule')}
           description={language === 'de' ? 'Noch keine Einträge erstellt.' : 'No schedule entries created yet.'}
         />
+      ) : viewMode === 'gantt' ? (
+        <ScheduleGantt
+          entries={entries}
+          onEditEntry={canWrite ? openEditEntry : undefined}
+        />
       ) : viewMode === 'timeline' ? (
         <ScheduleTimeline
           entries={entries}
@@ -1060,6 +1077,46 @@ export function ScheduleTab({ projectId }) {
               onToggleSelect={toggleSelect}
             />
           ))}
+        </div>
+      )}
+
+      {/* ── Übernahme + Protokoll footer ───────────────────── */}
+      {entries.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {canWrite && (
+            <div className="rounded-xl border border-border bg-card p-4 shadow-theme-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {t('pm.transferSection', 'Übernahme in andere Planung')}
+              </p>
+              <p className="mb-3 mt-1 text-xs text-muted-foreground">
+                {t('pm.transferSectionDesc', 'Geplante Termine mit einem Klick übernehmen:')}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setTransferTarget('einsatzplanung'); setTransferOpen(true); }}>
+                  <ArrowRightLeft className="h-3.5 w-3.5" /> {t('pm.transferToEinsatzBtn', 'In Einsatzplanung übernehmen')}
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setTransferTarget('grobplanung'); setTransferOpen(true); }}>
+                  <ArrowRightLeft className="h-3.5 w-3.5" /> {t('pm.transferToGrobBtn', 'In Grobplanung übernehmen')}
+                </Button>
+              </div>
+            </div>
+          )}
+          <div className="rounded-xl border border-border bg-card p-4 shadow-theme-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {t('pm.protocolSection', 'Protokoll (PDF)')}
+            </p>
+            <p className="mb-3 mt-1 text-xs text-muted-foreground">
+              {t('pm.protocolSectionDesc', 'Automatisches PDF-Protokoll der Terminplanung erstellen:')}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" className="gap-1.5" disabled={exportSchedule.isPending} onClick={() => exportSchedule.mutate({ format: 'pdf', variant: 'internal' })}>
+                <FileText className="h-3.5 w-3.5" /> {t('pm.protocolInternal', 'Internes Protokoll erstellen')}
+              </Button>
+              <Button size="sm" variant="outline" className="gap-1.5" disabled={exportSchedule.isPending} onClick={() => exportSchedule.mutate({ format: 'pdf', variant: 'external' })}>
+                <FileText className="h-3.5 w-3.5" /> {t('pm.protocolExternal', 'Externes Protokoll erstellen')}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1139,10 +1196,35 @@ export function ScheduleTab({ projectId }) {
                 {watchEntryType === 'PHASE' ? (
                   <>
                     <FormField label={t('pm.startDate', 'Start Date')} required error={entryForm.formState.errors.startDate?.message}>
-                      <Input type="date" {...entryForm.register('startDate')} />
+                      <div className="flex gap-2">
+                        <Input type="date" {...entryForm.register('startDate')} className="flex-1" />
+                        {/* Half-day precision for the Terminplan export (Morgen/NM) */}
+                        <Select
+                          value={entryForm.watch('startHalf') || 'morning'}
+                          onValueChange={(v) => entryForm.setValue('startHalf', v, { shouldDirty: true })}
+                        >
+                          <SelectTrigger className="w-28 shrink-0"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="morning">{language === 'de' ? 'ab Morgen' : 'from AM'}</SelectItem>
+                            <SelectItem value="afternoon">{language === 'de' ? 'ab NM' : 'from PM'}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </FormField>
                     <FormField label={t('pm.endDate', 'End Date')} required error={entryForm.formState.errors.endDate?.message}>
-                      <Input type="date" {...entryForm.register('endDate')} />
+                      <div className="flex gap-2">
+                        <Input type="date" {...entryForm.register('endDate')} className="flex-1" />
+                        <Select
+                          value={entryForm.watch('endHalf') || 'afternoon'}
+                          onValueChange={(v) => entryForm.setValue('endHalf', v, { shouldDirty: true })}
+                        >
+                          <SelectTrigger className="w-28 shrink-0"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="morning">{language === 'de' ? 'bis Morgen' : 'to AM'}</SelectItem>
+                            <SelectItem value="afternoon">{language === 'de' ? 'bis NM' : 'to PM'}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </FormField>
                   </>
                 ) : (

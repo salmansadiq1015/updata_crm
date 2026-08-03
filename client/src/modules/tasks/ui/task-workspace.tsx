@@ -31,6 +31,7 @@ import { TaskTimelineView } from './task-timeline-view';
 import { TaskCommandBar } from './task-command-bar';
 import { TaskEmptyState } from './task-empty-state';
 import { TaskListView } from './task-list-view';
+import { TaskQuickAdd } from './task-quick-add';
 import { TaskSidebar } from './task-sidebar';
 import { InputDialog } from './input-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
@@ -195,6 +196,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
           selectedTaskId={selectedTaskId}
           onSelectTask={(id) => router.push(`/tasks/${listId ?? 'all'}/${id}`)}
           onPatchTask={patchTask}
+          onCreateTask={(title, status) => mutations.createTask.mutate({ title, status })}
           users={usersQuery.data ?? []}
         />
       );
@@ -265,6 +267,17 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
             {content}
           </div>
         </main>
+        {/* Microsoft-To-Do-style capture row: always available in the list
+            view, including when the list is empty. */}
+        {activeView === 'list' && (
+          <div className="shrink-0 border-t border-border bg-card px-3 py-2">
+            <TaskQuickAdd
+              asRow
+              onCreate={(title) => mutations.createTask.mutate(title)}
+              label={t('tasks.addTaskRow', 'Aufgabe hinzufügen')}
+            />
+          </div>
+        )}
       </section>
 
       <TaskBulkActionBar

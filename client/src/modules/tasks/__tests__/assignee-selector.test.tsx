@@ -29,43 +29,42 @@ function renderWithProviders(ui: ReactElement) {
 
 describe('AssigneeSelector', () => {
   describe('unassigned state', () => {
-    it('renders "Assign" text when assigneeId is null and users list is empty', () => {
+    it('renders "Assign" text when assigneeIds is empty and users list is empty', () => {
       renderWithProviders(
-        <AssigneeSelector assigneeId={null} users={[]} onAssigneeChange={vi.fn()} />
+        <AssigneeSelector assigneeIds={[]} users={[]} onAssigneeChange={vi.fn()} />
       );
       expect(screen.getByText('Assign')).toBeInTheDocument();
     });
 
-    it('renders "Assign" text when assigneeId is null even with users provided', () => {
+    it('renders "Assign" text when assigneeIds is empty even with users provided', () => {
       renderWithProviders(
-        <AssigneeSelector assigneeId={null} users={USERS} onAssigneeChange={vi.fn()} />
+        <AssigneeSelector assigneeIds={[]} users={USERS} onAssigneeChange={vi.fn()} />
       );
       expect(screen.getByText('Assign')).toBeInTheDocument();
     });
   });
 
   describe('assigned state', () => {
-    it('shows user initials when assigneeId matches a user in the users list', () => {
+    it('shows user initials when assigneeIds contains a user in the users list', () => {
       renderWithProviders(
-        <AssigneeSelector assigneeId="u1" users={USERS} onAssigneeChange={vi.fn()} />
+        <AssigneeSelector assigneeIds={['u1']} users={USERS} onAssigneeChange={vi.fn()} />
       );
       // Initials for Alice Smith = "AS"
       expect(screen.getByText('AS')).toBeInTheDocument();
     });
 
-    it('shows the user full name when assigned', () => {
+    it('shows the user full name when a single user is assigned', () => {
       renderWithProviders(
-        <AssigneeSelector assigneeId="u1" users={USERS} onAssigneeChange={vi.fn()} />
+        <AssigneeSelector assigneeIds={['u1']} users={USERS} onAssigneeChange={vi.fn()} />
       );
       expect(screen.getByText('Alice Smith')).toBeInTheDocument();
     });
 
-    it('shows initials for second user when their id is assigned', () => {
+    it('shows count when multiple users are assigned', () => {
       renderWithProviders(
-        <AssigneeSelector assigneeId="u2" users={USERS} onAssigneeChange={vi.fn()} />
+        <AssigneeSelector assigneeIds={['u1', 'u2']} users={USERS} onAssigneeChange={vi.fn()} />
       );
-      // Initials for Bob Jones = "BJ"
-      expect(screen.getByText('BJ')).toBeInTheDocument();
+      expect(screen.getByText('2 Assignees')).toBeInTheDocument();
     });
   });
 
@@ -74,7 +73,7 @@ describe('AssigneeSelector', () => {
       const user = userEvent.setup();
 
       renderWithProviders(
-        <AssigneeSelector assigneeId={null} users={USERS} onAssigneeChange={vi.fn()} />
+        <AssigneeSelector assigneeIds={[]} users={USERS} onAssigneeChange={vi.fn()} />
       );
 
       const trigger = screen.getByRole('button');
@@ -89,7 +88,7 @@ describe('AssigneeSelector', () => {
       const user = userEvent.setup();
 
       renderWithProviders(
-        <AssigneeSelector assigneeId="u1" users={USERS} onAssigneeChange={vi.fn()} />
+        <AssigneeSelector assigneeIds={['u1']} users={USERS} onAssigneeChange={vi.fn()} />
       );
 
       const trigger = screen.getByRole('button');
@@ -98,12 +97,12 @@ describe('AssigneeSelector', () => {
       expect(await screen.findByText('Unassigned')).toBeInTheDocument();
     });
 
-    it('calls onAssigneeChange with the clicked user id', async () => {
+    it('calls onAssigneeChange with array containing the clicked user id', async () => {
       const onAssigneeChange = vi.fn();
       const user = userEvent.setup();
 
       renderWithProviders(
-        <AssigneeSelector assigneeId={null} users={USERS} onAssigneeChange={onAssigneeChange} />
+        <AssigneeSelector assigneeIds={[]} users={USERS} onAssigneeChange={onAssigneeChange} />
       );
 
       const trigger = screen.getByRole('button');
@@ -112,16 +111,16 @@ describe('AssigneeSelector', () => {
       const aliceButton = await screen.findByRole('button', { name: /Alice Smith/i });
       await user.click(aliceButton);
 
-      expect(onAssigneeChange).toHaveBeenCalledWith('u1');
+      expect(onAssigneeChange).toHaveBeenCalledWith(['u1']);
       expect(onAssigneeChange).toHaveBeenCalledTimes(1);
     });
 
-    it('calls onAssigneeChange with null when "Unassigned" is clicked', async () => {
+    it('calls onAssigneeChange with empty array when "Unassigned" is clicked', async () => {
       const onAssigneeChange = vi.fn();
       const user = userEvent.setup();
 
       renderWithProviders(
-        <AssigneeSelector assigneeId="u1" users={USERS} onAssigneeChange={onAssigneeChange} />
+        <AssigneeSelector assigneeIds={['u1']} users={USERS} onAssigneeChange={onAssigneeChange} />
       );
 
       const trigger = screen.getByRole('button');
@@ -130,14 +129,14 @@ describe('AssigneeSelector', () => {
       const unassignedBtn = await screen.findByRole('button', { name: /Unassigned/i });
       await user.click(unassignedBtn);
 
-      expect(onAssigneeChange).toHaveBeenCalledWith(null);
+      expect(onAssigneeChange).toHaveBeenCalledWith([]);
     });
 
     it('shows "No users found" when search yields no results', async () => {
       const user = userEvent.setup();
 
       renderWithProviders(
-        <AssigneeSelector assigneeId={null} users={USERS} onAssigneeChange={vi.fn()} />
+        <AssigneeSelector assigneeIds={[]} users={USERS} onAssigneeChange={vi.fn()} />
       );
 
       const trigger = screen.getByRole('button');

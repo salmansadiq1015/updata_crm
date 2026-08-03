@@ -9,14 +9,17 @@ import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 class EmailService {
   async send({
     to, cc, bcc, subject, bodyHtml, bodyText,
-    documentId, documentIds, sourceModule, sourceRecordId,
+    documentId, documentIds, fileAttachments, sourceModule, sourceRecordId,
     senderAddress, senderName, createdBy, meta: _meta = {},
   }) {
     const requestedDocumentIds = [...new Set([
       ...(documentId ? [documentId] : []),
       ...(Array.isArray(documentIds) ? documentIds : []),
     ].map((id) => id.toString()))];
-    const attachments = await this._resolveAttachments(requestedDocumentIds);
+    const attachments = [
+      ...await this._resolveAttachments(requestedDocumentIds),
+      ...await this._resolveFileAttachments(fileAttachments),
+    ];
     const sender = await this._resolveSender({ senderAddress, senderName });
 
     // Create EmailRecord with status QUEUED
@@ -95,6 +98,27 @@ class EmailService {
       });
     }
 
+    return attachments;
+  }
+
+  // Resolve attachments that reference an already-stored file directly by its
+  // FileMetadata id (uploaded object/project documents). The dispatch job pulls
+  // the file from storage by fileId, so no re-upload is needed.
+  async _resolveFileAttachments(fileAttachments = []) {
+    if (!Array.isArray(fileAttachments) || !fileAttachments.length) return [];
+
+    const { default: FileMetadata } = await import('../files/file.model.js');
+    const attachments = [];
+    for (const item of fileAttachments) {
+      const file = await FileMetadata.findById(item.fileId).select('originalName').lean();
+      if (!file) throw new NotFoundError('FileMetadata', item.fileId);
+      attachments.push({
+        documentId: null,
+        fileId: item.fileId,
+        fileName: item.fileName || file.originalName || 'attachment',
+        fileUrl: '',
+      });
+    }
     return attachments;
   }
 

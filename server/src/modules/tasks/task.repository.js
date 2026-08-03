@@ -25,6 +25,7 @@ const ALLOWED_SORT_FIELDS = ['createdAt', 'dueDate', 'priority', 'title', 'sortO
 
 const POPULATE_FIELDS = [
   { path: 'assigneeId', select: 'firstName lastName email role' },
+  { path: 'assigneeIds', select: 'firstName lastName email role' },
   { path: 'createdBy', select: 'firstName lastName email' },
   { path: 'projectId', select: 'name projectNumber customerName status' },
   { path: 'orderId', select: 'assignmentNumber title status priority' },
@@ -139,7 +140,9 @@ class TaskRepository {
         : [];
       const or = [{ title: regex }, { description: regex }];
       if (matchedUsers.length > 0) {
-        or.push({ assigneeId: { $in: matchedUsers.map((u) => u._id) } });
+        const matchedIds = matchedUsers.map((u) => u._id);
+        or.push({ assigneeId: { $in: matchedIds } });
+        or.push({ assigneeIds: { $in: matchedIds } });
       }
       searchFilter = { $or: or };
     }
@@ -153,6 +156,7 @@ class TaskRepository {
             { locked: { $ne: true } },
             { createdBy: accessUserId },
             { assigneeId: accessUserId },
+            { assigneeIds: accessUserId },
             { lockedBy: accessUserId },
           ],
         }

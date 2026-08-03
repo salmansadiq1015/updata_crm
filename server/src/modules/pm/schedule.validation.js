@@ -21,6 +21,8 @@ export const createEntrySchema = {
       then: Joi.date().iso().required(),
       otherwise: Joi.date().iso().allow(null),
     }),
+    startHalf: Joi.string().valid('morning', 'afternoon').default('morning'),
+    endHalf: Joi.string().valid('morning', 'afternoon').default('afternoon'),
     responsibleType: Joi.string().valid('INTERNAL_TEAM', 'PARTNER_COMPANY').allow(null),
     responsibleTeamId: objectId.allow(null),
     partnerCompanyId: objectId.allow(null),
@@ -38,6 +40,8 @@ export const updateEntrySchema = {
     startDate: Joi.date().iso().allow(null),
     endDate: Joi.date().iso().allow(null),
     milestoneDate: Joi.date().iso().allow(null),
+    startHalf: Joi.string().valid('morning', 'afternoon'),
+    endHalf: Joi.string().valid('morning', 'afternoon'),
     responsibleType: Joi.string().valid('INTERNAL_TEAM', 'PARTNER_COMPANY').allow(null),
     responsibleTeamId: objectId.allow(null),
     partnerCompanyId: objectId.allow(null),
@@ -89,6 +93,7 @@ export const exportScheduleSchema = {
   params: Joi.object({ id: objectId.required() }),
   query: Joi.object({
     format: Joi.string().valid('pdf', 'ical', 'excel').default('pdf'),
+    variant: Joi.string().valid('internal', 'external').default('internal'),
   }),
 };
 

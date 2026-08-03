@@ -1,12 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '@/lib/i18n/language-context';
+import apiClient from '@/lib/api/client';
+import { ENDPOINTS } from '@/lib/api/endpoints';
 import { newsletterService } from '@/modules/crm/services/newsletter-service';
 import { queryKeys } from '@/lib/query/keys';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,6 +67,7 @@ export function NewsletterCompose({
   const { t } = useLanguage();
   const isEdit = !!newsletter;
   const isReadOnly = newsletter && !['draft', 'scheduled'].includes(newsletter.status);
+  const [confirmSendOpen, setConfirmSendOpen] = useState(false);
 
   const {
     register,
@@ -167,6 +171,18 @@ export function NewsletterCompose({
     }
   });
 
+  const handleImageUpload = useCallback(async (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('module', 'crm');
+    form.append('bucket', 'images');
+    form.append('category', 'newsletter');
+    const res = await apiClient.post(ENDPOINTS.FILES.UPLOAD, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return { url: res.data.url, fileId: res.data._id };
+  }, []);
+
   const isPending = isCreating || isUpdating;
 
   return (
@@ -225,11 +241,12 @@ export function NewsletterCompose({
               rules={{ required: t('crm.bodyRequired', 'Newsletter body is required') }}
               render={({ field }) => (
                 <RichTextEditor
-                  content={field.value}
+                  value={field.value}
                   onChange={field.onChange}
                   placeholder={t('crm.bodyPlaceholder', 'Write your newsletter content...')}
                   readOnly={isReadOnly}
                   className="min-h-[200px]"
+                  onImageUpload={handleImageUpload}
                 />
               )}
             />
@@ -431,7 +448,7 @@ export function NewsletterCompose({
                   <Button
                     type="button"
                     size="sm"
-                    onClick={onSendNow}
+                    onClick={() => setConfirmSendOpen(true)}
                     disabled={isPending || recipientCount === 0}
                     className="gap-1.5"
                   >
@@ -443,6 +460,24 @@ export function NewsletterCompose({
             )}
           </div>
         </form>
+
+        {/* Send Confirmation */}
+        <ConfirmDialog
+          open={confirmSendOpen}
+          onOpenChange={setConfirmSendOpen}
+          title={t('crm.sendNewsletter', 'Send Newsletter')}
+          description={t(
+            'crm.sendNewsletterConfirm',
+            'Are you sure you want to send "{subject}" now? This will email all opted-in recipients immediately.',
+            { subject: newsletter?.subject || '' },
+          )}
+          confirmText={t('crm.sendNow', 'Send Now')}
+          variant="default"
+          onConfirm={() => {
+            setConfirmSendOpen(false);
+            onSendNow();
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

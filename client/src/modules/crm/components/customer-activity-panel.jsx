@@ -9,30 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/shared/components/empty-state';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDateTime, formatDateRelative } from '@/lib/formatters';
-import {
-  Activity, AlertCircle, CheckCircle, Edit3, GitMerge, Archive, UserPlus,
-  FileText, ShoppingCart, Receipt, Send, ThumbsDown, ThumbsUp,
-} from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const EVENT_META = {
-  // CRM events
-  'customer.created': { icon: UserPlus, tone: 'emerald', labelKey: 'crm.event.customer.created', fallback: 'Customer created' },
-  'customer.updated': { icon: Edit3, tone: 'blue', labelKey: 'crm.event.customer.updated', fallback: 'Customer updated' },
-  'customer.archived': { icon: Archive, tone: 'muted', labelKey: 'crm.event.customer.archived', fallback: 'Customer archived' },
-  'customer.merged': { icon: GitMerge, tone: 'amber', labelKey: 'crm.event.customer.merged', fallback: 'Customers merged' },
-  // QOP — Quotations
-  'quotation.created': { icon: FileText, tone: 'blue', labelKey: 'crm.event.quotation.created', fallback: 'Quotation created' },
-  'quotation.sent': { icon: Send, tone: 'sky', labelKey: 'crm.event.quotation.sent', fallback: 'Quotation sent' },
-  'quotation.accepted': { icon: ThumbsUp, tone: 'emerald', labelKey: 'crm.event.quotation.accepted', fallback: 'Quotation accepted' },
-  'quotation.declined': { icon: ThumbsDown, tone: 'red', labelKey: 'crm.event.quotation.declined', fallback: 'Quotation declined' },
-  // QOP — Orders
-  'order.created': { icon: ShoppingCart, tone: 'emerald', labelKey: 'crm.event.order.created', fallback: 'Order created' },
-  // QOP — Invoices
-  'invoice.created': { icon: Receipt, tone: 'orange', labelKey: 'crm.event.invoice.created', fallback: 'Invoice created' },
-  'invoice.sent': { icon: Send, tone: 'sky', labelKey: 'crm.event.invoice.sent', fallback: 'Invoice sent' },
-  'invoice.paid': { icon: CheckCircle, tone: 'emerald', labelKey: 'crm.event.invoice.paid', fallback: 'Invoice paid' },
-};
+import { getActivityEventMeta, getActivityEventLabel } from '@/modules/crm/constants/activity-events';
 
 const TONE_CLASSES = {
   emerald: 'bg-emerald-500/10 text-emerald-500 ring-emerald-500/20',
@@ -96,8 +75,9 @@ export function CustomerActivityPanel({ customerId }) {
           <>
             <ol className="relative border-l border-border ml-4 space-y-5 py-2">
               {items.map((e) => {
-                const meta = EVENT_META[e.eventType] || { icon: Activity, tone: 'violet', labelKey: e.eventType, fallback: e.eventType };
+                const meta = getActivityEventMeta(e.eventType);
                 const MetaIcon = meta.icon;
+                const label = getActivityEventLabel(t, e.eventType);
                 return (
                   <li key={e._id} className="ml-6">
                     <span className={cn(
@@ -108,7 +88,7 @@ export function CustomerActivityPanel({ customerId }) {
                     </span>
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{t(meta.labelKey, meta.fallback)}</p>
+                        <p className="text-sm font-medium truncate">{label}</p>
                         {e.details && Object.keys(e.details).length > 0 && (
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                             {describeDetails(e.details, t)}
@@ -151,6 +131,7 @@ function describeDetails(details, t) {
   if (Array.isArray(details.changedFields) && details.changedFields.length > 0) {
     fields.push(`${t('crm.changedFields', 'Changed')}: ${details.changedFields.join(', ')}`);
   }
+  if (details.meetingTitle) fields.push(details.meetingTitle);
   if (details.name) fields.push(details.name);
   if (details.reason) fields.push(details.reason);
   if (details.sourceId && details.targetId) {

@@ -2,7 +2,7 @@ import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
 import { catalogSnapshotJoi } from '../../shared/validation/catalogSnapshot.schema.js';
 
-const INVOICE_STATUSES = ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
+const INVOICE_STATUSES = ['DRAFT', 'FINALIZED', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
 const INVOICE_TYPES = ['STANDARD', 'ADVANCE', 'FINAL', 'CREDIT_NOTE'];
 const PAYMENT_METHODS = ['bank_transfer', 'cash', 'card', 'other'];
 

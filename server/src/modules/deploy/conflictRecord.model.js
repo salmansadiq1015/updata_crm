@@ -41,6 +41,13 @@ const conflictRecordSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Accepted despite the conflict (override at creation). Such a conflict is
+    // NOT resolved — the double-booking still exists — so it stays in the active
+    // list, flagged, until the work is actually reassigned (client feedback).
+    overridden: {
+      type: Boolean,
+      default: false,
+    },
     resolvedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

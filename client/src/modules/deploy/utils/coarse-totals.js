@@ -57,10 +57,20 @@ export function computeKpis(rows, weeks) {
     ? Math.round(cellValues.reduce((a, b) => a + b, 0) / cellValues.length)
     : 0;
 
+  // Free capacity reflects the BUSIEST week's team load, not the average across
+  // the whole horizon. Averaging diluted near-term bookings by the empty future
+  // weeks, so a partly-booked week still read ~100% free and invited planning
+  // conflicts (module 08 client feedback). Ø Auslastung stays the honest average.
+  const weeklyTeamLoads = columnAverages(rows, weeks);
+  const peakWeekLoad = weeks.length
+    ? Math.max(0, ...weeks.map((week) => weeklyTeamLoads[week] || 0))
+    : 0;
+
   return {
     rowCount: rows.length,
     avgUtilization,
-    freeCapacity: Math.max(0, 100 - avgUtilization),
+    peakWeekLoad,
+    freeCapacity: Math.max(0, 100 - peakWeekLoad),
     overAllocatedRows: rows.filter((row) => isRowOverAllocated(row, weeks)).length,
   };
 }

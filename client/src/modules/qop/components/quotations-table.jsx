@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Search, Plus, MoreHorizontal, Copy, Send,
-  ArrowRight, Trash2, History, RefreshCw, FileText, LayoutTemplate,
+  ArrowRight, Trash2, History, RefreshCw, FileText, LayoutTemplate, Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,8 @@ import { useQuotationMutations } from '../hooks/use-qop-mutations';
 import { QuotationStatusBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
+import { quotationService } from '../services/quotation-service';
+import { showError } from '@/lib/toast';
 import { QuotationFormDialog } from './quotation-form-dialog';
 import { ConvertToOrderDialog } from './convert-to-order-dialog';
 import { InvoiceFormDialog } from './invoice-form-dialog';
@@ -162,6 +164,16 @@ export function QuotationsTable({ advancedFilters = {} }) {
   };
   const handleDuplicate = (id) => duplicateQuotation.mutate(id);
   const handleSend      = (id) => sendQuotation.mutate(id);
+  const handlePreviewPdf = async (id) => {
+    try {
+      const res = await quotationService.generateDocument(id);
+      const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
+      if (url) window.open(url, '_blank');
+      else showError(t('qop.actions.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    } catch (err) {
+      showError(err?.message || t('qop.actions.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
+    }
+  };
   const handleTransitionConfirm = (targetStatus, reason) => {
     transitionQuotationStatus.mutate({
       id: transitioning._id ?? transitioning.id,
@@ -365,6 +377,9 @@ export function QuotationsTable({ advancedFilters = {} }) {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleDuplicate(id)}>
                       <Copy className="h-4 w-4 mr-2" />{t('qop.table.duplicate', 'Duplizieren')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handlePreviewPdf(id)}>
+                      <Eye className="h-4 w-4 mr-2" />{t('qop.actions.preview', 'Vorschau')}
                     </DropdownMenuItem>
                     {q.status === 'DRAFT' && (
                       <DropdownMenuItem onClick={() => handleSend(id)}>

@@ -36,7 +36,6 @@ import {
   taskPriorityIconColor,
   taskStatusIconColor,
 } from './task-ui-constants';
-import { TaskInlineField } from './task-inline-field';
 import { taskApi } from '../services/task-api';
 
 // ── Status cycle for subtask toggle ──────────────────────────────────────────
@@ -87,16 +86,35 @@ type WorkspaceUser = {
   lastName?: string;
 };
 
-function AssigneeCell({ assigneeId, users = [] }: { assigneeId: string | null; users: WorkspaceUser[] }) {
-  const user = users?.find((item) => item.id === assigneeId);
-  if (!user) return <span className="text-muted-foreground text-xs">—</span>;
-  const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
+function AssigneeCell({ assigneeIds, assigneeId, users = [] }: { assigneeIds?: string[]; assigneeId?: string | null; users: WorkspaceUser[] }) {
+  const ids = assigneeIds?.length ? assigneeIds : (assigneeId ? [assigneeId] : []);
+  const matched = ids.map((id) => users.find((u) => u.id === id)).filter(Boolean) as WorkspaceUser[];
+  if (matched.length === 0) return <span className="text-muted-foreground text-xs">—</span>;
+  if (matched.length === 1) {
+    const user = matched[0];
+    const init = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="h-5 w-5 rounded-full bg-primary/20 text-primary text-[9px] font-medium flex items-center justify-center shrink-0">
+          {init}
+        </span>
+        <span className="truncate text-xs">{user.firstName} {user.lastName}</span>
+      </div>
+    );
+  }
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="h-5 w-5 rounded-full bg-primary/20 text-primary text-[9px] font-medium flex items-center justify-center shrink-0">
-        {initials}
-      </span>
-      <span className="truncate text-xs">{user.firstName} {user.lastName}</span>
+    <div className="flex items-center gap-1">
+      <div className="flex -space-x-1.5">
+        {matched.slice(0, 3).map((user) => {
+          const init = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase();
+          return (
+            <span key={user.id} className="h-5 w-5 rounded-full bg-primary/20 text-primary text-[9px] font-medium flex items-center justify-center shrink-0 ring-1 ring-background">
+              {init}
+            </span>
+          );
+        })}
+      </div>
+      {matched.length > 3 && <span className="text-[10px] text-muted-foreground">+{matched.length - 3}</span>}
     </div>
   );
 }
@@ -272,14 +290,13 @@ const TaskRow = memo(function TaskRow({
           />
         </div>
 
-        {/* Title */}
+        {/* Title — display only: clicking the row opens the detail page, where
+            the title can be renamed. Inline rename here collided with that
+            navigation (client feedback). */}
         <div role="gridcell" className="min-w-0">
-          <TaskInlineField
-            value={task.title}
-            ariaLabel={t('tasks.editTitleFor', 'Titel bearbeiten: {title}', { title: task.title })}
-            className="block max-w-full truncate text-left font-medium text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onCommit={(title) => onPatchTask(task.id, { title, expectedVersion: task.version })}
-          />
+          <span className="block max-w-full truncate text-left font-medium text-foreground group-hover:text-primary">
+            {task.title}
+          </span>
         </div>
 
         {/* Status — icon + label dropdown */}
@@ -342,7 +359,7 @@ const TaskRow = memo(function TaskRow({
 
         {/* Assignee */}
         <div role="gridcell" className="min-w-0">
-          <AssigneeCell assigneeId={task.assigneeId} users={users ?? []} />
+          <AssigneeCell assigneeIds={task.assigneeIds} assigneeId={task.assigneeId} users={users ?? []} />
         </div>
 
         {/* Due date */}

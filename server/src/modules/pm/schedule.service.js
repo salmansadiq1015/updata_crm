@@ -565,63 +565,170 @@ class ScheduleService {
     return updated;
   }
 
-  async exportPdf(projectId, userId, meta = {}) {
+  /**
+   * Everything the Terminplan template needs: project header data, phases as
+   * colourable tasks (Firma + Telefon resolved from the partner company or the
+   * internal responsible), milestones, and the CI logo. Shared by the PDF and
+   * Excel exports so both always show the same plan.
+   */
+  async _buildTerminplanData(projectId, variant = 'internal') {
     const Project = (await import('./project.model.js')).default;
     const project = await Project.findById(projectId)
-      .populate('customerId', 'name')
-      .populate('projectManagerId', 'firstName lastName');
+      .populate('customerId', 'name phone mobile')
+      .populate('projectManagerId', 'firstName lastName phone email');
     if (!project) throw new NotFoundError('Project', projectId);
 
+    const { TASK_COLORS, buildTerminplanWeeks } = await import('./terminplan.renderer.js');
+
     const entries = await scheduleRepository.findByProjectId(projectId);
+    const phases = entries.filter((e) => e.entryType === 'PHASE');
 
-    const templateData = {
-      documentNumber: project.projectNumber,
-      documentDate: new Date().toISOString().split('T')[0],
-      projectName: project.name,
-      projectNumber: project.projectNumber,
-      customer: project.customerId ? { name: project.customerId.name } : null,
-      projectManager: project.projectManagerId
-        ? `${project.projectManagerId.firstName} ${project.projectManagerId.lastName}`
-        : null,
-      phases: entries.filter(e => e.entryType === 'PHASE').map(e => ({
+    // Resolve Firma / Telefon per phase without N+1 queries.
+    const Customer = (await import('../crm/customer.model.js')).default;
+    const User = (await import('../auth/user.model.js')).default;
+    const partnerIds = [...new Set(phases.map((p) => p.partnerCompanyId).filter(Boolean).map(String))];
+    const internalIds = [...new Set(phases.map((p) => p.responsibleTeamId).filter(Boolean).map(String))];
+    const [partners, internals] = await Promise.all([
+      partnerIds.length ? Customer.find({ _id: { $in: partnerIds } }).select('name phone mobile').lean() : [],
+      internalIds.length ? User.find({ _id: { $in: internalIds } }).select('firstName lastName phone').lean() : [],
+    ]);
+    const partnerById = new Map(partners.map((c) => [String(c._id), c]));
+    const internalById = new Map(internals.map((u) => [String(u._id), u]));
+
+    const tasks = phases.map((p, i) => {
+      const partner = p.partnerCompanyId ? partnerById.get(String(p.partnerCompanyId)) : null;
+      const internal = p.responsibleTeamId ? internalById.get(String(p.responsibleTeamId)) : null;
+      return {
+        name: p.name,
+        company: partner?.name
+          || (internal ? `${internal.firstName} ${internal.lastName}` : ''),
+        phone: partner?.phone || partner?.mobile || internal?.phone || '',
+        startDate: p.startDate,
+        endDate: p.endDate,
+        startHalf: p.startHalf || 'morning',
+        endHalf: p.endHalf || 'afternoon',
+        color: TASK_COLORS[i % TASK_COLORS.length],
+      };
+    });
+
+    const weeks = buildTerminplanWeeks(tasks);
+
+    const dated = tasks.filter((t) => t.startDate && t.endDate);
+    const chDate = (d) => new Date(d).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const periodLabel = dated.length
+      ? `${chDate(new Date(Math.min(...dated.map((t) => new Date(t.startDate)))))}-${chDate(new Date(Math.max(...dated.map((t) => new Date(t.endDate)))))}`
+      : '';
+
+    const pm = project.projectManagerId;
+    const contacts = pm
+      ? [[`${pm.firstName} ${pm.lastName}`, pm.phone, pm.email].filter(Boolean).join(', ')]
+      : [];
+
+    // Logo: CI configuration first (same asset as other doctpl documents),
+    // otherwise the bundled company logo — the same image the sidebar shows.
+    let logoBuffer = null;
+    try {
+      const CIConfiguration = (await import('../doctpl/ciConfiguration.model.js')).default;
+      const { default: ciRenderAssetsService } = await import('../doctpl/ciRenderAssets.service.js');
+      const ciConfig = await CIConfiguration.findOne({ isActive: true }).lean();
+      if (ciConfig) logoBuffer = (await ciRenderAssetsService.prepare(ciConfig))?.logoBuffer || null;
+    } catch { /* no CI configured — fall through to the bundled logo */ }
+    if (!logoBuffer) {
+      try {
+        const { readFile } = await import('fs/promises');
+        const { fileURLToPath } = await import('url');
+        const path = await import('path');
+        const here = path.dirname(fileURLToPath(import.meta.url));
+        logoBuffer = await readFile(path.join(here, '../../assets/logo.png'));
+      } catch { /* asset missing — export renders without logo */ }
+    }
+
+    // Internal-only extras: who is responsible for each phase (Zuständigkeiten)
+    // and the internal phase notes. The external protocol omits these.
+    const projectManagerName = pm ? `${pm.firstName || ''} ${pm.lastName || ''}`.trim() : '';
+    let companyName = 'MB Boiler & Heizung AG';
+    try {
+      const CIConfiguration = (await import('../doctpl/ciConfiguration.model.js')).default;
+      const ci = await CIConfiguration.findOne({ isActive: true }).lean();
+      companyName = ci?.companyName || ci?.name || companyName;
+    } catch { /* no CI configured — keep default */ }
+    const responsibilities = tasks
+      .filter((t) => t.company)
+      .map((t) => ({ name: t.name, company: t.company, phone: t.phone }));
+    const internalNotes = phases
+      .filter((p) => p.notes && p.notes.trim())
+      .map((p) => ({ name: p.name, notes: p.notes.trim() }));
+
+    return {
+      project,
+      variant,
+      title: `Terminplan ${project.name || ''}`.trim(),
+      projectName: [project.projectNumber, project.name].filter(Boolean).join(' — '),
+      periodLabel,
+      customerName: project.customerId?.name || '',
+      customerPhone: project.customerId?.phone || project.customerId?.mobile || '',
+      companyName,
+      projectManagerName,
+      contacts,
+      logoBuffer,
+      tasks,
+      weeks,
+      responsibilities,
+      internalNotes,
+      milestones: entries.filter((e) => e.entryType === 'MILESTONE').map((e) => ({
         name: e.name,
-        startDate: e.startDate?.toISOString().split('T')[0],
-        endDate: e.endDate?.toISOString().split('T')[0],
-        status: e.status,
-      })),
-      milestones: entries.filter(e => e.entryType === 'MILESTONE').map(e => ({
-        name: e.name,
-        date: e.milestoneDate?.toISOString().split('T')[0],
-        status: e.status,
+        date: e.milestoneDate,
       })),
     };
+  }
 
-    // The document renderer has no schedule-specific layout, so render the plan
-    // as a rich-text body (Phasen + Meilensteine) that the BodyRenderer draws.
-    const STATUS_DE = {
-      PLANNED: 'Geplant', IN_PROGRESS: 'In Arbeit', COMPLETED: 'Abgeschlossen',
-      CANCELLED: 'Abgebrochen', WAIVED: 'Verzichtet',
-    };
-    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const isoToCh = (s) => (s ? s.split('-').reverse().join('.') : '');
-    const phaseLines = templateData.phases.map((p) => `<b>${esc(p.name)}</b> — ${isoToCh(p.startDate)} – ${isoToCh(p.endDate)} · ${STATUS_DE[p.status] || p.status}`);
-    const msLines = templateData.milestones.map((m) => `<b>${esc(m.name)}</b> — ${isoToCh(m.date)} · ${STATUS_DE[m.status] || m.status}`);
-    templateData.introduction = [
-      '<b>Phasen</b>',
-      phaseLines.length ? phaseLines.join('<br>') : '—',
-      '<br><b>Meilensteine</b>',
-      msLines.length ? msLines.join('<br>') : '—',
-    ].join('<br>');
+  async exportPdf(projectId, userId, meta = {}) {
+    const variant = meta.variant === 'external' ? 'external' : 'internal';
+    const data = await this._buildTerminplanData(projectId, variant);
+    const { renderTerminplanPdf } = await import('./terminplan.renderer.js');
+    const { buffer, pageCount } = await renderTerminplanPdf(data);
 
-    const documentGenerationService = (await import('../doctpl/documentGeneration.service.js')).default;
-    const generatedDoc = await documentGenerationService.generate({
-      templateType: 'project_schedule',
+    // Persist through the same path as doctpl documents so the export keeps
+    // appearing in the archive and the client download flow stays unchanged.
+    const variantTag = variant === 'external' ? 'extern' : 'intern';
+    const fileName = `Terminprotokoll_${variantTag}_${data.project.projectNumber || projectId}.pdf`;
+    const { default: fileService } = await import('../files/file.service.js');
+    const fileMeta = await fileService.upload({
+      buffer,
+      originalName: fileName,
+      mimeType: 'application/pdf',
+      sizeBytes: buffer.length,
+      module: 'doctpl',
+      entityType: 'project_schedule',
+      entityId: projectId,
+      uploadedBy: userId,
+      bucket: 'documents',
+      folderPath: `pm/project_schedule`,
+      category: 'project_schedule',
+    });
+
+    // The template no longer drives the layout (the grid is drawn directly),
+    // but the archive record still links to it — same requirement as before.
+    const DocumentTemplate = (await import('../doctpl/documentTemplate.model.js')).default;
+    const template = await DocumentTemplate.findOne({ templateType: 'project_schedule', isActive: true, isDeleted: false }).lean();
+    if (!template) throw new NotFoundError('DocumentTemplate', 'type:project_schedule');
+    const { default: generatedDocumentRepository } = await import('../doctpl/generatedDocument.repository.js');
+    const generatedDoc = await generatedDocumentRepository.create({
+      templateId: template._id,
+      templateVersion: template.currentVersion,
+      documentType: 'project_schedule',
       sourceModule: 'pm',
       sourceRecordId: projectId,
-      data: templateData,
       language: 'de',
+      fileId: fileMeta._id,
+      fileName,
+      fileSizeBytes: buffer.length,
+      pageCount,
+      sourceCustomerId: data.project.customerId?._id || null,
+      sourceProjectId: data.project._id,
+      ownerUserId: userId,
       generatedBy: userId,
-      meta,
+      metadata: { variant, title: data.title },
     });
 
     auditService.logEvent({
@@ -635,6 +742,28 @@ class ScheduleService {
     });
 
     return generatedDoc;
+  }
+
+  /**
+   * List the Terminprotokoll PDFs generated for a project (newest first), with
+   * their variant (internal/external) so the Protokolle tab can label them.
+   * They also remain visible in the project's Dokumente (same generatedDocument).
+   */
+  async listProtocols(projectId) {
+    const { default: generatedDocumentRepository } = await import('../doctpl/generatedDocument.repository.js');
+    const docs = await generatedDocumentRepository.findBySource('pm', projectId);
+    return docs
+      .filter((d) => d.documentType === 'project_schedule')
+      .map((d) => ({
+        id: String(d._id),
+        fileId: String(d.fileId),
+        fileName: d.fileName,
+        variant: d.metadata?.variant || 'internal',
+        title: d.metadata?.title || d.fileName,
+        pageCount: d.pageCount || null,
+        fileSizeBytes: d.fileSizeBytes || null,
+        generatedAt: d.generatedAt || d.createdAt || null,
+      }));
   }
 
   /**
@@ -819,50 +948,125 @@ class ScheduleService {
    * ';' separator) that opens natively in Excel. Mirrors the PDF content:
    * header block + Phasen table + Meilensteine table (PROJ – Bauplan export).
    */
+  /**
+   * Terminplan as a real .xlsx mirroring the PDF: header block, then one
+   * weekly grid after another with coloured Morgen/NM cells. Shares
+   * _buildTerminplanData with the PDF so both always show the same plan.
+   */
   async exportExcel(projectId) {
-    const Project = (await import('./project.model.js')).default;
-    const project = await Project.findById(projectId)
-      .populate('customerId', 'name')
-      .populate('projectManagerId', 'firstName lastName');
-    if (!project) throw new NotFoundError('Project', projectId);
+    const data = await this._buildTerminplanData(projectId);
+    const ExcelJS = (await import('exceljs')).default;
 
-    const entries = await scheduleRepository.findByProjectId(projectId);
-    const phases = entries.filter((e) => e.entryType === 'PHASE');
-    const milestones = entries.filter((e) => e.entryType === 'MILESTONE');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Terminplan', {
+      pageSetup: { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+    });
 
-    const STATUS_DE = {
-      PLANNED: 'Geplant', IN_PROGRESS: 'In Arbeit', COMPLETED: 'Abgeschlossen',
-      CANCELLED: 'Abgebrochen', WAIVED: 'Verzichtet',
-    };
-    const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('de-CH') : '');
-    const esc = (v) => {
-      if (v === null || v === undefined) return '';
-      const s = String(v);
-      return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const row = (...cells) => cells.map(esc).join(';');
+    const DAY_NAMES = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
+    const chDate = (d) => new Date(d).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const argb = (hex) => `FF${hex.replace('#', '').toUpperCase()}`;
+    const NAVY = { argb: 'FF1F3864' };
+    const thin = { style: 'thin', color: { argb: 'FF000000' } };
+    const box = { top: thin, left: thin, bottom: thin, right: thin };
 
-    const lines = [
-      row('Bauplan / Terminplan'),
-      row('Projekt', project.name),
-      row('Projekt-Nr.', project.projectNumber),
-      row('Kunde', project.customerId?.name || ''),
-      row('Projektleiter', project.projectManagerId
-        ? `${project.projectManagerId.firstName} ${project.projectManagerId.lastName}` : ''),
-      row('Exportiert am', new Date().toLocaleDateString('de-CH')),
-      '',
-      row('Phasen'),
-      row('Name', 'Start', 'Ende', 'Status'),
-      ...phases.map((p) => row(p.name, fmtDate(p.startDate), fmtDate(p.endDate), STATUS_DE[p.status] || p.status)),
-      '',
-      row('Meilensteine'),
-      row('Name', 'Datum', 'Status'),
-      ...milestones.map((m) => row(m.name, fmtDate(m.milestoneDate), STATUS_DE[m.status] || m.status)),
+    // 3 label columns + 10 half-day slots
+    ws.columns = [
+      { width: 26 }, { width: 22 }, { width: 14 },
+      ...Array.from({ length: 10 }, () => ({ width: 10.5 })),
     ];
 
+    // ── header block ──
+    ws.mergeCells('A1:F1');
+    ws.getCell('A1').value = data.title;
+    ws.getCell('A1').font = { bold: true, size: 16, color: NAVY };
+    ws.getCell('A2').value = 'Projekt:';
+    ws.getCell('A2').font = { color: NAVY };
+    ws.getCell('B2').value = data.projectName;
+    ws.getCell('B2').font = { bold: true };
+    ws.getCell('A3').value = 'Zeitraum:';
+    ws.getCell('A3').font = { color: NAVY };
+    ws.getCell('B3').value = data.periodLabel;
+    ws.getCell('B3').font = { bold: true };
+    ws.getCell('G2').value = 'Kunde:';
+    ws.getCell('G2').font = { color: NAVY };
+    ws.getCell('H2').value = data.customerName;
+    ws.getCell('H2').font = { bold: true };
+    ws.getCell('G3').value = 'Telefon:';
+    ws.getCell('G3').font = { color: NAVY };
+    ws.getCell('H3').value = data.customerPhone;
+    ws.getCell('H3').font = { bold: true };
+    data.contacts.forEach((line, i) => {
+      const cell = ws.getCell(`J${2 + i}`);
+      cell.value = line;
+      cell.font = { size: 8, color: { argb: 'FF333333' } };
+    });
+    if (data.logoBuffer) {
+      // Same asset as the PDF header, anchored top-right (source is 329×100).
+      const imgId = wb.addImage({ buffer: data.logoBuffer, extension: 'png' });
+      ws.addImage(imgId, { tl: { col: 11.2, row: 0.1 }, ext: { width: 132, height: 40 } });
+    }
+
+    // ── one grid per week ──
+    let r = 5;
+    for (const week of data.weeks) {
+      ws.getCell(r, 1).value = `Woche ${week.index}:`;
+      ws.getCell(r, 1).font = { bold: true, color: NAVY };
+      week.days.forEach((day, i) => {
+        ws.mergeCells(r, 4 + i * 2, r, 5 + i * 2);
+        const cell = ws.getCell(r, 4 + i * 2);
+        cell.value = chDate(day);
+        cell.font = { bold: true, size: 9 };
+        cell.alignment = { horizontal: 'center' };
+      });
+      r += 1;
+
+      // day header row
+      const heads = ['Arbeit', 'Firma', 'Telefon',
+        ...Array.from({ length: 10 }, (_, i) => `${DAY_NAMES[Math.floor(i / 2)]} ${i % 2 === 0 ? 'Morgen' : 'NM'}`)];
+      heads.forEach((label, c) => {
+        const cell = ws.getCell(r, c + 1);
+        cell.value = label;
+        cell.font = { bold: true, size: 8 };
+        cell.border = box;
+        cell.alignment = { vertical: 'bottom', wrapText: true };
+      });
+      ws.getRow(r).height = 24;
+      r += 1;
+
+      // task rows
+      for (const row of week.rows) {
+        ws.getCell(r, 1).value = row.task.name;
+        ws.getCell(r, 2).value = row.task.company || '';
+        ws.getCell(r, 3).value = row.task.phone || '';
+        for (let c = 1; c <= 13; c++) {
+          const cell = ws.getCell(r, c);
+          cell.border = box;
+          cell.font = { size: 9 };
+          if (c > 3 && row.cells[c - 4]) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(row.task.color) } };
+          }
+        }
+        r += 1;
+      }
+      r += 2; // gap between weeks
+    }
+
+    // ── milestones ──
+    if (data.milestones.length) {
+      ws.getCell(r, 1).value = 'Meilensteine';
+      ws.getCell(r, 1).font = { bold: true, color: NAVY };
+      r += 1;
+      for (const ms of data.milestones) {
+        ws.getCell(r, 1).value = ms.date ? chDate(ms.date) : '—';
+        ws.getCell(r, 2).value = ms.name;
+        r += 1;
+      }
+    }
+
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
     return {
-      csv: `\uFEFF${lines.join('\r\n')}`,
-      filename: `Bauplan_${project.projectNumber || projectId}.csv`,
+      buffer,
+      filename: `Terminplan_${data.project.projectNumber || projectId}.xlsx`,
     };
   }
 

@@ -23,7 +23,7 @@ import { formatDate } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import {
   Plus, Pencil, Trash2, Send, Clock, XCircle, Eye,
-  Mail, Search, BarChart3,
+  Mail, Search, BarChart3, RotateCcw,
 } from 'lucide-react';
 
 const STATUS_META = {
@@ -46,6 +46,8 @@ export function NewsletterList() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [sendTarget, setSendTarget] = useState(null);
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
+  const [revertTarget, setRevertTarget] = useState(null);
+  const [confirmRevertOpen, setConfirmRevertOpen] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -73,11 +75,12 @@ export function NewsletterList() {
     initialSize: 25,
   });
 
-  const { create, update, remove, schedule, cancel, send } = useNewsletterMutations({
+  const { create, update, remove, schedule, cancel, send, revert } = useNewsletterMutations({
     onCreate: () => setComposeOpen(false),
     onUpdate: () => { setComposeOpen(false); setEditNewsletter(null); },
     onDelete: () => { setConfirmDeleteOpen(false); setDeleteTarget(null); },
     onSend: () => { setConfirmSendOpen(false); setSendTarget(null); },
+    onRevert: () => { setConfirmRevertOpen(false); setRevertTarget(null); },
   });
 
   const clearFilters = useCallback(() => {
@@ -95,9 +98,13 @@ export function NewsletterList() {
       size: 320,
       Cell: ({ row }) => {
         const n = row.original;
+        const canEdit = hasPermission('crm:admin') && ['draft', 'scheduled'].includes(n.status);
         return (
-          <div className="min-w-0">
-            <span className="font-medium text-sm truncate block">
+          <div
+            className={cn('min-w-0', canEdit && 'cursor-pointer')}
+            onClick={canEdit ? () => { setEditNewsletter(n); setComposeOpen(true); } : undefined}
+          >
+            <span className={cn('font-medium text-sm truncate block', canEdit && 'hover:underline')}>
               {n.subject}
             </span>
             {n.createdBy && (
@@ -274,6 +281,7 @@ export function NewsletterList() {
             const n = row.original;
             const isDraft = n.status === 'draft';
             const isScheduled = n.status === 'scheduled';
+            const isSentOrSending = n.status === 'sent' || n.status === 'sending';
             const canAdmin = hasPermission('crm:admin');
 
             return (
@@ -303,7 +311,14 @@ export function NewsletterList() {
                     hidden: n.status === 'draft',
                     onSelect: () => { /* future: open stats dialog */ },
                   },
-                  { type: 'separator', hidden: !isDraft || !canAdmin },
+                  { type: 'separator', hidden: !canAdmin || (!isDraft && !isSentOrSending) },
+                  {
+                    label: t('crm.revertToDraft', 'Revert to Draft'),
+                    icon: RotateCcw,
+                    destructive: true,
+                    hidden: !canAdmin || !isSentOrSending,
+                    onSelect: () => { setRevertTarget(n); setConfirmRevertOpen(true); },
+                  },
                   {
                     label: t('common.delete', 'Delete'),
                     icon: Trash2,
@@ -346,9 +361,9 @@ export function NewsletterList() {
           'Are you sure you want to delete "{subject}"? This action cannot be undone.',
           { subject: deleteTarget?.subject || '' },
         )}
-        confirmLabel={t('common.delete', 'Delete')}
+        confirmText={t('common.delete', 'Delete')}
         variant="destructive"
-        isPending={remove.isPending}
+        isLoading={remove.isPending}
         onConfirm={() => deleteTarget && remove.mutate(deleteTarget._id)}
       />
 
@@ -362,9 +377,25 @@ export function NewsletterList() {
           'Are you sure you want to send "{subject}" now? This will email all opted-in recipients immediately.',
           { subject: sendTarget?.subject || '' },
         )}
-        confirmLabel={t('crm.sendNow', 'Send Now')}
-        isPending={send.isPending}
+        confirmText={t('crm.sendNow', 'Send Now')}
+        isLoading={send.isPending}
         onConfirm={() => sendTarget && send.mutate(sendTarget._id)}
+      />
+
+      {/* Revert to Draft Confirmation */}
+      <ConfirmDialog
+        open={confirmRevertOpen}
+        onOpenChange={setConfirmRevertOpen}
+        title={t('crm.revertToDraft', 'Revert to Draft')}
+        description={t(
+          'crm.revertToDraftConfirm',
+          'Are you sure you want to revert "{subject}" back to draft? This will reset its sent status.',
+          { subject: revertTarget?.subject || '' },
+        )}
+        confirmText={t('crm.revertToDraft', 'Revert to Draft')}
+        variant="destructive"
+        isLoading={revert.isPending}
+        onConfirm={() => revertTarget && revert.mutate(revertTarget._id)}
       />
     </div>
   );

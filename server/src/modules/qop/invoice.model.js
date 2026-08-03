@@ -3,7 +3,7 @@ import migrationTraceSchema from '../../shared/schemas/migrationTrace.schema.js'
 import catalogSnapshotSchema from '../../shared/schemas/catalogSnapshot.schema.js';
 import lineItemImageSchema from '../../shared/schemas/lineItemImage.schema.js';
 
-export const INVOICE_STATUSES = ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
+export const INVOICE_STATUSES = ['DRAFT', 'FINALIZED', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED', 'WRITTEN_OFF'];
 export const INVOICE_TYPES = ['STANDARD', 'ADVANCE', 'FINAL', 'CREDIT_NOTE'];
 export const PAYMENT_METHODS = ['bank_transfer', 'cash', 'card', 'other'];
 

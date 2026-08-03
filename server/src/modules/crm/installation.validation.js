@@ -13,6 +13,7 @@ export const createInstallationSchema = {
     fuelType: Joi.string().valid('gas', 'oil', 'electric', 'pellet', 'other').allow(null),
     yearOfManufacture: Joi.number().integer().min(1900).max(2100).allow(null),
     technicalNotes: Joi.string().max(5000).allow('', null),
+    additionalSiteIds: Joi.array().items(objectId).max(50).default([]),
   }),
 };
 
@@ -30,6 +31,7 @@ export const updateInstallationSchema = {
     yearOfManufacture: Joi.number().integer().min(1900).max(2100).allow(null),
     technicalNotes: Joi.string().max(5000).allow('', null),
     status: Joi.string().valid('active', 'maintenance', 'out_of_service', 'defective', 'decommissioned'),
+    additionalSiteIds: Joi.array().items(objectId).max(50),
   }).min(1),
 };
 

@@ -29,14 +29,22 @@ const DEFAULT_FORM = {
 function buildInitialAttachments(initialValues = {}) {
   if (Array.isArray(initialValues.attachments) && initialValues.attachments.length) {
     return initialValues.attachments
-      .filter((a) => a && (a.id || a._id))
-      .map((a) => ({ id: a.id || a._id, fileName: a.fileName || a.name || String(a.id || a._id) }));
+      .filter((a) => a && (a.id || a._id || a.fileId))
+      // Attachments can reference a generated document (id) or a stored file
+      // directly (fileId — e.g. an uploaded object/project document).
+      .map((a) => ({
+        id: a.id || a._id || null,
+        fileId: a.fileId || null,
+        fileName: a.fileName || a.name || String(a.id || a._id || a.fileId),
+      }));
   }
   if (initialValues.documentId) {
-    return [{ id: initialValues.documentId, fileName: initialValues.documentFileName || initialValues.documentId }];
+    return [{ id: initialValues.documentId, fileId: null, fileName: initialValues.documentFileName || initialValues.documentId }];
   }
   return [];
 }
+
+const attachmentKeyOf = (a) => a.id || a.fileId;
 
 function normalizeRecipients(value) {
   if (Array.isArray(value)) return value.join(', ');
@@ -68,13 +76,18 @@ function EmailComposeForm({ initialValues, onClose }) {
 
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
-  const removeAttachment = (id) => setForm((current) => ({
+  const removeAttachment = (key) => setForm((current) => ({
     ...current,
-    attachments: current.attachments.filter((a) => a.id !== id),
+    attachments: current.attachments.filter((a) => attachmentKeyOf(a) !== key),
   }));
 
   const handleSend = async () => {
-    const documentIds = form.attachments.map((a) => a.id);
+    // Generated documents are sent by id; uploaded object/project documents by
+    // their stored fileId.
+    const documentIds = form.attachments.filter((a) => a.id && !a.fileId).map((a) => a.id);
+    const fileAttachments = form.attachments
+      .filter((a) => a.fileId)
+      .map((a) => ({ fileId: a.fileId, fileName: a.fileName }));
     const payload = {
       to: toRecipientList(form.to),
       cc: toRecipientList(form.cc),
@@ -85,6 +98,7 @@ function EmailComposeForm({ initialValues, onClose }) {
       sourceRecordId: form.sourceRecordId,
       documentId: documentIds[0] || null,
       documentIds,
+      fileAttachments,
     };
     // senderName/senderAddress are optional; the server resolves them from the CI
     // config when omitted. Sending empty strings fails Joi (string().email() rejects '').
@@ -142,7 +156,7 @@ function EmailComposeForm({ initialValues, onClose }) {
             <ul className="mt-1.5 space-y-1.5">
               {form.attachments.map((attachment) => (
                 <li
-                  key={attachment.id}
+                  key={attachmentKeyOf(attachment)}
                   className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5 text-xs"
                 >
                   <span className="flex min-w-0 items-center gap-1.5">
@@ -151,7 +165,7 @@ function EmailComposeForm({ initialValues, onClose }) {
                   </span>
                   <button
                     type="button"
-                    onClick={() => removeAttachment(attachment.id)}
+                    onClick={() => removeAttachment(attachmentKeyOf(attachment))}
                     className="shrink-0 text-muted-foreground hover:text-destructive"
                     aria-label={t('doctpl.email.removeAttachment')}
                   >
@@ -177,7 +191,7 @@ function EmailComposeForm({ initialValues, onClose }) {
 
 export function EmailComposeModal({ open, onClose, initialValues = {} }) {
   const attachmentKey = Array.isArray(initialValues.attachments)
-    ? initialValues.attachments.map((a) => a?.id || a?._id).join('-')
+    ? initialValues.attachments.map((a) => a?.id || a?._id || a?.fileId).join('-')
     : '';
   const formKey = `${initialValues.documentId || ''}:${attachmentKey}:${initialValues.subject || ''}:${initialValues.to || ''}`;
 

@@ -2,8 +2,11 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
+import { useQuery } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { siteService } from '@/modules/crm/services/site-service';
+import { queryKeys } from '@/lib/query/keys';
 import { createInstallationSchema } from '@/modules/crm/validations/installation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -13,7 +16,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Controller } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Flame, AlertCircle } from 'lucide-react';
+import { Loader2, Flame, AlertCircle, Check } from 'lucide-react';
 import { INSTALLATION_TYPE_META, FUEL_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +31,7 @@ const BLANK = {
   fuelType: null,
   yearOfManufacture: null,
   technicalNotes: '',
+  additionalSiteIds: [],
 };
 
 const toDateInput = (v) => {
@@ -37,9 +41,21 @@ const toDateInput = (v) => {
   return d.toISOString().split('T')[0];
 };
 
-export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, isLoading }) {
+/**
+ * customerId + primarySiteId enable the "Weitere Objekte" section: the other
+ * sites of the same customer this component also supplies. Without customerId
+ * (caller can't provide it) the section simply doesn't render.
+ */
+export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, isLoading, customerId, primarySiteId }) {
   const { t } = useLanguage();
   const isEdit = !!defaultValues?._id;
+
+  const { data: customerSites = [] } = useQuery({
+    queryKey: queryKeys.crm.sites.byCustomer(customerId),
+    queryFn: () => siteService.listByCustomer(customerId),
+    enabled: open && !!customerId,
+  });
+  const otherSites = customerSites.filter((s) => String(s._id) !== String(primarySiteId));
   const { register, handleSubmit, reset, setValue, watch, control, formState: { errors } } = useForm({
     resolver: zodResolver(createInstallationSchema),
     defaultValues: BLANK,
@@ -59,12 +75,22 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
         fuelType: defaultValues.fuelType ?? null,
         yearOfManufacture: defaultValues.yearOfManufacture ?? null,
         technicalNotes: defaultValues.technicalNotes || '',
+        additionalSiteIds: (defaultValues.additionalSiteIds || []).map((s) => String(s?._id ?? s)),
       });
     } else reset(BLANK);
   }, [defaultValues, reset, open]);
 
   const type = watch('type');
   const fuelType = watch('fuelType');
+  const additionalSiteIds = watch('additionalSiteIds') || [];
+
+  const toggleSite = (siteId) => {
+    const id = String(siteId);
+    const next = additionalSiteIds.includes(id)
+      ? additionalSiteIds.filter((s) => s !== id)
+      : [...additionalSiteIds, id];
+    setValue('additionalSiteIds', next, { shouldDirty: true });
+  };
 
   const submit = async (data) => {
     const cleaned = {
@@ -102,11 +128,11 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
             <div>
               <DialogTitle className="text-[16px] font-semibold text-foreground">
                 {isEdit
-                  ? t('crm.installations.editInstallation', 'Installation bearbeiten')
-                  : t('crm.installations.newInstallation', 'Neue Installation')}
+                  ? t('crm.installations.editInstallation', 'Komponente bearbeiten')
+                  : t('crm.installations.newInstallation', 'Neue Komponente')}
               </DialogTitle>
               <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-                {t('crm.installations.formDesc', 'Anlage / Gerät am Standort (Heizkessel, Wärmepumpe, etc.).')}
+                {t('crm.installations.formDesc', 'Komponente am Objekt (Heizkessel, Wärmepumpe, etc.).')}
               </DialogDescription>
             </div>
           </div>
@@ -189,6 +215,51 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
               </DarkField>
             </div>
 
+            {otherSites.length > 0 && (
+              <>
+                <Separator className="my-5 bg-muted/50" />
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                  {t('crm.installations.sectionSupplies', 'Weitere Objekte')}
+                </p>
+                <p className="text-[12px] text-muted-foreground mb-3">
+                  {t('crm.installations.suppliesHint', 'Versorgt diese Komponente weitere Objekte des Kunden (z.B. Heizzentrale)? Wartungen, Dokumente und Historie werden nur einmal geführt.')}
+                </p>
+                <div className="rounded-lg border border-border bg-muted/30 p-2 space-y-1 max-h-44 overflow-y-auto scrollbar-thin">
+                  {otherSites.map((site) => {
+                    const checked = additionalSiteIds.includes(String(site._id));
+                    return (
+                      <button
+                        key={site._id}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={checked}
+                        onClick={() => toggleSite(site._id)}
+                        className={cn(
+                          'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors',
+                          checked ? 'bg-brand-500/10 text-foreground' : 'hover:bg-muted/60 text-muted-foreground',
+                        )}
+                      >
+                        <span className={cn(
+                          'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+                          checked ? 'border-brand-600 bg-brand-600 text-white' : 'border-border bg-background',
+                        )}>
+                          {checked && <Check className="h-3 w-3" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13px] font-medium">{site.name}</span>
+                          {(site.street || site.city) && (
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {[site.street, [site.postalCode, site.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
             <Separator className="my-5 bg-muted/50" />
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               {t('crm.installations.sectionNotes', 'Technische Notizen')}
@@ -228,7 +299,7 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
               className="bg-linear-to-r from-brand-700 to-brand-600 hover:from-brand-600 hover:to-brand-500 text-white gap-2"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isEdit ? t('common.save', 'Speichern') : t('crm.installations.createInstallation', 'Installation anlegen')}
+              {isEdit ? t('common.save', 'Speichern') : t('crm.installations.createInstallation', 'Komponente anlegen')}
             </Button>
           </div>
         </form>

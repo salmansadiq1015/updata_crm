@@ -84,6 +84,12 @@ router.post(
   (req, res, next) => newsletterController.send(req, res, next),
 );
 
+router.post(
+  '/:id/revert',
+  validate(newsletterIdParamSchema),
+  (req, res, next) => newsletterController.revertToDraft(req, res, next),
+);
+
 // Stats
 router.get(
   '/:id/stats',

@@ -149,7 +149,7 @@ export function CustomerMergeDialog({
               <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
                 {t(
                   'crm.mergeCustomerDesc',
-                  'Alle Kontakte, Objekte und Anlagen des Quellkunden werden dem Zielkunden zugewiesen. Der Quellkunde wird archiviert.',
+                  'Alle Kontakte, Objekte und Komponenten des Quellkunden werden dem Zielkunden zugewiesen. Der Quellkunde wird deaktiviert.',
                 )}
               </DialogDescription>
             </div>

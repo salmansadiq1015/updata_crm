@@ -27,11 +27,17 @@ class InstallationRepository {
         select: 'siteNumber name customerId street postalCode city canton',
         populate: { path: 'customerId', select: 'customerNumber name companyName email phone' },
       })
+      // Supplied objects, for the "Versorgt N Objekte" panel.
+      .populate({ path: 'additionalSiteIds', select: 'siteNumber name street postalCode city' })
       .lean();
   }
 
+  // A site sees its own components plus shared ones supplying it from another
+  // primary object (Heizzentrale case).
   async findBySiteId(siteId) {
-    return Installation.find({ siteId })
+    return Installation.find({ $or: [{ siteId }, { additionalSiteIds: siteId }] })
+      .populate({ path: 'siteId', select: 'siteNumber name' })
+      .populate({ path: 'additionalSiteIds', select: 'siteNumber name' })
       .sort({ installationNumber: 1 })
       .lean();
   }

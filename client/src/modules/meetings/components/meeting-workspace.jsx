@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
+  Upload,
   Building2,
   Check,
   CalendarPlus,
@@ -496,17 +497,38 @@ function ParticipantPicker({ participants, onChange }) {
 function MeetingFormDialog({ open, onOpenChange, meeting, onSubmit, isPending }) {
   const { t, locale } = useLanguage();
   const [form, setForm] = useState(defaultFormState);
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    if (open) setForm(formFromMeeting(meeting));
+    if (open) { setForm(formFromMeeting(meeting)); setErrors({}); }
   }, [meeting, open]);
 
-  const patch = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  // Clearing the field's error on edit keeps the message tied to the problem.
+  const patch = (key, value) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setErrors((current) => (current[key] ? { ...current, [key]: undefined } : current));
+  };
   const isEdit = Boolean(meeting?._id);
   const providerLabel = t(`meetings.providers.${form.onlineProvider}`, form.onlineProvider.replaceAll('_', ' '));
 
+  const validate = () => {
+    const next = {};
+    if (!form.title.trim()) next.title = t('meetings.form.titleRequired', 'Titel ist erforderlich');
+    if (!form.startAt) next.startAt = t('meetings.form.startRequired', 'Startzeit ist erforderlich');
+    if (!form.endAt) next.endAt = t('meetings.form.endRequired', 'Endzeit ist erforderlich');
+    if (form.startAt && form.endAt && fromDatetimeLocal(form.endAt) <= fromDatetimeLocal(form.startAt)) {
+      next.endAt = t('meetings.form.endAfterStart', 'Ende muss nach dem Start liegen');
+    }
+    return next;
+  };
+
   const submit = (event) => {
     event.preventDefault();
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return; // keep the dialog open and show what's missing
+    }
     const payload = {
       title: form.title.trim(),
       description: form.description.trim(),
@@ -537,7 +559,7 @@ function MeetingFormDialog({ open, onOpenChange, meeting, onSubmit, isPending })
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-6xl">
-        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+        <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col">
           <DialogHeader className="bg-card/95 pr-16">
             <div className="flex items-start gap-3">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
@@ -569,16 +591,19 @@ function MeetingFormDialog({ open, onOpenChange, meeting, onSubmit, isPending })
               <div className="space-y-5">
                 <div className="space-y-2">
                   <Label>{t('meetings.form.title', 'Titel')}</Label>
-                  <Input required className="h-11 rounded-xl bg-background/70" value={form.title} onChange={(event) => patch('title', event.target.value)} />
+                  <Input aria-invalid={!!errors.title} className={cn('h-11 rounded-xl bg-background/70', errors.title && 'border-destructive focus-visible:ring-destructive/30')} value={form.title} onChange={(event) => patch('title', event.target.value)} />
+                  {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>{t('meetings.form.start', 'Start')}</Label>
-                    <Input required type="datetime-local" className="h-11 rounded-xl bg-background/70" value={form.startAt} onChange={(event) => patch('startAt', event.target.value)} />
+                    <Input aria-invalid={!!errors.startAt} type="datetime-local" className={cn('h-11 rounded-xl bg-background/70', errors.startAt && 'border-destructive focus-visible:ring-destructive/30')} value={form.startAt} onChange={(event) => patch('startAt', event.target.value)} />
+                    {errors.startAt && <p className="text-xs text-destructive">{errors.startAt}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label>{t('meetings.form.end', 'Ende')}</Label>
-                    <Input required type="datetime-local" className="h-11 rounded-xl bg-background/70" value={form.endAt} onChange={(event) => patch('endAt', event.target.value)} />
+                    <Input aria-invalid={!!errors.endAt} type="datetime-local" className={cn('h-11 rounded-xl bg-background/70', errors.endAt && 'border-destructive focus-visible:ring-destructive/30')} value={form.endAt} onChange={(event) => patch('endAt', event.target.value)} />
+                    {errors.endAt && <p className="text-xs text-destructive">{errors.endAt}</p>}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -646,6 +671,63 @@ function MeetingFormDialog({ open, onOpenChange, meeting, onSubmit, isPending })
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Drag-and-drop document upload for a meeting, mirroring the project uploader:
+ * drop files or click to browse. Uploads each dropped file (images, mails,
+ * PDF, Word, Excel and other documents — the server documents bucket decides
+ * what is accepted). Multiple files upload one after another.
+ */
+function MeetingFileDropzone({ onUpload, isUploading, t }) {
+  const inputRef = useRef(null);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepth = useRef(0);
+
+  const handleFiles = (fileList) => {
+    Array.from(fileList || []).forEach((file) => file && onUpload(file));
+  };
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => inputRef.current?.click()}
+      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); inputRef.current?.click(); } }}
+      onDragEnter={(event) => { event.preventDefault(); dragDepth.current += 1; setDragOver(true); }}
+      onDragOver={(event) => event.preventDefault()}
+      onDragLeave={(event) => { event.preventDefault(); dragDepth.current -= 1; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragOver(false); } }}
+      onDrop={(event) => {
+        event.preventDefault();
+        dragDepth.current = 0;
+        setDragOver(false);
+        handleFiles(event.dataTransfer.files);
+      }}
+      className={cn(
+        'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors',
+        dragOver ? 'border-primary bg-primary/[0.06]' : 'border-border/70 hover:border-primary/40 hover:bg-muted/30',
+      )}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => { handleFiles(event.target.files); event.target.value = ''; }}
+      />
+      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+      </span>
+      <p className="text-sm font-medium text-foreground">
+        {isUploading
+          ? t('meetings.files.uploading', 'Wird hochgeladen...')
+          : t('meetings.files.dropOrClick', 'Dateien hierher ziehen oder klicken')}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {t('meetings.files.hint', 'Bilder, Mails, PDF-, Word- und Excel-Dateien')}
+      </p>
+    </div>
   );
 }
 
@@ -1101,18 +1183,11 @@ function MeetingDetail({ meetingId, onEdit }) {
           </TabsContent>
 
           <TabsContent value="files" className="space-y-4">
-            <div className="rounded-lg border border-dashed p-4">
-              <Label>{t('meetings.files.upload', 'Dokument anhängen')}</Label>
-              <Input
-                className="mt-2"
-                type="file"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) mutations.uploadFile.mutate({ id: meeting._id, file });
-                  event.target.value = '';
-                }}
-              />
-            </div>
+            <MeetingFileDropzone
+              onUpload={(file) => mutations.uploadFile.mutate({ id: meeting._id, file })}
+              isUploading={mutations.uploadFile.isPending}
+              t={t}
+            />
             <div className="space-y-2">
               {files.length === 0 && <p className="text-sm text-muted-foreground">{t('meetings.files.empty', 'Keine Dokumente angehängt')}</p>}
               {files.map((file) => (
@@ -1149,6 +1224,21 @@ export function MeetingWorkspace() {
     const id = searchParams.get('meetingId') || '';
     if (id && id !== selectedId) setSelectedId(id);
   }, [searchParams, selectedId]);
+
+  // One-click RSVP from the invitation email: ?meetingId=X&rsvp=ACCEPTED|DECLINED
+  // records the logged-in user's response, then drops the param from the URL.
+  const rsvpAppliedRef = useRef(false);
+  useEffect(() => {
+    const id = searchParams.get('meetingId');
+    const rsvp = (searchParams.get('rsvp') || '').toUpperCase();
+    if (!id || (rsvp !== 'ACCEPTED' && rsvp !== 'DECLINED') || rsvpAppliedRef.current) return;
+    rsvpAppliedRef.current = true;
+    mutations.rsvp.mutate({ id, rsvpStatus: rsvp });
+    // Drop the rsvp param immediately, so a later refresh can't re-apply a stale
+    // response over a choice the user has since changed in the app.
+    router.replace(`/scheduling/meetings?meetingId=${id}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const filters = useMemo(() => ({
     q: debouncedSearch || undefined,

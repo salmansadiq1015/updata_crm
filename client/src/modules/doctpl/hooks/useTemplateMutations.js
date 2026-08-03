@@ -14,7 +14,12 @@ export const useUpdateTemplate = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...d }) => templateService.update(id, d),
-    onSuccess: (_, v) => {
+    onSuccess: (res, v) => {
+      // Seed the detail cache with the saved template right away so the editor
+      // reflects the change immediately. Without this the query briefly returns
+      // stale data while refetching, which reset the rich-text editor back to
+      // the previous value and looked like the entered text was lost.
+      if (res?.data) qc.setQueryData(queryKeys.doctpl.templates.detail(v.id), res);
       qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.detail(v.id) });
       qc.invalidateQueries({ queryKey: queryKeys.doctpl.templates.versions(v.id) });
       qc.invalidateQueries({ queryKey: ['doctpl', 'templates', 'compare', v.id] });

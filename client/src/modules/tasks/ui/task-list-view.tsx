@@ -13,6 +13,7 @@ import {
   CircleX,
   Copy,
   Flag,
+  MessageSquare,
   MoreHorizontal,
   Trash2,
 } from 'lucide-react';
@@ -37,6 +38,9 @@ import {
   taskStatusIconColor,
 } from './task-ui-constants';
 import { taskApi } from '../services/task-api';
+// eslint-disable-next-line import/no-unresolved
+import { sourceMeta } from '../constants/task-source-meta';
+import { TaskChatDialog } from '../components/task-chat-dialog';
 
 // ── Status cycle for subtask toggle ──────────────────────────────────────────
 
@@ -121,7 +125,7 @@ function AssigneeCell({ assigneeIds, assigneeId, users = [] }: { assigneeIds?: s
 
 // ── Column layout ────────────────────────────────────────────────────────────
 
-const columns = 'grid-cols-[32px_minmax(280px,1fr)_148px_128px_140px_108px_56px]';
+const columns = 'grid-cols-[28px_minmax(180px,1fr)_124px_116px_112px_108px_120px_84px_64px]';
 
 const formatDueDate = (value: string | null) => {
   if (!value) return '—';
@@ -235,6 +239,7 @@ const TaskRow = memo(function TaskRow({
   onRowSelectionChange,
   onDuplicateTask,
   onToggleExpand,
+  onOpenChat,
 }: {
   task: Task;
   selected: boolean;
@@ -247,8 +252,9 @@ const TaskRow = memo(function TaskRow({
   onRowSelectionChange?: (selection: Record<string, boolean>) => void;
   onDuplicateTask?: (id: string) => void;
   onToggleExpand: (taskId: string) => void;
+  onOpenChat?: (task: Task) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const isOverdue =
     task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED';
 
@@ -297,6 +303,33 @@ const TaskRow = memo(function TaskRow({
           <span className="block max-w-full truncate text-left font-medium text-foreground group-hover:text-primary">
             {task.title}
           </span>
+        </div>
+
+        {/* Herkunft (origin) */}
+        <div role="gridcell" className="min-w-0">
+          {(() => {
+            const src = sourceMeta(task.source?.type);
+            const SrcIcon = src.icon;
+            const label = language === 'de' ? src.labelDe : src.labelEn;
+            return (
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-xs" title={task.source?.label || label}>
+                <SrcIcon className={cn('h-3.5 w-3.5 shrink-0', src.color)} />
+                <span className="truncate text-muted-foreground">{label}</span>
+              </span>
+            );
+          })()}
+        </div>
+
+        {/* Abteilung (department) */}
+        <div role="gridcell" className="min-w-0">
+          {task.departmentId?.name ? (
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-xs" style={{ color: task.departmentId.color || undefined }}>
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: task.departmentId.color || '#94a3b8' }} />
+              <span className="truncate">{task.departmentId.name}</span>
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
         </div>
 
         {/* Status — icon + label dropdown */}
@@ -370,8 +403,17 @@ const TaskRow = memo(function TaskRow({
           {formatDueDate(task.dueDate)}
         </div>
 
-        {/* Actions */}
-        <div role="gridcell" className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {/* Chat + Actions */}
+        <div role="gridcell" className="flex items-center justify-end gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            title={t('tasks.openChat', 'Chat öffnen')}
+            onClick={(e: MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); onOpenChat?.(task); }}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -439,6 +481,7 @@ export function TaskListView({
   const { t, language } = useLanguage();
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
+  const [chatTask, setChatTask] = useState<Task | null>(null);
 
   const toggleExpand = useCallback((taskId: string) => {
     setExpandedIds((prev) => ({ ...prev, [taskId]: !prev[taskId] }));
@@ -491,6 +534,8 @@ export function TaskListView({
           />
         </div>
         <div role="columnheader">{t('tasks.task', language === 'de' ? 'Aufgabe' : 'Task')}</div>
+        <div role="columnheader">{t('tasks.col.origin', 'Herkunft')}</div>
+        <div role="columnheader">{t('tasks.department', language === 'de' ? 'Abteilung' : 'Department')}</div>
         <div role="columnheader">{t('tasks.status', 'Status')}</div>
         <div role="columnheader">{t('tasks.priority', language === 'de' ? 'Priorität' : 'Priority')}</div>
         <div role="columnheader">{t('tasks.assignee', language === 'de' ? 'Zugewiesen' : 'Assignee')}</div>
@@ -523,6 +568,7 @@ export function TaskListView({
                   onRowSelectionChange={onRowSelectionChange}
                   onDuplicateTask={onDuplicateTask}
                   onToggleExpand={toggleExpand}
+                  onOpenChat={setChatTask}
                 />
               </div>
             );
@@ -532,6 +578,8 @@ export function TaskListView({
           <div className="h-10 px-4 py-3 text-xs text-muted-foreground">{t('common.loadingMore', 'Weitere laden...')}</div>
         )}
       </div>
+
+      <TaskChatDialog task={chatTask} open={!!chatTask} onOpenChange={(v: boolean) => !v && setChatTask(null)} />
     </div>
   );
 }

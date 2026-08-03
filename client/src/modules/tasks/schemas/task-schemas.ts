@@ -79,6 +79,8 @@ export const rawTaskSchema = z
     poolHelperId: nullableId,
     projectName: z.string().nullable().optional(),
     orderName: z.string().nullable().optional(),
+    departmentId: z.any().optional(),
+    source: z.any().optional(),
   })
   .passthrough()
   .transform((raw) => {
@@ -127,6 +129,8 @@ export const rawTaskSchema = z
       poolHelperId: raw.poolHelperId,
       projectName: raw.projectName ?? null,
       orderName: raw.orderName ?? null,
+      departmentId: raw.departmentId ?? null,
+      source: raw.source ?? null,
     };
   }));
 

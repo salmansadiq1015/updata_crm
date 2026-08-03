@@ -41,6 +41,23 @@ export type Task = {
   poolHelperId: string | null;
   projectName: string | null;
   orderName: string | null;
+  departmentId?: TaskDepartmentRef | null;
+  source?: TaskSource | null;
+};
+
+export type TaskDepartmentRef = {
+  _id?: string;
+  id?: string;
+  name?: string;
+  code?: string;
+  color?: string | null;
+  icon?: string | null;
+};
+
+export type TaskSource = {
+  type?: string;
+  refId?: string | null;
+  label?: string | null;
 };
 
 export type TaskList = {
@@ -94,6 +111,8 @@ export type TaskPatch = Partial<
   expectedVersion?: number;
   completeSubtasks?: boolean;
   completeParentOnly?: boolean;
+  departmentId?: string | null;
+  source?: TaskSource | null;
 };
 
 export type TaskRealtimeEvent =

@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, LifeBuoy, Loader2, Lock, LockOpen, MessagesSquare, UserPlus } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,9 @@ import { TaskRemindersPanel } from './task-reminders-panel';
 import { TaskContextSelector } from './task-context-selector';
 import { TaskCompletionDialog } from './task-completion-dialog';
 import { TaskChatDialog } from '../components/task-chat-dialog';
+import { taskService } from '../services/task-service';
+// eslint-disable-next-line import/no-unresolved
+import { TASK_SOURCE_META } from '../constants/task-source-meta';
 import { AssigneeSelector } from './assignee-selector';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { parseTaskDueInput } from '../utils/task-date-parser';
@@ -82,7 +85,7 @@ const getIncompleteSubtaskCount = (error: unknown): number | null => {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const router = useRouter();
   const qc = useQueryClient();
   const currentUserId = useAuthStore((state: { user?: { _id?: string; id?: string } | null }) =>
@@ -99,6 +102,11 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
 
   const task = taskQuery.data;
   const [chatOpen, setChatOpen] = useState(false);
+  const { data: departments = [] } = useQuery<Array<{ _id: string; name: string; color?: string }>>({
+    queryKey: ['tasks', 'departments'],
+    queryFn: () => taskService.listDepartments(),
+    staleTime: 300_000,
+  });
   useBreadcrumbLabel(taskId, task?.title);
   const users = usersQuery.data ?? [];
 
@@ -478,6 +486,46 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
                 disabled={task.locked}
                 onAssigneeChange={(ids) => patch({ assigneeIds: ids })}
               />
+            </div>
+
+            {/* Department (Abteilung) */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">{t('tasks.department', language === 'de' ? 'Abteilung' : 'Department')}</label>
+              <Select
+                value={(task.departmentId?._id || task.departmentId?.id || (typeof task.departmentId === 'string' ? task.departmentId : '') || 'NONE') as string}
+                onValueChange={(v) => patch({ departmentId: v === 'NONE' ? null : v })}
+              >
+                <SelectTrigger className="h-8 gap-1.5 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE"><span className="text-muted-foreground">—</span></SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d._id} value={String(d._id)} textValue={d.name}>
+                      <span className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: d.color || '#94a3b8' }} />
+                        {d.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Herkunft (origin) */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">{t('tasks.col.origin', 'Herkunft')}</label>
+              <Select
+                value={task.source?.type || 'MANUAL'}
+                onValueChange={(v) => patch({ source: { ...(task.source ?? {}), type: v } })}
+              >
+                <SelectTrigger className="h-8 gap-1.5 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.keys(TASK_SOURCE_META).map((k) => (
+                    <SelectItem key={k} value={k} textValue={language === 'de' ? TASK_SOURCE_META[k].labelDe : TASK_SOURCE_META[k].labelEn}>
+                      {language === 'de' ? TASK_SOURCE_META[k].labelDe : TASK_SOURCE_META[k].labelEn}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Start date */}

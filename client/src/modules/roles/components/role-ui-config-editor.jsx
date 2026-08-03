@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Loader2, MonitorPlay, Save } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Eye, EyeOff, Loader2, MonitorPlay, Save } from 'lucide-react';
 import { roleService } from '@/modules/roles/services/role-service';
 import { queryKeys } from '@/lib/query/keys';
 import { useUiPreviewStore } from '@/stores/ui-preview-store';
@@ -16,37 +16,38 @@ import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
 // Top-level sidebar modules (id = group key or leaf href — must match sidebar.jsx).
+// `permission` mirrors the sidebar gating: without it the role never sees the module.
 const MODULE_CATALOG = [
-  { id: '/dashboard', label: 'Dashboard' },
-  { id: '/settings/users', label: 'Mitarbeiterverwaltung' },
-  { id: 'crm', label: 'CRM' },
-  { id: '/projects', label: 'Projekte' },
-  { id: 'scheduling', label: 'Einsatzplanung' },
-  { id: 'sales', label: 'Offerten & Aufträge' },
-  { id: 'finance', label: 'Buchhaltung' },
-  { id: 'catalog', label: 'Katalog' },
-  { id: '/documents', label: 'Dokumente' },
-  { id: '/vehicles', label: 'Fahrzeuge' },
-  { id: '/tasks', label: 'Aufgaben' },
-  { id: '/notifications', label: 'Benachrichtigungen' },
-  { id: '/ai', label: 'KI-Assistent' },
-  { id: '/field-ops/orders', label: 'Einsätze' },
-  { id: '/field-ops/reports', label: 'Arbeitsberichte' },
-  { id: '/field-ops/time', label: 'Zeiterfassung' },
-  { id: '/field-ops/chat', label: 'Global-Chat' },
+  { id: '/dashboard', label: 'Dashboard', permission: null },
+  { id: '/settings/users', label: 'Mitarbeiterverwaltung', permission: 'users:read' },
+  { id: 'crm', label: 'CRM', permission: 'crm:read' },
+  { id: '/projects', label: 'Projekte', permission: 'projects:read' },
+  { id: 'scheduling', label: 'Einsatzplanung', permission: 'scheduling:read' },
+  { id: 'sales', label: 'Offerten & Aufträge', permission: 'quotations:read' },
+  { id: 'finance', label: 'Buchhaltung', permission: 'accounting:read' },
+  { id: 'catalog', label: 'Katalog', permission: 'catalog:read' },
+  { id: '/documents', label: 'Dokumente', permission: 'documents:read' },
+  { id: '/vehicles', label: 'Fahrzeuge', permission: 'vehicles:read' },
+  { id: '/tasks', label: 'Aufgaben', permission: 'tasks:read' },
+  { id: '/notifications', label: 'Benachrichtigungen', permission: 'notifications:feed' },
+  { id: '/ai', label: 'KI-Assistent', permission: null },
+  { id: '/field-ops/orders', label: 'Einsätze', permission: 'mobile:read' },
+  { id: '/field-ops/reports', label: 'Arbeitsberichte', permission: 'mobile:read' },
+  { id: '/field-ops/time', label: 'Zeiterfassung', permission: 'time-tracking:read' },
+  { id: '/field-ops/chat', label: 'Global-Chat', permission: 'mobile:read' },
 ];
 
 const START_PAGES = [
-  { value: '/dashboard', label: 'Dashboard' },
-  { value: '/tasks', label: 'Aufgaben' },
-  { value: '/projects', label: 'Projekte' },
-  { value: '/crm/sites', label: 'Objekte' },
-  { value: '/crm/customers', label: 'Kunden' },
-  { value: '/scheduling/calendar', label: 'Einsatzplanung' },
-  { value: '/quotes', label: 'Offerten & Aufträge' },
-  { value: '/documents', label: 'Dokumente' },
-  { value: '/vehicles', label: 'Fahrzeuge' },
-  { value: '/field-ops/orders', label: 'Einsätze' },
+  { value: '/dashboard', label: 'Dashboard', permission: null },
+  { value: '/tasks', label: 'Aufgaben', permission: 'tasks:read' },
+  { value: '/projects', label: 'Projekte', permission: 'projects:read' },
+  { value: '/crm/sites', label: 'Objekte', permission: 'crm:read' },
+  { value: '/crm/customers', label: 'Kunden', permission: 'crm:read' },
+  { value: '/scheduling/calendar', label: 'Einsatzplanung', permission: 'scheduling:read' },
+  { value: '/quotes', label: 'Offerten & Aufträge', permission: 'quotations:read' },
+  { value: '/documents', label: 'Dokumente', permission: 'documents:read' },
+  { value: '/vehicles', label: 'Fahrzeuge', permission: 'vehicles:read' },
+  { value: '/field-ops/orders', label: 'Einsätze', permission: 'mobile:read' },
 ];
 
 const orderedCatalog = (sidebarOrder) => {
@@ -95,6 +96,19 @@ export function RoleUiConfigEditor({ role }) {
   }, [role?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const byId = useMemo(() => new Map(MODULE_CATALOG.map((m) => [m.id, m])), []);
+
+  // Permission keys of THIS role (populated docs) — used to warn the Key User
+  // before configuring a start page/module the role cannot actually open.
+  const rolePermKeys = useMemo(() => {
+    const keys = new Set();
+    for (const p of role?.permissions || []) {
+      if (p?.module && p?.action) keys.add(`${p.module}:${p.action}`);
+      else if (p?.key) keys.add(p.key);
+    }
+    return keys;
+  }, [role?.permissions]);
+  const roleCan = (permission) => !permission || rolePermKeys.size === 0 || rolePermKeys.has(permission);
+  const startPageInvalid = !roleCan(START_PAGES.find((p) => p.value === startPage)?.permission);
 
   const buildConfig = () => ({
     startPage,
@@ -153,15 +167,33 @@ export function RoleUiConfigEditor({ role }) {
               {t('roles.startPageDesc', 'Diese Seite öffnet sich für alle Benutzer dieser Rolle nach der Anmeldung. Persönliche Einstellungen haben Vorrang.')}
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             <Select value={startPage} onValueChange={setStartPage}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {START_PAGES.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                ))}
+                {START_PAGES.map((p) => {
+                  const allowed = roleCan(p.permission);
+                  return (
+                    <SelectItem key={p.value} value={p.value} disabled={!allowed} textValue={p.label}>
+                      <span className={cn('flex items-center gap-2', !allowed && 'text-muted-foreground')}>
+                        {p.label}
+                        {!allowed && (
+                          <span className="text-[10px]">
+                            — {t('roles.missingPermission', 'fehlende Berechtigung')} ({p.permission})
+                          </span>
+                        )}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
+            {startPageInvalid && (
+              <p className="flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                {t('roles.startPageNoAccess', 'Diese Rolle hat keinen Zugriff auf die konfigurierte Startseite — Benutzer sehen eine leere Seite.')}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -255,7 +287,14 @@ export function RoleUiConfigEditor({ role }) {
                 )}
               >
                 <span className="w-5 text-center text-[11px] tabular-nums text-muted-foreground">{idx + 1}</span>
-                <span className={cn('min-w-0 flex-1 truncate text-sm', isHidden && 'line-through')}>{mod.label}</span>
+                <span className={cn('min-w-0 flex-1 truncate text-sm', isHidden && 'line-through')}>
+                  {mod.label}
+                  {!roleCan(mod.permission) && (
+                    <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground" title={mod.permission}>
+                      {t('roles.noPermissionBadge', 'keine Berechtigung')}
+                    </span>
+                  )}
+                </span>
                 <Button variant="ghost" size="icon" className="h-6 w-6" disabled={idx === 0} onClick={() => move(id, -1)}>
                   <ArrowUp className="h-3.5 w-3.5" />
                 </Button>

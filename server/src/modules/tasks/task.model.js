@@ -4,6 +4,14 @@ export const TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CA
 export const TASK_PRIORITIES = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 export const MAX_SUBTASK_DEPTH = 3;
 
+// Where a task originates from (Herkunft) — drives the origin icon/label in the
+// department task board. Kept separate from projectId/orderId (which still link
+// the records) so any origin can be represented uniformly.
+export const TASK_SOURCE_TYPES = [
+  'MANUAL', 'PROJECT', 'ORDER', 'SITE', 'MAINTENANCE', 'QUOTATION',
+  'CUSTOMER_INQUIRY', 'DISPOSITION', 'INVOICE', 'DOCUMENT', 'MEETING',
+];
+
 const taskSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 500 },
@@ -19,6 +27,16 @@ const taskSchema = new mongoose.Schema(
     projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', default: null },
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
     meetingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', default: null },
+    // Department (Abteilung/Sparte) the task belongs to — the task board groups by it.
+    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null, index: true },
+    // Origin (Herkunft) for display: type + optional linked record + human label.
+    source: {
+      type: { type: String, enum: TASK_SOURCE_TYPES, default: 'MANUAL' },
+      refId: { type: mongoose.Schema.Types.ObjectId, default: null },
+      label: { type: String, trim: true, maxlength: 255, default: null },
+    },
+    // Own chat room for the task (null when it uses the linked project's chat).
+    chatRoomId: { type: mongoose.Schema.Types.ObjectId, ref: 'ChatRoom', default: null },
     startDate: { type: Date, default: null },
     dueDate: { type: Date, default: null },
     sortOrder: { type: Number, default: 0 },

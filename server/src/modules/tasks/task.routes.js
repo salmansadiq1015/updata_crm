@@ -14,6 +14,7 @@ import {
 
 const router = Router();
 
+router.get('/departments', authenticate, requirePermission('tasks:read'), (req, res, next) => taskController.listDepartments(req, res, next));
 router.get('/', authenticate, requirePermission('tasks:read'), validate(listTasksSchema), (req, res, next) => taskController.list(req, res, next));
 router.post('/', authenticate, requirePermission('tasks:write'), validate(createTaskSchema), (req, res, next) => taskController.create(req, res, next));
 router.post('/bulk', authenticate, requirePermission('tasks:write'), validate(bulkOperationSchema), (req, res, next) => taskController.bulkOperation(req, res, next));

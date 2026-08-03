@@ -9,7 +9,9 @@ export const referenceService = {
     // Deactivated customers stay out of document dropdowns.
     params: { ...(query ? { search: query } : {}), status: 'active', limit: 10 },
   }),
-  listDepartments: () => apiClient.get('/admin/departments'),
+  // QOP numbering only uses commercial departments (scope=qop) — the task board
+  // has additional operational departments that must not appear in QOP forms.
+  listDepartments: () => apiClient.get('/admin/departments', { params: { scope: 'qop' } }),
   // Admin management view: include deactivated ones so they can be reactivated
   // (the QOP form dropdowns keep using listDepartments = active only).
   listAllDepartments: () => apiClient.get('/admin/departments', { params: { includeInactive: true } }),

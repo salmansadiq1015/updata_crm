@@ -1,6 +1,12 @@
 import Joi from 'joi';
 import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
-import { TASK_STATUSES, TASK_PRIORITIES } from './task.model.js';
+import { TASK_STATUSES, TASK_PRIORITIES, TASK_SOURCE_TYPES } from './task.model.js';
+
+const sourceSchema = Joi.object({
+  type: Joi.string().valid(...TASK_SOURCE_TYPES),
+  refId: objectId.allow(null),
+  label: Joi.string().trim().max(255).allow('', null),
+}).allow(null);
 
 export const createTaskSchema = {
   body: Joi.object({
@@ -16,6 +22,8 @@ export const createTaskSchema = {
     projectId: objectId.allow(null),
     orderId: objectId.allow(null),
     meetingId: objectId.allow(null),
+    departmentId: objectId.allow(null),
+    source: sourceSchema,
     sortOrder: Joi.number().integer(),
   }),
 };
@@ -33,6 +41,8 @@ export const updateTaskSchema = {
     projectId: objectId.allow(null),
     orderId: objectId.allow(null),
     meetingId: objectId.allow(null),
+    departmentId: objectId.allow(null),
+    source: sourceSchema,
     sortOrder: Joi.number().integer(),
     expectedVersion: Joi.number().integer().min(0),
   }).min(1),
@@ -52,6 +62,7 @@ export const listTasksSchema = {
     projectId: objectId,
     orderId: objectId,
     meetingId: objectId,
+    departmentId: objectId,
     overdue: Joi.boolean(),
     dueToday: Joi.boolean(),
     inPool: Joi.boolean(),

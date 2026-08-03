@@ -9,6 +9,11 @@ const createSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(100),
     code: Joi.string().required().trim().uppercase().max(20).alphanum(),
+    color: Joi.string().trim().max(20).allow(null, ''),
+    icon: Joi.string().trim().max(40).allow(null, ''),
+    sortOrder: Joi.number().integer().min(0),
+    scopeQop: Joi.boolean(),
+    scopeTasks: Joi.boolean(),
   }),
 };
 
@@ -17,6 +22,11 @@ const updateSchema = {
   body: Joi.object({
     name: Joi.string().trim().max(100),
     isActive: Joi.boolean(),
+    color: Joi.string().trim().max(20).allow(null, ''),
+    icon: Joi.string().trim().max(40).allow(null, ''),
+    sortOrder: Joi.number().integer().min(0),
+    scopeQop: Joi.boolean(),
+    scopeTasks: Joi.boolean(),
   }).min(1),
 };
 

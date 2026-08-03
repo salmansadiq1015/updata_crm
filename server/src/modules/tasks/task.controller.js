@@ -1,6 +1,18 @@
 import taskService from './task.service.js';
 
 class TaskController {
+  // Departments (Sparten) available for the task board — task-scoped, ordered.
+  async listDepartments(req, res, next) {
+    try {
+      const Department = (await import('../qop/department.model.js')).default;
+      const departments = await Department.find({ isActive: true, scopeTasks: { $ne: false } })
+        .sort({ sortOrder: 1, name: 1 })
+        .select('name code color icon sortOrder')
+        .lean();
+      return res.success({ data: departments });
+    } catch (err) { next(err); }
+  }
+
   async create(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

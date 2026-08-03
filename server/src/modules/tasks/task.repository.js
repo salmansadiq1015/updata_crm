@@ -16,6 +16,7 @@ const ALLOWED_FILTERS = {
   projectId: 'objectId',
   orderId: 'objectId',
   meetingId: 'objectId',
+  departmentId: 'objectId',
   parentTaskId: 'objectId',
   dueFrom: 'dateFrom',
   dueTo: 'dateTo',
@@ -30,6 +31,7 @@ const POPULATE_FIELDS = [
   { path: 'projectId', select: 'name projectNumber customerName status' },
   { path: 'orderId', select: 'assignmentNumber title status priority' },
   { path: 'meetingId', select: 'title startAt status' },
+  { path: 'departmentId', select: 'name code color icon' },
 ];
 
 function escapeRegex(value) {

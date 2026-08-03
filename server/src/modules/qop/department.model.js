@@ -20,6 +20,14 @@ const departmentSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Presentation for the task board (Aufgaben nach Abteilungen).
+    color: { type: String, trim: true, maxlength: 20, default: null },
+    icon: { type: String, trim: true, maxlength: 40, default: null },
+    sortOrder: { type: Number, default: 0 },
+    // Scope flags: which areas a department applies to. QOP numbering only uses
+    // commercial departments; the task board uses operational ones too.
+    scopeQop: { type: Boolean, default: true },
+    scopeTasks: { type: Boolean, default: true },
   },
   { timestamps: true },
 );

@@ -75,6 +75,9 @@ export const ALLOWED_MIME_TYPES = {
     // (.eml = message/rfc822, .msg = Outlook).
     'message/rfc822',
     'application/vnd.ms-outlook',
+    // Supplier catalog exchange files (IGH DataExpert, yearly Nussbaum import).
+    'text/xml',
+    'application/xml',
   ],
   photos: [
     'image/jpeg',
@@ -108,6 +111,7 @@ export const ALLOWED_MIME_TYPES = {
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'text/csv', 'text/plain',
+    'text/xml', 'application/xml',
     'application/postscript', 'image/x-eps',
     'font/ttf', 'font/otf', 'font/woff', 'font/woff2',
     'application/font-woff', 'application/font-woff2',

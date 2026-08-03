@@ -118,6 +118,13 @@ const articleSchema = new mongoose.Schema(
       maxlength: 50,
       default: null,
     },
+    // GTIN/EAN barcode (from supplier catalog imports, e.g. DataExpert).
+    ean: {
+      type: String,
+      trim: true,
+      maxlength: 20,
+      default: null,
+    },
     source: {
       type: String,
       enum: ARTICLE_SOURCES,

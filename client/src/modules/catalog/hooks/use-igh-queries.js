@@ -13,7 +13,14 @@ export function useIghConfig() {
 export function useIghImportHistory() {
   return useQuery({
     queryKey: queryKeys.catalog.ighImportHistory(),
-    queryFn: () => ighService.getImportHistory().then((r) => (Array.isArray(r) ? r : (r?.data ?? []))),
+    // The history endpoint returns cursor pagination ({ data: [...], pagination })
+    // wrapped in the API envelope — unwrap both layers to the plain array.
+    queryFn: () => ighService.getImportHistory().then((r) => {
+      if (Array.isArray(r)) return r;
+      if (Array.isArray(r?.data)) return r.data;
+      if (Array.isArray(r?.data?.data)) return r.data.data;
+      return [];
+    }),
     staleTime: 30_000,
   });
 }

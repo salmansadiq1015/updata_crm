@@ -27,6 +27,8 @@ export class IghImportWorker extends BaseWorker {
       parseIghCsv,
       parseIghJson,
       parseIghXml,
+      parseDataExpertXml,
+      isDataExpertXml,
       batchUpsertArticles,
     } = await import('../modules/catalog/igh-import-adapters.js');
 
@@ -39,7 +41,59 @@ export class IghImportWorker extends BaseWorker {
       ).lean();
       const importedBy = importJobDoc?.createdBy ?? null;
 
-      // Load config
+      // Resolve a default category for new IGH articles (categoryId is required on Article)
+      const ighCategory = await CatalogCategory.findOne({ code: 'IGH' }).lean().select('_id');
+      const fallbackCategory = ighCategory ?? (await CatalogCategory.findOne().lean().select('_id'));
+      const defaultCategoryId = fallbackCategory?._id ?? null;
+
+      // ── UPLOAD: import the previously uploaded catalog file (no endpoint) ──
+      if (type === 'UPLOAD') {
+        if (!importJobDoc?.sourceFileId) throw new Error('Upload job has no stored source file');
+        const { default: fileService } = await import('../modules/files/file.service.js');
+        const fileMeta = await fileService.getById(importJobDoc.sourceFileId);
+        if (!fileMeta?.key) throw new Error('Uploaded catalog file not found');
+        const fileBuffer = await fileService.downloadBuffer(fileMeta.key);
+        const xml = fileBuffer.toString('utf-8');
+
+        await IghImportJob.findByIdAndUpdate(importJobId, {
+          log: `Read "${importJobDoc.sourceFileName || 'catalog file'}" (${xml.length} chars). Parsing...`,
+        });
+
+        const uploadedArticles = isDataExpertXml(xml) ? parseDataExpertXml(xml) : parseIghXml(xml);
+        await job.updateProgress(30);
+
+        // A single-supplier catalog must never deactivate other suppliers'
+        // articles — upsert only, no deactivateMissing.
+        const uploadResult = await batchUpsertArticles(uploadedArticles, importedBy, defaultCategoryId, {
+          deactivateMissing: false,
+        });
+
+        const uploadCounts = {
+          articlesCreated: uploadResult.upsertedCount,
+          articlesUpdated: uploadResult.modifiedCount,
+          articlesSkipped: 0,
+          articlesDeactivated: 0,
+          errorsCount: uploadResult.errors.length,
+        };
+        await IghImportJob.findByIdAndUpdate(importJobId, {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          ...uploadCounts,
+          log: `Catalog upload import completed. Created: ${uploadResult.upsertedCount}, Updated: ${uploadResult.modifiedCount}, Errors: ${uploadResult.errors.length}`,
+        });
+
+        await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:articles:list:*`);
+        await cacheManager.invalidatePattern(`${config.redis.keyPrefix}catalog:picker:*`);
+        eventBus.publish(EVENT_TYPES.CATALOG_IGH_IMPORT_COMPLETED, {
+          jobId: importJobId,
+          type,
+          ...uploadCounts,
+        }, { source: 'jobs:igh-import' });
+        logger.info('IGH upload import completed', { module: 'jobs', action: 'igh-import', type, importJobId });
+        return { importJobId, ...uploadCounts };
+      }
+
+      // ── FULL/DELTA: fetch from the configured IGH endpoint ──
       const cfg = await IghConfig.findOne().lean();
       if (!cfg || !cfg.isEnabled) {
         throw new Error('IGH integration is disabled');
@@ -48,11 +102,6 @@ export class IghImportWorker extends BaseWorker {
       if (!cfg.endpointUrl) {
         throw new Error('IGH endpoint URL is not configured');
       }
-
-      // Resolve a default category for new IGH articles (categoryId is required on Article)
-      const ighCategory = await CatalogCategory.findOne({ code: 'IGH' }).lean().select('_id');
-      const fallbackCategory = ighCategory ?? (await CatalogCategory.findOne().lean().select('_id'));
-      const defaultCategoryId = fallbackCategory?._id ?? null;
 
       await IghImportJob.findByIdAndUpdate(importJobId, {
         log: 'Connecting to IGH data source...',

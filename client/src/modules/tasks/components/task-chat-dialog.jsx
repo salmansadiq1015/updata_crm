@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
  */
 export function TaskChatDialog({ task, open, onOpenChange }) {
   const { t } = useLanguage();
-  const taskId = task?._id;
+  const taskId = task?._id || task?.id;
 
   const { data: chat, isLoading } = useQuery({
     queryKey: ['tasks', 'chat', taskId],

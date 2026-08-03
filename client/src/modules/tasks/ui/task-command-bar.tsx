@@ -21,6 +21,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { useQuery } from '@tanstack/react-query';
+import { taskService } from '../services/task-service';
 import { TaskQuickAdd } from './task-quick-add';
 import type { TaskPriority, TaskStatus, TaskViewType } from '../types/task-types';
 import {
@@ -61,6 +63,8 @@ type TaskCommandBarProps = {
   onStatusChange: (status: TaskStatus | 'ALL') => void;
   onPriorityChange: (priority: TaskPriority | 'ALL') => void;
   onAssigneeFilterChange?: (value: string) => void;
+  department?: string;
+  onDepartmentChange?: (value: string) => void;
   onCreateTask: (title: string) => void;
   pageSize?: number;
   onPageSizeChange?: (size: number) => void;
@@ -141,11 +145,18 @@ export function TaskCommandBar({
   onStatusChange,
   onPriorityChange,
   onAssigneeFilterChange,
+  department = 'ALL',
+  onDepartmentChange,
   onCreateTask,
   pageSize,
   onPageSizeChange,
 }: TaskCommandBarProps) {
   const { t } = useLanguage();
+  const { data: departments = [] } = useQuery({
+    queryKey: ['tasks', 'departments'],
+    queryFn: () => taskService.listDepartments(),
+    staleTime: 300_000,
+  });
 
   return (
     <div className="border-b border-border bg-card">
@@ -260,6 +271,28 @@ export function TaskCommandBar({
             ))}
           </SelectContent>
         </Select>
+
+        {/* Department (Abteilung) filter */}
+        {onDepartmentChange && (
+          <Select value={department} onValueChange={(v: string) => onDepartmentChange(v)}>
+            <SelectTrigger className="h-8 w-44 gap-1.5 border border-border bg-background text-xs font-medium hover:bg-muted [&>svg:last-child]:shrink-0">
+              <SelectValue placeholder={t('tasks.allDepartments', 'Alle Abteilungen')} />
+            </SelectTrigger>
+            <SelectContent className="w-52">
+              <SelectItem value="ALL" textValue={t('tasks.allDepartments', 'Alle Abteilungen')}>
+                <span className="text-muted-foreground">{t('tasks.allDepartments', 'Alle Abteilungen')}</span>
+              </SelectItem>
+              {departments.map((d: { _id: string; name: string; color?: string }) => (
+                <SelectItem key={d._id} value={String(d._id)} textValue={d.name}>
+                  <span className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: d.color || '#94a3b8' }} />
+                    {d.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         {/* Assignee scope filter: everyone's tasks / mine / a specific colleague */}
         {onAssigneeFilterChange && (

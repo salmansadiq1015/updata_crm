@@ -63,6 +63,7 @@ export type TaskFilters = {
   status?: TaskStatus;
   priority?: TaskPriority;
   assigneeId?: string;
+  departmentId?: string;
   projectId?: string;
   orderId?: string;
   dueToday?: boolean;

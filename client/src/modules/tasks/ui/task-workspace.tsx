@@ -72,6 +72,8 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const setRowSelection = useTaskWorkspaceStore((s) => s.setRowSelection);
   const pageSize = useTaskWorkspaceStore((s) => s.pageSize);
   const setPageSize = useTaskWorkspaceStore((s) => s.setPageSize);
+  const department = useTaskWorkspaceStore((s) => s.department);
+  const setDepartment = useTaskWorkspaceStore((s) => s.setDepartment);
 
   // Folder / user / bulk data
   const foldersQuery = useFolders();
@@ -150,11 +152,12 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
     ...(status !== 'ALL' ? { status } : {}),
     ...(priority !== 'ALL' ? { priority } : {}),
     ...(resolvedAssigneeId ? { assigneeId: resolvedAssigneeId } : {}),
+    ...(department !== 'ALL' ? { departmentId: department } : {}),
     ...(savedView === 'dueToday' ? { dueToday: true } : {}),
     ...(savedView === 'overdue' ? { overdue: true } : {}),
     ...(savedView === 'pool' ? { inPool: true } : {}),
     hasParent: false,
-  }), [debouncedSearch, listId, priority, resolvedAssigneeId, savedView, status]);
+  }), [debouncedSearch, department, listId, priority, resolvedAssigneeId, savedView, status]);
 
   const taskPageSize = activeView === 'calendar' || activeView === 'timeline'
     ? Math.max(pageSize, 100)
@@ -258,6 +261,8 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
           onStatusChange={setStatus}
           onPriorityChange={setPriority}
           onAssigneeFilterChange={setAssigneeFilter}
+          department={department}
+          onDepartmentChange={setDepartment}
           onCreateTask={(title) => mutations.createTask.mutate(title)}
           pageSize={pageSize}
           onPageSizeChange={setPageSize}

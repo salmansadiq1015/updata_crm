@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, LifeBuoy, Loader2, Lock, LockOpen, UserPlus } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Circle, CircleCheck, CircleDashed, CirclePause, CircleX, Copy, Flag, LifeBuoy, Loader2, Lock, LockOpen, MessagesSquare, UserPlus } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import { TaskInlineField } from './task-inline-field';
 import { TaskRemindersPanel } from './task-reminders-panel';
 import { TaskContextSelector } from './task-context-selector';
 import { TaskCompletionDialog } from './task-completion-dialog';
+import { TaskChatDialog } from '../components/task-chat-dialog';
 import { AssigneeSelector } from './assignee-selector';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { parseTaskDueInput } from '../utils/task-date-parser';
@@ -97,6 +98,7 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
   const remindersQuery = useTaskReminders(taskId);
 
   const task = taskQuery.data;
+  const [chatOpen, setChatOpen] = useState(false);
   useBreadcrumbLabel(taskId, task?.title);
   const users = usersQuery.data ?? [];
 
@@ -265,6 +267,16 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           <span className="truncate max-w-48 font-medium text-foreground">{task.title}</span>
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => setChatOpen(true)}
+            title={t('tasks.openChat', 'Chat öffnen')}
+          >
+            <MessagesSquare className="h-3.5 w-3.5" />
+            Chat
+          </Button>
           {canHelp && (
             <Button
               variant="default"
@@ -595,6 +607,8 @@ export function TaskDetailPage({ taskId, listId }: TaskDetailPageProps) {
           setCompletionPrompt(null);
         }}
       />
+
+      <TaskChatDialog task={task} open={chatOpen} onOpenChange={setChatOpen} />
     </div>
   );
 }

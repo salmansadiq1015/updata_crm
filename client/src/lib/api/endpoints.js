@@ -161,7 +161,6 @@ export const ENDPOINTS = Object.freeze({
     UPLOAD: '/documents/upload',
     BY_ID: (id) => `/documents/${id}`,
     DOWNLOAD: (id) => `/documents/${id}/download`,
-    ARCHIVE: (id) => `/documents/${id}/archive`,
   },
   VEHICLES: {
     LIST: '/vehicles',
@@ -251,6 +250,11 @@ export const ENDPOINTS = Object.freeze({
     DOCUMENTS_GENERATE: (id) => `/pm/projects/${id}/documents/generate`,
     DOCUMENTS_DRAFT: (id) => `/pm/projects/${id}/documents/draft`,
     DOCUMENT_EMAIL: (id, docId) => `/pm/projects/${id}/documents/${docId}/email`,
+  },
+  CONTACT_LOG: {
+    LIST: '/crm/contact-log',
+    BY_CUSTOMER: (customerId) => `/crm/customers/${customerId}/contact-log`,
+    BY_ID: (id) => `/crm/contact-log/${id}`,
   },
   TASKS: {
     LIST: '/tasks',

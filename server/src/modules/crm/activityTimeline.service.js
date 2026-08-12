@@ -376,6 +376,42 @@ async function collectNotes(entityType, entityId) {
   return entries;
 }
 
+/**
+ * Kundenkontakthistorie entries reaching this record — the object itself, or
+ * the installation's object. The exchange belongs on the activity timeline
+ * just as much as a note does.
+ */
+async function collectContacts(entityType, entityId, siteId) {
+  const entries = [];
+  try {
+    if (!siteId) return entries;
+    const ContactLogEntry = (await import('./contactLog.model.js')).default;
+    const rows = await ContactLogEntry.find({ siteId })
+      .populate({ path: 'employeeId', select: 'firstName lastName email' })
+      .sort({ occurredAt: -1 })
+      .limit(200)
+      .lean();
+
+    for (const row of rows) {
+      entries.push({
+        _id: `contact-${row._id}`,
+        type: 'contact',
+        timestamp: row.occurredAt,
+        title: 'Customer contact',
+        titleKey: `crm.contactLog.channel.${row.channel}`,
+        summary: [row.subject, row.note].filter(Boolean).join(' — '),
+        status: row.openPoints ? 'warning' : null,
+        actor: row.employeeId ? userDisplayName(row.employeeId) : null,
+        link: { module: 'crm', entityType, entityId: String(entityId) },
+        meta: { channel: row.channel, followUpAt: row.followUpAt || null },
+      });
+    }
+  } catch (err) {
+    logger.warn('Could not load contact timeline entries', { module: 'crm', error: err.message });
+  }
+  return entries;
+}
+
 async function collectImages(entityType, entityId) {
   const entries = [];
   try {
@@ -613,8 +649,9 @@ export async function buildEntityTimeline({
   // try/caught so a missing module degrades gracefully.
   const wantQop = !type || ['quotation', 'order', 'invoice'].includes(type);
 
-  const [notes, images, maintenance, serviceOrders, audit, qop] = await Promise.all([
+  const [notes, contacts, images, maintenance, serviceOrders, audit, qop] = await Promise.all([
     !type || type === 'note' ? collectNotes(entityType, entityId) : [],
+    !type || type === 'contact' ? collectContacts(entityType, entityId, siteId) : [],
     !type || type === 'image' ? collectImages(entityType, entityId) : [],
     !type || type === 'maintenance_done' || type === 'maintenance_scheduled'
       ? collectMaintenance(entityType, entityId)
@@ -624,7 +661,7 @@ export async function buildEntityTimeline({
     wantQop && customerId ? getQopTimelineEntries(customerId) : [],
   ]);
 
-  let merged = [...notes, ...images, ...maintenance, ...serviceOrders, ...audit, ...qop];
+  let merged = [...notes, ...contacts, ...images, ...maintenance, ...serviceOrders, ...audit, ...qop];
 
   // --- type filter (covers the QOP/maintenance multi-type collectors) -------
   if (type) {

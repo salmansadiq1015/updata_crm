@@ -19,6 +19,7 @@ import { PrepActionsTab } from './prep-actions-tab';
 import { ScheduleTab } from './schedule-tab';
 import { DocumentsTab } from './documents-tab';
 import { ProjectActivityTab } from './project-activity-tab';
+import { ContactLogPanel } from '@/modules/crm/components/contact-log-panel';
 import { ProjectTasksTab, ProjectTaskSummaryPanel } from './project-tasks-tab';
 import { ProjectChatTab } from './project-chat-tab';
 import { useProjectChatUnread } from '@/modules/chat/hooks/use-chat-rooms';
@@ -291,6 +292,9 @@ export function ProjectDetail() {
                   )}
                 </TabsTrigger>
               )}
+              <TabsTrigger value="contact-log" className="gap-1.5">
+                <MessagesSquare className="h-3.5 w-3.5" /> {t('crm.contactLog.title', 'Kontakthistorie')}
+              </TabsTrigger>
               <TabsTrigger value="activity" className="gap-1.5">
                 <Activity className="h-3.5 w-3.5" /> {t('common.activity', 'Aktivität')}
               </TabsTrigger>
@@ -365,6 +369,15 @@ export function ProjectDetail() {
                 <ProjectChatTab projectId={id} />
               </TabsContent>
             )}
+
+            <TabsContent value="contact-log" className="mt-6">
+              <ContactLogPanel
+                customerId={typeof project.customerId === 'object' ? project.customerId?._id : project.customerId}
+                scope={{ projectId: id }}
+                links={{ projectId: id }}
+                compact
+              />
+            </TabsContent>
 
             <TabsContent value="activity" className="mt-6">
               <ProjectActivityTab projectId={id} />

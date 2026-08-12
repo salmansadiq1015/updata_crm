@@ -19,6 +19,7 @@ import { SiteEmailButton } from './site-email-dialog';
 import { SiteBusinessTab } from './site-business-tab';
 import { SiteOverviewTab } from './site-overview-tab';
 import { SiteTasksTab } from './site-tasks-tab';
+import { ContactLogPanel } from './contact-log-panel';
 import { SiteProjectsTab } from './site-projects-tab';
 import { SiteMaintenanceTab } from './site-maintenance-tab';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
@@ -39,7 +40,7 @@ import {
   Pencil, Archive, Building2, MapPin, Key, Home,
   Wrench, FileText, Image as ImageIcon, Activity, Files, Receipt,
   User, Phone, Smartphone, Mail,
-  LayoutGrid, FolderKanban, Settings2, Eye, EyeOff, Check, Layers, ListChecks,
+  LayoutGrid, FolderKanban, Settings2, Eye, EyeOff, Check, Layers, ListChecks, MessagesSquare,
 } from 'lucide-react';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
@@ -74,6 +75,7 @@ const SITE_TABS = [
   { id: 'installations', labelKey: 'crm.installations.title', fallback: 'Komponenten', icon: Layers, permission: 'crm:read' },
   { id: 'maintenance', labelKey: 'crm.maintenance.objectTitle', fallback: 'Wartungen', icon: Wrench, permission: 'crm:read' },
   { id: 'tasks', labelKey: 'crm.sites.tasksTab', fallback: 'Aufgaben', icon: ListChecks, permission: 'tasks:read' },
+  { id: 'contact-log', labelKey: 'crm.contactLog.title', fallback: 'Kontakthistorie', icon: MessagesSquare, permission: 'crm:read' },
   { id: 'business', labelKey: 'crm.sites.businessTab', fallback: 'Offerten, Aufträge & Rechnungen', icon: Receipt, permission: 'crm:read' },
   { id: 'images', labelKey: 'crm.images.title', fallback: 'Bilder', icon: ImageIcon, permission: 'crm:read' },
   { id: 'documents', labelKey: 'crm.documents.title', fallback: 'Dokumente', icon: Files, permission: 'crm:read' },
@@ -409,6 +411,14 @@ export function SiteDetail() {
         </TabsContent>
         <TabsContent value="maintenance">
           <SiteMaintenanceTab siteId={id} />
+        </TabsContent>
+        <TabsContent value="contact-log">
+          <ContactLogPanel
+            customerId={customerId}
+            scope={{ siteId: id }}
+            links={{ siteId: id }}
+            compact
+          />
         </TabsContent>
         <TabsContent value="tasks">
           <SiteTasksTab siteId={id} />

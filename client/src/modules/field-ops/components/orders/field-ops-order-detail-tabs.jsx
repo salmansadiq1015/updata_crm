@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,6 +15,9 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
+import { queryKeys } from '@/lib/query/keys';
+import { siteService } from '@/modules/crm/services/site-service';
+import { ContactLogPanel } from '@/modules/crm/components/contact-log-panel';
 import {
   useFieldOpsOrderDetail, useFieldOpsOrderReports,
   useFieldOpsOrderTimeEntries, useFieldOpsOrderPhotos,
@@ -41,7 +45,7 @@ import {
   MapPin, Phone, Mail, User, Calendar, FileText, Clock,
   Camera, Wrench, MessageSquare, FileCheck, ClipboardList,
   AlertCircle, CheckCircle2, XCircle, Navigation,
-  Activity, History, ListChecks, PlayCircle, PlusCircle, RotateCcw, UsersRound,
+  Activity, History, ListChecks, PlayCircle, PlusCircle, RotateCcw, UsersRound, MessagesSquare,
 } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -489,6 +493,29 @@ function HistoryTab({ orderId, de }) {
   );
 }
 
+/**
+ * Kontakthistorie of an Einsatz. The field-ops order denormalises the customer
+ * to a name, so the id needed to log a new contact comes from its object.
+ */
+function EinsatzContactLogTab({ orderId, siteId }) {
+  const { data: site } = useQuery({
+    queryKey: queryKeys.crm.sites.detail(siteId),
+    queryFn: () => siteService.getById(siteId),
+    enabled: !!siteId,
+    staleTime: 60_000,
+  });
+  const customerId = site?.customerId?._id || site?.customerId || null;
+
+  return (
+    <ContactLogPanel
+      customerId={customerId}
+      scope={{ assignmentId: orderId }}
+      links={{ assignmentId: orderId, siteId: siteId || null }}
+      compact
+    />
+  );
+}
+
 export function FieldOpsOrderDetailTabs({ orderId }) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
@@ -678,6 +705,7 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
             <TabsTrigger value="work"      className="text-xs gap-1.5"><ListChecks className="h-3.5 w-3.5" />{de ? 'Arbeit' : 'Work'}</TabsTrigger>
             <TabsTrigger value="photos"    className="text-xs gap-1.5"><Camera className="h-3.5 w-3.5" />{de ? 'Fotos' : 'Photos'}</TabsTrigger>
             <TabsTrigger value="installations" className="text-xs gap-1.5"><Wrench className="h-3.5 w-3.5" />{de ? 'Komponenten' : 'Components'}</TabsTrigger>
+            <TabsTrigger value="contact-log" className="text-xs gap-1.5"><MessagesSquare className="h-3.5 w-3.5" />{de ? 'Kontakthistorie' : 'Contact history'}</TabsTrigger>
             <TabsTrigger value="history"   className="text-xs gap-1.5"><Activity className="h-3.5 w-3.5" />{de ? 'Aktivität' : 'Activity'}</TabsTrigger>
           </TabsList>
 
@@ -699,6 +727,10 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
           <TabsContent value="installations">
             <FieldOpsInstallationsTable siteId={siteId} />
           </TabsContent>
+          <TabsContent value="contact-log">
+            <EinsatzContactLogTab orderId={orderId} siteId={siteId} />
+          </TabsContent>
+
           <TabsContent value="history">
             <HistoryTab orderId={orderId} de={de} />
           </TabsContent>

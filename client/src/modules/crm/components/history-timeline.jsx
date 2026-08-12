@@ -18,7 +18,7 @@ import { getActivityEventLabel } from '@/modules/crm/constants/activity-events';
 import {
   Activity, FileText, Wrench, Clock, AlertTriangle, Info, ChevronRight,
   ShoppingCart, Receipt, Image as ImageIcon, ClipboardList, History,
-  ArrowDownUp, Download, Loader2,
+  ArrowDownUp, Download, Loader2, MessagesSquare,
 } from 'lucide-react';
 
 /**
@@ -138,6 +138,7 @@ export function HistoryTimeline({ entityType, entityId }) {
 const TYPE_FILTER_OPTIONS = [
   { value: 'all', labelKey: 'crm.timeline.filter.all', fallback: 'Alle' },
   { value: 'note', labelKey: 'crm.notes.title', fallback: 'Notizen' },
+  { value: 'contact', labelKey: 'crm.contactLog.title', fallback: 'Kontakthistorie' },
   { value: 'image', labelKey: 'crm.images.title', fallback: 'Bilder' },
   { value: 'maintenance_done', labelKey: 'crm.timeline.filter.maintenanceDone', fallback: 'Wartung durchgeführt' },
   { value: 'maintenance_scheduled', labelKey: 'crm.timeline.filter.maintenanceScheduled', fallback: 'Wartung geplant' },
@@ -365,6 +366,7 @@ function describeMeta(meta) {
 
 const TYPE_CONFIG = {
   note: { icon: Info, color: 'text-slate-500', bg: 'bg-slate-500/10' },
+  contact: { icon: MessagesSquare, color: 'text-sky-500', bg: 'bg-sky-500/10' },
   image: { icon: ImageIcon, color: 'text-brand-500', bg: 'bg-brand-500/10' },
   maintenance_done: { icon: Wrench, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
   maintenance_scheduled: { icon: Clock, color: 'text-sky-500', bg: 'bg-sky-500/10' },

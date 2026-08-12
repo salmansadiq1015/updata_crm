@@ -16,6 +16,7 @@ import { useOrderMutations } from '../hooks/use-qop-mutations';
 import { OrderStatusBadge, InvoiceStatusBadge, InvoiceTypeBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
+import { ContactLogPanel } from '@/modules/crm/components/contact-log-panel';
 import { orderService } from '../services/order-service';
 import { downloadFromUrl } from '@/lib/api/download';
 import { InvoiceFormDialog } from './invoice-form-dialog';
@@ -339,6 +340,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
                 <TabsTrigger value="items">{t('qop.orders.tabItems', 'Positionen')}</TabsTrigger>
                 <TabsTrigger value="billing">{t('qop.orders.tabBilling', 'Fakturierung')}</TabsTrigger>
                 <TabsTrigger value="invoices">{t('qop.orders.tabInvoices', 'Rechnungen')}</TabsTrigger>
+                <TabsTrigger value="contact-log">{t('crm.contactLog.title', 'Kontakthistorie')}</TabsTrigger>
                 <TabsTrigger value="history">{t('common.activity', 'Aktivität')}</TabsTrigger>
               </TabsList>
               <TabsContent value="overview" className="mt-4">
@@ -352,6 +354,14 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
               </TabsContent>
               <TabsContent value="invoices" className="mt-4">
                 <InvoicesTab orderId={orderId} onCreateInvoice={setInvoiceType} />
+              </TabsContent>
+              <TabsContent value="contact-log" className="mt-4">
+                <ContactLogPanel
+                  customerId={order?.customerId?._id || order?.customerId}
+                  scope={{ orderId: orderId }}
+                  links={{ orderId: orderId, customerId: order?.customerId?._id || order?.customerId }}
+                  compact
+                />
               </TabsContent>
               <TabsContent value="history" className="mt-4">
                 <DocumentHistoryTimeline history={history} />

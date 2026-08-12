@@ -4,6 +4,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { attachmentService } from '@/modules/crm/services/attachment-service';
 import { showSuccess, showError } from '@/lib/toast';
+import { downloadFromUrl } from '@/lib/api/download';
 
 const qKey = (customerId) => ['crm', 'attachments', customerId];
 
@@ -51,8 +52,8 @@ export function useAttachmentMutations(customerId) {
   });
 
   const download = useMutation({
-    mutationFn: (fileId) => attachmentService.getDownloadUrl(fileId),
-    onSuccess: (url) => { if (url) window.open(url, '_blank'); },
+    mutationFn: ({ fileId }) => attachmentService.getDownloadUrl(fileId),
+    onSuccess: (url, { fileName }) => { if (url) downloadFromUrl(url, fileName || 'download'); },
     onError: (err) => showError(err),
   });
 

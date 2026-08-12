@@ -1,6 +1,7 @@
 'use client';
 import { X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { downloadFromUrl } from '@/lib/api/download';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 export function DocumentPreviewDrawer({ open, url, fileName, onClose }) {
@@ -14,7 +15,7 @@ export function DocumentPreviewDrawer({ open, url, fileName, onClose }) {
           <span className="text-sm font-medium truncate max-w-xs">{fileName || t('doctpl.documentPreview')}</span>
           <div className="flex items-center gap-2">
             {url && (
-              <Button size="sm" variant="outline" onClick={() => window.open(url, '_blank')}>
+              <Button size="sm" variant="outline" onClick={() => downloadFromUrl(url, fileName || 'document')}>
                 <Download className="h-3.5 w-3.5 mr-1.5" />{t('common.download')}
               </Button>
             )}

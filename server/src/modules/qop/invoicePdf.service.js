@@ -8,6 +8,7 @@ import auditService from '../auth/audit.service.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
+import { buildDocumentFilename } from '../../shared/utils/documentFilename.js';
 
 const QR_REFERENCE_TABLE = [0, 9, 4, 6, 8, 2, 7, 1, 3, 5];
 const PDF_MIME_TYPE = 'application/pdf';
@@ -239,7 +240,15 @@ class InvoicePdfService {
 
     const qrReference = invoice.qrBillReference || buildQrReference(invoice.invoiceNumber);
     const buffer = await generateInvoicePdfBuffer(invoice, qrReference);
-    const originalName = `Rechnung_${invoice.invoiceNumber}.pdf`;
+
+    // Resolve the object address for the filename convention.
+    const objectAddress = await this._resolveObjectAddress(invoice.projectId);
+    const templateType = invoice.invoiceType === 'ADVANCE'
+      ? 'invoice_advance'
+      : invoice.invoiceType === 'FINAL'
+        ? 'invoice_final'
+        : 'invoice_standard';
+    const originalName = buildDocumentFilename({ templateType, objectAddress });
 
     const file = await fileService.upload({
       buffer,
@@ -295,6 +304,23 @@ class InvoicePdfService {
     });
 
     return { invoice: updatedInvoice, document: accountingDocument };
+  }
+
+  async _resolveObjectAddress(projectId) {
+    if (!projectId) return null;
+    try {
+      const mongoose = (await import('mongoose')).default;
+      if (!mongoose.Types.ObjectId.isValid(String(projectId))) return null;
+      const Project = (await import('../pm/project.model.js')).default;
+      const project = await Project.findById(projectId).select('siteId').lean();
+      if (!project?.siteId) return null;
+      const Site = (await import('../crm/site.model.js')).default;
+      const site = await Site.findById(project.siteId).select('street city').lean();
+      if (!site?.street) return null;
+      return [site.street, site.city].filter(Boolean).join(', ');
+    } catch {
+      return null;
+    }
   }
 }
 

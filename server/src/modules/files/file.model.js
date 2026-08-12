@@ -84,6 +84,15 @@ const fileMetadataSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    archived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    archivedAt: {
+      type: Date,
+      default: null,
+    },
     isDeleted: {
       type: Boolean,
       default: false,

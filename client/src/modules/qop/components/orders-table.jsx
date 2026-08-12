@@ -17,6 +17,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { showError } from '@/lib/toast';
+import { downloadFromUrl } from '@/lib/api/download';
 import { useOrders } from '../hooks/use-qop-queries';
 import { useOrderMutations } from '../hooks/use-qop-mutations';
 import { orderService } from '../services/order-service';
@@ -118,7 +119,8 @@ export function OrdersTable({ advancedFilters = {} }) {
     try {
       const res = await orderService.generateDocument(id);
       const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
-      if (url) window.open(url, '_blank');
+      const fileName = res?.data?.fileName ?? res?.data?.filename ?? 'order.pdf';
+      if (url) await downloadFromUrl(url, fileName);
       else showError(t('qop.actions.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
     } catch (err) {
       showError(err?.message || t('qop.actions.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));

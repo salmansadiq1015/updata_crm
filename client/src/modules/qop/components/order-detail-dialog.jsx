@@ -17,6 +17,7 @@ import { OrderStatusBadge, InvoiceStatusBadge, InvoiceTypeBadge } from './status
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
 import { orderService } from '../services/order-service';
+import { downloadFromUrl } from '@/lib/api/download';
 import { InvoiceFormDialog } from './invoice-form-dialog';
 import { CatalogLinePriceDrift } from './catalog-line-price-drift';
 
@@ -305,7 +306,8 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
     try {
       const res = await orderService.generateDocument(orderId);
       const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
-      if (url) window.open(url, '_blank');
+      const fileName = res?.data?.fileName ?? res?.data?.filename ?? 'order.pdf';
+      if (url) await downloadFromUrl(url, fileName);
     } finally {
       setPdfLoading(false);
     }

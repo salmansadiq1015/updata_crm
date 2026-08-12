@@ -172,7 +172,7 @@ export function CustomerAttachmentsSection({ customerId, attachments, canWrite, 
                     {uploaderInitials(file.uploadedBy)}
                   </div>
                   <div className="flex items-center gap-0.5 justify-end">
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground/60 hover:text-foreground" onClick={() => download.mutate(file._id)} title={de ? 'Herunterladen' : 'Download'}>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground/60 hover:text-foreground" onClick={() => download.mutate({ fileId: file._id, fileName: file.originalName })} title={de ? 'Herunterladen' : 'Download'}>
                       <Download className="h-3 w-3" />
                     </Button>
                     {canWrite && (

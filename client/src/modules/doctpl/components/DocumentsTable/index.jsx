@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { DocumentPreviewDrawer } from '../DocumentPreviewDrawer';
 import { useDownloadDocument, usePreviewDocument } from '../../hooks/useDocumentMutations';
+import { downloadFromUrl } from '@/lib/api/download';
 import { formatSwissDate } from '../../utils/localization';
 
 export function DocumentsTable({
@@ -46,7 +47,7 @@ export function DocumentsTable({
   const handleDownload = async (doc) => {
     if (onDownload) { onDownload(doc); return; }
     const r = await download.mutateAsync(doc._id);
-    if (r?.data?.downloadUrl) window.open(r.data.downloadUrl, '_blank', 'noopener,noreferrer');
+    if (r?.data?.downloadUrl) await downloadFromUrl(r.data.downloadUrl, r.data.fileName || doc.fileName);
   };
 
   if (error) {

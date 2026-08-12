@@ -17,6 +17,7 @@ import { DocumentHistoryTimeline } from './document-history-timeline';
 import { RecordPaymentDialog } from './record-payment-dialog';
 import { invoiceService } from '../services/invoice-service';
 import { showError } from '@/lib/toast';
+import { downloadFromUrl } from '@/lib/api/download';
 
 function fmt(n) {
   return new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
@@ -120,7 +121,8 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
     try {
       const res = await invoiceService.generateDocument(invoiceId);
       const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
-      if (url) window.open(url, '_blank');
+      const fileName = res?.data?.fileName ?? res?.data?.filename ?? 'invoice.pdf';
+      if (url) await downloadFromUrl(url, fileName);
       else showError(t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
     } catch (err) {
       showError(err?.message || t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));

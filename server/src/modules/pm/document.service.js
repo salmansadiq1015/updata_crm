@@ -176,13 +176,13 @@ class DocumentService {
     return this._enrichDocument(doc);
   }
 
-  async getDownloadUrl(id) {
+  async getDownloadUrl(id, options = {}) {
     const doc = await documentRepository.findById(id);
     if (!doc) throw new NotFoundError('ProjectDocument', id);
 
     // Lazy import file service
     const fileService = (await import('../files/file.service.js')).default;
-    const url = await fileService.getDownloadUrl(doc.fileId);
+    const url = await fileService.getDownloadUrl(doc.fileId, options);
     return url;
   }
 

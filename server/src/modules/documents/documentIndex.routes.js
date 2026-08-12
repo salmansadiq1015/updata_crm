@@ -41,6 +41,23 @@ router.get(
   (req, res, next) => documentIndexController.download(req, res, next),
 );
 
+// Archive: POST to archive, DELETE to restore from archive.
+router.post(
+  '/:id/archive',
+  authenticate,
+  requirePermission('documents:write'),
+  validate(documentRecordParamSchema),
+  (req, res, next) => documentIndexController.setArchived(req, res, next),
+);
+
+router.delete(
+  '/:id/archive',
+  authenticate,
+  requirePermission('documents:write'),
+  validate(documentRecordParamSchema),
+  (req, res, next) => documentIndexController.setArchived(req, res, next),
+);
+
 router.delete(
   '/:id',
   authenticate,

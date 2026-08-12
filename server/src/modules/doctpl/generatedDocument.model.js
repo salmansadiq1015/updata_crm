@@ -79,6 +79,15 @@ const generatedDocumentSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    archived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    archivedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: { createdAt: 'generatedAt', updatedAt: false },

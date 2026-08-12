@@ -3,6 +3,7 @@ import eventBus from '../../shared/events/EventBus.js';
 import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import logger from '../../shared/logger/index.js';
 import { NotFoundError, ValidationError } from '../../shared/errors/AppError.js';
+import { buildDocumentFilename } from '../../shared/utils/documentFilename.js';
 
 const LINE_ITEM_TEMPLATE_TYPES = new Set([
   'quotation',
@@ -48,6 +49,11 @@ class DocumentGenerationService {
 
     const renderData = this._prepareRenderData(templateType, data, renderCiConfig);
     await this._resolveLineItemImages(renderData);
+    // Resolve the object (site) address for the filename when not already supplied
+    // by the payload builder (e.g. direct /generate calls).
+    if (!renderData.objectAddress) {
+      renderData.objectAddress = await this._resolveObjectAddress(renderData);
+    }
     this._validateRenderData(templateType, renderData, renderCiConfig);
 
     // 3. Build filename
@@ -243,21 +249,19 @@ class DocumentGenerationService {
   }
 
   _buildFilename(templateType, data, _language) {
-    const typeMap = {
-      quotation: 'Offerte',
-      order_confirmation: 'Auftragsbestätigung',
-      invoice_standard: 'Rechnung',
-      invoice_advance: 'Akontorechnung',
-      invoice_final: 'Schlussrechnung',
-      cover_letter: 'Begleitschreiben',
-      service_report: 'Servicebericht',
-      inspection_certificate: 'Inspektionszertifikat',
-    };
-    const typeName = typeMap[templateType] || templateType;
-    const docNum = data.documentNumber || 'DRAFT';
-    const custName = (data.customer?.name || '').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-    const dateStr = new Date().toISOString().split('T')[0];
-    return `${typeName}_${docNum}_${custName}_${dateStr}.pdf`;
+    // Resolve the object address: prefer explicit objectAddress, fall back to
+    // site address block or customer address.
+    const objectAddress = data.objectAddress
+      || (data.site?.address)
+      || [data.customer?.addressLine1, data.customer?.city].filter(Boolean).join(', ')
+      || '';
+
+    return buildDocumentFilename({
+      templateType,
+      objectAddress,
+      version: data.version || data.metadata?.version || 1,
+      date: new Date(),
+    });
   }
 
   _buildFolderPath({ sourceModule, templateType, data }) {
@@ -273,6 +277,25 @@ class DocumentGenerationService {
 
   _cleanPathSegment(value = '') {
     return `${value}`.trim().replace(/[\\/]+/g, '-').replace(/\s+/g, '_').substring(0, 80);
+  }
+
+  async _resolveObjectAddress(renderData) {
+    const projectId = renderData.sourceProjectId || renderData.projectId
+      || renderData.project?._id || renderData.metadata?.sourceProjectId;
+    if (!projectId) return null;
+    try {
+      const mongoose = (await import('mongoose')).default;
+      if (!mongoose.Types.ObjectId.isValid(String(projectId))) return null;
+      const Project = (await import('../pm/project.model.js')).default;
+      const project = await Project.findById(projectId).select('siteId').lean();
+      if (!project?.siteId) return null;
+      const Site = (await import('../crm/site.model.js')).default;
+      const site = await Site.findById(project.siteId).select('street city').lean();
+      if (!site?.street) return null;
+      return [site.street, site.city].filter(Boolean).join(', ');
+    } catch {
+      return null;
+    }
   }
 
   _toObjectIdOrNull(value) {

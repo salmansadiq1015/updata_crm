@@ -91,6 +91,21 @@ async function loadSiteBillingAddress(projectId) {
   return billing && billing.street ? billing : null;
 }
 
+// Object address (Objektadresse) for the document filename convention.
+// Returns "Street, City" (without PLZ) or null.
+async function loadSiteAddress(projectId) {
+  const id = toId(projectId);
+  if (!isObjectId(id)) return null;
+  const Project = (await import('../pm/project.model.js')).default;
+  const project = await Project.findById(id).select('siteId').lean();
+  const siteId = toId(project?.siteId);
+  if (!isObjectId(siteId)) return null;
+  const Site = (await import('../crm/site.model.js')).default;
+  const site = await Site.findById(siteId).select('street city').lean();
+  if (!site?.street) return null;
+  return [site.street, site.city].filter(Boolean).join(', ');
+}
+
 function buildCustomerBlock(document, customer, contact, billing = null) {
   const contactName = contact
     ? [contact.firstName, contact.lastName].filter(Boolean).join(' ')
@@ -135,7 +150,7 @@ function buildCustomerBlock(document, customer, contact, billing = null) {
   };
 }
 
-function buildBaseData({ document, customer, contact, project, templateType, documentNumber, documentDate, billing = null }) {
+function buildBaseData({ document, customer, contact, project, templateType, documentNumber, documentDate, billing = null, objectAddress = null }) {
   const customerBlock = buildCustomerBlock(document, customer, contact, billing);
   const projectName = project?.name || document.projectName || '';
   const customerId = toId(document.customerId || customer);
@@ -160,6 +175,7 @@ function buildBaseData({ document, customer, contact, project, templateType, doc
       name: project.name,
     } : null,
     projectName,
+    objectAddress: objectAddress || null,
     reference: project?.projectNumber || document.sourceQuotationNumber || '',
     title: document.title || '',
     language: document.language || 'de',
@@ -188,10 +204,11 @@ class QopDocumentPayloadService {
   async buildQuotationPayload(quotationOrId) {
     const quotation = await this._resolveDocument('quotation', quotationOrId);
     if (!quotation) throw new Error(`Quotation not found: ${quotationOrId}`);
-    const [customer, contact, project] = await Promise.all([
+    const [customer, contact, project, objectAddress] = await Promise.all([
       loadCustomer(quotation.customerId),
       loadContact(quotation.contactId),
       loadProject(quotation.projectId),
+      loadSiteAddress(quotation.projectId),
     ]);
 
     const data = {
@@ -203,6 +220,7 @@ class QopDocumentPayloadService {
         templateType: 'quotation',
         documentNumber: quotation.quotationNumber,
         documentDate: formatDate(quotation.createdAt || quotation.validFrom),
+        objectAddress,
       }),
       introduction: quotation.introduction || '',
       validUntil: formatDate(quotation.validUntil),
@@ -228,10 +246,11 @@ class QopDocumentPayloadService {
   async buildOrderPayload(orderOrId) {
     const order = await this._resolveDocument('order', orderOrId);
     if (!order) throw new Error(`Order not found: ${orderOrId}`);
-    const [customer, contact, project] = await Promise.all([
+    const [customer, contact, project, objectAddress] = await Promise.all([
       loadCustomer(order.customerId),
       loadContact(order.contactId),
       loadProject(order.projectId),
+      loadSiteAddress(order.projectId),
     ]);
 
     const data = {
@@ -243,6 +262,7 @@ class QopDocumentPayloadService {
         templateType: 'order_confirmation',
         documentNumber: order.orderNumber,
         documentDate: formatDate(order.createdAt),
+        objectAddress,
       }),
       sourceQuotationNumber: order.sourceQuotationNumber || '',
       requestedDate: formatDate(order.requestedDate),
@@ -266,11 +286,12 @@ class QopDocumentPayloadService {
   async buildInvoicePayload(invoiceOrId) {
     const invoice = await this._resolveDocument('invoice', invoiceOrId);
     if (!invoice) throw new Error(`Invoice not found: ${invoiceOrId}`);
-    const [customer, contact, project, billing] = await Promise.all([
+    const [customer, contact, project, billing, objectAddress] = await Promise.all([
       loadCustomer(invoice.customerId),
       loadContact(invoice.contactId),
       loadProject(invoice.projectId),
       loadSiteBillingAddress(invoice.projectId),
+      loadSiteAddress(invoice.projectId),
     ]);
     const templateType = invoiceTemplateType(invoice.invoiceType);
     const advanceDeductions = (invoice.advanceDeductions || []).map((deduction) => ({
@@ -292,6 +313,7 @@ class QopDocumentPayloadService {
         documentNumber: invoice.invoiceNumber,
         documentDate: formatDate(invoice.invoiceDate || invoice.createdAt),
         billing,
+        objectAddress,
       }),
       invoiceType: templateType,
       dueDate: formatDate(invoice.dueDate),

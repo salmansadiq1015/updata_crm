@@ -29,6 +29,7 @@ import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
 import { quotationService } from '../services/quotation-service';
 import { showError } from '@/lib/toast';
+import { downloadFromUrl } from '@/lib/api/download';
 import { QuotationFormDialog } from './quotation-form-dialog';
 import { ConvertToOrderDialog } from './convert-to-order-dialog';
 import { InvoiceFormDialog } from './invoice-form-dialog';
@@ -168,7 +169,8 @@ export function QuotationsTable({ advancedFilters = {} }) {
     try {
       const res = await quotationService.generateDocument(id);
       const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
-      if (url) window.open(url, '_blank');
+      const fileName = res?.data?.fileName ?? res?.data?.filename ?? 'quotation.pdf';
+      if (url) await downloadFromUrl(url, fileName);
       else showError(t('qop.actions.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
     } catch (err) {
       showError(err?.message || t('qop.actions.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));

@@ -56,6 +56,7 @@ import {
   VALID_STATUS_TRANSITIONS,
 } from '@/modules/mobile/constants/mobile-constants';
 import { cn } from '@/lib/utils';
+import { downloadFromUrl } from '@/lib/api/download';
 import toast from 'react-hot-toast';
 
 const TABS = [
@@ -490,7 +491,7 @@ function DocumentsTab({ orderId, lang, isOnline }) {
     try {
       const result = await downloadMutation.mutateAsync({ orderId, docId: doc.id });
       const url = result?.url || result;
-      if (url) window.open(url, '_blank');
+      if (url) await downloadFromUrl(url, doc.filename || doc.name || 'download');
     } catch {
       toast.error(lang === 'de' ? 'Download fehlgeschlagen' : 'Download failed');
     }

@@ -152,13 +152,21 @@ class StorageService {
 
   /**
    * Generate a pre-signed download URL.
+   *
+   * @param {string}  key
+   * @param {number}  [expiresIn]
+   * @param {object}  [options]
+   * @param {string}  [options.attachmentFilename] - When set, the URL will force
+   *   a browser download with the given filename (Content-Disposition: attachment).
    */
-  async getPresignedUrl(key, expiresIn = config.storage.presignExpiry) {
+  async getPresignedUrl(key, expiresIn = config.storage.presignExpiry, options = {}) {
     try {
-      const command = new GetObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-      });
+      const params = { Bucket: this.bucket, Key: key };
+      if (options.attachmentFilename) {
+        const safe = options.attachmentFilename.replace(/["\r\n]/g, '_');
+        params.ResponseContentDisposition = `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
+      }
+      const command = new GetObjectCommand(params);
       return getSignedUrl(this._getClient(), command, { expiresIn });
     } catch (err) {
       logger.error('S3 presign failed', {

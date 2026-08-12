@@ -147,6 +147,8 @@ const accountingDocumentSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    archived: { type: Boolean, default: false, index: true },
+    archivedAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
     deletedBy: {

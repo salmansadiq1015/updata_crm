@@ -161,6 +161,7 @@ export const ENDPOINTS = Object.freeze({
     UPLOAD: '/documents/upload',
     BY_ID: (id) => `/documents/${id}`,
     DOWNLOAD: (id) => `/documents/${id}/download`,
+    ARCHIVE: (id) => `/documents/${id}/archive`,
   },
   VEHICLES: {
     LIST: '/vehicles',

@@ -119,6 +119,12 @@ const documentIndexSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    installationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Installation',
+      default: null,
+      index: true,
+    },
     ownerUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -133,6 +139,15 @@ const documentIndexSchema = new mongoose.Schema(
     metadata: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
+    },
+    archived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    archivedAt: {
+      type: Date,
+      default: null,
     },
     isDeleted: {
       type: Boolean,
@@ -162,6 +177,7 @@ documentIndexSchema.index({ projectId: 1, createdAt: -1 });
 documentIndexSchema.index({ customerId: 1, createdAt: -1 });
 documentIndexSchema.index({ jobId: 1, createdAt: -1 });
 documentIndexSchema.index({ employeeId: 1, createdAt: -1 });
+documentIndexSchema.index({ installationId: 1, createdAt: -1 });
 documentIndexSchema.index(
   {
     title: 'text',

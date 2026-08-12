@@ -19,8 +19,18 @@ class DocumentIndexController {
 
   async download(req, res, next) {
     try {
-      const data = await documentIndexService.download(req.params.id, req.user);
+      const attachment = req.query.attachment === '1' || req.query.attachment === 'true';
+      const data = await documentIndexService.download(req.params.id, req.user, { attachment });
       return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  async setArchived(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const archived = req.method !== 'DELETE';
+      const doc = await documentIndexService.setArchived(req.params.id, req.user, archived, meta);
+      return res.success({ data: doc, message: archived ? 'Document archived' : 'Document restored from archive' });
     } catch (err) { next(err); }
   }
 

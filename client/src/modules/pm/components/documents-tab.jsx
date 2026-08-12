@@ -16,6 +16,7 @@ import {
   DOCUMENT_SECTIONS, documentSectionOf,
 } from '@/modules/pm/constants/pm-constants';
 import { showError } from '@/lib/toast';
+import { downloadFromUrl } from '@/lib/api/download';
 import { EmptyState } from '@/shared/components/empty-state';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { DocumentViewer, getFileIcon, formatFileSize, isPreviewable } from '@/shared/components/document-viewer';
@@ -632,7 +633,8 @@ export function DocumentsTab({ projectId }) {
     try {
       const result = await documentService.getDownloadUrl(projectId, doc._id);
       const url = result?.url || result;
-      if (url) window.open(url, '_blank');
+      const filename = doc.originalName || doc.fileName || 'download';
+      if (url) await downloadFromUrl(url, filename);
     } catch {
       // toast already handled in service
     }

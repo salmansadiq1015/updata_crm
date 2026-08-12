@@ -210,7 +210,7 @@ class DocumentIndexService {
       sizeBytes: fileData.size,
       module: 'documents',
       entityType: metadata.sourceRecordType || 'repository_document',
-      entityId: metadata.sourceRecordId || metadata.projectId || metadata.customerId || metadata.jobId || metadata.employeeId || null,
+      entityId: metadata.sourceRecordId || metadata.installationId || metadata.projectId || metadata.customerId || metadata.jobId || metadata.employeeId || null,
       uploadedBy: user._id,
       bucket: 'documents',
       folderPath,
@@ -236,6 +236,7 @@ class DocumentIndexService {
       projectId: metadata.projectId || null,
       jobId: metadata.jobId || null,
       employeeId: metadata.employeeId || null,
+      installationId: metadata.installationId || null,
       ownerUserId: user._id,
       uploadedBy: user._id,
       metadata: { directUpload: true },
@@ -254,25 +255,81 @@ class DocumentIndexService {
     return this._normalizeRepositoryDocument(record);
   }
 
-  async download(recordId, user) {
+  async download(recordId, user, { attachment = false } = {}) {
     const parsed = parseRecordId(recordId);
     if (!parsed) throw new NotFoundError('Document', recordId);
 
     switch (parsed.source) {
       case 'repository':
-        return this._downloadRepository(parsed.id, user);
+        return this._downloadRepository(parsed.id, user, attachment);
       case 'generated':
-        return this._downloadGenerated(parsed.id, user);
+        return this._downloadGenerated(parsed.id, user, attachment);
       case 'project':
-        return this._downloadProject(parsed.id, user);
+        return this._downloadProject(parsed.id, user, attachment);
       case 'customer':
       case 'mobile':
-        return this._downloadFileMetadata(parsed.id, user);
+        return this._downloadFileMetadata(parsed.id, user, attachment);
       case 'accounting':
-        return this._downloadAccounting(parsed.id, user);
+        return this._downloadAccounting(parsed.id, user, attachment);
       default:
         throw new NotFoundError('Document', recordId);
     }
+  }
+
+  async setArchived(recordId, user, archived = true, meta = {}) {
+    const parsed = parseRecordId(recordId);
+    if (!parsed) throw new NotFoundError('Document', recordId);
+
+    const update = archived
+      ? { archived: true, archivedAt: new Date() }
+      : { archived: false, archivedAt: null };
+
+    switch (parsed.source) {
+      case 'project': {
+        const { default: projectDocumentService } = await import('../pm/document.service.js');
+        await projectDocumentService.setArchived(parsed.id, user._id, archived, meta);
+        break;
+      }
+      case 'repository': {
+        const record = await documentIndexRepository.findById(parsed.id);
+        if (!record) throw new NotFoundError('Document', recordId);
+        await documentIndexRepository.updateById(parsed.id, update);
+        break;
+      }
+      case 'generated': {
+        const doc = await GeneratedDocument.findById(parsed.id);
+        if (!doc) throw new NotFoundError('GeneratedDocument', recordId);
+        await GeneratedDocument.findByIdAndUpdate(parsed.id, update);
+        break;
+      }
+      case 'customer':
+      case 'mobile': {
+        const file = await FileMetadata.findById(parsed.id);
+        if (!file) throw new NotFoundError('File', recordId);
+        await FileMetadata.findByIdAndUpdate(parsed.id, update);
+        break;
+      }
+      case 'accounting': {
+        const accDoc = await AccountingDocument.findById(parsed.id);
+        if (!accDoc) throw new NotFoundError('AccountingDocument', recordId);
+        await AccountingDocument.findByIdAndUpdate(parsed.id, update);
+        break;
+      }
+      default:
+        throw new NotFoundError('Document', recordId);
+    }
+
+    auditService.logEvent({
+      eventType: archived ? 'document_repository.archived' : 'document_repository.unarchived',
+      userId: user._id,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: recordId, source: parsed.source },
+      module: 'documents',
+    });
+
+    return { archived };
   }
 
   async delete(recordId, user, meta = {}) {
@@ -498,10 +555,12 @@ class DocumentIndexService {
       projectId: toStringId(doc.projectId),
       jobId: toStringId(doc.jobId),
       employeeId: toStringId(doc.employeeId),
+      installationId: toStringId(doc.installationId),
       ownerUserId: toStringId(doc.ownerUserId),
       uploadedBy: toStringId(doc.uploadedBy),
       createdAt: normalizeDate(doc.createdAt),
       updatedAt: normalizeDate(doc.updatedAt),
+      archived: Boolean(doc.archived),
       metadata: doc.metadata || {},
       canDelete: true,
     });
@@ -531,6 +590,7 @@ class DocumentIndexService {
       templateVersion: doc.templateVersion,
       pageCount: doc.pageCount,
       createdAt: normalizeDate(doc.generatedAt),
+      archived: Boolean(doc.archived),
       metadata: doc.metadata || {},
       canDelete: true,
     });
@@ -608,6 +668,7 @@ class DocumentIndexService {
         retentionUntil: normalizeDate(doc.retentionUntil),
         assignedTo: toStringId(doc.assignedTo),
       },
+      archived: Boolean(doc.archived),
       canDelete: Boolean(doc.retentionUntil && new Date(doc.retentionUntil) <= new Date()),
     });
   }
@@ -635,37 +696,43 @@ class DocumentIndexService {
       uploadedBy: toStringId(file.uploadedBy),
       createdAt: normalizeDate(file.createdAt),
       updatedAt: normalizeDate(file.updatedAt),
+      archived: Boolean(file.archived),
       metadata: { bucket: file.bucket, storageBackend: file.storageBackend },
       canDelete: true,
     });
   }
 
-  async _downloadRepository(id, user) {
+  async _downloadRepository(id, user, attachment = false) {
     const record = await documentIndexRepository.findById(id);
     if (!record) throw new NotFoundError('Document', id);
     await this._assertRepositoryReadable(record, user);
-    return { downloadUrl: await fileService.getDownloadUrl(record.fileId), fileName: record.fileName };
+    const opts = attachment ? { attachmentFilename: record.fileName } : {};
+    return { downloadUrl: await fileService.getDownloadUrl(record.fileId, opts), fileName: record.fileName };
   }
 
-  async _downloadGenerated(id, user) {
+  async _downloadGenerated(id, user, attachment = false) {
     const doc = await generatedDocumentRepository.findById(id);
     if (!doc) throw new NotFoundError('GeneratedDocument', id);
     await documentAccessPolicyService.assertCanRead(doc, user);
-    return { downloadUrl: await fileService.getDownloadUrl(doc.fileId), fileName: doc.fileName };
+    const opts = attachment ? { attachmentFilename: doc.fileName } : {};
+    return { downloadUrl: await fileService.getDownloadUrl(doc.fileId, opts), fileName: doc.fileName };
   }
 
-  async _downloadProject(id, user) {
+  async _downloadProject(id, user, attachment = false) {
     const permissions = await this._permissions(user);
     if (!isAdmin(user) && !hasPermission(permissions, 'project:documents:read') && !hasPermission(permissions, 'projects:read')) {
       throw new AuthorizationError('You do not have access to this project document');
     }
     const { default: projectDocumentService } = await import('../pm/document.service.js');
     const doc = await projectDocumentService.getById(id);
-    const downloadUrl = await projectDocumentService.getDownloadUrl(id);
-    return { downloadUrl, fileName: doc.originalName || doc.fileName };
+    const fileName = doc.originalName || doc.fileName;
+    const downloadUrl = attachment
+      ? await projectDocumentService.getDownloadUrl(id, { attachmentFilename: fileName })
+      : await projectDocumentService.getDownloadUrl(id);
+    return { downloadUrl, fileName };
   }
 
-  async _downloadFileMetadata(id, user) {
+  async _downloadFileMetadata(id, user, attachment = false) {
     const file = await fileService.getById(id);
     if (!file) throw new NotFoundError('File', id);
     const permissions = await this._permissions(user);
@@ -675,17 +742,19 @@ class DocumentIndexService {
       || (isCustomer && hasPermission(permissions, 'crm:read'))
       || (isMobile && (hasPermission(permissions, 'mobile:read') || hasPermission(permissions, 'field-service:read')));
     if (!allowed) throw new AuthorizationError('You do not have access to this file');
-    return { downloadUrl: await fileService.getDownloadUrl(id), fileName: file.originalName };
+    const opts = attachment ? { attachmentFilename: file.originalName } : {};
+    return { downloadUrl: await fileService.getDownloadUrl(id, opts), fileName: file.originalName };
   }
 
-  async _downloadAccounting(id, user) {
+  async _downloadAccounting(id, user, attachment = false) {
     const permissions = await this._permissions(user);
     if (!isAdmin(user) && !hasPermission(permissions, 'accounting:documents:read')) {
       throw new AuthorizationError('You do not have access to this accounting document');
     }
     const doc = await AccountingDocument.findById(id).lean();
     if (!doc) throw new NotFoundError('AccountingDocument', id);
-    return { downloadUrl: await storageService.getPresignedUrl(doc.filePath), fileName: doc.fileName };
+    const opts = attachment ? { attachmentFilename: doc.fileName } : {};
+    return { downloadUrl: await storageService.getPresignedUrl(doc.filePath, undefined, opts), fileName: doc.fileName };
   }
 
   async _deleteRepository(id, user) {
@@ -716,15 +785,17 @@ class DocumentIndexService {
   }
 
   _buildFolderPath(metadata) {
-    const base = metadata.projectId
-      ? `Projects/${metadata.projectId}`
-      : metadata.customerId
-        ? `Customers/${metadata.customerId}`
-        : metadata.jobId
-          ? `Jobs/${metadata.jobId}`
-          : metadata.employeeId
-            ? `Employees/${metadata.employeeId}`
-            : 'Documents';
+    const base = metadata.installationId
+      ? `Installations/${metadata.installationId}`
+      : metadata.projectId
+        ? `Projects/${metadata.projectId}`
+        : metadata.customerId
+          ? `Customers/${metadata.customerId}`
+          : metadata.jobId
+            ? `Jobs/${metadata.jobId}`
+            : metadata.employeeId
+              ? `Employees/${metadata.employeeId}`
+              : 'Documents';
     const folder = metadata.folderPath ? `${metadata.folderPath}` : base;
     return folder
       .split('/')

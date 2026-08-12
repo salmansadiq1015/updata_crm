@@ -24,10 +24,24 @@ export function useDownloadRepositoryDocument() {
   });
 }
 
+export function useDownloadRepositoryDocumentAttachment() {
+  return useMutation({
+    mutationFn: (id) => documentRepositoryService.getDownloadUrl(id, { attachment: true }),
+  });
+}
+
 export function useDeleteRepositoryDocument() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id) => documentRepositoryService.remove(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.documents.all() }),
+  });
+}
+
+export function useArchiveRepositoryDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, archived }) => documentRepositoryService.setArchived(id, archived),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.documents.all() }),
   });
 }

@@ -14,7 +14,7 @@ import { NotesPanel } from './notes-panel';
 import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
 import { InstallationSparePartsPanel } from './installation-spare-parts-panel';
-import { SiteDocumentsTab } from './site-documents-tab';
+import { InstallationDocumentsTab } from './installation-documents-tab';
 import { EmptyState } from '@/shared/components/empty-state';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -69,11 +69,21 @@ export function InstallationDetail() {
   const decommMut = useMutation({
     mutationFn: (r) => installationService.decommission(id, r),
     onSuccess: () => {
+      // The object we navigate back to lists this component — drop its caches
+      // so the status badge is already violet when we land there.
+      qc.invalidateQueries({ queryKey: ['crm', 'installations'] });
       showSuccess(t('crm.installations.decommissionedToast', 'Komponente stillgelegt'));
       if (installation?.siteId) router.push(`/crm/sites/${installation.siteId?._id || installation.siteId}`);
       else router.back();
     },
-    onError: (err) => showError(err.message),
+    onError: (err) => {
+      if (err?.code === 'INSTALLATION_ALREADY_DECOMMISSIONED') {
+        qc.invalidateQueries({ queryKey: ['crm', 'installations'] });
+        showError(t('crm.installations.alreadyDecommissioned', 'Diese Komponente ist bereits stillgelegt.'));
+        return;
+      }
+      showError(err);
+    },
   });
 
   // The URL (/crm/installations/:id) has no parent chain — publish
@@ -278,7 +288,7 @@ export function InstallationDetail() {
           <InstallationSparePartsPanel installationId={id} />
         </TabsContent>
         <TabsContent value="documents">
-          <SiteDocumentsTab siteId={siteId} />
+          <InstallationDocumentsTab installationId={id} siteId={siteId} />
         </TabsContent>
         <TabsContent value="notes">
           <NotesPanel entityType="installation" entityId={id} />

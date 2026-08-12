@@ -47,7 +47,9 @@ export function InstallationsPanel({ siteId, customerId }) {
     enabled: !!siteId,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: queryKeys.crm.installations.bySite(siteId) });
+  // Prefix invalidation: the object overview and the panel cache the same list
+  // under different keys, and both must show a decommissioned component at once.
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['crm', 'installations'] });
 
   const createMut = useMutation({
     mutationFn: (data) => installationService.createForSite(siteId, data),
@@ -67,7 +69,16 @@ export function InstallationsPanel({ siteId, customerId }) {
       setDecommTarget(null);
       setDecommReason('');
     },
-    onError: (err) => showError(err.message),
+    onError: (err) => {
+      if (err?.code === 'INSTALLATION_ALREADY_DECOMMISSIONED') {
+        // The list was showing a stale status — refresh it so the badge catches up.
+        invalidate();
+        setDecommTarget(null);
+        showError(t('crm.installations.alreadyDecommissioned', 'Diese Komponente ist bereits stillgelegt.'));
+        return;
+      }
+      showError(err);
+    },
   });
 
   const handleSubmit = async (data) => {

@@ -408,17 +408,17 @@ export function CustomerDetail() {
                 <ClipboardList className="h-3.5 w-3.5" />
                 {t('crm.tabSites', 'Objects')}
               </TabsTrigger>
-              <TabsTrigger value="activity" className="gap-1.5">
-                <Activity className="h-3.5 w-3.5" />
-                {t('common.activity', 'Aktivität')}
-              </TabsTrigger>
               <TabsTrigger value="documents" className="gap-1.5">
                 <ClipboardList className="h-3.5 w-3.5" />
-                {de ? 'Dokumente' : 'Documents'}
+                {t('crm.documents.title', 'Dokumente')}
               </TabsTrigger>
               <TabsTrigger value="photos" className="gap-1.5">
                 <ImageIcon className="h-3.5 w-3.5" />
-                {t('crm.tabPhotos', 'Photos')}
+                {t('crm.tabPhotos', 'Bilder')}
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="gap-1.5">
+                <Activity className="h-3.5 w-3.5" />
+                {t('common.activity', 'Aktivität')}
               </TabsTrigger>
             </TabsList>
 

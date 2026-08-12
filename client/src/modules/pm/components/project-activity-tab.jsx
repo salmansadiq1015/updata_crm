@@ -42,7 +42,7 @@ function labelFor(eventType, language) {
 }
 
 export function ProjectActivityTab({ projectId }) {
-  const { language } = useLanguage();
+  const { t, language } = useLanguage();
 
   const { data, isLoading } = useQuery({
     queryKey: ['pm', 'projects', 'activity', projectId],
@@ -88,7 +88,7 @@ export function ProjectActivityTab({ projectId }) {
                 <p className="text-sm">
                   {labelFor(e.eventType, language)}
                   {e.userName && (
-                    <span className="text-muted-foreground font-normal"> · {e.userName}</span>
+                    <span className="text-muted-foreground font-normal"> · {t('common.by', 'von')} {e.userName}</span>
                   )}
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">

@@ -254,6 +254,7 @@ export const ENDPOINTS = Object.freeze({
   TASKS: {
     LIST: '/tasks',
     DEPARTMENTS: '/tasks/departments',
+    SITE_OVERVIEW: (siteId) => `/tasks/site/${siteId}/overview`,
     CHAT: (id) => `/tasks/${id}/chat`,
     BY_ID: (id) => `/tasks/${id}`,
     STATUS: (id) => `/tasks/${id}/status`,

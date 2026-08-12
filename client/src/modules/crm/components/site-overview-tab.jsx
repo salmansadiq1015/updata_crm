@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Wrench, CalendarClock, CalendarCheck, FolderKanban, Layers, ChevronRight,
-  Flame, KeyRound, MonitorSpeaker,
+  Flame, KeyRound, MonitorSpeaker, ListChecks,
 } from 'lucide-react';
 import { installationService } from '@/modules/crm/services/installation-service';
 import { maintenanceService } from '@/modules/crm/services/maintenance-service';
 import { projectService } from '@/modules/pm/services/project-service';
+import { taskService } from '@/modules/tasks/services/task-service';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { PROJECT_STATUS_CONFIG } from '@/modules/pm/constants/pm-constants';
@@ -19,8 +19,9 @@ import { PROJECT_STATUS_CONFIG } from '@/modules/pm/constants/pm-constants';
 const fmt = (v) => (v ? new Date(v).toLocaleDateString('de-CH', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 
 /**
- * Object landing tab: quick access counts + current projects. Purely derived
- * from existing data (components, maintenance, projects) — no new data model.
+ * Object landing tab: one Schnellzugriff list holding every key figure of the
+ * object (components, maintenance dates, Objektinformationen), the current
+ * projects, and the open tasks grouped by department.
  */
 export function SiteOverviewTab({ siteId, site, onNavigate }) {
   const { t, language } = useLanguage();
@@ -52,40 +53,96 @@ export function SiteOverviewTab({ siteId, site, onNavigate }) {
     return { lastService: last, nextService: next };
   }, [maintenance]);
 
-  const stats = [
-    { icon: Layers, labelKey: 'crm.installations.title', label: 'Komponenten', value: installations.length, accent: 'text-brand-600', tab: 'installations', loading: loadingInst },
-    { icon: Wrench, labelKey: 'crm.maintenance.objectTitle', label: 'Wartungen', value: maintenance.length, accent: 'text-emerald-600', tab: 'maintenance', loading: loadingMaint },
-    { icon: CalendarCheck, labelKey: 'crm.maintenance.lastServiceDate', label: 'Letzter Service', value: fmt(lastService), accent: 'text-sky-600', tab: 'maintenance', loading: loadingMaint, isDate: true },
-    { icon: CalendarClock, labelKey: 'crm.maintenance.nextServiceDate', label: 'Nächster Service', value: fmt(nextService), accent: 'text-amber-600', tab: 'maintenance', loading: loadingMaint, isDate: true },
+  const yesNo = (v) => (v ? t('crm.sites.yes', 'Ja') : t('crm.sites.no', 'Nein'));
+  const eh = site?.emergencyHeating;
+  const kb = site?.keyBox;
+  const ab = site?.advertisingBoard;
+
+  // One list, so nothing about the object needs a second look elsewhere:
+  // counts, Objektinformationen (with their details) and service dates.
+  const rows = [
+    {
+      key: 'installations', icon: Layers, accent: 'text-brand-600',
+      label: t('crm.installations.title', 'Komponenten'),
+      value: installations.length, loading: loadingInst, tab: 'installations',
+    },
+    {
+      key: 'maintenance', icon: Wrench, accent: 'text-emerald-600',
+      label: t('crm.maintenance.objectTitle', 'Wartungen'),
+      value: maintenance.length, loading: loadingMaint, tab: 'maintenance',
+    },
+    {
+      key: 'emergencyHeating', icon: Flame, accent: 'text-orange-500',
+      label: t('crm.sites.emergencyHeating', 'Notheizung'),
+      value: yesNo(eh?.present),
+      details: [eh?.number && { label: t('crm.sites.number', 'Nummer'), value: eh.number }],
+    },
+    {
+      key: 'keyBox', icon: KeyRound, accent: 'text-sky-500',
+      label: t('crm.sites.keyBox', 'Schlüsselbox'),
+      value: yesNo(kb?.present),
+      details: [
+        kb?.code && { label: t('crm.sites.keyBoxCode', 'Code'), value: kb.code },
+        kb?.depositedBy && { label: t('crm.sites.keyBoxDepositedBy', 'Deponiert von'), value: kb.depositedBy },
+        kb?.depositedAt && { label: t('crm.sites.keyBoxDepositedAt', 'Deponiert am'), value: fmt(kb.depositedAt) },
+      ],
+    },
+    {
+      key: 'advertisingBoard', icon: MonitorSpeaker, accent: 'text-violet-500',
+      label: t('crm.sites.advertisingBoard', 'Werbetafeln'),
+      value: ab?.count ?? 0,
+      details: [
+        ab?.type && { label: t('crm.sites.advertisingType', 'Typ'), value: ab.type },
+        ab?.location && { label: t('crm.sites.advertisingLocation', 'Standort'), value: ab.location },
+      ],
+    },
+    {
+      key: 'lastService', icon: CalendarCheck, accent: 'text-sky-600',
+      label: t('crm.maintenance.lastServiceDate', 'Letzte Wartung'),
+      value: fmt(lastService), loading: loadingMaint, tab: 'maintenance',
+    },
+    {
+      key: 'nextService', icon: CalendarClock, accent: 'text-amber-600',
+      label: t('crm.maintenance.nextServiceDate', 'Nächste Wartung'),
+      value: fmt(nextService), loading: loadingMaint, tab: 'maintenance',
+    },
   ];
 
   return (
-    <div className="space-y-4">
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-3">
       {/* Schnellzugriff */}
       <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="mb-3 text-sm font-semibold">{t('crm.sites.quickAccess', 'Schnellzugriff')}</h3>
-        <div className="grid grid-cols-2 gap-3">
-          {stats.map((s) => {
-            const Icon = s.icon;
+        <ul className="divide-y divide-border/60">
+          {rows.map((row) => {
+            const Icon = row.icon;
+            const details = (row.details || []).filter(Boolean);
+            const clickable = !!row.tab;
+            const Wrapper = clickable ? 'button' : 'div';
             return (
-              <button
-                key={s.label}
-                type="button"
-                onClick={() => onNavigate?.(s.tab)}
-                className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 p-3 text-left transition-colors hover:bg-muted/50"
-              >
-                <Icon className={cn('h-5 w-5 shrink-0', s.accent)} />
-                <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground">{t(s.labelKey, s.label)}</p>
-                  {s.loading
-                    ? <Skeleton className="mt-1 h-5 w-12" />
-                    : <p className={cn('font-semibold text-foreground', s.isDate ? 'text-sm' : 'text-lg tabular-nums')}>{s.value}</p>}
-                </div>
-              </button>
+              <li key={row.key}>
+                <Wrapper
+                  {...(clickable ? { type: 'button', onClick: () => onNavigate?.(row.tab) } : {})}
+                  className={cn(
+                    'flex w-full items-baseline gap-3 px-1 py-2 text-left',
+                    clickable && 'rounded-md transition-colors hover:bg-muted/50',
+                  )}
+                >
+                  <Icon className={cn('h-4 w-4 shrink-0 self-center', row.accent)} />
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">{row.label}</span>
+                  {row.loading
+                    ? <Skeleton className="h-4 w-10" />
+                    : <span className="shrink-0 text-[13px] font-semibold tabular-nums text-foreground">{row.value}</span>}
+                </Wrapper>
+                {details.length > 0 && (
+                  <p className="px-1 pb-2 pl-8 text-[11px] leading-relaxed text-muted-foreground">
+                    {details.map((d) => `${d.label}: ${d.value}`).join(' · ')}
+                  </p>
+                )}
+              </li>
             );
           })}
-        </div>
+        </ul>
       </div>
 
       {/* Aktuelle Projekte */}
@@ -120,83 +177,62 @@ export function SiteOverviewTab({ siteId, site, onNavigate }) {
           </div>
         )}
       </div>
-    </div>
 
-      <ObjectInfoCards site={site} t={t} />
+      <OpenTasksCard siteId={siteId} onNavigate={onNavigate} t={t} />
     </div>
   );
 }
 
-/** Objektinformationen cards: Notheizung / Schlüsselbox / Werbetafel. */
-function ObjectInfoCards({ site, t }) {
-  const eh = site?.emergencyHeating;
-  const kb = site?.keyBox;
-  const ab = site?.advertisingBoard;
-  const ehHas = eh && (eh.present || eh.number);
-  const kbHas = kb && (kb.present || kb.code || kb.depositedBy || kb.depositedAt);
-  const abHas = ab && ((ab.count != null && ab.count !== 0) || ab.type || ab.location);
-  if (!ehHas && !kbHas && !abHas) return null;
+/** Open tasks of the object, grouped by department (Abteilung). */
+function OpenTasksCard({ siteId, onNavigate, t }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['tasks', 'site-overview', siteId],
+    queryFn: () => taskService.siteOverview(siteId),
+    enabled: !!siteId,
+    staleTime: 20_000,
+  });
+  const byDepartment = data?.byDepartment || [];
 
   return (
-    <div>
-      <h3 className="mb-3 text-sm font-semibold">{t('crm.sites.objectInfo', 'Objektinformationen')}</h3>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {ehHas && (
-          <InfoCard icon={Flame} accent="text-orange-500" bg="bg-orange-500/10" title={t('crm.sites.emergencyHeating', 'Notheizung')}>
-            <PresentBadge present={eh.present} t={t} />
-            {eh.number && <InfoLine label={t('crm.sites.number', 'Nummer')} value={eh.number} />}
-          </InfoCard>
-        )}
-        {kbHas && (
-          <InfoCard icon={KeyRound} accent="text-sky-500" bg="bg-sky-500/10" title={t('crm.sites.keyBox', 'Schlüsselbox')}>
-            <PresentBadge present={kb.present} t={t} />
-            {kb.code && <InfoLine label={t('crm.sites.keyBoxCode', 'Code')} value={kb.code} />}
-            {kb.depositedBy && <InfoLine label={t('crm.sites.keyBoxDepositedBy', 'Deponiert von')} value={kb.depositedBy} />}
-            {kb.depositedAt && <InfoLine label={t('crm.sites.keyBoxDepositedAt', 'Deponiert am')} value={fmt(kb.depositedAt)} />}
-          </InfoCard>
-        )}
-        {abHas && (
-          <InfoCard icon={MonitorSpeaker} accent="text-violet-500" bg="bg-violet-500/10" title={t('crm.sites.advertisingBoard', 'Werbetafeln')}>
-            {ab.count != null && <InfoLine label={t('crm.sites.advertisingCount', 'Anzahl')} value={ab.count} />}
-            {ab.type && <InfoLine label={t('crm.sites.advertisingType', 'Typ')} value={ab.type} />}
-            {ab.location && <InfoLine label={t('crm.sites.advertisingLocation', 'Standort')} value={ab.location} />}
-          </InfoCard>
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold">{t('crm.sites.openTasks', 'Offene Aufgaben (Übersicht)')}</h3>
+        {byDepartment.length > 0 && (
+          <button type="button" onClick={() => onNavigate?.('tasks')} className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline">
+            {t('crm.sites.allTasks', 'Alle anzeigen')} <ChevronRight className="h-3 w-3" />
+          </button>
         )}
       </div>
-    </div>
-  );
-}
-
-function InfoCard({ icon: Icon, accent, bg, title, children }) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', bg)}>
-          <Icon className={cn('h-4 w-4', accent)} />
+      {isLoading ? (
+        <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-lg" />)}</div>
+      ) : byDepartment.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-6 text-center">
+          <ListChecks className="h-5 w-5 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">{t('crm.sites.tasksEmpty', 'Keine offenen Aufgaben')}</p>
         </div>
-        <span className="text-xs font-semibold uppercase tracking-wide text-foreground">{title}</span>
-      </div>
-      <div className="space-y-1">{children}</div>
+      ) : (
+        <ul className="divide-y divide-border/60">
+          {byDepartment.map((dep) => (
+            <li key={dep.departmentId || 'none'}>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('tasks')}
+                className="flex w-full items-center gap-2.5 rounded-md px-1 py-2 text-left transition-colors hover:bg-muted/50"
+              >
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: dep.color || 'var(--muted-foreground)' }}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
+                  {dep.name || t('crm.sites.tasksNoDepartment', 'Ohne Abteilung')}
+                </span>
+                <span className="shrink-0 text-[13px] font-semibold tabular-nums text-foreground">{dep.count}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
-  );
-}
-
-function PresentBadge({ present, t }) {
-  return present ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {t('crm.sites.present', 'Vorhanden')}
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" /> {t('crm.sites.notPresent', 'Nicht vorhanden')}
-    </span>
-  );
-}
-
-function InfoLine({ label, value }) {
-  return (
-    <p className="text-[13px] text-foreground">
-      <span className="text-muted-foreground">{label}: </span>{value}
-    </p>
   );
 }

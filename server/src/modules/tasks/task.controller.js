@@ -13,6 +13,15 @@ class TaskController {
     } catch (err) { next(err); }
   }
 
+  // Open tasks of an object (Objekt), grouped by department.
+  async siteOverview(req, res, next) {
+    try {
+      const isAdmin = req.user.role?.name === 'Admin';
+      const data = await taskService.getSiteOverview(req.params.siteId, req.user._id, { isAdmin });
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async create(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

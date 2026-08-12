@@ -8,6 +8,9 @@ import auditService from '../auth/audit.service.js';
 import { AppError, NotFoundError } from '../../shared/errors/AppError.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import { TASK_STATUSES, MAX_SUBTASK_DEPTH } from './task.model.js';
+
+// Statuses that count as "offen" for an object's task overview.
+const OPEN_TASK_STATUSES = ['OPEN', 'IN_PROGRESS', 'ON_HOLD'];
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
@@ -136,6 +139,70 @@ class TaskService {
     await taskAccessService.assertTaskAccess(task, userId, 'VIEWER', { isAdmin });
 
     return task;
+  }
+
+  /**
+   * Every open task that concerns an object (Objekt), grouped by department —
+   * the object's "Offene Aufgaben" overview. A task reaches the object either
+   * directly (siteId) or through one of the object's projects. Locked tasks
+   * stay invisible to everyone but their owner, as everywhere else.
+   */
+  async getSiteOverview(siteId, userId, { isAdmin = false, limit = 200 } = {}) {
+    const Task = (await import('./task.model.js')).default;
+    const Project = (await import('../pm/project.model.js')).default;
+
+    const projects = await Project.find({ siteId, isDeleted: { $ne: true } }).select('_id').lean();
+    const projectIds = projects.map((p) => p._id);
+
+    const scope = { $or: [{ siteId }, ...(projectIds.length ? [{ projectId: { $in: projectIds } }] : [])] };
+    const filter = {
+      isDeleted: false,
+      status: { $in: OPEN_TASK_STATUSES },
+      ...scope,
+    };
+    if (!isAdmin) {
+      filter.$and = [{
+        $or: [
+          { locked: { $ne: true } },
+          { assigneeId: userId },
+          { assigneeIds: userId },
+          { createdBy: userId },
+          { lockedBy: userId },
+        ],
+      }];
+    }
+
+    const tasks = await Task.find(filter)
+      .select('title status priority dueDate departmentId assigneeId projectId siteId listId inPool')
+      .populate({ path: 'departmentId', select: 'name code color icon sortOrder' })
+      .populate({ path: 'assigneeId', select: 'firstName lastName email' })
+      .populate({ path: 'projectId', select: 'name projectNumber' })
+      .sort({ dueDate: 1, createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    const buckets = new Map();
+    for (const task of tasks) {
+      const dep = task.departmentId;
+      const key = dep?._id ? String(dep._id) : 'none';
+      if (!buckets.has(key)) {
+        buckets.set(key, {
+          departmentId: dep?._id ? String(dep._id) : null,
+          name: dep?.name || null,
+          code: dep?.code || null,
+          color: dep?.color || null,
+          icon: dep?.icon || null,
+          sortOrder: dep?.sortOrder ?? 999,
+          count: 0,
+        });
+      }
+      buckets.get(key).count += 1;
+    }
+    const byDepartment = [...buckets.values()].sort((a, b) => (
+      a.departmentId === null ? 1 : b.departmentId === null ? -1 : a.sortOrder - b.sortOrder
+    ));
+
+    return { total: tasks.length, byDepartment, tasks };
   }
 
   async list(queryParams, userId, { isAdmin = false } = {}) {

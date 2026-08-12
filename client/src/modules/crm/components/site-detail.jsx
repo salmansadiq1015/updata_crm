@@ -72,7 +72,7 @@ const SITE_TABS = [
   { id: 'projects', labelKey: 'crm.sites.tab.projects', fallback: 'Projekte', icon: FolderKanban, permission: 'projects:read' },
   { id: 'installations', labelKey: 'crm.installations.title', fallback: 'Komponenten', icon: Layers, permission: 'crm:read' },
   { id: 'maintenance', labelKey: 'crm.maintenance.objectTitle', fallback: 'Wartungen', icon: Wrench, permission: 'crm:read' },
-  { id: 'business', labelKey: 'crm.sites.businessTab', fallback: 'Offerten & Aufträge', icon: Receipt, permission: 'crm:read' },
+  { id: 'business', labelKey: 'crm.sites.businessTab', fallback: 'Offerten, Aufträge & Rechnungen', icon: Receipt, permission: 'crm:read' },
   { id: 'images', labelKey: 'crm.images.title', fallback: 'Bilder', icon: ImageIcon, permission: 'crm:read' },
   { id: 'documents', labelKey: 'crm.documents.title', fallback: 'Dokumente', icon: Files, permission: 'crm:read' },
   { id: 'notes', labelKey: 'crm.notes.title', fallback: 'Notizen', icon: FileText, permission: 'crm:read' },

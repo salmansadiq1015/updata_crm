@@ -3444,6 +3444,7 @@ export const translations = {
     'common.close': 'Schliessen',
     'common.save': 'Speichern',
     'common.activity': 'Aktivität',
+    'crm.sites.businessTab': 'Offerten, Aufträge & Rechnungen',
     'crm.installations.allStatus': 'Alle Status',
     'crm.installations.emptyFiltered': 'Keine Komponenten mit diesem Status',
     'crm.installations.emptyFilteredDesc': 'Status-Filter anpassen, um weitere Komponenten zu sehen.',
@@ -5646,7 +5647,10 @@ export const translations = {
     'crm.installations.tab.images': 'Bilder',
     'crm.installations.tab.history': 'Historie',
     'crm.installations.documentsDesc': 'Dokumente dieser Komponente (z.B. Technische Daten).',
+    'crm.installations.documentsDescAll': 'Alle Dokumente aus den Projekten dieses Objekts.',
     'crm.installations.uploadDocTitle': 'Dokument hochladen',
+    'crm.installations.showAllDocs': 'Alle Dokumente',
+    'crm.installations.showComponentDocs': 'Nur Komponente',
 
     // CRM — Maintenance
     'crm.maintenance.title': 'Wartung',
@@ -8058,6 +8062,7 @@ export const translations = {
     'common.close': 'Close',
     'common.save': 'Save',
     'common.activity': 'Activity',
+    'crm.sites.businessTab': 'Quotes, orders & invoices',
     'crm.installations.allStatus': 'All statuses',
     'crm.installations.emptyFiltered': 'No components with this status',
     'crm.installations.emptyFilteredDesc': 'Adjust the status filter to see more components.',
@@ -10208,7 +10213,10 @@ export const translations = {
     'crm.installations.tab.images': 'Images',
     'crm.installations.tab.history': 'History',
     'crm.installations.documentsDesc': 'Documents for this component (e.g. technical data).',
+    'crm.installations.documentsDescAll': 'All documents from the projects of this site.',
     'crm.installations.uploadDocTitle': 'Upload document',
+    'crm.installations.showAllDocs': 'All documents',
+    'crm.installations.showComponentDocs': 'Component only',
 
     // CRM — Maintenance
     'crm.maintenance.title': 'Maintenance',
@@ -11460,6 +11468,7 @@ export const translations = {
     'common.category': 'Categorie',
     'common.save': 'Enregistrer',
     'common.activity': 'Activite',
+    'crm.sites.businessTab': 'Offres, commandes et factures',
     'crm.installations.allStatus': 'Tous les statuts',
     'crm.installations.emptyFiltered': 'Aucun composant avec ce statut',
     'crm.installations.emptyFilteredDesc': 'Ajustez le filtre de statut pour voir plus de composants.',
@@ -13577,6 +13586,7 @@ export const translations = {
     'common.category': 'Categoria',
     'common.save': 'Salva',
     'common.activity': 'Attivita',
+    'crm.sites.businessTab': 'Offerte, ordini e fatture',
     'crm.installations.allStatus': 'Tutti gli stati',
     'crm.installations.emptyFiltered': 'Nessun componente con questo stato',
     'crm.installations.emptyFilteredDesc': 'Modifica il filtro di stato per vedere altri componenti.',

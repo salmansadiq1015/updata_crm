@@ -69,6 +69,8 @@ function formatDate(value) {
  */
 export async function getQopTimelineEntries(customerId, eventTypeFilter) {
   const entries = [];
+  // documentId -> createdBy, used by resolveQopActors() below.
+  const docCreatedBy = new Map();
 
   try {
     // --- Quotations ----------------------------------------------------------
@@ -77,10 +79,11 @@ export async function getQopTimelineEntries(customerId, eventTypeFilter) {
       const quotations = await Quotation.find({ customerId })
         .sort({ createdAt: -1 })
         .limit(200)
-        .select('quotationNumber title status grandTotalRounded currency createdAt sentAt acceptedAt declinedAt')
+        .select('quotationNumber title status grandTotalRounded currency createdAt sentAt acceptedAt declinedAt createdBy')
         .lean();
 
       for (const q of quotations) {
+        docCreatedBy.set(String(q._id), q.createdBy || null);
         const link = { module: 'qop', entityType: 'quotation', entityId: String(q._id) };
         const titleText = q.title || q.quotationNumber;
 
@@ -165,10 +168,11 @@ export async function getQopTimelineEntries(customerId, eventTypeFilter) {
       const orders = await Order.find({ customerId })
         .sort({ createdAt: -1 })
         .limit(200)
-        .select('orderNumber title status grandTotalRounded currency createdAt')
+        .select('orderNumber title status grandTotalRounded currency createdAt createdBy')
         .lean();
 
       for (const o of orders) {
+        docCreatedBy.set(String(o._id), o.createdBy || null);
         if (!eventTypeFilter || eventTypeFilter === 'order.created') {
           const titleText = o.title || o.orderNumber;
           entries.push({
@@ -199,10 +203,11 @@ export async function getQopTimelineEntries(customerId, eventTypeFilter) {
       const invoices = await Invoice.find({ customerId })
         .sort({ createdAt: -1 })
         .limit(200)
-        .select('invoiceNumber title invoiceType status grandTotalRounded currency createdAt sentAt paidAt')
+        .select('invoiceNumber title invoiceType status grandTotalRounded currency createdAt sentAt paidAt createdBy')
         .lean();
 
       for (const inv of invoices) {
+        docCreatedBy.set(String(inv._id), inv.createdBy || null);
         const link = { module: 'qop', entityType: 'invoice', entityId: String(inv._id) };
         const titleText = inv.title || inv.invoiceNumber;
 
@@ -271,7 +276,60 @@ export async function getQopTimelineEntries(customerId, eventTypeFilter) {
     logger.warn('Could not load QOP timeline entries', { module: 'crm', error: err.message });
   }
 
+  await resolveQopActors(entries, docCreatedBy);
   return entries;
+}
+
+/**
+ * Fill in the acting user for quotation/order/invoice timeline entries.
+ *
+ * "created" entries are attributed to the document's creator; status entries
+ * (sent / accepted / declined / paid) to the user recorded in the document
+ * status log — the only exact source for who performed the transition.
+ * Best-effort: on any failure the entries simply keep actor = null.
+ */
+async function resolveQopActors(entries, docCreatedBy) {
+  const qopEntries = entries.filter((e) => ['quotation', 'order', 'invoice'].includes(e.type));
+  if (!qopEntries.length) return;
+
+  try {
+    const docIds = [...new Set(qopEntries.map((e) => e.details?.entityId).filter(Boolean).map(String))];
+
+    // Status transitions: (documentId + toStatus) -> user who changed it.
+    const changedByKey = new Map();
+    const DocumentStatusLog = (await import('../qop/documentStatusLog.model.js')).default;
+    const logs = await DocumentStatusLog.find({ documentId: { $in: docIds } })
+      .select('documentId toStatus changedBy changedAt')
+      .sort({ changedAt: 1 })
+      .lean();
+    for (const log of logs) {
+      changedByKey.set(`${String(log.documentId)}:${String(log.toStatus).toLowerCase()}`, log.changedBy);
+    }
+
+    // Resolve every referenced user id to a display name in one query.
+    const userIds = [...new Set([
+      ...[...docCreatedBy.values()],
+      ...[...changedByKey.values()],
+    ].filter(Boolean).map(String))];
+    const nameById = new Map();
+    if (userIds.length) {
+      const User = (await import('../auth/user.model.js')).default;
+      const users = await User.find({ _id: { $in: userIds } }).select('firstName lastName email').lean();
+      for (const user of users) nameById.set(String(user._id), userDisplayName(user));
+    }
+
+    for (const entry of qopEntries) {
+      const docId = entry.details?.entityId ? String(entry.details.entityId) : null;
+      if (!docId) continue;
+      const action = entry.meta?.action;
+      const userId = action === 'created'
+        ? docCreatedBy.get(docId)
+        : changedByKey.get(`${docId}:${String(action || '').toLowerCase()}`);
+      if (userId) entry.actor = nameById.get(String(userId)) || null;
+    }
+  } catch (err) {
+    logger.warn('Could not resolve QOP timeline actors', { module: 'crm', error: err.message });
+  }
 }
 
 // =============================================================================
@@ -466,10 +524,15 @@ async function collectAudit(entityType, entityId) {
   try {
     const AuditLog = (await import('../auth/auditLog.model.js')).default;
     const detailKey = entityType === 'installation' ? 'details.installationId' : 'details.siteId';
-    const docs = await AuditLog.find({ module: 'crm', [detailKey]: entityId })
+    const rawDocs = await AuditLog.find({ module: 'crm', [detailKey]: entityId })
       .sort({ timestamp: -1 })
       .limit(500)
       .lean();
+
+    // Resolve the acting user to a readable name — the timeline used to show
+    // the raw ObjectId ("von 6a4652dc…").
+    const { default: auditService } = await import('../auth/audit.service.js');
+    const docs = await auditService.withUserNames(rawDocs);
 
     for (const d of docs) {
       entries.push({
@@ -479,7 +542,7 @@ async function collectAudit(entityType, entityId) {
         title: d.eventType,
         summary: d.result ? `Result: ${d.result}` : '',
         status: d.result || null,
-        actor: d.userId ? String(d.userId) : null,
+        actor: d.userName || null,
         link: { module: 'crm', entityType, entityId: String(entityId) },
         meta: { eventType: d.eventType, details: d.details || {} },
       });

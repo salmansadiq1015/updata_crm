@@ -337,7 +337,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
                 <TabsTrigger value="items">{t('qop.orders.tabItems', 'Positionen')}</TabsTrigger>
                 <TabsTrigger value="billing">{t('qop.orders.tabBilling', 'Fakturierung')}</TabsTrigger>
                 <TabsTrigger value="invoices">{t('qop.orders.tabInvoices', 'Rechnungen')}</TabsTrigger>
-                <TabsTrigger value="history">{t('qop.orders.tabHistory', 'Verlauf')}</TabsTrigger>
+                <TabsTrigger value="history">{t('common.activity', 'Aktivität')}</TabsTrigger>
               </TabsList>
               <TabsContent value="overview" className="mt-4">
                 <OverviewTab order={order} onTransition={setTransitionTarget} onDownloadPdf={handleDownloadPdf} pdfLoading={pdfLoading} />

@@ -292,7 +292,7 @@ export function ProjectDetail() {
                 </TabsTrigger>
               )}
               <TabsTrigger value="activity" className="gap-1.5">
-                <Activity className="h-3.5 w-3.5" /> {t('pm.activity', 'Aktivität')}
+                <Activity className="h-3.5 w-3.5" /> {t('common.activity', 'Aktivität')}
               </TabsTrigger>
             </TabsList>
 

@@ -174,7 +174,7 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="overview">{t('qop.invoice.tabOverview', 'Übersicht')}</TabsTrigger>
                 <TabsTrigger value="payments">{t('qop.invoice.tabPayments', 'Zahlungen')}</TabsTrigger>
-                <TabsTrigger value="history">{t('qop.invoice.tabHistory', 'Verlauf')}</TabsTrigger>
+                <TabsTrigger value="history">{t('common.activity', 'Aktivität')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="mt-4">

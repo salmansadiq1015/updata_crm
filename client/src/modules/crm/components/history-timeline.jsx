@@ -34,6 +34,7 @@ import {
  * @param {string} props.entityId
  */
 export function HistoryTimeline({ entityType, entityId }) {
+  const { t } = useLanguage();
   const [type, setType] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -70,7 +71,7 @@ export function HistoryTimeline({ entityType, entityId }) {
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <Activity className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Historie</h3>
+          <h3 className="text-sm font-semibold">{t('common.activity', 'Aktivität')}</h3>
           {!isLoading && (
             <span className="text-xs text-muted-foreground">({items.length}{hasNextPage ? '+' : ''})</span>
           )}

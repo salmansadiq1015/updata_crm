@@ -76,7 +76,7 @@ const SITE_TABS = [
   { id: 'images', labelKey: 'crm.images.title', fallback: 'Bilder', icon: ImageIcon, permission: 'crm:read' },
   { id: 'documents', labelKey: 'crm.documents.title', fallback: 'Dokumente', icon: Files, permission: 'crm:read' },
   { id: 'notes', labelKey: 'crm.notes.title', fallback: 'Notizen', icon: FileText, permission: 'crm:read' },
-  { id: 'activity', labelKey: 'crm.installations.tab.history', fallback: 'Historie', icon: Activity, permission: 'crm:read' },
+  { id: 'activity', labelKey: 'common.activity', fallback: 'Aktivität', icon: Activity, permission: 'crm:read' },
 ];
 
 /** Popover to let each user choose which registers (tabs) to show. */

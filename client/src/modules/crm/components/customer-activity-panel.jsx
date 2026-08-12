@@ -42,7 +42,7 @@ export function CustomerActivityPanel({ customerId }) {
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
           <Activity className="h-4 w-4 text-muted-foreground" />
-          {t('crm.tabActivity', 'Activity')}
+          {t('common.activity', 'Aktivität')}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -92,6 +92,11 @@ export function CustomerActivityPanel({ customerId }) {
                         {e.details && Object.keys(e.details).length > 0 && (
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                             {describeDetails(e.details, t)}
+                          </p>
+                        )}
+                        {e.userName && (
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {t('common.by', 'von')} {e.userName}
                           </p>
                         )}
                       </div>

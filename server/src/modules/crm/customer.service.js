@@ -589,7 +589,10 @@ class CustomerService {
 
     // Take limit + 1 to determine hasNext
     const hasNext = merged.length > limit;
-    const data = hasNext ? merged.slice(0, limit) : merged;
+    const page = hasNext ? merged.slice(0, limit) : merged;
+    // Resolve "who did this" for the page (audit entries only carry userId).
+    const { default: auditService } = await import('../auth/audit.service.js');
+    const data = await auditService.withUserNames(page);
     const nextCursor = hasNext && data.length > 0
       ? (await import('../../shared/utils/pagination.js')).encodeCursor(
           { _id: data[data.length - 1]._id, timestamp: data[data.length - 1].timestamp },

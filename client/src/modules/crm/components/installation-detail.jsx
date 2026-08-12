@@ -266,7 +266,7 @@ export function InstallationDetail() {
             <ImageIcon className="h-3.5 w-3.5" /> {t('crm.installations.tab.images', 'Bilder')}
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5">
-            <Activity className="h-3.5 w-3.5" /> {t('crm.installations.tab.history', 'Historie')}
+            <Activity className="h-3.5 w-3.5" /> {t('common.activity', 'Aktivität')}
           </TabsTrigger>
         </TabsList>
 

@@ -7,6 +7,9 @@ export const INSTALLATION_TYPES = [
 
 export const FUEL_TYPES = ['gas', 'oil', 'electric', 'pellet', 'other'];
 
+// `decommissioned` is set through the dedicated Stilllegen action (needs a reason).
+export const INSTALLATION_STATUSES = ['active', 'maintenance', 'out_of_service', 'defective'];
+
 export const createInstallationSchema = z.object({
   type: z.enum(INSTALLATION_TYPES),
   manufacturer: z.string().trim().max(100).optional().or(z.literal('')),
@@ -18,6 +21,7 @@ export const createInstallationSchema = z.object({
   fuelType: z.enum(FUEL_TYPES).nullable().optional(),
   yearOfManufacture: z.number().int().min(1900).max(2100).nullable().optional(),
   technicalNotes: z.string().max(5000).optional().or(z.literal('')),
+  status: z.enum(INSTALLATION_STATUSES).optional(),
   // Additional supplied objects (same customer) — the multi-object linkage.
   additionalSiteIds: z.array(z.string()).max(50).optional(),
 });

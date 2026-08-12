@@ -16,7 +16,8 @@ import { useRouter } from 'next/navigation';
 import { formatDate, formatNumber } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import { Wrench, Eye, ExternalLink, Filter, Search, X, Zap, Flame } from 'lucide-react';
-import { INSTALLATION_TYPE_META } from '@/modules/crm/constants/crm-constants';
+import { INSTALLATION_TYPE_META, INSTALLATION_STATUS_META } from '@/modules/crm/constants/crm-constants';
+import { InstallationStatusBadge } from './installation-status-badge';
 import { DotLabel } from '@/shared/components/filter-dot';
 
 const INSTALLATION_TYPE_TONE = {
@@ -167,19 +168,7 @@ export function InstallationsTable() {
       accessorKey: 'status',
       header: t('crm.status', 'Status'),
       size: 140,
-      Cell: ({ row }) => {
-        const status = row.original.status;
-        const active = status === 'active';
-        return (
-          <span className={cn(
-            'inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full',
-            active ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-muted/60 text-muted-foreground',
-          )}>
-            <span className={cn('h-1.5 w-1.5 rounded-full', active ? 'bg-emerald-500' : 'bg-muted-foreground/40')} />
-            {active ? t('crm.statusActive', 'Active') : t('crm.installations.statusDecommissioned', 'Decommissioned')}
-          </span>
-        );
-      },
+      Cell: ({ row }) => <InstallationStatusBadge status={row.original.status} size="md" className="rounded-full" />,
     },
   ], [t]);
 
@@ -203,7 +192,7 @@ export function InstallationsTable() {
       <div className="grid grid-cols-3 gap-4">
         <PremiumStatCard label={t('crm.stats.total', 'Total')} value={pageStats.total} icon={Wrench} accent="violet" />
         <PremiumStatCard label={t('crm.statusActive', 'Active')} value={pageStats.active} accent="emerald" />
-        <PremiumStatCard label={t('crm.installations.statusDecommissioned', 'Decommissioned')} value={pageStats.decommissioned} accent="rose" />
+        <PremiumStatCard label={t('crm.installations.statusDecommissioned', 'Stillgelegt')} value={pageStats.decommissioned} accent="rose" />
       </div>
 
       {/* Filter bar */}
@@ -230,8 +219,11 @@ export function InstallationsTable() {
           </SelectTrigger>
           <SelectContent position="popper" sideOffset={4} className="bg-card border-border">
             <SelectItem value="all" className="text-foreground focus:bg-muted/60"><DotLabel tone="muted">{t('crm.allStatus', 'All statuses')}</DotLabel></SelectItem>
-            <SelectItem value="active" className="text-foreground focus:bg-muted/60"><DotLabel tone="emerald">{t('crm.statusActive', 'Active')}</DotLabel></SelectItem>
-            <SelectItem value="decommissioned" className="text-foreground focus:bg-muted/60"><DotLabel tone="slate">{t('crm.installations.statusDecommissioned', 'Decommissioned')}</DotLabel></SelectItem>
+            {Object.entries(INSTALLATION_STATUS_META).map(([key, meta]) => (
+              <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/60">
+                <DotLabel tone={meta.tone}>{t(`crm.installations.status.${key}`, meta.label)}</DotLabel>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 

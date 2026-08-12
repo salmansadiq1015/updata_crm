@@ -24,6 +24,7 @@ import {
   Plus, Pencil, PowerOff, Wrench, ArrowRight, Calendar, Zap, Hash, Loader2,
 } from 'lucide-react';
 import { INSTALLATION_TYPE_META, FUEL_TYPE_META } from '@/modules/crm/constants/crm-constants';
+import { InstallationStatusBadge } from './installation-status-badge';
 
 export function InstallationsPanel({ siteId, customerId }) {
   const { t } = useLanguage();
@@ -59,7 +60,7 @@ export function InstallationsPanel({ siteId, customerId }) {
     mutationFn: ({ id, reason }) => installationService.decommission(id, reason),
     onSuccess: () => {
       invalidate();
-      showSuccess(t('crm.installations.decommissionedToast', 'Komponente ausser Betrieb'));
+      showSuccess(t('crm.installations.decommissionedToast', 'Komponente stillgelegt'));
       setDecommTarget(null);
       setDecommReason('');
     },
@@ -122,11 +123,11 @@ export function InstallationsPanel({ siteId, customerId }) {
       <Dialog open={!!decommTarget} onOpenChange={(v) => !v && setDecommTarget(null)}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>{t('crm.installations.decommissionTitle', 'Komponente ausser Betrieb nehmen')}</DialogTitle>
+            <DialogTitle>{t('crm.installations.decommissionTitle', 'Komponente stilllegen')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
             <p className="text-sm text-muted-foreground">
-              {t('crm.installations.decommissionDescLong', 'Die Komponente wird als ausser Betrieb markiert. Dieser Vorgang kann nicht direkt rückgängig gemacht werden.')}
+              {t('crm.installations.decommissionDescLong', 'Die Komponente wird als stillgelegt markiert. Dieser Vorgang kann nicht direkt rückgängig gemacht werden.')}
             </p>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">{t('crm.installations.decommissionReason', 'Grund')}*</Label>
@@ -148,7 +149,7 @@ export function InstallationsPanel({ siteId, customerId }) {
                 className="gap-2"
               >
                 {decommMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {t('crm.installations.decommissionAction', 'Ausser Betrieb')}
+                {t('crm.installations.decommissionAction', 'Stilllegen')}
               </Button>
             </div>
           </div>
@@ -192,11 +193,7 @@ function InstallationCard({ installation: i, canWrite, canDelete, onEdit, onDeco
             {fuelMeta && (
               <span className={cn('text-[10px] font-medium', fuelMeta.color)}>{t(`crm.installations.fuel.${i.fuelType}`, fuelMeta.label)}</span>
             )}
-            {!isActive && (
-              <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
-                {t('crm.installations.decommissioned', 'Ausser Betrieb')}
-              </span>
-            )}
+            <InstallationStatusBadge status={i.status} />
           </div>
 
           {(i.manufacturer || i.model) && (
@@ -230,7 +227,7 @@ function InstallationCard({ installation: i, canWrite, canDelete, onEdit, onDeco
             <IconActionButton label={t('common.edit', 'Edit')} icon={Pencil} onClick={onEdit} />
           )}
           {canDelete && isActive && (
-            <IconActionButton label={t('crm.installations.decommission', 'Decommission')} icon={PowerOff} destructive onClick={onDecommission} />
+            <IconActionButton label={t('crm.installations.decommissionAction', 'Stilllegen')} icon={PowerOff} destructive onClick={onDecommission} />
           )}
         </div>
       </div>

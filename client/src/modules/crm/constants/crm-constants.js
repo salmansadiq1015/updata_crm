@@ -28,6 +28,23 @@ export const FUEL_TYPE_META = Object.freeze({
   other:    { label: 'Sonstige',  color: 'text-slate-600' },
 });
 
+/**
+ * Lifecycle status of a component (Komponente). Mirrors the `status` enum of
+ * the server-side installation model. `out_of_service` (temporarily stopped)
+ * and `decommissioned` (permanently retired) are deliberately distinct — and
+ * so are their colours, since the client reads them at a glance.
+ */
+export const INSTALLATION_STATUS_META = Object.freeze({
+  active:         { label: 'Aktiv',          tone: 'emerald', color: 'text-emerald-600', bg: 'bg-emerald-500/10', ring: 'ring-emerald-500/20', dot: 'bg-emerald-500' },
+  maintenance:    { label: 'In Wartung',     tone: 'sky',     color: 'text-sky-600',     bg: 'bg-sky-500/10',     ring: 'ring-sky-500/20',     dot: 'bg-sky-500' },
+  out_of_service: { label: 'Ausser Betrieb', tone: 'slate',   color: 'text-slate-600',   bg: 'bg-slate-500/10',   ring: 'ring-slate-500/20',   dot: 'bg-slate-500' },
+  defective:      { label: 'Defekt',         tone: 'red',     color: 'text-red-600',     bg: 'bg-red-500/10',     ring: 'ring-red-500/20',     dot: 'bg-red-500' },
+  decommissioned: { label: 'Stillgelegt',    tone: 'purple',  color: 'text-violet-600',  bg: 'bg-violet-500/10',  ring: 'ring-violet-500/20',  dot: 'bg-violet-500' },
+});
+
+/** Statuses a user may set directly; `decommissioned` goes through Stilllegen (needs a reason). */
+export const INSTALLATION_EDITABLE_STATUSES = Object.freeze(['active', 'maintenance', 'out_of_service', 'defective']);
+
 export const MAINTENANCE_TYPE_META = Object.freeze({
   annual_service:     { label: 'Jährlicher Service',    icon: Wrench,        color: 'text-brand-500', bg: 'bg-brand-500/10' },
   filter_change:      { label: 'Filterwechsel',          icon: Filter,        color: 'text-sky-500',    bg: 'bg-sky-500/10' },

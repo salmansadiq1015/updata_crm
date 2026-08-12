@@ -14,6 +14,7 @@ const TONE_CLASS = {
   blue: 'bg-blue-500',
   sky: 'bg-sky-500',
   violet: 'bg-brand-500',
+  purple: 'bg-violet-500',
   orange: 'bg-orange-500',
   slate: 'bg-slate-500',
   indigo: 'bg-indigo-500',

@@ -409,7 +409,7 @@ export function CustomerDetail() {
                 {t('crm.tabSites', 'Objects')}
               </TabsTrigger>
               <TabsTrigger value="activity" className="gap-1.5">
-                <FileText className="h-3.5 w-3.5" />
+                <Activity className="h-3.5 w-3.5" />
                 {t('common.activity', 'Aktivität')}
               </TabsTrigger>
               <TabsTrigger value="documents" className="gap-1.5">

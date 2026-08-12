@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Activity, Plus, Pencil, Trash2, User, Wrench, Package, StickyNote, History,
+  Activity, Plus, Pencil, Trash2, User, Wrench, Package, StickyNote,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -60,7 +60,7 @@ export function VehicleHistoryTab({ vehicleId }) {
     <Card>
       <CardContent className="p-4">
         <div className="mb-4 flex items-center gap-2">
-          <History className="h-4 w-4 text-muted-foreground" />
+          <Activity className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">{t('common.activity', 'Aktivität')}</h3>
           <span className="text-xs text-muted-foreground">({events.length})</span>
         </div>

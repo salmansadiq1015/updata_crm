@@ -59,6 +59,16 @@ const projectDocumentSchema = new mongoose.Schema(
       default: null,
     },
     visumAt: { type: Date, default: null },
+    // Digitales Dossier: the project lead decides which documents the field
+    // (Monteure/Techniker) may see. Nothing is visible to them until released,
+    // so a document is internal by default.
+    releasedToField: { type: Boolean, default: false, index: true },
+    releasedAt: { type: Date, default: null },
+    releasedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     // Archived documents (typically superseded old versions) move to the
     // "Archiv" section and out of the two current-document sections.
     archived: { type: Boolean, default: false, index: true },
@@ -74,6 +84,7 @@ const projectDocumentSchema = new mongoose.Schema(
 // --- Indexes ---
 projectDocumentSchema.index({ projectId: 1, category: 1 });
 projectDocumentSchema.index({ projectId: 1, archived: 1 });
+projectDocumentSchema.index({ projectId: 1, releasedToField: 1, isDeleted: 1 });
 projectDocumentSchema.index({ isDeleted: 1 });
 projectDocumentSchema.index({ fileId: 1 });
 

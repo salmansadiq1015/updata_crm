@@ -104,6 +104,7 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'project', action: 'documents:write',     description: 'Upload and update project documents' },
   { module: 'project', action: 'documents:create',    description: 'Generate project documents from templates' },
   { module: 'project', action: 'documents:delete',    description: 'Delete project documents' },
+  { module: 'project', action: 'documents:read:all', description: 'View every project document, including those not released to the field' },
 
   // Field Service
   { module: 'field-service', action: 'read', description: 'View field service data' },
@@ -236,7 +237,7 @@ export const ROLE_DEFINITIONS = [
       'project:create', 'project:edit', 'project:read', 'project:delete',
       'project:status:update', 'project:status:override',
       'project:prep-actions:manage', 'project:schedule:manage',
-      'project:documents:read', 'project:documents:write',
+      'project:documents:read', 'project:documents:read:all', 'project:documents:write',
       'project:documents:create', 'project:documents:delete',
       'documents:read', 'documents:write', 'documents:delete',
       'quotations:read', 'quotations:write', 'quotations:delete', 'quotations:admin',
@@ -284,7 +285,7 @@ export const ROLE_DEFINITIONS = [
     description: 'Financial operations',
     permissionKeys: [
       'crm:read',
-      'project:read', 'project:documents:read',
+      'project:read', 'project:documents:read', 'project:documents:read:all',
       'documents:read',
       'invoicing:read', 'invoicing:write', 'invoicing:delete', 'invoicing:admin',
       ...ACCOUNTING_PERMISSION_KEYS,
@@ -303,7 +304,7 @@ export const ROLE_DEFINITIONS = [
     description: 'Scheduling and resource planning',
     permissionKeys: [
       'crm:read',
-      'project:read', 'project:schedule:manage', 'project:documents:read',
+      'project:read', 'project:schedule:manage', 'project:documents:read', 'project:documents:read:all',
       'documents:read',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'meetings:read', 'meetings:write', 'meetings:delete', 'meetings:admin',

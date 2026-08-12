@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/formatters';
 import {
   Pencil, Trash2, Loader2, Download, Upload,
-  FileText, Search, X, FolderOpen, Eye,
+  FileText, Search, X, FolderOpen, Eye, EyeOff,
   CloudUpload, FileUp, Grid3X3, List, LayoutGrid,
   Sparkles, Mail, RefreshCw, FilePen, ArchiveRestore,
   FileCheck2, Archive,
@@ -44,7 +44,7 @@ import {
 
 function DocumentCard({
   doc, language, canWrite, onEdit, onDelete, onDownload, onPreview,
-  onEmail, onRegenerate, onResumeDraft, onRestore, onVisum, onArchive,
+  onEmail, onRegenerate, onResumeDraft, onRestore, onVisum, onArchive, onRelease,
 }) {
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
@@ -52,6 +52,7 @@ function DocumentCard({
   const isDraft = doc.status === 'DRAFT';
   const isDeleted = !!doc.isDeleted;
   const hasVisum = !!doc.visumBy;
+  const isReleased = !!doc.releasedToField;
   const isArchived = !!doc.archived;
 
   return (
@@ -98,6 +99,13 @@ function DocumentCard({
                 {language === 'de' ? 'Generiert' : 'Generated'}
               </Badge>
             )}
+            {isReleased && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
+                <Eye className="h-3 w-3" />
+                {language === 'de' ? 'Freigegeben' : 'Released'}
+              </span>
+            )}
+
             {hasVisum && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium border-emerald-500/60 text-emerald-600 dark:text-emerald-400 gap-1">
                 <FileCheck2 className="h-3 w-3" />
@@ -227,6 +235,19 @@ function DocumentCard({
                 <Button
                   variant="ghost"
                   size="icon"
+                  className={cn('h-8 w-8 rounded-lg', isReleased && 'text-sky-600 dark:text-sky-400')}
+                  onClick={(e) => { e.stopPropagation(); onRelease?.(doc); }}
+                  title={isReleased
+                    ? (language === 'de' ? 'Freigabe zurückziehen' : 'Revoke release')
+                    : (language === 'de' ? 'Für Aussendienst freigeben' : 'Release to the field')}
+                >
+                  {isReleased ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                </Button>
+              )}
+              {canWrite && (
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className={cn('h-8 w-8 rounded-lg', isArchived && 'text-amber-600 dark:text-amber-400')}
                   onClick={(e) => { e.stopPropagation(); onArchive?.(doc); }}
                   title={isArchived
@@ -266,12 +287,13 @@ function DocumentCard({
 
 // ── Document grid card ───────────────────────────────────────
 
-function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview, onResumeDraft, onRestore, onVisum, onArchive }) {
+function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownload, onPreview, onResumeDraft, onRestore, onVisum, onArchive, onRelease }) {
   const FileIcon = getFileIcon(doc.mimeType);
   const categoryCfg = DOCUMENT_CATEGORY_CONFIG[doc.category];
   const isDraft = doc.status === 'DRAFT';
   const isDeleted = !!doc.isDeleted;
   const hasVisum = !!doc.visumBy;
+  const isReleased = !!doc.releasedToField;
   const isArchived = !!doc.archived;
 
   return (
@@ -349,6 +371,7 @@ function DocumentGridCard({ doc, language, canWrite, onEdit, onDelete, onDownloa
                   <Button variant="secondary" size="icon" className={cn('h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm', hasVisum && 'text-emerald-600 dark:text-emerald-400')} onClick={(e) => { e.stopPropagation(); onVisum?.(doc); }} title={hasVisum ? (language === 'de' ? 'Visum entfernen' : 'Remove sign-off') : (language === 'de' ? 'Visieren' : 'Sign off')}>
                     <FileCheck2 className="h-3 w-3" />
                   </Button>
+                <Button variant="secondary" size="icon" className={cn('h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm', isReleased && 'text-sky-600 dark:text-sky-400')} onClick={(e) => { e.stopPropagation(); onRelease?.(doc); }} title={isReleased ? (language === 'de' ? 'Freigabe zurückziehen' : 'Revoke release') : (language === 'de' ? 'Für Aussendienst freigeben' : 'Release to the field')}>{isReleased ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}</Button>
                   <Button variant="secondary" size="icon" className={cn('h-7 w-7 rounded-lg shadow-sm bg-background/90 backdrop-blur-sm', isArchived && 'text-amber-600 dark:text-amber-400')} onClick={(e) => { e.stopPropagation(); onArchive?.(doc); }} title={isArchived ? (language === 'de' ? 'Aus Archiv wiederherstellen' : 'Restore from archive') : (language === 'de' ? 'Ins Archiv' : 'To archive')}>
                     {isArchived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
                   </Button>
@@ -572,7 +595,7 @@ export function DocumentsTab({ projectId }) {
     return list;
   }, [documents, activeSection, searchTerm, includeDeleted]);
 
-  const { upload, updateMetadata, remove, restore, generate, emailDocument, setVisum, setArchived } = useDocumentMutations(projectId, {
+  const { upload, updateMetadata, remove, restore, generate, emailDocument, setVisum, setArchived, setReleased } = useDocumentMutations(projectId, {
     onDelete: () => setDeleteTarget(null),
     onEmail: () => { setEmailDoc(null); setEmailTo(''); setEmailMessage(''); },
     // On a replacement upload (same filename → new version), offer to move the
@@ -583,6 +606,10 @@ export function DocumentsTab({ projectId }) {
   const handleVisum = useCallback((doc) => {
     setVisum.mutate({ docId: doc._id, visiert: !doc.visumBy });
   }, [setVisum]);
+
+  const handleRelease = useCallback((doc) => {
+    setReleased.mutate({ docId: doc._id, released: !doc.releasedToField });
+  }, [setReleased]);
 
   const handleArchive = useCallback((doc) => {
     setArchived.mutate({ docId: doc._id, archived: !doc.archived });
@@ -892,6 +919,7 @@ export function DocumentsTab({ projectId }) {
               onResumeDraft={openResumeDraft}
               onRestore={handleRestore}
               onVisum={handleVisum}
+              onRelease={handleRelease}
               onArchive={handleArchive}
             />
           ))}
@@ -911,6 +939,7 @@ export function DocumentsTab({ projectId }) {
               onResumeDraft={openResumeDraft}
               onRestore={handleRestore}
               onVisum={handleVisum}
+              onRelease={handleRelease}
               onArchive={handleArchive}
             />
           ))}

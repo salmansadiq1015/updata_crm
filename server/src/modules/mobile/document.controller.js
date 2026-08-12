@@ -32,9 +32,11 @@ class DocumentController {
       const orderId = req.params.id;
       const { default: generatedDocumentRepository } = await import('../doctpl/generatedDocument.repository.js');
 
-      const [uploadedFiles, generatedDocs] = await Promise.all([
+      const [uploadedFiles, generatedDocs, dossier] = await Promise.all([
         fileService.getByEntity('mobile', 'document', orderId),
         generatedDocumentRepository.findBySource('qop', orderId),
+        // Digitales Dossier: the project documents the lead released to the field.
+        this._releasedProjectDocuments(orderId),
       ]);
 
       const uploaded = await Promise.all((uploadedFiles || []).map(async (file) => ({
@@ -64,14 +66,64 @@ class DocumentController {
         url: await this._safeDownloadUrl(fileService, doc.fileId),
       })));
 
+      const released = await Promise.all(dossier.map(async (doc) => ({
+        id: doc.fileId,
+        fileId: doc.fileId,
+        projectDocumentId: doc._id,
+        filename: doc.fileName,
+        name: doc.fileName,
+        file_size: doc.fileSizeBytes ?? null,
+        uploaded_at: doc.releasedAt || doc.createdAt,
+        category: doc.category,
+        mimeType: doc.mimeType || null,
+        source: 'project',
+        url: await this._safeDownloadUrl(fileService, doc.fileId),
+      })));
+
       return res.success({
-        data: [...generated, ...uploaded].sort((a, b) => new Date(b.uploaded_at || 0) - new Date(a.uploaded_at || 0)),
+        data: [...generated, ...uploaded, ...released]
+          .sort((a, b) => new Date(b.uploaded_at || 0) - new Date(a.uploaded_at || 0)),
       });
     } catch (err) { next(err); }
   }
 
+  /**
+   * Released documents of the order's project. An order without a project has
+   * no dossier — that is not an error, just an empty list.
+   */
+  async _releasedProjectDocuments(orderId) {
+    try {
+      const { default: Order } = await import('../qop/order.model.js');
+      const order = await Order.findById(orderId).select('projectId').lean();
+      if (!order?.projectId) return [];
+      const { default: documentService } = await import('../pm/document.service.js');
+      const docs = await documentService.listReleasedForProject(order.projectId);
+      // A DRAFT has no file yet — nothing to hand the field.
+      return (docs || []).filter((doc) => doc.fileId);
+    } catch (err) {
+      logger.warn('Could not load released project documents for order', {
+        module: 'mobile', action: 'document.dossier', orderId, error: err.message,
+      });
+      return [];
+    }
+  }
+
   async downloadDocument(req, res, next) {
     try {
+      // Releasing a document is meaningless if its file id still downloads when
+      // the release was never given (or was taken back).
+      const { default: ProjectDocument } = await import('../pm/projectDocument.model.js');
+      const projectDoc = await ProjectDocument.findOne({ fileId: req.params.docId })
+        .select('releasedToField')
+        .lean();
+      if (projectDoc && !projectDoc.releasedToField) {
+        return res.fail({
+          statusCode: 403,
+          code: 'DOCUMENT_NOT_RELEASED',
+          message: 'Dieses Dokument wurde nicht für den Aussendienst freigegeben.',
+        });
+      }
+
       const { default: fileService } = await import('../files/file.service.js');
       const url = await fileService.getDownloadUrl(req.params.docId);
       return res.success({ data: { url } });

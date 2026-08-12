@@ -246,6 +246,7 @@ export const ENDPOINTS = Object.freeze({
     DOCUMENT_DOWNLOAD: (id, docId) => `/pm/projects/${id}/documents/${docId}/download`,
     DOCUMENT_RESTORE: (id, docId) => `/pm/projects/${id}/documents/${docId}/restore`,
     DOCUMENT_VISUM: (id, docId) => `/pm/projects/${id}/documents/${docId}/visum`,
+    DOCUMENT_RELEASE: (id, docId) => `/pm/projects/${id}/documents/${docId}/release`,
     DOCUMENT_ARCHIVE: (id, docId) => `/pm/projects/${id}/documents/${docId}/archive`,
     DOCUMENTS_GENERATE: (id) => `/pm/projects/${id}/documents/generate`,
     DOCUMENTS_DRAFT: (id) => `/pm/projects/${id}/documents/draft`,

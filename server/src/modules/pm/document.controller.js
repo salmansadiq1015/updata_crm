@@ -1,15 +1,30 @@
 import documentService from './document.service.js';
+import { loadUserPermissions, satisfiesPermission } from '../../shared/middleware/authenticate.js';
+
+/**
+ * Digitales Dossier: only holders of `project:documents:read:all` (office roles)
+ * see the whole dossier. Everyone else — Monteure, Techniker — sees exactly what
+ * the project lead released.
+ */
+async function releasedOnlyFor(user) {
+  if (user?.role?.name === 'Admin') return false;
+  const permissions = await loadUserPermissions(user);
+  return !satisfiesPermission(permissions, 'project:documents:read:all');
+}
 
 class DocumentController {
   async list(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;
+      const releasedOnly = await releasedOnlyFor(req.user);
       const docs = await documentService.listByProject(req.params.id, {
         category: query.category,
         search: query.search,
         startDate: query.startDate,
         endDate: query.endDate,
-        includeDeleted: query.includeDeleted,
+        // The field never gets to browse deleted documents either.
+        includeDeleted: releasedOnly ? false : query.includeDeleted,
+        releasedOnly,
       });
       return res.success({ data: docs });
     } catch (err) { next(err); }
@@ -60,6 +75,19 @@ class DocumentController {
       const visiert = req.method !== 'DELETE';
       const doc = await documentService.setVisum(req.params.docId, req.user._id, visiert, meta);
       return res.success({ data: doc, message: visiert ? 'Document signed off' : 'Sign-off removed' });
+    } catch (err) { next(err); }
+  }
+
+  // POST releases the document to the field, DELETE takes the release back.
+  async setReleased(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const released = req.method === 'POST';
+      const doc = await documentService.setReleased(req.params.docId, req.user._id, released, meta);
+      return res.success({
+        data: doc,
+        message: released ? 'Document released to the field' : 'Document release revoked',
+      });
     } catch (err) { next(err); }
   }
 

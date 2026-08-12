@@ -2,6 +2,8 @@
 
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
+import apiClient from '@/lib/api/client';
+import { ENDPOINTS } from '@/lib/api/endpoints';
 import { orderService } from '@/modules/mobile/services/order-service';
 import { reportService } from '@/modules/mobile/services/report-service';
 import { timeTrackingService } from '@/modules/field-ops/services/time-tracking-service';
@@ -36,6 +38,24 @@ export function useFieldOpsOrderHistory(id) {
     queryKey: queryKeys.mobile.orders.history(id),
     queryFn: () => orderService.getOrderHistory(id),
     enabled: !!id,
+    staleTime: 30_000,
+    select: (data) => (Array.isArray(data) ? data : (data?.data ?? [])),
+  });
+}
+
+/**
+ * Documents an Einsatz may show the field: what is attached to the order plus
+ * the project documents the lead released (digitales Dossier). The server
+ * decides what belongs in there — the client just renders it.
+ */
+export function useFieldOpsOrderDocuments(orderId) {
+  return useQuery({
+    queryKey: ['mobile', 'orders', orderId, 'documents'],
+    queryFn: async () => {
+      const res = await apiClient.get(ENDPOINTS.MOBILE.ORDER_DOCUMENTS(orderId));
+      return res.data;
+    },
+    enabled: !!orderId,
     staleTime: 30_000,
     select: (data) => (Array.isArray(data) ? data : (data?.data ?? [])),
   });

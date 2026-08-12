@@ -51,6 +51,13 @@ export const documentService = {
     return res.data;
   },
 
+  // Digitales Dossier: released=true makes the document visible to the field.
+  async setReleased(projectId, docId, released = true) {
+    const url = ENDPOINTS.PM.DOCUMENT_RELEASE(projectId, docId);
+    const res = released ? await apiClient.post(url) : await apiClient.delete(url);
+    return res.data;
+  },
+
   // Archive: archived=true moves to Archiv, false restores it.
   async setArchived(projectId, docId, archived = true) {
     const url = ENDPOINTS.PM.DOCUMENT_ARCHIVE(projectId, docId);

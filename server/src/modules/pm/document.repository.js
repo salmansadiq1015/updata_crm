@@ -19,9 +19,11 @@ class DocumentRepository {
   }
 
   async findByProjectId(projectId, {
-    category, search, startDate, endDate, includeDeleted = false,
+    category, search, startDate, endDate, includeDeleted = false, releasedOnly = false,
   } = {}) {
     const filter = { projectId };
+    // The field only ever sees what the project lead released.
+    if (releasedOnly) filter.releasedToField = true;
     if (category) filter.category = category;
     if (search) filter.fileName = { $regex: search, $options: 'i' };
     if (startDate || endDate) {

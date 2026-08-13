@@ -118,7 +118,11 @@ class CIService {
       sizeBytes: fileData.size,
       module: 'doctpl',
       entityType: 'ci-asset',
-      entityId: assetType,
+      // entityId is an ObjectId on FileMetadata — passing the asset type here
+      // ("logo_png") made every CI upload fail on a cast error. The file is
+      // linked to its CIAsset record right after it exists; the asset type
+      // lives on that record.
+      entityId: null,
       uploadedBy: userId,
       bucket: 'ci-assets',
     });
@@ -131,6 +135,10 @@ class CIService {
       metadata: {},
       uploadedBy: userId,
     });
+
+    // Complete the polymorphic link now that the owning record has an id.
+    const FileMetadata = (await import('../files/file.model.js')).default;
+    await FileMetadata.findByIdAndUpdate(result._id, { entityId: asset._id });
 
     await this._linkAssetToActiveConfig(assetType, result._id, userId);
 

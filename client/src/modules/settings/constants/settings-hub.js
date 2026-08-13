@@ -1,4 +1,5 @@
 import {
+  Mail,
   Activity,
   BellRing,
   BookOpen,
@@ -122,6 +123,16 @@ export const SETTINGS_HUB_ITEMS = [
     permission: 'settings:read',
     accent: 'emerald',
     badgeKey: 'settingsHub.badgeLive',
+  },
+  {
+    id: 'email-templates',
+    category: 'documents',
+    titleKey: 'settingsHub.item.emailTemplates.title',
+    descriptionKey: 'settingsHub.item.emailTemplates.description',
+    href: '/admin/email-templates',
+    icon: Mail,
+    permission: 'templates:read',
+    accent: 'sky',
   },
   {
     id: 'numbering',

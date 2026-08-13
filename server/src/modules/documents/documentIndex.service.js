@@ -838,8 +838,18 @@ class DocumentIndexService {
       });
     }
 
+    // Generated and project documents hang off projects, not off an object or a
+    // customer — so scoping to one of those means scoping to its projects.
+    let projectIds = projectId ? [projectId] : null;
+    if (!projectIds && (siteId || customerId)) {
+      const Project = (await import('../pm/project.model.js')).default;
+      const scope = siteId ? { siteId } : { customerId };
+      const projects = await Project.find({ ...scope, isDeleted: { $ne: true } }).select('_id').lean();
+      projectIds = projects.map((project) => project._id);
+    }
+
     const genFilter = { fileId: { $ne: null } };
-    if (projectId) genFilter.sourceRecordId = projectId;
+    if (projectIds) genFilter.sourceRecordId = { $in: projectIds };
     if (rx) genFilter.fileName = rx;
     for (const doc of await GeneratedDocument.find(genFilter).sort({ generatedAt: -1 }).limit(limit).lean()) {
       out.push({
@@ -853,7 +863,7 @@ class DocumentIndexService {
     }
 
     const pdFilter = { fileId: { $ne: null } };
-    if (projectId) pdFilter.projectId = projectId;
+    if (projectIds) pdFilter.projectId = { $in: projectIds };
     if (rx) pdFilter.fileName = rx;
     for (const doc of await ProjectDocument.find(pdFilter).sort({ createdAt: -1 }).limit(limit).lean()) {
       out.push({

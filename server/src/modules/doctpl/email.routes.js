@@ -11,11 +11,11 @@ import {
 
 const router = Router();
 
-// Send email
+// Send email — any user with crm:write (or templates:write) can send.
 router.post(
   '/send',
   authenticate,
-  requirePermission('templates:write'),
+  requirePermission('crm:write'),
   validate(sendEmailSchema),
   (req, res, next) => emailController.send(req, res, next),
 );
@@ -24,7 +24,7 @@ router.post(
 router.post(
   '/compose',
   authenticate,
-  requirePermission('templates:read'),
+  requirePermission('crm:read'),
   validate(composeEmailSchema),
   (req, res, next) => emailController.compose(req, res, next),
 );
@@ -33,7 +33,7 @@ router.post(
 router.get(
   '/',
   authenticate,
-  requirePermission('templates:read'),
+  requirePermission('crm:read'),
   validate(listEmailsSchema),
   (req, res, next) => emailController.list(req, res, next),
 );
@@ -42,7 +42,7 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  requirePermission('templates:read'),
+  requirePermission('crm:read'),
   validate(emailIdParamSchema),
   (req, res, next) => emailController.getById(req, res, next),
 );
@@ -51,7 +51,7 @@ router.get(
 router.post(
   '/:id/retry',
   authenticate,
-  requirePermission('templates:write'),
+  requirePermission('crm:write'),
   validate(emailIdParamSchema),
   (req, res, next) => emailController.retry(req, res, next),
 );

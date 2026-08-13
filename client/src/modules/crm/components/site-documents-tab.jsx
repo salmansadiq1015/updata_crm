@@ -6,6 +6,8 @@ import { showError, showSuccess } from '@/lib/toast';
 import { downloadFromUrl } from '@/lib/api/download';
 import {
   useArchiveRepositoryDocument,
+  useVisumRepositoryDocument,
+  useReleaseRepositoryDocument,
   useDocumentRepository,
   useDownloadRepositoryDocument,
   useDownloadRepositoryDocumentAttachment,
@@ -30,6 +32,8 @@ export function SiteDocumentsTab({ siteId }) {
   const download = useDownloadRepositoryDocument();
   const downloadAttachment = useDownloadRepositoryDocumentAttachment();
   const archiveMutation = useArchiveRepositoryDocument();
+  const visumMutation = useVisumRepositoryDocument();
+  const releaseMutation = useReleaseRepositoryDocument();
 
   const documents = data?.items || [];
 
@@ -69,6 +73,32 @@ export function SiteDocumentsTab({ siteId }) {
       } else {
         showError(t('documents.repository.noDownloadUrl', 'Kein Download-Link verfügbar'));
       }
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleVisum = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const next = !doc.visumBy;
+      await visumMutation.mutateAsync({ id: doc.id, visiert: next });
+      showSuccess(t(next ? 'documents.repository.visumSetDone' : 'documents.repository.visumRemovedDone'));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRelease = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const next = !doc.releasedToField;
+      await releaseMutation.mutateAsync({ id: doc.id, released: next });
+      showSuccess(t(next ? 'documents.repository.releasedDone' : 'documents.repository.releaseRevokedDone'));
     } catch (err) {
       showError(err);
     } finally {
@@ -127,6 +157,8 @@ export function SiteDocumentsTab({ siteId }) {
         onPreview={openDocument}
         onDownload={handleDownload}
         onArchive={handleArchive}
+        onVisum={handleVisum}
+        onRelease={handleRelease}
         busyId={busyId}
       />
     </div>

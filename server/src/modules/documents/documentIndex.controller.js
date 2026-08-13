@@ -43,6 +43,24 @@ class DocumentIndexController {
     } catch (err) { next(err); }
   }
 
+  async setVisum(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const visiert = req.method !== 'DELETE';
+      const doc = await documentIndexService.setVisum(req.params.id, req.user, visiert, meta);
+      return res.success({ data: doc, message: visiert ? 'Document signed off' : 'Sign-off removed' });
+    } catch (err) { next(err); }
+  }
+
+  async setReleased(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const released = req.method !== 'DELETE';
+      const doc = await documentIndexService.setReleased(req.params.id, req.user, released, meta);
+      return res.success({ data: doc, message: released ? 'Document released to the field' : 'Document release revoked' });
+    } catch (err) { next(err); }
+  }
+
   async delete(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

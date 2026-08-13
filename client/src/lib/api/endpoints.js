@@ -160,8 +160,11 @@ export const ENDPOINTS = Object.freeze({
     LIST: '/documents',
     UPLOAD: '/documents/upload',
     ATTACHABLE: '/documents/attachable',
+    VISUM: (id) => `/documents/${id}/visum`,
+    RELEASE: (id) => `/documents/${id}/release`,
     BY_ID: (id) => `/documents/${id}`,
     DOWNLOAD: (id) => `/documents/${id}/download`,
+    ARCHIVE: (id) => `/documents/${id}/archive`,
   },
   VEHICLES: {
     LIST: '/vehicles',

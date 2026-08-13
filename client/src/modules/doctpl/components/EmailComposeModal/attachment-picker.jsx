@@ -88,7 +88,7 @@ export function AttachmentPicker({ open, onOpenChange, scope = {}, onConfirm, al
             {hasScope && (
               <label className="flex shrink-0 items-center gap-2 text-[13px] text-muted-foreground">
                 <Checkbox checked={allDocuments} onCheckedChange={(v) => setAllDocuments(!!v)} />
-                {t('doctpl.email.allDocuments', 'Alle Dokumente')}
+                {t('doctpl.email.showAllDocuments', 'Alle Dokumente anzeigen')}
               </label>
             )}
           </div>

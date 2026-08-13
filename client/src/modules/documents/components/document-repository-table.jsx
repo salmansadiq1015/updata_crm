@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Archive, ArchiveRestore, Download, Eye, FileText, FolderOpen, Link2, Loader2, Trash2 } from 'lucide-react';
+import { AlertTriangle, Archive, ArchiveRestore, Download, Eye, EyeOff, FileCheck2, FileText, FolderOpen, Link2, Loader2, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -84,8 +84,10 @@ function LinkSummary({ doc, t }) {
   );
 }
 
-function DocumentActions({ doc, title, actionBusy, onPreview, onDownload, onDelete, onArchive, canDelete, t }) {
+function DocumentActions({ doc, title, actionBusy, onPreview, onDownload, onDelete, onArchive, onVisum, onRelease, canDelete, t }) {
   const canArchive = !!onArchive;
+  const hasVisum = !!doc.visumBy;
+  const isReleased = !!doc.releasedToField;
   const archiveLabel = doc.archived
     ? t('documents.repository.unarchive')
     : t('documents.repository.archive');
@@ -117,6 +119,34 @@ function DocumentActions({ doc, title, actionBusy, onPreview, onDownload, onDele
       >
         <Download className="h-4 w-4" />
       </Button>
+      {onVisum && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn('h-8 w-8', hasVisum && 'text-emerald-600 dark:text-emerald-400')}
+          title={hasVisum ? t('documents.repository.visumRemove') : t('documents.repository.visumSet')}
+          aria-label={`${hasVisum ? t('documents.repository.visumRemove') : t('documents.repository.visumSet')}: ${title}`}
+          onClick={() => onVisum(doc)}
+          disabled={actionBusy}
+        >
+          <FileCheck2 className="h-4 w-4" />
+        </Button>
+      )}
+      {onRelease && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn('h-8 w-8', isReleased && 'text-sky-600 dark:text-sky-400')}
+          title={isReleased ? t('documents.repository.releaseRevoke') : t('documents.repository.release')}
+          aria-label={`${isReleased ? t('documents.repository.releaseRevoke') : t('documents.repository.release')}: ${title}`}
+          onClick={() => onRelease(doc)}
+          disabled={actionBusy}
+        >
+          {isReleased ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+        </Button>
+      )}
       {canArchive && (
         <Button
           type="button"
@@ -149,7 +179,7 @@ function DocumentActions({ doc, title, actionBusy, onPreview, onDownload, onDele
   );
 }
 
-function MobileDocumentCard({ doc, dateLocale, onPreview, onDownload, onDelete, onArchive, busyId, canDelete, t }) {
+function MobileDocumentCard({ doc, dateLocale, onPreview, onDownload, onDelete, onArchive, onVisum, onRelease, busyId, canDelete, t }) {
   const title = doc.title || doc.fileName || t('documents.repository.untitled');
   const actionBusy = busyId === doc.id;
 
@@ -205,6 +235,8 @@ function MobileDocumentCard({ doc, dateLocale, onPreview, onDownload, onDelete, 
           onDownload={onDownload}
           onDelete={onDelete}
           onArchive={onArchive}
+          onVisum={onVisum}
+          onRelease={onRelease}
           canDelete={canDelete}
           t={t}
         />
@@ -221,6 +253,8 @@ export function DocumentRepositoryTable({
   onDownload,
   onDelete,
   onArchive,
+  onVisum,
+  onRelease,
   busyId,
   canDelete = false,
 }) {
@@ -268,6 +302,8 @@ export function DocumentRepositoryTable({
               onDownload={onDownload}
               onDelete={onDelete}
               onArchive={onArchive}
+              onVisum={onVisum}
+              onRelease={onRelease}
               busyId={busyId}
               canDelete={canDelete}
               t={t}
@@ -341,6 +377,8 @@ export function DocumentRepositoryTable({
                       onDownload={onDownload}
                       onDelete={onDelete}
                       onArchive={onArchive}
+                      onVisum={onVisum}
+                      onRelease={onRelease}
                       canDelete={canDelete}
                       t={t}
                     />

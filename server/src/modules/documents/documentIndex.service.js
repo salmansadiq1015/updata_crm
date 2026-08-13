@@ -332,6 +332,90 @@ class DocumentIndexService {
     return { archived };
   }
 
+  /**
+   * Apply a flag update to whichever model backs a federated document record.
+   * Visum and Freigabe travel the same five sources as archiving, so they route
+   * the same way instead of each growing its own switch.
+   */
+  async _updateBackingRecord(recordId, update) {
+    const parsed = parseRecordId(recordId);
+    if (!parsed) throw new NotFoundError('Document', recordId);
+
+    switch (parsed.source) {
+      case 'project': {
+        const { default: ProjectDocument } = await import('../pm/projectDocument.model.js');
+        const doc = await ProjectDocument.findByIdAndUpdate(parsed.id, update);
+        if (!doc) throw new NotFoundError('ProjectDocument', recordId);
+        const { default: projectDocumentService } = await import('../pm/document.service.js');
+        await projectDocumentService._invalidateCache(doc.projectId);
+        break;
+      }
+      case 'repository': {
+        const record = await documentIndexRepository.findById(parsed.id);
+        if (!record) throw new NotFoundError('Document', recordId);
+        await documentIndexRepository.updateById(parsed.id, update);
+        break;
+      }
+      case 'generated': {
+        const doc = await GeneratedDocument.findByIdAndUpdate(parsed.id, update);
+        if (!doc) throw new NotFoundError('GeneratedDocument', recordId);
+        break;
+      }
+      case 'customer':
+      case 'mobile': {
+        const file = await FileMetadata.findByIdAndUpdate(parsed.id, update);
+        if (!file) throw new NotFoundError('File', recordId);
+        break;
+      }
+      case 'accounting': {
+        const doc = await AccountingDocument.findByIdAndUpdate(parsed.id, update);
+        if (!doc) throw new NotFoundError('AccountingDocument', recordId);
+        break;
+      }
+      default:
+        throw new NotFoundError('Document', recordId);
+    }
+    return parsed;
+  }
+
+  /** Visum (sign-off) on any document of the federated list. */
+  async setVisum(recordId, user, visiert = true, meta = {}) {
+    const parsed = await this._updateBackingRecord(recordId, visiert
+      ? { visumBy: user._id, visumAt: new Date() }
+      : { visumBy: null, visumAt: null });
+
+    auditService.logEvent({
+      eventType: visiert ? 'document_repository.visum_set' : 'document_repository.visum_cleared',
+      userId: user._id,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: recordId, source: parsed.source },
+      module: 'documents',
+    });
+
+    return { visiert };
+  }
+
+  /** Digitales Dossier: release the document to the field, or take it back. */
+  async setReleased(recordId, user, released = true, meta = {}) {
+    const parsed = await this._updateBackingRecord(recordId, released
+      ? { releasedToField: true, releasedAt: new Date(), releasedBy: user._id }
+      : { releasedToField: false, releasedAt: null, releasedBy: null });
+
+    auditService.logEvent({
+      eventType: released ? 'document_repository.released' : 'document_repository.release_revoked',
+      userId: user._id,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: recordId, source: parsed.source },
+      module: 'documents',
+    });
+
+    return { released };
+  }
+
   async delete(recordId, user, meta = {}) {
     const parsed = parseRecordId(recordId);
     if (!parsed) throw new NotFoundError('Document', recordId);
@@ -561,6 +645,8 @@ class DocumentIndexService {
       createdAt: normalizeDate(doc.createdAt),
       updatedAt: normalizeDate(doc.updatedAt),
       archived: Boolean(doc.archived),
+      visumBy: doc.visumBy || null,
+      releasedToField: Boolean(doc.releasedToField),
       metadata: doc.metadata || {},
       canDelete: true,
     });
@@ -591,6 +677,8 @@ class DocumentIndexService {
       pageCount: doc.pageCount,
       createdAt: normalizeDate(doc.generatedAt),
       archived: Boolean(doc.archived),
+      visumBy: doc.visumBy || null,
+      releasedToField: Boolean(doc.releasedToField),
       metadata: doc.metadata || {},
       canDelete: true,
     });
@@ -624,6 +712,8 @@ class DocumentIndexService {
       updatedAt: normalizeDate(doc.updatedAt),
       // Section flags for the 3-way split (Dokumente / mit Visum / Archiv).
       archived: Boolean(doc.archived),
+      visumBy: doc.visumBy || null,
+      releasedToField: Boolean(doc.releasedToField),
       visum: doc.visumBy
         ? {
             by: toStringId(doc.visumBy),
@@ -669,6 +759,8 @@ class DocumentIndexService {
         assignedTo: toStringId(doc.assignedTo),
       },
       archived: Boolean(doc.archived),
+      visumBy: doc.visumBy || null,
+      releasedToField: Boolean(doc.releasedToField),
       canDelete: Boolean(doc.retentionUntil && new Date(doc.retentionUntil) <= new Date()),
     });
   }
@@ -697,6 +789,8 @@ class DocumentIndexService {
       createdAt: normalizeDate(file.createdAt),
       updatedAt: normalizeDate(file.updatedAt),
       archived: Boolean(file.archived),
+      visumBy: file.visumBy || null,
+      releasedToField: Boolean(file.releasedToField),
       metadata: { bucket: file.bucket, storageBackend: file.storageBackend },
       canDelete: true,
     });

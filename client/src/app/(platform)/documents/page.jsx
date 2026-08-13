@@ -19,6 +19,8 @@ import { DocumentUploadDialog } from '@/modules/documents/components/document-up
 import { downloadFromUrl } from '@/lib/api/download';
 import {
   useArchiveRepositoryDocument,
+  useVisumRepositoryDocument,
+  useReleaseRepositoryDocument,
   useDeleteRepositoryDocument,
   useDocumentRepository,
   useDownloadRepositoryDocument,
@@ -69,6 +71,8 @@ export default function DocumentsPage() {
   const downloadAttachment = useDownloadRepositoryDocumentAttachment();
   const remove = useDeleteRepositoryDocument();
   const archiveMutation = useArchiveRepositoryDocument();
+  const visumMutation = useVisumRepositoryDocument();
+  const releaseMutation = useReleaseRepositoryDocument();
   const documents = data?.items ?? [];
   const pagination = data?.pagination ?? {};
 
@@ -166,6 +170,32 @@ export default function DocumentsPage() {
     }
   };
 
+  const handleVisum = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const next = !doc.visumBy;
+      await visumMutation.mutateAsync({ id: doc.id, visiert: next });
+      showSuccess(t(next ? 'documents.repository.visumSetDone' : 'documents.repository.visumRemovedDone'));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRelease = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const next = !doc.releasedToField;
+      await releaseMutation.mutateAsync({ id: doc.id, released: next });
+      showSuccess(t(next ? 'documents.repository.releasedDone' : 'documents.repository.releaseRevokedDone'));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleArchive = async (doc) => {
     setBusyId(doc.id);
     try {
@@ -244,6 +274,8 @@ export default function DocumentsPage() {
         onDownload={handleDownload}
         onDelete={canDelete ? setDeleteTarget : undefined}
         onArchive={handleArchive}
+        onVisum={handleVisum}
+        onRelease={handleRelease}
         busyId={busyId}
         canDelete={canDelete}
       />

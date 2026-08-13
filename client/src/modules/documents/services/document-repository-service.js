@@ -41,6 +41,18 @@ export const documentRepositoryService = {
     return res.data;
   },
 
+  async setVisum(id, visiert) {
+    const url = ENDPOINTS.DOCUMENTS.VISUM(id);
+    const res = visiert ? await apiClient.post(url) : await apiClient.delete(url);
+    return res.data;
+  },
+
+  async setReleased(id, released) {
+    const url = ENDPOINTS.DOCUMENTS.RELEASE(id);
+    const res = released ? await apiClient.post(url) : await apiClient.delete(url);
+    return res.data;
+  },
+
   async setArchived(id, archived) {
     const res = archived
       ? await apiClient.post(ENDPOINTS.DOCUMENTS.ARCHIVE(id))

@@ -39,6 +39,22 @@ export function useDeleteRepositoryDocument() {
   });
 }
 
+export function useVisumRepositoryDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, visiert }) => documentRepositoryService.setVisum(id, visiert),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.documents.all() }),
+  });
+}
+
+export function useReleaseRepositoryDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, released }) => documentRepositoryService.setReleased(id, released),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.documents.all() }),
+  });
+}
+
 export function useArchiveRepositoryDocument() {
   const queryClient = useQueryClient();
   return useMutation({

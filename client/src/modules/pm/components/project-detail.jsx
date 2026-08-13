@@ -20,6 +20,7 @@ import { ScheduleTab } from './schedule-tab';
 import { DocumentsTab } from './documents-tab';
 import { ProjectActivityTab } from './project-activity-tab';
 import { ContactLogPanel } from '@/modules/crm/components/contact-log-panel';
+import { EmailHistoryPanel } from '@/modules/doctpl/components/email-history-panel';
 import { ProjectTasksTab, ProjectTaskSummaryPanel } from './project-tasks-tab';
 import { ProjectChatTab } from './project-chat-tab';
 import { useProjectChatUnread } from '@/modules/chat/hooks/use-chat-rooms';
@@ -39,6 +40,7 @@ import {
   FolderKanban, Building2, User, Calendar, Wallet, FileText,
   ClipboardList, Clock, ListChecks, CalendarClock, Activity, ListTodo, MessagesSquare,
   ScrollText,
+  Mail,
 } from 'lucide-react';
 import { ProjectProtocolsTab } from './project-protocols-tab';
 
@@ -292,6 +294,9 @@ export function ProjectDetail() {
                   )}
                 </TabsTrigger>
               )}
+              <TabsTrigger value="emails" className="gap-1.5">
+                <Mail className="h-3.5 w-3.5" /> {t('doctpl.email.tab', 'E-Mails')}
+              </TabsTrigger>
               <TabsTrigger value="contact-log" className="gap-1.5">
                 <MessagesSquare className="h-3.5 w-3.5" /> {t('crm.contactLog.title', 'Kontakthistorie')}
               </TabsTrigger>
@@ -369,6 +374,10 @@ export function ProjectDetail() {
                 <ProjectChatTab projectId={id} />
               </TabsContent>
             )}
+
+            <TabsContent value="emails" className="mt-6">
+              <EmailHistoryPanel sourceModule="pm" sourceRecordId={id} />
+            </TabsContent>
 
             <TabsContent value="contact-log" className="mt-6">
               <ContactLogPanel

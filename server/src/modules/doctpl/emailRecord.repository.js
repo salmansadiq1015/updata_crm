@@ -34,6 +34,8 @@ class EmailRecordRepository {
       .sort(sort)
       .limit(limit + 1)
       .select('-__v')
+      // The history has to answer "who sent this", not show an id.
+      .populate({ path: 'createdBy', select: 'firstName lastName email' })
       .lean();
 
     return buildCursorResponse(docs, limit, sortBy);

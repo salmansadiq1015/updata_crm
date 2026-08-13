@@ -20,6 +20,7 @@ import { SiteBusinessTab } from './site-business-tab';
 import { SiteOverviewTab } from './site-overview-tab';
 import { SiteTasksTab } from './site-tasks-tab';
 import { ContactLogPanel } from './contact-log-panel';
+import { EmailHistoryPanel } from '@/modules/doctpl/components/email-history-panel';
 import { SiteProjectsTab } from './site-projects-tab';
 import { SiteMaintenanceTab } from './site-maintenance-tab';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
@@ -76,6 +77,7 @@ const SITE_TABS = [
   { id: 'maintenance', labelKey: 'crm.maintenance.objectTitle', fallback: 'Wartungen', icon: Wrench, permission: 'crm:read' },
   { id: 'tasks', labelKey: 'crm.sites.tasksTab', fallback: 'Aufgaben', icon: ListChecks, permission: 'tasks:read' },
   { id: 'contact-log', labelKey: 'crm.contactLog.title', fallback: 'Kontakthistorie', icon: MessagesSquare, permission: 'crm:read' },
+  { id: 'emails', labelKey: 'doctpl.email.tab', fallback: 'E-Mails', icon: Mail, permission: 'crm:read' },
   { id: 'business', labelKey: 'crm.sites.businessTab', fallback: 'Offerten, Aufträge & Rechnungen', icon: Receipt, permission: 'crm:read' },
   { id: 'images', labelKey: 'crm.images.title', fallback: 'Bilder', icon: ImageIcon, permission: 'crm:read' },
   { id: 'documents', labelKey: 'crm.documents.title', fallback: 'Dokumente', icon: Files, permission: 'crm:read' },
@@ -415,6 +417,9 @@ export function SiteDetail() {
         </TabsContent>
         <TabsContent value="maintenance">
           <SiteMaintenanceTab siteId={id} />
+        </TabsContent>
+        <TabsContent value="emails">
+          <EmailHistoryPanel sourceModule="crm" sourceRecordId={id} />
         </TabsContent>
         <TabsContent value="contact-log">
           <ContactLogPanel

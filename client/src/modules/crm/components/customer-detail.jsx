@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ContactLogPanel } from './contact-log-panel';
 import { EntityEmailButton } from './entity-email-button';
+import { EmailHistoryPanel } from '@/modules/doctpl/components/email-history-panel';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -430,6 +431,10 @@ export function CustomerDetail() {
                 <ImageIcon className="h-3.5 w-3.5" />
                 {t('crm.tabPhotos', 'Bilder')}
               </TabsTrigger>
+              <TabsTrigger value="emails" className="gap-1.5">
+                <Mail className="h-3.5 w-3.5" />
+                {t('doctpl.email.tab', 'E-Mails')}
+              </TabsTrigger>
               <TabsTrigger value="activity" className="gap-1.5">
                 <Activity className="h-3.5 w-3.5" />
                 {t('common.activity', 'Aktivität')}
@@ -474,6 +479,9 @@ export function CustomerDetail() {
               <SitesPanel customerId={customer._id} customer={customer} />
             </TabsContent>
 
+            <TabsContent value="emails">
+              <EmailHistoryPanel sourceModule="crm" sourceRecordId={id} />
+            </TabsContent>
             <TabsContent value="activity">
               <CustomerActivityPanel customerId={customer._id} />
             </TabsContent>

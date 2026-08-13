@@ -19,7 +19,7 @@ import { showError } from '@/lib/toast';
 import { downloadFromUrl } from '@/lib/api/download';
 import { EmptyState } from '@/shared/components/empty-state';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
-import { DocumentViewer, getFileIcon, formatFileSize, isPreviewable } from '@/shared/components/document-viewer';
+import { getFileIcon, formatFileSize, isPreviewable } from '@/shared/components/document-viewer';
 import { DocumentGenerateDialog, templateLabel } from '@/modules/pm/components/document-generate-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -537,8 +537,6 @@ export function DocumentsTab({ projectId }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [uploadCategory, setUploadCategory] = useState('OTHER');
   const [viewMode, setViewMode] = useState('list');
-  const [previewDoc, setPreviewDoc] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [resumeDraft, setResumeDraft] = useState(null);
   const [emailDoc, setEmailDoc] = useState(null);
@@ -667,14 +665,15 @@ export function DocumentsTab({ projectId }) {
     }
   }, [projectId]);
 
+  // Preview opens in a new tab, like every other document surface — the modal
+  // viewer this used made the same action behave differently here.
   const handlePreview = useCallback(async (doc) => {
     try {
       const result = await documentService.getDownloadUrl(projectId, doc._id);
       const url = result?.url || result;
-      setPreviewUrl(url);
-      setPreviewDoc(doc);
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      else handleDownload(doc);
     } catch {
-      // fallback: open in new tab
       handleDownload(doc);
     }
   }, [projectId, handleDownload]);
@@ -945,16 +944,6 @@ export function DocumentsTab({ projectId }) {
           ))}
         </div>
       )}
-
-      {/* ── Document viewer ───────────────────────────────── */}
-      <DocumentViewer
-        open={!!previewDoc}
-        onOpenChange={(v) => { if (!v) { setPreviewDoc(null); setPreviewUrl(null); } }}
-        doc={previewDoc}
-        url={previewUrl}
-        docs={filteredDocs}
-        onNavigate={handlePreview}
-      />
 
       {/* ── Metadata edit dialog ──────────────────────────── */}
       <Dialog open={!!editDoc} onOpenChange={(v) => { if (!v) setEditDoc(null); }}>

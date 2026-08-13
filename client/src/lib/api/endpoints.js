@@ -173,6 +173,7 @@ export const ENDPOINTS = Object.freeze({
     SERVICES: (id) => `/vehicles/${id}/services`,
     SERVICE_BY_ID: (id, subId) => `/vehicles/${id}/services/${subId}`,
     MATERIALS: (id) => `/vehicles/${id}/materials`,
+    MATERIALS_EXPORT_PDF: (id) => `/vehicles/${id}/materials/export/pdf`,
     MATERIAL_BY_ID: (id, subId) => `/vehicles/${id}/materials/${subId}`,
     NOTES: (id) => `/vehicles/${id}/notes`,
     NOTE_BY_ID: (id, subId) => `/vehicles/${id}/notes/${subId}`,
@@ -789,5 +790,7 @@ export const ENDPOINTS = Object.freeze({
     EMAIL_COMPOSE:        '/doctpl/emails/compose',
     EMAIL_BY_ID:          (id)      => `/doctpl/emails/${id}`,
     EMAIL_RETRY:          (id)      => `/doctpl/emails/${id}/retry`,
+    EMAIL_TEMPLATES:      '/doctpl/email-templates',
+    EMAIL_TEMPLATE_RENDER:(id)      => `/doctpl/email-templates/${id}/render`,
   },
 });

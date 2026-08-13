@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Paperclip, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -10,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { showError, showSuccess } from '@/lib/toast';
 import { useSendEmail } from '../../hooks/useEmailMutations';
+import { emailService } from '../../services/EmailService';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AttachmentPicker } from './attachment-picker';
 
 const DEFAULT_FORM = {
@@ -71,9 +74,33 @@ function buildInitialForm(initialValues = {}) {
 }
 
 function EmailComposeForm({ initialValues, onClose, onSent }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [form, setForm] = useState(() => buildInitialForm(initialValues));
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Reusable email texts: pick one and its placeholders resolve against the
+  // record the message is being sent from.
+  const { data: templates = [] } = useQuery({
+    queryKey: ['doctpl', 'email-templates'],
+    queryFn: async () => (await emailService.listTemplates())?.data ?? [],
+    staleTime: 5 * 60_000,
+  });
+  const usable = templates.filter((tpl) => tpl.isActive !== false && tpl.language === language);
+
+  const applyTemplate = async (templateId) => {
+    const scope = initialValues.attachmentScope || {};
+    const res = await emailService.renderTemplate(templateId, {
+      customerId: scope.customerId,
+      siteId: scope.siteId,
+      projectId: scope.projectId,
+    });
+    const rendered = res?.data;
+    if (!rendered) return;
+    setForm((current) => ({
+      ...current,
+      subject: rendered.subject || current.subject,
+      bodyHtml: rendered.bodyHtml || current.bodyHtml,
+    }));
+  };
   const send = useSendEmail();
 
   const addAttachments = (picked) => setForm((current) => {
@@ -158,6 +185,19 @@ function EmailComposeForm({ initialValues, onClose, onSent }) {
             <Input value={form.senderAddress} onChange={set('senderAddress')} placeholder={t('common.optional')} />
           </div>
         </div>
+        {usable.length > 0 && (
+          <div>
+            <Label>{t('doctpl.email.template', 'Textvorlage')}</Label>
+            <Select onValueChange={applyTemplate}>
+              <SelectTrigger><SelectValue placeholder={t('doctpl.email.templatePlaceholder', 'Vorlage übernehmen (optional)')} /></SelectTrigger>
+              <SelectContent>
+                {usable.map((tpl) => (
+                  <SelectItem key={tpl._id} value={tpl._id}>{tpl.templateType}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div>
           <Label>{t('doctpl.subject')}<span className="ml-1 text-red-400">*</span></Label>
           <Input value={form.subject} onChange={set('subject')} />

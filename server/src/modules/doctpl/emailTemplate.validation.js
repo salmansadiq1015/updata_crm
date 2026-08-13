@@ -27,3 +27,12 @@ export const updateEmailTemplateSchema = {
     isActive: Joi.boolean(),
   }).min(1),
 };
+
+export const renderEmailTemplateSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    customerId: objectId,
+    siteId: objectId,
+    projectId: objectId,
+  }),
+};

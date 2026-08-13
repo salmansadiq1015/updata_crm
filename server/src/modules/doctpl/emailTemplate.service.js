@@ -90,6 +90,62 @@ class EmailTemplateService {
     return copy;
   }
 
+  /**
+   * Fill a template's placeholders from the record the email is sent from.
+   * Templates are written once with {{customerName}}, {{siteAddress}} and the
+   * like; the caller passes whichever ids it has and the rest resolve to ''.
+   */
+  async render(id, { customerId, siteId, projectId, user } = {}) {
+    const template = await this.getById(id);
+
+    const vars = {
+      customerName: '', customerEmail: '',
+      siteName: '', siteAddress: '',
+      projectName: '', projectNumber: '',
+      senderName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || '',
+      senderEmail: user?.email || '',
+    };
+
+    if (siteId) {
+      const Site = (await import('../crm/site.model.js')).default;
+      const site = await Site.findById(siteId).select('name street postalCode city customerId').lean();
+      if (site) {
+        vars.siteName = site.name || '';
+        vars.siteAddress = [site.street, [site.postalCode, site.city].filter(Boolean).join(' ')]
+          .filter(Boolean).join(', ');
+        if (!customerId) customerId = site.customerId;
+      }
+    }
+    if (projectId) {
+      const Project = (await import('../pm/project.model.js')).default;
+      const project = await Project.findById(projectId).select('name projectNumber customerId').lean();
+      if (project) {
+        vars.projectName = project.name || '';
+        vars.projectNumber = project.projectNumber || '';
+        if (!customerId) customerId = project.customerId;
+      }
+    }
+    if (customerId) {
+      const Customer = (await import('../crm/customer.model.js')).default;
+      const customer = await Customer.findById(customerId).select('name email').lean();
+      if (customer) {
+        vars.customerName = customer.name || '';
+        vars.customerEmail = customer.email || '';
+      }
+    }
+
+    const fill = (text) => String(text || '').replace(
+      /\{\{\s*([a-zA-Z]+)\s*\}\}/g,
+      (match, key) => (key in vars ? vars[key] : match),
+    );
+
+    return {
+      subject: fill(template.subjectTemplate),
+      bodyHtml: fill(template.bodyHtml),
+      bodyText: fill(template.bodyText),
+    };
+  }
+
   async remove(id, userId, meta = {}) {
     const existing = await emailBodyTemplateRepository.findById(id);
     if (!existing) throw new NotFoundError('EmailBodyTemplate', id);

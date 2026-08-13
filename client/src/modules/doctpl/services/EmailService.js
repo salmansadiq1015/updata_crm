@@ -7,4 +7,6 @@ export const emailService = {
   list:    (p={}) => apiClient.get(E.EMAILS, { params: p }),
   getById: (id)   => apiClient.get(E.EMAIL_BY_ID(id)),
   retry:   (id)   => apiClient.post(E.EMAIL_RETRY(id)),
+  listTemplates: ()        => apiClient.get(E.EMAIL_TEMPLATES),
+  renderTemplate: (id, ctx) => apiClient.post(E.EMAIL_TEMPLATE_RENDER(id), ctx),
 };

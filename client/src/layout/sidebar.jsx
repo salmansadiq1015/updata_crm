@@ -31,6 +31,7 @@ import {
   FileCheck, Clock4, Files, LayoutTemplate,
   Type, TrendingUp, Ruler, RefreshCw, CalendarDays, Grid3X3, AlertTriangle,
   ShoppingCart, PlugZap, Percent, Video, Building2, Eraser, Truck,
+  Mail,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import {
@@ -132,6 +133,7 @@ const navSectionDefs = [
         ],
       },
       { type: 'leaf', labelKey: 'sidebar.templates', href: '/admin/templates', icon: LayoutTemplate, permission: 'templates:read' },
+      { type: 'leaf', labelKey: 'sidebar.emailTemplates', href: '/admin/email-templates', icon: Mail, permission: 'templates:read' },
       { type: 'leaf', labelKey: 'sidebar.cleanup', href: '/admin/cleanup', icon: Eraser, permission: 'crm:admin' },
       { type: 'leaf', labelKey: 'sidebar.migration', href: '/admin/migration', icon: RefreshCw, permission: PERMISSIONS.SETTINGS_ADMIN },
       { type: 'leaf', labelKey: 'sidebar.integrations', href: '/admin/integrations', icon: Zap, permission: 'integrations:admin' },

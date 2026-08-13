@@ -791,6 +791,8 @@ export const ENDPOINTS = Object.freeze({
     EMAIL_BY_ID:          (id)      => `/doctpl/emails/${id}`,
     EMAIL_RETRY:          (id)      => `/doctpl/emails/${id}/retry`,
     EMAIL_TEMPLATES:      '/doctpl/email-templates',
+    EMAIL_TEMPLATE_BY_ID: (id)      => `/doctpl/email-templates/${id}`,
+    EMAIL_TEMPLATE_DUPLICATE:(id)   => `/doctpl/email-templates/${id}/duplicate`,
     EMAIL_TEMPLATE_RENDER:(id)      => `/doctpl/email-templates/${id}/render`,
   },
 });

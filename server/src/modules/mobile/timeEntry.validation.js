@@ -4,15 +4,26 @@ import { objectId } from '../../shared/validation/commonSchemas.js';
 const ACTIVITY_TYPES = ['TRAVEL', 'ONSITE_WORK', 'ADMINISTRATIVE', 'OTHER'];
 const RELEASE_STATUSES = ['PENDING', 'RELEASED', 'LOCKED'];
 
+const timeEntryBody = {
+  date: Joi.date().iso().required(),
+  startTime: Joi.date().iso().required(),
+  endTime: Joi.date().iso().allow(null),
+  breakDurationMin: Joi.number().min(0).default(0),
+  activityType: Joi.string().valid(...ACTIVITY_TYPES).required(),
+  note: Joi.string().max(500).allow('', null),
+};
+
+/** Nested under an assignment: the order comes from the URL. */
 export const createTimeEntrySchema = {
   params: Joi.object({ id: objectId.required() }),
+  body: Joi.object(timeEntryBody),
+};
+
+/** Standalone: office hours, which belong to no assignment. */
+export const createOfficeTimeEntrySchema = {
   body: Joi.object({
-    date: Joi.date().iso().required(),
-    startTime: Joi.date().iso().required(),
-    endTime: Joi.date().iso().allow(null),
-    breakDurationMin: Joi.number().min(0).default(0),
-    activityType: Joi.string().valid(...ACTIVITY_TYPES).required(),
-    note: Joi.string().max(500).allow('', null),
+    ...timeEntryBody,
+    officeCategoryId: objectId.allow(null),
   }),
 };
 

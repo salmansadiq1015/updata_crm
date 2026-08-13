@@ -3,6 +3,7 @@ import timeEntryController from './timeEntry.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
+  createOfficeTimeEntrySchema,
   createTimeEntrySchema,
   updateTimeEntrySchema,
   deleteTimeEntrySchema,
@@ -31,6 +32,14 @@ timeEntryOrderRouter.post(
 
 // Standalone router for routes under /time-entries/:entryId
 const timeEntryRouter = Router();
+
+timeEntryRouter.post(
+  '/',
+  authenticate,
+  requirePermission('mobile:write'),
+  validate(createOfficeTimeEntrySchema),
+  (req, res, next) => timeEntryController.createOffice(req, res, next),
+);
 
 timeEntryRouter.get(
   '/',

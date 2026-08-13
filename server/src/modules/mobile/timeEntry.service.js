@@ -20,12 +20,19 @@ class TimeEntryService {
     return timeEntryRepository.findByOrderId(orderId);
   }
 
+  /**
+   * `orderId` is null for office hours — the entry then carries entryType
+   * OFFICE and, optionally, a category. Everything downstream (cache key,
+   * events, audit) tolerates its absence.
+   */
   async create(orderId, data, technicianId, meta = {}) {
     const netDurationMin = this._calculateNetDuration(data.startTime, data.endTime, data.breakDurationMin);
+    const entryType = orderId ? 'ASSIGNMENT' : 'OFFICE';
 
     const entry = await timeEntryRepository.create({
       ...data,
-      orderId,
+      orderId: orderId || null,
+      entryType,
       technicianId,
       netDurationMin,
       createdBy: technicianId,
@@ -72,7 +79,7 @@ class TimeEntryService {
       updatedBy: userId,
     });
 
-    await cacheManager.del(`mobile:time-entries:order:${existing.orderId}`);
+    if (existing.orderId) await cacheManager.del(`mobile:time-entries:order:${existing.orderId}`);
 
     auditService.logEvent({
       eventType: 'time-entry.updated',
@@ -97,7 +104,7 @@ class TimeEntryService {
 
     await timeEntryRepository.softDelete(id);
 
-    await cacheManager.del(`mobile:time-entries:order:${existing.orderId}`);
+    if (existing.orderId) await cacheManager.del(`mobile:time-entries:order:${existing.orderId}`);
     emitTimeTrackingRealtimeEvent({ type: 'time-entry.deleted', entryId: id, orderId: existing.orderId, technicianId: existing.technicianId });
 
     auditService.logEvent({
@@ -182,7 +189,7 @@ class TimeEntryService {
       updatedBy: userId,
     });
 
-    await cacheManager.del(`mobile:time-entries:order:${existing.orderId}`);
+    if (existing.orderId) await cacheManager.del(`mobile:time-entries:order:${existing.orderId}`);
     emitTimeTrackingRealtimeEvent({ type: 'time-entry.updated', entryId: id, orderId: existing.orderId, technicianId: existing.technicianId });
 
     eventBus.publish(EVENT_TYPES.MOBILE_TIME_ENTRY_RELEASED, {

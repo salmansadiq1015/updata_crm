@@ -16,6 +16,15 @@ class TimeEntryController {
     } catch (err) { next(err); }
   }
 
+  // Office hours: no assignment in the URL, so none on the entry.
+  async createOffice(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const entry = await timeEntryService.create(null, req.body, req.user._id, meta);
+      return res.success({ data: entry, message: 'Time entry created successfully', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
   async update(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

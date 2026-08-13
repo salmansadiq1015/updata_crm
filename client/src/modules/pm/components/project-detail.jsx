@@ -20,6 +20,7 @@ import { ScheduleTab } from './schedule-tab';
 import { DocumentsTab } from './documents-tab';
 import { ProjectActivityTab } from './project-activity-tab';
 import { ContactLogPanel } from '@/modules/crm/components/contact-log-panel';
+import { EntityEmailButton } from '@/modules/crm/components/entity-email-button';
 import { EmailHistoryPanel } from '@/modules/doctpl/components/email-history-panel';
 import { ProjectTasksTab, ProjectTaskSummaryPanel } from './project-tasks-tab';
 import { ProjectChatTab } from './project-chat-tab';
@@ -217,6 +218,15 @@ export function ProjectDetail() {
                     </Tooltip>
                   </TooltipProvider>
                 )}
+              </div>
+
+              <div className="mt-2 flex justify-center">
+                <EntityEmailButton
+                  sourceModule="pm"
+                  sourceRecordId={id}
+                  attachmentScope={{ projectId: id }}
+                  defaultTo={typeof project.customerId === 'object' ? project.customerId?.email : undefined}
+                />
               </div>
             </div>
 

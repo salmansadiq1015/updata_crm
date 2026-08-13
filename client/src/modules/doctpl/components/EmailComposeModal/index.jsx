@@ -106,10 +106,14 @@ function EmailComposeForm({ initialValues, onClose }) {
       bodyHtml: form.bodyHtml,
       sourceModule: form.sourceModule,
       sourceRecordId: form.sourceRecordId,
-      documentId: documentIds[0] || null,
-      documentIds,
-      fileAttachments,
     };
+    // An email without attachments simply omits them: the schema validates
+    // documentId as an ObjectId, so sending null to mean "none" is rejected.
+    if (documentIds.length) {
+      payload.documentId = documentIds[0];
+      payload.documentIds = documentIds;
+    }
+    if (fileAttachments.length) payload.fileAttachments = fileAttachments;
     // senderName/senderAddress are optional; the server resolves them from the CI
     // config when omitted. Sending empty strings fails Joi (string().email() rejects '').
     if (form.senderName?.trim()) payload.senderName = form.senderName.trim();
@@ -129,7 +133,7 @@ function EmailComposeForm({ initialValues, onClose }) {
       </DialogHeader>
       <div className="space-y-3 py-1">
         <div>
-          <Label>{t('doctpl.to')}</Label>
+          <Label>{t('doctpl.to')}<span className="ml-1 text-red-400">*</span></Label>
           <Input value={form.to} onChange={set('to')} placeholder={t('doctpl.email.recipientPlaceholder')} />
         </div>
         <div>
@@ -151,7 +155,7 @@ function EmailComposeForm({ initialValues, onClose }) {
           </div>
         </div>
         <div>
-          <Label>{t('doctpl.subject')}</Label>
+          <Label>{t('doctpl.subject')}<span className="ml-1 text-red-400">*</span></Label>
           <Input value={form.subject} onChange={set('subject')} />
         </div>
         <div>
@@ -196,7 +200,10 @@ function EmailComposeForm({ initialValues, onClose }) {
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-        <Button onClick={handleSend} disabled={send.isPending || !toRecipientList(form.to).length}>
+        <Button
+          onClick={handleSend}
+          disabled={send.isPending || !toRecipientList(form.to).length || !form.subject.trim()}
+        >
           {send.isPending ? t('doctpl.sending') : t('common.send')}
         </Button>
       </DialogFooter>

@@ -3,15 +3,21 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, CheckCircle2, ChevronDown, Clock, Mail, Paperclip, User,
+  AlertTriangle, CheckCircle2, ChevronDown, Clock, Loader2, Mail, Paperclip, RotateCcw, User,
 } from 'lucide-react';
 import apiClient from '@/lib/api/client';
 import { ENDPOINTS } from '@/lib/api/endpoints';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { EmptyState } from '@/shared/components/empty-state';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { showError, showSuccess } from '@/lib/toast';
+import { useRetryEmail } from '../hooks/useEmailMutations';
 import { formatDateTime } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
+
+// The server only re-queues these two.
+const RETRYABLE = ['FAILED', 'BOUNCED'];
 
 const STATUS_META = {
   QUEUED: { label: 'In Warteschlange', icon: Clock, cls: 'bg-muted text-muted-foreground' },
@@ -50,6 +56,21 @@ export function EmailHistoryPanel({ sourceModule = 'crm', sourceRecordId, highli
 
   const emails = Array.isArray(data) ? data : (data?.items || data?.data || []);
 
+  const retry = useRetryEmail();
+  const [retryingId, setRetryingId] = useState(null);
+  const onRetry = async (email) => {
+    const id = String(email._id || email.id);
+    setRetryingId(id);
+    try {
+      await retry.mutateAsync(id);
+      showSuccess(t('doctpl.email.retryQueued', 'E-Mail wird erneut gesendet'));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
   if (isLoading) {
     return <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>;
   }
@@ -78,6 +99,8 @@ export function EmailHistoryPanel({ sourceModule = 'crm', sourceRecordId, highli
             email={email}
             t={t}
             open={openId === String(email._id || email.id)}
+            onRetry={onRetry}
+            retryingId={retryingId}
             onToggle={() => setOpenId((current) => (
               current === String(email._id || email.id) ? null : String(email._id || email.id)
             ))}
@@ -88,13 +111,15 @@ export function EmailHistoryPanel({ sourceModule = 'crm', sourceRecordId, highli
   );
 }
 
-function EmailRow({ email, t, open, onToggle }) {
+function EmailRow({ email, t, open, onToggle, onRetry, retryingId }) {
   const meta = STATUS_META[email.status] || STATUS_META.QUEUED;
   const StatusIcon = meta.icon;
   const sender = email.createdBy
     ? [email.createdBy.firstName, email.createdBy.lastName].filter(Boolean).join(' ') || email.createdBy.email
     : null;
   const recipients = [...(email.to || []), ...(email.cc || [])].join(', ');
+  const canRetry = RETRYABLE.includes(email.status);
+  const isRetrying = retryingId === String(email._id || email.id);
 
   return (
     <li className="overflow-hidden rounded-xl border border-border bg-card">
@@ -137,6 +162,22 @@ function EmailRow({ email, t, open, onToggle }) {
         </div>
         <ChevronDown className={cn('mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
       </button>
+
+      {canRetry && (
+        <div className="flex justify-end border-t border-border bg-muted/10 px-3.5 py-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
+            onClick={() => onRetry?.(email)}
+            disabled={isRetrying}
+          >
+            {isRetrying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+            {t('doctpl.email.retry', 'Erneut senden')}
+          </Button>
+        </div>
+      )}
 
       {open && (
         <div className="space-y-3 border-t border-border bg-muted/20 p-3.5">

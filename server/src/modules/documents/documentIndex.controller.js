@@ -9,6 +9,15 @@ class DocumentIndexController {
     } catch (err) { next(err); }
   }
 
+  // Attachable documents across the repository, generated and project documents.
+  async listAttachable(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const data = await documentIndexService.listAttachable(query);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async upload(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

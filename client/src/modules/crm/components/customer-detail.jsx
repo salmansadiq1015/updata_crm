@@ -22,6 +22,7 @@ import { RichTextContent } from '@/components/ui/rich-text-content';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ContactLogPanel } from './contact-log-panel';
+import { EntityEmailButton } from './entity-email-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -362,6 +363,14 @@ export function CustomerDetail() {
                     </Tooltip>
                   </TooltipProvider>
                 )}
+              </div>
+
+              <div className="mt-2 flex justify-center">
+                <EntityEmailButton
+                  sourceRecordId={id}
+                  attachmentScope={{ customerId: id }}
+                  defaultTo={customer.email}
+                />
               </div>
             </div>
           </div>

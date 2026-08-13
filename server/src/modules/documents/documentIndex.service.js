@@ -803,6 +803,83 @@ class DocumentIndexService {
       .filter(Boolean)
       .join('/');
   }
+
+  /**
+   * Everything that can travel as an email attachment, across the three places
+   * a file actually lives: the repository index, generated documents, and
+   * project documents. The index alone holds a fraction of the stored files,
+   * which is why an attachment picker built on it looked almost empty.
+   */
+  async listAttachable({ siteId, customerId, projectId, search, limit = 100 } = {}) {
+    const [DocumentIndex, GeneratedDocument, ProjectDocument] = await Promise.all([
+      import('./documentIndex.model.js').then((m) => m.default),
+      import('../doctpl/generatedDocument.model.js').then((m) => m.default),
+      import('../pm/projectDocument.model.js').then((m) => m.default),
+    ]);
+
+    const rx = search
+      ? new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+      : null;
+    const out = [];
+
+    const repoFilter = { fileId: { $ne: null } };
+    if (siteId) repoFilter.siteId = siteId;
+    if (customerId) repoFilter.customerId = customerId;
+    if (projectId) repoFilter.projectId = projectId;
+    if (rx) repoFilter.$or = [{ title: rx }, { fileName: rx }];
+    for (const doc of await DocumentIndex.find(repoFilter).sort({ createdAt: -1 }).limit(limit).lean()) {
+      out.push({
+        id: String(doc._id),
+        fileId: String(doc.fileId),
+        title: doc.title || doc.fileName,
+        fileName: doc.fileName,
+        createdAt: doc.createdAt,
+        origin: 'repository',
+      });
+    }
+
+    const genFilter = { fileId: { $ne: null } };
+    if (projectId) genFilter.sourceRecordId = projectId;
+    if (rx) genFilter.fileName = rx;
+    for (const doc of await GeneratedDocument.find(genFilter).sort({ generatedAt: -1 }).limit(limit).lean()) {
+      out.push({
+        id: String(doc._id),
+        fileId: String(doc.fileId),
+        title: doc.fileName,
+        fileName: doc.fileName,
+        createdAt: doc.generatedAt || doc.createdAt,
+        origin: 'generated',
+      });
+    }
+
+    const pdFilter = { fileId: { $ne: null } };
+    if (projectId) pdFilter.projectId = projectId;
+    if (rx) pdFilter.fileName = rx;
+    for (const doc of await ProjectDocument.find(pdFilter).sort({ createdAt: -1 }).limit(limit).lean()) {
+      out.push({
+        id: String(doc._id),
+        fileId: String(doc.fileId),
+        title: doc.fileName,
+        fileName: doc.fileName,
+        createdAt: doc.createdAt,
+        origin: 'project',
+      });
+    }
+
+    // The same file can be indexed twice (a mobile upload mirrored into a
+    // project) — an attachment is the file, so dedupe on it.
+    const seen = new Set();
+    return out
+      .filter((doc) => {
+        const key = String(doc.fileId);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+      .slice(0, limit);
+  }
+
 }
 
 const documentIndexService = new DocumentIndexService();

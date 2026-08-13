@@ -2,11 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { documentRepositoryService } from '../services/document-repository-service';
 
-export function useDocumentRepository(filters = {}) {
+export function useDocumentRepository(filters = {}, options = {}) {
   return useQuery({
     queryKey: queryKeys.documents.list(filters),
     queryFn: () => documentRepositoryService.list(filters),
     staleTime: 20_000,
+    ...options,
   });
 }
 
@@ -43,5 +44,19 @@ export function useArchiveRepositoryDocument() {
   return useMutation({
     mutationFn: ({ id, archived }) => documentRepositoryService.setArchived(id, archived),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.documents.all() }),
+  });
+}
+
+/**
+ * Documents that can be attached to an email — merged from the repository,
+ * generated documents and project documents, since a stored file lives in
+ * whichever of the three indexed it.
+ */
+export function useAttachableDocuments(filters = {}, options = {}) {
+  return useQuery({
+    queryKey: ['documents', 'attachable', filters],
+    queryFn: () => documentRepositoryService.listAttachable(filters),
+    staleTime: 20_000,
+    ...options,
   });
 }

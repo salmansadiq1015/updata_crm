@@ -50,3 +50,13 @@ export const documentRecordParamSchema = {
     id: Joi.string().pattern(CENTRAL_RECORD_ID).required(),
   }),
 };
+
+export const listAttachableSchema = {
+  query: Joi.object({
+    siteId: objectId,
+    customerId: objectId,
+    projectId: objectId,
+    search: Joi.string().trim().max(200).allow(''),
+    limit: Joi.number().integer().min(1).max(200).default(100),
+  }),
+};

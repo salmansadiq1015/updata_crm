@@ -5,6 +5,7 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import {
   documentRecordParamSchema,
+  listAttachableSchema,
   listDocumentsSchema,
   uploadDocumentSchema,
 } from './documentIndex.validation.js';
@@ -15,6 +16,14 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: config.storage.maxFileSize },
 });
+
+router.get(
+  '/attachable',
+  authenticate,
+  requirePermission('documents:read'),
+  validate(listAttachableSchema),
+  (req, res, next) => documentIndexController.listAttachable(req, res, next),
+);
 
 router.get(
   '/',

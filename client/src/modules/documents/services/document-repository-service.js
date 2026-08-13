@@ -8,6 +8,11 @@ function stripEmptyParams(params = {}) {
 }
 
 export const documentRepositoryService = {
+  async listAttachable(params = {}) {
+    const res = await apiClient.get(ENDPOINTS.DOCUMENTS.ATTACHABLE, { params });
+    return res.data;
+  },
+
   async list(params = {}) {
     const res = await apiClient.get(ENDPOINTS.DOCUMENTS.LIST, { params: stripEmptyParams(params) });
     return {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Paperclip, X } from 'lucide-react';
+import { Paperclip, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { showError } from '@/lib/toast';
 import { useSendEmail } from '../../hooks/useEmailMutations';
+import { AttachmentPicker } from './attachment-picker';
 
 const DEFAULT_FORM = {
   to: '',
@@ -72,7 +73,16 @@ function buildInitialForm(initialValues = {}) {
 function EmailComposeForm({ initialValues, onClose }) {
   const { t } = useLanguage();
   const [form, setForm] = useState(() => buildInitialForm(initialValues));
+  const [pickerOpen, setPickerOpen] = useState(false);
   const send = useSendEmail();
+
+  const addAttachments = (picked) => setForm((current) => {
+    const known = new Set(current.attachments.map(attachmentKeyOf).map(String));
+    return {
+      ...current,
+      attachments: [...current.attachments, ...picked.filter((a) => !known.has(String(a.fileId)))],
+    };
+  });
 
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
 
@@ -149,9 +159,14 @@ function EmailComposeForm({ initialValues, onClose }) {
           <Textarea rows={7} value={form.bodyHtml} onChange={set('bodyHtml')} />
         </div>
         <div>
-          <Label className="flex items-center gap-1.5">
-            <Paperclip className="h-3.5 w-3.5" />{t('doctpl.attachments')}
-          </Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label className="flex items-center gap-1.5">
+              <Paperclip className="h-3.5 w-3.5" />{t('doctpl.attachments')}
+            </Label>
+            <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => setPickerOpen(true)}>
+              <Plus className="h-3 w-3" /> {t('doctpl.email.addAttachment', 'Dokument anhängen')}
+            </Button>
+          </div>
           {form.attachments.length ? (
             <ul className="mt-1.5 space-y-1.5">
               {form.attachments.map((attachment) => (
@@ -181,10 +196,18 @@ function EmailComposeForm({ initialValues, onClose }) {
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-        <Button onClick={handleSend} disabled={send.isPending || !toRecipientList(form.to).length || !form.attachments.length}>
+        <Button onClick={handleSend} disabled={send.isPending || !toRecipientList(form.to).length}>
           {send.isPending ? t('doctpl.sending') : t('common.send')}
         </Button>
       </DialogFooter>
+
+      <AttachmentPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        scope={initialValues.attachmentScope || {}}
+        alreadyAttached={form.attachments}
+        onConfirm={addAttachments}
+      />
     </DialogContent>
   );
 }

@@ -15,7 +15,7 @@ import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
 import { SiteMapCard, buildGoogleMapsUrl } from './site-map-card';
 import { SiteDocumentsTab } from './site-documents-tab';
-import { SiteEmailButton } from './site-email-dialog';
+import { EntityEmailButton } from './entity-email-button';
 import { SiteBusinessTab } from './site-business-tab';
 import { SiteOverviewTab } from './site-overview-tab';
 import { SiteTasksTab } from './site-tasks-tab';
@@ -286,7 +286,11 @@ export function SiteDetail() {
 
           <div className="flex items-center gap-2">
             {canWrite && (
-              <SiteEmailButton siteId={id} defaultTo={parentCustomer?.email} />
+              <EntityEmailButton
+                sourceRecordId={id}
+                attachmentScope={{ siteId: id }}
+                defaultTo={parentCustomer?.email}
+              />
             )}
             {canWrite && isActive && (
               <Button

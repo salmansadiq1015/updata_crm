@@ -25,12 +25,29 @@ class TimeEntryService {
    * OFFICE and, optionally, a category. Everything downstream (cache key,
    * events, audit) tolerates its absence.
    */
+  /**
+   * The company break, applied only once the span reaches the configured
+   * threshold — a two-hour morning should not lose a lunch break.
+   */
+  async _defaultBreakFor(startTime, endTime) {
+    if (!endTime) return 0;
+    const WorkTimeSettings = (await import('./workTimeSettings.model.js')).default;
+    const settings = await WorkTimeSettings.findOne({ key: 'default' }).lean();
+    if (!settings) return 0;
+    const spanHours = (new Date(endTime) - new Date(startTime)) / 3600000;
+    return spanHours >= (settings.breakThresholdHours ?? 6) ? (settings.breakDurationMin ?? 0) : 0;
+  }
+
   async create(orderId, data, technicianId, meta = {}) {
-    const netDurationMin = this._calculateNetDuration(data.startTime, data.endTime, data.breakDurationMin);
     const entryType = orderId ? 'ASSIGNMENT' : 'OFFICE';
+    const breakDurationMin = entryType === 'OFFICE' && data.breakDurationMin === undefined
+      ? await this._defaultBreakFor(data.startTime, data.endTime)
+      : (data.breakDurationMin || 0);
+    const netDurationMin = this._calculateNetDuration(data.startTime, data.endTime, breakDurationMin);
 
     const entry = await timeEntryRepository.create({
       ...data,
+      breakDurationMin,
       orderId: orderId || null,
       entryType,
       technicianId,

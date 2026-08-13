@@ -23,6 +23,9 @@ export const createTimeEntrySchema = {
 export const createOfficeTimeEntrySchema = {
   body: Joi.object({
     ...timeEntryBody,
+    // No default: an omitted break means "apply the company rule", which is
+    // not the same as an explicit 0.
+    breakDurationMin: Joi.number().min(0),
     officeCategoryId: objectId.allow(null),
   }),
 };

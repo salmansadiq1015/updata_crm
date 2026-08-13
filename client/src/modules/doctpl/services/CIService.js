@@ -6,6 +6,6 @@ export const ciService = {
   updateConfig: (d)   => apiClient.put(E.CI_CONFIG, d),
   getAudit:     ()    => apiClient.get(E.CI_AUDIT),
   listAssets:   ()    => apiClient.get(E.CI_ASSETS),
-  uploadAsset:  (fd)  => apiClient.post(E.CI_ASSETS, fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  uploadAsset:  (fd)  => apiClient.post(E.CI_ASSETS, fd, { headers: { 'Content-Type': undefined } }),
   deleteAsset:  (id)  => apiClient.delete(E.CI_ASSET_BY_ID(id)),
 };

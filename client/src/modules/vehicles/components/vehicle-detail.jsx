@@ -194,7 +194,7 @@ export function VehicleDetail() {
         </TabsContent>
 
         <TabsContent value="material">
-          <VehicleMaterialTab vehicleId={id} canWrite={canWrite} />
+          <VehicleMaterialTab vehicleId={id} kennzeichen={vehicle.kennzeichen} canWrite={canWrite} />
         </TabsContent>
 
         <TabsContent value="notes">

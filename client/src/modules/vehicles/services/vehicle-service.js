@@ -16,6 +16,7 @@ export const vehicleService = {
   deleteService:(id, subId)  => apiClient.delete(E.SERVICE_BY_ID(id, subId)).then((r) => r.data),
 
   listMaterials:(id)         => apiClient.get(E.MATERIALS(id)).then((r) => r.data),
+  exportMaterialsPdf:(id)    => apiClient.get(E.MATERIALS_EXPORT_PDF(id), { responseType: 'blob' }).then((r) => r.data),
   addMaterial: (id, data)    => apiClient.post(E.MATERIALS(id), data).then((r) => r.data),
   deleteMaterial:(id, subId) => apiClient.delete(E.MATERIAL_BY_ID(id, subId)).then((r) => r.data),
 

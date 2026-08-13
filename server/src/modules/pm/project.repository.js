@@ -27,7 +27,7 @@ const ALLOWED_SORT_FIELDS = [
 ];
 
 const POPULATE_FIELDS = [
-  { path: 'customerId', select: 'customerNumber name' },
+  { path: 'customerId', select: 'customerNumber name email' },
   { path: 'projectManagerId', select: 'firstName lastName email' },
   { path: 'siteId', select: 'name street city' },
 ];

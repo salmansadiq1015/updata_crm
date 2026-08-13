@@ -82,6 +82,13 @@ export function ProjectDetail() {
   const { hasPermission } = usePermissions();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  // After sending, land on the E-Mails register with that message already open.
+  const [sentEmailId, setSentEmailId] = useState(null);
+  const handleEmailSent = (record) => {
+    setSentEmailId(record?._id || record?.id || null);
+    setActiveTab('emails');
+  };
   const [archiveOpen, setArchiveOpen] = useState(false); // soft-delete a DRAFT
   const [archiveActionOpen, setArchiveActionOpen] = useState(false); // status → ARCHIVED
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
@@ -226,6 +233,7 @@ export function ProjectDetail() {
                   sourceRecordId={id}
                   attachmentScope={{ projectId: id }}
                   defaultTo={typeof project.customerId === 'object' ? project.customerId?.email : undefined}
+                  onSent={handleEmailSent}
                 />
               </div>
             </div>
@@ -271,7 +279,7 @@ export function ProjectDetail() {
 
         {/* Content area */}
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue="overview" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList variant="line">
               <TabsTrigger value="overview" className="gap-1.5">
                 <ClipboardList className="h-3.5 w-3.5" /> {t('pm.overview', 'Übersicht')}
@@ -386,7 +394,7 @@ export function ProjectDetail() {
             )}
 
             <TabsContent value="emails" className="mt-6">
-              <EmailHistoryPanel sourceModule="pm" sourceRecordId={id} />
+              <EmailHistoryPanel sourceModule="pm" sourceRecordId={id} highlightId={sentEmailId} />
             </TabsContent>
 
             <TabsContent value="contact-log" className="mt-6">

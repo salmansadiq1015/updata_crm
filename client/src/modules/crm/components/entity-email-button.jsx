@@ -20,6 +20,7 @@ export function EntityEmailButton({
   sourceModule = 'crm',
   attachmentScope = {},
   defaultTo,
+  onSent,
   variant = 'outline',
   size = 'sm',
   className = 'gap-1.5',
@@ -36,6 +37,7 @@ export function EntityEmailButton({
       <EmailComposeModal
         open={open}
         onClose={() => setOpen(false)}
+        onSent={onSent}
         initialValues={{
           to: defaultTo || '',
           sourceModule,

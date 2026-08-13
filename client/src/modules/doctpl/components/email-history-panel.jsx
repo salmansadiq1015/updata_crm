@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle, CheckCircle2, ChevronDown, Clock, Mail, Paperclip, User,
@@ -26,8 +26,15 @@ const STATUS_META = {
  * EmailRecord log, which already stores recipients, subject, body,
  * attachments, sender, status and timestamps per sourceModule/sourceRecordId.
  */
-export function EmailHistoryPanel({ sourceModule = 'crm', sourceRecordId }) {
+export function EmailHistoryPanel({ sourceModule = 'crm', sourceRecordId, highlightId }) {
   const { t } = useLanguage();
+  // Which entry is expanded, held here rather than per row: the row for a
+  // just-sent email mounts after its list refetches, so an initial-state-only
+  // flag would be read before that id exists.
+  const [openId, setOpenId] = useState(null);
+  useEffect(() => {
+    if (highlightId) setOpenId(String(highlightId));
+  }, [highlightId]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['doctpl', 'emails', sourceModule, sourceRecordId],
@@ -65,14 +72,23 @@ export function EmailHistoryPanel({ sourceModule = 'crm', sourceRecordId }) {
         <span className="text-xs text-muted-foreground">({emails.length})</span>
       </div>
       <ul className="space-y-2">
-        {emails.map((email) => <EmailRow key={email._id || email.id} email={email} t={t} />)}
+        {emails.map((email) => (
+          <EmailRow
+            key={email._id || email.id}
+            email={email}
+            t={t}
+            open={openId === String(email._id || email.id)}
+            onToggle={() => setOpenId((current) => (
+              current === String(email._id || email.id) ? null : String(email._id || email.id)
+            ))}
+          />
+        ))}
       </ul>
     </div>
   );
 }
 
-function EmailRow({ email, t }) {
-  const [open, setOpen] = useState(false);
+function EmailRow({ email, t, open, onToggle }) {
   const meta = STATUS_META[email.status] || STATUS_META.QUEUED;
   const StatusIcon = meta.icon;
   const sender = email.createdBy
@@ -84,7 +100,7 @@ function EmailRow({ email, t }) {
     <li className="overflow-hidden rounded-xl border border-border bg-card">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={onToggle}
         className="flex w-full items-start gap-3 p-3.5 text-left transition-colors hover:bg-muted/40"
       >
         <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/60">

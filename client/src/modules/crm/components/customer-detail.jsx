@@ -192,6 +192,13 @@ export function CustomerDetail() {
   const { hasPermission } = usePermissions();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  // After sending, land on the E-Mails register with that message already open.
+  const [sentEmailId, setSentEmailId] = useState(null);
+  const handleEmailSent = (record) => {
+    setSentEmailId(record?._id || record?.id || null);
+    setActiveTab('emails');
+  };
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
 
@@ -371,6 +378,7 @@ export function CustomerDetail() {
                   sourceRecordId={id}
                   attachmentScope={{ customerId: id }}
                   defaultTo={customer.email}
+                  onSent={handleEmailSent}
                 />
               </div>
             </div>
@@ -405,7 +413,7 @@ export function CustomerDetail() {
 
         {/* Right content */}
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue="overview" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList variant="line">
               <TabsTrigger value="overview" className="gap-1.5">
                 <Activity className="h-3.5 w-3.5" />
@@ -480,7 +488,7 @@ export function CustomerDetail() {
             </TabsContent>
 
             <TabsContent value="emails">
-              <EmailHistoryPanel sourceModule="crm" sourceRecordId={id} />
+              <EmailHistoryPanel sourceModule="crm" sourceRecordId={id} highlightId={sentEmailId} />
             </TabsContent>
             <TabsContent value="activity">
               <CustomerActivityPanel customerId={customer._id} />

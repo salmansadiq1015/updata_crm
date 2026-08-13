@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { showError } from '@/lib/toast';
+import { showError, showSuccess } from '@/lib/toast';
 import { useSendEmail } from '../../hooks/useEmailMutations';
 import { AttachmentPicker } from './attachment-picker';
 
@@ -70,7 +70,7 @@ function buildInitialForm(initialValues = {}) {
   };
 }
 
-function EmailComposeForm({ initialValues, onClose }) {
+function EmailComposeForm({ initialValues, onClose, onSent }) {
   const { t } = useLanguage();
   const [form, setForm] = useState(() => buildInitialForm(initialValues));
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -119,8 +119,12 @@ function EmailComposeForm({ initialValues, onClose }) {
     if (form.senderName?.trim()) payload.senderName = form.senderName.trim();
     if (form.senderAddress?.trim()) payload.senderAddress = form.senderAddress.trim();
     try {
-      await send.mutateAsync(payload);
+      const record = await send.mutateAsync(payload);
+      showSuccess(t('doctpl.email.sent', 'E-Mail gesendet'));
       onClose();
+      // emailService.send resolves the response envelope, not the record —
+      // unwrap it so the caller gets the id it needs to open the entry.
+      onSent?.(record?.data ?? record);
     } catch (err) {
       showError(err);
     }
@@ -219,7 +223,7 @@ function EmailComposeForm({ initialValues, onClose }) {
   );
 }
 
-export function EmailComposeModal({ open, onClose, initialValues = {} }) {
+export function EmailComposeModal({ open, onClose, initialValues = {}, onSent }) {
   const attachmentKey = Array.isArray(initialValues.attachments)
     ? initialValues.attachments.map((a) => a?.id || a?._id || a?.fileId).join('-')
     : '';
@@ -227,7 +231,7 @@ export function EmailComposeModal({ open, onClose, initialValues = {} }) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      {open && <EmailComposeForm key={formKey} initialValues={initialValues} onClose={onClose} />}
+      {open && <EmailComposeForm key={formKey} initialValues={initialValues} onClose={onClose} onSent={onSent} />}
     </Dialog>
   );
 }

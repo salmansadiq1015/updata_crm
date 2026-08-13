@@ -151,6 +151,13 @@ export function SiteDetail() {
   const visibleTabs = useMemo(() => permittedTabs.filter((tab) => tab.fixed || !hiddenTabs.includes(tab.id)), [permittedTabs, hiddenTabs]);
   const safeActiveTab = visibleTabs.some((tab) => tab.id === activeTab) ? activeTab : (visibleTabs[0]?.id || 'overview');
 
+  // After sending, land on the E-Mails register with that message already open.
+  const [sentEmailId, setSentEmailId] = useState(null);
+  const handleEmailSent = (record) => {
+    setSentEmailId(record?._id || record?.id || null);
+    setActiveTab('emails');
+  };
+
   const handleSaveTabs = async (nextHidden) => {
     try {
       const res = await apiClient.patch(ENDPOINTS.AUTH.USER_PREFERENCES, { siteDetail: { hiddenTabs: nextHidden } });
@@ -292,6 +299,7 @@ export function SiteDetail() {
                 sourceRecordId={id}
                 attachmentScope={{ siteId: id }}
                 defaultTo={parentCustomer?.email}
+                onSent={handleEmailSent}
               />
             )}
             {canWrite && isActive && (
@@ -419,7 +427,7 @@ export function SiteDetail() {
           <SiteMaintenanceTab siteId={id} />
         </TabsContent>
         <TabsContent value="emails">
-          <EmailHistoryPanel sourceModule="crm" sourceRecordId={id} />
+          <EmailHistoryPanel sourceModule="crm" sourceRecordId={id} highlightId={sentEmailId} />
         </TabsContent>
         <TabsContent value="contact-log">
           <ContactLogPanel

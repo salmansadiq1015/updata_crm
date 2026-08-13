@@ -150,7 +150,10 @@ class DocumentIndexService {
       this._listMobileDocuments(query, fetchLimit, permissions, user),
     ]);
 
-    const flat = sources.flat().filter((item) => matchesSection(item, query.section));
+    const releasedOnly = await this._releasedOnly(user);
+    const flat = sources.flat()
+      .filter((item) => matchesSection(item, query.section))
+      .filter((item) => !releasedOnly || item.releasedToField);
     const sorted = sortDocuments(flat.filter((item) => isAfterCursor(item, cursor, query.sortOrder)), query.sortOrder);
     const pageItems = sorted.slice(0, limit);
     const hasNext = sorted.length > limit;
@@ -191,7 +194,11 @@ class DocumentIndexService {
       }
     }
 
-    const sorted = sortDocuments(merged, query.sortOrder);
+    const releasedOnlyForSite = await this._releasedOnly(user);
+    const sorted = sortDocuments(
+      releasedOnlyForSite ? merged.filter((doc) => doc.releasedToField) : merged,
+      query.sortOrder,
+    );
     const pageItems = sorted.slice(0, limit);
     return {
       data: pageItems,
@@ -871,6 +878,17 @@ class DocumentIndexService {
     if (isAdmin(user) || hasPermission(permissions, 'documents:read')) return;
     if (record.ownerUserId && String(record.ownerUserId) === String(user?._id)) return;
     throw new AuthorizationError('You do not have access to this document');
+  }
+
+  /**
+   * Digitales Dossier, repository side: without `documents:read:all` a user
+   * only sees documents released to the field — the counterpart that makes the
+   * Freigabe mean something instead of decorating a row.
+   */
+  async _releasedOnly(user) {
+    if (user?.role?.name === 'Admin') return false;
+    const permissions = await this._permissions(user);
+    return !satisfiesPermission(permissions, 'documents:read:all');
   }
 
   async _permissions(user) {

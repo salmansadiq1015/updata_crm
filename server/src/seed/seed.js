@@ -149,6 +149,7 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'documents', action: 'read', description: 'View generated PDFs and document repository records' },
   { module: 'documents', action: 'write', description: 'Upload and organize central document repository records' },
   { module: 'documents', action: 'delete', description: 'Delete generated document repository records' },
+  { module: 'documents', action: 'read:all',       description: 'View every document, including those not released to the field' },
 
   // Vehicles (fleet)
   { module: 'vehicles', action: 'read', description: 'View vehicles and their details' },
@@ -239,7 +240,7 @@ export const ROLE_DEFINITIONS = [
       'project:prep-actions:manage', 'project:schedule:manage',
       'project:documents:read', 'project:documents:read:all', 'project:documents:write',
       'project:documents:create', 'project:documents:delete',
-      'documents:read', 'documents:write', 'documents:delete',
+      'documents:read', 'documents:read:all', 'documents:write', 'documents:delete',
       'quotations:read', 'quotations:write', 'quotations:delete', 'quotations:admin',
       'templates:read', 'templates:write',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
@@ -286,7 +287,7 @@ export const ROLE_DEFINITIONS = [
     permissionKeys: [
       'crm:read',
       'project:read', 'project:documents:read', 'project:documents:read:all',
-      'documents:read',
+      'documents:read', 'documents:read:all',
       'invoicing:read', 'invoicing:write', 'invoicing:delete', 'invoicing:admin',
       ...ACCOUNTING_PERMISSION_KEYS,
       'files:upload', 'files:view', 'files:list',
@@ -305,7 +306,7 @@ export const ROLE_DEFINITIONS = [
     permissionKeys: [
       'crm:read',
       'project:read', 'project:schedule:manage', 'project:documents:read', 'project:documents:read:all',
-      'documents:read',
+      'documents:read', 'documents:read:all',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
       'meetings:read', 'meetings:write', 'meetings:delete', 'meetings:admin',
       'field-service:read',

@@ -98,8 +98,19 @@ class DocumentController {
       if (!order?.projectId) return [];
       const { default: documentService } = await import('../pm/document.service.js');
       const docs = await documentService.listReleasedForProject(order.projectId);
+
+      // Repository documents released on the project reach the field too — the
+      // Freigabe is offered on every document surface, so it must be honoured
+      // beyond project documents.
+      const { default: DocumentIndex } = await import('../documents/documentIndex.model.js');
+      const repoDocs = await DocumentIndex.find({
+        releasedToField: true,
+        projectId: order.projectId,
+        fileId: { $ne: null },
+      }).lean();
+
       // A DRAFT has no file yet — nothing to hand the field.
-      return (docs || []).filter((doc) => doc.fileId);
+      return [...(docs || []), ...repoDocs].filter((doc) => doc.fileId);
     } catch (err) {
       logger.warn('Could not load released project documents for order', {
         module: 'mobile', action: 'document.dossier', orderId, error: err.message,
@@ -113,10 +124,13 @@ class DocumentController {
       // Releasing a document is meaningless if its file id still downloads when
       // the release was never given (or was taken back).
       const { default: ProjectDocument } = await import('../pm/projectDocument.model.js');
-      const projectDoc = await ProjectDocument.findOne({ fileId: req.params.docId })
-        .select('releasedToField')
-        .lean();
-      if (projectDoc && !projectDoc.releasedToField) {
+      const { default: DocumentIndex } = await import('../documents/documentIndex.model.js');
+      const [projectDoc, repoDoc] = await Promise.all([
+        ProjectDocument.findOne({ fileId: req.params.docId }).select('releasedToField').lean(),
+        DocumentIndex.findOne({ fileId: req.params.docId }).select('releasedToField').lean(),
+      ]);
+      const known = projectDoc || repoDoc;
+      if (known && !known.releasedToField) {
         return res.fail({
           statusCode: 403,
           code: 'DOCUMENT_NOT_RELEASED',

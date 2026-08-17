@@ -1,4 +1,5 @@
 import {
+  Clock4,
   Mail,
   Activity,
   BellRing,
@@ -133,6 +134,16 @@ export const SETTINGS_HUB_ITEMS = [
     icon: Mail,
     permission: 'templates:read',
     accent: 'sky',
+  },
+  {
+    id: 'work-time',
+    category: 'operations',
+    titleKey: 'settingsHub.item.workTime.title',
+    descriptionKey: 'settingsHub.item.workTime.description',
+    href: '/admin/work-time',
+    icon: Clock4,
+    permission: 'time-tracking:read',
+    accent: 'amber',
   },
   {
     id: 'numbering',

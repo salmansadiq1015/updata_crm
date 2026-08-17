@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { StepIndicator, StepFooter } from '@/components/ui/form-stepper';
 import { FormField, FormSection } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
+import { usePermissions } from '@/shared/hooks/use-permissions';
+import { useUserDirectory } from '@/modules/users/hooks/use-user-directory';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFieldOpsOrders } from '@/modules/field-ops/hooks/use-field-ops-queries';
@@ -26,6 +28,7 @@ import { Clock, StickyNote } from 'lucide-react';
 
 const step1Schema = z.object({
   orderId: z.string().min(1, 'Required'),
+  technicianId: z.string().optional(),
   date: z.string().min(1, 'Required'),
   startTime: z.string().min(1, 'Required'),
   endTime: z.string().min(1, 'Required'),
@@ -48,7 +51,7 @@ const STEP_FIELDS = [
 ];
 
 const BLANK = {
-  orderId: '', date: '', startTime: '', endTime: '',
+  orderId: '', technicianId: '', date: '', startTime: '', endTime: '',
   breakDurationMin: 0, activityType: '', note: '',
 };
 
@@ -88,6 +91,11 @@ function toTimeLocal(iso) {
 // ── Step components ───────────────────────────────────────────────────────────
 
 function Step1OrderTime({ form, de, isEdit, loadOrders }) {
+  // Booking someone else's time takes a permission; the server re-checks, so
+  // the field only appears where it would be accepted.
+  const { hasPermission } = usePermissions();
+  const canBookForOthers = hasPermission('time-tracking:book-others');
+  const { data: employees = [] } = useUserDirectory({ enabled: canBookForOthers && !isEdit });
   const { register, watch, setValue, formState: { errors } } = form;
   const { data: ordersResponse, isFetching: ordersLoading, isError: ordersError } = useFieldOpsOrders(
     FIELD_OPS_ORDER_PICKER_QUERY,
@@ -109,6 +117,27 @@ function Step1OrderTime({ form, de, isEdit, loadOrders }) {
         title={de ? 'Einsatz & Datum' : 'Assignment & Date'}
         description={de ? 'Einsatz zuordnen und Einsatzdatum festlegen' : 'Link to an order and set the service date'}
       >
+        {canBookForOthers && !isEdit && (
+          <FormField label={de ? 'Mitarbeiter' : 'Employee'}>
+            <Select
+              value={watch('technicianId') || '__self'}
+              onValueChange={(v) => setValue('technicianId', v === '__self' ? '' : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={de ? 'Ich' : 'Me'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__self">{de ? 'Ich' : 'Me'}</SelectItem>
+                {employees.map((employee) => (
+                  <SelectItem key={employee._id} value={employee._id}>
+                    {[employee.firstName, employee.lastName].filter(Boolean).join(' ') || employee.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+        )}
+
         <FormField label={de ? 'Einsatz' : 'Assignment'} required error={errors.orderId?.message}>
           <Select
             value={watch('orderId')}

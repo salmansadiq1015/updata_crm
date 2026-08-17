@@ -16,7 +16,7 @@ const timeEntryBody = {
 /** Nested under an assignment: the order comes from the URL. */
 export const createTimeEntrySchema = {
   params: Joi.object({ id: objectId.required() }),
-  body: Joi.object(timeEntryBody),
+  body: Joi.object({ ...timeEntryBody, technicianId: objectId }),
 };
 
 /** Standalone: office hours, which belong to no assignment. */

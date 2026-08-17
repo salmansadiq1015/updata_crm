@@ -27,6 +27,9 @@ export const createOfficeTimeEntrySchema = {
     // not the same as an explicit 0.
     breakDurationMin: Joi.number().min(0),
     officeCategoryId: objectId.allow(null),
+    // Whose day this is; the controller rejects anyone booking for another
+    // person without time-tracking:admin.
+    technicianId: objectId,
   }),
 };
 

@@ -216,6 +216,7 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'time-tracking', action: 'read', description: 'View time entries' },
   { module: 'time-tracking', action: 'write', description: 'Create and update time entries' },
   { module: 'time-tracking', action: 'admin', description: 'Full time tracking administration' },
+  { module: 'time-tracking', action: 'book-others', description: 'Record working time on behalf of other employees' },
 
   // Settings
   { module: 'settings', action: 'read', description: 'View system settings' },
@@ -244,6 +245,7 @@ export const ROLE_DEFINITIONS = [
       'quotations:read', 'quotations:write', 'quotations:delete', 'quotations:admin',
       'templates:read', 'templates:write',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
+      'time-tracking:read', 'time-tracking:book-others',
       'meetings:read', 'meetings:write', 'meetings:delete', 'meetings:admin',
       'field-service:read',
       'field-ticket:read', 'field-ticket:write', 'field-ticket:assign', 'field-ticket:comment', 'field-ticket:admin',
@@ -308,6 +310,7 @@ export const ROLE_DEFINITIONS = [
       'project:read', 'project:schedule:manage', 'project:documents:read', 'project:documents:read:all',
       'documents:read', 'documents:read:all',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
+      'time-tracking:read', 'time-tracking:book-others',
       'meetings:read', 'meetings:write', 'meetings:delete', 'meetings:admin',
       'field-service:read',
       'field-ticket:read', 'field-ticket:write', 'field-ticket:assign', 'field-ticket:comment', 'field-ticket:admin',

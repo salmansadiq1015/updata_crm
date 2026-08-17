@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { showError, showSuccess } from '@/lib/toast';
+import { usePermissions } from '@/shared/hooks/use-permissions';
+import { useUserDirectory } from '@/modules/users/hooks/use-user-directory';
 
 const NONE = 'none';
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -47,6 +49,13 @@ export function OfficeTimeEntryDialog({ open, onOpenChange, onSaved }) {
   const [categoryId, setCategoryId] = useState(NONE);
   const [note, setNote] = useState('');
   const [breakOverride, setBreakOverride] = useState('');
+  const [employeeId, setEmployeeId] = useState(NONE);
+
+  // Booking someone else's day is an administrative act; the server enforces
+  // the same rule, so the selector only appears where it would be accepted.
+  const { hasPermission } = usePermissions();
+  const canBookForOthers = hasPermission('time-tracking:book-others');
+  const { data: employees = [] } = useUserDirectory({ enabled: open && canBookForOthers });
 
   const { data: categories = [] } = useQuery({
     queryKey: ['mobile', 'office-categories'],
@@ -68,6 +77,7 @@ export function OfficeTimeEntryDialog({ open, onOpenChange, onSaved }) {
     setCategoryId(NONE);
     setNote('');
     setBreakOverride('');
+    setEmployeeId(NONE);
   }, [open]);
 
   const grossMinutes = useMemo(
@@ -104,6 +114,7 @@ export function OfficeTimeEntryDialog({ open, onOpenChange, onSaved }) {
           breakDurationMin: rangeBreak,
           activityType: 'ADMINISTRATIVE',
           officeCategoryId: categoryId === NONE ? null : categoryId,
+          ...(employeeId === NONE ? {} : { technicianId: employeeId }),
           note: note.trim() || null,
         }));
       }
@@ -137,6 +148,25 @@ export function OfficeTimeEntryDialog({ open, onOpenChange, onSaved }) {
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (valid) save.mutate(); }}>
+          {canBookForOthers && (
+            <div className="space-y-1.5">
+              <Label>{t('timeTracking.office.employee', 'Mitarbeiter')}</Label>
+              <Select value={employeeId} onValueChange={setEmployeeId} disabled={save.isPending}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t('timeTracking.office.employeeSelf', 'Ich')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>{t('timeTracking.office.employeeSelf', 'Ich')}</SelectItem>
+                  {employees.map((employee) => (
+                    <SelectItem key={employee._id} value={employee._id}>
+                      {[employee.firstName, employee.lastName].filter(Boolean).join(' ') || employee.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label>{t('timeTracking.office.date', 'Datum')}*</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={save.isPending} />

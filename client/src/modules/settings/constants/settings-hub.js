@@ -1,4 +1,5 @@
 import {
+  Wrench,
   Clock4,
   Mail,
   Activity,
@@ -133,6 +134,16 @@ export const SETTINGS_HUB_ITEMS = [
     href: '/admin/email-templates',
     icon: Mail,
     permission: 'templates:read',
+    accent: 'sky',
+  },
+  {
+    id: 'work-types',
+    category: 'operations',
+    titleKey: 'settingsHub.item.workTypes.title',
+    descriptionKey: 'settingsHub.item.workTypes.description',
+    href: '/admin/work-types',
+    icon: Wrench,
+    permission: 'scheduling:read',
     accent: 'sky',
   },
   {

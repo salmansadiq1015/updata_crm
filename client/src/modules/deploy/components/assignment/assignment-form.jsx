@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
+import { useQuery } from '@tanstack/react-query';
+import apiClient from '@/lib/api/client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useDebounce } from '@/shared/hooks/use-debounce';
@@ -249,6 +251,28 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
   const appointmentWindow = useWatch({ control, name: 'appointment.appointmentWindow' }) || '';
   const showRecurrence = Boolean(recurrenceValue);
   const assignmentMeta = ASSIGNMENT_TYPE_META[assignmentType];
+
+  // Standard works: picking one proposes its usual duration. It only ever
+  // writes the end time — the scheduler keeps the start they chose, and both
+  // stay editable, since a proposal that overrides decisions stops being used.
+  const { data: workTypes = [] } = useQuery({
+    queryKey: ['scheduling', 'work-types'],
+    queryFn: async () => (await apiClient.get('/scheduling/work-types'))?.data ?? [],
+    enabled: open,
+    staleTime: 5 * 60_000,
+  });
+
+  const applyWorkType = (workTypeId) => {
+    const workType = workTypes.find((w) => w._id === workTypeId);
+    if (!workType) return;
+    const start = getValues('startDatetime');
+    if (!start || getValues('isFullDay')) return;
+    const end = new Date(new Date(start).getTime() + workType.standardDurationMin * 60000);
+    const pad = (n) => String(n).padStart(2, '0');
+    const local = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+    setValue('endDatetime', local, { shouldValidate: true });
+    if (!getValues('title')) setValue('title', workType.name, { shouldValidate: true });
+  };
   const AssignmentIcon = assignmentMeta?.icon || CalendarClock;
   const priorityMeta = PRIORITY_META[priority];
   const PriorityIcon = priorityMeta?.icon;
@@ -450,6 +474,23 @@ export function AssignmentForm({ open, onOpenChange, defaultValues, prefill }) {
             {/* Basic Info */}
             <FormSection title={t('deploy.form.basicInfo', 'Grundinformationen')} className="border-b border-border/70 pb-6">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {workTypes.length > 0 && (
+                  <FormField label={t('deploy.workTypes.pick', 'Standardarbeit')}>
+                    <Select value="" onValueChange={applyWorkType}>
+                      <SelectTrigger className="h-11 rounded-xl text-sm">
+                        <SelectValue placeholder={t('deploy.workTypes.pickNone', 'Keine')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {workTypes.map((workType) => (
+                          <SelectItem key={workType._id} value={workType._id}>
+                            {workType.name} · {(workType.standardDurationMin / 60)} h
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+                )}
+
                 <FormField label={t('deploy.form.assignmentType', 'Einsatztyp')} required error={errors.assignmentType?.message}>
                   <Select
                     value={assignmentType}

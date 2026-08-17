@@ -215,7 +215,7 @@ class OrderService {
   // Resolve the parties attached to the order's site (via its project). Returns
   // only parties that actually carry content; failures are non-fatal.
   async _resolveSiteParties(projectId) {
-    const empty = { siteBillingAddress: null, siteOwnership: null };
+    const empty = { siteBillingAddress: null, siteOwnership: null, siteManagement: null };
     const pid = projectId && typeof projectId === 'object' ? projectId._id : projectId;
     if (!pid) return empty;
     const hasContent = (p) => Boolean(p && (p.name || p.street || p.city));
@@ -224,10 +224,11 @@ class OrderService {
       const project = await Project.findById(pid).select('siteId').lean();
       if (!project?.siteId) return empty;
       const Site = (await import('../crm/site.model.js')).default;
-      const site = await Site.findById(project.siteId).select('billingAddress ownership').lean();
+      const site = await Site.findById(project.siteId).select('billingAddress ownership management').lean();
       return {
         siteBillingAddress: hasContent(site?.billingAddress) ? site.billingAddress : null,
         siteOwnership: hasContent(site?.ownership) ? site.ownership : null,
+        siteManagement: hasContent(site?.management) ? site.management : null,
       };
     } catch {
       return empty;

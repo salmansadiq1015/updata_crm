@@ -34,6 +34,7 @@ const BLANK = {
   longitude: null,
   billingAddress: { ...BLANK_PARTY },
   ownership: { ...BLANK_PARTY },
+  management: { ...BLANK_PARTY },
   emergencyHeating: { present: false, number: '' },
   keyBox: { present: false, code: '', depositedBy: '', depositedAt: '' },
   advertisingBoard: { count: '', type: '', location: '' },
@@ -122,6 +123,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
   // 'customer' | 'billing' | 'manual' — how each party block is filled.
   const [billingMode, setBillingMode] = useState('manual');
   const [ownerMode, setOwnerMode] = useState('manual');
+  const [managementMode, setManagementMode] = useState('manual');
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
     resolver: zodResolver(createSiteSchema),
     defaultValues: BLANK,
@@ -160,6 +162,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
         siteType: defaultValues.siteType || 'residential',
         billingAddress: partyValues(defaultValues.billingAddress),
         ownership: partyValues(defaultValues.ownership),
+        management: partyValues(defaultValues.management),
         emergencyHeating: emergencyHeatingValues(defaultValues.emergencyHeating),
         keyBox: keyBoxValues(defaultValues.keyBox),
         advertisingBoard: advertisingBoardValues(defaultValues.advertisingBoard),
@@ -173,6 +176,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
   const siteType = watch('siteType');
   const billingCanton = watch('billingAddress.canton');
   const ownerCanton = watch('ownership.canton');
+  const managementCanton = watch('management.canton');
   const ehPresent = watch('emergencyHeating.present');
   const kbPresent = watch('keyBox.present');
 
@@ -201,8 +205,14 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerMode, customerParty, billingKey]);
 
+  useEffect(() => {
+    if (managementMode === 'billing') applyParty('management', billingParty);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [managementMode, billingKey]);
+
   const billingLocked = billingMode !== 'manual';
   const ownerLocked = ownerMode !== 'manual';
+  const managementLocked = managementMode !== 'manual';
 
   const submit = async (data) => {
     const cleaned = {
@@ -215,6 +225,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
       accessInstructions: data.accessInstructions || null,
       billingAddress: cleanParty(data.billingAddress),
       ownership: cleanParty(data.ownership),
+      management: cleanParty(data.management),
       emergencyHeating: cleanEmergencyHeating(data.emergencyHeating),
       keyBox: cleanKeyBox(data.keyBox),
       advertisingBoard: cleanBoard(data.advertisingBoard),
@@ -413,6 +424,51 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
               </div>
               <DarkField label={t('crm.canton', 'Kanton')} error={errors.ownership?.canton}>
                 <Select value={ownerCanton || ''} disabled={ownerLocked} onValueChange={(v) => setValue('ownership.canton', v, { shouldDirty: true })}>
+                  <SelectTrigger className={selectTriggerCls}><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent className="max-h-72 bg-card border-border">
+                    {CH_CANTONS.map((c) => (
+                      <SelectItem key={c.code} value={c.code} className="text-foreground focus:bg-muted/50 focus:text-foreground">{c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </DarkField>
+            </div>
+
+            {/* Verwaltung: the managing agent, often a régie distinct from the owner. */}
+            <Separator className="my-5 bg-muted/50" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              {t('crm.sites.management', 'Verwaltung')}
+            </p>
+            <FillModeSwitch
+              name={t('crm.sites.management', 'Verwaltung')}
+              value={managementMode}
+              onChange={setManagementMode}
+              options={[
+                { value: 'billing', label: t('crm.sites.sameAsBilling', 'Gleich wie Rechnungsadresse') },
+                { value: 'manual', label: t('crm.sites.manualEntry', 'Manuelle Eingabe') },
+              ]}
+            />
+            <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-4">
+              <DarkField label={t('crm.name', 'Name')} error={errors.management?.name}>
+                <Input {...register('management.name')} readOnly={managementLocked} placeholder="z.B. Peter Müller" className={cn(inputCls, managementLocked && lockedCls)} />
+              </DarkField>
+              <DarkField label={t('crm.sites.careOf', 'c/o')} error={errors.management?.careOf}>
+                <Input {...register('management.careOf')} readOnly={managementLocked} placeholder="z.B. Test Liegenschaftsverwaltung AG" className={cn(inputCls, managementLocked && lockedCls)} />
+              </DarkField>
+              <DarkField label={t('crm.street', 'Strasse')} error={errors.management?.street}>
+                <Input {...register('management.street')} readOnly={managementLocked} className={cn(inputCls, managementLocked && lockedCls)} />
+              </DarkField>
+              <div className="grid grid-cols-[120px_1fr] gap-4">
+                <DarkField label={t('crm.postalCode', 'PLZ')} error={errors.management?.postalCode}>
+                  <Input {...register('management.postalCode')} readOnly={managementLocked} className={cn(inputCls, managementLocked && lockedCls)} />
+                </DarkField>
+                <DarkField label={t('crm.city', 'Ort')} error={errors.management?.city}>
+                  <Input {...register('management.city')} readOnly={managementLocked} className={cn(inputCls, managementLocked && lockedCls)} />
+                </DarkField>
+              </div>
+              <DarkField label={t('crm.canton', 'Kanton')} error={errors.management?.canton}>
+                <Select value={managementCanton || ''} disabled={managementLocked} onValueChange={(v) => setValue('management.canton', v, { shouldDirty: true })}>
                   <SelectTrigger className={selectTriggerCls}><SelectValue placeholder="—" /></SelectTrigger>
                   <SelectContent className="max-h-72 bg-card border-border">
                     {CH_CANTONS.map((c) => (

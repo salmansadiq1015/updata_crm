@@ -70,6 +70,7 @@ export const createSiteSchema = z.object({
   longitude: z.number().min(-180).max(180).nullable().optional(),
   billingAddress: addressParty,
   ownership: addressParty,
+  management: addressParty,
   emergencyHeating,
   keyBox,
   advertisingBoard,

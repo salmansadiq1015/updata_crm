@@ -72,6 +72,9 @@ const siteSchema = new mongoose.Schema(
     // for the object — client feedback #10. Free-form, optional.
     billingAddress: { type: siteAddressPartySchema, default: null },
     ownership: { type: siteAddressPartySchema, default: null },
+    // Verwaltung: the managing agent, distinct from the owner — a régie bills
+    // and is written to, while the owner may be someone else entirely.
+    management: { type: siteAddressPartySchema, default: null },
     // Objektinformationen (client feedback): emergency heating, key box, boards.
     emergencyHeating: { type: emergencyHeatingSchema, default: null },
     keyBox: { type: keyBoxSchema, default: null },

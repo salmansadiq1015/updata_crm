@@ -85,13 +85,16 @@ function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading }) {
         />
       </div>
 
-      {(order?.siteBillingAddress || order?.siteOwnership) && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {(order?.siteBillingAddress || order?.siteOwnership || order?.siteManagement) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {order?.siteBillingAddress && (
             <PartyBlock title={t('qop.orders.billingAddress', 'Rechnungsadresse')} party={order.siteBillingAddress} />
           )}
           {order?.siteOwnership && (
             <PartyBlock title={t('qop.orders.ownership', 'Eigentümer')} party={order.siteOwnership} />
+          )}
+          {order?.siteManagement && (
+            <PartyBlock title={t('qop.orders.management', 'Verwaltung')} party={order.siteManagement} />
           )}
         </div>
       )}

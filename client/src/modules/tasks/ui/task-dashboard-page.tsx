@@ -679,7 +679,7 @@ export function TaskDashboardPage({ embedded = false }: { embedded?: boolean } =
   };
 
   const openAllTasks = () => {
-    router.push('/tasks/all');
+    router.push('/tasks');
   };
 
   const workloadData = analytics.workload.map((item) => ({

@@ -266,7 +266,7 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
         collapsedFolderIds={sidebarState.collapsedFolderIds}
         onCollapseChange={setSidebarCollapsed}
         onToggleFolder={toggleFolderCollapsed}
-        onSelectList={(nextListId) => router.push(nextListId ? `/tasks/${nextListId}` : '/tasks/all')}
+        onSelectList={(nextListId) => router.push(nextListId ? `/tasks/${nextListId}` : '/tasks')}
         onSelectSavedView={setSavedView}
         onCreateFolder={() => setDlg({ kind: 'createFolder' })}
         onCreateList={(folderId) => setDlg({ kind: 'createList', folderId: folderId ?? null })}

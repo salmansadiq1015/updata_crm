@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useTaskRealtime } from '../hooks/use-task-realtime';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useTaskAnalyticsPreference } from '../hooks/use-task-analytics-preference';
+import { TaskMetricTiles, type TaskMetricFilter } from './task-metric-tiles';
+import { TaskDashboardPage } from './task-dashboard-page';
 import { TaskBulkActionBar } from './task-bulk-action-bar';
 import {
   toTaskParams,
@@ -66,6 +71,23 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
   const setSelectedTaskId = useTaskWorkspaceStore((state) => state.setSelectedTaskId);
   const setSearch = useTaskWorkspaceStore((state) => state.setSearch);
   const setStatus = useTaskWorkspaceStore((state) => state.setStatus);
+  const [analyticsOpen, setAnalyticsOpen] = useTaskAnalyticsPreference();
+
+  // Which tile is driving the list. Derived rather than stored, so the tiles
+  // stay in step when the filters are changed from the command bar.
+  const metricFilter: TaskMetricFilter = savedView === 'overdue'
+    ? 'overdue'
+    : status === 'OPEN'
+      ? 'open'
+      : status === 'COMPLETED'
+        ? 'completedThisWeek'
+        : null;
+
+  const applyMetricFilter = (filter: TaskMetricFilter) => {
+    if (filter === null) { setSavedView('none'); setStatus('ALL'); return; }
+    if (filter === 'overdue') { setStatus('ALL'); setSavedView('overdue'); return; }
+    setStatus(filter === 'open' ? 'OPEN' : 'COMPLETED');
+  };
   const setPriority = useTaskWorkspaceStore((state) => state.setPriority);
   const setAssigneeFilter = useTaskWorkspaceStore((state) => state.setAssigneeFilter);
   const setSavedView = useTaskWorkspaceStore((state) => state.setSavedView);
@@ -276,6 +298,25 @@ export function TaskWorkspace({ listId }: TaskWorkspaceProps) {
           pageSize={pageSize}
           onPageSizeChange={setPageSize}
         />
+        {/* The former dashboard, merged in: the status tiles head the list and
+            filter it, the analysis blocks fold away. */}
+        <div className="space-y-3 border-t border-border p-4">
+          <TaskMetricTiles active={metricFilter} onSelect={applyMetricFilter} />
+
+          <button
+            type="button"
+            onClick={() => setAnalyticsOpen(!analyticsOpen)}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', analyticsOpen && 'rotate-180')} />
+            {analyticsOpen
+              ? t('tasks.dashboard.hideAnalysis', 'Analyse ausblenden')
+              : t('tasks.dashboard.showAnalysis', 'Analyse anzeigen')}
+          </button>
+
+          {analyticsOpen && <TaskDashboardPage embedded />}
+        </div>
+
         <main className="min-h-0 flex-1 overflow-hidden">
           <div className="h-full overflow-hidden border-t border-border bg-card">
             {content}

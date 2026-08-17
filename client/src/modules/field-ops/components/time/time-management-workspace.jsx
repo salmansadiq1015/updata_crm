@@ -29,6 +29,7 @@ import {
   Upload,
   Users,
   X,
+  Briefcase,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { OfficeTimeEntryDialog } from './office-time-entry-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { PermissionGate } from '@/shared/components/permission-gate';
 import { formatDate } from '@/lib/formatters';
@@ -1109,6 +1111,7 @@ export function TimeManagementWorkspace() {
   const de = locale === 'de';
   useTimeTrackingRealtime();
   const [tab, setTab] = useState('overview');
+  const [officeDialogOpen, setOfficeDialogOpen] = useState(false);
   const [groupBy, setGroupBy] = useState('employee');
   const [dateFrom, setDateFrom] = useState(monthStart);
   const [dateTo, setDateTo] = useState(monthEnd);
@@ -1160,6 +1163,15 @@ export function TimeManagementWorkspace() {
         <PremiumStatCard icon={Check} label={de ? 'Freigegeben' : 'Released'} value={totals.releasedEntries || 0} tone="success" />
         <PremiumStatCard icon={CalendarDays} label={de ? 'Offene Abwesenheit' : 'Pending leave'} value={totals.pendingLeaveRequests || 0} tone="warning" />
       </div>
+
+      <div className="flex justify-end">
+        <Button size="sm" className="gap-1.5" onClick={() => setOfficeDialogOpen(true)}>
+          <Briefcase className="h-3.5 w-3.5" />
+          {de ? 'Büroarbeiten erfassen' : 'Log office hours'}
+        </Button>
+      </div>
+
+      <OfficeTimeEntryDialog open={officeDialogOpen} onOpenChange={setOfficeDialogOpen} />
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
         <div className="overflow-x-auto">

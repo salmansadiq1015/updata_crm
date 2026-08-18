@@ -13,7 +13,10 @@ import { ENDPOINTS } from '@/lib/api/endpoints';
 function useTextBlockPicker(search) {
   return useQuery({
     queryKey: ['catalog', 'picker', 'textBlocks', search],
-    queryFn: () => apiClient.get(ENDPOINTS.CATALOG.PICKER_TEXT_BLOCKS, { params: { q: search, limit: 30 } }),
+    // An empty q is rejected by the picker validation — omit it instead.
+    queryFn: () => apiClient.get(ENDPOINTS.CATALOG.PICKER_TEXT_BLOCKS, {
+      params: { ...(search ? { q: search } : {}), limit: 30 },
+    }),
     select: (r) => (Array.isArray(r.data) ? r.data : r.data?.items ?? []),
     staleTime: 60 * 1000,
   });

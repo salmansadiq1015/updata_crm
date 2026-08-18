@@ -505,13 +505,70 @@ class ReportService {
       throw new ConflictError('No QOP order is linked to this work assignment.');
     }
 
+    // The invoice bills what the report says happened: the worked time priced
+    // at the company hourly rate (Stundensatz, Einstellungen › Arbeitszeit),
+    // plus the material actually used with its catalogue snapshot prices.
+    // Everything stays editable on the draft invoice.
+    const { default: WorkTimeSettings } = await import('./workTimeSettings.model.js');
+    const settings = await WorkTimeSettings.findOne({ key: 'default' }).lean();
+    const hourlyRate = Number(settings?.billingHourlyRate) || 0;
+
+    const fmtDay = (d) => {
+      const date = d ? new Date(d) : null;
+      if (!date || Number.isNaN(date.getTime())) return '';
+      return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
+    };
+
+    const lineItems = [];
+    if (existing.arrivalTime && existing.departureTime) {
+      const workedHours = (new Date(existing.departureTime) - new Date(existing.arrivalTime)) / 3600000;
+      // Bill in quarter-hour steps, as trades usually do.
+      const billedHours = Math.round(Math.max(0, workedHours) * 4) / 4;
+      if (billedHours > 0) {
+        const day = fmtDay(existing.reportDate || existing.arrivalTime);
+        lineItems.push({
+          position: lineItems.length + 1,
+          type: 'service',
+          description: ['Arbeitszeit', day, assignment.title || existing.reportNumber]
+            .filter(Boolean).join(' — '),
+          unit: 'h',
+          quantity: billedHours,
+          unitPrice: hourlyRate,
+          discountPercent: 0,
+          vatRate: 8.1,
+        });
+      }
+    }
+    for (const item of existing.materialItems || []) {
+      const snapshot = item.catalogSnapshot || null;
+      lineItems.push({
+        position: lineItems.length + 1,
+        type: 'material',
+        description: item.description,
+        unit: item.unit || 'Stk',
+        quantity: Number(item.quantity) || 0,
+        // Custom (non-catalogue) material has no price — the office completes
+        // it on the draft invoice.
+        unitPrice: Number(snapshot?.snapshotSalesPrice ?? snapshot?.snapshotBasePrice ?? 0),
+        discountPercent: 0,
+        vatRate: 8.1,
+        catalogSnapshot: snapshot || null,
+      });
+    }
+    if (!lineItems.length) {
+      throw new ConflictError('The report has neither worked time nor material to invoice.');
+    }
+
     const invoiceService = (await import('../qop/invoice.service.js')).default;
     let invoice;
     try {
       invoice = await invoiceService.createFromOrder({
         sourceOrderId: assignment.orderId,
-        title: data.title || `Invoice for report ${existing.reportNumber}`,
-        dueDate: data.dueDate,
+        sourceWorkReportId: existing._id,
+        lineItems,
+        title: data.title || `Rechnung zu Rapport ${existing.reportNumber}`,
+        // The invoice needs a due date; default to 30 days like the payment terms.
+        dueDate: data.dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         paymentTermsDays: data.paymentTermsDays,
         paymentTermsText: data.paymentTermsText,
         globalDiscountPercent: data.globalDiscountPercent,

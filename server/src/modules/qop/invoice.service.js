@@ -234,8 +234,16 @@ class InvoiceService {
       throw new ConflictError('Cannot create an invoice from a cancelled order');
     }
 
-    const existingInvoices = await invoiceRepository.findByOrderId(order._id);
-    const { lineItems } = buildOrderInvoiceLines(order, existingInvoices, data.lineSelections);
+    // Rapport → Rechnung passes explicit line items (the report's hours and
+    // material); without them the lines come from the order's remaining
+    // uninvoiced quantities as before.
+    let lineItems;
+    if (Array.isArray(data.lineItems) && data.lineItems.length) {
+      lineItems = data.lineItems;
+    } else {
+      const existingInvoices = await invoiceRepository.findByOrderId(order._id);
+      ({ lineItems } = buildOrderInvoiceLines(order, existingInvoices, data.lineSelections));
+    }
     if (!lineItems.length) {
       throw new ConflictError('No remaining order line quantity is available to invoice');
     }
@@ -252,6 +260,7 @@ class InvoiceService {
       invoiceType: 'STANDARD',
       sourceOrderId: order._id,
       sourceQuotationId: order.sourceQuotationId || null,
+      sourceWorkReportId: data.sourceWorkReportId || null,
       customerId: order.customerId?._id || order.customerId,
       customerName: order.customerName,
       contactId: order.contactId?._id || order.contactId || null,

@@ -45,6 +45,7 @@ function BreakRuleCard({ t, canManage }) {
       setForm({
         breakDurationMin: data.breakDurationMin ?? 30,
         breakThresholdHours: data.breakThresholdHours ?? 6,
+        billingHourlyRate: data.billingHourlyRate ?? 0,
       });
     }
   }, [data, form]);
@@ -53,6 +54,7 @@ function BreakRuleCard({ t, canManage }) {
     mutationFn: () => apiClient.put('/mobile/work-time-settings', {
       breakDurationMin: Number(form.breakDurationMin),
       breakThresholdHours: Number(form.breakThresholdHours),
+      billingHourlyRate: Number(form.billingHourlyRate) || 0,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['mobile', 'work-time-settings'] });
@@ -91,6 +93,23 @@ function BreakRuleCard({ t, canManage }) {
             onChange={(e) => setForm((c) => ({ ...c, breakThresholdHours: e.target.value }))}
             disabled={!canManage || save.isPending}
           />
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-border/60 pt-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>{t('timeTracking.settings.hourlyRate', 'Stundensatz für Verrechnung (CHF)')}</Label>
+            <Input
+              type="number" min="0" max="10000" step="0.05"
+              value={form.billingHourlyRate}
+              onChange={(e) => setForm((c) => ({ ...c, billingHourlyRate: e.target.value }))}
+              disabled={!canManage || save.isPending}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('timeTracking.settings.hourlyRateHint', 'Wird beim Erstellen einer Rechnung aus einem Arbeitsrapport als Preis pro Stunde vorgeschlagen.')}
+            </p>
+          </div>
         </div>
       </div>
 

@@ -8,6 +8,7 @@ const updateSchema = {
   body: Joi.object({
     breakDurationMin: Joi.number().min(0).max(240),
     breakThresholdHours: Joi.number().min(0).max(24),
+    billingHourlyRate: Joi.number().min(0).max(10000),
   }).min(1),
 };
 

@@ -188,6 +188,11 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
                     [t('qop.invoice.fieldDueDate', 'Fällig am'), fmtDate(invoice?.dueDate, language)],
                     [t('qop.invoice.fieldAmount', 'Betrag'), <AmountDisplay key="a" amount={invoice?.grandTotalRounded} currency={invoice?.currency} className="font-semibold" />],
                     [t('qop.invoice.fieldAmountDue', 'Offener Betrag'), <AmountDisplay key="d" amount={invoice?.amountDue} currency={invoice?.currency} />],
+                    // Rapport → Rechnung: show where the billed lines came from.
+                    ...(invoice?.sourceWorkReportId ? [[
+                      t('qop.invoice.fieldSourceReport', 'Quelle'),
+                      t('qop.invoice.sourceReport', 'Arbeitsrapport'),
+                    ]] : []),
                   ].map(([label, value], i) => (
                     <div key={i} className="flex flex-col gap-0.5">
                       <span className="text-xs text-muted-foreground">{label}</span>

@@ -196,6 +196,15 @@ class ReportController {
     } catch (err) { next(err); }
   }
 
+  async generateDocument(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const { default: reportDocumentService } = await import('./reportDocument.service.js');
+      const result = await reportDocumentService.generateDocument(req.params.reportId, req.user._id, meta);
+      return res.success({ data: result, message: 'Work report document generated' });
+    } catch (err) { next(err); }
+  }
+
   async history(req, res, next) {
     try {
       const query = req._validatedQuery || req.query;

@@ -11,7 +11,7 @@ import { useFieldOpsReportMutations } from '@/modules/field-ops/hooks/use-field-
 import { useFieldOpsReportHistory } from '@/modules/field-ops/hooks/use-field-ops-queries';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { formatDate } from '@/lib/formatters';
-import { CheckCircle, Clock, History, ReceiptText, XCircle, Pencil } from 'lucide-react';
+import { CheckCircle, Clock, History, ReceiptText, XCircle, Pencil, FileDown, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 function Section({ title, children, className }) {
@@ -44,7 +44,7 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange,
   const reportId = report?._id || report?.id;
   const { data: history = [] } = useFieldOpsReportHistory(reportId);
 
-  const { approve, reject, createInvoice } = useFieldOpsReportMutations({
+  const { approve, reject, createInvoice, generateDocument } = useFieldOpsReportMutations({
     onApprove: () => onOpenChange(false),
     onReject: () => { setRejectOpen(false); onOpenChange(false); },
   });
@@ -202,8 +202,20 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange,
             )}
           </div>
 
-          {(canAct || canInvoice) && (
-            <div className="border-t px-6 py-4 flex gap-2 justify-end bg-background">
+          <div className="border-t px-6 py-4 flex gap-2 justify-end bg-background">
+              {/* A report can always leave as a PDF, whatever its status. */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => generateDocument.mutate({ reportId })}
+                disabled={generateDocument.isPending}
+                className="mr-auto"
+              >
+                {generateDocument.isPending
+                  ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  : <FileDown className="h-4 w-4 mr-1.5" />}
+                {language === 'de' ? 'Als PDF' : 'As PDF'}
+              </Button>
               {canAct && (
                 <>
                   <Button
@@ -245,8 +257,7 @@ export function FieldOpsReportDetailPanel({ report, orderId, open, onOpenChange,
                   {language === 'de' ? 'Rechnung erstellen' : 'Create Invoice'}
                 </Button>
               )}
-            </div>
-          )}
+          </div>
         </SheetContent>
       </Sheet>
 

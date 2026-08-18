@@ -19,6 +19,15 @@ const DEFAULT_COLUMNS = () => [
   { field: 'total',       label: { de: 'Total',         fr: 'Total',         it: 'Totale',         en: 'Total'        }, widthPercent: 20, alignment: 'right', format: 'currency' },
 ];
 
+// A report prints what the technician recorded — equipment, work, findings,
+// material, time, signature — and carries no line-item table or totals.
+const REPORT_SECTIONS = () => [
+  { id: 'header', name: 'Header', type: 'header', position: 0,  isVisible: true, isConditional: false, config: {} },
+  { id: 'body',   name: 'Intro',  type: 'body',   position: 1,  isVisible: true, isConditional: true, conditionField: 'introduction', config: {} },
+  { id: 'report', name: 'Report', type: 'report', position: 2,  isVisible: true, isConditional: false, config: {} },
+  { id: 'footer', name: 'Footer', type: 'footer', position: 99, isVisible: true, isConditional: false, config: {} },
+];
+
 const LETTER_SECTIONS = () => [
   { id: 'header', name: 'Header', type: 'header', position: 0, isVisible: true, isConditional: false, config: {} },
   { id: 'body',   name: 'Body',   type: 'body',   position: 1, isVisible: true, isConditional: false, config: {} },
@@ -32,8 +41,8 @@ const TEMPLATES = [
   { templateType: 'invoice_advance',       name: 'Akontorechnung',            sections: DEFAULT_SECTIONS(true),       tableColumns: DEFAULT_COLUMNS() },
   { templateType: 'invoice_final',         name: 'Schlussrechnung',           sections: DEFAULT_SECTIONS(true, true), tableColumns: DEFAULT_COLUMNS() },
   { templateType: 'cover_letter',          name: 'Begleitschreiben',          sections: LETTER_SECTIONS(),            tableColumns: [] },
-  { templateType: 'service_report',        name: 'Servicebericht',            sections: DEFAULT_SECTIONS(),           tableColumns: DEFAULT_COLUMNS() },
-  { templateType: 'inspection_certificate',name: 'Inspektionszertifikat',     sections: DEFAULT_SECTIONS(),           tableColumns: DEFAULT_COLUMNS() },
+  { templateType: 'service_report',        name: 'Servicebericht',            sections: REPORT_SECTIONS(),            tableColumns: [] },
+  { templateType: 'inspection_certificate',name: 'Inspektionszertifikat',     sections: REPORT_SECTIONS(),            tableColumns: [] },
   // PM project documents — text-style documents (header/body/footer, no line-item table).
   { templateType: 'project_appointment_confirmation', name: 'Terminbestätigung',     sections: LETTER_SECTIONS(), tableColumns: [] },
   { templateType: 'project_status_report',            name: 'Projekt-Statusbericht', sections: LETTER_SECTIONS(), tableColumns: [] },

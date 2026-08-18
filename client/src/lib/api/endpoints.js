@@ -424,6 +424,7 @@ export const ENDPOINTS = Object.freeze({
     REPORT_REJECT: (id) => `/mobile/reports/${id}/reject`,
     REPORT_MARK_INVOICED: (id) => `/mobile/reports/${id}/mark-invoiced`,
     REPORT_CREATE_INVOICE: (id) => `/mobile/reports/${id}/create-invoice`,
+    REPORT_GENERATE_DOC: (id) => `/mobile/reports/${id}/documents/generate`,
     REPORT_HISTORY: (id) => `/mobile/reports/${id}/history`,
     REPORT_ARCHIVE: (id) => `/mobile/reports/${id}/archive`,
     REPORT_UNARCHIVE: (id) => `/mobile/reports/${id}/unarchive`,

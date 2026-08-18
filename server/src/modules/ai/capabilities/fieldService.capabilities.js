@@ -715,14 +715,13 @@ async function deleteAssignment({ context, userId, state, helpers }) {
 
 async function searchCustomers({ input, context, helpers }) {
   const customerService = (await import('../../crm/customer.service.js')).default;
-  const term = helpers.extractSearchTerm(input);
-  const customers = isListAllIntent(input)
-    ? (await customerService.list({ limit: 10, sortBy: 'createdAt', sortOrder: 'desc' })).data
-    : await customerService.search(term, 10);
-
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_CUSTOMERS, ['customer search term'], context);
   }
+  const customers = listAll
+    ? (await customerService.list({ limit: 10, sortBy: 'createdAt', sortOrder: 'desc' })).data
+    : await customerService.search(term, 10);
 
   return {
     action: ACTIONS.SEARCH_CUSTOMERS,
@@ -743,8 +742,8 @@ async function searchCustomers({ input, context, helpers }) {
 
 async function searchTasks({ input, context, userId, state, helpers }) {
   const taskService = (await import('../../tasks/task.service.js')).default;
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_TASKS, ['task search term'], context);
   }
 
@@ -752,7 +751,7 @@ async function searchTasks({ input, context, userId, state, helpers }) {
     limit: 10,
     sortBy: 'createdAt',
     sortOrder: 'desc',
-    ...(isListAllIntent(input) ? {} : { q: term }),
+    ...(listAll ? {} : { q: term }),
   }, userId, { isAdmin: Boolean(state.permissions?.includes('*')) });
   const tasks = result.data || [];
 
@@ -772,13 +771,13 @@ async function searchTasks({ input, context, userId, state, helpers }) {
 }
 
 async function searchProjects({ input, context, helpers }) {
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_PROJECTS, ['project search term'], context);
   }
 
   const projectService = (await import('../../pm/project.service.js')).default;
-  const projects = isListAllIntent(input)
+  const projects = listAll
     ? (await projectService.list({ limit: 10, sortBy: 'createdAt', sortOrder: 'desc' })).data
     : await projectService.search(term, 10);
   return {
@@ -796,8 +795,8 @@ async function searchProjects({ input, context, helpers }) {
 }
 
 async function searchOrders({ input, context, helpers }) {
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_ORDERS, ['job/order search term'], context);
   }
 
@@ -806,7 +805,7 @@ async function searchOrders({ input, context, helpers }) {
     limit: 10,
     sortBy: 'createdAt',
     sortOrder: 'desc',
-    ...(isListAllIntent(input) ? {} : { search: term }),
+    ...(listAll ? {} : { search: term }),
   });
   const orders = result.data || [];
 
@@ -827,8 +826,8 @@ async function searchOrders({ input, context, helpers }) {
 }
 
 async function searchReports({ input, context, helpers }) {
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && !context.assignment && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && !context.assignment && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_REPORTS, ['service report search term'], context);
   }
 
@@ -839,7 +838,7 @@ async function searchReports({ input, context, helpers }) {
       pageSize: 10,
       sortBy: 'createdAt',
       sortOrder: 'desc',
-      ...(isListAllIntent(input) ? {} : { search: term }),
+      ...(listAll ? {} : { search: term }),
     });
   const reports = result.items || [];
 
@@ -859,8 +858,8 @@ async function searchReports({ input, context, helpers }) {
 }
 
 async function searchDocuments({ input, context, userId, state, helpers }) {
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_DOCUMENTS, ['document search term'], context);
   }
 
@@ -868,7 +867,7 @@ async function searchDocuments({ input, context, userId, state, helpers }) {
   const user = await User.findById(userId).select('_id role').lean();
   const documentIndexService = (await import('../../documents/documentIndex.service.js')).default;
   const result = await documentIndexService.list({
-    search: isListAllIntent(input) ? undefined : term,
+    search: listAll ? undefined : term,
     limit: 10,
     source: 'all',
     origin: 'all',
@@ -1009,6 +1008,15 @@ function extractReportStatus(input) {
 function isListAllIntent(input) {
   return /\b(show|list|view|get|display|zeige|liste|alle|all|recent|latest|newest)\b/i.test(input)
     && /\b(all|recent|latest|newest|list|alle|overview|uebersicht|übersicht)\b/i.test(input);
+}
+
+// The LLM planner's clean parameters win over keyword extraction when present.
+function searchInputs(input, context, helpers) {
+  const draft = context?.llmDraft || {};
+  return {
+    term: draft.searchTerm || helpers.extractSearchTerm(input),
+    listAll: draft.listAll === true || isListAllIntent(input),
+  };
 }
 
 function extractProjectType(input) {

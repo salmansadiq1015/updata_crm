@@ -37,6 +37,7 @@ const ACTIONS = Object.freeze({
   UPDATE_PROJECT: 'UPDATE_PROJECT',
   CREATE_NOTE: 'CREATE_NOTE',
   SEND_CHAT: 'SEND_CHAT',
+  SUMMARIZE_CHAT: 'SUMMARIZE_CHAT',
   RECORD_TIME: 'RECORD_TIME',
   ANALYZE_WORKFORCE: 'ANALYZE_WORKFORCE',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
@@ -73,6 +74,7 @@ const ACTION_LABELS = {
   [ACTIONS.UPDATE_PROJECT]: 'update a project',
   [ACTIONS.CREATE_NOTE]: 'create a note',
   [ACTIONS.SEND_CHAT]: 'send a chat message',
+  [ACTIONS.SUMMARIZE_CHAT]: 'summarize a chat conversation',
   [ACTIONS.RECORD_TIME]: 'record working hours',
   [ACTIONS.ANALYZE_WORKFORCE]: 'analyze workforce planning',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'analyze a technician ticket',
@@ -152,11 +154,17 @@ async function executeAction(state) {
 
   const previousFollowUp = state.entities?.previousFollowUp || null;
   const requestContext = state.entities?.requestContext || {};
-  const action = previousFollowUp?.action || classifyAction(input);
+  const llmPlan = state.entities?.llmPlan || null;
+  const action = previousFollowUp?.action
+    || (llmPlan?.action && ACTIONS[llmPlan.action] ? ACTIONS[llmPlan.action] : classifyAction(input));
   const effectiveInput = previousFollowUp?.originalInput
     ? `${previousFollowUp.originalInput}\nFollow-up answer: ${input}`
     : input;
   const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext, action);
+  // Clean parameters extracted by the LLM planner; handlers prefer these over
+  // keyword stripping. Dates crossed the queue as ISO strings.
+  context.llmDraft = llmPlan?.params || null;
+  context.requestContext = requestContext;
   let output;
 
   try {
@@ -324,6 +332,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return createNote(input, context, userId);
     case ACTIONS.SEND_CHAT:
       return sendChat(input, context, userId);
+    case ACTIONS.SUMMARIZE_CHAT:
+      return summarizeChat(input, context, userId, state);
     case ACTIONS.SEARCH_CUSTOMER:
       return searchCustomer(input, context);
     case ACTIONS.CREATE_ORDER:
@@ -378,14 +388,15 @@ async function createTask(input, context, userId) {
   if (context.projectCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_TASK, ['project'], context);
   }
-  const title = cleanTitle(input, ['create task', 'task', 'aufgabe', 'erstelle']);
-  const priority = extractPriority(input);
-  const dueDate = extractDate(input);
+  const draft = context.llmDraft || {};
+  const title = draft.title || cleanTitle(input, ['create task', 'task', 'aufgabe', 'erstelle']);
+  const priority = draft.priority || extractPriority(input);
+  const dueDate = draftDate(draft.dueDate) || extractDate(input);
 
   const taskService = (await import('../../tasks/task.service.js')).default;
   const task = await taskService.create({
     title,
-    description: input,
+    description: draft.description || input,
     priority,
     ...(dueDate ? { dueDate } : {}),
     ...(context.assignee ? { assigneeId: context.assignee._id } : {}),
@@ -463,19 +474,20 @@ async function createAssignment(input, context, userId) {
   }
   const employee = context.assignee;
   if (!employee) return needsFollowUp(ACTIONS.CREATE_ASSIGNMENT, ['employee/technician'], context);
-  const start = extractDateTime(input);
+  const draft = context.llmDraft || {};
+  const start = draftDate(draft.dateTime) || extractDateTime(input);
   if (!start) return needsFollowUp(ACTIONS.CREATE_ASSIGNMENT, ['scheduled date and time'], context);
-  const durationHours = extractDurationHours(input) || 1;
+  const durationHours = draft.durationHours || extractDurationHours(input) || 1;
   const assignmentService = (await import('../../deploy/assignment.service.js')).default;
   const result = await assignmentService.create({
     employeeIds: [employee._id],
     assignmentType: hasAny(input.toLowerCase(), ['maintenance', 'wartung']) ? 'MAINTENANCE' : 'PROJECT_WORK',
-    title: cleanTitle(input, ['schedule', 'assign', 'plan', 'termin']),
+    title: draft.title || cleanTitle(input, ['schedule', 'assign', 'plan', 'termin']),
     startDatetime: start,
     endDatetime: new Date(start.getTime() + durationHours * 60 * 60 * 1000),
     projectId: context.project?._id || null,
     customerId: context.customer?._id || null,
-    priority: extractPriority(input) === 'URGENT' ? 'URGENT' : extractPriority(input) === 'HIGH' ? 'HIGH' : 'NORMAL',
+    priority: ['URGENT', 'HIGH'].includes(draft.priority || extractPriority(input)) ? (draft.priority || extractPriority(input)) : 'NORMAL',
     instructions: input,
   }, userId, { source: 'ai-agent' });
   return {
@@ -603,7 +615,7 @@ async function sendChat(input, context, userId) {
   if (!roomId || !mongoose.Types.ObjectId.isValid(roomId)) {
     return needsFollowUp(ACTIONS.SEND_CHAT, ['chat room'], context);
   }
-  const content = extractAfter(input, ['message ', 'nachricht ', 'say ', 'send ']) || input;
+  const content = context.llmDraft?.messageContent || extractAfter(input, ['message ', 'nachricht ', 'say ', 'send ']) || input;
   const User = (await import('../../auth/user.model.js')).default;
   const sender = await User.findById(userId).select('firstName lastName email').lean();
   const chatMessageService = (await import('../../chat/chatMessage.service.js')).default;
@@ -614,6 +626,64 @@ async function sendChat(input, context, userId) {
     message: 'Chat message sent.',
     recordType: 'chatMessage',
     recordId: message._id,
+  };
+}
+
+async function summarizeChat(input, context, userId, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('chat:read')) {
+    return {
+      action: ACTIONS.SUMMARIZE_CHAT,
+      status: 'failed',
+      message: "Missing permission 'chat:read'",
+    };
+  }
+  const requestRoomId = context.requestContext?.chatRoomId || context.roomId || extractAfter(input, ['room ', 'chat room ']);
+  if (!requestRoomId || !mongoose.Types.ObjectId.isValid(requestRoomId)) {
+    return needsFollowUp(ACTIONS.SUMMARIZE_CHAT, ['chat room'], context);
+  }
+
+  const User = (await import('../../auth/user.model.js')).default;
+  const user = await User.findById(userId).select('firstName lastName email role').lean();
+  const chatRoomService = (await import('../../chat/chatRoom.service.js')).default;
+  await chatRoomService.assertMembership(requestRoomId, user);
+
+  const ChatMessage = (await import('../../chat/chatMessage.model.js')).default;
+  const messages = await ChatMessage.find({ roomId: requestRoomId, isDeleted: { $ne: true } })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate('senderId', 'firstName lastName')
+    .lean();
+  if (!messages.length) {
+    return { action: ACTIONS.SUMMARIZE_CHAT, status: 'completed', message: 'Dieser Chat enthält noch keine Nachrichten.' };
+  }
+
+  const transcript = messages
+    .reverse()
+    .map((m) => {
+      const who = m.senderId ? `${m.senderId.firstName || ''} ${m.senderId.lastName || ''}`.trim() : 'Unbekannt';
+      const text = m.transcript || m.content || (m.messageType !== 'TEXT' ? `[${m.messageType}]` : '');
+      return `${who}: ${text}`;
+    })
+    .join('\n');
+
+  const { ChatOpenAI } = await import('@langchain/openai');
+  const config = (await import('../../../config/index.js')).default;
+  const llm = new ChatOpenAI({ apiKey: config.ai.apiKey, model: config.ai.model || 'gpt-4o', temperature: 0.3 });
+  const response = await llm.invoke([
+    {
+      role: 'system',
+      content: 'Fasse den folgenden Team-Chat eines Schweizer Heizungsbau-Betriebs kurz zusammen: die wichtigsten Themen, getroffene Entscheidungen und offene Punkte als knappe Aufzählung. Antworte in der Sprache, in der der Chat hauptsächlich geführt wird.',
+    },
+    { role: 'user', content: transcript.slice(0, 12000) },
+  ]);
+
+  return {
+    action: ACTIONS.SUMMARIZE_CHAT,
+    status: 'completed',
+    message: String(response.content),
+    recordType: 'chatRoom',
+    recordId: requestRoomId,
   };
 }
 
@@ -647,8 +717,8 @@ async function createOrder(input, context, userId) {
     customerId: context.customer._id,
     customerName: context.customer.name,
     projectId: context.project?._id || null,
-    title: cleanTitle(input, ['create order', 'create job', 'auftrag', 'order']),
-    notes: input,
+    title: context.llmDraft?.title || cleanTitle(input, ['create order', 'create job', 'auftrag', 'order']),
+    notes: context.llmDraft?.description || input,
     lineItems: [],
     language: 'de',
   }, userId, { source: 'ai-agent' });
@@ -1108,6 +1178,13 @@ function extractProjectStatus(input) {
 function extractDurationHours(input) {
   const match = input.match(/(\d+(?:[.,]\d+)?)\s*(hours?|hrs?|stunden?|h)\b/i);
   return match ? Number(match[1].replace(',', '.')) : null;
+}
+
+// LLM-draft dates arrive as ISO strings after queue serialization.
+function draftDate(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function extractDate(input) {

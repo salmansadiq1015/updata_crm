@@ -1,6 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import agentRunRepository from './agentRun.repository.js';
 import agentMemory from './agent.memory.js';
+import llmPlanner from './llmPlanner.service.js';
 import { checkRateLimit, sanitizeUserInput } from './agent.guardrails.js';
 import queueManager from '../../../shared/queue/QueueManager.js';
 import { AppError } from '../../../shared/errors/AppError.js';
@@ -63,24 +64,19 @@ class AgentService {
     return this._llm;
   }
 
+  /**
+   * LLM planning first (understands questions and extracts clean parameters);
+   * deterministic keyword heuristics only as fallback so the agent still
+   * responds without an API key. Returns { intent, llmPlan }.
+   */
   async _classifyIntent(input) {
-    const deterministic = this._classifyIntentHeuristic(input);
-    if (deterministic) return deterministic;
-
-    try {
-      const llm = this._getLlm();
-      const response = await llm.invoke([
-        {
-          role: 'system',
-          content: 'You are an ERP intent classifier. Given user input, return JSON only: {"intent": "<one of: create_customer, update_customer, delete_customer, create_task, update_task, delete_task, create_project, delete_project, send_notification, create_order, update_order, delete_order, create_assignment, reschedule_assignment, delete_assignment, create_report, update_report, delete_report, update_project, create_note, send_chat_message, record_time, analyze_workforce, search_customer, search_tasks, search_projects, search_orders, search_reports, search_documents, create_quotation, create_invoice, create_task_reminder, general>", "confidence": 0.0-1.0}',
-        },
-        { role: 'user', content: input },
-      ]);
-      const parsed = JSON.parse(response.content.replace(/```json|```/g, '').trim());
-      return parsed.intent || 'general';
-    } catch {
-      return 'general';
+    const plan = await llmPlanner.plan(input);
+    if (plan) {
+      const intent = plan.action === 'SEND_CHAT' ? 'send_chat_message' : plan.action.toLowerCase();
+      return { intent, llmPlan: plan };
     }
+    const deterministic = this._classifyIntentHeuristic(input);
+    return { intent: deterministic || 'general', llmPlan: null };
   }
 
   _classifyIntentHeuristic(input) {
@@ -152,7 +148,10 @@ class AgentService {
     }
 
     const previousFollowUp = await this._loadPreviousFollowUp(userId, meta.threadId);
-    const intent = previousFollowUp ? previousFollowUp.action : await this._classifyIntent(sanitized);
+    const classification = previousFollowUp
+      ? { intent: previousFollowUp.action, llmPlan: null }
+      : await this._classifyIntent(sanitized);
+    const { intent, llmPlan } = classification;
     const workflowType = previousFollowUp
       ? 'FIELD_SERVICE_AGENT'
       : INTENT_TO_WORKFLOW[intent] || (intent === 'general' ? 'GENERAL' : 'FIELD_SERVICE_AGENT');
@@ -178,6 +177,7 @@ class AgentService {
         entities: {
           requestContext: meta.context || {},
           previousFollowUp,
+          llmPlan,
         },
         input: sanitized,
       });

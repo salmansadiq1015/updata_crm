@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { sanitizePastedHtml } from '@/lib/dom/sanitize-pasted-html';
 
 export const TEMPLATE_LANGUAGES = [
   ['de', 'Deutsch'],
@@ -34,6 +35,9 @@ function RichTextEditor({ value, onChange, labelList }) {
     immediatelyRender: false,
     extensions: [StarterKit],
     content: value || '',
+    // Same rule as the shared editor: pasted text drops the source's own
+    // formatting and adopts the system layout.
+    editorProps: { transformPastedHTML: sanitizePastedHtml },
     onUpdate: ({ editor: activeEditor }) => onChangeRef.current(activeEditor.getHTML()),
   });
 

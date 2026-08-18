@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { sanitizePastedHtml } from '@/lib/dom/sanitize-pasted-html';
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   Heading1, Heading2, Heading3,
@@ -381,35 +382,40 @@ export function RichTextEditor({
     onUpdate: ({ editor: ed }) => {
       onChange?.(ed.getHTML());
     },
-    editorProps: onImageUpload
-      ? {
-          handlePaste: (view, event) => {
-            const items = Array.from(event.clipboardData?.items || []);
-            const imageItem = items.find((item) => item.type.startsWith('image/'));
-            if (imageItem) {
-              event.preventDefault();
-              const file = imageItem.getAsFile();
-              if (file) handleImageFileRef.current(file);
-              return true;
-            }
-            return false;
-          },
-          handleDrop: (view, event) => {
-            const files = Array.from(event.dataTransfer?.files || []);
-            const imageFile = files.find((f) => f.type.startsWith('image/'));
-            if (imageFile) {
-              event.preventDefault();
-              handleImageFileRef.current(imageFile);
-              return true;
-            }
-            return false;
-          },
-        }
-      // Must be an object, never undefined: passing editorProps: undefined
-      // overrides Tiptap's default {} and crashes createView (reading
-      // 'dispatchTransaction' of undefined) for every editor without image
-      // upload — e.g. the component form, quotation intro/T&C, task notes.
-      : {},
+    // Must always be an object, never undefined: passing editorProps: undefined
+    // overrides Tiptap's default {} and crashes createView (reading
+    // 'dispatchTransaction' of undefined) for every editor without image
+    // upload — e.g. the component form, quotation intro/T&C, task notes.
+    editorProps: {
+      // Pasted text adopts the system layout instead of carrying the source's
+      // typeface, sizes and colours along.
+      transformPastedHTML: sanitizePastedHtml,
+      ...(onImageUpload
+        ? {
+            handlePaste: (view, event) => {
+              const items = Array.from(event.clipboardData?.items || []);
+              const imageItem = items.find((item) => item.type.startsWith('image/'));
+              if (imageItem) {
+                event.preventDefault();
+                const file = imageItem.getAsFile();
+                if (file) handleImageFileRef.current(file);
+                return true;
+              }
+              return false;
+            },
+            handleDrop: (view, event) => {
+              const files = Array.from(event.dataTransfer?.files || []);
+              const imageFile = files.find((f) => f.type.startsWith('image/'));
+              if (imageFile) {
+                event.preventDefault();
+                handleImageFileRef.current(imageFile);
+                return true;
+              }
+              return false;
+            },
+          }
+        : {}),
+    },
   });
 
   // Keep editor ref in sync

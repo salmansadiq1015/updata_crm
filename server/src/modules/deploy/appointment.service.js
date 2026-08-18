@@ -6,6 +6,37 @@ import logger from '../../shared/logger/index.js';
 import appointmentRepository from './appointment.repository.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
 
+/**
+ * The identifying payload the QOP reminder handlers subscribe to: which
+ * appointment, for which customer, and when it takes place. The schedule and
+ * the customer live on the assignment; the linked order is the fallback for
+ * assignments booked without a customer of their own.
+ *
+ * Publishing less than this used to leave the handlers with undefined values,
+ * so no reminder was ever created.
+ */
+async function buildAppointmentEventPayload(assignmentId, appointment) {
+  const { default: Assignment } = await import('./assignment.model.js');
+  const assignment = await Assignment.findById(assignmentId)
+    .select('customerId orderId startDatetime')
+    .lean();
+
+  let customerId = assignment?.customerId || null;
+  if (!customerId && assignment?.orderId) {
+    const { default: Order } = await import('../qop/order.model.js');
+    const order = await Order.findById(assignment.orderId).select('customerId').lean();
+    customerId = order?.customerId || null;
+  }
+
+  return {
+    appointmentId: appointment?._id || null,
+    assignmentId,
+    customerId,
+    scheduledDate: assignment?.startDatetime || null,
+    email: appointment?.customerContactEmail || null,
+  };
+}
+
 class AppointmentService {
   async getByAssignmentId(assignmentId) {
     const appointment = await appointmentRepository.findByAssignmentId(assignmentId);
@@ -91,10 +122,11 @@ class AppointmentService {
       },
     });
 
-    eventBus.publish(EVENT_TYPES.SCHEDULE_APPOINTMENT_CONFIRMED, {
-      assignmentId,
-      email: appointment.customerContactEmail,
-    }, { source: 'deploy:appointments' });
+    eventBus.publish(
+      EVENT_TYPES.SCHEDULE_APPOINTMENT_CONFIRMED,
+      await buildAppointmentEventPayload(assignmentId, appointment),
+      { source: 'deploy:appointments' },
+    );
 
     auditService.logEvent({
       eventType: 'appointment.confirmation_sent',
@@ -131,10 +163,11 @@ class AppointmentService {
       });
     }
 
-    eventBus.publish(EVENT_TYPES.SCHEDULE_APPOINTMENT_CANCELLED, {
-      assignmentId,
-      reason,
-    }, { source: 'deploy:appointments' });
+    eventBus.publish(
+      EVENT_TYPES.SCHEDULE_APPOINTMENT_CANCELLED,
+      { ...(await buildAppointmentEventPayload(assignmentId, appointment)), reason },
+      { source: 'deploy:appointments' },
+    );
 
     auditService.logEvent({
       eventType: 'appointment.cancelled',
@@ -173,10 +206,15 @@ class AppointmentService {
       });
     }
 
-    eventBus.publish(EVENT_TYPES.SCHEDULE_APPOINTMENT_RESCHEDULED, {
-      assignmentId,
-      newData,
-    }, { source: 'deploy:appointments' });
+    eventBus.publish(
+      EVENT_TYPES.SCHEDULE_APPOINTMENT_RESCHEDULED,
+      {
+        ...(await buildAppointmentEventPayload(assignmentId, appointment)),
+        newScheduledDate: newData?.startDatetime || newData?.newStartDatetime || null,
+        newData,
+      },
+      { source: 'deploy:appointments' },
+    );
 
     auditService.logEvent({
       eventType: 'appointment.rescheduled',
@@ -216,10 +254,15 @@ class AppointmentService {
       });
     }
 
-    eventBus.publish(EVENT_TYPES.SCHEDULE_APPOINTMENT_RESCHEDULED, {
-      assignmentId,
-      newData: scheduleData,
-    }, { source: 'deploy:appointments' });
+    eventBus.publish(
+      EVENT_TYPES.SCHEDULE_APPOINTMENT_RESCHEDULED,
+      {
+        ...(await buildAppointmentEventPayload(assignmentId, appointment)),
+        newScheduledDate: scheduleData?.startDatetime || null,
+        newData: scheduleData,
+      },
+      { source: 'deploy:appointments' },
+    );
 
     auditService.logEvent({
       eventType: 'appointment.assignment_rescheduled',

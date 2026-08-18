@@ -127,6 +127,13 @@ class AgentService {
   }
 
   async run(input, userId, permissions, meta = {}) {
+    if (!config.ai.apiKey) {
+      throw new AppError(
+        'Der KI-Assistent ist nicht konfiguriert (OPENAI_API_KEY fehlt). Bitte den Administrator kontaktieren.',
+        503,
+        'AI_NOT_CONFIGURED'
+      );
+    }
     await checkRateLimit(userId);
     const sanitized = sanitizeUserInput(input);
 

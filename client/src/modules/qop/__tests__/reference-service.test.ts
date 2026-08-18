@@ -29,7 +29,7 @@ describe('qop reference service', () => {
 
     referenceService.listDepartments();
 
-    expect(getMock).toHaveBeenCalledWith('/admin/departments');
+    expect(getMock).toHaveBeenCalledWith('/admin/departments', { params: { scope: 'qop' } });
   });
 
   test('loads customer projects with valid selectable project status filters', async () => {

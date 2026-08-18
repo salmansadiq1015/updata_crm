@@ -547,6 +547,7 @@ export const ENDPOINTS = Object.freeze({
     QUOTATION_CONVERT: (id) => `/qop/quotations/${id}/convert`,
     QUOTATION_DUPLICATE: (id) => `/qop/quotations/${id}/duplicate`,
     QUOTATION_HISTORY: (id) => `/qop/quotations/${id}/history`,
+    QUOTATION_REVISIONS: (id) => `/qop/quotations/${id}/revisions`,
     // Orders
     ORDERS: '/qop/orders',
     ORDER_BY_ID: (id) => `/qop/orders/${id}`,

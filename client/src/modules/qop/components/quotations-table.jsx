@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { useQuotations, useQuotationHistory } from '../hooks/use-qop-queries';
+import { useQuotations, useQuotationHistory, useQuotationRevisions } from '../hooks/use-qop-queries';
 import { useQuotationMutations } from '../hooks/use-qop-mutations';
 import { QuotationStatusBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
@@ -98,19 +98,66 @@ function StatusTransitionDialog({ open, onClose, quotation, onConfirm }) {
   );
 }
 
-function HistoryDrawer({ open, onClose, quotationId }) {
-  const { t } = useLanguage();
+function HistoryDrawer({ open, onClose, quotation }) {
+  const { t, locale: language } = useLanguage();
+  const quotationId = quotation?._id ?? quotation?.id ?? null;
   const { data: history = [], isLoading } = useQuotationHistory(open ? quotationId : null);
+  const { data: revisions = [] } = useQuotationRevisions(open ? quotationId : null);
+
+  const fmtAmount = (n, currency) => `${currency || 'CHF'} ${new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2 }).format(n ?? 0)}`;
+  const personName = (user) => [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || '—';
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('qop.status.historyTitle', 'Statusverlauf')}</DialogTitle>
+          <DialogTitle>{t('qop.status.historyTitle', 'Verlauf')}</DialogTitle>
         </DialogHeader>
+
+        {/* Versionsverwaltung — the document's business versions */}
+        <div className="mt-1">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('qop.versions.title', 'Versionen')}
+          </p>
+          <ul className="divide-y divide-border/60 rounded-lg border border-border">
+            <li className="flex items-center gap-3 px-3 py-2 text-sm">
+              <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-primary">
+                V{quotation?.docVersion ?? 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                {t('qop.versions.current', 'Aktuelle Version')}
+              </span>
+              <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                {fmtAmount(quotation?.grandTotalRounded ?? quotation?.grandTotal, quotation?.currency)}
+              </span>
+            </li>
+            {revisions.map((rev) => (
+              <li key={rev._id} className="flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground">
+                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold">
+                  V{rev.version}
+                </span>
+                <span className="min-w-0 flex-1 truncate">
+                  {t('qop.versions.archivedBy', 'Archiviert')} · {personName(rev.changedBy)} · {fmtDate(rev.createdAt, language)}
+                </span>
+                <span className="shrink-0 tabular-nums text-xs">
+                  {fmtAmount(rev.snapshot?.grandTotalRounded ?? rev.snapshot?.grandTotal, rev.snapshot?.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {revisions.length === 0 && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {t('qop.versions.none', 'Noch keine früheren Versionen — sie entstehen, wenn eine versendete Offerte bearbeitet wird.')}
+            </p>
+          )}
+        </div>
+
+        <p className="mt-3 mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t('qop.status.historyTitle2', 'Statusverlauf')}
+        </p>
         {isLoading
           ? <Skeleton className="h-32 w-full" />
-          : <DocumentHistoryTimeline history={history} className="mt-2" />}
+          : <DocumentHistoryTimeline history={history} className="mt-1" />}
       </DialogContent>
     </Dialog>
   );
@@ -348,8 +395,13 @@ export function QuotationsTable({ advancedFilters = {} }) {
                   aria-label={t('qop.bulk.selectRow', 'Select row')}
                 />
               </div>
-              <div className="px-3 py-3 text-sm font-mono text-muted-foreground">
-                {q.quotationNumber}
+              <div className="flex items-center gap-1.5 px-3 py-3 text-sm font-mono text-muted-foreground">
+                <span className="truncate">{q.quotationNumber}</span>
+                {(q.docVersion ?? 1) > 1 && (
+                  <span className="shrink-0 rounded bg-primary/10 px-1 py-0.5 text-[10px] font-semibold text-primary">
+                    V{q.docVersion}
+                  </span>
+                )}
               </div>
               <div className="px-3 py-3 text-sm font-medium truncate">
                 {q.customerName ?? q.customer?.name ?? '—'}
@@ -401,7 +453,7 @@ export function QuotationsTable({ advancedFilters = {} }) {
                     <DropdownMenuItem onClick={() => setTrans(q)}>
                       <RefreshCw className="h-4 w-4 mr-2" />{t('qop.status.changeTitle', 'Status ändern')}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setHistoryFor(id)}>
+                    <DropdownMenuItem onClick={() => setHistoryFor(q)}>
                       <History className="h-4 w-4 mr-2" />{t('qop.table.history', 'Verlauf')}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -448,7 +500,7 @@ export function QuotationsTable({ advancedFilters = {} }) {
       <HistoryDrawer
         open={!!historyFor}
         onClose={() => setHistoryFor(null)}
-        quotationId={historyFor}
+        quotation={historyFor}
       />
       <ConvertToOrderDialog
         open={!!convertTarget}

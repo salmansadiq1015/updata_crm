@@ -34,6 +34,15 @@ export function useQuotationHistory(id) {
   });
 }
 
+export function useQuotationRevisions(id) {
+  return useQuery({
+    queryKey: ['qop', 'quotations', 'revisions', id],
+    queryFn: () => quotationService.getRevisions(id),
+    enabled: !!id,
+    select: (r) => (Array.isArray(r.data) ? r.data : []),
+  });
+}
+
 export function useOrders(filters = {}, options = {}) {
   const { enabled = true, ...queryOptions } = options;
   return useQuery({

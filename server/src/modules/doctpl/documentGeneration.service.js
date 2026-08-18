@@ -99,6 +99,29 @@ class DocumentGenerationService {
       generatedBy,
     });
 
+    // 6b. Versionsverwaltung: the freshly generated PDF is the current one —
+    // every earlier PDF of the same document type on this record moves to the
+    // archive automatically (client feedback: "die ältere Version soll
+    // automatisch ins Archiv gehen").
+    try {
+      const { default: GeneratedDocument } = await import('./generatedDocument.model.js');
+      await GeneratedDocument.updateMany(
+        {
+          sourceModule,
+          sourceRecordId,
+          documentType: templateType,
+          _id: { $ne: generatedDocument._id },
+          archived: { $ne: true },
+        },
+        { $set: { archived: true, archivedAt: new Date() } },
+      );
+    } catch (archiveErr) {
+      logger.warn('Auto-archive of older generated documents failed', {
+        module: 'doctpl',
+        error: { message: archiveErr.message },
+      });
+    }
+
     // 7. Publish event
     eventBus.publish(EVENT_TYPES.DOCUMENT_TPL_GENERATED, {
       documentId: generatedDocument._id,

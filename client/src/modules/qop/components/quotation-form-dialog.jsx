@@ -308,9 +308,10 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
       if (isEdit) {
         const id = quotation._id ?? quotation.id;
         const statusChanged = form.status && form.status !== quotation.status;
-        // Content can only be edited while the quotation is a draft (the server
-        // enforces it); a pure status change is always possible.
-        if (quotation.status === 'DRAFT') {
+        // Versionsverwaltung: sent quotations are editable too — the server
+        // freezes the previous state as a revision and bumps V. Only converted
+        // ones are locked (their content lives on in the order).
+        if (quotation.status !== 'CONVERTED') {
           await updateQuotation.mutateAsync({ id, data: { ...payload, version: form.version } });
         }
         if (statusChanged) {
@@ -363,6 +364,12 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 py-5">
+            {/* Versionsverwaltung: editing a sent quotation creates the next version */}
+            {isEdit && quotation && !['DRAFT', 'CONVERTED'].includes(quotation.status) && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-[13px] text-amber-800 dark:text-amber-200">
+                {t('qop.versions.editHint', 'Diese Offerte wurde bereits versendet. Beim Speichern entsteht Version V{next} — die bisherige Fassung bleibt im Verlauf erhalten und ältere PDFs werden automatisch archiviert.', { next: (quotation.docVersion ?? 1) + 1 })}
+              </div>
+            )}
             {/* Header fields */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {/* Objekt — picked first; the customer is derived from it */}

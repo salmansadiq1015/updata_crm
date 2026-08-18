@@ -150,7 +150,12 @@ const quotationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    // Optimistic-lock counter, bumped on every save (technical).
     version: { type: Number, default: 1 },
+    // Business document version (V1, V2, …): bumped only when an already-sent
+    // quotation is edited; the previous state is kept as a DocumentRevision
+    // and older PDFs are archived automatically.
+    docVersion: { type: Number, default: 1 },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

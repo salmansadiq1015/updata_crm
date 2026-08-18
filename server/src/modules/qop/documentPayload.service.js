@@ -248,6 +248,8 @@ class QopDocumentPayloadService {
         billing,
         objectAddress,
       }),
+      // Business version (V1, V2, …) — lands in the PDF filename.
+      version: quotation.docVersion || 1,
       salutation: quotation.salutation || '',
       introduction: quotation.introduction || '',
       validUntil: formatDate(quotation.validUntil),

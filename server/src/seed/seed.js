@@ -1,5 +1,6 @@
 import { seedCatalog } from './catalog-seed.js';
 import { seedDoctplTemplates } from './doctplSeed.js';
+import { seedOperations } from './operations-seed.js';
 import { seedAiVocabulary } from './ai-vocabulary-seed.js';
 import { seedAiCommands } from './ai-commands-seed.js';
 import Permission from '../modules/auth/permission.model.js';
@@ -637,6 +638,15 @@ export async function seedDatabase() {
       } else {
         logger.warn('No admin user found — skipping document template seed', { module: 'seed' });
       }
+    }
+
+    // 4c. Seed the working content the office needs on day one — offer text
+    // blocks, the catalogue of standard works, office-hour categories. Without
+    // it a fresh production database opens on empty screens.
+    {
+      const adminRole = await Role.findOne({ name: 'Admin' });
+      const anyAdmin = adminRole ? await User.findOne({ role: adminRole._id }) : null;
+      await seedOperations(anyAdmin?._id);
     }
 
     // 5. Seed default departments (Abteilungen) — required to create quotations /

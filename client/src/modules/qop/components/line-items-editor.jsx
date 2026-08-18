@@ -6,7 +6,11 @@ import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { PackageSearch, Plus, Trash2, ImagePlus, X } from 'lucide-react';
+import { PackageSearch, Plus, Trash2, ImagePlus, X, Maximize2 } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { VAT_RATES } from '../constants/qop-constants';
@@ -52,6 +56,17 @@ const UNIT_QTY_STEP = {
 
 let _uid = 0;
 function uid() { return ++_uid; }
+
+// Long catalogue texts (e.g. heat-pump datasheets) must stay readable inline:
+// the description grows up to a few lines instead of clipping after one.
+function descRows(text = '') {
+  const wrapped = Math.ceil((text || '').length / 55);
+  const breaks = (text.match(/\n/g) || []).length;
+  return Math.min(6, Math.max(1, wrapped + breaks));
+}
+
+const IMAGE_SIZES = ['small', 'medium', 'large'];
+const IMAGE_SIZE_SHORT = { small: 'S', medium: 'M', large: 'L' };
 
 const LINE_IMAGE_MIME = ['image/png', 'image/jpeg', 'image/jpg'];
 const LINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
@@ -109,7 +124,7 @@ function LineImageControl({ image, disabled, onChange, t }) {
       const payload = res?.data ?? res;
       const fileId = payload?._id || payload?.id;
       if (!fileId) throw new Error('upload failed');
-      onChange({ fileId, url: payload?.url || '' });
+      onChange({ fileId, url: payload?.url || '', size: 'medium' });
     } catch {
       showError(t('qop.lineItems.imageUploadError', 'Bild konnte nicht hochgeladen werden.'));
     } finally {
@@ -118,8 +133,10 @@ function LineImageControl({ image, disabled, onChange, t }) {
   };
 
   if (image?.fileId || image?.url) {
+    const size = image?.size || 'medium';
+    const nextSize = IMAGE_SIZES[(IMAGE_SIZES.indexOf(size) + 1) % IMAGE_SIZES.length];
     return (
-      <span className="relative group/img shrink-0">
+      <span className="relative group/img flex shrink-0 items-center gap-1">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={displayUrl}
@@ -128,14 +145,25 @@ function LineImageControl({ image, disabled, onChange, t }) {
           className="h-8 w-8 rounded border border-border object-cover"
         />
         {!disabled && (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            title={t('qop.lineItems.imageRemove', 'Bild entfernen')}
-            className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground group-hover/img:flex"
-          >
-            <X className="h-2.5 w-2.5" />
-          </button>
+          <>
+            {/* Cycle the print size Klein → Mittel → Gross for the PDF. */}
+            <button
+              type="button"
+              onClick={() => onChange({ ...image, size: nextSize })}
+              title={t('qop.lineItems.imageSize', 'Bildgrösse auf dem Dokument (S/M/L)')}
+              className="flex h-5 w-5 items-center justify-center rounded border border-border bg-background text-[10px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {IMAGE_SIZE_SHORT[size]}
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              title={t('qop.lineItems.imageRemove', 'Bild entfernen')}
+              className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground group-hover/img:flex"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </>
         )}
       </span>
     );
@@ -168,6 +196,9 @@ function LineImageControl({ image, disabled, onChange, t }) {
 export function LineItemsEditor({ value = [], onChange, disabled = false }) {
   const { t } = useLanguage();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Index of the position whose description is edited in the large window
+  // (the client's "F7" — long catalogue texts need room).
+  const [descDialogIdx, setDescDialogIdx] = useState(null);
 
   const addItem = useCallback(() => {
     const newItem = {
@@ -291,14 +322,26 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
             </div>
             <div className="flex items-center px-1 py-1">
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <div className="flex min-w-0 items-center gap-1">
-                <Input
+                <div className="flex min-w-0 items-start gap-1">
+                <Textarea
                   value={item.description}
                   onChange={(e) => updateItem(idx, 'description', e.target.value)}
                   disabled={disabled}
-                  className="h-7 min-w-0 text-xs px-1.5 border-0 bg-transparent focus-visible:bg-background focus-visible:ring-1"
+                  rows={descRows(item.description)}
+                  maxLength={2000}
+                  className="min-h-7 min-w-0 resize-none border-0 bg-transparent px-1.5 py-1 text-xs focus-visible:bg-background focus-visible:ring-1"
                   placeholder={t('qop.lineItems.descriptionPlaceholder', 'Beschreibung...')}
                 />
+                {!disabled && (
+                  <button
+                    type="button"
+                    onClick={() => setDescDialogIdx(idx)}
+                    title={t('qop.lineItems.editWindow', 'Im Fenster bearbeiten')}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 {!disabled && (
                   <TextBlockPicker
                     onSelect={(text) => updateItem(idx, 'description', text)}
@@ -452,6 +495,41 @@ export function LineItemsEditor({ value = [], onChange, disabled = false }) {
         onClose={() => setPickerOpen(false)}
         onSelect={addCatalogItem}
       />
+
+      {/* Large editing window for a position's description ("F7") */}
+      <Dialog open={descDialogIdx !== null} onOpenChange={(v) => !v && setDescDialogIdx(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {t('qop.lineItems.editWindowTitle', 'Position bearbeiten')}
+              {descDialogIdx !== null && value[descDialogIdx]
+                ? ` — #${value[descDialogIdx].position}`
+                : ''}
+            </DialogTitle>
+          </DialogHeader>
+          {descDialogIdx !== null && value[descDialogIdx] && (
+            <div className="flex flex-col gap-2">
+              <Textarea
+                autoFocus
+                rows={14}
+                maxLength={2000}
+                value={value[descDialogIdx].description || ''}
+                onChange={(e) => updateItem(descDialogIdx, 'description', e.target.value)}
+                placeholder={t('qop.lineItems.descriptionPlaceholder', 'Beschreibung...')}
+                className="text-sm"
+              />
+              <p className="self-end text-xs text-muted-foreground tabular-nums">
+                {(value[descDialogIdx].description || '').length} / 2000
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" onClick={() => setDescDialogIdx(null)}>
+              {t('common.done', 'Fertig')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

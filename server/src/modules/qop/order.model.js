@@ -74,6 +74,18 @@ const orderSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    // Carried over from the source quotation (Objekt-first flow): which site the
+    // order belongs to and which of its parties is the printed billing address.
+    siteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site',
+      default: null,
+    },
+    billingAddressSource: {
+      type: String,
+      enum: ['customer', 'site_billing', 'site_ownership', 'site_management'],
+      default: 'customer',
+    },
     language: {
       type: String,
       enum: ['de', 'fr', 'it', 'en'],

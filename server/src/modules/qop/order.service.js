@@ -105,6 +105,8 @@ class OrderService {
       contactId: quotation.contactId?._id || quotation.contactId || null,
       projectId: quotation.projectId?._id || quotation.projectId || null,
       departmentId: quotation.departmentId || null,
+      siteId: quotation.siteId?._id || quotation.siteId || null,
+      billingAddressSource: quotation.billingAddressSource || 'customer',
       language: quotation.language,
       title: quotation.title,
       lineItems,
@@ -203,7 +205,7 @@ class OrderService {
         if (!doc) return null;
         // Surface the site's billing address (Rechnungsadresse) and ownership
         // (Eigentümer) so the order detail can show them alongside the customer.
-        const parties = await this._resolveSiteParties(doc.projectId);
+        const parties = await this._resolveSiteParties(doc.projectId, doc.siteId);
         return { ...doc, ...parties };
       },
       ENTITY_TTL,
@@ -214,17 +216,23 @@ class OrderService {
 
   // Resolve the parties attached to the order's site (via its project). Returns
   // only parties that actually carry content; failures are non-fatal.
-  async _resolveSiteParties(projectId) {
+  async _resolveSiteParties(projectId, directSiteId = null) {
     const empty = { siteBillingAddress: null, siteOwnership: null, siteManagement: null };
     const pid = projectId && typeof projectId === 'object' ? projectId._id : projectId;
-    if (!pid) return empty;
+    // An order carrying its own site (Objekt-first quotations) wins over the
+    // project route, which stays as fallback for older records.
+    let sid = directSiteId && typeof directSiteId === 'object' ? directSiteId._id : directSiteId;
+    if (!sid && !pid) return empty;
     const hasContent = (p) => Boolean(p && (p.name || p.street || p.city));
     try {
       const Project = (await import('../pm/project.model.js')).default;
-      const project = await Project.findById(pid).select('siteId').lean();
-      if (!project?.siteId) return empty;
+      if (!sid && pid) {
+        const project = await Project.findById(pid).select('siteId').lean();
+        sid = project?.siteId;
+      }
+      if (!sid) return empty;
       const Site = (await import('../crm/site.model.js')).default;
-      const site = await Site.findById(project.siteId).select('billingAddress ownership management').lean();
+      const site = await Site.findById(sid).select('billingAddress ownership management').lean();
       return {
         siteBillingAddress: hasContent(site?.billingAddress) ? site.billingAddress : null,
         siteOwnership: hasContent(site?.ownership) ? site.ownership : null,

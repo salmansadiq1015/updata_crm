@@ -152,6 +152,15 @@ export function useQopCustomerSearch(query) {
   });
 }
 
+export function useQopSiteSearch(query) {
+  return useQuery({
+    queryKey: ['qop', 'references', 'sites', query],
+    queryFn: () => referenceService.searchSites(query),
+    enabled: true,
+    select: (r) => normalizeReferenceItems(r.data),
+  });
+}
+
 export function useQopDepartments() {
   return useQuery({
     queryKey: ['qop', 'references', 'departments'],

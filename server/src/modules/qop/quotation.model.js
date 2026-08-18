@@ -94,7 +94,23 @@ const quotationSchema = new mongoose.Schema(
       default: 'de',
     },
     title: { type: String, maxlength: 500, default: '' },
+    // Anrede printed above the introduction, freely editable
+    // (e.g. "Sehr geehrte Frau Berger" or "Liebe Kseniya").
+    salutation: { type: String, maxlength: 255, default: '' },
     introduction: { type: String, maxlength: 5000, default: '' },
+    // Objekt-first flow: the quotation can start from a site; the customer is
+    // derived from it and the printed recipient address is picked among the
+    // site's parties (its billing address, owner or property management).
+    siteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site',
+      default: null,
+    },
+    billingAddressSource: {
+      type: String,
+      enum: ['customer', 'site_billing', 'site_ownership', 'site_management'],
+      default: 'customer',
+    },
     validFrom: { type: Date, default: Date.now },
     validUntil: { type: Date, required: true },
     currency: {

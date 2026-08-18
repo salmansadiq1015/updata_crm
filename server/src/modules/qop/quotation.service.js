@@ -13,16 +13,12 @@ import qopDocumentPayloadService from './documentPayload.service.js';
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
-const QUOTATION_TRANSITIONS = {
-  DRAFT: ['SENT', 'CANCELLED'],
-  SENT: ['VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED'],
-  VIEWED: ['ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED'],
-  ACCEPTED: ['CONVERTED'],
-  DECLINED: [],
-  EXPIRED: ['SENT'],
-  CANCELLED: [],
-  CONVERTED: [],
-};
+// The status is freely adjustable by hand (client feedback: the full status
+// list must be offered in "Status ändern"), so any change to a different
+// status is accepted; timestamps are still maintained per target status.
+const QUOTATION_STATUSES = [
+  'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED',
+];
 
 class QuotationService {
   async create(data, createdBy, meta = {}) {
@@ -35,8 +31,16 @@ class QuotationService {
       data.currency || 'CHF',
     );
 
+    // The form lets a quotation be captured directly in a later status
+    // (e.g. recorded after it was already sent on paper).
+    const statusStamps = {};
+    if (data.status === 'SENT') statusStamps.sentAt = new Date();
+    if (data.status === 'ACCEPTED') statusStamps.acceptedAt = new Date();
+    if (data.status === 'DECLINED') statusStamps.declinedAt = new Date();
+
     const quotation = await quotationRepository.create({
       ...data,
+      ...statusStamps,
       quotationNumber,
       lineItems: totals.lineItems,
       subtotal: totals.subtotal,
@@ -196,6 +200,12 @@ class QuotationService {
       status: 'DRAFT',
       language: original.language,
       title: original.title,
+      salutation: original.salutation,
+      siteId: original.siteId?._id || original.siteId || null,
+      billingAddressSource: original.billingAddressSource || 'customer',
+      subsidyAmount: original.subsidyAmount,
+      subsidyNote: original.subsidyNote,
+      clientSideWorks: original.clientSideWorks,
       introduction: original.introduction,
       validFrom: new Date(),
       validUntil: original.validUntil,
@@ -248,19 +258,14 @@ class QuotationService {
     const quotation = await quotationRepository.findById(id);
     if (!quotation) throw new NotFoundError('Quotation', id);
 
-    const allowed = QUOTATION_TRANSITIONS[quotation.status] || [];
-    if (!allowed.includes(targetStatus)) {
+    if (!QUOTATION_STATUSES.includes(targetStatus) || targetStatus === quotation.status) {
       throw new ConflictError(
         `Cannot transition from ${quotation.status} to ${targetStatus}`,
       );
     }
 
-    // Precondition checks
-    if (quotation.status === 'DRAFT' && targetStatus === 'SENT' && !quotation.customerId) {
+    if (targetStatus === 'SENT' && !quotation.customerId) {
       throw new ConflictError('Cannot send quotation without a customer');
-    }
-    if (targetStatus === 'DECLINED' && !reason) {
-      throw new ConflictError('Decline reason is required');
     }
 
     const updateData = { status: targetStatus, updatedBy: userId };

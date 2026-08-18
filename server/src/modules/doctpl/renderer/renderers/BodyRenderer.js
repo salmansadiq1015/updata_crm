@@ -29,6 +29,16 @@ export default class BodyRenderer {
       pm.moveDown(6);
     }
 
+    // Anrede — freely worded salutation ("Sehr geehrte Frau …", "Liebe Kseniya")
+    // printed as its own line above the introduction.
+    if (data.salutation) {
+      pm.checkSpace(20);
+      doc.save().font(fonts.body).fontSize(10).fillColor(colors.text);
+      doc.text(data.salutation, pm.margins.left, pm.currentY, { width: pm.contentWidth });
+      doc.restore();
+      pm.moveDown(18);
+    }
+
     const text = data.introduction || textBlocks?.[language]?.introduction || '';
     if (!text) return;
     pm.checkSpace(30);

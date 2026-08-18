@@ -18,6 +18,7 @@ const lineItemSchema = Joi.object({
   image: Joi.object({
     fileId: objectId.allow(null, ''),
     url: Joi.string().max(2000).allow('', null),
+    size: Joi.string().valid('small', 'medium', 'large'),
   }).allow(null),
 });
 

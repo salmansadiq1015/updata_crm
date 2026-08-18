@@ -14,14 +14,11 @@ export default class FooterRenderer {
     this.fonts = pdfFonts(ciConfig);
     this.lang = language;
     this.richText = new RichTextRenderer();
-    this.footerYPositions = [];
-    doc.on('pageAdded', () => this._drawFooterLayout());
-    this._drawFooterLayout();
+    this.footerY = this.pm.footerY + 5;
   }
 
-  _drawFooterLayout() {
-    const y = this.pm.footerY + 5;
-    this.footerYPositions.push({ pageIndex: this.pm.pageCount - 1, y });
+  _drawFooterOnCurrentPage() {
+    const y = this.footerY;
     const doc = this.doc;
     const left = this.pm.margins.left;
     const width = this.pm.contentWidth;
@@ -50,11 +47,26 @@ export default class FooterRenderer {
     doc.restore();
   }
 
-  stampPageNumbers(totalPages) {
+  /**
+   * Draw every footer at the very end, once the document knows how many pages
+   * it has and which of them carry the QR-bill.
+   *
+   * Footers used to be painted as each page opened, which put the company line
+   * and the page number straight on top of the payment part — the Swiss
+   * QR-bill requires that area to stay free of any other content. Deferring
+   * the whole footer is what lets those pages be skipped.
+   */
+  render({ skipPages = [] } = {}) {
     const range = this.doc.bufferedPageRange();
-    for (let i = 0; i < totalPages; i++) {
+    const totalPages = range.count;
+    const skip = new Set(skipPages);
+
+    for (let i = 0; i < totalPages; i += 1) {
+      if (skip.has(i)) continue;
       this.doc.switchToPage(range.start + i);
-      const y = (this.footerYPositions[i]?.y || this.pm.footerY) + 6;
+      this._drawFooterOnCurrentPage();
+
+      const y = this.footerY + 6;
       const left = this.pm.margins.left;
       const width = this.pm.contentWidth;
       this.doc.save();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { projectService } from '@/modules/pm/services/project-service';
@@ -12,12 +12,14 @@ import { CoarseSummary } from './coarse-summary';
 import { CoarseGrid } from './coarse-grid';
 import { CoarseBulkDialog } from './coarse-bulk-dialog';
 import { CoarseCreateDialog } from './coarse-create-dialog';
+import { CoarseEditDialog } from './coarse-edit-dialog';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { Skeleton as BoneSkeleton } from 'boneyard-js/react';
 import { DeployEmptyState } from '../shared/deploy-empty-state';
 import { columnAverages, computeKpis, isRowOverAllocated } from '../../utils/coarse-totals';
 import { Grid3X3 } from 'lucide-react';
 import { getISOWeek } from 'date-fns';
+import { showSuccess } from '@/lib/toast';
 
 const VISIBLE_WEEKS = 12;
 const ROW_SOURCE_LIMIT = 80;
@@ -66,11 +68,15 @@ export function CoarseMatrix() {
   const [bulkEmployeeId, setBulkEmployeeId] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDefaults, setCreateDefaults] = useState({ employeeId: '', projectId: '', week: nowWeek });
+  const [selectedCell, setSelectedCell] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editAllocation, setEditAllocation] = useState(null);
+  const clipboardRef = useRef(null);
 
   const params = useMemo(() => ({ year, weekFrom, weekTo, view: viewMode }), [year, weekFrom, weekTo, viewMode]);
 
   const { data: matrixData, isLoading } = useCoarseMatrix(params);
-  const { update, remove, bulkUpsert } = useCoarseMutations();
+  const { update, remove, move, bulkUpsert } = useCoarseMutations();
   const isProjectView = viewMode === 'PROJECT_CENTRIC';
 
   const { data: employees = [], isLoading: employeesLoading } = useDeployEmployees({
@@ -165,7 +171,9 @@ export function CoarseMatrix() {
 
   const dragFill = useCoarseDragFill({
     year,
-    onCommit: (alloc) => bulkUpsert.mutate({ allocations: alloc }),
+    onMove: (allocationId, targetYear, targetWeek) => {
+      move.mutate({ id: allocationId, data: { calendarYear: targetYear, calendarWeek: targetWeek } });
+    },
   });
 
   const handlePrevRange = useCallback(() => {
@@ -194,24 +202,28 @@ export function CoarseMatrix() {
 
   const handleCellClick = useCallback((rowId, week, existing) => {
     const list = Array.isArray(existing) ? existing : [existing].filter(Boolean);
-    if (list.length === 1) {
-      const current = list[0];
-      const nextMap = { 25: 50, 50: 75, 75: 100 };
-      const nextPercent = nextMap[current.allocationPercent];
-      if (nextPercent) {
-        update.mutate({ id: current._id, data: { allocationPercent: nextPercent } });
-      } else {
-        remove.mutate(current._id);
-      }
+
+    if (list.length >= 1) {
+      // Belegte Zelle → selektieren (kein Prozent-Durchschalten mehr)
+      setSelectedCell({ rowId, week });
       return;
     }
-    if (list.length > 1) return;
 
+    // Leere Zelle → Create-Dialog
+    setSelectedCell(null);
     setCreateDefaults(viewMode === 'PROJECT_CENTRIC'
       ? { employeeId: '', projectId: rowId, week }
       : { employeeId: rowId, projectId: '', week });
     setCreateOpen(true);
-  }, [remove, update, viewMode]);
+  }, [viewMode]);
+
+  const handleCellDoubleClick = useCallback((rowId, week, existing) => {
+    const list = Array.isArray(existing) ? existing : [existing].filter(Boolean);
+    if (list.length === 1) {
+      setEditAllocation(list[0]);
+      setEditOpen(true);
+    }
+  }, []);
 
   const handleSetPercent = useCallback((existing, percent) => {
     const list = Array.isArray(existing) ? existing : [existing].filter(Boolean);
@@ -229,6 +241,53 @@ export function CoarseMatrix() {
     setBulkEmployeeId(employeeId);
     setBulkOpen(true);
   }, []);
+
+  // Copy & Paste (Ctrl+C / Ctrl+V)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const isMeta = e.ctrlKey || e.metaKey;
+      if (!isMeta) return;
+
+      if (e.key === 'c' && selectedCell) {
+        const row = rows.find((r) => r.id === selectedCell.rowId);
+        if (!row) return;
+        const cellAllocations = row.weekMap[selectedCell.week] || [];
+        if (cellAllocations.length === 1) {
+          const alloc = cellAllocations[0];
+          clipboardRef.current = {
+            employeeId: alloc.employeeId?._id || alloc.employeeId,
+            projectId: alloc.projectId?._id || alloc.projectId,
+            allocationPercent: alloc.allocationPercent,
+          };
+          showSuccess(t('deploy.coarse.copied', 'Zuteilung kopiert'));
+          e.preventDefault();
+        }
+      }
+
+      if (e.key === 'v' && selectedCell && clipboardRef.current) {
+        const clipboard = clipboardRef.current;
+        // In employee view: rowId is the employee, paste uses the project from clipboard
+        // In project view: rowId is the project, paste uses the employee from clipboard
+        const employeeId = isProjectView ? clipboard.employeeId : selectedCell.rowId;
+        const projectId = isProjectView ? selectedCell.rowId : clipboard.projectId;
+
+        bulkUpsert.mutate({
+          allocations: [{
+            employeeId,
+            projectId,
+            calendarYear: year,
+            calendarWeek: selectedCell.week,
+            allocationPercent: clipboard.allocationPercent,
+          }],
+        });
+        showSuccess(t('deploy.coarse.pasted', 'Zuteilung eingefügt'));
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedCell, rows, year, isProjectView, bulkUpsert, t]);
 
   const hasFilters = !!search.trim() || overAllocatedOnly;
 
@@ -285,7 +344,9 @@ export function CoarseMatrix() {
             columnAvgs={columnAvgs}
             currentWeek={currentWeek}
             dragFill={dragFill}
+            selectedCell={selectedCell}
             onCellClick={handleCellClick}
+            onCellDoubleClick={handleCellDoubleClick}
             onSetPercent={handleSetPercent}
             onClear={handleClear}
             onBulkRow={openBulk}
@@ -308,6 +369,11 @@ export function CoarseMatrix() {
         defaultProjectId={createDefaults.projectId}
         defaultWeek={createDefaults.week}
         year={year}
+      />
+      <CoarseEditDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        allocation={editAllocation}
       />
     </div>
   );

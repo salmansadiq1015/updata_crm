@@ -43,6 +43,20 @@ class CoarseController {
     } catch (err) { next(err); }
   }
 
+  async move(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const allocation = await coarseService.move(
+        req.params.id,
+        req.body.calendarYear,
+        req.body.calendarWeek,
+        req.user._id,
+        meta,
+      );
+      return res.success({ data: allocation, message: 'Coarse allocation moved successfully' });
+    } catch (err) { next(err); }
+  }
+
   async bulkUpsert(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

@@ -535,6 +535,7 @@ export const ENDPOINTS = Object.freeze({
     COARSE: '/scheduling/coarse',
     COARSE_ALLOCATIONS: '/scheduling/coarse/allocations',
     COARSE_ALLOCATION_BY_ID: (id) => `/scheduling/coarse/allocations/${id}`,
+    COARSE_ALLOCATION_MOVE: (id) => `/scheduling/coarse/allocations/${id}/move`,
     COARSE_ALLOCATIONS_BULK: '/scheduling/coarse/allocations/bulk',
   },
   QOP: {

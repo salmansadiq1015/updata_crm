@@ -219,6 +219,85 @@ class CoarseService {
     });
   }
 
+  async move(id, targetYear, targetWeek, movedBy, meta = {}) {
+    const existing = await coarseRepository.findById(id);
+    if (!existing) throw new NotFoundError('CoarseAllocation', id);
+
+    const employeeId = existing.employeeId?._id || existing.employeeId;
+    const projectId = existing.projectId?._id || existing.projectId;
+
+    // No-op if target is the same week
+    if (existing.calendarYear === targetYear && existing.calendarWeek === targetWeek) {
+      return existing;
+    }
+
+    // Check for duplicate at target
+    const duplicate = await coarseRepository.findByEmployeeProjectWeek(
+      employeeId, projectId, targetYear, targetWeek,
+    );
+    if (duplicate) {
+      throw new ConflictError('Coarse allocation already exists for this employee, project, and week.');
+    }
+
+    // Capacity check at target week (exclude nothing — the source will be deleted)
+    const currentSum = await coarseRepository.sumAllocationsForEmployeeWeek(
+      employeeId, targetYear, targetWeek,
+    );
+    if (currentSum + existing.allocationPercent > 100) {
+      throw new ConflictError(
+        `Total allocation would be ${currentSum + existing.allocationPercent}% (max 100%)`,
+      );
+    }
+
+    // Delete source and create at target
+    await coarseRepository.deleteById(id);
+    const allocation = await coarseRepository.create({
+      employeeId,
+      projectId,
+      calendarYear: targetYear,
+      calendarWeek: targetWeek,
+      allocationPercent: existing.allocationPercent,
+      notes: existing.notes,
+      createdBy: movedBy,
+    });
+    await this._invalidateCoarseCache();
+
+    eventBus.publish(EVENT_TYPES.SCHEDULE_COARSE_ALLOCATION_CHANGED, {
+      allocationId: allocation._id,
+      previousAllocationId: id,
+      employeeId,
+      projectId,
+      calendarYear: targetYear,
+      calendarWeek: targetWeek,
+      action: 'moved',
+      movedBy,
+    }, { source: 'deploy:coarse' });
+
+    auditService.logEvent({
+      eventType: 'coarse_allocation.moved',
+      userId: movedBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: {
+        previousAllocationId: id,
+        newAllocationId: allocation._id,
+        from: { year: existing.calendarYear, week: existing.calendarWeek },
+        to: { year: targetYear, week: targetWeek },
+      },
+      module: 'deploy',
+    });
+
+    logger.info('Coarse allocation moved', {
+      module: 'deploy',
+      action: 'coarse.move',
+      previousAllocationId: id,
+      newAllocationId: allocation._id,
+    });
+
+    return coarseRepository.findById(allocation._id);
+  }
+
   async bulkUpsert(records, userId, meta = {}) {
     const grouped = new Map();
     for (const record of records) {

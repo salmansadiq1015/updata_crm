@@ -27,7 +27,8 @@ function HeatBar({ percent }) {
 
 export function CoarseGrid({
   viewMode, weeks, rows, columnAvgs, currentWeek,
-  dragFill, onCellClick, onSetPercent, onClear, onBulkRow,
+  dragFill, selectedCell,
+  onCellClick, onCellDoubleClick, onSetPercent, onClear, onBulkRow,
 }) {
   const { t } = useLanguage();
   const isProjectView = viewMode === 'PROJECT_CENTRIC';
@@ -96,25 +97,33 @@ export function CoarseGrid({
                 )}
               </div>
 
-              {weeks.map((week) => (
-                <div key={week} className={cn('min-w-[58px] flex-1', week === currentWeek && 'bg-primary/[0.04]')}>
-                  <CoarseCell
-                    allocation={row.weekMap[week] || []}
-                    assignmentPercent={row.assignmentMap?.[week] || 0}
-                    projectName={isProjectView ? row.name : undefined}
-                    isCurrentWeek={week === currentWeek}
-                    inDragRange={dragFill.isInRange(row.id, week)}
-                    onMouseDown={() => dragFill.start(row.id, week, row.weekMap[week] || [])}
-                    onMouseEnter={() => dragFill.extend(row.id, week)}
-                    onClick={() => {
-                      if (dragFill.consumeClickSuppression()) return;
-                      onCellClick(row.id, week, row.weekMap[week] || []);
-                    }}
-                    onSetPercent={(percent) => onSetPercent(row.weekMap[week] || [], percent)}
-                    onClear={() => onClear(row.weekMap[week] || [])}
-                  />
-                </div>
-              ))}
+              {weeks.map((week) => {
+                const isCellSelected = selectedCell?.rowId === row.id && selectedCell?.week === week;
+                return (
+                  <div key={week} className={cn('min-w-[58px] flex-1', week === currentWeek && 'bg-primary/[0.04]')}>
+                    <CoarseCell
+                      allocation={row.weekMap[week] || []}
+                      assignmentPercent={row.assignmentMap?.[week] || 0}
+                      projectName={isProjectView ? row.name : undefined}
+                      isCurrentWeek={week === currentWeek}
+                      isSelected={isCellSelected}
+                      isDragSource={dragFill.isSource(row.id, week)}
+                      isDropTarget={dragFill.isDropTarget(row.id, week)}
+                      onMouseDown={() => dragFill.start(row.id, week, row.weekMap[week] || [])}
+                      onMouseEnter={() => dragFill.extend(row.id, week)}
+                      onClick={() => {
+                        if (dragFill.consumeClickSuppression()) return;
+                        onCellClick(row.id, week, row.weekMap[week] || []);
+                      }}
+                      onDoubleClick={() => {
+                        onCellDoubleClick?.(row.id, week, row.weekMap[week] || []);
+                      }}
+                      onSetPercent={(percent) => onSetPercent(row.weekMap[week] || [], percent)}
+                      onClear={() => onClear(row.weekMap[week] || [])}
+                    />
+                  </div>
+                );
+              })}
 
               <div className={cn(SUM_COL, 'flex flex-col justify-center gap-1 border-l border-border/60 px-2.5 py-2')}>
                 <span className={cn(

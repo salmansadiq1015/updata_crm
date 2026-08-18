@@ -15,7 +15,7 @@ export function useCoarseMatrix(params) {
   });
 }
 
-export function useCoarseMutations({ onCreate, onUpdate, onDelete, onBulk } = {}) {
+export function useCoarseMutations({ onCreate, onUpdate, onDelete, onMove, onBulk } = {}) {
   const queryClient = useQueryClient();
   const { t } = useLanguage();
 
@@ -51,6 +51,16 @@ export function useCoarseMutations({ onCreate, onUpdate, onDelete, onBulk } = {}
     onError: (err) => showError(err),
   });
 
+  const move = useMutation({
+    mutationFn: ({ id, data }) => coarseService.moveAllocation(id, data),
+    onSuccess: (res) => {
+      invalidate();
+      showSuccess(t('deploy.coarse.moved', 'Zuteilung verschoben'));
+      onMove?.(res);
+    },
+    onError: (err) => showError(err),
+  });
+
   const bulkUpsert = useMutation({
     mutationFn: (data) => coarseService.bulkUpsert(data),
     onSuccess: (res) => {
@@ -61,5 +71,5 @@ export function useCoarseMutations({ onCreate, onUpdate, onDelete, onBulk } = {}
     onError: (err) => showError(err),
   });
 
-  return { create, update, remove, bulkUpsert };
+  return { create, update, remove, move, bulkUpsert };
 }

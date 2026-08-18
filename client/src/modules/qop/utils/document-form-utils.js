@@ -98,3 +98,38 @@ export function buildOrderOptions(orders = []) {
 export function buildPaymentTermOptions(days = [], suffix = 'days net') {
   return days.map((d) => ({ value: String(d), label: `${d} ${suffix}` }));
 }
+
+export function buildSiteOptions(sites = []) {
+  return normalizeReferenceItems(sites).map((s) => ({
+    value: s._id ?? s.id,
+    label: s.name || s.street || s.siteNumber || '—',
+    description: [s.street, s.city].filter(Boolean).join(', ') || undefined,
+  }));
+}
+
+/**
+ * The party of an Objekt a document can be addressed to. Only parties that
+ * carry a street are offerable — an empty block must never silently replace
+ * the customer address on the printed document.
+ */
+export function siteBillingParty(site, source) {
+  if (!site) return null;
+  const bySource = {
+    site_billing: site.billingAddress,
+    site_ownership: site.ownership,
+    site_management: site.management,
+  };
+  const party = bySource[source];
+  return party?.street ? party : null;
+}
+
+/** One-line rendering of a site party, for the picker. */
+export function formatSiteParty(party) {
+  if (!party) return '';
+  return [
+    party.name,
+    party.careOf ? `c/o ${party.careOf}` : null,
+    party.street,
+    [party.postalCode, party.city].filter(Boolean).join(' '),
+  ].filter(Boolean).join(', ');
+}

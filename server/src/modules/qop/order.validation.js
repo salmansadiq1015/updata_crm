@@ -22,6 +22,8 @@ const lineItemSchema = Joi.object({
   }).allow(null),
 });
 
+const BILLING_ADDRESS_SOURCES = ['customer', 'site_billing', 'site_ownership', 'site_management'];
+
 export const createOrderSchema = {
   body: Joi.object({
     customerId: objectId.required(),
@@ -29,6 +31,8 @@ export const createOrderSchema = {
     contactId: objectId.allow(null),
     projectId: objectId.allow(null),
     departmentId: objectId.allow(null),
+    siteId: objectId.allow(null),
+    billingAddressSource: Joi.string().valid(...BILLING_ADDRESS_SOURCES),
     language: Joi.string().valid('de', 'fr', 'it', 'en').default('de'),
     title: Joi.string().trim().max(500).allow('', null),
     lineItems: Joi.array().items(lineItemSchema).default([]),
@@ -52,6 +56,8 @@ export const updateOrderSchema = {
     contactId: objectId.allow(null),
     projectId: objectId.allow(null),
     departmentId: objectId.allow(null),
+    siteId: objectId.allow(null),
+    billingAddressSource: Joi.string().valid(...BILLING_ADDRESS_SOURCES),
     language: Joi.string().valid('de', 'fr', 'it', 'en'),
     title: Joi.string().trim().max(500).allow('', null),
     lineItems: Joi.array().items(lineItemSchema),

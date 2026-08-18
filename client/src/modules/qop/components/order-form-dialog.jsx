@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   PackageCheck, Users, Building2, FolderKanban, Coins, Languages, CalendarDays,
-  SearchX,
+  SearchX, MapPin,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
@@ -18,7 +18,11 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useOrderMutations } from '../hooks/use-qop-mutations';
-import { useQopCustomerProjects, useQopCustomerSearch, useQopDepartments } from '../hooks/use-qop-queries';
+import {
+  useQopCustomerProjects, useQopCustomerSearch, useQopDepartments, useQopSiteSearch,
+} from '../hooks/use-qop-queries';
+import { referenceService } from '../services/reference-service';
+import { showError } from '@/lib/toast';
 import { CURRENCIES, PAYMENT_TERMS_PRESETS } from '../constants/qop-constants';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -26,6 +30,7 @@ import {
 import { LineItemsEditor } from './line-items-editor';
 import {
   LANGUAGE_OPTIONS, buildCustomerOptions, buildDepartmentOptions, buildProjectOptions,
+  buildSiteOptions, siteBillingParty, formatSiteParty,
   getEntityId, mapLineItemsForPayload, toDateInputValue, withEditableLineIds,
 } from '../utils/document-form-utils';
 
@@ -34,6 +39,9 @@ const EMPTY_FORM = () => ({
   customerName: '',
   departmentId: '',
   projectId: '',
+  siteId: '',
+  siteName: '',
+  billingAddressSource: 'customer',
   language: 'de',
   title: '',
   currency: 'CHF',
@@ -52,6 +60,10 @@ export function OrderFormDialog({ open, onClose, order = null }) {
   const isEdit = Boolean(order);
   const [form, setForm] = useState(EMPTY_FORM);
   const [customerQuery, setCustomerQuery] = useState('');
+  const [siteQuery, setSiteQuery] = useState('');
+  // Full site record of the chosen Objekt — decides which billing parties
+  // (Rechnungsadresse / Eigentümer / Verwaltung) can be offered.
+  const [selectedSite, setSelectedSite] = useState(null);
   const [projectQuery, setProjectQuery] = useState('');
   const debouncedProjectQuery = useDebounce(projectQuery.trim(), 250);
 
@@ -59,6 +71,7 @@ export function OrderFormDialog({ open, onClose, order = null }) {
   const isPending = createOrder.isPending || updateOrder.isPending;
 
   const { data: customerResults = [], isFetching: customersLoading } = useQopCustomerSearch(customerQuery);
+  const { data: siteResults = [], isFetching: sitesLoading } = useQopSiteSearch(siteQuery);
   const {
     data: departments = [],
     isFetching: departmentsLoading,
@@ -71,6 +84,7 @@ export function OrderFormDialog({ open, onClose, order = null }) {
   } = useQopCustomerProjects(form.customerId, debouncedProjectQuery);
 
   const customerOptions = useMemo(() => buildCustomerOptions(customerResults), [customerResults]);
+  const siteOptions = useMemo(() => buildSiteOptions(siteResults), [siteResults]);
   const departmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
   const projectOptions = useMemo(() => buildProjectOptions(projects), [projects]);
   const projectPickerLoading = projectsLoading || projectQuery.trim() !== debouncedProjectQuery;
@@ -85,6 +99,9 @@ export function OrderFormDialog({ open, onClose, order = null }) {
         customerName: order.customerName ?? order.customerId?.name ?? '',
         departmentId: getEntityId(order.departmentId),
         projectId: getEntityId(order.projectId),
+        siteId: getEntityId(order.siteId),
+        siteName: order.siteId?.name ?? '',
+        billingAddressSource: order.billingAddressSource ?? 'customer',
         language: order.language ?? 'de',
         title: order.title ?? '',
         currency: order.currency ?? 'CHF',
@@ -98,17 +115,71 @@ export function OrderFormDialog({ open, onClose, order = null }) {
         version: order.version,
       });
       setCustomerQuery('');
+      setSiteQuery('');
       setProjectQuery('');
+      // Reload the site so the billing-party options are available again.
+      const existingSiteId = order.siteId?._id ?? order.siteId;
+      setSelectedSite(null);
+      if (existingSiteId) {
+        referenceService.getSite(existingSiteId)
+          .then((res) => {
+            const site = res?.data ?? res;
+            if (site?._id) {
+              setSelectedSite(site);
+              setForm((f) => ({ ...f, siteName: site.name || site.street || '' }));
+            }
+          })
+          .catch(() => {});
+      }
       return;
     }
 
     setForm(EMPTY_FORM());
     setCustomerQuery('');
+    setSiteQuery('');
+    setSelectedSite(null);
     setProjectQuery('');
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [open, order]);
 
   const set = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+
+  // Objekt-first, same rule as the quotation: picking a site derives the
+  // customer and offers that site's parties as the printed billing address.
+  const applySite = async (siteId, option) => {
+    if (!siteId) {
+      setSelectedSite(null);
+      setForm((f) => ({ ...f, siteId: '', siteName: '', billingAddressSource: 'customer' }));
+      return;
+    }
+    set('siteId', siteId);
+    set('siteName', option?.label ?? '');
+    try {
+      const res = await referenceService.getSite(siteId);
+      const site = res?.data ?? res;
+      setSelectedSite(site || null);
+      const customerId = site?.customerId?._id ?? site?.customerId;
+      // On an existing order the customer is fixed, so only the billing party
+      // is adjustable — never silently move an order to another customer.
+      if (customerId && !isEdit) {
+        let customerName = site?.customerId?.name || '';
+        if (!customerName) {
+          const customerRes = await referenceService.getCustomer(customerId);
+          customerName = (customerRes?.data ?? customerRes)?.name || '';
+        }
+        setForm((f) => ({
+          ...f,
+          customerId: String(customerId),
+          customerName,
+          projectId: '',
+          billingAddressSource: siteBillingParty(site, f.billingAddressSource) ? f.billingAddressSource : 'customer',
+        }));
+        setProjectQuery('');
+      }
+    } catch (err) {
+      showError(err);
+    }
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -117,6 +188,8 @@ export function OrderFormDialog({ open, onClose, order = null }) {
       customerName: form.customerName,
       departmentId: form.departmentId || undefined,
       projectId: form.projectId || undefined,
+      siteId: form.siteId || null,
+      billingAddressSource: form.billingAddressSource || 'customer',
       language: form.language,
       title: form.title || undefined,
       currency: form.currency,
@@ -170,6 +243,27 @@ export function OrderFormDialog({ open, onClose, order = null }) {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 py-5">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {/* Objekt — picked first; the customer is derived from it */}
+            <div className="flex flex-col gap-1.5 md:col-span-2">
+              <Label>{t('qop.form.site', 'Objekt')} ({t('common.optional', 'optional')})</Label>
+              <Combobox
+                async
+                triggerIcon={MapPin}
+                options={siteOptions}
+                value={form.siteId}
+                selectedLabel={form.siteName}
+                allowClear
+                loading={sitesLoading}
+                onSearchChange={setSiteQuery}
+                onChange={(value, option) => applySite(value, option)}
+                placeholder={t('qop.form.siteSearch', 'Objekt suchen...')}
+                searchPlaceholder={t('qop.form.siteSearch', 'Objekt suchen...')}
+                emptyIcon={MapPin}
+                emptyMessage={t('qop.form.siteNoResults', 'Keine Objekte gefunden')}
+                emptyHint={t('qop.form.siteHint', 'Der Kunde wird automatisch vom Objekt übernommen.')}
+              />
+            </div>
+
             <div className="flex flex-col gap-1.5 md:col-span-2">
               <Label>{t('qop.form.customer', 'Customer')} *</Label>
               <Combobox
@@ -198,6 +292,42 @@ export function OrderFormDialog({ open, onClose, order = null }) {
                   : t('qop.form.customerNoResultsHint', 'Try a different name or number.')}
               />
             </div>
+
+            {/* Billing party — only offered once an Objekt is chosen */}
+            {form.siteId && (
+              <div className="flex flex-col gap-1.5 md:col-span-2 xl:col-span-4">
+                <Label>{t('qop.form.billingAddressSource', 'Rechnungsadresse')}</Label>
+                <Select
+                  value={form.billingAddressSource}
+                  onValueChange={(v) => set('billingAddressSource', v)}
+                >
+                  <SelectTrigger className="rounded-xl text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="customer">
+                      {t('qop.form.billingCustomer', 'Kunde')}{form.customerName ? ` — ${form.customerName}` : ''}
+                    </SelectItem>
+                    {siteBillingParty(selectedSite, 'site_billing') && (
+                      <SelectItem value="site_billing">
+                        {t('qop.form.billingSite', 'Rechnungsadresse des Objekts')} — {formatSiteParty(siteBillingParty(selectedSite, 'site_billing'))}
+                      </SelectItem>
+                    )}
+                    {siteBillingParty(selectedSite, 'site_ownership') && (
+                      <SelectItem value="site_ownership">
+                        {t('qop.form.billingOwnership', 'Eigentümer')} — {formatSiteParty(siteBillingParty(selectedSite, 'site_ownership'))}
+                      </SelectItem>
+                    )}
+                    {siteBillingParty(selectedSite, 'site_management') && (
+                      <SelectItem value="site_management">
+                        {t('qop.form.billingManagement', 'Verwaltung')} — {formatSiteParty(siteBillingParty(selectedSite, 'site_management'))}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {t('qop.form.billingHint', 'Diese Adresse erscheint als Empfänger auf dem Dokument.')}
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label>{t('qop.form.department', 'Department')} *</Label>

@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/select';
 import {
   LANGUAGE_OPTIONS, buildCustomerOptions, buildDepartmentOptions, buildProjectOptions,
+  buildSiteOptions, siteBillingParty, formatSiteParty,
 } from '../utils/document-form-utils';
 import { SourceDocumentsPanel } from '@/modules/doctpl/components/SourceDocumentsPanel';
 
@@ -41,20 +42,6 @@ function addDays(date, days) {
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
-
-// A site party is only offerable as billing address when it carries a street.
-const partyOf = (site, source) => {
-  if (!site) return null;
-  if (source === 'site_billing') return site.billingAddress?.street ? site.billingAddress : null;
-  if (source === 'site_ownership') return site.ownership?.street ? site.ownership : null;
-  if (source === 'site_management') return site.management?.street ? site.management : null;
-  return null;
-};
-
-const formatParty = (party) => party
-  ? [party.name, party.careOf ? `c/o ${party.careOf}` : null, party.street,
-    [party.postalCode, party.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-  : '';
 
 const SALUTATION_SUGGESTIONS = [
   'Sehr geehrte Damen und Herren',
@@ -127,11 +114,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   } = useQopCustomerProjects(form.customerId, debouncedProjectQuery);
 
   const customerOptions = useMemo(() => buildCustomerOptions(customerResults), [customerResults]);
-  const siteOptions = useMemo(() => siteResults.map((s) => ({
-    value: s._id ?? s.id,
-    label: s.name || s.street || s.siteNumber || '—',
-    description: [s.street, s.city].filter(Boolean).join(', ') || undefined,
-  })), [siteResults]);
+  const siteOptions = useMemo(() => buildSiteOptions(siteResults), [siteResults]);
   const departmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
   const projectOptions = useMemo(() => buildProjectOptions(projects), [projects]);
   const projectPickerLoading = projectsLoading || projectQuery.trim() !== debouncedProjectQuery;
@@ -221,7 +204,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
           customerId: String(customerId),
           customerName,
           projectId: '',
-          billingAddressSource: partyOf(site, f.billingAddressSource) ? f.billingAddressSource : 'customer',
+          billingAddressSource: siteBillingParty(site, f.billingAddressSource) ? f.billingAddressSource : 'customer',
         }));
         setProjectQuery('');
       }
@@ -437,19 +420,19 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                       <SelectItem value="customer">
                         {t('qop.form.billingCustomer', 'Kunde')}{form.customerName ? ` — ${form.customerName}` : ''}
                       </SelectItem>
-                      {partyOf(selectedSite, 'site_billing') && (
+                      {siteBillingParty(selectedSite, 'site_billing') && (
                         <SelectItem value="site_billing">
-                          {t('qop.form.billingSite', 'Rechnungsadresse des Objekts')} — {formatParty(partyOf(selectedSite, 'site_billing'))}
+                          {t('qop.form.billingSite', 'Rechnungsadresse des Objekts')} — {formatSiteParty(siteBillingParty(selectedSite, 'site_billing'))}
                         </SelectItem>
                       )}
-                      {partyOf(selectedSite, 'site_ownership') && (
+                      {siteBillingParty(selectedSite, 'site_ownership') && (
                         <SelectItem value="site_ownership">
-                          {t('qop.form.billingOwnership', 'Eigentümer')} — {formatParty(partyOf(selectedSite, 'site_ownership'))}
+                          {t('qop.form.billingOwnership', 'Eigentümer')} — {formatSiteParty(siteBillingParty(selectedSite, 'site_ownership'))}
                         </SelectItem>
                       )}
-                      {partyOf(selectedSite, 'site_management') && (
+                      {siteBillingParty(selectedSite, 'site_management') && (
                         <SelectItem value="site_management">
-                          {t('qop.form.billingManagement', 'Verwaltung')} — {formatParty(partyOf(selectedSite, 'site_management'))}
+                          {t('qop.form.billingManagement', 'Verwaltung')} — {formatSiteParty(siteBillingParty(selectedSite, 'site_management'))}
                         </SelectItem>
                       )}
                     </SelectContent>

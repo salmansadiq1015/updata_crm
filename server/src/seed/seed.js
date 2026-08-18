@@ -1,4 +1,5 @@
 import { seedCatalog } from './catalog-seed.js';
+import { seedDoctplTemplates } from './doctplSeed.js';
 import { seedAiVocabulary } from './ai-vocabulary-seed.js';
 import { seedAiCommands } from './ai-commands-seed.js';
 import Permission from '../modules/auth/permission.model.js';
@@ -622,6 +623,19 @@ export async function seedDatabase() {
 
           logger.info('Seeded admin user', { module: 'seed', email: config.admin.email });
         }
+      }
+    }
+
+    // 4b. Seed approved default document templates — without them every PDF
+    // preview fails with "DocumentTemplate 'type:…' not found". Idempotent:
+    // only creates types that don't exist yet, never touches edited templates.
+    {
+      const adminRole = await Role.findOne({ name: 'Admin' });
+      const anyAdmin = adminRole ? await User.findOne({ role: adminRole._id }) : null;
+      if (anyAdmin) {
+        await seedDoctplTemplates(anyAdmin._id);
+      } else {
+        logger.warn('No admin user found — skipping document template seed', { module: 'seed' });
       }
     }
 

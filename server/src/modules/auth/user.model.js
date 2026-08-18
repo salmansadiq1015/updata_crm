@@ -43,6 +43,19 @@ const userSchema = new mongoose.Schema(
       enum: ['herr', 'frau', null],
       default: null,
     },
+    birthDate: {
+      type: Date,
+      default: null,
+    },
+    // Short code identifying the employee on documents and plans, e.g.
+    // Kseniya Goncharuk = KSG, Timo Schweizer = TS.
+    initials: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      maxlength: 5,
+      default: null,
+    },
     phone: {
       type: String,
       trim: true,
@@ -203,6 +216,12 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ role: 1 });
 userSchema.index({ isDeleted: 1, status: 1 });
 userSchema.index({ createdAt: -1 });
+// The short code identifies one person, so it must stay unique — but only
+// among live users: soft-deleted ones must not hold a code hostage.
+userSchema.index(
+  { initials: 1 },
+  { unique: true, partialFilterExpression: { initials: { $type: 'string' }, isDeleted: false } },
+);
 userSchema.index(
   { firstName: 'text', lastName: 'text', email: 'text' },
   { weights: { email: 3, firstName: 2, lastName: 2 } },

@@ -35,7 +35,7 @@ function splitCapabilities(value) {
 }
 
 const STEPS = [
-  { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persönlich', icon: User, fields: ['firstName', 'lastName'] },
+  { id: 'personal', labelKey: 'users.step.personal', fallback: 'Persönlich', icon: User, fields: ['firstName', 'lastName', 'birthDate', 'initials'] },
   { id: 'contact', labelKey: 'users.step.contact', fallback: 'Kontakt', icon: Mail, fields: ['email', 'phone'] },
   { id: 'work', labelKey: 'users.step.work', fallback: 'Arbeit', icon: Briefcase, fields: ['department', 'position', 'preferredDepartmentId'] },
   { id: 'address', labelKey: 'users.step.address', fallback: 'Adresse', icon: MapPin, fields: ['street', 'addressSupplement', 'zip', 'city', 'country'] },
@@ -56,7 +56,8 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
   const { register, handleSubmit, reset, setValue, getValues, control, formState: { errors }, trigger } = useForm({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
-      firstName: '', lastName: '', salutation: '', email: '', phone: '',
+      firstName: '', lastName: '', salutation: '', birthDate: '', initials: '',
+      email: '', phone: '',
       department: '', position: '', skills: '', certifications: '',
       street: '', addressSupplement: '', city: '', zip: '', country: 'Schweiz',
       roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
@@ -70,6 +71,8 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
         firstName: defaultValues.firstName || '',
         lastName: defaultValues.lastName || '',
         salutation: defaultValues.salutation || '',
+        birthDate: defaultValues.birthDate ? String(defaultValues.birthDate).slice(0, 10) : '',
+        initials: defaultValues.initials || '',
         email: defaultValues.email || '',
         phone: defaultValues.phone || '',
         department: defaultValues.department || '',
@@ -87,7 +90,8 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
       });
     } else {
       reset({
-        firstName: '', lastName: '', salutation: '', email: '', phone: '',
+        firstName: '', lastName: '', salutation: '', birthDate: '', initials: '',
+        email: '', phone: '',
         department: '', position: '', skills: '', certifications: '',
         street: '', addressSupplement: '', city: '', zip: '', country: 'Schweiz',
         roleId: defaultRoleId, language: 'de', preferredDepartmentId: null,
@@ -438,6 +442,18 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
                   </FormField>
                   <FormField label={t('users.lastName')} error={errors.lastName?.message} required>
                     <Input placeholder="Muster" {...register('lastName')} />
+                  </FormField>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label={t('users.birthDate', 'Geburtsdatum')} error={errors.birthDate?.message}>
+                    <Input type="date" {...register('birthDate')} />
+                  </FormField>
+                  <FormField
+                    label={t('users.initials', 'Kürzel')}
+                    error={errors.initials?.message}
+                    description={t('users.initialsHint', 'z.B. Timo Schweizer = TS')}
+                  >
+                    <Input placeholder="TS" maxLength={5} className="uppercase" {...register('initials')} />
                   </FormField>
                 </div>
               </div>

@@ -23,7 +23,9 @@ const USER_CACHE_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_CACHE_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
 // Fields users can edit on their own profile
-const SELF_EDITABLE_FIELDS = ['firstName', 'lastName', 'salutation', 'language', 'phone', 'department', 'position', 'street', 'addressSupplement', 'city', 'zip', 'country'];
+// The short code (initials) is assigned by an administrator, so it is
+// deliberately absent here: nobody may claim a colleague's code.
+const SELF_EDITABLE_FIELDS = ['firstName', 'lastName', 'salutation', 'birthDate', 'language', 'phone', 'department', 'position', 'street', 'addressSupplement', 'city', 'zip', 'country'];
 
 function applyPreferredDepartmentPatch(updateData) {
   if (!Object.prototype.hasOwnProperty.call(updateData, 'preferredDepartmentId')) {
@@ -35,6 +37,23 @@ function applyPreferredDepartmentPatch(updateData) {
     ...rest,
     'preferences.preferredDepartmentId': preferredDepartmentId || null,
   };
+}
+
+/**
+ * The short code identifies one employee, so a second holder must be refused
+ * with a readable message rather than a raw duplicate-key error from the
+ * database. Soft-deleted users are excluded, matching the partial index.
+ */
+async function assertInitialsAvailable(initials, excludeUserId = null) {
+  if (!initials) return;
+  const { default: User } = await import('./user.model.js');
+  const query = { initials: String(initials).trim().toUpperCase(), isDeleted: false };
+  if (excludeUserId) query._id = { $ne: excludeUserId };
+  const holder = await User.findOne(query).select('firstName lastName').lean();
+  if (holder) {
+    const name = [holder.firstName, holder.lastName].filter(Boolean).join(' ');
+    throw new ConflictError(`Das Kürzel ${query.initials} ist bereits vergeben${name ? ` (${name})` : ''}.`);
+  }
 }
 
 class UserService {
@@ -54,6 +73,8 @@ class UserService {
     const role = await roleRepository.findById(data.roleId);
     if (!role) throw new NotFoundError('Role', data.roleId);
 
+    await assertInitialsAvailable(data.initials);
+
     // Generate temporary password
     const tempPassword = generateTempPassword();
     const hashedPassword = await hashPassword(tempPassword);
@@ -67,6 +88,8 @@ class UserService {
       firstName: data.firstName,
       lastName: data.lastName,
       salutation: data.salutation || null,
+      birthDate: data.birthDate || null,
+      initials: data.initials || null,
       phone: data.phone || null,
       department: data.department || null,
       position: data.position || null,
@@ -193,6 +216,8 @@ class UserService {
   async updateUser(id, data, updatedBy, meta = {}) {
     const existing = await userRepository.findById(id);
     if (!existing) throw new NotFoundError('User', id);
+
+    if (data.initials !== undefined) await assertInitialsAvailable(data.initials, id);
 
     const updateData = { ...data };
 

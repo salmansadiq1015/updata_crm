@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAiChat } from '../../hooks/use-ai-chat';
 import { AiChatSidebar } from './ai-chat-sidebar';
@@ -17,14 +17,18 @@ function replacePath(path) {
   window.history.replaceState(null, '', path);
 }
 
-export function AiChatLayout({ initialThreadId } = {}) {
+export function AiChatLayout({ initialThreadId, initialContext, initialPrompt } = {}) {
   const pathname = usePathname();
   // selectedThreadId = thread currently shown in main area
   const [selectedThreadId, setSelectedThreadId] = useState(initialThreadId ?? null);
   // currentThreadId = thread new messages are sent into (may differ from selected while browsing history)
   const [currentThreadId, setCurrentThreadId] = useState(initialThreadId ?? newThreadId());
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const routeContext = useMemo(() => buildAiRouteContext(pathname), [pathname]);
+  const routeContext = useMemo(() => {
+    const base = buildAiRouteContext(pathname);
+    if (!initialContext) return base;
+    return { ...(base || {}), ...initialContext };
+  }, [pathname, initialContext]);
 
   const handleThreadSelected = useCallback((id) => {
     setSelectedThreadId((current) => (current === id ? current : id));
@@ -53,6 +57,15 @@ export function AiChatLayout({ initialThreadId } = {}) {
     onThreadSelected: handleThreadSelected,
     onThreadDeleted: handleThreadDeleted,
   });
+
+  // Deep links like /ai?chatRoomId=…&intent=summary fire their prompt once.
+  const initialPromptSent = useRef(false);
+  const { dispatch } = chat;
+  useEffect(() => {
+    if (!initialPrompt || initialPromptSent.current) return;
+    initialPromptSent.current = true;
+    dispatch(initialPrompt);
+  }, [initialPrompt, dispatch]);
 
   return (
     <div className="flex h-full bg-background overflow-hidden">

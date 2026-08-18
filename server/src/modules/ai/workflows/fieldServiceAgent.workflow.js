@@ -648,7 +648,7 @@ async function summarizeChat(input, context, userId, state = {}) {
   const chatRoomService = (await import('../../chat/chatRoom.service.js')).default;
   await chatRoomService.assertMembership(requestRoomId, user);
 
-  const ChatMessage = (await import('../../chat/chatMessage.model.js')).default;
+  const ChatMessage = (await import('../../mobile/chatMessage.model.js')).default;
   const messages = await ChatMessage.find({ roomId: requestRoomId, isDeleted: { $ne: true } })
     .sort({ createdAt: -1 })
     .limit(50)

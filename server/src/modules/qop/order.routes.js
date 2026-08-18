@@ -8,6 +8,7 @@ import {
   listOrdersSchema,
   orderIdParamSchema,
   transitionOrderStatusSchema,
+  createProjectFromOrderSchema,
 } from './order.validation.js';
 
 const router = Router();
@@ -21,6 +22,9 @@ router.delete('/:id', authenticate, requirePermission('quotations:delete'), vali
 router.patch('/:id/status', authenticate, requirePermission('quotations:write'), validate(transitionOrderStatusSchema), (req, res, next) => orderController.transitionStatus(req, res, next));
 router.get('/:id/invoices', authenticate, requirePermission('quotations:read'), validate(orderIdParamSchema), (req, res, next) => orderController.getInvoices(req, res, next));
 router.post('/:id/documents/generate', authenticate, requirePermission('quotations:write'), validate(orderIdParamSchema), (req, res, next) => orderController.generateDocument(req, res, next));
+
+// Open a project from the order ("Projekt eröffnen")
+router.post('/:id/project', authenticate, requirePermission('project:create'), validate(createProjectFromOrderSchema), (req, res, next) => orderController.createProject(req, res, next));
 router.get('/:id/history', authenticate, requirePermission('quotations:read'), validate(orderIdParamSchema), (req, res, next) => orderController.getHistory(req, res, next));
 router.get('/:id/billing-plan', authenticate, requirePermission('quotations:read'), validate(orderIdParamSchema), (req, res, next) => orderController.getBillingPlan(req, res, next));
 

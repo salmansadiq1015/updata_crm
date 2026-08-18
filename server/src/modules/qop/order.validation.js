@@ -73,6 +73,16 @@ export const updateOrderSchema = {
   }).min(1),
 };
 
+export const createProjectFromOrderSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    name: Joi.string().trim().max(255).allow('', null),
+    projectType: Joi.string().valid('NEW_INSTALLATION', 'RENOVATION', 'MAINTENANCE', 'SERVICE_CONTRACT', 'OTHER'),
+    projectManagerId: objectId.allow(null),
+    description: Joi.string().max(5000).allow('', null),
+  }),
+};
+
 export const listOrdersSchema = {
   query: cursorPagination.keys({
     status: Joi.string().valid(...ORDER_STATUSES),

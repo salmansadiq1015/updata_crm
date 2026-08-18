@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, RefreshCw, Plus } from 'lucide-react';
+import { Download, RefreshCw, Plus, FolderPlus, Loader2} from 'lucide-react';
 import {
   Dialog, DialogContent, DialogBody, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -61,7 +61,7 @@ function PartyBlock({ title, party }) {
   );
 }
 
-function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading }) {
+function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading, onCreateProject, creatingProject }) {
   const { locale: language, t } = useLanguage();
   const allowed = ORDER_TRANSITIONS[order?.status] ?? [];
 
@@ -79,6 +79,12 @@ function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading }) {
         <InfoRow label={t('qop.orders.fieldCustomer', 'Kunde')} value={order?.customerName ?? order?.customer?.name} />
         <InfoRow label={t('qop.orders.fieldCreated', 'Erstellt')} value={fmtDate(order?.createdAt, language)} />
         <InfoRow label={t('qop.orders.fieldSource', 'Quelle')} value={order?.sourceQuotationNumber ?? '—'} mono />
+        <InfoRow
+          label={t('qop.orders.fieldProject', 'Projekt')}
+          value={order?.projectId?.projectNumber
+            ? `${order.projectId.projectNumber}${order.projectId.name ? ` — ${order.projectId.name}` : ''}`
+            : '—'}
+        />
         <InfoRow
           label={t('qop.orders.fieldTotal', 'Gesamtbetrag')}
           value={<AmountDisplay amount={order?.grandTotalRounded ?? order?.grandTotal} currency={order?.currency} className="font-semibold" />}
@@ -100,6 +106,16 @@ function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading }) {
       )}
 
       <div className="flex gap-2 flex-wrap">
+        {/* "Projekt eröffnen" — the step between the order confirmation and the
+            execution in the customer's project flow. */}
+        {!order?.projectId && (
+          <Button size="sm" variant="outline" onClick={onCreateProject} disabled={creatingProject}>
+            {creatingProject
+              ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              : <FolderPlus className="h-4 w-4 mr-1.5" />}
+            {t('qop.orders.openProject', 'Projekt eröffnen')}
+          </Button>
+        )}
         {allowed.map((s) => {
           const variant = s === 'CANCELLED' ? 'destructive' : s === 'COMPLETED' ? 'default' : 'outline';
           return (
@@ -297,7 +313,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
 
   const { data: order, isLoading } = useOrderDetail(open ? orderId : null);
   const { data: history = [] } = useOrderHistory(open && tab === 'history' ? orderId : null);
-  const { transitionOrderStatus } = useOrderMutations();
+  const { transitionOrderStatus, createProjectFromOrder } = useOrderMutations();
 
   const handleTransitionConfirm = () => {
     if (!transitionTarget) return;
@@ -347,7 +363,14 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
                 <TabsTrigger value="history">{t('common.activity', 'Aktivität')}</TabsTrigger>
               </TabsList>
               <TabsContent value="overview" className="mt-4">
-                <OverviewTab order={order} onTransition={setTransitionTarget} onDownloadPdf={handleDownloadPdf} pdfLoading={pdfLoading} />
+                <OverviewTab
+                  order={order}
+                  onTransition={setTransitionTarget}
+                  onDownloadPdf={handleDownloadPdf}
+                  pdfLoading={pdfLoading}
+                  onCreateProject={() => createProjectFromOrder.mutate({ id: orderId, data: {} })}
+                  creatingProject={createProjectFromOrder.isPending}
+                />
               </TabsContent>
               <TabsContent value="items" className="mt-4">
                 <LineItemsTab order={order} />

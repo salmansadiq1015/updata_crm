@@ -243,6 +243,55 @@ class OrderService {
     }
   }
 
+  /**
+   * Open a project from an order — the "Projekt eröffnen" step of the customer's
+   * project flow, which until now meant creating the project separately and
+   * wiring it up by hand. The customer, the object and the title come from the
+   * order; everything else is the caller's choice.
+   */
+  async createProject(id, data, userId, meta = {}) {
+    const order = await orderRepository.findById(id);
+    if (!order) throw new NotFoundError('Order', id);
+    if (order.projectId) {
+      throw new ConflictError('This order already belongs to a project');
+    }
+
+    const { default: projectService } = await import('../pm/project.service.js');
+    const project = await projectService.create({
+      name: data.name || order.title || `Projekt ${order.orderNumber}`,
+      projectType: data.projectType || 'NEW_INSTALLATION',
+      customerId: order.customerId?._id || order.customerId,
+      siteId: order.siteId?._id || order.siteId || null,
+      projectManagerId: data.projectManagerId || userId,
+      description: data.description || null,
+      estimatedBudget: order.grandTotalRounded ?? order.grandTotal ?? null,
+      currency: order.currency || 'CHF',
+    }, userId, meta);
+
+    await orderRepository.updateById(id, { projectId: project._id, updatedBy: userId });
+    await this._invalidateOrderCache(id);
+    await this._invalidateListCache();
+
+    auditService.logEvent({
+      eventType: 'order.project_created',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { orderId: id, projectId: project._id, projectNumber: project.projectNumber },
+      module: 'qop',
+    });
+
+    logger.info('Project opened from order', {
+      module: 'qop',
+      action: 'createProject',
+      orderId: id,
+      projectId: project._id,
+    });
+
+    return project;
+  }
+
   async list(queryParams) {
     const { cursor, limit, sortBy, sortOrder, search, ...filters } = queryParams;
     const filterKey = Object.entries(filters)

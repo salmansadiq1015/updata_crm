@@ -555,6 +555,7 @@ export const ENDPOINTS = Object.freeze({
     ORDER_STATUS: (id) => `/qop/orders/${id}/status`,
     ORDER_INVOICES: (id) => `/qop/orders/${id}/invoices`,
     ORDER_HISTORY: (id) => `/qop/orders/${id}/history`,
+    ORDER_CREATE_PROJECT: (id) => `/qop/orders/${id}/project`,
     ORDER_BILLING_PLAN: (id) => `/qop/orders/${id}/billing-plan`,
     // Invoices
     INVOICES: '/qop/invoices',

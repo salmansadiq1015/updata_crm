@@ -215,7 +215,7 @@ async function createProject({ input, context, userId, helpers }) {
   }
 
   const projectService = (await import('../../pm/project.service.js')).default;
-  const name = helpers.cleanTitle(input, [
+  const name = context.llmDraft?.title || helpers.cleanTitle(input, [
     'create project',
     'new project',
     'add project',
@@ -233,10 +233,22 @@ async function createProject({ input, context, userId, helpers }) {
     notes: 'Created by AI assistant.',
   }, userId, { source: 'ai-agent' });
 
+  // Projekt AI fills the checklist that belongs to this kind of job.
+  const projektService = (await import('../agents/projekt/projekt.service.js')).default;
+  const template = await projektService.selectTemplate({ title: name, description: input });
+  const checklist = await projektService.createChecklist(project, template, userId);
+
+  const blockingNote = checklist.blocking.length
+    ? ` ${checklist.blocking.length} davon müssen vor dem Baustart erledigt sein.`
+    : '';
+  const message = checklist.created.length
+    ? `Projekt ${project.projectNumber} eröffnet: ${project.name}. Checkliste „${template.name}“ mit ${checklist.created.length} Aufgaben angelegt.${blockingNote}`
+    : `Project ${project.projectNumber} created: ${project.name}.`;
+
   return {
     action: ACTIONS.CREATE_PROJECT,
     status: 'completed',
-    message: `Project ${project.projectNumber} created: ${project.name}.`,
+    message,
     recordType: 'project',
     recordId: project._id,
     record: {
@@ -245,6 +257,15 @@ async function createProject({ input, context, userId, helpers }) {
       name: project.name,
       status: project.status,
       customerName: project.customerName,
+      ...(checklist.created.length ? {
+        checklist: template?.name || null,
+        tasks: checklist.created.map((task) => ({
+          title: task.title,
+          dueDate: task.dueDate,
+          blocksStart: task.blocksStart,
+        })),
+        blocksStart: checklist.blocking.map((task) => task.title),
+      } : {}),
     },
   };
 }

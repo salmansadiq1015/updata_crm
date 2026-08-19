@@ -1,0 +1,99 @@
+/**
+ * Inter-agent handoffs.
+ *
+ * The specification formalises ten of them: a fact established by one agent
+ * puts the next one to work, without anybody asking. This module subscribes
+ * the agents to the business events the ERP already publishes.
+ *
+ * Two rules hold for every handoff:
+ *  - the receiving agent must be enabled in the registry, and the fleet-wide
+ *    emergency stop must be clear;
+ *  - the agent prepares, it never commits. Everything it produces is a draft
+ *    or a task for a person to act on.
+ */
+import eventBus from '../../../shared/events/EventBus.js';
+import EVENT_TYPES from '../../../shared/events/eventTypes.js';
+import agentGovernance from './agentGovernance.service.js';
+import logger from '../../../shared/logger/index.js';
+
+/** An agent only acts on its own initiative when it is switched on. */
+async function agentIsRunnable(agentKey) {
+  if (await agentGovernance.isEmergencyStopped()) return false;
+  const { byKey } = await agentGovernance._registry();
+  const agent = byKey.get(agentKey);
+  return Boolean(agent?.isEnabled);
+}
+
+/**
+ * Quotation accepted → Projekt AI.
+ *
+ * The specification's own wording: "Offerte angenommen → Projekt AI →
+ * Behörden/Money/Material AI". This first leg opens the project and its
+ * checklist; the onward legs follow as those agents gain behaviour.
+ */
+async function onQuotationAccepted(event) {
+  const payload = event?.payload || event || {};
+  const { quotationId, acceptedBy } = payload;
+  if (!quotationId) return;
+
+  if (!(await agentIsRunnable('PROJEKT'))) return;
+
+  try {
+    const Quotation = (await import('../../qop/quotation.model.js')).default;
+    const quotation = await Quotation.findById(quotationId)
+      .select('quotationNumber customerId customerName siteId projectId title aiDraft convertedOrderId')
+      .lean();
+    if (!quotation) return;
+
+    // Nothing to open when the job already has a project.
+    if (quotation.projectId) return;
+
+    const projektService = (await import('../agents/projekt/projekt.service.js')).default;
+    const template = await projektService.selectTemplate({
+      recognizedWork: quotation.aiDraft?.recognizedWork || [],
+      title: quotation.title || '',
+    });
+
+    const taskService = (await import('../../tasks/task.service.js')).default;
+    const blocking = (template?.tasks || []).filter((task) => task.blocksStart).map((task) => task.title);
+
+    // Projekt AI proposes; a person opens the project from the order screen.
+    await taskService.create({
+      title: `Projekt eröffnen: ${quotation.title || quotation.quotationNumber}`,
+      description: [
+        `Die Offerte ${quotation.quotationNumber} wurde angenommen.`,
+        template ? `Vorgeschlagene Checkliste: „${template.name}" mit ${template.tasks.length} Aufgaben.` : null,
+        blocking.length ? `Vor dem Baustart zu erledigen: ${blocking.join(', ')}.` : null,
+        'Projekt über den Auftrag eröffnen, damit die Checkliste automatisch angelegt wird.',
+      ].filter(Boolean).join('\n'),
+      priority: 'HIGH',
+      customerId: quotation.customerId || null,
+    }, acceptedBy || null, { source: 'ai-agent' });
+
+    logger.info('Handoff: quotation accepted → Projekt AI', {
+      module: 'ai-handoff',
+      action: 'quotationAccepted',
+      quotationId: String(quotationId),
+      template: template?.key || null,
+    });
+  } catch (err) {
+    logger.warn('Handoff quotation → Projekt AI failed', {
+      module: 'ai-handoff',
+      action: 'quotationAccepted',
+      quotationId: String(quotationId),
+      error: err.message,
+    });
+  }
+}
+
+export function registerAgentHandoffs() {
+  eventBus.subscribe(EVENT_TYPES.QUOTATION_ACCEPTED, onQuotationAccepted);
+
+  logger.info('Agent handoffs registered', {
+    module: 'ai-handoff',
+    action: 'register',
+    handoffs: ['quotation.accepted → PROJEKT'],
+  });
+}
+
+export default registerAgentHandoffs;

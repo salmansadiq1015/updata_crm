@@ -2,6 +2,7 @@ import { seedCatalog } from './catalog-seed.js';
 import { seedDoctplTemplates } from './doctplSeed.js';
 import { seedOperations } from './operations-seed.js';
 import { seedAgentRegistry } from './agentRegistrySeed.js';
+import { seedProjectTaskTemplates } from './projectTaskTemplateSeed.js';
 import { seedAiVocabulary } from './ai-vocabulary-seed.js';
 import { seedAiCommands } from './ai-commands-seed.js';
 import Permission from '../modules/auth/permission.model.js';
@@ -655,6 +656,9 @@ export async function seedDatabase() {
     // are seeded disabled and switched on from the admin screen once their
     // capabilities exist.
     await seedAgentRegistry();
+
+    // 4e. Standard task checklists Projekt AI opens with a project.
+    await seedProjectTaskTemplates();
 
     // 5. Seed default departments (Abteilungen) — required to create quotations /
     // orders / invoices (and their per-department numbering). Without at least one,

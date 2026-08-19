@@ -25,6 +25,7 @@ import { registerMeetingEvents } from './modules/meetings/meeting.events.js';
 import { registerNotificationsEvents } from './modules/notifications/notifications.events.js';
 import { registerIntegrationsEvents } from './modules/integrations/integrations.events.js';
 import { registerAiEvents } from './modules/ai/ai.events.js';
+import { registerAgentHandoffs } from './modules/ai/governance/agentHandoffs.js';
 import { seedDatabase } from './seed/seed.js';
 import logger from './shared/logger/index.js';
 
@@ -117,6 +118,7 @@ async function start() {
     registerNotificationsEvents();
     registerIntegrationsEvents();
     registerAiEvents();
+    registerAgentHandoffs();
 
     // 3. Create Express app
     const app = createApp();

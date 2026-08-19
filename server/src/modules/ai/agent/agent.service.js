@@ -1,4 +1,3 @@
-import { ChatOpenAI } from '@langchain/openai';
 import agentRunRepository from './agentRun.repository.js';
 import agentMemory from './agent.memory.js';
 import llmPlanner from './llmPlanner.service.js';
@@ -49,21 +48,6 @@ const INTENT_TO_WORKFLOW = {
 };
 
 class AgentService {
-  constructor() {
-    this._llm = null;
-  }
-
-  _getLlm() {
-    if (!this._llm) {
-      this._llm = new ChatOpenAI({
-        apiKey: config.ai.apiKey,
-        model: config.ai.model || 'gpt-4o',
-        temperature: 0,
-      });
-    }
-    return this._llm;
-  }
-
   /**
    * LLM planning first (understands questions and extracts clean parameters);
    * deterministic keyword heuristics only as fallback so the agent still

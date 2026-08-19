@@ -8,11 +8,10 @@
  * Graph: __start__ → respond → END
  */
 import { StateGraph, END } from '@langchain/langgraph';
-import { ChatOpenAI } from '@langchain/openai';
 
 import { MAX_STEPS } from '../agent/agent.guardrails.js';
 import { WorkflowState } from './workflow.state.js';
-import config from '../../../config/index.js';
+import { createChatModel } from '../../../shared/ai/llmFactory.js';
 import logger from '../../../shared/logger/index.js';
 
 async function respond(state) {
@@ -27,11 +26,7 @@ async function respond(state) {
   }
 
   try {
-    const llm = new ChatOpenAI({
-      apiKey: config.ai.apiKey,
-      model: config.ai.model || 'gpt-4o',
-      temperature: 0.7,
-    });
+    const llm = await createChatModel({ temperature: 0.7 });
 
     const response = await llm.invoke([
       {

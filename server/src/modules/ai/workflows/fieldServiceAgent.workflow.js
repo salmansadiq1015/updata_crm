@@ -667,9 +667,8 @@ async function summarizeChat(input, context, userId, state = {}) {
     })
     .join('\n');
 
-  const { ChatOpenAI } = await import('@langchain/openai');
-  const config = (await import('../../../config/index.js')).default;
-  const llm = new ChatOpenAI({ apiKey: config.ai.apiKey, model: config.ai.model || 'gpt-4o', temperature: 0.3 });
+  const { createChatModel } = await import('../../../shared/ai/llmFactory.js');
+  const llm = await createChatModel({ temperature: 0.3 });
   const response = await llm.invoke([
     {
       role: 'system',

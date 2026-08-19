@@ -6,9 +6,9 @@
  * deterministic heuristics remain the fallback when no API key is configured
  * or the call fails, so the agent still works (degraded) without OpenAI.
  */
-import { ChatOpenAI } from '@langchain/openai';
 import config from '../../../config/index.js';
 import logger from '../../../shared/logger/index.js';
+import { createChatModel } from '../../../shared/ai/llmFactory.js';
 
 export const PLANNER_ACTIONS = Object.freeze([
   'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'DELETE_CUSTOMER', 'SEARCH_CUSTOMER',
@@ -52,13 +52,9 @@ class LlmPlannerService {
     this._llm = null;
   }
 
-  _getLlm() {
+  async _getLlm() {
     if (!this._llm) {
-      this._llm = new ChatOpenAI({
-        apiKey: config.ai.apiKey,
-        model: config.ai.model || 'gpt-4o',
-        temperature: 0,
-      });
+      this._llm = await createChatModel({ temperature: 0 });
     }
     return this._llm;
   }
@@ -71,7 +67,8 @@ class LlmPlannerService {
     if (!config.ai.apiKey) return null;
     try {
       const todayIso = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Zurich' });
-      const response = await this._getLlm().invoke([
+      const llm = await this._getLlm();
+      const response = await llm.invoke([
         { role: 'system', content: SYSTEM_PROMPT(todayIso) },
         { role: 'user', content: input },
       ]);

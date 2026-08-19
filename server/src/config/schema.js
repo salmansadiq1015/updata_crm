@@ -96,6 +96,10 @@ const configSchema = Joi.object({
   OPENAI_API_KEY: Joi.string().allow('').default(''),
   OPENAI_MODEL: Joi.string().default('gpt-4o'),
   OPENAI_MAX_TOKENS: Joi.number().default(2000),
+  // Alternative OpenAI-compatible endpoint (Azure OpenAI, Swiss gateway…),
+  // set once the data-residency decision is made.
+  OPENAI_BASE_URL: Joi.string().uri().allow('').default(''),
+  STT_PROVIDER: Joi.string().valid('whisper', 'google', 'azure').default('whisper'),
 
   // Accounting OCR
   OCR_PROVIDER: Joi.string().valid('disabled', 'http', 'text').default('disabled'),

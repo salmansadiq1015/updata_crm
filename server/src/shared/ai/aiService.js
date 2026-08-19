@@ -1,13 +1,12 @@
+import { isAiConfigured } from './llmFactory.js';
+
 // ─── Lazy-init singleton ─────────────────────────────────────
 let openaiClient = null;
 
 async function getClient() {
   if (!openaiClient) {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
-    }
-    const { default: OpenAI } = await import('openai');
-    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const { createOpenAiClient } = await import('./llmFactory.js');
+    openaiClient = await createOpenAiClient();
   }
   return openaiClient;
 }
@@ -16,7 +15,7 @@ async function getClient() {
  * Check if the AI service is available (key configured).
  */
 export function isAiAvailable() {
-  return !!process.env.OPENAI_API_KEY;
+  return isAiConfigured();
 }
 
 /**

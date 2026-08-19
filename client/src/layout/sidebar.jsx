@@ -129,6 +129,7 @@ const navSectionDefs = [
           { type: 'leaf', labelKey: 'sidebar.aiAnalytics', href: '/admin/ai/analytics', icon: Activity, permission: 'ai:analytics:read' },
           { type: 'leaf', labelKey: 'sidebar.aiVocabulary', href: '/admin/ai/vocabulary', icon: BookOpen, permission: 'ai:vocabulary:manage' },
           { type: 'leaf', labelKey: 'sidebar.aiCommands', href: '/admin/ai/commands', icon: MonitorSmartphone, permission: 'ai:commands:manage' },
+          { type: 'leaf', labelKey: 'sidebar.aiAgents', href: '/admin/ai/agents', icon: ShieldCheck, permission: 'ai:agents:manage' },
         ],
       },
       { type: 'leaf', labelKey: 'sidebar.templates', href: '/admin/templates', icon: LayoutTemplate, permission: 'templates:read' },

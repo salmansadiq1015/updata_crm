@@ -764,6 +764,10 @@ export const ENDPOINTS = Object.freeze({
     ANALYTICS_CORRECTIONS:  '/ai/analytics/corrections/top',
     DOCUMENT_PREVIEW:       '/ai/documents/preview',
     DOCUMENT_GENERATE:      '/ai/documents/generate',
+    // Agent registry, kill switches, emergency stop
+    GOVERNANCE:             '/ai/governance',
+    GOVERNANCE_AGENT:       (key) => `/ai/governance/agents/${key}`,
+    GOVERNANCE_STOP:        '/ai/governance/emergency-stop',
   },
   DOCTPL: {
     TEMPLATES:            '/doctpl/templates',

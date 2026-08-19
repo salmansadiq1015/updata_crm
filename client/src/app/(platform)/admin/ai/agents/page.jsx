@@ -60,7 +60,11 @@ function AgentRow({ agent, onToggle, isPending, t }) {
               {t('ai.agents.approvalFrom')} {agent.approvalRule}
             </span>
           </div>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">{agent.purpose}</p>
+          {/* Purposes are seeded in German; fall back to the stored text when
+              an agent has no translation yet. */}
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            {t(`ai.agents.purpose.${agent.key}`, agent.purpose)}
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
             {actionCount > 0
               ? `${t('ai.agents.actions')}: ${(agent.allowedActions || []).join(', ')}`

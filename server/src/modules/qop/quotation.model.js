@@ -133,6 +133,30 @@ const quotationSchema = new mongoose.Schema(
     subsidyAmount: { type: Number, min: 0, default: 0 },
     subsidyNote: { type: String, maxlength: 5000, default: '' },
     clientSideWorks: { type: String, maxlength: 5000, default: '' },
+    // Offerte AI: the nine blocks the specification prescribes, kept structured
+    // so the office can work through them; the customer-facing introduction is
+    // composed from the first three.
+    aiDraft: {
+      type: new mongoose.Schema({
+        blocks: {
+          ausgangslage: { type: String, maxlength: 4000, default: '' },
+          kundenziel: { type: String, maxlength: 4000, default: '' },
+          technischeLoesung: { type: String, maxlength: 4000, default: '' },
+          leistungsumfang: { type: String, maxlength: 4000, default: '' },
+          optionen: { type: String, maxlength: 4000, default: '' },
+          ausschluesse: { type: String, maxlength: 4000, default: '' },
+          offenePunkte: { type: String, maxlength: 4000, default: '' },
+          preispruefung: { type: String, maxlength: 4000, default: '' },
+          versandbereitschaft: { type: String, maxlength: 4000, default: '' },
+        },
+        openPoints: [{ type: String, maxlength: 500 }],
+        missingPrices: [{ type: String, maxlength: 500 }],
+        recognizedWork: [{ type: String, maxlength: 200 }],
+        sourceText: { type: String, maxlength: 20000, default: '' },
+        generatedAt: { type: Date, default: Date.now },
+      }, { _id: false }),
+      default: null,
+    },
     assignedUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

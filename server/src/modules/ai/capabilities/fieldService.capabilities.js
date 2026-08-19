@@ -460,31 +460,61 @@ async function createQuotation({ input, context, userId, helpers }) {
   }
 
   const quotationService = (await import('../../qop/quotation.service.js')).default;
-  const lineItems = extractCommercialLineItems(input, {
-    defaultDescription: helpers.cleanTitle(input, ['create quotation', 'create quote', 'quotation', 'quote', 'offerte', 'angebot']),
-    quotationMode: true,
-  });
+  const fallbackTitle = helpers.cleanTitle(input, ['create quotation', 'create quote', 'quotation', 'quote', 'offerte', 'angebot']);
+
+  // A site visit or dictation carries enough substance for Offerte AI to draft
+  // the nine blocks; a one-line command does not, so it keeps the plain path.
+  const offerteService = (await import('../agents/offerte/offerte.service.js')).default;
+  const draft = input.length >= 120 ? await offerteService.draft(input, {
+    customerName: context.customer.name,
+    siteLabel: context.site?.name || context.installation?.name || null,
+  }) : null;
+
+  const lineItems = draft?.positions?.length
+    ? await offerteService.toLineItems(draft.positions)
+    : extractCommercialLineItems(input, { defaultDescription: fallbackTitle, quotationMode: true });
+
   const quotation = await quotationService.create({
     customerId: helpers.objectIdValue(context.customer),
     customerName: context.customer.name,
     projectId: helpers.objectIdValue(context.project) || null,
     language: 'de',
-    title: helpers.cleanTitle(input, ['create quotation', 'create quote', 'quotation', 'quote', 'offerte', 'angebot']),
-    introduction: 'Draft created by AI assistant. Please review before sending.',
+    title: draft?.title || fallbackTitle,
+    introduction: draft
+      ? offerteService.composeIntroduction(draft.blocks)
+      : 'Entwurf durch den KI-Assistenten erstellt. Bitte vor dem Versand prüfen.',
     validUntil: addDays(new Date(), 30),
     currency: 'CHF',
     lineItems,
     globalDiscountPercent: 0,
     paymentTerms: '',
-    notes: input,
+    notes: draft ? offerteService.composeInternalNotes(draft) : input,
     termsAndConditions: '',
     assignedUserId: helpers.objectIdValue(context.assignee) || userId,
+    ...(draft ? {
+      aiDraft: {
+        blocks: draft.blocks,
+        openPoints: draft.openPoints,
+        missingPrices: draft.missingPrices,
+        recognizedWork: draft.recognizedWork,
+        sourceText: input.slice(0, 20000),
+        generatedAt: new Date(),
+      },
+    } : {}),
   }, userId, { source: 'ai-agent' });
+
+  const followUps = [...(draft?.openPoints || []), ...(draft?.missingPrices || [])];
+  const message = draft
+    ? `Offertenentwurf ${quotation.quotationNumber} für ${quotation.customerName} erstellt`
+      + `${draft.positions.length ? ` — ${draft.positions.length} Positionen` : ''}`
+      + `${followUps.length ? `, ${followUps.length} offene Punkte zu klären` : ''}.`
+      + ' Preise sind noch zu ergänzen.'
+    : `Draft quotation ${quotation.quotationNumber} created for ${quotation.customerName}.`;
 
   return {
     action: ACTIONS.CREATE_QUOTATION,
     status: 'completed',
-    message: `Draft quotation ${quotation.quotationNumber} created for ${quotation.customerName}.`,
+    message,
     recordType: 'quotation',
     recordId: quotation._id,
     record: {
@@ -493,6 +523,12 @@ async function createQuotation({ input, context, userId, helpers }) {
       customerName: quotation.customerName,
       status: quotation.status,
       total: quotation.grandTotalRounded,
+      ...(draft ? {
+        positions: draft.positions.length,
+        openPoints: draft.openPoints,
+        missingPrices: draft.missingPrices,
+        recognizedWork: draft.recognizedWork,
+      } : {}),
     },
   };
 }

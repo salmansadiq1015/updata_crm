@@ -1,6 +1,7 @@
 import { seedCatalog } from './catalog-seed.js';
 import { seedDoctplTemplates } from './doctplSeed.js';
 import { seedOperations } from './operations-seed.js';
+import { seedAgentRegistry } from './agentRegistrySeed.js';
 import { seedAiVocabulary } from './ai-vocabulary-seed.js';
 import { seedAiCommands } from './ai-commands-seed.js';
 import Permission from '../modules/auth/permission.model.js';
@@ -213,6 +214,7 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'ai', action: 'commands:manage', description: 'Manage AI voice commands' },
   { module: 'ai', action: 'vocabulary:manage', description: 'Manage AI custom vocabulary' },
   { module: 'ai', action: 'analytics:read', description: 'View AI assistant analytics' },
+  { module: 'ai', action: 'agents:manage', description: 'Enable or disable AI agents, trigger the emergency stop' },
 
   // Time Tracking
   { module: 'time-tracking', action: 'read', description: 'View time entries' },
@@ -648,6 +650,11 @@ export async function seedDatabase() {
       const anyAdmin = adminRole ? await User.findOne({ role: adminRole._id }) : null;
       await seedOperations(anyAdmin?._id);
     }
+
+    // 4d. Declare the AI agents (registry, kill switches, risk rules). Agents
+    // are seeded disabled and switched on from the admin screen once their
+    // capabilities exist.
+    await seedAgentRegistry();
 
     // 5. Seed default departments (Abteilungen) — required to create quotations /
     // orders / invoices (and their per-department numbering). Without at least one,

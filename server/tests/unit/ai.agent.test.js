@@ -52,6 +52,20 @@ jest.unstable_mockModule('../../src/modules/ai/tools/notification.tools.js', () 
   },
 }));
 
+// Governance reads the registry from Mongo; these suites exercise workflow
+// logic, so the gate is stubbed to "allowed, no approval needed".
+jest.unstable_mockModule('../../src/modules/ai/governance/agentGovernance.service.js', () => ({
+  default: {
+    evaluate: jest.fn().mockResolvedValue({
+      allowed: true,
+      requiresApproval: false,
+      riskLevel: 'LOW',
+      agentKey: null,
+    }),
+    record: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
 jest.unstable_mockModule('../../src/modules/auth/user.model.js', () => ({
   default: {
     find: jest.fn().mockReturnValue({

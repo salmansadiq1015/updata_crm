@@ -19,6 +19,8 @@ import {
   isFieldServiceCapabilityAction,
 } from '../capabilities/fieldService.capabilities.js';
 import { WorkflowState } from './workflow.state.js';
+import agentGovernance from '../governance/agentGovernance.service.js';
+import { RISK_LEVEL_LABELS } from '../governance/agent.risk.js';
 import logger from '../../../shared/logger/index.js';
 import swissPlzService from '../../../shared/ai/swissPlz.service.js';
 
@@ -300,6 +302,36 @@ function classifyActionLegacy(input) {
 }
 
 async function performAction(action, input, context, userId, state = {}) {
+  // Single gate in front of every action: emergency stop, per-agent kill
+  // switch (proactive runs only) and the risk-based approval rule.
+  const decision = await agentGovernance.evaluate(action, {
+    confirmed: Boolean(state.confirmed),
+    agentKey: state.agentKey || null,
+  });
+  if (!decision.allowed) {
+    await agentGovernance.record(decision, { action, userId, agentRunId: state.agentRunId, input });
+    return decision.block;
+  }
+  if (decision.requiresApproval) {
+    await agentGovernance.record(decision, { action, userId, agentRunId: state.agentRunId, input });
+    const target = confirmationTarget(action, context);
+    return {
+      action,
+      status: 'awaiting_confirmation',
+      riskLevel: decision.riskLevel,
+      message: `${ACTION_LABELS[action] ? `Ich soll ${ACTION_LABELS[action]}. ` : ''}${RISK_LEVEL_LABELS[decision.riskLevel]}. Soll ich fortfahren?`,
+      confirmation: {
+        action,
+        riskLevel: decision.riskLevel,
+        label: ACTION_LABELS[action] || action,
+        effect: RISK_LEVEL_LABELS[decision.riskLevel],
+        ...target,
+      },
+      ...target,
+      resolvedContext: summarizeContext(context),
+    };
+  }
+
   if (isFieldServiceCapabilityAction(action)) {
     return executeFieldServiceCapability({
       action,
@@ -729,6 +761,29 @@ async function createOrder(input, context, userId) {
     recordId: order._id,
     record: { id: order._id, orderNumber: order.orderNumber, customerName: order.customerName, status: order.status },
   };
+}
+
+/**
+ * Names the record an action is about, so the confirmation prompt can show
+ * what exactly is at stake rather than just the action label.
+ */
+const CONFIRMATION_TARGETS = {
+  [ACTIONS.DELETE_TASK]: ['task', 'task'],
+  [ACTIONS.DELETE_ORDER]: ['order', 'order'],
+  [ACTIONS.DELETE_PROJECT]: ['project', 'project'],
+  [ACTIONS.DELETE_CUSTOMER]: ['customer', 'customer'],
+  [ACTIONS.DELETE_REPORT]: ['workReport', 'report'],
+  [ACTIONS.DELETE_ASSIGNMENT]: ['assignment', 'assignment'],
+  [ACTIONS.RESCHEDULE_ASSIGNMENT]: ['assignment', 'assignment'],
+};
+
+function confirmationTarget(action, context = {}) {
+  const mapping = CONFIRMATION_TARGETS[action];
+  if (!mapping) return {};
+  const [recordType, contextKey] = mapping;
+  const record = context[contextKey];
+  if (!record?._id) return {};
+  return { recordType, recordId: String(record._id) };
 }
 
 function needsFollowUp(action, missingFields, context = {}) {

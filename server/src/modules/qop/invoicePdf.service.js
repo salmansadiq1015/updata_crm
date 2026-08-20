@@ -190,6 +190,15 @@ function writeInvoiceContent(doc, invoice) {
     .text(`${currency} ${money(invoice.subtotal)}`, totalsX, y, { width: 170, align: 'right' });
   y += 16;
 
+  if (invoice.globalDiscountPercent > 0) {
+    const pct = Number(invoice.globalDiscountPercent);
+    const discountAmount = Math.round((Number(invoice.subtotal || 0) * pct / 100 + Number.EPSILON) * 100) / 100;
+    const pctLabel = Number.isInteger(pct) ? String(pct) : pct.toFixed(1);
+    doc.text(`Globalrabatt ${pctLabel}%`, totalsX, y)
+      .text(`-${currency} ${money(discountAmount)}`, totalsX, y, { width: 170, align: 'right' });
+    y += 16;
+  }
+
   for (const vat of invoice.vatBreakdown || []) {
     doc.text(`Mehrwertsteuer ${vat.rate}%`, totalsX, y)
       .text(`${currency} ${money(vat.amount)}`, totalsX, y, { width: 170, align: 'right' });

@@ -205,6 +205,7 @@ function buildBaseData({ document, customer, contact, project, templateType, doc
     language: document.language || 'de',
     currency: document.currency || 'CHF',
     lineItems: normalizeLineItems(document.lineItems || []),
+    globalDiscountPercent: Number(document.globalDiscountPercent || 0),
     subtotal: Number(document.subtotal || 0),
     vatBreakdown: normalizeVatBreakdown(document.vatBreakdown || []),
     grandTotal: Number(document.grandTotal || 0),

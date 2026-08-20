@@ -563,15 +563,27 @@ async function createInvoice({ input, context, userId, helpers }) {
   }
 
   if (context.order) {
+    // Money AI runs its ten checks against the real records first; an invoice
+    // is money, so a missing price or an open report stops it here.
+    const moneyService = (await import('../agents/money/money.service.js')).default;
+    const checks = await moneyService.checkBeforeInvoice(context.order, { customer: context.customer });
+    if (!checks.ok) {
+      return moneyService.toBlocked(ACTIONS.CREATE_INVOICE, checks);
+    }
+
     const invoice = await invoiceService.createFromOrder({
       sourceOrderId: helpers.objectIdValue(context.order),
-      title: helpers.cleanTitle(input, ['create invoice', 'invoice', 'rechnung']),
+      title: context.llmDraft?.title || helpers.cleanTitle(input, ['create invoice', 'invoice', 'rechnung']),
       dueDate,
       paymentTermsDays: 30,
       paymentTermsText: '',
     }, userId, { source: 'ai-agent' });
 
-    return invoiceResult(invoice, `Draft invoice ${invoice.invoiceNumber} created from order ${context.order.orderNumber}.`);
+    const warning = checks.warnings.length ? ` Zu prüfen: ${checks.warnings.join(' ')}` : '';
+    return invoiceResult(
+      invoice,
+      `Rechnungsentwurf ${invoice.invoiceNumber} aus Auftrag ${context.order.orderNumber} erstellt.${warning}`,
+    );
   }
 
   if (context.customerCandidates?.length > 1) {

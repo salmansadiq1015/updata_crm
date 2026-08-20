@@ -524,6 +524,54 @@ const SCENARIOS = [
       ];
     },
   },
+
+  // ─── Money AI ──────────────────────────────────────────────
+
+  {
+    name: 'rechnung-braucht-freigabe',
+    why: 'Eine Rechnung ist verbindlich und wird nie ohne Freigabe erstellt.',
+    async exec() {
+      const state = await run('Erstelle eine Rechnung aus dem Auftrag AUF-2026-0051');
+      return [
+        check('Freigabe verlangt', state.status === 'AWAITING_CONFIRMATION', `status = ${state.status}`),
+        check('Risikostufe HIGH', state.output?.riskLevel === 'HIGH', `risque = ${state.output?.riskLevel}`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'rechnung-sperrt-bei-fehlendem-preis',
+    why: 'Ohne Preis darf keine Rechnung entstehen — die Regel aus dem Pflichtenheft.',
+    async exec() {
+      const state = await runAnswering('Erstelle eine Rechnung aus dem Auftrag AUF-2026-0051');
+      const o = state.output || {};
+      const text = message(state);
+      const blockedOrAsked = o.status === 'blocked' || o.status === 'needs_follow_up';
+      return [
+        check('geprüft statt blind erstellt', blockedOrAsked || o.status === 'completed',
+          `status = ${o.status}`),
+        check('bei Sperre: Grund genannt', o.status !== 'blocked' || (o.blockers || []).length > 0,
+          `blocages = ${(o.blockers || []).join(' | ')}`),
+        check('bei Sperre: keine Rechnung angelegt', o.status !== 'blocked' || !o.recordId, 'une facture a été créée'),
+        check('kein englischer Text', !ENGLISH_LEAKS.some((w) => text.includes(w)), text.slice(0, 90)),
+      ];
+    },
+  },
+  {
+    name: 'rechnung-nennt-offene-rapporte',
+    why: 'Offene Rapporte müssen die Rechnung aufhalten und benannt werden.',
+    async exec() {
+      const state = await runAnswering('Stelle die Schlussrechnung für den Auftrag AUF-2026-0052');
+      const o = state.output || {};
+      const text = message(state);
+      const mentionsControl = /Rapport|Preis|Position|Auftragsstatus|Rechnung/i.test(text);
+      return [
+        check('Antwort bezieht sich auf die Prüfung', mentionsControl, text.slice(0, 110)),
+        check('nichts versendet', !o.sent, 'un envoi a eu lieu'),
+        check('kein englischer Text', !ENGLISH_LEAKS.some((w) => text.includes(w)), text.slice(0, 90)),
+      ];
+    },
+  },
 ];
 
 // ─── Cleanup ──────────────────────────────────────────────────

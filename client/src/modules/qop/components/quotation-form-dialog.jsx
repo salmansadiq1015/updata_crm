@@ -294,9 +294,11 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
         // Versionsverwaltung: sent quotations are editable too — the server
         // freezes the previous state as a revision and bumps V. Only converted
         // ones are locked (their content lives on in the order).
-        if (quotation.status !== 'CONVERTED') {
-          await updateQuotation.mutateAsync({ id, data: { ...payload, version: form.version } });
+        if (quotation.status === 'CONVERTED') {
+          showError(t('qop.form.convertedLocked', 'Diese Offerte wurde in einen Auftrag konvertiert und kann nicht mehr bearbeitet werden.'));
+          return;
         }
+        await updateQuotation.mutateAsync({ id, data: { ...payload, version: form.version } });
         if (statusChanged) {
           await transitionQuotationStatus.mutateAsync({ id, targetStatus: form.status });
         }

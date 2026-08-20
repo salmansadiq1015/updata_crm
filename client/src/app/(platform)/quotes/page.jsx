@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle, FileText, Package } from 'lucide-react';
 import { PageHeader } from '@/shared/components/page-header';
 import { QuotationsTable } from '@/modules/qop/components/quotations-table';
@@ -174,10 +175,19 @@ function StatusCountsWidget({ de }) {
   );
 }
 
-export default function QuotesPage() {
+function QuotesPageInner() {
   const { locale: language, t } = useLanguage();
   const de = language === 'de';
-  const [tab, setTab] = useState('quotations');
+  // The AI assistant links straight to a record: pick the right tab and hand
+  // the id to the table so it opens it.
+  const searchParams = useSearchParams();
+  const focus = {
+    quotations: searchParams.get('quotationId'),
+    orders: searchParams.get('orderId'),
+    invoices: searchParams.get('invoiceId'),
+  };
+  const linkedTab = TABS.find((key) => focus[key]) || 'quotations';
+  const [tab, setTab] = useState(linkedTab);
   const [advFilters, setAdvFilters] = useState({});
   const quotationFilters = cleanTableFilters(advFilters, 'quotations');
   const orderFilters = cleanTableFilters(advFilters, 'orders');
@@ -215,10 +225,19 @@ export default function QuotesPage() {
       </div>
 
       <div>
-        {tab === 'quotations' && <QuotationsTable advancedFilters={quotationFilters} />}
+        {tab === 'quotations' && <QuotationsTable advancedFilters={quotationFilters} focusId={focus.quotations} />}
         {tab === 'orders' && <OrdersTable advancedFilters={orderFilters} />}
         {tab === 'invoices' && <InvoicesTable advancedFilters={invoiceFilters} />}
       </div>
     </div>
+  );
+}
+
+// useSearchParams needs a Suspense boundary in this Next version.
+export default function QuotesPage() {
+  return (
+    <Suspense fallback={null}>
+      <QuotesPageInner />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Plus, MoreHorizontal, Copy, Send,
   ArrowRight, Trash2, History, RefreshCw, FileText, LayoutTemplate, Eye,
@@ -163,7 +163,7 @@ function HistoryDrawer({ open, onClose, quotation }) {
   );
 }
 
-export function QuotationsTable({ advancedFilters = {} }) {
+export function QuotationsTable({ advancedFilters = {}, focusId = null }) {
   const { locale: language, t } = useLanguage();
 
   const [search, setSearch]         = useState('');
@@ -194,6 +194,17 @@ export function QuotationsTable({ advancedFilters = {} }) {
 
   const { data, isLoading } = useQuotations(filters);
   const items = useMemo(() => data?.items ?? [], [data?.items]);
+
+  // Deep link from the AI assistant: open the record named in the URL once.
+  const focusedRef = useRef(null);
+  useEffect(() => {
+    if (!focusId || focusedRef.current === focusId) return;
+    const match = items.find((item) => String(item._id) === String(focusId));
+    if (!match) return;
+    focusedRef.current = focusId;
+    setEditing(match);
+    setFormOpen(true);
+  }, [focusId, items]);
   const visibleIds = useMemo(() => items.map((quotation) => quotation._id ?? quotation.id), [items]);
   const selectedItems = useMemo(
     () => items.filter((quotation) => selectedIds.has(quotation._id ?? quotation.id)),

@@ -18,9 +18,9 @@ const ROUTES = {
   customer: (id) => `/crm/customers/${id}`,
   order: (id) => `/field-ops/orders/${id}`,
   chatRoom: (id) => `/field-ops/chat?chatId=${id}`,
+  quotation: (id) => `/quotes?quotationId=${id}`,
   task: () => '/tasks',
-  quotation: () => '/quotes',
-  invoice: () => '/quotes',
+  invoice: () => '/quotes?tab=invoices',
   workReport: () => '/field-ops/reports',
   assignment: () => '/scheduling',
 };

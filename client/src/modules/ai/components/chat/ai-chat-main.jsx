@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Menu, PenSquare, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,10 @@ export function AiChatMain({
 
   const { copy, voice } = useInteractionLayer({ onDispatch: dispatch });
 
-  const handleSuggestion = useCallback((text) => dispatch(text), [dispatch]);
+  // A suggestion is a starting point, not a command: it fills the field so the
+  // user says what they actually want before sending.
+  const [prefill, setPrefill] = useState(null);
+  const handleSuggestion = useCallback((text) => setPrefill({ text, at: Date.now() }), []);
 
   const handleVoiceStart = useCallback(async () => {
     try {
@@ -144,6 +147,7 @@ export function AiChatMain({
       </div>
 
       <AiChatInput
+        prefill={prefill}
         onSubmit={dispatch}
         isDispatching={isDispatching}
         recorder={recorder}

@@ -80,11 +80,9 @@ const ACTION_RISK = Object.freeze({
   RECORD_TIME: RISK_LEVELS.LOW,
   CREATE_REPORT: RISK_LEVELS.LOW,
   UPDATE_REPORT: RISK_LEVELS.LOW,
-  CREATE_PROJECT: RISK_LEVELS.LOW,
   UPDATE_PROJECT: RISK_LEVELS.LOW,
   CREATE_CUSTOMER: RISK_LEVELS.LOW,
   UPDATE_CUSTOMER: RISK_LEVELS.LOW,
-  CREATE_ORDER: RISK_LEVELS.LOW,
   UPDATE_ORDER: RISK_LEVELS.LOW,
   ANALYZE_WORKFORCE: RISK_LEVELS.LOW,
   ANALYZE_FIELD_TICKET: RISK_LEVELS.LOW,
@@ -99,6 +97,13 @@ const ACTION_RISK = Object.freeze({
   SEARCH_DOCUMENTS: RISK_LEVELS.LOW,
   SUMMARIZE_CHAT: RISK_LEVELS.LOW,
   GENERAL: RISK_LEVELS.LOW,
+
+  // These pull a whole cascade in behind them — a project opens its checklist,
+  // an order starts the commercial chain — so they get one look before they
+  // exist. Master data (customer, task, note) stays direct: it is cheap to fix
+  // and the voice address capture depends on it.
+  CREATE_PROJECT: RISK_LEVELS.MEDIUM,
+  CREATE_ORDER: RISK_LEVELS.MEDIUM,
 
   // Reaches a customer or commits a slot in someone's calendar.
   SEND_CHAT: RISK_LEVELS.MEDIUM,

@@ -32,9 +32,28 @@ class MoneyService {
    * The ten pre-invoice checks. Returns the blockers and the warnings
    * separately: a blocker stops the draft, a warning is worth saying out loud.
    */
-  async checkBeforeInvoice(order, { customer } = {}) {
+  async checkBeforeInvoice(orderRef, { customer } = {}) {
     const blockers = [];
     const warnings = [];
+
+    // Context resolution loads a short projection of the order — no line items,
+    // no total, no invoice link. Checking money against that would block every
+    // invoice, so read the record in full here rather than trust the caller.
+    let order = orderRef;
+    const orderId = orderRef?._id || orderRef?.id;
+    if (orderId) {
+      try {
+        const Order = (await import('../../../qop/order.model.js')).default;
+        const full = await Order.findById(orderId)
+          .select('orderNumber customerId customerName status lineItems grandTotal grandTotalRounded currency invoiceId')
+          .lean();
+        if (full) order = { ...orderRef, ...full };
+      } catch (err) {
+        logger.warn('Money AI could not reload the order', {
+          module: 'ai-money', action: 'checkBeforeInvoice', error: err.message,
+        });
+      }
+    }
 
     // 1. Recipient
     if (!order?.customerId && !customer) {

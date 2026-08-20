@@ -70,7 +70,8 @@ export const RECORDING_WARNING_SECONDS = 14 * 60; // warn at 14 min
 export const AGENT_POLL_INTERVAL_MS = 1000;
 export const SESSION_POLL_INTERVAL_MS = 2000;
 export const SESSION_PROCESSING_TIMEOUT_MS = 90000;
-export const MIN_AGENT_INPUT_LENGTH = 2;
+// One character is enough when answering a numbered choice from the assistant.
+export const MIN_AGENT_INPUT_LENGTH = 1;
 
 export const OFFLINE_QUEUE_MAX = 5; // max queued recordings
 

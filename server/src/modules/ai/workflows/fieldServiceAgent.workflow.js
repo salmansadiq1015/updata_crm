@@ -477,23 +477,69 @@ async function createReport(input, context, userId) {
   if (!orderId) {
     return needsFollowUp(ACTIONS.CREATE_REPORT, ['order/work order'], context);
   }
-  const workPerformed = extractReportWorkPerformed(input);
+  // A dictated visit carries enough for Rapport AI to structure it; a one-line
+  // command keeps the plain path.
+  const rapportService = (await import('../agents/rapport/rapport.service.js')).default;
+  const draft = input.length >= 80 ? await rapportService.draft(input) : null;
+
   const reportService = (await import('../../mobile/report.service.js')).default;
   const report = await reportService.create(orderId, {
     reportDate: new Date(),
     projectId: context.project?._id || objectIdValue(context.assignment?.projectId) || null,
-    workPerformed,
-    technicianNotes: input,
-    materialItems: extractMaterials(input),
+    workPerformed: draft?.workPerformed || extractReportWorkPerformed(input),
+    findings: draft?.findings || null,
+    nextSteps: draft?.nextSteps || null,
+    technicianNotes: draft ? rapportService.composeNotes(draft) : input,
+    // catalogSource is required; dictated material is CUSTOM until the office
+    // maps it onto a catalogue article.
+    materialItems: draft?.materials?.length
+      ? draft.materials.map((m, index) => ({
+        catalogSource: 'CUSTOM',
+        description: m.description,
+        quantity: m.quantity,
+        unit: m.unit || 'Stk',
+        sortOrder: index,
+      }))
+      : extractMaterials(input),
+    ...(draft?.workedHours ? { billableMinutes: Math.round(draft.workedHours * 60) } : {}),
     status: 'DRAFT',
   }, userId, { source: 'ai-agent' });
+
+  const completeness = draft
+    ? rapportService.completeness(draft, { hasAssignment: true })
+    : { complete: false, missing: [] };
+
+  const parts = [`Rapport-Entwurf ${report.reportNumber} erstellt`];
+  if (draft?.materials?.length) parts.push(`${draft.materials.length} Materialposition(en)`);
+  if (draft?.workedHours) parts.push(`${draft.workedHours} h Arbeitszeit`);
+  let message = `${parts.join(', ')}.`;
+  if (draft && !completeness.complete) {
+    message += ` Für die Freigabe fehlt noch: ${completeness.missing.join(', ')}.`;
+  }
+  if (draft?.followUpQuotation?.needed) {
+    message += ` Folgearbeit erkannt — eine Offerte wäre angezeigt${draft.followUpQuotation.reason ? ` (${draft.followUpQuotation.reason})` : ''}.`;
+  }
+
   return {
     action: ACTIONS.CREATE_REPORT,
     status: 'completed',
-    message: `Rapport-Entwurf ${report.reportNumber} erstellt.`,
+    message,
     recordType: 'workReport',
     recordId: report._id,
-    record: { id: report._id, orderId, reportNumber: report.reportNumber, status: report.status },
+    record: {
+      id: report._id,
+      orderId,
+      reportNumber: report.reportNumber,
+      status: report.status,
+      ...(draft ? {
+        materials: draft.materials.length,
+        workedHours: draft.workedHours,
+        billable: draft.billable,
+        defectFound: draft.defectFound,
+        followUpQuotation: draft.followUpQuotation.needed,
+        missing: completeness.missing,
+      } : {}),
+    },
   };
 }
 
@@ -826,7 +872,7 @@ const FIELD_CANDIDATE_KEY = {
   'project name': 'projects',
   'employee/technician': 'assignees',
   'project manager': 'assignees',
-  'order/work order': 'orders',
+  'order/work order': 'assignments',
   order: 'orders',
   task: 'tasks',
   'service report': 'reports',
@@ -1138,6 +1184,16 @@ async function findAssignment(input, objectId, previousFollowUp) {
   if (/\bcurrent\s+(work\s+)?order\b/i.test(input)) {
     return { selected: null, candidates: [] };
   }
+  // A dictated report usually names the assignment: "zum Einsatz ASN-2026-00003".
+  const documentNumber = documentNumberIn(input);
+  if (documentNumber) {
+    const byNumber = await Assignment.findOne({ assignmentNumber: new RegExp(`^${escapeRegex(documentNumber)}$`, 'i') })
+      .select('assignmentNumber title status projectId customerId orderId assignmentType priority startDatetime endDatetime')
+      .lean()
+      .catch(() => null);
+    if (byNumber) return { selected: byNumber, candidates: [] };
+  }
+
   const term = extractSearchTerm(input);
   if (!term || term.length < 2) {
     return { selected: null, candidates: [] };
@@ -1304,6 +1360,14 @@ function stripSearchNoise(term) {
     .filter((word) => word && !SEARCH_NOISE.has(word.toLowerCase().replace(/[.,:;!?]/g, '')))
     .join(' ')
     .trim();
+}
+
+const DOCUMENT_NUMBER = /\b[A-Z]{2,4}-\d{4}-\d{3,6}\b/i;
+
+/** Picks a document number out of dictated text, where the search term misses it. */
+function documentNumberIn(input) {
+  const match = String(input || '').match(DOCUMENT_NUMBER);
+  return match ? match[0] : null;
 }
 
 function escapeRegex(value) {

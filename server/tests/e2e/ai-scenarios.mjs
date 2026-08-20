@@ -113,6 +113,19 @@ async function settle(runId, notStatus = null) {
   throw new Error(`run ${runId} did not settle in time (last status ${last?.status})`);
 }
 
+/**
+ * Dictates, and if the assistant asks which record it means, answers with the
+ * number — the way the office would. Exercises the whole chain rather than
+ * stopping at the follow-up.
+ */
+async function runAnswering(input, answer = '1') {
+  const first = await run(input, { confirm: true });
+  if (first.output?.status !== 'needs_follow_up') return first;
+  const second = await run(answer, { confirm: true, threadId: first.threadId });
+  second.askedFirst = true;
+  return second;
+}
+
 // ─── Assertions ───────────────────────────────────────────────
 
 function check(label, condition, detail = '') {
@@ -447,6 +460,66 @@ const SCENARIOS = [
       return [
         check('Rapport oder Rückfrage', ['CREATE_REPORT', 'RECORD_TIME'].includes(action(state)) || state.output?.status === 'needs_follow_up',
           `action = ${action(state)} / ${state.output?.status}`),
+        check('kein englischer Text', !ENGLISH_LEAKS.some((w) => text.includes(w)), text.slice(0, 90)),
+      ];
+    },
+  },
+
+  // ─── Rapport AI ────────────────────────────────────────────
+
+  {
+    name: 'rapport-strukturiert-arbeiten-und-material',
+    why: 'Ein diktierter Einsatz muss Arbeiten, Material und Zeit sauber trennen.',
+    async exec() {
+      const dictation = 'Erstelle einen Rapport zum Einsatz ASN-2026-00003: Brenner ausgebaut und gereinigt, '
+        + 'Zündelektrode ersetzt, Düse 0.6 gewechselt, Kesseldruck kontrolliert und auf 1.8 bar '
+        + 'nachgefüllt. Anlage läuft wieder einwandfrei. Zwei Komma fünf Stunden vor Ort, '
+        + 'eine halbe Stunde Anfahrt. Der Kunde war zufrieden.';
+      const state = await runAnswering(dictation);
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Rapport erstellt', action(state) === 'CREATE_REPORT' && Boolean(record.reportNumber),
+          `action = ${action(state)} / ${state.output?.status}`),
+        check('Material erkannt', (record.materials || 0) > 0, `matériel = ${record.materials}`),
+        check('Arbeitszeit erkannt', record.workedHours === 2.5, `heures = ${record.workedHours}`),
+        check('kein englischer Text', !ENGLISH_LEAKS.some((w) => text.includes(w)), text.slice(0, 90)),
+      ];
+    },
+  },
+  {
+    name: 'rapport-erkennt-folgearbeit',
+    why: 'Das Beispiel aus dem Pflichtenheft: Ausdehnungsgefäss schlecht, sollte offeriert werden.',
+    async exec() {
+      const dictation = 'Rapport zum Einsatz ASN-2026-00003: Umwälzpumpe ersetzt, Anlage entlüftet, läuft wieder. '
+        + 'Drei Stunden gearbeitet. Das Ausdehnungsgefäss sieht schlecht aus und sollte ersetzt '
+        + 'werden, das müsste man dem Kunden offerieren.';
+      const state = await runAnswering(dictation);
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Rapport erstellt', action(state) === 'CREATE_REPORT' && Boolean(record.reportNumber),
+          `action = ${action(state)} / ${state.output?.status}`),
+        check('Folgearbeit erkannt', record.followUpQuotation === true || /Offerte|Folgearbeit/i.test(text),
+          `suivi = ${record.followUpQuotation}`),
+        check('kein englischer Text', !ENGLISH_LEAKS.some((w) => text.includes(w)), text.slice(0, 90)),
+      ];
+    },
+  },
+  {
+    name: 'rapport-meldet-fehlende-angaben',
+    why: 'Ohne Arbeitszeit darf ein Rapport nicht als vollständig gelten.',
+    async exec() {
+      const dictation = 'Rapport zum Einsatz ASN-2026-00003: Beim Kunden kurz vorbei, Anlage angeschaut, '
+        + 'sieht soweit in Ordnung aus. Nichts weiter unternommen.';
+      const state = await runAnswering(dictation);
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Rapport erstellt', action(state) === 'CREATE_REPORT' && Boolean(record.reportNumber),
+          `action = ${action(state)} / ${state.output?.status}`),
+        check('Unvollständigkeit gemeldet', (record.missing || []).length > 0 || /fehlt/i.test(text),
+          `manquants = ${(record.missing || []).join(', ')}`),
         check('kein englischer Text', !ENGLISH_LEAKS.some((w) => text.includes(w)), text.slice(0, 90)),
       ];
     },

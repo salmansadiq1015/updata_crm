@@ -27,7 +27,7 @@ node tests/e2e/ai-scenarios.mjs --only=offerte   # filtre par nom
 API=http://localhost:9097/api/v1 node tests/e2e/ai-scenarios.mjs
 ```
 
-Sortie : un ✓/✗ par contrôle, puis `21/21 scénarios passés`. Code de sortie
+Sortie : un ✓/✗ par contrôle, puis `28/28 scénarios passés`. Code de sortie
 non nul si un scénario échoue, donc utilisable en pré-livraison.
 
 ## Ce qui est couvert
@@ -55,6 +55,13 @@ non nul si un scénario échoue, donc utilisable en pré-livraison.
 | `einsatz-verschieben-braucht-freigabe` | Un rendez-vous client ne bouge pas sans accord |
 | `ausserhalb-des-themas` | Une question hors sujet ne crée rien |
 | `rapport-diktat-uebernimmt-arbeiten` | Un rapport dicté reprend les travaux, pas la commande |
+| `rapport-strukturiert-arbeiten-und-material` | Travaux, matériel et heures séparés proprement |
+| `rapport-erkennt-folgearbeit` | Le cas du CDC : l'Ausdehnungsgefäss à offrir est repéré |
+| `rapport-meldet-fehlende-angaben` | Sans heures, le rapport est signalé incomplet |
+| `rechnung-braucht-freigabe` | Facturer exige une validation (risque élevé) |
+| `rechnung-sperrt-bei-fehlendem-preis` | Blocage motivé, aucune facture créée |
+| `rechnung-nennt-offene-rapporte` | Les contrôles avant facture sont bien exécutés |
+| `nachfassliste-nach-wert-sortiert` | Offres à relancer, priorisées par valeur, sans pression tarifaire |
 
 Chaque scénario contrôle aussi qu'**aucun anglais** ne fuit dans le message
 affiché (`ENGLISH_LEAKS`).

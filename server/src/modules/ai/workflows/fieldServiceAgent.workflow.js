@@ -42,6 +42,7 @@ const ACTIONS = Object.freeze({
   SUMMARIZE_CHAT: 'SUMMARIZE_CHAT',
   RECORD_TIME: 'RECORD_TIME',
   ANALYZE_WORKFORCE: 'ANALYZE_WORKFORCE',
+  SALES_FOLLOWUPS: 'SALES_FOLLOWUPS',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -79,6 +80,7 @@ const ACTION_LABELS = {
   [ACTIONS.SUMMARIZE_CHAT]: 'einen Chat zusammenfassen',
   [ACTIONS.RECORD_TIME]: 'Arbeitszeit erfassen',
   [ACTIONS.ANALYZE_WORKFORCE]: 'die Personalplanung auswerten',
+  [ACTIONS.SALES_FOLLOWUPS]: 'die offenen Offerten prüfen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -358,6 +360,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return recordTime(input, context, userId);
     case ACTIONS.ANALYZE_WORKFORCE:
       return analyzeWorkforce(input, state);
+    case ACTIONS.SALES_FOLLOWUPS:
+      return salesFollowUps(state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -633,6 +637,25 @@ async function analyzeFieldTicket(input, state) {
     recordType: 'fieldTicket',
     recordId: ticketId,
     record: result,
+  };
+}
+
+async function salesFollowUps(state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('quotations:read')) {
+    return {
+      action: ACTIONS.SALES_FOLLOWUPS,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  const salesService = (await import('../agents/sales/sales.service.js')).default;
+  const followUps = await salesService.findFollowUps();
+  return {
+    action: ACTIONS.SALES_FOLLOWUPS,
+    status: 'completed',
+    message: salesService.compose(followUps),
+    records: followUps,
   };
 }
 

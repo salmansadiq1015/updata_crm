@@ -18,7 +18,7 @@ export const PLANNER_ACTIONS = Object.freeze([
   'CREATE_ASSIGNMENT', 'RESCHEDULE_ASSIGNMENT', 'DELETE_ASSIGNMENT',
   'CREATE_REPORT', 'UPDATE_REPORT', 'DELETE_REPORT', 'SEARCH_REPORTS',
   'SEARCH_DOCUMENTS', 'CREATE_QUOTATION', 'CREATE_INVOICE', 'CREATE_NOTE',
-  'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE',
+  'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE', 'SALES_FOLLOWUPS',
   'ANALYZE_FIELD_TICKET', 'SEND_NOTIFICATION', 'GENERAL',
 ]);
 
@@ -35,6 +35,7 @@ Hard rules:
 - QUESTIONS are never mutations. "Wie viele offene Aufgaben gibt es?", "Welche Projekte laufen?", "Zeige mir…" → the matching SEARCH_* action (SEARCH_TASKS, SEARCH_PROJECTS, SEARCH_ORDERS, SEARCH_CUSTOMER, SEARCH_REPORTS, SEARCH_DOCUMENTS). Only choose CREATE_*/UPDATE_*/DELETE_* when the user explicitly asks to create, change or delete something.
 - Questions about how the system works, greetings, or anything that maps to no ERP data → GENERAL.
 - "Fasse den Chat zusammen" / summarize a chat/conversation → SUMMARIZE_CHAT.
+- Questions about which quotations need chasing ("Welche Offerten muss ich nachfassen?", "offene Offerten", "Nachfassliste") → SALES_FOLLOWUPS.
 - Parameters:
   - title: clean, human-readable title WITHOUT command words ("Erstelle eine Aufgabe Boiler entkalken" → title "Boiler entkalken"). Keep the user's language.
   - priority: LOW | MEDIUM | HIGH | URGENT ("hohe Priorität" → HIGH, "dringend" → URGENT).

@@ -546,13 +546,11 @@ const SCENARIOS = [
       const state = await runAnswering('Erstelle eine Rechnung aus dem Auftrag AUF-2026-0051');
       const o = state.output || {};
       const text = message(state);
-      const blockedOrAsked = o.status === 'blocked' || o.status === 'needs_follow_up';
       return [
-        check('geprüft statt blind erstellt', blockedOrAsked || o.status === 'completed',
-          `status = ${o.status}`),
-        check('bei Sperre: Grund genannt', o.status !== 'blocked' || (o.blockers || []).length > 0,
-          `blocages = ${(o.blockers || []).join(' | ')}`),
-        check('bei Sperre: keine Rechnung angelegt', o.status !== 'blocked' || !o.recordId, 'une facture a été créée'),
+        check('gesperrt statt blind erstellt', o.status === 'blocked', `status = ${o.status}`),
+        check('Grund genannt', (o.blockers || []).length > 0, `blocages = ${(o.blockers || []).join(' | ')}`),
+        check('keine Rechnung angelegt', !o.recordId, 'une facture a été créée'),
+        check('Sperrgrund normiert', Boolean(o.blockReason), `motif = ${o.blockReason}`),
         check('kein englischer Text', !ENGLISH_LEAKS.some((w) => text.includes(w)), text.slice(0, 90)),
       ];
     },
@@ -569,6 +567,26 @@ const SCENARIOS = [
         check('Antwort bezieht sich auf die Prüfung', mentionsControl, text.slice(0, 110)),
         check('nichts versendet', !o.sent, 'un envoi a eu lieu'),
         check('kein englischer Text', !ENGLISH_LEAKS.some((w) => text.includes(w)), text.slice(0, 90)),
+      ];
+    },
+  },
+
+  // ─── Sales AI ──────────────────────────────────────────────
+
+  {
+    name: 'nachfassliste-nach-wert-sortiert',
+    why: 'Offene Offerten müssen nach Auftragswert priorisiert werden — die Regel des Kunden.',
+    async exec() {
+      const state = await run('Welche Offerten muss ich nachfassen?');
+      const records = state.output?.records || [];
+      const sorted = records.every((r, i) => i === 0 || records[i - 1].value >= r.value);
+      const text = message(state);
+      return [
+        check('Nachfassliste geliefert', action(state) === 'SALES_FOLLOWUPS', `action = ${action(state)}`),
+        check('nichts verändert', !state.output?.recordId, `recordId = ${state.output?.recordId}`),
+        check('nach Wert sortiert', sorted, records.map((r) => r.value).join(' > ')),
+        check('Gesprächshinweis ohne Preisdruck', !/Rabatt|Preisnachlass/i.test(text), text.slice(0, 80)),
+        noEnglish(state),
       ];
     },
   },

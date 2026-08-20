@@ -96,6 +96,7 @@ const ACTION_RISK = Object.freeze({
   SEARCH_REPORTS: RISK_LEVELS.LOW,
   SEARCH_DOCUMENTS: RISK_LEVELS.LOW,
   SUMMARIZE_CHAT: RISK_LEVELS.LOW,
+  SALES_FOLLOWUPS: RISK_LEVELS.LOW,
   GENERAL: RISK_LEVELS.LOW,
 
   // These pull a whole cascade in behind them — a project opens its checklist,

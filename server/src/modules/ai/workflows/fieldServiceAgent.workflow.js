@@ -162,7 +162,7 @@ async function executeAction(state) {
   const effectiveInput = previousFollowUp?.originalInput
     ? `${previousFollowUp.originalInput}\nFollow-up answer: ${input}`
     : input;
-  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext, action);
+  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext, action, llmPlan?.params || null);
   // Clean parameters extracted by the LLM planner; handlers prefer these over
   // keyword stripping. Dates crossed the queue as ISO strings.
   context.llmDraft = llmPlan?.params || null;
@@ -786,25 +786,101 @@ function confirmationTarget(action, context = {}) {
   return { recordType, recordId: String(record._id) };
 }
 
-function needsFollowUp(action, missingFields, context = {}) {
+/** German names for the fields an action can be missing. */
+const FIELD_LABELS = {
+  customer: 'den Kunden',
+  'customer name': 'den Kundennamen',
+  'company name': 'den Firmennamen',
+  'owner name': 'den Inhabernamen',
+  'UID number': 'die UID-Nummer',
+  'street address with postal code and city': 'die Adresse mit PLZ und Ort',
+  project: 'das Projekt',
+  'project name': 'den Projektnamen',
+  'project status': 'den Projektstatus',
+  'project manager': 'die Projektleitung',
+  'employee/technician': 'den Monteur',
+  'order/work order': 'den Auftrag',
+  order: 'den Auftrag',
+  task: 'die Aufgabe',
+  'service report': 'den Rapport',
+  assignment: 'den Einsatz',
+  'chat room': 'den Chat-Raum',
+  'scheduled date and time': 'Datum und Uhrzeit',
+  'new date and time': 'das neue Datum mit Uhrzeit',
+  'hours or start/end time': 'die Stundenzahl oder Start- und Endzeit',
+  'customer/site/asset': 'den Kunden, das Objekt oder die Anlage',
+  'line items or service description': 'die Positionen oder die Leistungsbeschreibung',
+  'new status or assignment': 'den neuen Status oder die Zuweisung',
+  'new status or details': 'den neuen Status oder die Angaben',
+  'new report content or status': 'den Rapportinhalt oder den Status',
+  action: 'die gewünschte Aktion',
+  permission: 'die nötige Berechtigung',
+  confirmation: 'Ihre Bestätigung',
+};
+
+/** Which candidate list belongs to which missing field. */
+const FIELD_CANDIDATE_KEY = {
+  customer: 'customers',
+  'customer name': 'customers',
+  project: 'projects',
+  'project name': 'projects',
+  'employee/technician': 'assignees',
+  'project manager': 'assignees',
+  'order/work order': 'orders',
+  order: 'orders',
+  task: 'tasks',
+  'service report': 'reports',
+  assignment: 'assignments',
+  'customer/site/asset': 'installations',
+};
+
+function fieldLabel(field) {
+  return FIELD_LABELS[field] || field;
+}
+
+/**
+ * Says plainly what is missing and, when the system already found possible
+ * matches, lists them numbered so the answer can be "1" or the name. The
+ * candidates were always in the payload — they just never reached the reader.
+ */
+function needsFollowUp(action, missingFields = [], context = {}) {
+  const candidates = summarizeCandidates(context);
+  const lines = [`Ich kann ${ACTION_LABELS[action] || 'das erledigen'}, dafür fehlt mir noch etwas.`];
+
+  const questions = [];
+  for (const field of missingFields) {
+    const options = candidates[FIELD_CANDIDATE_KEY[field]] || [];
+    if (options.length) {
+      lines.push('');
+      lines.push(`Welchen Treffer meinen Sie für ${fieldLabel(field)}?`);
+      options.forEach((option) => {
+        lines.push(`  ${option.index}. ${option.label}${option.subtitle ? ` — ${option.subtitle}` : ''}`);
+      });
+      questions.push(`Welchen Treffer meinen Sie für ${fieldLabel(field)}? Antworten Sie mit der Nummer oder dem Namen.`);
+    } else {
+      lines.push(`• Bitte ${fieldLabel(field)} angeben.`);
+      questions.push(`Bitte ${fieldLabel(field)} angeben.`);
+    }
+  }
+
   return {
     action,
     status: 'needs_follow_up',
-    message: `I can ${ACTION_LABELS[action] || 'do that'}, but I need more information first.`,
+    message: lines.join('\n'),
     missingFields,
-    followUpQuestions: missingFields.map((field) => `Which ${field} should I use?`),
+    followUpQuestions: questions,
     resolvedContext: summarizeContext(context),
-    candidates: summarizeCandidates(context),
+    candidates,
   };
 }
 
-async function resolveContext(input, previousFollowUp = null, requestContext = {}, action = null) {
+async function resolveContext(input, previousFollowUp = null, requestContext = {}, action = null, draft = null) {
   const objectId = firstObjectId(input);
   const requestResolved = await loadRequestResolvedContext(requestContext);
   const [userResult, customerResult, projectResult, orderResult, assignmentResult, installationResult, taskResult, reportResult] = await Promise.all([
-    findUser(input, previousFollowUp),
-    findCustomer(input, objectId, previousFollowUp),
-    findProject(input, objectId, previousFollowUp),
+    findUser(input, previousFollowUp, draft),
+    findCustomer(input, objectId, previousFollowUp, draft),
+    findProject(input, objectId, previousFollowUp, draft),
     findOrder(input, objectId, previousFollowUp),
     requestResolved.assignment ? { selected: null, candidates: [] } : findAssignment(input, objectId, previousFollowUp),
     findInstallation(input, objectId),
@@ -945,9 +1021,9 @@ async function loadPreviousReport(id) {
     .catch(() => null);
 }
 
-async function findUser(input, previousFollowUp) {
+async function findUser(input, previousFollowUp, draft = null) {
   const User = (await import('../../auth/user.model.js')).default;
-  const term = extractPersonName(input);
+  const term = draft?.assigneeName || extractPersonName(input);
   const previousCandidates = previousFollowUp?.candidates?.assignees || [];
   const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
   if (selectedPrevious?._id) {
@@ -962,7 +1038,7 @@ async function findUser(input, previousFollowUp) {
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
 }
 
-async function findCustomer(input, objectId, previousFollowUp) {
+async function findCustomer(input, objectId, previousFollowUp, draft = null) {
   const Customer = (await import('../../crm/customer.model.js')).default;
   const previousCandidates = previousFollowUp?.candidates?.customers || [];
   const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
@@ -974,7 +1050,7 @@ async function findCustomer(input, objectId, previousFollowUp) {
     const found = await Customer.findById(objectId).select('name ownerName customerNumber email phone mobile city uidNumber vatNumber').lean().catch(() => null);
     if (found) return { selected: found, candidates: [] };
   }
-  const candidates = await findCustomers(extractSearchTerm(input), 5);
+  const candidates = await findCustomers(draft?.customerName || extractSearchTerm(input), 5);
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
 }
 
@@ -987,7 +1063,7 @@ async function findCustomers(term, limit = 5) {
     .lean();
 }
 
-async function findProject(input, objectId, previousFollowUp) {
+async function findProject(input, objectId, previousFollowUp, draft = null) {
   const Project = (await import('../../pm/project.model.js')).default;
   const previousCandidates = previousFollowUp?.candidates?.projects || [];
   const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
@@ -999,7 +1075,7 @@ async function findProject(input, objectId, previousFollowUp) {
     const found = await Project.findById(objectId).select('name projectNumber status customerId customerName').lean().catch(() => null);
     if (found) return { selected: found, candidates: [] };
   }
-  const term = extractSearchTerm(input);
+  const term = draft?.projectName || extractSearchTerm(input);
   if (!term || term.length < 2) return { selected: null, candidates: [] };
   const candidates = await Project.find({ $text: { $search: term } }).select('name projectNumber status customerId customerName').limit(5).lean();
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };

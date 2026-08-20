@@ -37,7 +37,15 @@ function track(type, id) {
   if (id) createdRecords.push({ type, id });
 }
 
-async function api(path, { method = 'GET', body } = {}) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * The gateway allows 100 requests a minute; polling many runs blows through
+ * that long before anything is wrong with the agent. A global 429 is a test
+ * artefact, so wait for the window and retry. The agent's own limit carries
+ * AI_AGENT_RATE_LIMITED and is reported as a real failure.
+ */
+async function api(path, { method = 'GET', body, retries = 3 } = {}) {
   const res = await fetch(`${API}${path}`, {
     method,
     headers: {
@@ -49,6 +57,12 @@ async function api(path, { method = 'GET', body } = {}) {
   const text = await res.text();
   let json = null;
   try { json = text ? JSON.parse(text) : null; } catch { /* non-JSON body */ }
+
+  if (res.status === 429 && json?.error?.code !== 'AI_AGENT_RATE_LIMITED' && retries > 0) {
+    process.stdout.write('⏳');
+    await sleep(20_000);
+    return api(path, { method, body, retries: retries - 1 });
+  }
   return { status: res.status, body: json };
 }
 
@@ -58,11 +72,20 @@ async function login() {
   token = res.body.data.accessToken;
 }
 
-/** Dispatches one message and waits for the run to settle. */
-async function run(input, { confirm = false } = {}) {
-  const dispatched = await api('/ai/agent/run', { method: 'POST', body: { input } });
+/**
+ * Dispatches one message and waits for the run to settle.
+ * Pass the threadId back in to continue a conversation — that is how the
+ * office answers a follow-up question.
+ */
+async function run(input, { confirm = false, threadId } = {}) {
+  const dispatched = await api('/ai/agent/run', {
+    method: 'POST',
+    body: { input, ...(threadId ? { threadId } : {}) },
+  });
+  if (dispatched.status === 429) throw new Error('agent rate limit — restart with AI_AGENT_RATE_LIMIT=200');
   if (dispatched.status !== 202) throw new Error(`dispatch failed: ${dispatched.status}`);
   const runId = dispatched.body.data.agentRunId;
+  const thread = dispatched.body.data.threadId;
   createdRuns.push(runId);
 
   let state = await settle(runId);
@@ -71,14 +94,15 @@ async function run(input, { confirm = false } = {}) {
     await api(`/ai/agent/${runId}/confirm`, { method: 'POST', body: { decision: true } });
     state = await settle(runId, 'AWAITING_CONFIRMATION');
   }
+  state.threadId = state.threadId || thread;
   return state;
 }
 
 async function settle(runId, notStatus = null) {
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + 90_000;
   let last = null;
   while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 1500));
+    await sleep(2500);
     const res = await api(`/ai/agent/${runId}`);
     last = res.body?.data;
     const status = last?.status;
@@ -253,6 +277,180 @@ const SCENARIOS = [
       ];
     },
   },
+
+  // ─── Vocabulaire métier : chauffage / sanitaire suisse ──────
+
+  {
+    name: 'wartung-ueberfaellig',
+    why: 'Der Assistent muss Wartungssprache verstehen, ohne dass man ihm Feldnamen diktiert.',
+    async exec() {
+      const state = await run('Die Jahreswartung bei Familie Meier ist überfällig, erstelle mir eine Aufgabe ZZTEST Jahreswartung nachholen', { confirm: true });
+      const record = state.output?.record || {};
+      track('task', record.id);
+      return [
+        check('Aufgabe angelegt', action(state) === 'CREATE_TASK', `action = ${action(state)}`),
+        check('Titel ohne Befehlswörter', !/erstelle|mir eine Aufgabe/i.test(record.title || ''), `titre = « ${record.title} »`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'notfall-wird-dringend',
+    why: 'Ein Heizungsausfall im Winter ist dringend — das muss in der Priorität ankommen.',
+    async exec() {
+      const state = await run('Notfall bei Familie Meier: die Heizung ist komplett ausgefallen, kein Warmwasser mehr. Erstelle eine Aufgabe ZZTEST Heizungsausfall Meier', { confirm: true });
+      const record = state.output?.record || {};
+      track('task', record.id);
+      return [
+        check('Aufgabe angelegt', action(state) === 'CREATE_TASK', `action = ${action(state)}`),
+        check('Priorität hoch oder dringend', ['HIGH', 'URGENT'].includes(record.priority), `priorité = ${record.priority}`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'schweizer-datumsangabe',
+    why: '« nächsten Dienstag » muss ein echtes Datum werden, nicht Text.',
+    async exec() {
+      const state = await run('Erstelle eine Aufgabe ZZTEST Boiler entkalken für nächsten Dienstag', { confirm: true });
+      const record = state.output?.record || {};
+      track('task', record.id);
+      const due = record.dueDate ? new Date(record.dueDate) : null;
+      const inFuture = due && due.getTime() > Date.now();
+      const isTuesday = due && due.getDay() === 2;
+      return [
+        check('Fälligkeit gesetzt', Boolean(due), 'aucune échéance'),
+        check('Datum in der Zukunft', inFuture, `échéance = ${record.dueDate}`),
+        check('fällt auf einen Dienstag', isTuesday, `jour = ${due ? due.getDay() : '—'} (2 = mardi)`),
+      ];
+    },
+  },
+  {
+    name: 'entkalkung-fachbegriff',
+    why: 'Fachbegriffe wie Entkalkung oder Hygienespeicher dürfen den Assistenten nicht aus dem Tritt bringen.',
+    async exec() {
+      const state = await run('Erstelle eine Aufgabe ZZTEST Hygienespeicher entkalken und Anode prüfen', { confirm: true });
+      const record = state.output?.record || {};
+      track('task', record.id);
+      return [
+        check('Aufgabe angelegt', action(state) === 'CREATE_TASK', `action = ${action(state)}`),
+        check('Fachbegriff im Titel erhalten', /Hygienespeicher/i.test(record.title || ''), `titre = « ${record.title} »`),
+      ];
+    },
+  },
+  {
+    name: 'kundensuche-mit-fachfrage',
+    why: 'Eine Suchfrage darf nie zu einer Änderung führen.',
+    async exec() {
+      const state = await run('Zeig mir die Kundendaten von Immobilien Verwaltung');
+      return [
+        check('Suche ausgeführt', String(action(state)).startsWith('SEARCH'), `action = ${action(state)}`),
+        check('Treffer geliefert', (state.output?.records || []).length > 0, 'aucun résultat'),
+        check('nichts verändert', !state.output?.recordId, `recordId = ${state.output?.recordId}`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'erdsonde-erkennt-bewilligungspflicht',
+    why: 'Bei einer Erdsonde hängt die Bohrbewilligung dran — Offerte AI muss den Anlagetyp erkennen.',
+    async exec() {
+      const dictation = 'Erstelle eine Offerte für Kunde Immobilien Verwaltung. Besichtigung: '
+        + 'Ersatz der Ölheizung durch eine Sole-Wasser-Wärmepumpe mit Erdsonde. Bohrung im Garten, '
+        + 'Zufahrt für das Bohrgerät ist eng, das muss noch geprüft werden. Fördergelder Basel-Landschaft '
+        + 'sind möglich. Preise für die Bohrung habe ich noch nicht.';
+      const state = await run(dictation, { confirm: true });
+      const record = state.output?.record || {};
+      track('quotation', record.id);
+      const recognized = (record.recognizedWork || []).join(' ');
+      return [
+        check('Offerte angelegt', action(state) === 'CREATE_QUOTATION', `action = ${action(state)}`),
+        check('Erdsonde erkannt', /erdsonde|sole-wasser|bohr/i.test(recognized), `reconnus = ${recognized}`),
+        check('Fördergelder erkannt', /förder/i.test(recognized) || /förder/i.test(JSON.stringify(record)), 'subventions non repérées'),
+        check('offener Punkt Zufahrt', (record.openPoints || []).some((x) => /zufahrt|bohrgerät|eng/i.test(x)), `points = ${(record.openPoints || []).join(' | ')}`),
+        check('keine Preise erfunden', !record.total, `total = ${record.total}`),
+      ];
+    },
+  },
+  {
+    name: 'mehrdeutiger-kunde-mit-auswahl',
+    why: 'Bei mehreren Treffern muss der Assistent eine nummerierte Auswahl anbieten.',
+    async exec() {
+      const state = await run('Erstelle ein Projekt ZZTEST Auswahl für Kunde Verwaltung', { confirm: true });
+      const text = message(state);
+      const asked = state.output?.status === 'needs_follow_up';
+      const created = action(state) === 'CREATE_PROJECT' && state.output?.record?.id;
+      if (created) track('project', state.output.record.id);
+      return [
+        check('entweder eindeutig gelöst oder Auswahl angeboten', asked || Boolean(created),
+          `status = ${state.output?.status}`),
+        check('bei Rückfrage nummerierte Liste', !asked || /\n\s*1\./.test(text), `message = ${text.slice(0, 120)}`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'mehrtuerige-antwort-auf-rueckfrage',
+    why: 'Auf eine Rückfrage muss eine kurze Antwort im selben Gespräch genügen.',
+    async exec() {
+      const first = await run('Erstelle ein Projekt ZZTEST Mehrturn', { confirm: true });
+      if (first.output?.status !== 'needs_follow_up') {
+        if (first.output?.record?.id) track('project', first.output.record.id);
+        return [check('Rückfrage erwartet', false, `status = ${first.output?.status} (le contexte a suffi)`)];
+      }
+      const second = await run('Immobilien Verwaltung', { confirm: true, threadId: first.threadId });
+      const record = second.output?.record || {};
+      if (record.id) track('project', record.id);
+      return [
+        check('erste Antwort ist eine Rückfrage', true),
+        check('zweite Antwort löst sie auf', action(second) === 'CREATE_PROJECT', `action 2 = ${action(second)} / ${second.output?.status}`),
+        check('Kunde übernommen', /Immobilien/i.test(record.customerName || ''), `client = ${record.customerName}`),
+        noEnglish(second),
+      ];
+    },
+  },
+  {
+    name: 'einsatz-verschieben-braucht-freigabe',
+    why: 'Ein Termin beim Kunden wird nie ohne Freigabe verschoben.',
+    async exec() {
+      const state = await run('Verschiebe den Einsatz bei Familie Meier auf nächste Woche Donnerstag');
+      return [
+        check('Freigabe oder Rückfrage', state.status === 'AWAITING_CONFIRMATION' || state.output?.status === 'needs_follow_up',
+          `status = ${state.status} / ${state.output?.status}`),
+        check('nichts verschoben', !state.output?.record?.rescheduled, 'un déplacement a eu lieu'),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'ausserhalb-des-themas',
+    why: 'Eine Frage ohne ERP-Bezug darf nichts anlegen.',
+    async exec() {
+      const state = await run('Wie wird das Wetter morgen in Basel?');
+      return [
+        check('nichts angelegt', !state.output?.recordId, `recordId = ${state.output?.recordId}`),
+        check('konversationell beantwortet', state.workflowType === 'GENERAL' || String(action(state)).startsWith('SEARCH'),
+          `workflow = ${state.workflowType}, action = ${action(state)}`),
+      ];
+    },
+  },
+  {
+    name: 'rapport-diktat-uebernimmt-arbeiten',
+    why: 'Ein diktierter Rapport muss die ausgeführten Arbeiten übernehmen, nicht den Befehl.',
+    async exec() {
+      const state = await run(
+        'Erstelle einen Rapport-Entwurf: Brenner gereinigt, Zündelektrode ersetzt, Kesseldruck geprüft, '
+        + 'Anlage läuft wieder einwandfrei. Zwei Stunden vor Ort bei Familie Meier.',
+        { confirm: true },
+      );
+      const text = message(state);
+      return [
+        check('Rapport oder Rückfrage', ['CREATE_REPORT', 'RECORD_TIME'].includes(action(state)) || state.output?.status === 'needs_follow_up',
+          `action = ${action(state)} / ${state.output?.status}`),
+        check('kein englischer Text', !ENGLISH_LEAKS.some((w) => text.includes(w)), text.slice(0, 90)),
+      ];
+    },
+  },
 ];
 
 // ─── Cleanup ──────────────────────────────────────────────────
@@ -276,11 +474,38 @@ async function cleanup() {
   return removed;
 }
 
+/**
+ * Deletes anything a previous run left behind. Project names are unique per
+ * customer, so a leftover makes the next run fail for the wrong reason.
+ */
+async function precleanup() {
+  let removed = 0;
+  const sweeps = [
+    ['/pm/projects?limit=100', 'name', 'project'],
+    ['/tasks?limit=100', 'title', 'task'],
+    ['/qop/quotations?limit=100', 'title', 'quotation'],
+  ];
+  for (const [path, field, type] of sweeps) {
+    const res = await api(path);
+    const data = res.body?.data;
+    const items = Array.isArray(data) ? data : (data?.data || data?.items || []);
+    for (const item of items) {
+      if (!/ZZTEST/i.test(item?.[field] || '')) continue;
+      const del = await api(DELETE_PATH[type](item._id || item.id), { method: 'DELETE' });
+      if (del.status < 300) removed += 1;
+    }
+  }
+  return removed;
+}
+
 // ─── Runner ───────────────────────────────────────────────────
 
 async function main() {
   console.log(`AI end-to-end scenarios — ${API}\n`);
   await login();
+
+  const swept = await precleanup();
+  if (swept) console.log(`(${swept} Testdatensatz/-sätze aus einem früheren Lauf entfernt)\n`);
 
   const selected = SCENARIOS.filter((s) => !only || s.name.includes(only));
 

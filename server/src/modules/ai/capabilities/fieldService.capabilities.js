@@ -1070,8 +1070,12 @@ function isListAllIntent(input) {
 // The LLM planner's clean parameters win over keyword extraction when present.
 function searchInputs(input, context, helpers) {
   const draft = context?.llmDraft || {};
+  const raw = draft.searchTerm || helpers.extractSearchTerm(input);
+  // "Kundendaten von Immobilien Verwaltung" must find the customer; the search
+  // requires every word to match, so the filler has to go first.
+  const cleaned = helpers.stripSearchNoise ? helpers.stripSearchNoise(raw) : raw;
   return {
-    term: draft.searchTerm || helpers.extractSearchTerm(input),
+    term: cleaned && cleaned.length >= 2 ? cleaned : raw,
     listAll: draft.listAll === true || isListAllIntent(input),
   };
 }

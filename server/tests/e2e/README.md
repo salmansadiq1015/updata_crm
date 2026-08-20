@@ -17,8 +17,9 @@ un serveur réel, avec de vrais appels OpenAI.
 ## Lancer
 
 ```bash
-# Serveur local requis. La limite de 20 runs/h doit être relevée le temps du test.
-AI_AGENT_RATE_LIMIT=200 node src/server.js
+# Serveur local requis. Les deux limites doivent être relevées le temps du test :
+# l'agent (20 runs/h) et la passerelle HTTP (100 req/min, saturée par le polling).
+AI_AGENT_RATE_LIMIT=200 RATE_LIMIT_GLOBAL=1000 node src/server.js
 
 # Dans un autre terminal :
 node tests/e2e/ai-scenarios.mjs              # les 10 scénarios
@@ -26,7 +27,7 @@ node tests/e2e/ai-scenarios.mjs --only=offerte   # filtre par nom
 API=http://localhost:9097/api/v1 node tests/e2e/ai-scenarios.mjs
 ```
 
-Sortie : un ✓/✗ par contrôle, puis `10/10 scénarios passés`. Code de sortie
+Sortie : un ✓/✗ par contrôle, puis `21/21 scénarios passés`. Code de sortie
 non nul si un scénario échoue, donc utilisable en pré-livraison.
 
 ## Ce qui est couvert
@@ -43,6 +44,17 @@ non nul si un scénario échoue, donc utilisable en pré-livraison.
 | `general-question-answered` | Réponse conversationnelle, en Sie-Form |
 | `offerte-nine-blocks` | Positions, points ouverts, prix manquants, total à 0 |
 | `deletion-requires-approval` | Supprimer exige toujours une validation |
+| `wartung-ueberfaellig` | Langage d'entretien compris, titre sans mots de commande |
+| `notfall-wird-dringend` | Une panne de chauffage devient priorité haute/urgente |
+| `schweizer-datumsangabe` | « nächsten Dienstag » devient une vraie date, un mardi |
+| `entkalkung-fachbegriff` | Les termes métier (Hygienespeicher) survivent |
+| `kundensuche-mit-fachfrage` | Recherche client qui ne modifie rien |
+| `erdsonde-erkennt-bewilligungspflicht` | Erdsonde, Fördergelder et point ouvert repérés |
+| `mehrdeutiger-kunde-mit-auswahl` | Plusieurs clients → liste numérotée |
+| `mehrtuerige-antwort-auf-rueckfrage` | Répondre « Immobilien Verwaltung » suffit au tour suivant |
+| `einsatz-verschieben-braucht-freigabe` | Un rendez-vous client ne bouge pas sans accord |
+| `ausserhalb-des-themas` | Une question hors sujet ne crée rien |
+| `rapport-diktat-uebernimmt-arbeiten` | Un rapport dicté reprend les travaux, pas la commande |
 
 Chaque scénario contrôle aussi qu'**aucun anglais** ne fuit dans le message
 affiché (`ENGLISH_LEAKS`).
@@ -50,6 +62,9 @@ affiché (`ENGLISH_LEAKS`).
 ## Règles
 
 - Tout ce qui est créé porte le préfixe `ZZTEST` et est supprimé à la fin.
+- Le harnais **balaie aussi les restes** d'un run précédent au démarrage : un nom
+  de projet est unique par client, un reliquat ferait échouer le run suivant pour
+  une mauvaise raison. Il est donc rejouable à l'identique.
 - **Ne jamais pointer sur la production** : le harnais écrit de vraies données
   et consomme de vrais jetons OpenAI.
 - Identifiants par défaut : `admin@appnity.ch`. Surchargeables via

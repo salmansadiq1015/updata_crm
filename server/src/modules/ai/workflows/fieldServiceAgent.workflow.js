@@ -185,7 +185,7 @@ async function executeAction(state) {
       output: {
         action,
         status: 'needs_follow_up',
-        message: `I could not ${ACTION_LABELS[action] || 'complete that action'} yet.`,
+        message: `Ich konnte ${ACTION_LABELS[action] || 'das noch nicht erledigen'} noch nicht abschliessen.`,
         followUpQuestions: [err.message],
         missingFields: [],
         originalInput: previousFollowUp?.originalInput || input,
@@ -1055,12 +1055,28 @@ async function findCustomer(input, objectId, previousFollowUp, draft = null) {
 }
 
 async function findCustomers(term, limit = 5) {
-  const Customer = (await import('../../crm/customer.model.js')).default;
   if (!term || term.length < 2) return [];
-  return Customer.find({ $text: { $search: term } })
-    .select('name ownerName customerNumber email phone mobile city uidNumber vatNumber')
-    .limit(limit)
-    .lean();
+  const customerRepository = (await import('../../crm/customer.repository.js')).default;
+
+  // The CRM search is accent-safe and matches partial words, unlike a bare
+  // $text query; it requires every word to match, so a term still carrying
+  // filler ("Kundendaten von Immobilien Verwaltung") finds nothing. Drop the
+  // filler and try again rather than telling the user there is no such client.
+  let results = await customerRepository.textSearch(term, limit).catch(() => []);
+  if (results.length) return results;
+
+  const stripped = stripSearchNoise(term);
+  if (stripped && stripped !== term) {
+    results = await customerRepository.textSearch(stripped, limit).catch(() => []);
+    if (results.length) return results;
+  }
+
+  // Last resort: the longest word, which is almost always the actual name.
+  const longest = (stripped || term).split(/\s+/).sort((a, b) => b.length - a.length)[0];
+  if (longest && longest.length >= 4 && longest !== stripped) {
+    return customerRepository.textSearch(longest, limit).catch(() => []);
+  }
+  return [];
 }
 
 async function findProject(input, objectId, previousFollowUp, draft = null) {
@@ -1270,7 +1286,25 @@ const fieldServiceCapabilityHelpers = {
   extractDurationHours,
   objectIdValue,
   extractSearchTerm,
+  stripSearchNoise,
 };
+
+const SEARCH_NOISE = new Set([
+  'kunde', 'kunden', 'kundendaten', 'kundin', 'firma', 'herr', 'frau', 'familie',
+  'von', 'vom', 'der', 'die', 'das', 'den', 'dem', 'des', 'für', 'fuer', 'mit',
+  'bei', 'zum', 'zur', 'einen', 'eine', 'einem', 'einer', 'ein', 'alle', 'mir',
+  'zeig', 'zeige', 'suche', 'such', 'finde', 'zeigen', 'daten', 'infos',
+  'projekt', 'auftrag', 'offerte', 'rechnung', 'aufgabe', 'rapport',
+]);
+
+/** Removes command and filler words so what is left is the actual name. */
+function stripSearchNoise(term) {
+  return String(term || '')
+    .split(/\s+/)
+    .filter((word) => word && !SEARCH_NOISE.has(word.toLowerCase().replace(/[.,:;!?]/g, '')))
+    .join(' ')
+    .trim();
+}
 
 function escapeRegex(value) {
   return `${value}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

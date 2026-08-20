@@ -23,7 +23,10 @@ import { cn } from '@/lib/utils';
 import {
   Plus, Pencil, PowerOff, Wrench, ArrowRight, Calendar, Zap, Hash, Loader2,
 } from 'lucide-react';
-import { INSTALLATION_TYPE_META, FUEL_TYPE_META } from '@/modules/crm/constants/crm-constants';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DotLabel } from '@/shared/components/filter-dot';
+import { INSTALLATION_TYPE_META, FUEL_TYPE_META, INSTALLATION_STATUS_META } from '@/modules/crm/constants/crm-constants';
+import { InstallationStatusBadge } from './installation-status-badge';
 
 export function InstallationsPanel({ siteId, customerId }) {
   const { t } = useLanguage();
@@ -36,6 +39,7 @@ export function InstallationsPanel({ siteId, customerId }) {
   const [editInstallation, setEditInstallation] = useState(null);
   const [decommTarget, setDecommTarget] = useState(null);
   const [decommReason, setDecommReason] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const { data: installations = [], isLoading } = useQuery({
     queryKey: queryKeys.crm.installations.bySite(siteId),
@@ -43,7 +47,9 @@ export function InstallationsPanel({ siteId, customerId }) {
     enabled: !!siteId,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: queryKeys.crm.installations.bySite(siteId) });
+  // Prefix invalidation: the object overview and the panel cache the same list
+  // under different keys, and both must show a decommissioned component at once.
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['crm', 'installations'] });
 
   const createMut = useMutation({
     mutationFn: (data) => installationService.createForSite(siteId, data),
@@ -59,11 +65,20 @@ export function InstallationsPanel({ siteId, customerId }) {
     mutationFn: ({ id, reason }) => installationService.decommission(id, reason),
     onSuccess: () => {
       invalidate();
-      showSuccess(t('crm.installations.decommissionedToast', 'Komponente ausser Betrieb'));
+      showSuccess(t('crm.installations.decommissionedToast', 'Komponente stillgelegt'));
       setDecommTarget(null);
       setDecommReason('');
     },
-    onError: (err) => showError(err.message),
+    onError: (err) => {
+      if (err?.code === 'INSTALLATION_ALREADY_DECOMMISSIONED') {
+        // The list was showing a stale status — refresh it so the badge catches up.
+        invalidate();
+        setDecommTarget(null);
+        showError(t('crm.installations.alreadyDecommissioned', 'Diese Komponente ist bereits stillgelegt.'));
+        return;
+      }
+      showError(err);
+    },
   });
 
   const handleSubmit = async (data) => {
@@ -71,6 +86,12 @@ export function InstallationsPanel({ siteId, customerId }) {
     else await createMut.mutateAsync(data);
     setEditInstallation(null);
   };
+
+  // Components of one object are few, so the status filter runs on the list we
+  // already have instead of round-tripping to the server.
+  const visible = statusFilter === 'all'
+    ? installations
+    : installations.filter((i) => (i.status || 'active') === statusFilter);
 
   if (isLoading) return <InstallationsSkeleton />;
 
@@ -81,20 +102,44 @@ export function InstallationsPanel({ siteId, customerId }) {
           <div className="flex items-center gap-2">
             <Wrench className="h-4 w-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold">{t('crm.installations.title', 'Komponenten')}</h3>
-            <span className="text-xs text-muted-foreground">({installations.length})</span>
+            <span className="text-xs text-muted-foreground">
+              ({statusFilter === 'all' ? installations.length : `${visible.length}/${installations.length}`})
+            </span>
           </div>
-          <PermissionGate permission="crm:write">
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => { setEditInstallation(null); setFormOpen(true); }}>
-              <Plus className="h-3.5 w-3.5" /> {t('crm.installations.newInstallation', 'Neue Komponente')}
-            </Button>
-          </PermissionGate>
+          <div className="flex items-center gap-2">
+            {installations.length > 0 && (
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className={cn('h-8 w-44 text-xs', statusFilter !== 'all' && 'border-primary/40')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all"><DotLabel>{t('crm.installations.allStatus', 'Alle Status')}</DotLabel></SelectItem>
+                  {Object.entries(INSTALLATION_STATUS_META).map(([key, meta]) => (
+                    <SelectItem key={key} value={key}>
+                      <DotLabel tone={meta.tone}>{t(`crm.installations.status.${key}`, meta.label)}</DotLabel>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <PermissionGate permission="crm:write">
+              <Button size="sm" className="h-8 gap-1.5" onClick={() => { setEditInstallation(null); setFormOpen(true); }}>
+                <Plus className="h-3.5 w-3.5" /> {t('crm.installations.newInstallation', 'Neue Komponente')}
+              </Button>
+            </PermissionGate>
+          </div>
         </div>
 
         {installations.length === 0 ? (
           <EmptyState title={t('crm.installations.empty', 'Keine Komponenten')} description={t('crm.installations.emptyDesc', 'Fügen Sie Heizkessel, Wärmepumpen, etc. hinzu.')} />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            title={t('crm.installations.emptyFiltered', 'Keine Komponenten mit diesem Status')}
+            description={t('crm.installations.emptyFilteredDesc', 'Status-Filter anpassen, um weitere Komponenten zu sehen.')}
+          />
         ) : (
           <div className="grid gap-2 md:grid-cols-2">
-            {installations.map((i) => (
+            {visible.map((i) => (
               <InstallationCard
                 key={i._id}
                 installation={i}
@@ -122,11 +167,11 @@ export function InstallationsPanel({ siteId, customerId }) {
       <Dialog open={!!decommTarget} onOpenChange={(v) => !v && setDecommTarget(null)}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>{t('crm.installations.decommissionTitle', 'Komponente ausser Betrieb nehmen')}</DialogTitle>
+            <DialogTitle>{t('crm.installations.decommissionTitle', 'Komponente stilllegen')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
             <p className="text-sm text-muted-foreground">
-              {t('crm.installations.decommissionDescLong', 'Die Komponente wird als ausser Betrieb markiert. Dieser Vorgang kann nicht direkt rückgängig gemacht werden.')}
+              {t('crm.installations.decommissionDescLong', 'Die Komponente wird als stillgelegt markiert. Dieser Vorgang kann nicht direkt rückgängig gemacht werden.')}
             </p>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">{t('crm.installations.decommissionReason', 'Grund')}*</Label>
@@ -148,7 +193,7 @@ export function InstallationsPanel({ siteId, customerId }) {
                 className="gap-2"
               >
                 {decommMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {t('crm.installations.decommissionAction', 'Ausser Betrieb')}
+                {t('crm.installations.decommissionAction', 'Stilllegen')}
               </Button>
             </div>
           </div>
@@ -192,11 +237,7 @@ function InstallationCard({ installation: i, canWrite, canDelete, onEdit, onDeco
             {fuelMeta && (
               <span className={cn('text-[10px] font-medium', fuelMeta.color)}>{t(`crm.installations.fuel.${i.fuelType}`, fuelMeta.label)}</span>
             )}
-            {!isActive && (
-              <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">
-                {t('crm.installations.decommissioned', 'Ausser Betrieb')}
-              </span>
-            )}
+            <InstallationStatusBadge status={i.status} />
           </div>
 
           {(i.manufacturer || i.model) && (
@@ -230,7 +271,7 @@ function InstallationCard({ installation: i, canWrite, canDelete, onEdit, onDeco
             <IconActionButton label={t('common.edit', 'Edit')} icon={Pencil} onClick={onEdit} />
           )}
           {canDelete && isActive && (
-            <IconActionButton label={t('crm.installations.decommission', 'Decommission')} icon={PowerOff} destructive onClick={onDecommission} />
+            <IconActionButton label={t('crm.installations.decommissionAction', 'Stilllegen')} icon={PowerOff} destructive onClick={onDecommission} />
           )}
         </div>
       </div>

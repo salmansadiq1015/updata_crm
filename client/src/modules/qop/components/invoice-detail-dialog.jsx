@@ -17,6 +17,7 @@ import { DocumentHistoryTimeline } from './document-history-timeline';
 import { RecordPaymentDialog } from './record-payment-dialog';
 import { invoiceService } from '../services/invoice-service';
 import { showError } from '@/lib/toast';
+import { downloadFromUrl } from '@/lib/api/download';
 
 function fmt(n) {
   return new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n ?? 0);
@@ -120,7 +121,8 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
     try {
       const res = await invoiceService.generateDocument(invoiceId);
       const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
-      if (url) window.open(url, '_blank');
+      const fileName = res?.data?.fileName ?? res?.data?.filename ?? 'invoice.pdf';
+      if (url) await downloadFromUrl(url, fileName);
       else showError(t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
     } catch (err) {
       showError(err?.message || t('qop.invoices.pdfFailed', 'Das PDF konnte nicht erstellt werden.'));
@@ -174,7 +176,7 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="overview">{t('qop.invoice.tabOverview', 'Übersicht')}</TabsTrigger>
                 <TabsTrigger value="payments">{t('qop.invoice.tabPayments', 'Zahlungen')}</TabsTrigger>
-                <TabsTrigger value="history">{t('qop.invoice.tabHistory', 'Verlauf')}</TabsTrigger>
+                <TabsTrigger value="history">{t('common.activity', 'Aktivität')}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="mt-4">
@@ -186,6 +188,11 @@ export function InvoiceDetailDialog({ open, onClose, invoiceId }) {
                     [t('qop.invoice.fieldDueDate', 'Fällig am'), fmtDate(invoice?.dueDate, language)],
                     [t('qop.invoice.fieldAmount', 'Betrag'), <AmountDisplay key="a" amount={invoice?.grandTotalRounded} currency={invoice?.currency} className="font-semibold" />],
                     [t('qop.invoice.fieldAmountDue', 'Offener Betrag'), <AmountDisplay key="d" amount={invoice?.amountDue} currency={invoice?.currency} />],
+                    // Rapport → Rechnung: show where the billed lines came from.
+                    ...(invoice?.sourceWorkReportId ? [[
+                      t('qop.invoice.fieldSourceReport', 'Quelle'),
+                      t('qop.invoice.sourceReport', 'Arbeitsrapport'),
+                    ]] : []),
                   ].map(([label, value], i) => (
                     <div key={i} className="flex flex-col gap-0.5">
                       <span className="text-xs text-muted-foreground">{label}</span>

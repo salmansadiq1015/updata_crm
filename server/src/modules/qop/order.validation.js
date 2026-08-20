@@ -18,8 +18,11 @@ const lineItemSchema = Joi.object({
   image: Joi.object({
     fileId: objectId.allow(null, ''),
     url: Joi.string().max(2000).allow('', null),
+    size: Joi.string().valid('small', 'medium', 'large'),
   }).allow(null),
 });
+
+const BILLING_ADDRESS_SOURCES = ['customer', 'site_billing', 'site_ownership', 'site_management'];
 
 export const createOrderSchema = {
   body: Joi.object({
@@ -28,6 +31,8 @@ export const createOrderSchema = {
     contactId: objectId.allow(null),
     projectId: objectId.allow(null),
     departmentId: objectId.allow(null),
+    siteId: objectId.allow(null),
+    billingAddressSource: Joi.string().valid(...BILLING_ADDRESS_SOURCES),
     language: Joi.string().valid('de', 'fr', 'it', 'en').default('de'),
     title: Joi.string().trim().max(500).allow('', null),
     lineItems: Joi.array().items(lineItemSchema).default([]),
@@ -51,6 +56,8 @@ export const updateOrderSchema = {
     contactId: objectId.allow(null),
     projectId: objectId.allow(null),
     departmentId: objectId.allow(null),
+    siteId: objectId.allow(null),
+    billingAddressSource: Joi.string().valid(...BILLING_ADDRESS_SOURCES),
     language: Joi.string().valid('de', 'fr', 'it', 'en'),
     title: Joi.string().trim().max(500).allow('', null),
     lineItems: Joi.array().items(lineItemSchema),
@@ -64,6 +71,16 @@ export const updateOrderSchema = {
     specialInstructions: Joi.string().max(5000).allow('', null),
     version: Joi.number().integer().required(),
   }).min(1),
+};
+
+export const createProjectFromOrderSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    name: Joi.string().trim().max(255).allow('', null),
+    projectType: Joi.string().valid('NEW_INSTALLATION', 'RENOVATION', 'MAINTENANCE', 'SERVICE_CONTRACT', 'OTHER'),
+    projectManagerId: objectId.allow(null),
+    description: Joi.string().max(5000).allow('', null),
+  }),
 };
 
 export const listOrdersSchema = {

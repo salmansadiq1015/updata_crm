@@ -27,6 +27,10 @@ const taskSchema = new mongoose.Schema(
     projectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', default: null },
     orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
     meetingId: { type: mongoose.Schema.Types.ObjectId, ref: 'Meeting', default: null },
+    // Object (Objekt/Site) the task belongs to. Lets an object list every task
+    // that concerns it, grouped by department. Independent of projectId: a task
+    // can hang off the object directly or reach it through one of its projects.
+    siteId: { type: mongoose.Schema.Types.ObjectId, ref: 'Site', default: null, index: true },
     // Department (Abteilung/Sparte) the task belongs to — the task board groups by it.
     departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null, index: true },
     // Origin (Herkunft) for display: type + optional linked record + human label.
@@ -74,6 +78,7 @@ taskSchema.index({ dueDate: 1 });
 taskSchema.index({ projectId: 1 }, { sparse: true });
 taskSchema.index({ orderId: 1 }, { sparse: true });
 taskSchema.index({ meetingId: 1 }, { sparse: true });
+taskSchema.index({ siteId: 1, status: 1, isDeleted: 1 }, { sparse: true });
 taskSchema.index({ parentTaskId: 1 }, { sparse: true });
 taskSchema.index({ updatedAt: 1 }); // For sync queries
 taskSchema.index({ listId: 1, status: 1, sortOrder: 1, isDeleted: 1 });

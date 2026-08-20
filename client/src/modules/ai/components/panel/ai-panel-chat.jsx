@@ -225,7 +225,9 @@ export function AiPanelChat({ onClose }) {
     latestRun?.status === AGENT_STATUSES.PENDING ||
     latestRun?.status === AGENT_STATUSES.RUNNING;
 
-  const handleSuggestion = useCallback((text) => dispatch(text), [dispatch]);
+  // Same rule as the full page: a suggestion fills the field, it never sends.
+  const [prefill, setPrefill] = useState(null);
+  const handleSuggestion = useCallback((text) => setPrefill({ text, at: Date.now() }), []);
 
   const handleVoiceStart = useCallback(async () => {
     try {
@@ -397,6 +399,7 @@ export function AiPanelChat({ onClose }) {
       </div>
 
       <AiChatInput
+        prefill={prefill}
         onSubmit={dispatch}
         isDispatching={chat.isDispatching}
         recorder={chat.recorder}

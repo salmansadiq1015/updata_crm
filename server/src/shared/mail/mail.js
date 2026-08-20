@@ -7,6 +7,9 @@ import fs from "fs";
 
 dotenv.config();
 
+import wellKnown from 'nodemailer/lib/well-known/index.js';
+import logger from '../logger/index.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const TRANSPORTER_TTL_MS = 5 * 60 * 1000;
@@ -32,13 +35,29 @@ const createTransporter = () => {
     tls: { rejectUnauthorized: false },
   };
 
-  // If a service (e.g. "gmail") is set, it auto-configures host/port
-  if (process.env.SMTP_SERVICE) {
-    config.service = process.env.SMTP_SERVICE;
+  // A service name (e.g. "gmail") auto-configures host/port — but only for the
+  // providers nodemailer knows. An unknown name (a hoster like "hostpoint")
+  // used to silently win over SMTP_HOST and leave nodemailer falling back to
+  // localhost:587, so an explicit host always takes precedence and an
+  // unrecognised service is reported instead of quietly ignored.
+  const service = process.env.SMTP_SERVICE?.trim();
+  const knownService = service ? Boolean(wellKnown(service)) : false;
+
+  if (service && !knownService) {
+    logger.warn('SMTP_SERVICE is not a provider nodemailer knows — using SMTP_HOST/SMTP_PORT instead', {
+      module: 'mail', service,
+    });
+  }
+
+  if (knownService && !process.env.SMTP_HOST) {
+    config.service = service;
   } else {
     config.host = process.env.SMTP_HOST;
     config.port = parseInt(process.env.SMTP_PORT, 10) || 587;
     config.secure = config.port === 465;
+    if (!config.host) {
+      throw new Error('SMTP configuration is missing: set SMTP_HOST (or a service nodemailer supports).');
+    }
   }
 
   return nodemailer.createTransport(config);

@@ -44,54 +44,62 @@ import { UiPreviewBanner } from '@/shared/components/ui-preview-banner';
 
 // Nav model. A section item is either a leaf (link) or a group (parent w/ children).
 const navSectionDefs = [
+  // Navigation follows the business process: the cross-cutting tools first,
+  // then a chantier from customer enquiry to closing. Client feedback: new
+  // staff should find their way by following the work, not the module names.
   {
     titleKey: 'sidebar.mainMenu',
     items: [
       { type: 'leaf', labelKey: 'sidebar.dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { type: 'leaf', labelKey: 'sidebar.fieldOpsChat', href: '/field-ops/chat', icon: MessageSquare, permission: 'mobile:read' },
+      { type: 'leaf', labelKey: 'deploy.tabs.calendar', href: '/scheduling/calendar', icon: CalendarDays, permission: 'scheduling:read' },
+      { type: 'leaf', labelKey: 'sidebar.tasks', href: '/tasks', icon: CheckSquare, permission: 'tasks:read' },
+      { type: 'leaf', labelKey: 'sidebar.notifications', href: '/notifications', icon: Bell, permission: 'notifications:feed' },
+      { type: 'leaf', labelKey: 'sidebar.ai', href: '/ai', icon: Sparkles },
       { type: 'leaf', labelKey: 'sidebar.employmentManagement', href: '/settings/users', icon: Users, permission: 'users:read' },
     ],
   },
   {
     titleKey: 'sidebar.business',
     items: [
-      {
-        type: 'group', key: 'crm', labelKey: 'sidebar.crm', icon: Contact,
-        basePath: '/crm', permission: 'crm:read',
-        children: [
-          { type: 'leaf', labelKey: 'sidebar.customers', href: '/crm/customers', icon: Contact, permission: 'crm:read' },
-          { type: 'leaf', labelKey: 'sidebar.sites', href: '/crm/sites', icon: MapPinned, permission: 'crm:read' },
-          { type: 'leaf', labelKey: 'sidebar.assetMaintenance', href: '/crm/asset-maintenance', icon: Wrench, permission: 'crm:read' },
-          { type: 'leaf', labelKey: 'sidebar.procurement', href: '/crm/spare-parts/procurement', icon: ShoppingCart, permission: 'crm:read' },
-          { type: 'leaf', labelKey: 'sidebar.addressBook', href: '/crm/address-book', icon: BookOpen, permission: 'crm:read' },
-          { type: 'leaf', labelKey: 'sidebar.newsletters', href: '/crm/newsletters', icon: MessageSquare, permission: 'crm:read' },
-        ],
-      },
+      // Object first, then customer: the client anchors a job on the building.
+      { type: 'leaf', labelKey: 'sidebar.sites', href: '/crm/sites', icon: MapPinned, permission: 'crm:read' },
+      { type: 'leaf', labelKey: 'sidebar.customers', href: '/crm/customers', icon: Contact, permission: 'crm:read' },
+      { type: 'leaf', labelKey: 'sidebar.addressBook', href: '/crm/address-book', icon: BookOpen, permission: 'crm:read' },
+      { type: 'leaf', labelKey: 'sidebar.quotes', href: '/quotes', icon: FileText, permission: 'quotations:read' },
       { type: 'leaf', labelKey: 'sidebar.projects', href: '/projects', icon: FolderKanban, permission: 'projects:read' },
+      { type: 'leaf', labelKey: 'sidebar.procurement', href: '/crm/spare-parts/procurement', icon: ShoppingCart, permission: 'crm:read' },
       {
         type: 'group', key: 'scheduling', labelKey: 'sidebar.scheduling', icon: CalendarClock,
         basePath: '/scheduling', permission: 'scheduling:read',
         children: [
-          { type: 'leaf', labelKey: 'deploy.tabs.calendar', href: '/scheduling/calendar', icon: CalendarDays, permission: 'scheduling:read' },
           { type: 'leaf', labelKey: 'deploy.tabs.meetings', href: '/scheduling/meetings', icon: Video, permission: PERMISSIONS.MEETINGS_READ },
           { type: 'leaf', labelKey: 'deploy.tabs.dashboard', href: '/scheduling/dashboard', icon: LayoutDashboard, permission: 'scheduling:read' },
           { type: 'leaf', labelKey: 'deploy.tabs.coarse', href: '/scheduling/coarse', icon: Grid3X3, permission: 'scheduling:read' },
           { type: 'leaf', labelKey: 'deploy.tabs.conflicts', href: '/scheduling/conflicts', icon: AlertTriangle, permission: 'scheduling:read' },
         ],
       },
+      { type: 'leaf', labelKey: 'sidebar.fieldOpsOrders', href: '/field-ops/orders', icon: ClipboardList, permission: 'mobile:read' },
       {
-        type: 'group', key: 'sales', labelKey: 'sidebar.sales', icon: FileText,
-        basePath: '/quotes', permission: 'quotations:read',
+        // Service was split across two sections: maintenance sat under CRM,
+        // the reports under field ops.
+        type: 'group', key: 'service', labelKey: 'sidebar.serviceReports', icon: Wrench,
+        basePath: '/crm/asset-maintenance', permission: 'crm:read',
         children: [
-          { type: 'leaf', labelKey: 'sidebar.quotes', href: '/quotes', icon: FileText, permission: 'quotations:read' },
+          { type: 'leaf', labelKey: 'sidebar.assetMaintenance', href: '/crm/asset-maintenance', icon: Wrench, permission: 'crm:read' },
+          { type: 'leaf', labelKey: 'sidebar.fieldOpsReports', href: '/field-ops/reports', icon: FileCheck, permission: 'mobile:read' },
+          { type: 'leaf', labelKey: 'sidebar.fieldOpsTime', href: '/field-ops/time', icon: Clock4, permission: PERMISSIONS.TIME_TRACKING_READ },
         ],
       },
-      {
-        type: 'group', key: 'finance', labelKey: 'sidebar.finance', icon: Receipt,
-        basePath: '/accounting', permission: 'accounting:read',
-        children: [
-          { type: 'leaf', labelKey: 'sidebar.accounting', href: '/accounting', icon: Receipt, permission: 'accounting:read' },
-        ],
-      },
+      { type: 'leaf', labelKey: 'sidebar.accounting', href: '/accounting', icon: Receipt, permission: 'accounting:read' },
+      { type: 'leaf', labelKey: 'sidebar.documents', href: '/documents', icon: Files, permission: PERMISSIONS.DOCUMENTS_READ },
+      { type: 'leaf', labelKey: 'sidebar.vehicles', href: '/vehicles', icon: Truck, permission: 'vehicles:read' },
+      { type: 'leaf', labelKey: 'sidebar.newsletters', href: '/crm/newsletters', icon: MessageSquare, permission: 'crm:read' },
+    ],
+  },
+  {
+    titleKey: 'sidebar.admin',
+    items: [
       {
         type: 'group', key: 'catalog', labelKey: 'sidebar.catalog', icon: Boxes,
         basePath: '/catalog', permission: PERMISSIONS.CATALOG_READ,
@@ -105,25 +113,6 @@ const navSectionDefs = [
           { type: 'leaf', labelKey: 'catalog.igh.title', href: '/catalog/igh', icon: RefreshCw, permission: PERMISSIONS.CATALOG_ADMIN },
         ],
       },
-      { type: 'leaf', labelKey: 'sidebar.documents', href: '/documents', icon: Files, permission: PERMISSIONS.DOCUMENTS_READ },
-      { type: 'leaf', labelKey: 'sidebar.vehicles', href: '/vehicles', icon: Truck, permission: 'vehicles:read' },
-      { type: 'leaf', labelKey: 'sidebar.tasks', href: '/tasks', icon: CheckSquare, permission: 'tasks:read' },
-      { type: 'leaf', labelKey: 'sidebar.notifications', href: '/notifications', icon: Bell, permission: 'notifications:feed' },
-      { type: 'leaf', labelKey: 'sidebar.ai', href: '/ai', icon: Sparkles },
-    ],
-  },
-  {
-    titleKey: 'sidebar.fieldOps',
-    items: [
-      { type: 'leaf', labelKey: 'sidebar.fieldOpsOrders', href: '/field-ops/orders', icon: ClipboardList, permission: 'mobile:read' },
-      { type: 'leaf', labelKey: 'sidebar.fieldOpsReports', href: '/field-ops/reports', icon: FileCheck, permission: 'mobile:read' },
-      { type: 'leaf', labelKey: 'sidebar.fieldOpsTime', href: '/field-ops/time', icon: Clock4, permission: PERMISSIONS.TIME_TRACKING_READ },
-      { type: 'leaf', labelKey: 'sidebar.fieldOpsChat', href: '/field-ops/chat', icon: MessageSquare, permission: 'mobile:read' },
-    ],
-  },
-  {
-    titleKey: 'sidebar.admin',
-    items: [
       { type: 'leaf', labelKey: 'sidebar.users', href: '/settings/users', icon: Users, permission: 'users:read' },
       { type: 'leaf', labelKey: 'sidebar.roles', href: '/settings/roles', icon: ShieldCheck, permission: 'roles:read' },
       { type: 'leaf', labelKey: 'sidebar.audit', href: '/settings/audit', icon: ScrollText, permission: 'audit:read' },
@@ -140,6 +129,7 @@ const navSectionDefs = [
           { type: 'leaf', labelKey: 'sidebar.aiAnalytics', href: '/admin/ai/analytics', icon: Activity, permission: 'ai:analytics:read' },
           { type: 'leaf', labelKey: 'sidebar.aiVocabulary', href: '/admin/ai/vocabulary', icon: BookOpen, permission: 'ai:vocabulary:manage' },
           { type: 'leaf', labelKey: 'sidebar.aiCommands', href: '/admin/ai/commands', icon: MonitorSmartphone, permission: 'ai:commands:manage' },
+          { type: 'leaf', labelKey: 'sidebar.aiAgents', href: '/admin/ai/agents', icon: ShieldCheck, permission: 'ai:agents:manage' },
         ],
       },
       { type: 'leaf', labelKey: 'sidebar.templates', href: '/admin/templates', icon: LayoutTemplate, permission: 'templates:read' },

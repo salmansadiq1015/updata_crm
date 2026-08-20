@@ -33,6 +33,16 @@ const nextConfig = {
   },
   turbopack: {},
 
+  async redirects() {
+    return [
+      {
+        source: '/field-ops',
+        destination: '/field-ops/orders',
+        permanent: false,
+      },
+    ];
+  },
+
   async rewrites() {
     return [
       {

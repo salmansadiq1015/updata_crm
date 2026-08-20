@@ -94,7 +94,23 @@ const quotationSchema = new mongoose.Schema(
       default: 'de',
     },
     title: { type: String, maxlength: 500, default: '' },
+    // Anrede printed above the introduction, freely editable
+    // (e.g. "Sehr geehrte Frau Berger" or "Liebe Kseniya").
+    salutation: { type: String, maxlength: 255, default: '' },
     introduction: { type: String, maxlength: 5000, default: '' },
+    // Objekt-first flow: the quotation can start from a site; the customer is
+    // derived from it and the printed recipient address is picked among the
+    // site's parties (its billing address, owner or property management).
+    siteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site',
+      default: null,
+    },
+    billingAddressSource: {
+      type: String,
+      enum: ['customer', 'site_billing', 'site_ownership', 'site_management'],
+      default: 'customer',
+    },
     validFrom: { type: Date, default: Date.now },
     validUntil: { type: Date, required: true },
     currency: {
@@ -117,6 +133,30 @@ const quotationSchema = new mongoose.Schema(
     subsidyAmount: { type: Number, min: 0, default: 0 },
     subsidyNote: { type: String, maxlength: 5000, default: '' },
     clientSideWorks: { type: String, maxlength: 5000, default: '' },
+    // Offerte AI: the nine blocks the specification prescribes, kept structured
+    // so the office can work through them; the customer-facing introduction is
+    // composed from the first three.
+    aiDraft: {
+      type: new mongoose.Schema({
+        blocks: {
+          ausgangslage: { type: String, maxlength: 4000, default: '' },
+          kundenziel: { type: String, maxlength: 4000, default: '' },
+          technischeLoesung: { type: String, maxlength: 4000, default: '' },
+          leistungsumfang: { type: String, maxlength: 4000, default: '' },
+          optionen: { type: String, maxlength: 4000, default: '' },
+          ausschluesse: { type: String, maxlength: 4000, default: '' },
+          offenePunkte: { type: String, maxlength: 4000, default: '' },
+          preispruefung: { type: String, maxlength: 4000, default: '' },
+          versandbereitschaft: { type: String, maxlength: 4000, default: '' },
+        },
+        openPoints: [{ type: String, maxlength: 500 }],
+        missingPrices: [{ type: String, maxlength: 500 }],
+        recognizedWork: [{ type: String, maxlength: 200 }],
+        sourceText: { type: String, maxlength: 20000, default: '' },
+        generatedAt: { type: Date, default: Date.now },
+      }, { _id: false }),
+      default: null,
+    },
     assignedUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -134,7 +174,12 @@ const quotationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    // Optimistic-lock counter, bumped on every save (technical).
     version: { type: Number, default: 1 },
+    // Business document version (V1, V2, …): bumped only when an already-sent
+    // quotation is edited; the previous state is kept as a DocumentRevision
+    // and older PDFs are archived automatically.
+    docVersion: { type: Number, default: 1 },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

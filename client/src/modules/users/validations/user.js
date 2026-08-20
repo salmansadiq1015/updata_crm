@@ -5,6 +5,8 @@ export const createUserSchema = z.object({
   firstName: z.string().min(1, 'Vorname ist erforderlich').max(100),
   lastName: z.string().min(1, 'Nachname ist erforderlich').max(100),
   salutation: z.enum(['herr', 'frau']).or(z.literal('')).optional(),
+  birthDate: z.string().optional().or(z.literal('')),
+  initials: z.string().max(5, 'Höchstens 5 Zeichen').optional().or(z.literal('')),
   email: z.string().email('Bitte gültige E-Mail-Adresse eingeben'),
   phone: z.string().max(30)
     .refine(isValidPhone, 'Ungültige Telefonnummer (z. B. 079 123 45 67 oder +41 79 123 45 67)')

@@ -379,8 +379,8 @@ Respond with JSON only:
    */
   async _getClient() {
     if (!this._client) {
-      const { default: OpenAI } = await import('openai');
-      this._client = new OpenAI({ apiKey: config.ai.apiKey });
+      const { createOpenAiClient } = await import('../../shared/ai/llmFactory.js');
+      this._client = await createOpenAiClient();
     }
     return this._client;
   }

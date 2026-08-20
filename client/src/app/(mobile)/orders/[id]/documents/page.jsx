@@ -19,6 +19,7 @@ import { useNetworkStatus } from '@/modules/mobile/hooks/use-network-status';
 import { useOrderDocuments, useDocumentDownload } from '@/modules/mobile/hooks/use-document-queries';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { downloadFromUrl } from '@/lib/api/download';
 import toast from 'react-hot-toast';
 
 const FILE_ICONS = {
@@ -66,7 +67,7 @@ export default function DocumentsPage() {
       const result = await downloadMutation.mutateAsync({ orderId, docId: doc.id });
       const url = result?.url || result;
       if (url) {
-        window.open(url, '_blank');
+        await downloadFromUrl(url, doc.filename || doc.name || 'download');
       }
     } catch {
       toast.error(lang === 'de' ? 'Download fehlgeschlagen' : 'Download failed');

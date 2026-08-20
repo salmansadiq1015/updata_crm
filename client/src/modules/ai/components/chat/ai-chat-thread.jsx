@@ -10,6 +10,7 @@ import { useLanguage } from '@/lib/i18n/language-context';
 import { AiChatMessage } from './ai-chat-message';
 import { AiChatTypingIndicator } from './ai-chat-typing-indicator';
 import { AiChatConfirmation } from './ai-chat-confirmation';
+import { AiRecordLink } from './ai-record-link';
 import { AiProgressSteps } from '../status/ai-progress-steps';
 import { AiRunSteps } from '../history/ai-run-steps';
 import { AGENT_STATUSES, WORKFLOW_LABELS } from '../../constants/ai-constants';
@@ -103,7 +104,12 @@ function AgentContent({ run, onConfirm, isConfirming }) {
 
   if (status === AGENT_STATUSES.COMPLETED) {
     if (output?.message && typeof output.message === 'string') {
-      return <MarkdownMessage content={output.message} />;
+      return (
+        <div>
+          <MarkdownMessage content={output.message} />
+          <AiRecordLink output={output} />
+        </div>
+      );
     }
     return (
       <div className="flex flex-col gap-3">

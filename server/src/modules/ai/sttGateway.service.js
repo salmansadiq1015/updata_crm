@@ -24,7 +24,9 @@ class SttGatewayService {
    */
   async transcribe(audioBuffer, { language, mimeType, customVocabulary = [] } = {}) {
     const startTime = Date.now();
-    const provider = String(config.ai?.sttProvider || process.env.STT_PROVIDER || 'whisper').toLowerCase();
+    // Validated at boot by the config schema, so an unsupported value can no
+    // longer surface here through the environment.
+    const provider = String(config.ai?.sttProvider || 'whisper').toLowerCase();
 
     logger.debug('STT transcription started', {
       module: 'ai',
@@ -149,8 +151,8 @@ class SttGatewayService {
    */
   async _getClient() {
     if (!this._client) {
-      const { default: OpenAI } = await import('openai');
-      this._client = new OpenAI({ apiKey: config.ai.apiKey });
+      const { createOpenAiClient } = await import('../../shared/ai/llmFactory.js');
+      this._client = await createOpenAiClient();
     }
     return this._client;
   }

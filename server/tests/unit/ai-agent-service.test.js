@@ -70,9 +70,20 @@ jest.unstable_mockModule('../../src/modules/ai/agent/agent.guardrails.js', () =>
 jest.unstable_mockModule('@langchain/openai', () => ({
   ChatOpenAI: jest.fn().mockImplementation(() => ({
     invoke: jest.fn().mockResolvedValue({
-      content: JSON.stringify({ intent: 'send_notification', confidence: 0.95 }),
+      content: JSON.stringify({ action: 'SEND_NOTIFICATION', params: {} }),
     }),
   })),
+}));
+
+// The planner answers only for the notification phrasing; everything else
+// falls back to the deterministic heuristics, as it does without an API key.
+jest.unstable_mockModule('../../src/modules/ai/agent/llmPlanner.service.js', () => ({
+  default: {
+    plan: jest.fn().mockImplementation(async (input) => (
+      /notify/i.test(input) ? { action: 'SEND_NOTIFICATION', params: {} } : null
+    )),
+  },
+  PLANNER_ACTIONS: [],
 }));
 
 // ---------------------------------------------------------------------------

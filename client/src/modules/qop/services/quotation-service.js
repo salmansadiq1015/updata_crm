@@ -14,6 +14,7 @@ export const quotationService = {
     apiClient.patch(E.QUOTATION_STATUS(id), { targetStatus, reason }),
   generateDocument: (id)       => apiClient.post(E.QUOTATION_GENERATE_DOC(id)),
   getHistory:    (id)          => apiClient.get(E.QUOTATION_HISTORY(id)),
+  getRevisions:  (id)          => apiClient.get(E.QUOTATION_REVISIONS(id)),
   snoozeReminder:(id, remId, snoozedUntil) =>
     apiClient.post(E.QUOTATION_SNOOZE_REMINDER(id, remId), { snoozedUntil }),
   listReminders: (params = {}) => apiClient.get(`${E.QUOTATIONS}/reminders`, { params }),

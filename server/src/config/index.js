@@ -174,6 +174,8 @@ const config = Object.freeze({
     apiKey: envVars.OPENAI_API_KEY,
     model: envVars.OPENAI_MODEL,
     maxTokens: envVars.OPENAI_MAX_TOKENS,
+    baseUrl: envVars.OPENAI_BASE_URL,
+    sttProvider: envVars.STT_PROVIDER,
   },
 
   ocr: {

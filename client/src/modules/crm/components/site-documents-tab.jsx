@@ -2,10 +2,15 @@
 
 import { useMemo, useState } from 'react';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { showError } from '@/lib/toast';
+import { showError, showSuccess } from '@/lib/toast';
+import { downloadFromUrl } from '@/lib/api/download';
 import {
+  useArchiveRepositoryDocument,
+  useVisumRepositoryDocument,
+  useReleaseRepositoryDocument,
   useDocumentRepository,
   useDownloadRepositoryDocument,
+  useDownloadRepositoryDocumentAttachment,
 } from '@/modules/documents/hooks/use-document-repository';
 import { DocumentRepositoryTable } from '@/modules/documents/components/document-repository-table';
 import { DOCUMENT_SECTIONS, documentSectionOf } from '@/modules/pm/constants/pm-constants';
@@ -25,6 +30,10 @@ export function SiteDocumentsTab({ siteId }) {
   const [activeSection, setActiveSection] = useState('documents');
   const { data, isLoading, error } = useDocumentRepository({ siteId, sortOrder: 'desc', limit: 100 });
   const download = useDownloadRepositoryDocument();
+  const downloadAttachment = useDownloadRepositoryDocumentAttachment();
+  const archiveMutation = useArchiveRepositoryDocument();
+  const visumMutation = useVisumRepositoryDocument();
+  const releaseMutation = useReleaseRepositoryDocument();
 
   const documents = data?.items || [];
 
@@ -48,6 +57,61 @@ export function SiteDocumentsTab({ siteId }) {
       } else {
         showError(t('documents.repository.noDownloadUrl', 'Kein Download-Link verfügbar'));
       }
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDownload = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const payload = await downloadAttachment.mutateAsync(doc.id);
+      if (payload?.downloadUrl) {
+        await downloadFromUrl(payload.downloadUrl, payload.fileName || doc.fileName);
+      } else {
+        showError(t('documents.repository.noDownloadUrl', 'Kein Download-Link verfügbar'));
+      }
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleVisum = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const next = !doc.visumBy;
+      await visumMutation.mutateAsync({ id: doc.id, visiert: next });
+      showSuccess(t(next ? 'documents.repository.visumSetDone' : 'documents.repository.visumRemovedDone'));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRelease = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const next = !doc.releasedToField;
+      await releaseMutation.mutateAsync({ id: doc.id, released: next });
+      showSuccess(t(next ? 'documents.repository.releasedDone' : 'documents.repository.releaseRevokedDone'));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleArchive = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const newArchived = !doc.archived;
+      await archiveMutation.mutateAsync({ id: doc.id, archived: newArchived });
+      showSuccess(t(newArchived ? 'documents.repository.archived' : 'documents.repository.unarchived'));
     } catch (err) {
       showError(err);
     } finally {
@@ -91,7 +155,10 @@ export function SiteDocumentsTab({ siteId }) {
         loading={isLoading}
         error={error}
         onPreview={openDocument}
-        onDownload={openDocument}
+        onDownload={handleDownload}
+        onArchive={handleArchive}
+        onVisum={handleVisum}
+        onRelease={handleRelease}
         busyId={busyId}
       />
     </div>

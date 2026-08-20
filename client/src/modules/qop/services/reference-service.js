@@ -9,6 +9,14 @@ export const referenceService = {
     // Deactivated customers stay out of document dropdowns.
     params: { ...(query ? { search: query } : {}), status: 'active', limit: 10 },
   }),
+  // Objekt-first flow: search sites globally, then load the chosen one to derive
+  // the customer and to know which parties (Rechnungsadresse / Eigentümer /
+  // Verwaltung) can be offered as the printed billing address.
+  searchSites: (query) => apiClient.get(ENDPOINTS.CRM.SITES, {
+    params: { ...(query ? { search: query } : {}), status: 'active', limit: 10 },
+  }),
+  getSite: (id) => apiClient.get(`${ENDPOINTS.CRM.SITES}/${id}`),
+  getCustomer: (id) => apiClient.get(`${ENDPOINTS.CRM.CUSTOMERS}/${id}`),
   // QOP numbering only uses commercial departments (scope=qop) — the task board
   // has additional operational departments that must not appear in QOP forms.
   listDepartments: () => apiClient.get('/admin/departments', { params: { scope: 'qop' } }),

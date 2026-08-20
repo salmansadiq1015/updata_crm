@@ -9,6 +9,7 @@ import { EmailStatusBadge } from '../EmailStatusBadge';
 import { useDocumentsBySource } from '../../hooks/useDocumentQueries';
 import { useGenerateDocument } from '../../hooks/useDocumentMutations';
 import { useDownloadDocument, usePreviewDocument } from '../../hooks/useDocumentMutations';
+import { downloadFromUrl } from '@/lib/api/download';
 import { useComposeEmail } from '../../hooks/useEmailMutations';
 import { useEmails } from '../../hooks/useEmailQueries';
 import { formatSwissDate } from '../../utils/localization';
@@ -69,7 +70,7 @@ export function SourceDocumentsPanel({ sourceModule, sourceRecordId, templateTyp
 
   const handleDownload = async (doc) => {
     const r = await download.mutateAsync(doc._id);
-    if (r?.data?.downloadUrl) window.open(r.data.downloadUrl, '_blank', 'noopener,noreferrer');
+    if (r?.data?.downloadUrl) await downloadFromUrl(r.data.downloadUrl, r.data.fileName || doc.fileName);
   };
 
   return (

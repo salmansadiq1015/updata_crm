@@ -1,14 +1,31 @@
 import mongoose from 'mongoose';
 
 export const ACTIVITY_TYPES = ['TRAVEL', 'ONSITE_WORK', 'ADMINISTRATIVE', 'OTHER'];
+// Office and administrative work has no assignment behind it — the reason a
+// project lead could not book a working day at all until now.
+export const TIME_ENTRY_TYPES = ['ASSIGNMENT', 'OFFICE'];
 export const RELEASE_STATUSES = ['PENDING', 'RELEASED', 'LOCKED'];
 
 const timeEntrySchema = new mongoose.Schema(
   {
+    entryType: {
+      type: String,
+      enum: TIME_ENTRY_TYPES,
+      default: 'ASSIGNMENT',
+      index: true,
+    },
+    // Required for ASSIGNMENT entries only — enforced in the service, since a
+    // schema-level `required` is what blocked office hours in the first place.
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Assignment',
-      required: true,
+      default: null,
+    },
+    // Optional breakdown of office work (Administration, Sitzungen, ...).
+    officeCategoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'OfficeWorkCategory',
+      default: null,
     },
     technicianId: {
       type: mongoose.Schema.Types.ObjectId,

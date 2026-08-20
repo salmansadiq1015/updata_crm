@@ -46,6 +46,10 @@ export default class TotalsRenderer {
     if (data.subtotal != null) {
       row(t(language, 'subtotal'), `${currency} ${data.subtotal.toFixed(2)}`);
     }
+    if (data.globalDiscountPercent > 0 && data.subtotal != null) {
+      const discountAmount = Math.round((data.subtotal * data.globalDiscountPercent / 100 + Number.EPSILON) * 100) / 100;
+      row(`${t(language, 'globalDiscount')} ${formatPercent(data.globalDiscountPercent)}%`, `-${currency} ${discountAmount.toFixed(2)}`);
+    }
     for (const vat of (data.vatBreakdown || [])) {
       row(`${t(language, 'vat')} ${formatVatRate(vat.rate)}%`, `${currency} ${vat.amount.toFixed(2)}`);
     }

@@ -35,6 +35,14 @@ export const coarseIdParamSchema = {
   params: Joi.object({ id: objectId.required() }),
 };
 
+export const moveCoarseSchema = {
+  params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({
+    calendarYear: Joi.number().integer().required(),
+    calendarWeek: Joi.number().integer().min(1).max(53).required(),
+  }),
+};
+
 export const bulkCoarseSchema = {
   body: Joi.object({
     allocations: Joi.array().items(

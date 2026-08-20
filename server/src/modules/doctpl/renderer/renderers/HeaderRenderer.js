@@ -27,16 +27,20 @@ export default class HeaderRenderer {
     const fonts = pdfFonts(ciConfig);
 
     // Logo (top-left) — skip gracefully if path missing/invalid
+    const LOGO_HEIGHT = 30;
     const logoSource = ciConfig?.logoBuffer;
     if (logoSource) {
       doc.image(logoSource, left, y, {
         width: Math.min(Number(ciConfig?.logo?.width || 120), width * 0.4),
-        height: 30,
-        fit: [width * 0.4, 30],
+        height: LOGO_HEIGHT,
+        fit: [width * 0.4, LOGO_HEIGHT],
       });
     }
 
-    // Company block (top-right)
+    // Company block, right column, starting below the logo. It used to start at
+    // the very top like the logo, ran five lines down, and the document title
+    // was then drawn into the middle of it — both live in the same right column.
+    const COMPANY_LINE_HEIGHT = 11;
     const ci = ciConfig?.companyDetails || {};
     doc.save().font(fonts.body).fontSize(8).fillColor(colors.primary);
     const companyLines = [
@@ -46,15 +50,19 @@ export default class HeaderRenderer {
       ci.phone || '',
       ci.email || '',
     ].filter(Boolean);
-    let compY = y;
+    let compY = logoSource ? y + LOGO_HEIGHT + 8 : y;
     for (const line of companyLines) {
       doc.text(line, left + width * 0.55, compY, { width: width * 0.45, align: 'right' });
-      compY += 11;
+      compY += COMPANY_LINE_HEIGHT;
     }
+    const companyBottom = compY;
     doc.restore();
 
-    // Customer address window: DIN 5008 position (27mm from top, 20mm from left)
-    const addrY = 27 * MM_TO_PT;
+    // Customer address window, DIN 5008. Form A puts it at 27mm, which is for
+    // letters without a letterhead — with a logo drawn at the top-left it lands
+    // underneath it. Form B (45mm) is the letterhead variant, and matches the
+    // 45mm header this layout already declares.
+    const addrY = (logoSource ? 45 : 27) * MM_TO_PT;
     if (data.customer) {
       doc.save().font(fonts.body).fontSize(9).fillColor(colors.text);
       const cust = data.customer;
@@ -80,12 +88,15 @@ export default class HeaderRenderer {
     const title = translatedTitle === titleKey
       ? DOC_TITLES[templateType]?.[language] || DOC_TITLES[templateType]?.de || templateType
       : translatedTitle;
+    // Keep the title clear of the company block above it; the address window on
+    // the left keeps its DIN 5008 position regardless.
+    const titleY = Math.max(addrY, companyBottom + 14);
     doc.save().font(fonts.bold).fontSize(14).fillColor(colors.primary);
-    doc.text(title, left + width * 0.55, addrY, { width: width * 0.45, align: 'right' });
+    doc.text(title, left + width * 0.55, titleY, { width: width * 0.45, align: 'right' });
     doc.restore();
 
     doc.save().font(fonts.body).fontSize(9).fillColor(colors.text);
-    let metaY = addrY + 22;
+    let metaY = titleY + 22;
     if (data.documentNumber) { doc.text(`${t(language, 'documentNumber')}: ${data.documentNumber}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     if (data.documentDate)   { doc.text(`${t(language, 'date')}: ${data.documentDate}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }
     if (data.validUntil)     { doc.text(`${t(language,'validUntil')}: ${data.validUntil}`, left + width * 0.55, metaY, { width: width * 0.45, align: 'right' }); metaY += 13; }

@@ -14,12 +14,15 @@ import { Separator } from '@/components/ui/separator';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import {
   FileText, ChevronDown, ChevronUp, Building2, FolderKanban,
-  Coins, Languages, Users, CalendarDays, SearchX,
+  Coins, Languages, Users, CalendarDays, SearchX, MapPin,
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { useDebounce } from '@/shared/hooks/use-debounce';
 import { useQuotationMutations } from '../hooks/use-qop-mutations';
-import { useQopCustomerProjects, useQopCustomerSearch, useQopDepartments } from '../hooks/use-qop-queries';
+import {
+  useQopCustomerProjects, useQopCustomerSearch, useQopDepartments, useQopSiteSearch,
+} from '../hooks/use-qop-queries';
+import { referenceService } from '../services/reference-service';
 import { useQuotationTemplateMutations } from '../hooks/use-qop-template-mutations';
 import { LineItemsEditor } from './line-items-editor';
 import { SelectTemplateDialog } from './select-template-dialog';
@@ -30,6 +33,7 @@ import {
 } from '@/components/ui/select';
 import {
   LANGUAGE_OPTIONS, buildCustomerOptions, buildDepartmentOptions, buildProjectOptions,
+  buildSiteOptions, siteBillingParty, formatSiteParty,
 } from '../utils/document-form-utils';
 import { SourceDocumentsPanel } from '@/modules/doctpl/components/SourceDocumentsPanel';
 
@@ -39,16 +43,31 @@ function addDays(date, days) {
   return d.toISOString().slice(0, 10);
 }
 
+const SALUTATION_SUGGESTIONS = [
+  'Sehr geehrte Damen und Herren',
+  'Sehr geehrte Frau ',
+  'Sehr geehrter Herr ',
+  'Liebe ',
+  'Lieber ',
+];
+
+const QUOTATION_STATUS_OPTIONS = ['DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED'];
+
 const EMPTY_FORM = () => ({
   customerId: '',
   customerName: '',
   departmentId: '',
   projectId: '',
+  siteId: '',
+  siteName: '',
+  billingAddressSource: 'customer',
+  status: 'DRAFT',
   language: 'de',
   currency: 'CHF',
   validUntil: addDays(new Date(), DEFAULT_VALIDITY_DAYS),
   globalDiscountPercent: 0,
   lineItems: [],
+  salutation: '',
   introduction: '',
   notes: '',
   internalNote: '',
@@ -66,6 +85,10 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [customerQuery, setCustomerQuery] = useState('');
+  const [siteQuery, setSiteQuery] = useState('');
+  // Full site record of the chosen Objekt — decides which billing parties
+  // (Rechnungsadresse / Eigentümer / Verwaltung) can be offered.
+  const [selectedSite, setSelectedSite] = useState(null);
   const [projectQuery, setProjectQuery] = useState('');
   const debouncedProjectQuery = useDebounce(projectQuery.trim(), 250);
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
@@ -73,11 +96,12 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   // Which text field the Textbaustein picker fills: 'introduction' | 'termsAndConditions' | 'clientSideWorks'
   const [textBlockTarget, setTextBlockTarget] = useState(null);
 
-  const { createQuotation, updateQuotation } = useQuotationMutations();
+  const { createQuotation, updateQuotation, transitionQuotationStatus } = useQuotationMutations();
   const { recordUsage } = useQuotationTemplateMutations();
   const isPending = createQuotation.isPending || updateQuotation.isPending;
 
   const { data: customerResults = [], isFetching: customersLoading } = useQopCustomerSearch(customerQuery);
+  const { data: siteResults = [], isFetching: sitesLoading } = useQopSiteSearch(siteQuery);
   const {
     data: departments = [],
     isFetching: departmentsLoading,
@@ -90,6 +114,7 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
   } = useQopCustomerProjects(form.customerId, debouncedProjectQuery);
 
   const customerOptions = useMemo(() => buildCustomerOptions(customerResults), [customerResults]);
+  const siteOptions = useMemo(() => buildSiteOptions(siteResults), [siteResults]);
   const departmentOptions = useMemo(() => buildDepartmentOptions(departments), [departments]);
   const projectOptions = useMemo(() => buildProjectOptions(projects), [projects]);
   const projectPickerLoading = projectsLoading || projectQuery.trim() !== debouncedProjectQuery;
@@ -105,6 +130,11 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
         customerName: quotation.customerName ?? quotation.customer?.name ?? '',
         departmentId: idOf(quotation.departmentId),
         projectId: idOf(quotation.projectId),
+        siteId: idOf(quotation.siteId),
+        siteName: quotation.siteId?.name ?? '',
+        billingAddressSource: quotation.billingAddressSource ?? 'customer',
+        status: quotation.status ?? 'DRAFT',
+        salutation: quotation.salutation ?? '',
         language: quotation.language ?? 'de',
         currency: quotation.currency ?? 'CHF',
         validUntil: quotation.validUntil?.slice(0, 10) ?? addDays(new Date(), DEFAULT_VALIDITY_DAYS),
@@ -125,11 +155,63 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
       setShowAdvanced(false);
     }
     setCustomerQuery('');
+    setSiteQuery('');
+    setSelectedSite(null);
     setProjectQuery('');
+    // Reload the site record in edit mode so the billing-party options and the
+    // Objekt label are available again.
+    const existingSiteId = quotation?.siteId?._id ?? quotation?.siteId;
+    if (existingSiteId) {
+      referenceService.getSite(existingSiteId)
+        .then((res) => {
+          const site = res?.data ?? res;
+          if (site?._id) {
+            setSelectedSite(site);
+            setForm((f) => ({ ...f, siteName: site.name || site.street || '' }));
+          }
+        })
+        .catch(() => {});
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [quotation, open]);
 
   const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+
+  // Objekt-first: picking a site derives the customer and resets the dependent
+  // fields; the billing party falls back to 'customer' when the previous choice
+  // does not exist on the new site.
+  const applySite = async (siteId, option) => {
+    if (!siteId) {
+      setSelectedSite(null);
+      setForm((f) => ({ ...f, siteId: '', siteName: '', billingAddressSource: 'customer' }));
+      return;
+    }
+    set('siteId', siteId);
+    set('siteName', option?.label ?? '');
+    try {
+      const res = await referenceService.getSite(siteId);
+      const site = res?.data ?? res;
+      setSelectedSite(site || null);
+      const customerId = site?.customerId?._id ?? site?.customerId;
+      if (customerId) {
+        let customerName = site?.customerId?.name || '';
+        if (!customerName) {
+          const customerRes = await referenceService.getCustomer(customerId);
+          customerName = (customerRes?.data ?? customerRes)?.name || '';
+        }
+        setForm((f) => ({
+          ...f,
+          customerId: String(customerId),
+          customerName,
+          projectId: '',
+          billingAddressSource: siteBillingParty(site, f.billingAddressSource) ? f.billingAddressSource : 'customer',
+        }));
+        setProjectQuery('');
+      }
+    } catch (err) {
+      showError(err);
+    }
+  };
 
   // Insert a chosen Textbaustein into the targeted field. Einleitung and AGB are
   // rich-text (append the HTML); Bauseitige Arbeiten renders as plain text in the
@@ -140,11 +222,11 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
     const html = block?.bodyHtml || '';
     setForm((f) => {
       const current = f[field] || '';
-      if (field === 'clientSideWorks') {
+      if (field === 'clientSideWorks' || field === 'subsidyNote') {
         const tmp = document.createElement('div');
         tmp.innerHTML = html;
         const text = (tmp.textContent || '').trim();
-        return { ...f, clientSideWorks: current ? `${current}\n${text}` : text };
+        return { ...f, [field]: current ? `${current}\n${text}` : text };
       }
       return { ...f, [field]: `${current}${html}` };
     });
@@ -180,18 +262,23 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
       vatRate: Number(li.vatRate),
       catalogItemId: li.catalogItemId || li.catalogSnapshot?.catalogArticleId || undefined,
       catalogSnapshot: li.catalogSnapshot || undefined,
-      image: li.image?.fileId ? { fileId: li.image.fileId, url: li.image.url || '' } : null,
+      image: li.image?.fileId
+        ? { fileId: li.image.fileId, url: li.image.url || '', size: li.image.size || 'medium' }
+        : null,
     }));
     const payload = {
       customerId: form.customerId,
       customerName: form.customerName,
       departmentId: form.departmentId || undefined,
       projectId: form.projectId || undefined,
+      siteId: form.siteId || null,
+      billingAddressSource: form.billingAddressSource || 'customer',
       language: form.language,
       currency: form.currency,
       validUntil: form.validUntil,
       globalDiscountPercent: Number(form.globalDiscountPercent) || 0,
       ...(mappedItems.length > 0 ? { lineItems: mappedItems } : {}),
+      salutation: form.salutation || '',
       introduction: form.introduction || undefined,
       notes: form.notes || undefined,
       paymentTerms: form.paymentTerms || undefined,
@@ -202,9 +289,24 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
     };
     try {
       if (isEdit) {
-        await updateQuotation.mutateAsync({ id: quotation._id ?? quotation.id, data: { ...payload, version: form.version } });
+        const id = quotation._id ?? quotation.id;
+        const statusChanged = form.status && form.status !== quotation.status;
+        // Versionsverwaltung: sent quotations are editable too — the server
+        // freezes the previous state as a revision and bumps V. Only converted
+        // ones are locked (their content lives on in the order).
+        if (quotation.status === 'CONVERTED') {
+          showError(t('qop.form.convertedLocked', 'Diese Offerte wurde in einen Auftrag konvertiert und kann nicht mehr bearbeitet werden.'));
+          return;
+        }
+        await updateQuotation.mutateAsync({ id, data: { ...payload, version: form.version } });
+        if (statusChanged) {
+          await transitionQuotationStatus.mutateAsync({ id, targetStatus: form.status });
+        }
       } else {
-        await createQuotation.mutateAsync(payload);
+        await createQuotation.mutateAsync({
+          ...payload,
+          ...(form.status && form.status !== 'DRAFT' ? { status: form.status } : {}),
+        });
       }
       onClose();
     } catch (err) {
@@ -247,8 +349,35 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 py-5">
+            {/* Versionsverwaltung: editing a sent quotation creates the next version */}
+            {isEdit && quotation && !['DRAFT', 'CONVERTED'].includes(quotation.status) && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-[13px] text-amber-800 dark:text-amber-200">
+                {t('qop.versions.editHint', 'Diese Offerte wurde bereits versendet. Beim Speichern entsteht Version V{next} — die bisherige Fassung bleibt im Verlauf erhalten und ältere PDFs werden automatisch archiviert.', { next: (quotation.docVersion ?? 1) + 1 })}
+              </div>
+            )}
             {/* Header fields */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {/* Objekt — picked first; the customer is derived from it */}
+              <div className="flex flex-col gap-1.5">
+                <Label>{t('qop.form.site', 'Objekt')} ({t('common.optional', 'optional')})</Label>
+                <Combobox
+                  async
+                  triggerIcon={MapPin}
+                  options={siteOptions}
+                  value={form.siteId}
+                  selectedLabel={form.siteName}
+                  allowClear
+                  loading={sitesLoading}
+                  onSearchChange={setSiteQuery}
+                  onChange={(value, option) => applySite(value, option)}
+                  placeholder={t('qop.form.siteSearch', 'Objekt suchen...')}
+                  searchPlaceholder={t('qop.form.siteSearch', 'Objekt suchen...')}
+                  emptyIcon={MapPin}
+                  emptyMessage={t('qop.form.siteNoResults', 'Keine Objekte gefunden')}
+                  emptyHint={t('qop.form.siteHint', 'Der Kunde wird automatisch vom Objekt übernommen.')}
+                />
+              </div>
+
               {/* Customer */}
               <div className="flex flex-col gap-1.5">
                 <Label>{t('qop.form.customer', 'Customer')} *</Label>
@@ -276,6 +405,59 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                     ? t('qop.form.customerSearchHint', 'Type at least 2 characters to search.')
                     : t('qop.form.customerNoResultsHint', 'Try a different name or number.')}
                 />
+              </div>
+
+              {/* Billing party — only offered once an Objekt is chosen */}
+              {form.siteId && (
+                <div className="flex flex-col gap-1.5 md:col-span-2">
+                  <Label>{t('qop.form.billingAddressSource', 'Rechnungsadresse')}</Label>
+                  <Select
+                    value={form.billingAddressSource}
+                    onValueChange={(v) => set('billingAddressSource', v)}
+                  >
+                    <SelectTrigger className="rounded-xl text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="customer">
+                        {t('qop.form.billingCustomer', 'Kunde')}{form.customerName ? ` — ${form.customerName}` : ''}
+                      </SelectItem>
+                      {siteBillingParty(selectedSite, 'site_billing') && (
+                        <SelectItem value="site_billing">
+                          {t('qop.form.billingSite', 'Rechnungsadresse des Objekts')} — {formatSiteParty(siteBillingParty(selectedSite, 'site_billing'))}
+                        </SelectItem>
+                      )}
+                      {siteBillingParty(selectedSite, 'site_ownership') && (
+                        <SelectItem value="site_ownership">
+                          {t('qop.form.billingOwnership', 'Eigentümer')} — {formatSiteParty(siteBillingParty(selectedSite, 'site_ownership'))}
+                        </SelectItem>
+                      )}
+                      {siteBillingParty(selectedSite, 'site_management') && (
+                        <SelectItem value="site_management">
+                          {t('qop.form.billingManagement', 'Verwaltung')} — {formatSiteParty(siteBillingParty(selectedSite, 'site_management'))}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t('qop.form.billingHint', 'Diese Adresse erscheint als Empfänger auf dem Dokument.')}
+                  </p>
+                </div>
+              )}
+
+              {/* Status — visible and manually adjustable */}
+              <div className="flex flex-col gap-1.5">
+                <Label>{t('qop.form.status', 'Status')}</Label>
+                <Select value={form.status} onValueChange={(v) => set('status', v)}>
+                  <SelectTrigger className="rounded-xl text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {QUOTATION_STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>{t(`qop.status.${s}`, s)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Currency */}
@@ -383,6 +565,22 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   className="h-11 rounded-xl"
                 />
               </div>
+            </div>
+
+            {/* Anrede — free text with quick suggestions (Sie- oder Du-Form) */}
+            <div className="flex flex-col gap-1.5">
+              <Label>{t('qop.form.salutation', 'Anrede')}</Label>
+              <Input
+                list="qop-salutation-suggestions"
+                value={form.salutation}
+                onChange={(e) => set('salutation', e.target.value)}
+                placeholder={t('qop.form.salutationPlaceholder', 'z.B. Sehr geehrte Frau Berger oder Liebe Kseniya')}
+                className="rounded-xl text-sm"
+                maxLength={255}
+              />
+              <datalist id="qop-salutation-suggestions">
+                {SALUTATION_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
+              </datalist>
             </div>
 
             {/* Introduction — rich text */}
@@ -503,9 +701,19 @@ export function QuotationFormDialog({ open, onClose, quotation = null }) {
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>{t('qop.form.subsidyNote', 'Fördergelder-Hinweis')}</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>{t('qop.form.subsidyNote', 'Fördergelder-Hinweis')}</Label>
+                    <button
+                      type="button"
+                      onClick={() => setTextBlockTarget('subsidyNote')}
+                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      {t('qop.form.insertTextBlock', 'Textbaustein einfügen')}
+                    </button>
+                  </div>
                   <Textarea
-                    rows={2}
+                    rows={4}
                     value={form.subsidyNote}
                     onChange={(e) => set('subsidyNote', e.target.value)}
                     placeholder={t('qop.form.subsidyNotePlaceholder', 'z.B. Fördergelder Basel-Land ...')}

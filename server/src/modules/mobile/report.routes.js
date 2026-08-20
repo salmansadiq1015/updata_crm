@@ -197,6 +197,15 @@ reportRouter.post(
   (req, res, next) => reportController.createInvoice(req, res, next),
 );
 
+// Arbeitsrapport as a PDF in the company layout
+reportRouter.post(
+  '/:reportId/documents/generate',
+  authenticate,
+  requirePermission('mobile:read'),
+  validate(reportIdParamSchema),
+  (req, res, next) => reportController.generateDocument(req, res, next),
+);
+
 reportRouter.get(
   '/:reportId/history',
   authenticate,

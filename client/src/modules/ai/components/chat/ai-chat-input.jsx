@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { ArrowUp, Square, Mic, MicOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -128,11 +128,25 @@ export function AiChatInput({
   compact = false,
   variant = 'default',
   onVoiceConfirmed,
+  prefill,
 }) {
   const { t } = useLanguage();
   const [value, setValue] = useState('');
   const textareaRef = useRef(null);
   const isPanel = variant === 'panel';
+
+  // Starter suggestions load the field so the user completes them and sends
+  // deliberately — a click must never create a record on its own.
+  useEffect(() => {
+    if (!prefill?.text) return;
+    setValue(prefill.text);
+    const node = textareaRef.current;
+    if (node) {
+      node.focus();
+      const end = prefill.text.length;
+      requestAnimationFrame(() => node.setSelectionRange(end, end));
+    }
+  }, [prefill]);
 
   const isListening = voiceState === 'listening';
   const isVoiceProcessing = voiceState === 'processing';

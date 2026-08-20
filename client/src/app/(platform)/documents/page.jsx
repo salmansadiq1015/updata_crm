@@ -16,10 +16,15 @@ import { DocumentPreviewDrawer } from '@/modules/doctpl/components/DocumentPrevi
 import { DocumentRepositoryFilters } from '@/modules/documents/components/document-repository-filters';
 import { DocumentRepositoryTable } from '@/modules/documents/components/document-repository-table';
 import { DocumentUploadDialog } from '@/modules/documents/components/document-upload-dialog';
+import { downloadFromUrl } from '@/lib/api/download';
 import {
+  useArchiveRepositoryDocument,
+  useVisumRepositoryDocument,
+  useReleaseRepositoryDocument,
   useDeleteRepositoryDocument,
   useDocumentRepository,
   useDownloadRepositoryDocument,
+  useDownloadRepositoryDocumentAttachment,
 } from '@/modules/documents/hooks/use-document-repository';
 
 const PAGE_SIZE = 25;
@@ -63,7 +68,11 @@ export default function DocumentsPage() {
 
   const { data, isLoading, isFetching, error, refetch } = useDocumentRepository(filters);
   const download = useDownloadRepositoryDocument();
+  const downloadAttachment = useDownloadRepositoryDocumentAttachment();
   const remove = useDeleteRepositoryDocument();
+  const archiveMutation = useArchiveRepositoryDocument();
+  const visumMutation = useVisumRepositoryDocument();
+  const releaseMutation = useReleaseRepositoryDocument();
   const documents = data?.items ?? [];
   const pagination = data?.pagination ?? {};
 
@@ -133,8 +142,12 @@ export default function DocumentsPage() {
   const handleDownload = async (doc) => {
     setBusyId(doc.id);
     try {
-      const payload = await download.mutateAsync(doc.id);
-      if (!openDownloadUrl(payload)) showError(t('documents.repository.noDownloadUrl'));
+      const payload = await downloadAttachment.mutateAsync(doc.id);
+      if (payload?.downloadUrl) {
+        await downloadFromUrl(payload.downloadUrl, payload.fileName || doc.fileName);
+      } else {
+        showError(t('documents.repository.noDownloadUrl'));
+      }
     } catch (err) {
       showError(err);
     } finally {
@@ -150,6 +163,45 @@ export default function DocumentsPage() {
       showSuccess(t('documents.repository.deleted'));
       setDeleteTarget(null);
       resetPaging();
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleVisum = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const next = !doc.visumBy;
+      await visumMutation.mutateAsync({ id: doc.id, visiert: next });
+      showSuccess(t(next ? 'documents.repository.visumSetDone' : 'documents.repository.visumRemovedDone'));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRelease = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const next = !doc.releasedToField;
+      await releaseMutation.mutateAsync({ id: doc.id, released: next });
+      showSuccess(t(next ? 'documents.repository.releasedDone' : 'documents.repository.releaseRevokedDone'));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleArchive = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const newArchived = !doc.archived;
+      await archiveMutation.mutateAsync({ id: doc.id, archived: newArchived });
+      showSuccess(t(newArchived ? 'documents.repository.archived' : 'documents.repository.unarchived'));
     } catch (err) {
       showError(err);
     } finally {
@@ -221,6 +273,9 @@ export default function DocumentsPage() {
         onPreview={handlePreview}
         onDownload={handleDownload}
         onDelete={canDelete ? setDeleteTarget : undefined}
+        onArchive={handleArchive}
+        onVisum={handleVisum}
+        onRelease={handleRelease}
         busyId={busyId}
         canDelete={canDelete}
       />

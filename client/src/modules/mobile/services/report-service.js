@@ -158,6 +158,11 @@ export const reportService = {
     return normalizeReport(unwrapData(res));
   },
 
+  async generateReportDocument(reportId) {
+    const res = await apiClient.post(ENDPOINTS.MOBILE.REPORT_GENERATE_DOC(reportId));
+    return unwrapData(res);
+  },
+
   async getReportHistory(reportId, params = {}) {
     const res = await apiClient.get(ENDPOINTS.MOBILE.REPORT_HISTORY(reportId), { params });
     return Array.isArray(res.data) ? res.data : (res.data?.data ?? []);

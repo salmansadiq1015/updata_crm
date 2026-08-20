@@ -8,6 +8,11 @@ function stripEmptyParams(params = {}) {
 }
 
 export const documentRepositoryService = {
+  async listAttachable(params = {}) {
+    const res = await apiClient.get(ENDPOINTS.DOCUMENTS.ATTACHABLE, { params });
+    return res.data;
+  },
+
   async list(params = {}) {
     const res = await apiClient.get(ENDPOINTS.DOCUMENTS.LIST, { params: stripEmptyParams(params) });
     return {
@@ -23,13 +28,35 @@ export const documentRepositoryService = {
     return res.data;
   },
 
-  async getDownloadUrl(id) {
-    const res = await apiClient.get(ENDPOINTS.DOCUMENTS.DOWNLOAD(id));
+  async getDownloadUrl(id, { attachment = false } = {}) {
+    const url = attachment
+      ? `${ENDPOINTS.DOCUMENTS.DOWNLOAD(id)}?attachment=1`
+      : ENDPOINTS.DOCUMENTS.DOWNLOAD(id);
+    const res = await apiClient.get(url);
     return res.data;
   },
 
   async remove(id) {
     const res = await apiClient.delete(ENDPOINTS.DOCUMENTS.BY_ID(id));
+    return res.data;
+  },
+
+  async setVisum(id, visiert) {
+    const url = ENDPOINTS.DOCUMENTS.VISUM(id);
+    const res = visiert ? await apiClient.post(url) : await apiClient.delete(url);
+    return res.data;
+  },
+
+  async setReleased(id, released) {
+    const url = ENDPOINTS.DOCUMENTS.RELEASE(id);
+    const res = released ? await apiClient.post(url) : await apiClient.delete(url);
+    return res.data;
+  },
+
+  async setArchived(id, archived) {
+    const res = archived
+      ? await apiClient.post(ENDPOINTS.DOCUMENTS.ARCHIVE(id))
+      : await apiClient.delete(ENDPOINTS.DOCUMENTS.ARCHIVE(id));
     return res.data;
   },
 };

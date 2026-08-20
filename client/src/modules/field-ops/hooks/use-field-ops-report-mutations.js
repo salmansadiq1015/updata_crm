@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reportService } from '@/modules/mobile/services/report-service';
 import { queryKeys } from '@/lib/query/keys';
 import { showSuccess, showError } from '@/lib/toast';
+import { downloadFromUrl } from '@/lib/api/download';
 import { useLanguage } from '@/lib/i18n/language-context';
 
 const REPORTS_KEY = ['mobile', 'reports'];
@@ -137,6 +138,20 @@ export function useFieldOpsReportMutations({
     onError: (err) => showError(err.message),
   });
 
+  const generateDocument = useMutation({
+    mutationFn: ({ reportId }) => reportService.generateReportDocument(reportId),
+    onSuccess: async (res) => {
+      const url = res?.downloadUrl;
+      if (url) {
+        await downloadFromUrl(url, res?.fileName || 'arbeitsrapport.pdf');
+        showSuccess(de ? 'Rapport als PDF erstellt.' : 'Report exported as PDF.');
+      } else {
+        showError(de ? 'Das PDF konnte nicht erstellt werden.' : 'The PDF could not be created.');
+      }
+    },
+    onError: (err) => showError(err.message),
+  });
+
   const exportReports = useMutation({
     mutationFn: ({ filters, type }) => reportService.exportReports({ ...filters, type }),
     onSuccess: (blob, { type }) => {
@@ -181,6 +196,7 @@ export function useFieldOpsReportMutations({
     unarchiveReport,
     bulkArchive,
     createInvoice,
+    generateDocument,
     exportReports,
     importReports,
     downloadImportTemplate,

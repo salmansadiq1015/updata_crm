@@ -71,6 +71,46 @@ class AuditService {
   async queryByEntity(params) {
     return auditLogRepository.findByEntity(params);
   }
+
+  /**
+   * Resolve the acting user of audit entries to a display name.
+   *
+   * Audit documents only store `userId`, so every activity view has to answer
+   * "who did this?" the same way. Batch-loads the users once and returns the
+   * entries with a `userName` (falls back to the stored email, then "System"
+   * for entries written by background jobs). Never throws — an unresolved name
+   * must not break the timeline.
+   */
+  async withUserNames(entries = []) {
+    const list = Array.isArray(entries) ? entries : [];
+    if (!list.length) return list;
+    try {
+      const ids = [...new Set(list.map((e) => e?.userId).filter(Boolean).map(String))];
+      const nameById = new Map();
+      if (ids.length) {
+        const User = (await import('./user.model.js')).default;
+        const users = await User.find({ _id: { $in: ids } })
+          .select('firstName lastName email')
+          .lean();
+        for (const user of users) {
+          const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+          nameById.set(String(user._id), name || user.email || null);
+        }
+      }
+      return list.map((entry) => ({
+        ...entry,
+        // Timelines mix real audit rows with derived entries that already carry
+        // a resolved `actor` — never overwrite that with "System".
+        userName: (entry?.userId && nameById.get(String(entry.userId)))
+          || entry?.actor
+          || entry?.email
+          || 'System',
+      }));
+    } catch (err) {
+      logger.warn('Could not resolve audit user names', { module: 'auth', error: err.message });
+      return list.map((entry) => ({ ...entry, userName: entry?.actor || entry?.email || 'System' }));
+    }
+  }
 }
 
 const auditService = new AuditService();

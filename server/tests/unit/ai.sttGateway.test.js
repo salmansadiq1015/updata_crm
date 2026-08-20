@@ -16,10 +16,20 @@ jest.unstable_mockModule('openai', () => ({
   },
 }));
 
+// The STT provider comes from validated config, not the raw environment.
+const mockConfig = {
+  ai: { apiKey: 'test-key', model: 'gpt-4o', baseUrl: '', sttProvider: 'whisper' },
+  env: 'test',
+  isDevelopment: false,
+  isProduction: false,
+  logging: { level: 'error' },
+};
+jest.unstable_mockModule('../../src/config/index.js', () => ({ default: mockConfig }));
+
 describe('AI STT gateway', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    delete process.env.STT_PROVIDER;
+    mockConfig.ai.sttProvider = 'whisper';
   });
 
   test('passes through the original audio mime type and file extension', async () => {
@@ -37,12 +47,21 @@ describe('AI STT gateway', () => {
     expect(result.text).toBe('Hallo Welt');
   });
 
-  test('rejects unsupported providers explicitly', async () => {
-    process.env.STT_PROVIDER = 'unknown-provider';
+  test('rejects providers it cannot handle', async () => {
+    mockConfig.ai.sttProvider = 'unknown-provider';
     const { default: sttGatewayService } = await import('../../src/modules/ai/sttGateway.service.js');
 
     await expect(
       sttGatewayService.transcribe(Buffer.from('audio-bytes'), { language: 'de-CH' }),
     ).rejects.toThrow('Unsupported STT provider');
+  });
+
+  test('declared but unimplemented providers fail with a clear message', async () => {
+    mockConfig.ai.sttProvider = 'google';
+    const { default: sttGatewayService } = await import('../../src/modules/ai/sttGateway.service.js');
+
+    await expect(
+      sttGatewayService.transcribe(Buffer.from('audio-bytes'), { language: 'de-CH' }),
+    ).rejects.toThrow(/not configured|not implemented/i);
   });
 });

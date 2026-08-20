@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,10 +15,14 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
+import { queryKeys } from '@/lib/query/keys';
+import { siteService } from '@/modules/crm/services/site-service';
+import { ContactLogPanel } from '@/modules/crm/components/contact-log-panel';
 import {
   useFieldOpsOrderDetail, useFieldOpsOrderReports,
   useFieldOpsOrderTimeEntries, useFieldOpsOrderPhotos,
   useFieldOpsOrderHistory,
+  useFieldOpsOrderDocuments,
 } from '@/modules/field-ops/hooks/use-field-ops-queries';
 import { useFieldOpsOrderMutations } from '@/modules/field-ops/hooks/use-field-ops-order-mutations';
 import { useOrderTasks } from '@/modules/tasks/hooks/use-task-queries';
@@ -41,7 +46,7 @@ import {
   MapPin, Phone, Mail, User, Calendar, FileText, Clock,
   Camera, Wrench, MessageSquare, FileCheck, ClipboardList,
   AlertCircle, CheckCircle2, XCircle, Navigation,
-  History, ListChecks, PlayCircle, PlusCircle, RotateCcw, UsersRound,
+  Activity, History, ListChecks, PlayCircle, PlusCircle, RotateCcw, UsersRound, MessagesSquare,
 } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -489,6 +494,83 @@ function HistoryTab({ orderId, de }) {
   );
 }
 
+/**
+ * Kontakthistorie of an Einsatz. The field-ops order denormalises the customer
+ * to a name, so the id needed to log a new contact comes from its object.
+ */
+function EinsatzContactLogTab({ orderId, siteId }) {
+  const { data: site } = useQuery({
+    queryKey: queryKeys.crm.sites.detail(siteId),
+    queryFn: () => siteService.getById(siteId),
+    enabled: !!siteId,
+    staleTime: 60_000,
+  });
+  const customerId = site?.customerId?._id || site?.customerId || null;
+
+  return (
+    <ContactLogPanel
+      customerId={customerId}
+      scope={{ assignmentId: orderId }}
+      links={{ assignmentId: orderId, siteId: siteId || null }}
+      compact
+    />
+  );
+}
+
+/**
+ * Digitales Dossier for the field: the documents attached to this Einsatz plus
+ * the project documents the lead released. Anything not released never reaches
+ * this list — the server filters it.
+ */
+function EinsatzDocumentsTab({ orderId, de }) {
+  const { data: documents = [], isLoading } = useFieldOpsOrderDocuments(orderId);
+
+  if (isLoading) {
+    return <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>;
+  }
+  if (!documents.length) {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-10 text-center">
+        <FileText className="h-5 w-5 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">{de ? 'Keine freigegebenen Dokumente' : 'No released documents'}</p>
+        <p className="max-w-md text-xs text-muted-foreground">
+          {de
+            ? 'Der Projektleiter entscheidet, welche Projektdokumente hier sichtbar sind.'
+            : 'The project lead decides which project documents appear here.'}
+        </p>
+      </div>
+    );
+  }
+
+  const SOURCE_LABEL = {
+    project: de ? 'Projektdossier' : 'Project dossier',
+    generated: de ? 'Generiert' : 'Generated',
+    upload: de ? 'Hochgeladen' : 'Uploaded',
+  };
+
+  return (
+    <ul className="space-y-2">
+      {documents.map((doc) => (
+        <li key={doc.id || doc.fileId} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
+          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-medium text-foreground">{doc.name || doc.filename}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {SOURCE_LABEL[doc.source] || doc.source}
+              {doc.uploaded_at ? ` · ${new Date(doc.uploaded_at).toLocaleDateString('de-CH')}` : ''}
+            </p>
+          </div>
+          {doc.url && (
+            <Button asChild variant="outline" size="sm" className="h-8 shrink-0">
+              <a href={doc.url} target="_blank" rel="noopener noreferrer">{de ? 'Öffnen' : 'Open'}</a>
+            </Button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function FieldOpsOrderDetailTabs({ orderId }) {
   const { locale: language } = useLanguage();
   const de = language === 'de';
@@ -678,7 +760,9 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
             <TabsTrigger value="work"      className="text-xs gap-1.5"><ListChecks className="h-3.5 w-3.5" />{de ? 'Arbeit' : 'Work'}</TabsTrigger>
             <TabsTrigger value="photos"    className="text-xs gap-1.5"><Camera className="h-3.5 w-3.5" />{de ? 'Fotos' : 'Photos'}</TabsTrigger>
             <TabsTrigger value="installations" className="text-xs gap-1.5"><Wrench className="h-3.5 w-3.5" />{de ? 'Komponenten' : 'Components'}</TabsTrigger>
-            <TabsTrigger value="history"   className="text-xs gap-1.5"><History className="h-3.5 w-3.5" />{de ? 'Historie' : 'History'}</TabsTrigger>
+            <TabsTrigger value="documents" className="text-xs gap-1.5"><FileText className="h-3.5 w-3.5" />{de ? 'Dokumente' : 'Documents'}</TabsTrigger>
+            <TabsTrigger value="contact-log" className="text-xs gap-1.5"><MessagesSquare className="h-3.5 w-3.5" />{de ? 'Kontakthistorie' : 'Contact history'}</TabsTrigger>
+            <TabsTrigger value="history"   className="text-xs gap-1.5"><Activity className="h-3.5 w-3.5" />{de ? 'Aktivität' : 'Activity'}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -699,6 +783,14 @@ export function FieldOpsOrderDetailTabs({ orderId }) {
           <TabsContent value="installations">
             <FieldOpsInstallationsTable siteId={siteId} />
           </TabsContent>
+          <TabsContent value="documents">
+            <EinsatzDocumentsTab orderId={orderId} de={de} />
+          </TabsContent>
+
+          <TabsContent value="contact-log">
+            <EinsatzContactLogTab orderId={orderId} siteId={siteId} />
+          </TabsContent>
+
           <TabsContent value="history">
             <HistoryTab orderId={orderId} de={de} />
           </TabsContent>

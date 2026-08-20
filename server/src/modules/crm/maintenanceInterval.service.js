@@ -128,7 +128,9 @@ class MaintenanceIntervalService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { maintenanceIntervalId: id, changedFields: Object.keys(data) },
+      // installationId is what links the entry to the installation's activity
+      // timeline — without it a "maintenance done" never showed up there.
+      details: { maintenanceIntervalId: id, installationId: existing.installationId, changedFields: Object.keys(data) },
       module: 'crm',
     });
 

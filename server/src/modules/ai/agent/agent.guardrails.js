@@ -3,8 +3,13 @@ import { AppError } from '../../../shared/errors/AppError.js';
 import ERROR_CODES from '../../../shared/errors/errorCodes.js';
 
 export const MAX_STEPS = 10;
-export const MIN_AGENT_INPUT_LENGTH = 2;
-const RATE_LIMIT = 20;
+// One character is enough when answering a numbered choice.
+export const MIN_AGENT_INPUT_LENGTH = 1;
+// Raise only for load or end-to-end testing (AI_AGENT_RATE_LIMIT); production
+// keeps twenty runs per hour and per user.
+const RATE_LIMIT = Number(process.env.AI_AGENT_RATE_LIMIT) > 0
+  ? Number(process.env.AI_AGENT_RATE_LIMIT)
+  : 20;
 const RATE_WINDOW_SECONDS = 3600;
 
 const INJECTION_PATTERNS = [
@@ -21,7 +26,7 @@ export async function checkRateLimit(userId) {
   const count = await redis.incr(key);
   if (count === 1) await redis.expire(key, RATE_WINDOW_SECONDS);
   if (count > RATE_LIMIT) {
-    throw new AppError('Agent rate limit exceeded', 429, ERROR_CODES.AI_AGENT_RATE_LIMITED);
+    throw new AppError(`Agent rate limit exceeded (${RATE_LIMIT}/h)`, 429, ERROR_CODES.AI_AGENT_RATE_LIMITED);
   }
 }
 

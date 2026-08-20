@@ -18,7 +18,7 @@ import { getActivityEventLabel } from '@/modules/crm/constants/activity-events';
 import {
   Activity, FileText, Wrench, Clock, AlertTriangle, Info, ChevronRight,
   ShoppingCart, Receipt, Image as ImageIcon, ClipboardList, History,
-  ArrowDownUp, Download, Loader2,
+  ArrowDownUp, Download, Loader2, MessagesSquare,
 } from 'lucide-react';
 
 /**
@@ -34,6 +34,7 @@ import {
  * @param {string} props.entityId
  */
 export function HistoryTimeline({ entityType, entityId }) {
+  const { t } = useLanguage();
   const [type, setType] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -57,7 +58,7 @@ export function HistoryTimeline({ entityType, entityId }) {
     exportMutation.mutate(
       { format },
       {
-        onSuccess: ({ filename }) => showSuccess(`Export erstellt: ${filename}`),
+        onSuccess: ({ filename }) => showSuccess(`${t('crm.timeline.exportCreated', 'Export erstellt')}: ${filename}`),
         onError: (err) => showError(err),
       },
     );
@@ -70,7 +71,7 @@ export function HistoryTimeline({ entityType, entityId }) {
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <Activity className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Historie</h3>
+          <h3 className="text-sm font-semibold">{t('common.activity', 'Aktivität')}</h3>
           {!isLoading && (
             <span className="text-xs text-muted-foreground">({items.length}{hasNextPage ? '+' : ''})</span>
           )}
@@ -94,16 +95,16 @@ export function HistoryTimeline({ entityType, entityId }) {
         ) : isError ? (
           <EmptyState
             icon={AlertTriangle}
-            title="Historie konnte nicht geladen werden"
+            title={t('crm.timeline.loadFailed', 'Aktivität konnte nicht geladen werden')}
             description={error?.message}
-            action={<Button variant="outline" size="sm" onClick={() => refetch()}>Erneut versuchen</Button>}
+            action={<Button variant="outline" size="sm" onClick={() => refetch()}>{t('common.retry', 'Erneut versuchen')}</Button>}
           />
         ) : items.length === 0 ? (
           <EmptyState
-            title="Keine Historie"
+            title={t('crm.timeline.empty', 'Keine Aktivität')}
             description={hasActiveFilters
-              ? 'Keine Einträge entsprechen den gewählten Filtern.'
-              : 'Sobald Wartungen durchgeführt, Notizen erfasst oder Dokumente erstellt werden, erscheinen sie hier.'}
+              ? t('crm.timeline.emptyFiltered', 'Keine Einträge entsprechen den gewählten Filtern.')
+              : t('crm.timeline.emptyDesc', 'Sobald Wartungen durchgeführt, Notizen erfasst oder Dokumente erstellt werden, erscheinen sie hier.')}
             icon={Activity}
           />
         ) : (
@@ -123,7 +124,7 @@ export function HistoryTimeline({ entityType, entityId }) {
                   onClick={() => fetchNextPage()}
                   disabled={isFetchingNextPage}
                 >
-                  {isFetchingNextPage ? 'Wird geladen…' : 'Mehr laden'}
+                  {isFetchingNextPage ? t('common.loading', 'Wird geladen…') : t('crm.timeline.loadMore', 'Mehr laden')}
                 </Button>
               </div>
             )}
@@ -135,32 +136,34 @@ export function HistoryTimeline({ entityType, entityId }) {
 }
 
 const TYPE_FILTER_OPTIONS = [
-  { value: 'all', label: 'Alle' },
-  { value: 'note', label: 'Notizen' },
-  { value: 'image', label: 'Bilder' },
-  { value: 'maintenance_done', label: 'Wartung durchgeführt' },
-  { value: 'maintenance_scheduled', label: 'Wartung geplant' },
-  { value: 'service_order', label: 'Serviceaufträge' },
-  { value: 'quotation', label: 'Offerten' },
-  { value: 'order', label: 'Aufträge' },
-  { value: 'invoice', label: 'Rechnungen' },
-  { value: 'audit', label: 'Änderungen' },
+  { value: 'all', labelKey: 'crm.timeline.filter.all', fallback: 'Alle' },
+  { value: 'note', labelKey: 'crm.notes.title', fallback: 'Notizen' },
+  { value: 'contact', labelKey: 'crm.contactLog.title', fallback: 'Kontakthistorie' },
+  { value: 'image', labelKey: 'crm.images.title', fallback: 'Bilder' },
+  { value: 'maintenance_done', labelKey: 'crm.timeline.filter.maintenanceDone', fallback: 'Wartung durchgeführt' },
+  { value: 'maintenance_scheduled', labelKey: 'crm.timeline.filter.maintenanceScheduled', fallback: 'Wartung geplant' },
+  { value: 'service_order', labelKey: 'crm.timeline.filter.serviceOrders', fallback: 'Serviceaufträge' },
+  { value: 'quotation', labelKey: 'crm.timeline.filter.quotations', fallback: 'Offerten' },
+  { value: 'order', labelKey: 'crm.timeline.filter.orders', fallback: 'Aufträge' },
+  { value: 'invoice', labelKey: 'crm.timeline.filter.invoices', fallback: 'Rechnungen' },
+  { value: 'audit', labelKey: 'crm.timeline.filter.changes', fallback: 'Änderungen' },
 ];
 
 function Toolbar({
   type, onTypeChange, dateFrom, onDateFromChange, dateTo, onDateToChange,
   order, onToggleOrder, onExport, exporting,
 }) {
+  const { t } = useLanguage();
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
       <Select value={type} onValueChange={onTypeChange}>
         <SelectTrigger className="h-8 w-[180px] text-xs">
-          <SelectValue placeholder="Typ" />
+          <SelectValue placeholder={t('crm.timeline.type', 'Typ')} />
         </SelectTrigger>
         <SelectContent>
           {TYPE_FILTER_OPTIONS.map((opt) => (
             <SelectItem key={opt.value} value={opt.value} className="text-xs">
-              {opt.label}
+              {t(opt.labelKey, opt.fallback)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -169,7 +172,7 @@ function Toolbar({
       <div className="flex items-center gap-1.5">
         <Input
           type="date"
-          aria-label="Von"
+          aria-label={t('crm.timeline.from', 'Von')}
           value={dateFrom}
           max={dateTo || undefined}
           onChange={(e) => onDateFromChange(e.target.value)}
@@ -178,7 +181,7 @@ function Toolbar({
         <span className="text-xs text-muted-foreground">–</span>
         <Input
           type="date"
-          aria-label="Bis"
+          aria-label={t('crm.timeline.to', 'Bis')}
           value={dateTo}
           min={dateFrom || undefined}
           onChange={(e) => onDateToChange(e.target.value)}
@@ -191,10 +194,10 @@ function Toolbar({
         size="sm"
         className="h-8 gap-1.5 text-xs"
         onClick={onToggleOrder}
-        title={order === 'desc' ? 'Neueste zuerst' : 'Älteste zuerst'}
+        title={order === 'desc' ? t('crm.timeline.newestFirst', 'Neueste zuerst') : t('crm.timeline.oldestFirst', 'Älteste zuerst')}
       >
         <ArrowDownUp className="h-3.5 w-3.5" />
-        {order === 'desc' ? 'Neueste' : 'Älteste'}
+        {order === 'desc' ? t('crm.timeline.newest', 'Neueste') : t('crm.timeline.oldest', 'Älteste')}
       </Button>
 
       <div className="ml-auto flex items-center gap-1.5">
@@ -234,7 +237,7 @@ function TimelineItem({ entry }) {
     ? getActivityEventLabel(t, eventType)
     : entry.titleKey
       ? t(entry.titleKey, entry.title || '', entry.titleVars || {})
-      : (entry.title || 'Ereignis');
+      : (entry.title || t('crm.timeline.event', 'Ereignis'));
   const auditDetail = entry.type === 'audit' ? (entry.meta?.details?.meetingTitle || '') : '';
   const date = entry.timestamp ? new Date(entry.timestamp) : null;
   const dateStr = date ? date.toLocaleDateString('de-CH', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -262,7 +265,7 @@ function TimelineItem({ entry }) {
           )}
           {isFuture && (
             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-600">
-              Geplant
+              {t('crm.timeline.planned', 'Geplant')}
             </span>
           )}
           <span className="text-[11px] text-muted-foreground ml-auto">
@@ -279,7 +282,7 @@ function TimelineItem({ entry }) {
           <p className="mt-0.5 text-[10px] text-muted-foreground/70">
             {metaLine}
             {metaLine && entry.actor && ' · '}
-            {entry.actor && `von ${entry.actor}`}
+            {entry.actor && `${t('common.by', 'von')} ${entry.actor}`}
           </p>
         )}
       </div>
@@ -363,6 +366,7 @@ function describeMeta(meta) {
 
 const TYPE_CONFIG = {
   note: { icon: Info, color: 'text-slate-500', bg: 'bg-slate-500/10' },
+  contact: { icon: MessagesSquare, color: 'text-sky-500', bg: 'bg-sky-500/10' },
   image: { icon: ImageIcon, color: 'text-brand-500', bg: 'bg-brand-500/10' },
   maintenance_done: { icon: Wrench, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
   maintenance_scheduled: { icon: Clock, color: 'text-sky-500', bg: 'bg-sky-500/10' },

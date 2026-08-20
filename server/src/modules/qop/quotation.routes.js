@@ -34,6 +34,9 @@ router.post('/:id/documents/generate', authenticate, requirePermission('quotatio
 // History
 router.get('/:id/history', authenticate, requirePermission('quotations:read'), validate(quotationIdParamSchema), (req, res, next) => quotationController.getHistory(req, res, next));
 
+// Versionsverwaltung — frozen earlier versions (V1, V2, …) of the quotation
+router.get('/:id/revisions', authenticate, requirePermission('quotations:read'), validate(quotationIdParamSchema), (req, res, next) => quotationController.listRevisions(req, res, next));
+
 // Reminders
 router.post('/:id/reminders/:remId/snooze', authenticate, requirePermission('quotations:write'), validate(snoozeReminderSchema), (req, res, next) => quotationController.snoozeReminder(req, res, next));
 

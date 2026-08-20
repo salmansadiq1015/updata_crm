@@ -19,6 +19,8 @@ import {
   isFieldServiceCapabilityAction,
 } from '../capabilities/fieldService.capabilities.js';
 import { WorkflowState } from './workflow.state.js';
+import agentGovernance from '../governance/agentGovernance.service.js';
+import { RISK_LEVEL_LABELS } from '../governance/agent.risk.js';
 import logger from '../../../shared/logger/index.js';
 import swissPlzService from '../../../shared/ai/swissPlz.service.js';
 
@@ -37,6 +39,7 @@ const ACTIONS = Object.freeze({
   UPDATE_PROJECT: 'UPDATE_PROJECT',
   CREATE_NOTE: 'CREATE_NOTE',
   SEND_CHAT: 'SEND_CHAT',
+  SUMMARIZE_CHAT: 'SUMMARIZE_CHAT',
   RECORD_TIME: 'RECORD_TIME',
   ANALYZE_WORKFORCE: 'ANALYZE_WORKFORCE',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
@@ -59,39 +62,40 @@ const ACTIONS = Object.freeze({
 });
 
 const ACTION_LABELS = {
-  [ACTIONS.CREATE_CUSTOMER]: 'create a customer',
-  [ACTIONS.UPDATE_CUSTOMER]: 'update a customer',
-  [ACTIONS.CREATE_TASK]: 'create a task',
-  [ACTIONS.UPDATE_TASK]: 'update a task',
-  [ACTIONS.CREATE_PROJECT]: 'create a project',
-  [ACTIONS.CREATE_ORDER]: 'create an order',
-  [ACTIONS.UPDATE_ORDER]: 'update an order',
-  [ACTIONS.CREATE_ASSIGNMENT]: 'schedule an assignment',
-  [ACTIONS.RESCHEDULE_ASSIGNMENT]: 'reschedule an assignment',
-  [ACTIONS.CREATE_REPORT]: 'create a service report',
-  [ACTIONS.UPDATE_REPORT]: 'update a service report',
-  [ACTIONS.UPDATE_PROJECT]: 'update a project',
-  [ACTIONS.CREATE_NOTE]: 'create a note',
-  [ACTIONS.SEND_CHAT]: 'send a chat message',
-  [ACTIONS.RECORD_TIME]: 'record working hours',
-  [ACTIONS.ANALYZE_WORKFORCE]: 'analyze workforce planning',
-  [ACTIONS.ANALYZE_FIELD_TICKET]: 'analyze a technician ticket',
-  [ACTIONS.DELETE_CUSTOMER]: 'archive a customer',
-  [ACTIONS.DELETE_TASK]: 'delete a task',
-  [ACTIONS.DELETE_PROJECT]: 'delete a project',
-  [ACTIONS.DELETE_ORDER]: 'delete an order',
-  [ACTIONS.DELETE_REPORT]: 'delete a service report',
-  [ACTIONS.DELETE_ASSIGNMENT]: 'delete an assignment',
-  [ACTIONS.SEARCH_CUSTOMER]: 'find customer information',
-  [ACTIONS.SEARCH_TASKS]: 'find task information',
-  [ACTIONS.SEARCH_PROJECTS]: 'find project information',
-  [ACTIONS.SEARCH_ORDERS]: 'find job or order information',
-  [ACTIONS.SEARCH_REPORTS]: 'find service reports',
-  [ACTIONS.SEARCH_DOCUMENTS]: 'find documents',
-  [ACTIONS.CREATE_QUOTATION]: 'create a quotation',
-  [ACTIONS.CREATE_INVOICE]: 'create an invoice',
-  [ACTIONS.CREATE_TASK_REMINDER]: 'create a task reminder',
-  [ACTIONS.GENERAL]: 'help with the system',
+  [ACTIONS.CREATE_CUSTOMER]: 'einen Kunden erfassen',
+  [ACTIONS.UPDATE_CUSTOMER]: 'einen Kunden aktualisieren',
+  [ACTIONS.CREATE_TASK]: 'eine Aufgabe erstellen',
+  [ACTIONS.UPDATE_TASK]: 'eine Aufgabe aktualisieren',
+  [ACTIONS.CREATE_PROJECT]: 'ein Projekt eröffnen',
+  [ACTIONS.CREATE_ORDER]: 'einen Auftrag erstellen',
+  [ACTIONS.UPDATE_ORDER]: 'einen Auftrag aktualisieren',
+  [ACTIONS.CREATE_ASSIGNMENT]: 'einen Einsatz planen',
+  [ACTIONS.RESCHEDULE_ASSIGNMENT]: 'einen Einsatz verschieben',
+  [ACTIONS.CREATE_REPORT]: 'einen Rapport erstellen',
+  [ACTIONS.UPDATE_REPORT]: 'einen Rapport aktualisieren',
+  [ACTIONS.UPDATE_PROJECT]: 'ein Projekt aktualisieren',
+  [ACTIONS.CREATE_NOTE]: 'eine Notiz erfassen',
+  [ACTIONS.SEND_CHAT]: 'eine Chat-Nachricht senden',
+  [ACTIONS.SUMMARIZE_CHAT]: 'einen Chat zusammenfassen',
+  [ACTIONS.RECORD_TIME]: 'Arbeitszeit erfassen',
+  [ACTIONS.ANALYZE_WORKFORCE]: 'die Personalplanung auswerten',
+  [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
+  [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
+  [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
+  [ACTIONS.DELETE_PROJECT]: 'ein Projekt löschen',
+  [ACTIONS.DELETE_ORDER]: 'einen Auftrag löschen',
+  [ACTIONS.DELETE_REPORT]: 'einen Rapport löschen',
+  [ACTIONS.DELETE_ASSIGNMENT]: 'einen Einsatz löschen',
+  [ACTIONS.SEARCH_CUSTOMER]: 'Kundendaten suchen',
+  [ACTIONS.SEARCH_TASKS]: 'Aufgaben suchen',
+  [ACTIONS.SEARCH_PROJECTS]: 'Projekte suchen',
+  [ACTIONS.SEARCH_ORDERS]: 'Aufträge suchen',
+  [ACTIONS.SEARCH_REPORTS]: 'Rapporte suchen',
+  [ACTIONS.SEARCH_DOCUMENTS]: 'Dokumente suchen',
+  [ACTIONS.CREATE_QUOTATION]: 'eine Offerte erstellen',
+  [ACTIONS.CREATE_INVOICE]: 'eine Rechnung erstellen',
+  [ACTIONS.CREATE_TASK_REMINDER]: 'eine Erinnerung erstellen',
+  [ACTIONS.GENERAL]: 'beim System helfen',
 };
 
 const PROJECT_STATUS_BY_PHRASE = [
@@ -152,11 +156,17 @@ async function executeAction(state) {
 
   const previousFollowUp = state.entities?.previousFollowUp || null;
   const requestContext = state.entities?.requestContext || {};
-  const action = previousFollowUp?.action || classifyAction(input);
+  const llmPlan = state.entities?.llmPlan || null;
+  const action = previousFollowUp?.action
+    || (llmPlan?.action && ACTIONS[llmPlan.action] ? ACTIONS[llmPlan.action] : classifyAction(input));
   const effectiveInput = previousFollowUp?.originalInput
     ? `${previousFollowUp.originalInput}\nFollow-up answer: ${input}`
     : input;
-  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext, action);
+  const context = action === ACTIONS.CREATE_CUSTOMER ? {} : await resolveContext(effectiveInput, previousFollowUp, requestContext, action, llmPlan?.params || null);
+  // Clean parameters extracted by the LLM planner; handlers prefer these over
+  // keyword stripping. Dates crossed the queue as ISO strings.
+  context.llmDraft = llmPlan?.params || null;
+  context.requestContext = requestContext;
   let output;
 
   try {
@@ -175,7 +185,7 @@ async function executeAction(state) {
       output: {
         action,
         status: 'needs_follow_up',
-        message: `I could not ${ACTION_LABELS[action] || 'complete that action'} yet.`,
+        message: `Ich konnte ${ACTION_LABELS[action] || 'das noch nicht erledigen'} noch nicht abschliessen.`,
         followUpQuestions: [err.message],
         missingFields: [],
         originalInput: previousFollowUp?.originalInput || input,
@@ -292,6 +302,36 @@ function classifyActionLegacy(input) {
 }
 
 async function performAction(action, input, context, userId, state = {}) {
+  // Single gate in front of every action: emergency stop, per-agent kill
+  // switch (proactive runs only) and the risk-based approval rule.
+  const decision = await agentGovernance.evaluate(action, {
+    confirmed: Boolean(state.confirmed),
+    agentKey: state.agentKey || null,
+  });
+  if (!decision.allowed) {
+    await agentGovernance.record(decision, { action, userId, agentRunId: state.agentRunId, input });
+    return decision.block;
+  }
+  if (decision.requiresApproval) {
+    await agentGovernance.record(decision, { action, userId, agentRunId: state.agentRunId, input });
+    const target = confirmationTarget(action, context);
+    return {
+      action,
+      status: 'awaiting_confirmation',
+      riskLevel: decision.riskLevel,
+      message: `${ACTION_LABELS[action] ? `Ich soll ${ACTION_LABELS[action]}. ` : ''}${RISK_LEVEL_LABELS[decision.riskLevel]}. Soll ich fortfahren?`,
+      confirmation: {
+        action,
+        riskLevel: decision.riskLevel,
+        label: ACTION_LABELS[action] || action,
+        effect: RISK_LEVEL_LABELS[decision.riskLevel],
+        ...target,
+      },
+      ...target,
+      resolvedContext: summarizeContext(context),
+    };
+  }
+
   if (isFieldServiceCapabilityAction(action)) {
     return executeFieldServiceCapability({
       action,
@@ -324,6 +364,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return createNote(input, context, userId);
     case ACTIONS.SEND_CHAT:
       return sendChat(input, context, userId);
+    case ACTIONS.SUMMARIZE_CHAT:
+      return summarizeChat(input, context, userId, state);
     case ACTIONS.SEARCH_CUSTOMER:
       return searchCustomer(input, context);
     case ACTIONS.CREATE_ORDER:
@@ -364,7 +406,7 @@ async function createCustomer(input, context, userId) {
   return {
     action: ACTIONS.CREATE_CUSTOMER,
     status: 'completed',
-    message: `Customer ${customer.customerNumber} created: ${customer.name}.`,
+    message: `Kunde ${customer.customerNumber} erfasst: ${customer.name}.`,
     recordType: 'customer',
     recordId: customer._id,
     record: compactCustomer(customer),
@@ -378,14 +420,15 @@ async function createTask(input, context, userId) {
   if (context.projectCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_TASK, ['project'], context);
   }
-  const title = cleanTitle(input, ['create task', 'task', 'aufgabe', 'erstelle']);
-  const priority = extractPriority(input);
-  const dueDate = extractDate(input);
+  const draft = context.llmDraft || {};
+  const title = draft.title || cleanTitle(input, ['create task', 'task', 'aufgabe', 'erstelle']);
+  const priority = draft.priority || extractPriority(input);
+  const dueDate = draftDate(draft.dueDate) || extractDate(input);
 
   const taskService = (await import('../../tasks/task.service.js')).default;
   const task = await taskService.create({
     title,
-    description: input,
+    description: draft.description || input,
     priority,
     ...(dueDate ? { dueDate } : {}),
     ...(context.assignee ? { assigneeId: context.assignee._id } : {}),
@@ -396,7 +439,7 @@ async function createTask(input, context, userId) {
   return {
     action: ACTIONS.CREATE_TASK,
     status: 'completed',
-    message: `Task created: ${task.title}`,
+    message: `Aufgabe erstellt: ${task.title}`,
     recordType: 'task',
     recordId: task._id,
     record: compactTask(task),
@@ -419,7 +462,7 @@ async function updateProject(input, context, userId) {
   return {
     action: ACTIONS.UPDATE_PROJECT,
     status: 'completed',
-    message: `Project ${project.name} updated to ${status}.`,
+    message: `Projekt ${project.name} auf ${status} gesetzt.`,
     recordType: 'project',
     recordId: project._id,
     record: { id: project._id, name: project.name, status: project.status },
@@ -434,23 +477,69 @@ async function createReport(input, context, userId) {
   if (!orderId) {
     return needsFollowUp(ACTIONS.CREATE_REPORT, ['order/work order'], context);
   }
-  const workPerformed = extractReportWorkPerformed(input);
+  // A dictated visit carries enough for Rapport AI to structure it; a one-line
+  // command keeps the plain path.
+  const rapportService = (await import('../agents/rapport/rapport.service.js')).default;
+  const draft = input.length >= 80 ? await rapportService.draft(input) : null;
+
   const reportService = (await import('../../mobile/report.service.js')).default;
   const report = await reportService.create(orderId, {
     reportDate: new Date(),
     projectId: context.project?._id || objectIdValue(context.assignment?.projectId) || null,
-    workPerformed,
-    technicianNotes: input,
-    materialItems: extractMaterials(input),
+    workPerformed: draft?.workPerformed || extractReportWorkPerformed(input),
+    findings: draft?.findings || null,
+    nextSteps: draft?.nextSteps || null,
+    technicianNotes: draft ? rapportService.composeNotes(draft) : input,
+    // catalogSource is required; dictated material is CUSTOM until the office
+    // maps it onto a catalogue article.
+    materialItems: draft?.materials?.length
+      ? draft.materials.map((m, index) => ({
+        catalogSource: 'CUSTOM',
+        description: m.description,
+        quantity: m.quantity,
+        unit: m.unit || 'Stk',
+        sortOrder: index,
+      }))
+      : extractMaterials(input),
+    ...(draft?.workedHours ? { billableMinutes: Math.round(draft.workedHours * 60) } : {}),
     status: 'DRAFT',
   }, userId, { source: 'ai-agent' });
+
+  const completeness = draft
+    ? rapportService.completeness(draft, { hasAssignment: true })
+    : { complete: false, missing: [] };
+
+  const parts = [`Rapport-Entwurf ${report.reportNumber} erstellt`];
+  if (draft?.materials?.length) parts.push(`${draft.materials.length} Materialposition(en)`);
+  if (draft?.workedHours) parts.push(`${draft.workedHours} h Arbeitszeit`);
+  let message = `${parts.join(', ')}.`;
+  if (draft && !completeness.complete) {
+    message += ` Für die Freigabe fehlt noch: ${completeness.missing.join(', ')}.`;
+  }
+  if (draft?.followUpQuotation?.needed) {
+    message += ` Folgearbeit erkannt — eine Offerte wäre angezeigt${draft.followUpQuotation.reason ? ` (${draft.followUpQuotation.reason})` : ''}.`;
+  }
+
   return {
     action: ACTIONS.CREATE_REPORT,
     status: 'completed',
-    message: `Draft service report ${report.reportNumber} created.`,
+    message,
     recordType: 'workReport',
     recordId: report._id,
-    record: { id: report._id, orderId, reportNumber: report.reportNumber, status: report.status },
+    record: {
+      id: report._id,
+      orderId,
+      reportNumber: report.reportNumber,
+      status: report.status,
+      ...(draft ? {
+        materials: draft.materials.length,
+        workedHours: draft.workedHours,
+        billable: draft.billable,
+        defectFound: draft.defectFound,
+        followUpQuotation: draft.followUpQuotation.needed,
+        missing: completeness.missing,
+      } : {}),
+    },
   };
 }
 
@@ -463,25 +552,26 @@ async function createAssignment(input, context, userId) {
   }
   const employee = context.assignee;
   if (!employee) return needsFollowUp(ACTIONS.CREATE_ASSIGNMENT, ['employee/technician'], context);
-  const start = extractDateTime(input);
+  const draft = context.llmDraft || {};
+  const start = draftDate(draft.dateTime) || extractDateTime(input);
   if (!start) return needsFollowUp(ACTIONS.CREATE_ASSIGNMENT, ['scheduled date and time'], context);
-  const durationHours = extractDurationHours(input) || 1;
+  const durationHours = draft.durationHours || extractDurationHours(input) || 1;
   const assignmentService = (await import('../../deploy/assignment.service.js')).default;
   const result = await assignmentService.create({
     employeeIds: [employee._id],
     assignmentType: hasAny(input.toLowerCase(), ['maintenance', 'wartung']) ? 'MAINTENANCE' : 'PROJECT_WORK',
-    title: cleanTitle(input, ['schedule', 'assign', 'plan', 'termin']),
+    title: draft.title || cleanTitle(input, ['schedule', 'assign', 'plan', 'termin']),
     startDatetime: start,
     endDatetime: new Date(start.getTime() + durationHours * 60 * 60 * 1000),
     projectId: context.project?._id || null,
     customerId: context.customer?._id || null,
-    priority: extractPriority(input) === 'URGENT' ? 'URGENT' : extractPriority(input) === 'HIGH' ? 'HIGH' : 'NORMAL',
+    priority: ['URGENT', 'HIGH'].includes(draft.priority || extractPriority(input)) ? (draft.priority || extractPriority(input)) : 'NORMAL',
     instructions: input,
   }, userId, { source: 'ai-agent' });
   return {
     action: ACTIONS.CREATE_ASSIGNMENT,
     status: 'completed',
-    message: `Assignment scheduled for ${displayUser(employee)}.`,
+    message: `Einsatz für ${displayUser(employee)} geplant.`,
     recordType: 'assignment',
     recordId: result?.[0]?.id,
     record: result?.[0] || null,
@@ -509,7 +599,7 @@ async function recordTime(input, context, userId) {
   return {
     action: ACTIONS.RECORD_TIME,
     status: 'completed',
-    message: `${hours} hour(s) recorded.`,
+    message: `${hours} Stunde(n) erfasst.`,
     recordType: 'timeEntry',
     recordId: entry._id,
     record: { id: entry._id, orderId, netDurationMin: entry.netDurationMin },
@@ -539,7 +629,7 @@ async function analyzeFieldTicket(input, state) {
   return {
     action: ACTIONS.ANALYZE_FIELD_TICKET,
     status: 'completed',
-    message: `Ticket ${result.ticketNumber || ticketId} analyzed.`,
+    message: `Meldung ${result.ticketNumber || ticketId} analysiert.`,
     recordType: 'fieldTicket',
     recordId: ticketId,
     record: result,
@@ -570,7 +660,7 @@ async function analyzeWorkforce(input, state) {
   return {
     action: ACTIONS.ANALYZE_WORKFORCE,
     status: 'completed',
-    message: 'Workforce planning context prepared.',
+    message: 'Personalplanung ausgewertet.',
     recordType: 'workforcePlanningContext',
     record: result,
   };
@@ -592,7 +682,7 @@ async function createNote(input, context, userId) {
   return {
     action: ACTIONS.CREATE_NOTE,
     status: 'completed',
-    message: `Note added to ${entityType}.`,
+    message: 'Notiz erfasst.',
     recordType: 'note',
     recordId: note._id,
   };
@@ -603,7 +693,7 @@ async function sendChat(input, context, userId) {
   if (!roomId || !mongoose.Types.ObjectId.isValid(roomId)) {
     return needsFollowUp(ACTIONS.SEND_CHAT, ['chat room'], context);
   }
-  const content = extractAfter(input, ['message ', 'nachricht ', 'say ', 'send ']) || input;
+  const content = context.llmDraft?.messageContent || extractAfter(input, ['message ', 'nachricht ', 'say ', 'send ']) || input;
   const User = (await import('../../auth/user.model.js')).default;
   const sender = await User.findById(userId).select('firstName lastName email').lean();
   const chatMessageService = (await import('../../chat/chatMessage.service.js')).default;
@@ -611,9 +701,66 @@ async function sendChat(input, context, userId) {
   return {
     action: ACTIONS.SEND_CHAT,
     status: 'completed',
-    message: 'Chat message sent.',
+    message: 'Chat-Nachricht gesendet.',
     recordType: 'chatMessage',
     recordId: message._id,
+  };
+}
+
+async function summarizeChat(input, context, userId, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('chat:read')) {
+    return {
+      action: ACTIONS.SUMMARIZE_CHAT,
+      status: 'failed',
+      message: "Missing permission 'chat:read'",
+    };
+  }
+  const requestRoomId = context.requestContext?.chatRoomId || context.roomId || extractAfter(input, ['room ', 'chat room ']);
+  if (!requestRoomId || !mongoose.Types.ObjectId.isValid(requestRoomId)) {
+    return needsFollowUp(ACTIONS.SUMMARIZE_CHAT, ['chat room'], context);
+  }
+
+  const User = (await import('../../auth/user.model.js')).default;
+  const user = await User.findById(userId).select('firstName lastName email role').lean();
+  const chatRoomService = (await import('../../chat/chatRoom.service.js')).default;
+  await chatRoomService.assertMembership(requestRoomId, user);
+
+  const ChatMessage = (await import('../../mobile/chatMessage.model.js')).default;
+  const messages = await ChatMessage.find({ roomId: requestRoomId, isDeleted: { $ne: true } })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate('senderId', 'firstName lastName')
+    .lean();
+  if (!messages.length) {
+    return { action: ACTIONS.SUMMARIZE_CHAT, status: 'completed', message: 'Dieser Chat enthält noch keine Nachrichten.' };
+  }
+
+  const transcript = messages
+    .reverse()
+    .map((m) => {
+      const who = m.senderId ? `${m.senderId.firstName || ''} ${m.senderId.lastName || ''}`.trim() : 'Unbekannt';
+      const text = m.transcript || m.content || (m.messageType !== 'TEXT' ? `[${m.messageType}]` : '');
+      return `${who}: ${text}`;
+    })
+    .join('\n');
+
+  const { createChatModel } = await import('../../../shared/ai/llmFactory.js');
+  const llm = await createChatModel({ temperature: 0.3 });
+  const response = await llm.invoke([
+    {
+      role: 'system',
+      content: 'Fasse den folgenden Team-Chat eines Schweizer Heizungsbau-Betriebs kurz zusammen: die wichtigsten Themen, getroffene Entscheidungen und offene Punkte als knappe Aufzählung. Antworte in der Sprache, in der der Chat hauptsächlich geführt wird.',
+    },
+    { role: 'user', content: transcript.slice(0, 12000) },
+  ]);
+
+  return {
+    action: ACTIONS.SUMMARIZE_CHAT,
+    status: 'completed',
+    message: String(response.content),
+    recordType: 'chatRoom',
+    recordId: requestRoomId,
   };
 }
 
@@ -623,7 +770,7 @@ async function searchCustomer(input, context) {
   return {
     action: ACTIONS.SEARCH_CUSTOMER,
     status: 'completed',
-    message: customers.length === 1 ? `Found ${customers[0].name}.` : `Found ${customers.length} customers.`,
+    message: customers.length === 1 ? `${customers[0].name} gefunden.` : `${customers.length} Kunden gefunden.`,
     records: customers.map((customer) => ({
       id: customer._id,
       name: customer.name,
@@ -647,40 +794,139 @@ async function createOrder(input, context, userId) {
     customerId: context.customer._id,
     customerName: context.customer.name,
     projectId: context.project?._id || null,
-    title: cleanTitle(input, ['create order', 'create job', 'auftrag', 'order']),
-    notes: input,
+    title: context.llmDraft?.title || cleanTitle(input, ['create order', 'create job', 'auftrag', 'order']),
+    notes: context.llmDraft?.description || input,
     lineItems: [],
     language: 'de',
   }, userId, { source: 'ai-agent' });
   return {
     action: ACTIONS.CREATE_ORDER,
     status: 'completed',
-    message: `Order ${order.orderNumber} created for ${order.customerName}.`,
+    message: `Auftrag ${order.orderNumber} für ${order.customerName} erstellt.`,
     recordType: 'order',
     recordId: order._id,
     record: { id: order._id, orderNumber: order.orderNumber, customerName: order.customerName, status: order.status },
   };
 }
 
-function needsFollowUp(action, missingFields, context = {}) {
+/**
+ * Names the record an action is about, so the confirmation prompt can show
+ * what exactly is at stake rather than just the action label.
+ */
+const CONFIRMATION_TARGETS = {
+  [ACTIONS.DELETE_TASK]: ['task', 'task'],
+  [ACTIONS.DELETE_ORDER]: ['order', 'order'],
+  [ACTIONS.DELETE_PROJECT]: ['project', 'project'],
+  [ACTIONS.DELETE_CUSTOMER]: ['customer', 'customer'],
+  [ACTIONS.DELETE_REPORT]: ['workReport', 'report'],
+  [ACTIONS.DELETE_ASSIGNMENT]: ['assignment', 'assignment'],
+  [ACTIONS.RESCHEDULE_ASSIGNMENT]: ['assignment', 'assignment'],
+};
+
+function confirmationTarget(action, context = {}) {
+  const mapping = CONFIRMATION_TARGETS[action];
+  if (!mapping) return {};
+  const [recordType, contextKey] = mapping;
+  const record = context[contextKey];
+  if (!record?._id) return {};
+  return { recordType, recordId: String(record._id) };
+}
+
+/** German names for the fields an action can be missing. */
+const FIELD_LABELS = {
+  customer: 'den Kunden',
+  'customer name': 'den Kundennamen',
+  'company name': 'den Firmennamen',
+  'owner name': 'den Inhabernamen',
+  'UID number': 'die UID-Nummer',
+  'street address with postal code and city': 'die Adresse mit PLZ und Ort',
+  project: 'das Projekt',
+  'project name': 'den Projektnamen',
+  'project status': 'den Projektstatus',
+  'project manager': 'die Projektleitung',
+  'employee/technician': 'den Monteur',
+  'order/work order': 'den Auftrag',
+  order: 'den Auftrag',
+  task: 'die Aufgabe',
+  'service report': 'den Rapport',
+  assignment: 'den Einsatz',
+  'chat room': 'den Chat-Raum',
+  'scheduled date and time': 'Datum und Uhrzeit',
+  'new date and time': 'das neue Datum mit Uhrzeit',
+  'hours or start/end time': 'die Stundenzahl oder Start- und Endzeit',
+  'customer/site/asset': 'den Kunden, das Objekt oder die Anlage',
+  'line items or service description': 'die Positionen oder die Leistungsbeschreibung',
+  'new status or assignment': 'den neuen Status oder die Zuweisung',
+  'new status or details': 'den neuen Status oder die Angaben',
+  'new report content or status': 'den Rapportinhalt oder den Status',
+  action: 'die gewünschte Aktion',
+  permission: 'die nötige Berechtigung',
+  confirmation: 'Ihre Bestätigung',
+};
+
+/** Which candidate list belongs to which missing field. */
+const FIELD_CANDIDATE_KEY = {
+  customer: 'customers',
+  'customer name': 'customers',
+  project: 'projects',
+  'project name': 'projects',
+  'employee/technician': 'assignees',
+  'project manager': 'assignees',
+  'order/work order': 'assignments',
+  order: 'orders',
+  task: 'tasks',
+  'service report': 'reports',
+  assignment: 'assignments',
+  'customer/site/asset': 'installations',
+};
+
+function fieldLabel(field) {
+  return FIELD_LABELS[field] || field;
+}
+
+/**
+ * Says plainly what is missing and, when the system already found possible
+ * matches, lists them numbered so the answer can be "1" or the name. The
+ * candidates were always in the payload — they just never reached the reader.
+ */
+function needsFollowUp(action, missingFields = [], context = {}) {
+  const candidates = summarizeCandidates(context);
+  const lines = [`Ich kann ${ACTION_LABELS[action] || 'das erledigen'}, dafür fehlt mir noch etwas.`];
+
+  const questions = [];
+  for (const field of missingFields) {
+    const options = candidates[FIELD_CANDIDATE_KEY[field]] || [];
+    if (options.length) {
+      lines.push('');
+      lines.push(`Welchen Treffer meinen Sie für ${fieldLabel(field)}?`);
+      options.forEach((option) => {
+        lines.push(`  ${option.index}. ${option.label}${option.subtitle ? ` — ${option.subtitle}` : ''}`);
+      });
+      questions.push(`Welchen Treffer meinen Sie für ${fieldLabel(field)}? Antworten Sie mit der Nummer oder dem Namen.`);
+    } else {
+      lines.push(`• Bitte ${fieldLabel(field)} angeben.`);
+      questions.push(`Bitte ${fieldLabel(field)} angeben.`);
+    }
+  }
+
   return {
     action,
     status: 'needs_follow_up',
-    message: `I can ${ACTION_LABELS[action] || 'do that'}, but I need more information first.`,
+    message: lines.join('\n'),
     missingFields,
-    followUpQuestions: missingFields.map((field) => `Which ${field} should I use?`),
+    followUpQuestions: questions,
     resolvedContext: summarizeContext(context),
-    candidates: summarizeCandidates(context),
+    candidates,
   };
 }
 
-async function resolveContext(input, previousFollowUp = null, requestContext = {}, action = null) {
+async function resolveContext(input, previousFollowUp = null, requestContext = {}, action = null, draft = null) {
   const objectId = firstObjectId(input);
   const requestResolved = await loadRequestResolvedContext(requestContext);
   const [userResult, customerResult, projectResult, orderResult, assignmentResult, installationResult, taskResult, reportResult] = await Promise.all([
-    findUser(input, previousFollowUp),
-    findCustomer(input, objectId, previousFollowUp),
-    findProject(input, objectId, previousFollowUp),
+    findUser(input, previousFollowUp, draft),
+    findCustomer(input, objectId, previousFollowUp, draft),
+    findProject(input, objectId, previousFollowUp, draft),
     findOrder(input, objectId, previousFollowUp),
     requestResolved.assignment ? { selected: null, candidates: [] } : findAssignment(input, objectId, previousFollowUp),
     findInstallation(input, objectId),
@@ -821,9 +1067,9 @@ async function loadPreviousReport(id) {
     .catch(() => null);
 }
 
-async function findUser(input, previousFollowUp) {
+async function findUser(input, previousFollowUp, draft = null) {
   const User = (await import('../../auth/user.model.js')).default;
-  const term = extractPersonName(input);
+  const term = draft?.assigneeName || extractPersonName(input);
   const previousCandidates = previousFollowUp?.candidates?.assignees || [];
   const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
   if (selectedPrevious?._id) {
@@ -838,7 +1084,7 @@ async function findUser(input, previousFollowUp) {
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
 }
 
-async function findCustomer(input, objectId, previousFollowUp) {
+async function findCustomer(input, objectId, previousFollowUp, draft = null) {
   const Customer = (await import('../../crm/customer.model.js')).default;
   const previousCandidates = previousFollowUp?.candidates?.customers || [];
   const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
@@ -850,20 +1096,36 @@ async function findCustomer(input, objectId, previousFollowUp) {
     const found = await Customer.findById(objectId).select('name ownerName customerNumber email phone mobile city uidNumber vatNumber').lean().catch(() => null);
     if (found) return { selected: found, candidates: [] };
   }
-  const candidates = await findCustomers(extractSearchTerm(input), 5);
+  const candidates = await findCustomers(draft?.customerName || extractSearchTerm(input), 5);
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
 }
 
 async function findCustomers(term, limit = 5) {
-  const Customer = (await import('../../crm/customer.model.js')).default;
   if (!term || term.length < 2) return [];
-  return Customer.find({ $text: { $search: term } })
-    .select('name ownerName customerNumber email phone mobile city uidNumber vatNumber')
-    .limit(limit)
-    .lean();
+  const customerRepository = (await import('../../crm/customer.repository.js')).default;
+
+  // The CRM search is accent-safe and matches partial words, unlike a bare
+  // $text query; it requires every word to match, so a term still carrying
+  // filler ("Kundendaten von Immobilien Verwaltung") finds nothing. Drop the
+  // filler and try again rather than telling the user there is no such client.
+  let results = await customerRepository.textSearch(term, limit).catch(() => []);
+  if (results.length) return results;
+
+  const stripped = stripSearchNoise(term);
+  if (stripped && stripped !== term) {
+    results = await customerRepository.textSearch(stripped, limit).catch(() => []);
+    if (results.length) return results;
+  }
+
+  // Last resort: the longest word, which is almost always the actual name.
+  const longest = (stripped || term).split(/\s+/).sort((a, b) => b.length - a.length)[0];
+  if (longest && longest.length >= 4 && longest !== stripped) {
+    return customerRepository.textSearch(longest, limit).catch(() => []);
+  }
+  return [];
 }
 
-async function findProject(input, objectId, previousFollowUp) {
+async function findProject(input, objectId, previousFollowUp, draft = null) {
   const Project = (await import('../../pm/project.model.js')).default;
   const previousCandidates = previousFollowUp?.candidates?.projects || [];
   const selectedPrevious = selectCandidateFromAnswer(input, previousCandidates);
@@ -875,7 +1137,7 @@ async function findProject(input, objectId, previousFollowUp) {
     const found = await Project.findById(objectId).select('name projectNumber status customerId customerName').lean().catch(() => null);
     if (found) return { selected: found, candidates: [] };
   }
-  const term = extractSearchTerm(input);
+  const term = draft?.projectName || extractSearchTerm(input);
   if (!term || term.length < 2) return { selected: null, candidates: [] };
   const candidates = await Project.find({ $text: { $search: term } }).select('name projectNumber status customerId customerName').limit(5).lean();
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
@@ -922,6 +1184,16 @@ async function findAssignment(input, objectId, previousFollowUp) {
   if (/\bcurrent\s+(work\s+)?order\b/i.test(input)) {
     return { selected: null, candidates: [] };
   }
+  // A dictated report usually names the assignment: "zum Einsatz ASN-2026-00003".
+  const documentNumber = documentNumberIn(input);
+  if (documentNumber) {
+    const byNumber = await Assignment.findOne({ assignmentNumber: new RegExp(`^${escapeRegex(documentNumber)}$`, 'i') })
+      .select('assignmentNumber title status projectId customerId orderId assignmentType priority startDatetime endDatetime')
+      .lean()
+      .catch(() => null);
+    if (byNumber) return { selected: byNumber, candidates: [] };
+  }
+
   const term = extractSearchTerm(input);
   if (!term || term.length < 2) {
     return { selected: null, candidates: [] };
@@ -1070,7 +1342,33 @@ const fieldServiceCapabilityHelpers = {
   extractDurationHours,
   objectIdValue,
   extractSearchTerm,
+  stripSearchNoise,
 };
+
+const SEARCH_NOISE = new Set([
+  'kunde', 'kunden', 'kundendaten', 'kundin', 'firma', 'herr', 'frau', 'familie',
+  'von', 'vom', 'der', 'die', 'das', 'den', 'dem', 'des', 'für', 'fuer', 'mit',
+  'bei', 'zum', 'zur', 'einen', 'eine', 'einem', 'einer', 'ein', 'alle', 'mir',
+  'zeig', 'zeige', 'suche', 'such', 'finde', 'zeigen', 'daten', 'infos',
+  'projekt', 'auftrag', 'offerte', 'rechnung', 'aufgabe', 'rapport',
+]);
+
+/** Removes command and filler words so what is left is the actual name. */
+function stripSearchNoise(term) {
+  return String(term || '')
+    .split(/\s+/)
+    .filter((word) => word && !SEARCH_NOISE.has(word.toLowerCase().replace(/[.,:;!?]/g, '')))
+    .join(' ')
+    .trim();
+}
+
+const DOCUMENT_NUMBER = /\b[A-Z]{2,4}-\d{4}-\d{3,6}\b/i;
+
+/** Picks a document number out of dictated text, where the search term misses it. */
+function documentNumberIn(input) {
+  const match = String(input || '').match(DOCUMENT_NUMBER);
+  return match ? match[0] : null;
+}
 
 function escapeRegex(value) {
   return `${value}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -1108,6 +1406,13 @@ function extractProjectStatus(input) {
 function extractDurationHours(input) {
   const match = input.match(/(\d+(?:[.,]\d+)?)\s*(hours?|hrs?|stunden?|h)\b/i);
   return match ? Number(match[1].replace(',', '.')) : null;
+}
+
+// LLM-draft dates arrive as ISO strings after queue serialization.
+function draftDate(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function extractDate(input) {

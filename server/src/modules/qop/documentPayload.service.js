@@ -37,7 +37,7 @@ function normalizeLineItems(items = []) {
     vatRate: Number(item.vatRate || 0),
     lineTotal: Number(item.lineTotal || 0),
     image: item.image && item.image.fileId
-      ? { fileId: String(item.image.fileId), url: item.image.url || '' }
+      ? { fileId: String(item.image.fileId), url: item.image.url || '', size: item.image.size || 'medium' }
       : null,
   }));
 }
@@ -91,6 +91,45 @@ async function loadSiteBillingAddress(projectId) {
   return billing && billing.street ? billing : null;
 }
 
+// Object address (Objektadresse) for the document filename convention.
+// Returns "Street, City" (without PLZ) or null. Prefers the document's own
+// siteId (Objekt-first flow) and falls back to the project's site.
+async function loadSiteAddress(projectId, directSiteId = null) {
+  let siteId = toId(directSiteId);
+  if (!isObjectId(siteId)) {
+    const id = toId(projectId);
+    if (!isObjectId(id)) return null;
+    const Project = (await import('../pm/project.model.js')).default;
+    const project = await Project.findById(id).select('siteId').lean();
+    siteId = toId(project?.siteId);
+  }
+  if (!isObjectId(siteId)) return null;
+  const Site = (await import('../crm/site.model.js')).default;
+  const site = await Site.findById(siteId).select('street city').lean();
+  if (!site?.street) return null;
+  return [site.street, site.city].filter(Boolean).join(', ');
+}
+
+// The party chosen on the document (billingAddressSource) resolved from its
+// site: the Objekt's billing address, its owner or its property management.
+// Returns null for 'customer' (default) or when the party carries no street,
+// so an empty block never replaces the customer address.
+async function loadChosenSiteParty(siteId, source) {
+  const id = toId(siteId);
+  if (!isObjectId(id) || !source || source === 'customer') return null;
+  const fieldBySource = {
+    site_billing: 'billingAddress',
+    site_ownership: 'ownership',
+    site_management: 'management',
+  };
+  const field = fieldBySource[source];
+  if (!field) return null;
+  const Site = (await import('../crm/site.model.js')).default;
+  const site = await Site.findById(id).select(field).lean();
+  const party = site?.[field];
+  return party && party.street ? party : null;
+}
+
 function buildCustomerBlock(document, customer, contact, billing = null) {
   const contactName = contact
     ? [contact.firstName, contact.lastName].filter(Boolean).join(' ')
@@ -135,7 +174,7 @@ function buildCustomerBlock(document, customer, contact, billing = null) {
   };
 }
 
-function buildBaseData({ document, customer, contact, project, templateType, documentNumber, documentDate, billing = null }) {
+function buildBaseData({ document, customer, contact, project, templateType, documentNumber, documentDate, billing = null, objectAddress = null }) {
   const customerBlock = buildCustomerBlock(document, customer, contact, billing);
   const projectName = project?.name || document.projectName || '';
   const customerId = toId(document.customerId || customer);
@@ -160,11 +199,13 @@ function buildBaseData({ document, customer, contact, project, templateType, doc
       name: project.name,
     } : null,
     projectName,
+    objectAddress: objectAddress || null,
     reference: project?.projectNumber || document.sourceQuotationNumber || '',
     title: document.title || '',
     language: document.language || 'de',
     currency: document.currency || 'CHF',
     lineItems: normalizeLineItems(document.lineItems || []),
+    globalDiscountPercent: Number(document.globalDiscountPercent || 0),
     subtotal: Number(document.subtotal || 0),
     vatBreakdown: normalizeVatBreakdown(document.vatBreakdown || []),
     grandTotal: Number(document.grandTotal || 0),
@@ -188,10 +229,12 @@ class QopDocumentPayloadService {
   async buildQuotationPayload(quotationOrId) {
     const quotation = await this._resolveDocument('quotation', quotationOrId);
     if (!quotation) throw new Error(`Quotation not found: ${quotationOrId}`);
-    const [customer, contact, project] = await Promise.all([
+    const [customer, contact, project, objectAddress, billing] = await Promise.all([
       loadCustomer(quotation.customerId),
       loadContact(quotation.contactId),
       loadProject(quotation.projectId),
+      loadSiteAddress(quotation.projectId, quotation.siteId),
+      loadChosenSiteParty(quotation.siteId, quotation.billingAddressSource),
     ]);
 
     const data = {
@@ -203,7 +246,12 @@ class QopDocumentPayloadService {
         templateType: 'quotation',
         documentNumber: quotation.quotationNumber,
         documentDate: formatDate(quotation.createdAt || quotation.validFrom),
+        billing,
+        objectAddress,
       }),
+      // Business version (V1, V2, …) — lands in the PDF filename.
+      version: quotation.docVersion || 1,
+      salutation: quotation.salutation || '',
       introduction: quotation.introduction || '',
       validUntil: formatDate(quotation.validUntil),
       subsidyAmount: Number(quotation.subsidyAmount || 0),
@@ -228,10 +276,12 @@ class QopDocumentPayloadService {
   async buildOrderPayload(orderOrId) {
     const order = await this._resolveDocument('order', orderOrId);
     if (!order) throw new Error(`Order not found: ${orderOrId}`);
-    const [customer, contact, project] = await Promise.all([
+    const [customer, contact, project, objectAddress, billing] = await Promise.all([
       loadCustomer(order.customerId),
       loadContact(order.contactId),
       loadProject(order.projectId),
+      loadSiteAddress(order.projectId, order.siteId),
+      loadChosenSiteParty(order.siteId, order.billingAddressSource),
     ]);
 
     const data = {
@@ -243,6 +293,8 @@ class QopDocumentPayloadService {
         templateType: 'order_confirmation',
         documentNumber: order.orderNumber,
         documentDate: formatDate(order.createdAt),
+        billing,
+        objectAddress,
       }),
       sourceQuotationNumber: order.sourceQuotationNumber || '',
       requestedDate: formatDate(order.requestedDate),
@@ -266,12 +318,18 @@ class QopDocumentPayloadService {
   async buildInvoicePayload(invoiceOrId) {
     const invoice = await this._resolveDocument('invoice', invoiceOrId);
     if (!invoice) throw new Error(`Invoice not found: ${invoiceOrId}`);
-    const [customer, contact, project, billing] = await Promise.all([
+    const [customer, contact, project, chosenParty, projectBilling, objectAddress] = await Promise.all([
       loadCustomer(invoice.customerId),
       loadContact(invoice.contactId),
       loadProject(invoice.projectId),
+      loadChosenSiteParty(invoice.siteId, invoice.billingAddressSource),
       loadSiteBillingAddress(invoice.projectId),
+      loadSiteAddress(invoice.projectId, invoice.siteId),
     ]);
+    // The party explicitly chosen on the document wins. Documents carrying
+    // their own siteId made an explicit choice (even 'customer'), so the
+    // project-route fallback only applies to older records without one.
+    const billing = chosenParty || (toId(invoice.siteId) ? null : projectBilling);
     const templateType = invoiceTemplateType(invoice.invoiceType);
     const advanceDeductions = (invoice.advanceDeductions || []).map((deduction) => ({
       invoiceNumber: deduction.advanceInvoiceNumber,
@@ -292,6 +350,7 @@ class QopDocumentPayloadService {
         documentNumber: invoice.invoiceNumber,
         documentDate: formatDate(invoice.invoiceDate || invoice.createdAt),
         billing,
+        objectAddress,
       }),
       invoiceType: templateType,
       dueDate: formatDate(invoice.dueDate),

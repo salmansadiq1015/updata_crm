@@ -8,11 +8,10 @@
  * Graph: __start__ → respond → END
  */
 import { StateGraph, END } from '@langchain/langgraph';
-import { ChatOpenAI } from '@langchain/openai';
 
 import { MAX_STEPS } from '../agent/agent.guardrails.js';
 import { WorkflowState } from './workflow.state.js';
-import config from '../../../config/index.js';
+import { createChatModel } from '../../../shared/ai/llmFactory.js';
 import logger from '../../../shared/logger/index.js';
 
 async function respond(state) {
@@ -27,19 +26,17 @@ async function respond(state) {
   }
 
   try {
-    const llm = new ChatOpenAI({
-      apiKey: config.ai.apiKey,
-      model: config.ai.model || 'gpt-4o',
-      temperature: 0.7,
-    });
+    const llm = await createChatModel({ temperature: 0.7 });
 
     const response = await llm.invoke([
       {
         role: 'system',
         content:
-          'You are a helpful AI assistant for an HVAC ERP system (MB Boiler & Heizung AG). ' +
-          'Answer questions helpfully and concisely. ' +
-          'If the user asks about creating tasks, notifications, or leads, let them know they can just tell you what they want and you will handle it.',
+          'You are the assistant of the MB Boiler & Heizungen AG ERP (Swiss HVAC company). ' +
+          'Answer helpfully and concisely, always in the language the user writes in (usually German). '
+          + 'In German always use the formal Sie-Form, never du — this is a business tool. ' +
+          'You can create tasks, orders, quotations and reports, schedule work, search data and send notifications — ' +
+          'if the user asks what you can do, tell them to simply state what they want in their own words.',
       },
       { role: 'user', content: state.input },
     ]);

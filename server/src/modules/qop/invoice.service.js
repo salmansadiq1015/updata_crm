@@ -234,8 +234,16 @@ class InvoiceService {
       throw new ConflictError('Cannot create an invoice from a cancelled order');
     }
 
-    const existingInvoices = await invoiceRepository.findByOrderId(order._id);
-    const { lineItems } = buildOrderInvoiceLines(order, existingInvoices, data.lineSelections);
+    // Rapport → Rechnung passes explicit line items (the report's hours and
+    // material); without them the lines come from the order's remaining
+    // uninvoiced quantities as before.
+    let lineItems;
+    if (Array.isArray(data.lineItems) && data.lineItems.length) {
+      lineItems = data.lineItems;
+    } else {
+      const existingInvoices = await invoiceRepository.findByOrderId(order._id);
+      ({ lineItems } = buildOrderInvoiceLines(order, existingInvoices, data.lineSelections));
+    }
     if (!lineItems.length) {
       throw new ConflictError('No remaining order line quantity is available to invoice');
     }
@@ -252,11 +260,14 @@ class InvoiceService {
       invoiceType: 'STANDARD',
       sourceOrderId: order._id,
       sourceQuotationId: order.sourceQuotationId || null,
+      sourceWorkReportId: data.sourceWorkReportId || null,
       customerId: order.customerId?._id || order.customerId,
       customerName: order.customerName,
       contactId: order.contactId?._id || order.contactId || null,
       projectId: order.projectId?._id || order.projectId || null,
       departmentId: order.departmentId || null,
+      siteId: order.siteId?._id || order.siteId || null,
+      billingAddressSource: order.billingAddressSource || 'customer',
       language: order.language,
       title: data.title || `Invoice for order ${order.orderNumber}`,
       ...totals,
@@ -349,6 +360,8 @@ class InvoiceService {
       contactId: quotation.contactId?._id || quotation.contactId || null,
       projectId: quotation.projectId?._id || quotation.projectId || null,
       departmentId: quotation.departmentId || null,
+      siteId: quotation.siteId?._id || quotation.siteId || null,
+      billingAddressSource: quotation.billingAddressSource || 'customer',
       language: quotation.language,
       title: data.title || `Invoice for quotation ${quotation.quotationNumber}`,
       ...totals,
@@ -457,6 +470,8 @@ class InvoiceService {
       contactId: order.contactId?._id || order.contactId || null,
       projectId: order.projectId?._id || order.projectId || null,
       departmentId: order.departmentId || null,
+      siteId: order.siteId?._id || order.siteId || null,
+      billingAddressSource: order.billingAddressSource || 'customer',
       language: order.language,
       title: data.title || `Advance Invoice - ${data.milestoneDescription || ''}`,
       ...totals,
@@ -560,6 +575,8 @@ class InvoiceService {
       contactId: order.contactId?._id || order.contactId || null,
       projectId: order.projectId?._id || order.projectId || null,
       departmentId: order.departmentId || null,
+      siteId: order.siteId?._id || order.siteId || null,
+      billingAddressSource: order.billingAddressSource || 'customer',
       language: order.language,
       title: data.title || 'Final Invoice',
       ...totals,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, RefreshCw, Plus } from 'lucide-react';
+import { Download, RefreshCw, Plus, FolderPlus, Loader2} from 'lucide-react';
 import {
   Dialog, DialogContent, DialogBody, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -16,7 +16,9 @@ import { useOrderMutations } from '../hooks/use-qop-mutations';
 import { OrderStatusBadge, InvoiceStatusBadge, InvoiceTypeBadge } from './status-badge';
 import { AmountDisplay } from './amount-display';
 import { DocumentHistoryTimeline } from './document-history-timeline';
+import { ContactLogPanel } from '@/modules/crm/components/contact-log-panel';
 import { orderService } from '../services/order-service';
+import { downloadFromUrl } from '@/lib/api/download';
 import { InvoiceFormDialog } from './invoice-form-dialog';
 import { CatalogLinePriceDrift } from './catalog-line-price-drift';
 
@@ -59,7 +61,7 @@ function PartyBlock({ title, party }) {
   );
 }
 
-function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading }) {
+function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading, onCreateProject, creatingProject }) {
   const { locale: language, t } = useLanguage();
   const allowed = ORDER_TRANSITIONS[order?.status] ?? [];
 
@@ -78,23 +80,42 @@ function OverviewTab({ order, onTransition, onDownloadPdf, pdfLoading }) {
         <InfoRow label={t('qop.orders.fieldCreated', 'Erstellt')} value={fmtDate(order?.createdAt, language)} />
         <InfoRow label={t('qop.orders.fieldSource', 'Quelle')} value={order?.sourceQuotationNumber ?? '—'} mono />
         <InfoRow
+          label={t('qop.orders.fieldProject', 'Projekt')}
+          value={order?.projectId?.projectNumber
+            ? `${order.projectId.projectNumber}${order.projectId.name ? ` — ${order.projectId.name}` : ''}`
+            : '—'}
+        />
+        <InfoRow
           label={t('qop.orders.fieldTotal', 'Gesamtbetrag')}
           value={<AmountDisplay amount={order?.grandTotalRounded ?? order?.grandTotal} currency={order?.currency} className="font-semibold" />}
         />
       </div>
 
-      {(order?.siteBillingAddress || order?.siteOwnership) && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {(order?.siteBillingAddress || order?.siteOwnership || order?.siteManagement) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {order?.siteBillingAddress && (
             <PartyBlock title={t('qop.orders.billingAddress', 'Rechnungsadresse')} party={order.siteBillingAddress} />
           )}
           {order?.siteOwnership && (
             <PartyBlock title={t('qop.orders.ownership', 'Eigentümer')} party={order.siteOwnership} />
           )}
+          {order?.siteManagement && (
+            <PartyBlock title={t('qop.orders.management', 'Verwaltung')} party={order.siteManagement} />
+          )}
         </div>
       )}
 
       <div className="flex gap-2 flex-wrap">
+        {/* "Projekt eröffnen" — the step between the order confirmation and the
+            execution in the customer's project flow. */}
+        {!order?.projectId && (
+          <Button size="sm" variant="outline" onClick={onCreateProject} disabled={creatingProject}>
+            {creatingProject
+              ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              : <FolderPlus className="h-4 w-4 mr-1.5" />}
+            {t('qop.orders.openProject', 'Projekt eröffnen')}
+          </Button>
+        )}
         {allowed.map((s) => {
           const variant = s === 'CANCELLED' ? 'destructive' : s === 'COMPLETED' ? 'default' : 'outline';
           return (
@@ -292,7 +313,7 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
 
   const { data: order, isLoading } = useOrderDetail(open ? orderId : null);
   const { data: history = [] } = useOrderHistory(open && tab === 'history' ? orderId : null);
-  const { transitionOrderStatus } = useOrderMutations();
+  const { transitionOrderStatus, createProjectFromOrder } = useOrderMutations();
 
   const handleTransitionConfirm = () => {
     if (!transitionTarget) return;
@@ -305,7 +326,8 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
     try {
       const res = await orderService.generateDocument(orderId);
       const url = res?.data?.downloadUrl ?? res?.data?.url ?? res?.url;
-      if (url) window.open(url, '_blank');
+      const fileName = res?.data?.fileName ?? res?.data?.filename ?? 'order.pdf';
+      if (url) await downloadFromUrl(url, fileName);
     } finally {
       setPdfLoading(false);
     }
@@ -337,10 +359,18 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
                 <TabsTrigger value="items">{t('qop.orders.tabItems', 'Positionen')}</TabsTrigger>
                 <TabsTrigger value="billing">{t('qop.orders.tabBilling', 'Fakturierung')}</TabsTrigger>
                 <TabsTrigger value="invoices">{t('qop.orders.tabInvoices', 'Rechnungen')}</TabsTrigger>
-                <TabsTrigger value="history">{t('qop.orders.tabHistory', 'Verlauf')}</TabsTrigger>
+                <TabsTrigger value="contact-log">{t('crm.contactLog.title', 'Kontakthistorie')}</TabsTrigger>
+                <TabsTrigger value="history">{t('common.activity', 'Aktivität')}</TabsTrigger>
               </TabsList>
               <TabsContent value="overview" className="mt-4">
-                <OverviewTab order={order} onTransition={setTransitionTarget} onDownloadPdf={handleDownloadPdf} pdfLoading={pdfLoading} />
+                <OverviewTab
+                  order={order}
+                  onTransition={setTransitionTarget}
+                  onDownloadPdf={handleDownloadPdf}
+                  pdfLoading={pdfLoading}
+                  onCreateProject={() => createProjectFromOrder.mutate({ id: orderId, data: {} })}
+                  creatingProject={createProjectFromOrder.isPending}
+                />
               </TabsContent>
               <TabsContent value="items" className="mt-4">
                 <LineItemsTab order={order} />
@@ -350,6 +380,14 @@ export function OrderDetailDialog({ open, onClose, orderId }) {
               </TabsContent>
               <TabsContent value="invoices" className="mt-4">
                 <InvoicesTab orderId={orderId} onCreateInvoice={setInvoiceType} />
+              </TabsContent>
+              <TabsContent value="contact-log" className="mt-4">
+                <ContactLogPanel
+                  customerId={order?.customerId?._id || order?.customerId}
+                  scope={{ orderId: orderId }}
+                  links={{ orderId: orderId, customerId: order?.customerId?._id || order?.customerId }}
+                  compact
+                />
               </TabsContent>
               <TabsContent value="history" className="mt-4">
                 <DocumentHistoryTimeline history={history} />

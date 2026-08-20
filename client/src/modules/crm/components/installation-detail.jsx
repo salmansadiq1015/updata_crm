@@ -14,6 +14,7 @@ import { NotesPanel } from './notes-panel';
 import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
 import { InstallationSparePartsPanel } from './installation-spare-parts-panel';
+import { InstallationDocumentsTab } from './installation-documents-tab';
 import { EmptyState } from '@/shared/components/empty-state';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -25,11 +26,12 @@ import { Separator } from '@/components/ui/separator';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { useBreadcrumbTrail } from '@/stores/breadcrumb-store';
+import { InstallationStatusBadge } from './installation-status-badge';
 import Link from 'next/link';
 import {
   Pencil, PowerOff, Wrench, FileText, Image as ImageIcon,
   Calendar, Zap, Hash, ShieldCheck, Thermometer, Loader2, Activity, Flame, Package,
-  Building2, MapPin, Star,
+  Building2, MapPin, Star, Files,
 } from 'lucide-react';
 import {
   INSTALLATION_TYPE_META, FUEL_TYPE_META,
@@ -67,11 +69,21 @@ export function InstallationDetail() {
   const decommMut = useMutation({
     mutationFn: (r) => installationService.decommission(id, r),
     onSuccess: () => {
-      showSuccess(t('crm.installations.decommissionedToast', 'Komponente ausser Betrieb'));
+      // The object we navigate back to lists this component — drop its caches
+      // so the status badge is already violet when we land there.
+      qc.invalidateQueries({ queryKey: ['crm', 'installations'] });
+      showSuccess(t('crm.installations.decommissionedToast', 'Komponente stillgelegt'));
       if (installation?.siteId) router.push(`/crm/sites/${installation.siteId?._id || installation.siteId}`);
       else router.back();
     },
-    onError: (err) => showError(err.message),
+    onError: (err) => {
+      if (err?.code === 'INSTALLATION_ALREADY_DECOMMISSIONED') {
+        qc.invalidateQueries({ queryKey: ['crm', 'installations'] });
+        showError(t('crm.installations.alreadyDecommissioned', 'Diese Komponente ist bereits stillgelegt.'));
+        return;
+      }
+      showError(err);
+    },
   });
 
   // The URL (/crm/installations/:id) has no parent chain — publish
@@ -136,11 +148,7 @@ export function InstallationDetail() {
                   <ShieldCheck className="h-3 w-3" /> {t('crm.installations.warrantyActive', 'Garantie aktiv')}
                 </span>
               )}
-              {!isActive && (
-                <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
-                  {t('crm.installations.decommissioned', 'Ausser Betrieb')}
-                </span>
-              )}
+              <InstallationStatusBadge status={installation.status} size="md" className="rounded-full" />
               {suppliesMultiple && (
                 <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-700 dark:text-brand-300">
                   <Building2 className="h-3 w-3" />
@@ -174,7 +182,7 @@ export function InstallationDetail() {
                 className="gap-1.5 border-border bg-muted/50 text-muted-foreground hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
                 onClick={() => setDecommOpen(true)}
               >
-                <PowerOff className="h-3.5 w-3.5" /> {t('crm.installations.decommissionAction', 'Ausser Betrieb')}
+                <PowerOff className="h-3.5 w-3.5" /> {t('crm.installations.decommissionAction', 'Stilllegen')}
               </Button>
             )}
           </div>
@@ -259,6 +267,9 @@ export function InstallationDetail() {
           <TabsTrigger value="spareParts" className="gap-1.5">
             <Package className="h-3.5 w-3.5" /> {t('crm.installations.tab.spareParts', 'Ersatzteile')}
           </TabsTrigger>
+          <TabsTrigger value="documents" className="gap-1.5">
+            <Files className="h-3.5 w-3.5" /> {t('crm.documents.title', 'Dokumente')}
+          </TabsTrigger>
           <TabsTrigger value="notes" className="gap-1.5">
             <FileText className="h-3.5 w-3.5" /> {t('crm.installations.tab.notes', 'Notizen')}
           </TabsTrigger>
@@ -266,7 +277,7 @@ export function InstallationDetail() {
             <ImageIcon className="h-3.5 w-3.5" /> {t('crm.installations.tab.images', 'Bilder')}
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5">
-            <Activity className="h-3.5 w-3.5" /> {t('crm.installations.tab.history', 'Historie')}
+            <Activity className="h-3.5 w-3.5" /> {t('common.activity', 'Aktivität')}
           </TabsTrigger>
         </TabsList>
 
@@ -275,6 +286,9 @@ export function InstallationDetail() {
         </TabsContent>
         <TabsContent value="spareParts">
           <InstallationSparePartsPanel installationId={id} />
+        </TabsContent>
+        <TabsContent value="documents">
+          <InstallationDocumentsTab installationId={id} siteId={siteId} />
         </TabsContent>
         <TabsContent value="notes">
           <NotesPanel entityType="installation" entityId={id} />
@@ -306,12 +320,12 @@ export function InstallationDetail() {
                 <PowerOff className="h-5 w-5 text-red-400" />
               </div>
               <DialogTitle className="text-[16px] font-semibold text-foreground">
-                {t('crm.installations.decommissionTitle', 'Komponente ausser Betrieb nehmen')}
+                {t('crm.installations.decommissionTitle', 'Komponente stilllegen')}
               </DialogTitle>
             </div>
           </DialogHeader>
           <div className="px-6 py-5 space-y-4">
-            <p className="text-[13px] text-muted-foreground">{t('crm.installations.decommissionDesc', 'Die Komponente wird als ausser Betrieb markiert.')}</p>
+            <p className="text-[13px] text-muted-foreground">{t('crm.installations.decommissionDesc', 'Die Komponente wird als stillgelegt markiert.')}</p>
             <div className="space-y-1.5">
               <Label className="text-[12px] font-medium text-muted-foreground block">
                 {t('crm.installations.decommissionReason', 'Grund')} <span className="text-red-400">*</span>

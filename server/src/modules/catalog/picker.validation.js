@@ -13,7 +13,9 @@ export const pickerArticlesSchema = {
 
 export const pickerTextBlocksSchema = {
   query: Joi.object({
-    q: Joi.string().min(1).max(200).required(),
+    // Optional: an empty query lists the most recent blocks so the picker can
+    // show suggestions before the user types (the service handles both cases).
+    q: Joi.string().max(200).allow('').default(''),
     categoryId: objectId,
     limit: Joi.number().integer().min(1).max(50).default(25),
   }),

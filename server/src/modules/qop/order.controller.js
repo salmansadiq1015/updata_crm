@@ -72,6 +72,14 @@ class OrderController {
     } catch (err) { next(err); }
   }
 
+  async createProject(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const project = await orderService.createProject(req.params.id, req.body, req.user._id, meta);
+      return res.success({ data: project, message: 'Project opened from order', statusCode: 201 });
+    } catch (err) { next(err); }
+  }
+
   async getHistory(req, res, next) {
     try {
       const { default: documentStatusLogService } = await import('./documentStatusLog.service.js');

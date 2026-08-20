@@ -21,6 +21,9 @@ import { EmptyState } from '@/shared/components/empty-state';
 import { RichTextContent } from '@/components/ui/rich-text-content';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ContactLogPanel } from './contact-log-panel';
+import { EntityEmailButton } from './entity-email-button';
+import { EmailHistoryPanel } from '@/modules/doctpl/components/email-history-panel';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -39,7 +42,7 @@ import {
   Copy, Hash, Calendar, BellRing, FileText,
   UsersIcon, ClipboardList, Activity, GitMerge,
   Upload, Download, Trash2, Loader2, X, ReceiptText,
-  File, Image as ImageIcon, Paperclip,
+  File, Image as ImageIcon, Paperclip, MessagesSquare,
 } from 'lucide-react';
 import { pickCustomerAccent, CH_CANTONS } from '@/modules/crm/constants/customer-constants';
 import { recordRecentCustomer } from '@/modules/crm/utils/recent-customers';
@@ -189,6 +192,13 @@ export function CustomerDetail() {
   const { hasPermission } = usePermissions();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  // After sending, land on the E-Mails register with that message already open.
+  const [sentEmailId, setSentEmailId] = useState(null);
+  const handleEmailSent = (record) => {
+    setSentEmailId(record?._id || record?.id || null);
+    setActiveTab('emails');
+  };
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
 
@@ -362,6 +372,15 @@ export function CustomerDetail() {
                   </TooltipProvider>
                 )}
               </div>
+
+              <div className="mt-2 flex justify-center">
+                <EntityEmailButton
+                  sourceRecordId={id}
+                  attachmentScope={{ customerId: id }}
+                  defaultTo={customer.email}
+                  onSent={handleEmailSent}
+                />
+              </div>
             </div>
           </div>
 
@@ -394,7 +413,7 @@ export function CustomerDetail() {
 
         {/* Right content */}
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue="overview" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList variant="line">
               <TabsTrigger value="overview" className="gap-1.5">
                 <Activity className="h-3.5 w-3.5" />
@@ -404,21 +423,29 @@ export function CustomerDetail() {
                 <UsersIcon className="h-3.5 w-3.5" />
                 {t('crm.tabContacts', 'Contacts')}
               </TabsTrigger>
+              <TabsTrigger value="contact-log" className="gap-1.5">
+                <MessagesSquare className="h-3.5 w-3.5" />
+                {t('crm.contactLog.title', 'Kontakthistorie')}
+              </TabsTrigger>
               <TabsTrigger value="sites" className="gap-1.5">
                 <ClipboardList className="h-3.5 w-3.5" />
                 {t('crm.tabSites', 'Objects')}
               </TabsTrigger>
-              <TabsTrigger value="activity" className="gap-1.5">
-                <FileText className="h-3.5 w-3.5" />
-                {t('crm.tabActivity', 'Activity')}
-              </TabsTrigger>
               <TabsTrigger value="documents" className="gap-1.5">
                 <ClipboardList className="h-3.5 w-3.5" />
-                {de ? 'Dokumente' : 'Documents'}
+                {t('crm.documents.title', 'Dokumente')}
               </TabsTrigger>
               <TabsTrigger value="photos" className="gap-1.5">
                 <ImageIcon className="h-3.5 w-3.5" />
-                {t('crm.tabPhotos', 'Photos')}
+                {t('crm.tabPhotos', 'Bilder')}
+              </TabsTrigger>
+              <TabsTrigger value="emails" className="gap-1.5">
+                <Mail className="h-3.5 w-3.5" />
+                {t('doctpl.email.tab', 'E-Mails')}
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="gap-1.5">
+                <Activity className="h-3.5 w-3.5" />
+                {t('common.activity', 'Aktivität')}
               </TabsTrigger>
             </TabsList>
 
@@ -453,10 +480,16 @@ export function CustomerDetail() {
               <ContactsPanel customerId={customer._id} />
             </TabsContent>
 
+            <TabsContent value="contact-log">
+              <ContactLogPanel customerId={id} scope={{ customerId: id }} />
+            </TabsContent>
             <TabsContent value="sites">
               <SitesPanel customerId={customer._id} customer={customer} />
             </TabsContent>
 
+            <TabsContent value="emails">
+              <EmailHistoryPanel sourceModule="crm" sourceRecordId={id} highlightId={sentEmailId} />
+            </TabsContent>
             <TabsContent value="activity">
               <CustomerActivityPanel customerId={customer._id} />
             </TabsContent>

@@ -1,7 +1,9 @@
 import Joi from 'joi';
 
 export const runAgentSchema = Joi.object({
-  input: Joi.string().min(3).max(2000).required(),
+  // A single character is a legitimate answer: the assistant offers numbered
+  // choices, and "1" must reach it.
+  input: Joi.string().min(1).max(2000).required(),
   threadId: Joi.string().max(100).optional(),
   correlationId: Joi.string().max(120).optional(),
   context: Joi.object().unknown(true).allow(null).optional(),

@@ -82,7 +82,18 @@ export function useOrderMutations() {
     },
   });
 
-  return { createOrder, updateOrder, deleteOrder, transitionOrderStatus };
+  const createProjectFromOrder = useMutation({
+    mutationFn: ({ id, data }) => orderService.createProject(id, data),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['qop', 'orders'] });
+      qc.invalidateQueries({ queryKey: ['pm', 'projects'] });
+      const project = res?.data ?? res;
+      showSuccess(`Projekt ${project?.projectNumber ?? ''} eröffnet`);
+    },
+    onError: (err) => showError(err),
+  });
+
+  return { createOrder, updateOrder, deleteOrder, transitionOrderStatus, createProjectFromOrder };
 }
 
 export function useInvoiceMutations() {

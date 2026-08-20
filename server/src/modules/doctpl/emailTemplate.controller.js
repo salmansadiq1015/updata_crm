@@ -23,6 +23,14 @@ class EmailTemplateController {
     } catch (err) { next(err); }
   }
 
+  // Resolve a template's placeholders against the record the email starts from.
+  async render(req, res, next) {
+    try {
+      const data = await emailTemplateService.render(req.params.id, { ...req.body, user: req.user });
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async update(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

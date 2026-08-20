@@ -141,16 +141,14 @@ export const INVOICE_TYPE_LABELS = {
 
 export const DEFAULT_VALIDITY_DAYS = 30;
 
-export const VALID_QUOTATION_TRANSITIONS = {
-  DRAFT:     ['SENT', 'CANCELLED'],
-  SENT:      ['VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED'],
-  VIEWED:    ['ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED'],
-  ACCEPTED:  ['CONVERTED'],
-  EXPIRED:   ['SENT'],
-  DECLINED:  [],
-  CANCELLED: [],
-  CONVERTED: [],
-};
+// The status is freely adjustable by hand (client feedback: "Status ändern"
+// must offer the full list) — every status can move to every other one.
+export const VALID_QUOTATION_TRANSITIONS = Object.fromEntries(
+  Object.keys(QUOTATION_STATUSES).map((status) => [
+    status,
+    Object.keys(QUOTATION_STATUSES).filter((s) => s !== status),
+  ]),
+);
 
 export const VALID_ORDER_TRANSITIONS = {
   CONFIRMED: ['IN_PROGRESS', 'CANCELLED'],

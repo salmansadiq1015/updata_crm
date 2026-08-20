@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { getAllocationTier } from '../../constants/deploy-constants';
@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ChevronDown, Eraser } from 'lucide-react';
 
 const PICKER_VALUES = [25, 50, 75, 100];
+const DBLCLICK_DELAY = 250;
 
 function AllocationPicker({ current, onPick, onClear, onClose }) {
   const { t } = useLanguage();
@@ -60,9 +61,12 @@ export const CoarseCell = memo(function CoarseCell({
   allocation,
   assignmentPercent = 0,
   projectName,
-  inDragRange,
   isCurrentWeek,
+  isSelected,
+  isDragSource,
+  isDropTarget,
   onClick,
+  onDoubleClick,
   onMouseDown,
   onMouseEnter,
   onSetPercent,
@@ -70,6 +74,7 @@ export const CoarseCell = memo(function CoarseCell({
 }) {
   const { t } = useLanguage();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const clickTimerRef = useRef(null);
   const allocations = Array.isArray(allocation) ? allocation : [allocation].filter(Boolean);
   const percent = cellPercent(allocations);
   const tier = getAllocationTier(percent);
@@ -77,7 +82,25 @@ export const CoarseCell = memo(function CoarseCell({
   const isOver = percent > 100;
   const assignmentExceeds = assignmentPercent > percent;
 
-  const dragRing = inDragRange && 'ring-2 ring-inset ring-primary/70 z-10';
+  const dropRing = isDropTarget && 'ring-2 ring-inset ring-primary/70 z-10';
+  const selectedRing = isSelected && !isDropTarget && 'ring-2 ring-inset ring-primary z-10';
+  const dragSourceStyle = isDragSource && 'opacity-50';
+
+  // Click vs double-click: on first click start a timer. If a second click
+  // arrives before the timer fires, treat as double-click. Otherwise single.
+  const handleClick = useCallback((e) => {
+    if (clickTimerRef.current) {
+      // Second click within threshold → double-click
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      onDoubleClick?.(e);
+    } else {
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        onClick?.(e);
+      }, DBLCLICK_DELAY);
+    }
+  }, [onClick, onDoubleClick]);
 
   if (!percent) {
     // No coarse allocation. If the employee is already booked via real Einsätze,
@@ -96,7 +119,7 @@ export const CoarseCell = memo(function CoarseCell({
                 'relative w-full h-full min-h-[40px] border-r border-b flex items-center justify-center',
                 'text-[11px] font-semibold text-muted-foreground transition-colors hover:brightness-95',
                 isCurrentWeek && 'bg-primary/[0.03]',
-                dragRing,
+                selectedRing, dropRing,
               )}
             >
               <span className="tabular-nums leading-none">{assignmentPercent}%</span>
@@ -119,7 +142,7 @@ export const CoarseCell = memo(function CoarseCell({
           'group/cell relative w-full h-full min-h-[40px] border-r border-b transition-colors',
           'hover:bg-primary/5',
           isCurrentWeek && 'bg-primary/[0.03]',
-          dragRing,
+          selectedRing, dropRing,
         )}
         aria-label={t('deploy.coarse.addAllocation', 'Zuteilung hinzufügen')}
       >
@@ -131,12 +154,12 @@ export const CoarseCell = memo(function CoarseCell({
   }
 
   return (
-    <div className={cn('group/cell relative w-full h-full', dragRing)}>
+    <div className={cn('group/cell relative w-full h-full', selectedRing, dropRing, dragSourceStyle)}>
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
-            onClick={onClick}
+            onClick={handleClick}
             onMouseDown={onMouseDown}
             onMouseEnter={onMouseEnter}
             className={cn(

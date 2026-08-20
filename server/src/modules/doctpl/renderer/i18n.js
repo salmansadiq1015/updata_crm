@@ -1,6 +1,7 @@
 export const LABELS = {
   de: {
     subtotal: 'Zwischensumme',
+    globalDiscount: 'Globalrabatt',
     vat: 'MwSt.',
     grandTotal: 'Gesamtbetrag',
     subsidy: 'Abzüglich Fördergelder',
@@ -67,6 +68,7 @@ export const LABELS = {
   },
   fr: {
     subtotal: 'Sous-total',
+    globalDiscount: 'Remise globale',
     vat: 'TVA',
     grandTotal: 'Total general',
     subsidy: 'Deduction subventions',
@@ -133,6 +135,7 @@ export const LABELS = {
   },
   it: {
     subtotal: 'Totale parziale',
+    globalDiscount: 'Sconto globale',
     vat: 'IVA',
     grandTotal: 'Totale complessivo',
     subsidy: 'Detrazione sovvenzioni',
@@ -199,6 +202,7 @@ export const LABELS = {
   },
   en: {
     subtotal: 'Subtotal',
+    globalDiscount: 'Global Discount',
     vat: 'VAT',
     grandTotal: 'Grand Total',
     subsidy: 'Less subsidies',

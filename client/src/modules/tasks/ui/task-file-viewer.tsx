@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { downloadFromUrl } from '@/lib/api/download';
 import type { TaskAttachment } from '../types/task-types';
 import { taskApi } from '../services/task-api';
 
@@ -196,10 +197,10 @@ function FilePreview({ attachment }: { attachment: TaskAttachment }) {
 function DownloadButton({ attachment }: { attachment: TaskAttachment }) {
   const { data: resolvedUrl } = useResolvedUrl(attachment.taskId, attachment.id);
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (resolvedUrl) {
-      window.open(resolvedUrl, '_blank', 'noopener,noreferrer');
+      await downloadFromUrl(resolvedUrl, attachment.fileName || 'download');
     }
   };
 

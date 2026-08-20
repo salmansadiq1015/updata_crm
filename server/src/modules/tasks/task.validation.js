@@ -21,6 +21,7 @@ export const createTaskSchema = {
     dueDate: Joi.date().iso().allow(null),
     projectId: objectId.allow(null),
     orderId: objectId.allow(null),
+    siteId: objectId.allow(null),
     meetingId: objectId.allow(null),
     departmentId: objectId.allow(null),
     source: sourceSchema,
@@ -40,6 +41,7 @@ export const updateTaskSchema = {
     dueDate: Joi.date().iso().allow(null),
     projectId: objectId.allow(null),
     orderId: objectId.allow(null),
+    siteId: objectId.allow(null),
     meetingId: objectId.allow(null),
     departmentId: objectId.allow(null),
     source: sourceSchema,
@@ -61,6 +63,7 @@ export const listTasksSchema = {
     priority: Joi.string().valid(...TASK_PRIORITIES),
     projectId: objectId,
     orderId: objectId,
+    siteId: objectId,
     meetingId: objectId,
     departmentId: objectId,
     overdue: Joi.boolean(),
@@ -184,4 +187,10 @@ export const reorderSubtasksSchema = {
 
 export const promoteTaskSchema = {
   params: Joi.object({ id: objectId.required() }),
+};
+
+export const siteIdParamSchema = {
+  params: Joi.object({
+    siteId: objectId.required(),
+  }),
 };

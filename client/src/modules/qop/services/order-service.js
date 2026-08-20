@@ -12,5 +12,6 @@ export const orderService = {
   getInvoices:      (id)          => apiClient.get(E.ORDER_INVOICES(id)),
   getBillingPlan:   (id)          => apiClient.get(E.ORDER_BILLING_PLAN(id)),
   generateDocument: (id)          => apiClient.post(E.ORDER_GENERATE_DOC(id)),
+  createProject: (id, data = {}) => apiClient.post(E.ORDER_CREATE_PROJECT(id), data),
   getHistory:       (id)          => apiClient.get(E.ORDER_HISTORY(id)),
 };

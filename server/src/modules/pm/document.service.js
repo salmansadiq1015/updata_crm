@@ -162,7 +162,10 @@ class DocumentService {
     const endPart = filters.endDate ? new Date(filters.endDate).getTime() : '';
     const searchPart = filters.search || '';
     const deletedPart = filters.includeDeleted ? 'withDeleted' : '';
-    const cacheKey = `pm:documents:project:${projectId}:${categoryPart}:${startPart}:${endPart}:${searchPart}:${deletedPart}`;
+    // The released-only view is a different result set — never let it share a
+    // cache entry with the full one.
+    const releasedPart = filters.releasedOnly ? 'released' : '';
+    const cacheKey = `pm:documents:project:${projectId}:${categoryPart}:${startPart}:${endPart}:${searchPart}:${deletedPart}:${releasedPart}`;
     return cacheManager.getOrSet(
       cacheKey,
       async () => this._enrichDocuments(await documentRepository.findByProjectId(projectId, filters)),
@@ -170,19 +173,21 @@ class DocumentService {
     );
   }
 
-  async getById(id) {
+  async getById(id, { releasedOnly = false } = {}) {
     const doc = await documentRepository.findById(id);
     if (!doc) throw new NotFoundError('ProjectDocument', id);
+    // Hiding a document from the list is meaningless if its id still opens it.
+    if (releasedOnly && !doc.releasedToField) throw new NotFoundError('ProjectDocument', id);
     return this._enrichDocument(doc);
   }
 
-  async getDownloadUrl(id) {
+  async getDownloadUrl(id, options = {}) {
     const doc = await documentRepository.findById(id);
     if (!doc) throw new NotFoundError('ProjectDocument', id);
 
     // Lazy import file service
     const fileService = (await import('../files/file.service.js')).default;
-    const url = await fileService.getDownloadUrl(doc.fileId);
+    const url = await fileService.getDownloadUrl(doc.fileId, options);
     return url;
   }
 
@@ -230,6 +235,36 @@ class DocumentService {
       module: 'pm',
     });
     return updated;
+  }
+
+  /**
+   * Digitales Dossier: release a document to the field, or take it back.
+   * Mirrors the Visum toggle so both read the same way in the documents tab.
+   */
+  async setReleased(id, userId, released = true, meta = {}) {
+    const existing = await documentRepository.findById(id);
+    if (!existing) throw new NotFoundError('ProjectDocument', id);
+
+    const updated = this._enrichDocument(await documentRepository.updateById(id, released
+      ? { releasedToField: true, releasedAt: new Date(), releasedBy: userId }
+      : { releasedToField: false, releasedAt: null, releasedBy: null }));
+
+    await this._invalidateCache(existing.projectId);
+    auditService.logEvent({
+      eventType: released ? 'project_document.released' : 'project_document.release_revoked',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { documentId: id, projectId: existing.projectId, fileName: existing.fileName },
+      module: 'pm',
+    });
+    return updated;
+  }
+
+  /** Released documents of a project — the field's dossier. */
+  async listReleasedForProject(projectId) {
+    return this._enrichDocuments(await documentRepository.findByProjectId(projectId, { releasedOnly: true }));
   }
 
   // Move a document to the Archiv section; pass archived=false to restore it.

@@ -95,6 +95,14 @@ const invoiceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    // Set when the invoice was billed from an Arbeitsrapport (Rapport →
+    // Rechnung): its lines are the report's hours and material, not the
+    // order's remaining quantities.
+    sourceWorkReportId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'WorkReport',
+      default: null,
+    },
     creditNoteForInvoiceId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Invoice',
@@ -124,6 +132,18 @@ const invoiceSchema = new mongoose.Schema(
     departmentId: {
       type: mongoose.Schema.Types.ObjectId,
       default: null,
+    },
+    // Carried over from the source quotation/order (Objekt-first flow); decides
+    // which party is printed as the invoice recipient (QR debtor included).
+    siteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site',
+      default: null,
+    },
+    billingAddressSource: {
+      type: String,
+      enum: ['customer', 'site_billing', 'site_ownership', 'site_management'],
+      default: 'customer',
     },
     language: {
       type: String,

@@ -4,6 +4,8 @@ import orderRoutes from './order.routes.js';
 import { reportOrderRouter, reportRouter } from './report.routes.js';
 import { photoOrderRouter, photoRouter } from './photo.routes.js';
 import { timeEntryOrderRouter, timeEntryRouter } from './timeEntry.routes.js';
+import officeWorkCategoryRoutes from './officeWorkCategory.routes.js';
+import workTimeSettingsRoutes from './workTimeSettings.routes.js';
 import materialRoutes from './material.routes.js';
 import documentRoutes from './document.routes.js';
 import catalogRoutes from './catalog.routes.js';
@@ -68,6 +70,8 @@ router.use('/orders/:id/quotation', quotationRoute);
 // --- Standalone entity routes ---
 router.use('/reports', reportRouter);
 router.use('/time-entries', timeEntryRouter);
+router.use('/office-categories', officeWorkCategoryRoutes);
+router.use('/work-time-settings', workTimeSettingsRoutes);
 router.use('/photos', photoRouter);
 
 // --- Catalog ---

@@ -4,9 +4,14 @@ import { pdfFonts } from './fonts.js';
 
 const ROW_HEIGHT = 16;
 const HEADER_HEIGHT = 18;
-// Product/line image (rendered above the description text when present)
-const IMG_MAX_HEIGHT = 120;
+// Product/line image (rendered above the description text when present).
+// The editor lets each image choose its print size (Klein/Mittel/Gross).
+const IMG_MAX_HEIGHT_BY_SIZE = { small: 60, medium: 120, large: 220 };
 const IMG_GAP = 4;
+
+function imgMaxHeight(item) {
+  return IMG_MAX_HEIGHT_BY_SIZE[item?.image?.size] || IMG_MAX_HEIGHT_BY_SIZE.medium;
+}
 
 export default class TableRenderer {
   draw(doc, pm, ciConfig, data, language, config = {}) {
@@ -85,7 +90,7 @@ export default class TableRenderer {
     let imageExtra = 0;
     if (item.imageBuffer) {
       const box = this._descColBox(cols, pm);
-      const dims = this._imageBox(doc, item.imageBuffer, box.width, IMG_MAX_HEIGHT);
+      const dims = this._imageBox(doc, item.imageBuffer, box.width, imgMaxHeight(item));
       try {
         doc.image(item.imageBuffer, left + box.x, y, { fit: [dims.w, dims.h] });
       } catch {
@@ -144,7 +149,7 @@ export default class TableRenderer {
     let imageExtra = 0;
     if (item.imageBuffer) {
       const box = this._descColBox(cols, pm);
-      const dims = this._imageBox(doc, item.imageBuffer, box.width, IMG_MAX_HEIGHT);
+      const dims = this._imageBox(doc, item.imageBuffer, box.width, imgMaxHeight(item));
       imageExtra = dims.h + IMG_GAP;
     }
 

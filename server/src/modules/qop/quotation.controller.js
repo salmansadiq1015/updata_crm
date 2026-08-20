@@ -103,8 +103,15 @@ class QuotationController {
   async getHistory(req, res, next) {
     try {
       const { default: documentStatusLogService } = await import('./documentStatusLog.service.js');
-      const history = await documentStatusLogService.findByDocument('quotation', req.params.id);
+      const history = await documentStatusLogService.getHistory('quotation', req.params.id);
       return res.success({ data: history });
+    } catch (err) { next(err); }
+  }
+
+  async listRevisions(req, res, next) {
+    try {
+      const revisions = await quotationService.listRevisions(req.params.id);
+      return res.success({ data: revisions });
     } catch (err) { next(err); }
   }
 

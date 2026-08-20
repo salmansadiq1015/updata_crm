@@ -172,8 +172,8 @@ const chatMessageService = {
     const sourceText = (message.transcript || message.content || '').trim();
     if (!sourceText) return { lang, text: '', cached: false };
 
-    const { default: OpenAI } = await import('openai');
-    const openai = new OpenAI({ apiKey: config.ai.apiKey });
+    const { createOpenAiClient } = await import('../../shared/ai/llmFactory.js');
+    const openai = await createOpenAiClient();
     const langName = { de: 'German', en: 'English', fr: 'French', it: 'Italian' }[lang] || lang;
     const resp = await openai.chat.completions.create({
       model: config.ai.model || 'gpt-4o-mini',

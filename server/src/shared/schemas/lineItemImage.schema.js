@@ -14,6 +14,8 @@ const lineItemImageSchema = new mongoose.Schema(
   {
     fileId: { type: mongoose.Schema.Types.ObjectId, ref: 'FileMetadata', default: null },
     url: { type: String, trim: true, maxlength: 2000, default: '' },
+    // Print size on the PDF — the editor offers Klein/Mittel/Gross per image.
+    size: { type: String, enum: ['small', 'medium', 'large'], default: 'medium' },
   },
   { _id: false },
 );

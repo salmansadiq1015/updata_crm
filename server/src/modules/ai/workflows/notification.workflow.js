@@ -16,6 +16,8 @@ import { MAX_STEPS } from '../agent/agent.guardrails.js';
 import agentRunRepository from '../agent/agentRun.repository.js';
 import { sendNotificationTool } from '../tools/notification.tools.js';
 import { WorkflowState } from './workflow.state.js';
+import agentGovernance from '../governance/agentGovernance.service.js';
+import { RISK_LEVEL_LABELS } from '../governance/agent.risk.js';
 import logger from '../../../shared/logger/index.js';
 
 const TEAM_KEYWORDS = /\b(team|all|everyone|staff|users|group|company|organisation|organization|alle|mitarbeiter)\b/i;
@@ -112,6 +114,45 @@ async function executeTools(state) {
 
   const recipientIds = state.entities?._resolvedRecipientIds || [];
   const body = (state.entities?.DESCRIPTION?.[0]?.value || state.input).slice(0, 1000);
+
+  // Reaching people is never done unsupervised: same gate as every other action.
+  const decision = await agentGovernance.evaluate('SEND_NOTIFICATION', {
+    confirmed: Boolean(state.confirmed),
+    agentKey: state.agentKey || null,
+  });
+  if (!decision.allowed) {
+    await agentGovernance.record(decision, {
+      action: 'SEND_NOTIFICATION',
+      userId: state.userId,
+      agentRunId: state.agentRunId,
+      input: state.input,
+    });
+    return { stepCount, status: 'completed', output: decision.block };
+  }
+  if (decision.requiresApproval) {
+    await agentGovernance.record(decision, {
+      action: 'SEND_NOTIFICATION',
+      userId: state.userId,
+      agentRunId: state.agentRunId,
+      input: state.input,
+    });
+    return {
+      stepCount,
+      status: 'awaiting_confirmation',
+      output: {
+        action: 'SEND_NOTIFICATION',
+        status: 'awaiting_confirmation',
+        riskLevel: decision.riskLevel,
+        message: `Ich soll ${recipientIds.length} Empfänger benachrichtigen. ${RISK_LEVEL_LABELS[decision.riskLevel]}. Soll ich fortfahren?`,
+        confirmation: {
+          action: 'SEND_NOTIFICATION',
+          riskLevel: decision.riskLevel,
+          label: 'Benachrichtigung senden',
+          effect: `${recipientIds.length} Empfänger`,
+        },
+      },
+    };
+  }
 
   const toolInput = {
     recipientIds,

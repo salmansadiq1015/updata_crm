@@ -15,9 +15,12 @@ import { ImagesPanel } from './images-panel';
 import { HistoryTimeline } from './history-timeline';
 import { SiteMapCard, buildGoogleMapsUrl } from './site-map-card';
 import { SiteDocumentsTab } from './site-documents-tab';
-import { SiteEmailButton } from './site-email-dialog';
+import { EntityEmailButton } from './entity-email-button';
 import { SiteBusinessTab } from './site-business-tab';
 import { SiteOverviewTab } from './site-overview-tab';
+import { SiteTasksTab } from './site-tasks-tab';
+import { ContactLogPanel } from './contact-log-panel';
+import { EmailHistoryPanel } from '@/modules/doctpl/components/email-history-panel';
 import { SiteProjectsTab } from './site-projects-tab';
 import { SiteMaintenanceTab } from './site-maintenance-tab';
 import { ConfirmDialog } from '@/shared/components/confirm-dialog';
@@ -38,7 +41,7 @@ import {
   Pencil, Archive, Building2, MapPin, Key, Home,
   Wrench, FileText, Image as ImageIcon, Activity, Files, Receipt,
   User, Phone, Smartphone, Mail,
-  LayoutGrid, FolderKanban, Settings2, Eye, EyeOff, Check, Layers,
+  LayoutGrid, FolderKanban, Settings2, Eye, EyeOff, Check, Layers, ListChecks, MessagesSquare,
 } from 'lucide-react';
 import { SITE_TYPE_META } from '@/modules/crm/constants/crm-constants';
 import { CH_CANTONS } from '@/modules/crm/constants/customer-constants';
@@ -72,11 +75,14 @@ const SITE_TABS = [
   { id: 'projects', labelKey: 'crm.sites.tab.projects', fallback: 'Projekte', icon: FolderKanban, permission: 'projects:read' },
   { id: 'installations', labelKey: 'crm.installations.title', fallback: 'Komponenten', icon: Layers, permission: 'crm:read' },
   { id: 'maintenance', labelKey: 'crm.maintenance.objectTitle', fallback: 'Wartungen', icon: Wrench, permission: 'crm:read' },
-  { id: 'business', labelKey: 'crm.sites.businessTab', fallback: 'Offerten & Aufträge', icon: Receipt, permission: 'crm:read' },
+  { id: 'tasks', labelKey: 'crm.sites.tasksTab', fallback: 'Aufgaben', icon: ListChecks, permission: 'tasks:read' },
+  { id: 'contact-log', labelKey: 'crm.contactLog.title', fallback: 'Kontakthistorie', icon: MessagesSquare, permission: 'crm:read' },
+  { id: 'emails', labelKey: 'doctpl.email.tab', fallback: 'E-Mails', icon: Mail, permission: 'crm:read' },
+  { id: 'business', labelKey: 'crm.sites.businessTab', fallback: 'Offerten, Aufträge & Rechnungen', icon: Receipt, permission: 'crm:read' },
   { id: 'images', labelKey: 'crm.images.title', fallback: 'Bilder', icon: ImageIcon, permission: 'crm:read' },
   { id: 'documents', labelKey: 'crm.documents.title', fallback: 'Dokumente', icon: Files, permission: 'crm:read' },
   { id: 'notes', labelKey: 'crm.notes.title', fallback: 'Notizen', icon: FileText, permission: 'crm:read' },
-  { id: 'activity', labelKey: 'crm.installations.tab.history', fallback: 'Historie', icon: Activity, permission: 'crm:read' },
+  { id: 'activity', labelKey: 'common.activity', fallback: 'Aktivität', icon: Activity, permission: 'crm:read' },
 ];
 
 /** Popover to let each user choose which registers (tabs) to show. */
@@ -144,6 +150,13 @@ export function SiteDetail() {
   const permittedTabs = useMemo(() => SITE_TABS.filter((tab) => !tab.permission || hasPermission(tab.permission)), [hasPermission]);
   const visibleTabs = useMemo(() => permittedTabs.filter((tab) => tab.fixed || !hiddenTabs.includes(tab.id)), [permittedTabs, hiddenTabs]);
   const safeActiveTab = visibleTabs.some((tab) => tab.id === activeTab) ? activeTab : (visibleTabs[0]?.id || 'overview');
+
+  // After sending, land on the E-Mails register with that message already open.
+  const [sentEmailId, setSentEmailId] = useState(null);
+  const handleEmailSent = (record) => {
+    setSentEmailId(record?._id || record?.id || null);
+    setActiveTab('emails');
+  };
 
   const handleSaveTabs = async (nextHidden) => {
     try {
@@ -282,7 +295,12 @@ export function SiteDetail() {
 
           <div className="flex items-center gap-2">
             {canWrite && (
-              <SiteEmailButton siteId={id} defaultTo={parentCustomer?.email} />
+              <EntityEmailButton
+                sourceRecordId={id}
+                attachmentScope={{ siteId: id }}
+                defaultTo={parentCustomer?.email}
+                onSent={handleEmailSent}
+              />
             )}
             {canWrite && isActive && (
               <Button
@@ -407,6 +425,20 @@ export function SiteDetail() {
         </TabsContent>
         <TabsContent value="maintenance">
           <SiteMaintenanceTab siteId={id} />
+        </TabsContent>
+        <TabsContent value="emails">
+          <EmailHistoryPanel sourceModule="crm" sourceRecordId={id} highlightId={sentEmailId} />
+        </TabsContent>
+        <TabsContent value="contact-log">
+          <ContactLogPanel
+            customerId={customerId}
+            scope={{ siteId: id }}
+            links={{ siteId: id }}
+            compact
+          />
+        </TabsContent>
+        <TabsContent value="tasks">
+          <SiteTasksTab siteId={id} />
         </TabsContent>
         <TabsContent value="business">
           <SiteBusinessTab siteId={id} />

@@ -141,8 +141,10 @@ class VehicleService {
   }
 
   // ── History (audit timeline) ────────────────────────────────────────────
+  /** Audit trail of a vehicle, with the acting user resolved to a name. */
   async listHistory(vehicleId) {
-    return auditService.queryByEntity({ module: 'vehicles', detailsKey: 'vehicleId', entityId: [String(vehicleId), vehicleId], limit: 100 });
+    const entries = await auditService.queryByEntity({ module: 'vehicles', detailsKey: 'vehicleId', entityId: [String(vehicleId), vehicleId], limit: 100 });
+    return auditService.withUserNames(entries);
   }
 
   async _assertVehicle(id) {

@@ -641,7 +641,12 @@ function TaskSection({ sectionKey, tasks, total, config, t, formatDate, onOpenTa
   );
 }
 
-export function TaskDashboardPage() {
+/**
+ * `embedded` renders only the analysis blocks, for the collapsible section of
+ * the tasks workspace: the page chrome, the header and the metric row are the
+ * workspace's own since the two pages were merged.
+ */
+export function TaskDashboardPage({ embedded = false }: { embedded?: boolean } = {}) {
   const router = useRouter();
   const { locale, t } = useLanguage() as LanguageContextValue;
   const [upcomingDays, setUpcomingDays] = useState<(typeof UPCOMING_RANGE_OPTIONS)[number]>(7);
@@ -674,7 +679,7 @@ export function TaskDashboardPage() {
   };
 
   const openAllTasks = () => {
-    router.push('/tasks/all');
+    router.push('/tasks');
   };
 
   const workloadData = analytics.workload.map((item) => ({
@@ -716,10 +721,19 @@ export function TaskDashboardPage() {
     );
   }
 
+  const Shell = embedded
+    ? ({ children }: { children: React.ReactNode }) => <div className="space-y-5">{children}</div>
+    : ({ children }: { children: React.ReactNode }) => (
+      <div className="flex h-full min-h-0 flex-col bg-background">
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
+          <div className="space-y-5">{children}</div>
+        </main>
+      </div>
+    );
+
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
-        <div className="space-y-5">
+    <Shell>
+      {!embedded && (
           <DashboardHeader
             upcomingDays={upcomingDays}
             onChangeUpcomingDays={(value) => {
@@ -734,7 +748,9 @@ export function TaskDashboardPage() {
             isFetching={dashboardQuery.isFetching}
             t={t}
           />
+      )}
 
+      {!embedded && (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               title={t('tasks.dashboard.open', 'Open')}
@@ -765,6 +781,7 @@ export function TaskDashboardPage() {
               accent="sky"
             />
           </div>
+      )}
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.85fr)]">
             <ChartPanel
@@ -876,8 +893,6 @@ export function TaskDashboardPage() {
               onOpenAll={openAllTasks}
             />
           </div>
-        </div>
-      </main>
-    </div>
+    </Shell>
   );
 }

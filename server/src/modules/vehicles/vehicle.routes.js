@@ -25,6 +25,7 @@ router.post('/:id/services', authenticate, write, validate(createServiceSchema),
 router.delete('/:id/services/:subId', authenticate, write, validate(subResourceParamSchema), (req, res, next) => vehicleController.deleteService(req, res, next));
 
 router.get('/:id/materials', authenticate, read, validate(vehicleIdParamSchema), (req, res, next) => vehicleController.listMaterials(req, res, next));
+router.get('/:id/materials/export/pdf', authenticate, read, validate(vehicleIdParamSchema), (req, res, next) => vehicleController.exportMaterialsPdf(req, res, next));
 router.post('/:id/materials', authenticate, write, validate(createMaterialSchema), (req, res, next) => vehicleController.addMaterial(req, res, next));
 router.delete('/:id/materials/:subId', authenticate, write, validate(subResourceParamSchema), (req, res, next) => vehicleController.deleteMaterial(req, res, next));
 

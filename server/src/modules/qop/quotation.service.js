@@ -13,16 +13,12 @@ import qopDocumentPayloadService from './documentPayload.service.js';
 const ENTITY_TTL = { l1Ttl: 60, l2Ttl: 300 };
 const LIST_TTL = { l1Ttl: 30, l2Ttl: 120 };
 
-const QUOTATION_TRANSITIONS = {
-  DRAFT: ['SENT', 'CANCELLED'],
-  SENT: ['VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED'],
-  VIEWED: ['ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED'],
-  ACCEPTED: ['CONVERTED'],
-  DECLINED: [],
-  EXPIRED: ['SENT'],
-  CANCELLED: [],
-  CONVERTED: [],
-};
+// The status is freely adjustable by hand (client feedback: the full status
+// list must be offered in "Status ändern"), so any change to a different
+// status is accepted; timestamps are still maintained per target status.
+const QUOTATION_STATUSES = [
+  'DRAFT', 'SENT', 'VIEWED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'CONVERTED',
+];
 
 class QuotationService {
   async create(data, createdBy, meta = {}) {
@@ -35,8 +31,16 @@ class QuotationService {
       data.currency || 'CHF',
     );
 
+    // The form lets a quotation be captured directly in a later status
+    // (e.g. recorded after it was already sent on paper).
+    const statusStamps = {};
+    if (data.status === 'SENT') statusStamps.sentAt = new Date();
+    if (data.status === 'ACCEPTED') statusStamps.acceptedAt = new Date();
+    if (data.status === 'DECLINED') statusStamps.declinedAt = new Date();
+
     const quotation = await quotationRepository.create({
       ...data,
+      ...statusStamps,
       quotationNumber,
       lineItems: totals.lineItems,
       subtotal: totals.subtotal,
@@ -107,8 +111,10 @@ class QuotationService {
     const existing = await quotationRepository.findById(id);
     if (!existing) throw new NotFoundError('Quotation', id);
 
-    if (existing.status !== 'DRAFT') {
-      throw new ConflictError('Only DRAFT quotations can be edited');
+    // A converted quotation lives on as an order — editing it would silently
+    // diverge from that order.
+    if (existing.status === 'CONVERTED') {
+      throw new ConflictError('Converted quotations can no longer be edited');
     }
 
     // Optimistic concurrency check
@@ -118,6 +124,21 @@ class QuotationService {
 
     const updateData = { ...data, updatedBy };
     delete updateData.version; // version is incremented via $inc in repository
+
+    // Versionsverwaltung: editing a quotation that already left the draft
+    // stage freezes its current state as a revision (V1, V2, …) and bumps the
+    // business version. Drafts are edited in place without versioning.
+    if (existing.status !== 'DRAFT') {
+      const { default: DocumentRevision } = await import('./documentRevision.model.js');
+      await DocumentRevision.create({
+        documentType: 'quotation',
+        documentId: id,
+        version: existing.docVersion || 1,
+        snapshot: existing,
+        changedBy: updatedBy,
+      });
+      updateData.docVersion = (existing.docVersion || 1) + 1;
+    }
 
     // Recalculate totals if line items changed
     if (data.lineItems) {
@@ -196,6 +217,12 @@ class QuotationService {
       status: 'DRAFT',
       language: original.language,
       title: original.title,
+      salutation: original.salutation,
+      siteId: original.siteId?._id || original.siteId || null,
+      billingAddressSource: original.billingAddressSource || 'customer',
+      subsidyAmount: original.subsidyAmount,
+      subsidyNote: original.subsidyNote,
+      clientSideWorks: original.clientSideWorks,
       introduction: original.introduction,
       validFrom: new Date(),
       validUntil: original.validUntil,
@@ -248,19 +275,14 @@ class QuotationService {
     const quotation = await quotationRepository.findById(id);
     if (!quotation) throw new NotFoundError('Quotation', id);
 
-    const allowed = QUOTATION_TRANSITIONS[quotation.status] || [];
-    if (!allowed.includes(targetStatus)) {
+    if (!QUOTATION_STATUSES.includes(targetStatus) || targetStatus === quotation.status) {
       throw new ConflictError(
         `Cannot transition from ${quotation.status} to ${targetStatus}`,
       );
     }
 
-    // Precondition checks
-    if (quotation.status === 'DRAFT' && targetStatus === 'SENT' && !quotation.customerId) {
+    if (targetStatus === 'SENT' && !quotation.customerId) {
       throw new ConflictError('Cannot send quotation without a customer');
-    }
-    if (targetStatus === 'DECLINED' && !reason) {
-      throw new ConflictError('Decline reason is required');
     }
 
     const updateData = { status: targetStatus, updatedBy: userId };
@@ -275,20 +297,18 @@ class QuotationService {
     await this._invalidateQuotationCache(id);
     await this._invalidateListCache();
 
-    // Create DocumentStatusLog entry (lazy import to avoid circular deps)
+    // Record the transition in the document's status history (Verlauf).
     try {
       const { default: documentStatusLogService } = await import('./documentStatusLog.service.js');
-      await documentStatusLogService.create({
-        documentType: 'quotation',
-        documentId: id,
-        fromStatus: quotation.status,
-        toStatus: targetStatus,
-        reason,
-        changedBy: userId,
+      await documentStatusLogService.logTransition(
+        'quotation', id, quotation.status, targetStatus, userId, reason || null,
+      );
+    } catch (logErr) {
+      // Non-critical — the transition itself must not fail on a logging error.
+      logger.warn('Status history entry could not be written', {
+        module: 'qop',
+        error: { message: logErr.message },
       });
-    } catch {
-      // DocumentStatusLog may not exist yet — non-critical
-      logger.debug('DocumentStatusLog not available, skipping', { module: 'qop' });
     }
 
     eventBus.publish(EVENT_TYPES.QUOTATION_STATUS_CHANGED, {
@@ -417,6 +437,16 @@ class QuotationService {
     });
 
     return order;
+  }
+
+  async listRevisions(id) {
+    const quotation = await quotationRepository.findById(id);
+    if (!quotation) throw new NotFoundError('Quotation', id);
+    const { default: DocumentRevision } = await import('./documentRevision.model.js');
+    return DocumentRevision.find({ documentType: 'quotation', documentId: id })
+      .sort({ version: -1 })
+      .populate('changedBy', 'firstName lastName email')
+      .lean();
   }
 
   // --- Cache helpers ---

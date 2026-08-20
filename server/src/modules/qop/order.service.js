@@ -105,6 +105,8 @@ class OrderService {
       contactId: quotation.contactId?._id || quotation.contactId || null,
       projectId: quotation.projectId?._id || quotation.projectId || null,
       departmentId: quotation.departmentId || null,
+      siteId: quotation.siteId?._id || quotation.siteId || null,
+      billingAddressSource: quotation.billingAddressSource || 'customer',
       language: quotation.language,
       title: quotation.title,
       lineItems,
@@ -203,7 +205,7 @@ class OrderService {
         if (!doc) return null;
         // Surface the site's billing address (Rechnungsadresse) and ownership
         // (Eigentümer) so the order detail can show them alongside the customer.
-        const parties = await this._resolveSiteParties(doc.projectId);
+        const parties = await this._resolveSiteParties(doc.projectId, doc.siteId);
         return { ...doc, ...parties };
       },
       ENTITY_TTL,
@@ -214,24 +216,80 @@ class OrderService {
 
   // Resolve the parties attached to the order's site (via its project). Returns
   // only parties that actually carry content; failures are non-fatal.
-  async _resolveSiteParties(projectId) {
-    const empty = { siteBillingAddress: null, siteOwnership: null };
+  async _resolveSiteParties(projectId, directSiteId = null) {
+    const empty = { siteBillingAddress: null, siteOwnership: null, siteManagement: null };
     const pid = projectId && typeof projectId === 'object' ? projectId._id : projectId;
-    if (!pid) return empty;
+    // An order carrying its own site (Objekt-first quotations) wins over the
+    // project route, which stays as fallback for older records.
+    let sid = directSiteId && typeof directSiteId === 'object' ? directSiteId._id : directSiteId;
+    if (!sid && !pid) return empty;
     const hasContent = (p) => Boolean(p && (p.name || p.street || p.city));
     try {
       const Project = (await import('../pm/project.model.js')).default;
-      const project = await Project.findById(pid).select('siteId').lean();
-      if (!project?.siteId) return empty;
+      if (!sid && pid) {
+        const project = await Project.findById(pid).select('siteId').lean();
+        sid = project?.siteId;
+      }
+      if (!sid) return empty;
       const Site = (await import('../crm/site.model.js')).default;
-      const site = await Site.findById(project.siteId).select('billingAddress ownership').lean();
+      const site = await Site.findById(sid).select('billingAddress ownership management').lean();
       return {
         siteBillingAddress: hasContent(site?.billingAddress) ? site.billingAddress : null,
         siteOwnership: hasContent(site?.ownership) ? site.ownership : null,
+        siteManagement: hasContent(site?.management) ? site.management : null,
       };
     } catch {
       return empty;
     }
+  }
+
+  /**
+   * Open a project from an order — the "Projekt eröffnen" step of the customer's
+   * project flow, which until now meant creating the project separately and
+   * wiring it up by hand. The customer, the object and the title come from the
+   * order; everything else is the caller's choice.
+   */
+  async createProject(id, data, userId, meta = {}) {
+    const order = await orderRepository.findById(id);
+    if (!order) throw new NotFoundError('Order', id);
+    if (order.projectId) {
+      throw new ConflictError('This order already belongs to a project');
+    }
+
+    const { default: projectService } = await import('../pm/project.service.js');
+    const project = await projectService.create({
+      name: data.name || order.title || `Projekt ${order.orderNumber}`,
+      projectType: data.projectType || 'NEW_INSTALLATION',
+      customerId: order.customerId?._id || order.customerId,
+      siteId: order.siteId?._id || order.siteId || null,
+      projectManagerId: data.projectManagerId || userId,
+      description: data.description || null,
+      estimatedBudget: order.grandTotalRounded ?? order.grandTotal ?? null,
+      currency: order.currency || 'CHF',
+    }, userId, meta);
+
+    await orderRepository.updateById(id, { projectId: project._id, updatedBy: userId });
+    await this._invalidateOrderCache(id);
+    await this._invalidateListCache();
+
+    auditService.logEvent({
+      eventType: 'order.project_created',
+      userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { orderId: id, projectId: project._id, projectNumber: project.projectNumber },
+      module: 'qop',
+    });
+
+    logger.info('Project opened from order', {
+      module: 'qop',
+      action: 'createProject',
+      orderId: id,
+      projectId: project._id,
+    });
+
+    return project;
   }
 
   async list(queryParams) {

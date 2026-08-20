@@ -3,6 +3,7 @@ import calendarRoutes from './calendar.routes.js';
 import coarseRoutes from './coarse.routes.js';
 import dashboardRoutes from './dashboard.routes.js';
 import employeeRoutes from './employee.routes.js';
+import workTypeRoutes from './workType.routes.js';
 import mobileRoutes from './mobile.routes.js';
 
 /**
@@ -25,6 +26,7 @@ router.use('/calendar', calendarRoutes);
 
 // --- Schedule-aware employees ---
 router.use('/employees', employeeRoutes);
+router.use('/work-types', workTypeRoutes);
 
 // --- Assignments ---
 // Lazy import: assignment routes may not exist yet

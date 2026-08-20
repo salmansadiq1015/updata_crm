@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { DataTableShell } from '@/shared/components/data-table/data-table-shell';
 import { RowActionsMenu } from '@/shared/components/data-table/row-actions-menu';
 import { DotLabel } from '@/shared/components/filter-dot';
+import { InstallationStatusBadge } from './installation-status-badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -58,6 +59,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  INSTALLATION_STATUS_META,
   INSTALLATION_TYPE_META,
   MAINTENANCE_STATUS_META,
   MAINTENANCE_TYPE_META,
@@ -66,13 +68,8 @@ import {
 const ALL = 'all';
 const NO_EMPLOYEE = 'none';
 
-const INSTALLATION_STATUS_OPTIONS = [
-  { value: 'active', label: 'Aktiv', tone: 'emerald' },
-  { value: 'maintenance', label: 'In Wartung', tone: 'sky' },
-  { value: 'out_of_service', label: 'Ausser Betrieb', tone: 'slate' },
-  { value: 'defective', label: 'Defekt', tone: 'red' },
-  { value: 'decommissioned', label: 'Stillgelegt', tone: 'rose' },
-];
+const INSTALLATION_STATUS_OPTIONS = Object.entries(INSTALLATION_STATUS_META)
+  .map(([value, meta]) => ({ value, label: meta.label, tone: meta.tone }));
 
 const MAINTENANCE_STATUS_TONE = {
   ok: 'emerald',
@@ -361,9 +358,12 @@ export function AssetMaintenanceWorkspace() {
               <Icon className={cn('h-4 w-4', meta.color)} />
             </span>
             <div className="min-w-0">
-              <Link href={`/crm/installations/${item.installation?._id}`} className="block truncate text-[13px] font-medium text-foreground hover:underline">
-                {systemLabel(item.installation)}
-              </Link>
+              <div className="flex min-w-0 items-center gap-2">
+                <Link href={`/crm/installations/${item.installation?._id}`} className="truncate text-[13px] font-medium text-foreground hover:underline">
+                  {systemLabel(item.installation)}
+                </Link>
+                <InstallationStatusBadge status={item.installation?.status} className="shrink-0" />
+              </div>
               <p className="truncate text-xs text-muted-foreground">
                 {item.customer?.name || '-'} {item.site?.name ? `- ${item.site.name}` : ''}
               </p>
@@ -511,7 +511,7 @@ export function AssetMaintenanceWorkspace() {
               <SelectItem value={ALL}><DotLabel>{t('crm.assetMaintenance.allSystemStatus', 'Alle Komponentenstatus')}</DotLabel></SelectItem>
               {INSTALLATION_STATUS_OPTIONS.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
-                  <DotLabel tone={option.tone}>{option.label}</DotLabel>
+                  <DotLabel tone={option.tone}>{t(`crm.installations.status.${option.value}`, option.label)}</DotLabel>
                 </SelectItem>
               ))}
             </SelectContent>

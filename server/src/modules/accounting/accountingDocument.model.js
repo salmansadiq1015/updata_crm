@@ -147,6 +147,15 @@ const accountingDocumentSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    // Digitales Dossier / Visum — same two flags on every backing model, so the
+    // federated document list can offer one set of actions everywhere.
+    visumBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    visumAt: { type: Date, default: null },
+    releasedToField: { type: Boolean, default: false, index: true },
+    releasedAt: { type: Date, default: null },
+    releasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    archived: { type: Boolean, default: false, index: true },
+    archivedAt: { type: Date, default: null },
     isDeleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
     deletedBy: {

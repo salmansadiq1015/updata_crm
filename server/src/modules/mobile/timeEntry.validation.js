@@ -4,15 +4,32 @@ import { objectId } from '../../shared/validation/commonSchemas.js';
 const ACTIVITY_TYPES = ['TRAVEL', 'ONSITE_WORK', 'ADMINISTRATIVE', 'OTHER'];
 const RELEASE_STATUSES = ['PENDING', 'RELEASED', 'LOCKED'];
 
+const timeEntryBody = {
+  date: Joi.date().iso().required(),
+  startTime: Joi.date().iso().required(),
+  endTime: Joi.date().iso().allow(null),
+  breakDurationMin: Joi.number().min(0).default(0),
+  activityType: Joi.string().valid(...ACTIVITY_TYPES).required(),
+  note: Joi.string().max(500).allow('', null),
+};
+
+/** Nested under an assignment: the order comes from the URL. */
 export const createTimeEntrySchema = {
   params: Joi.object({ id: objectId.required() }),
+  body: Joi.object({ ...timeEntryBody, technicianId: objectId }),
+};
+
+/** Standalone: office hours, which belong to no assignment. */
+export const createOfficeTimeEntrySchema = {
   body: Joi.object({
-    date: Joi.date().iso().required(),
-    startTime: Joi.date().iso().required(),
-    endTime: Joi.date().iso().allow(null),
-    breakDurationMin: Joi.number().min(0).default(0),
-    activityType: Joi.string().valid(...ACTIVITY_TYPES).required(),
-    note: Joi.string().max(500).allow('', null),
+    ...timeEntryBody,
+    // No default: an omitted break means "apply the company rule", which is
+    // not the same as an explicit 0.
+    breakDurationMin: Joi.number().min(0),
+    officeCategoryId: objectId.allow(null),
+    // Whose day this is; the controller rejects anyone booking for another
+    // person without time-tracking:admin.
+    technicianId: objectId,
   }),
 };
 

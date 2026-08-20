@@ -6,6 +6,7 @@ import {
   getCoarseMatrixSchema,
   createCoarseSchema,
   updateCoarseSchema,
+  moveCoarseSchema,
   coarseIdParamSchema,
   bulkCoarseSchema,
 } from './coarse.validation.js';
@@ -34,6 +35,14 @@ router.patch(
   requirePermission('scheduling:admin'),
   validate(updateCoarseSchema),
   (req, res, next) => coarseController.update(req, res, next),
+);
+
+router.post(
+  '/allocations/:id/move',
+  authenticate,
+  requirePermission('scheduling:admin'),
+  validate(moveCoarseSchema),
+  (req, res, next) => coarseController.move(req, res, next),
 );
 
 router.delete(

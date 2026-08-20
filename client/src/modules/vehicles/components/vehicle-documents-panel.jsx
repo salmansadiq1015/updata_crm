@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { showError, showSuccess } from '@/lib/toast';
+import { downloadFromUrl } from '@/lib/api/download';
 import { DocumentRepositoryTable } from '@/modules/documents/components/document-repository-table';
 import {
   useDocumentRepository,
@@ -46,6 +47,19 @@ export function VehicleDocumentsPanel({ filters, metadata, canWrite = false, can
     }
   };
 
+  const downloadDoc = async (doc) => {
+    setBusyId(doc.id);
+    try {
+      const payload = await download.mutateAsync(doc.id);
+      if (payload?.downloadUrl) await downloadFromUrl(payload.downloadUrl, doc.fileName || doc.title || 'download');
+      else showError(t('documents.repository.noDownloadUrl', 'Kein Download-Link verfügbar'));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleDelete = async (doc) => {
     setBusyId(doc.id);
     try {
@@ -74,7 +88,7 @@ export function VehicleDocumentsPanel({ filters, metadata, canWrite = false, can
         loading={isLoading}
         error={error}
         onPreview={openDoc}
-        onDownload={openDoc}
+        onDownload={downloadDoc}
         onDelete={canDelete ? handleDelete : undefined}
         busyId={busyId}
         canDelete={canDelete}

@@ -304,6 +304,21 @@ documentRouter.delete(
   validate(documentIdParamSchema),
   (req, res, next) => documentController.setVisum(req, res, next),
 );
+// Digitales Dossier: POST releases the document to the field, DELETE revokes it.
+documentRouter.post(
+  '/:docId/release',
+  authenticate,
+  requirePermission('project:documents:write'),
+  validate(documentIdParamSchema),
+  (req, res, next) => documentController.setReleased(req, res, next),
+);
+documentRouter.delete(
+  '/:docId/release',
+  authenticate,
+  requirePermission('project:documents:write'),
+  validate(documentIdParamSchema),
+  (req, res, next) => documentController.setReleased(req, res, next),
+);
 // Archive: POST to archive, DELETE to restore from archive.
 documentRouter.post(
   '/:docId/archive',

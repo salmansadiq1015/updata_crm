@@ -3,7 +3,7 @@ import { cursorPagination, objectId } from '../../shared/validation/commonSchema
 import { DOCUMENT_ORIGINS, DOCUMENT_SOURCES } from './documentIndex.model.js';
 
 const CENTRAL_RECORD_ID = /^(repository|generated|project|customer|accounting|mobile):[0-9a-fA-F]{24}$/;
-const LINK_TYPES = ['', 'customer', 'project', 'job', 'employee', 'vehicle'];
+const LINK_TYPES = ['', 'customer', 'project', 'job', 'employee', 'vehicle', 'installation'];
 
 export const listDocumentsSchema = {
   query: cursorPagination.keys({
@@ -21,6 +21,7 @@ export const listDocumentsSchema = {
     siteId: objectId,
     jobId: objectId,
     employeeId: objectId,
+    installationId: objectId,
     dateFrom: Joi.date().iso(),
     dateTo: Joi.date().iso(),
     search: Joi.string().trim().max(200).allow(''),
@@ -40,11 +41,22 @@ export const uploadDocumentSchema = {
     projectId: objectId.allow(null),
     jobId: objectId.allow(null),
     employeeId: objectId.allow(null),
+    installationId: objectId.allow(null),
   }),
 };
 
 export const documentRecordParamSchema = {
   params: Joi.object({
     id: Joi.string().pattern(CENTRAL_RECORD_ID).required(),
+  }),
+};
+
+export const listAttachableSchema = {
+  query: Joi.object({
+    siteId: objectId,
+    customerId: objectId,
+    projectId: objectId,
+    search: Joi.string().trim().max(200).allow(''),
+    limit: Joi.number().integer().min(1).max(200).default(100),
   }),
 };

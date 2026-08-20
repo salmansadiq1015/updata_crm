@@ -110,12 +110,16 @@ class FileService {
 
   /**
    * Get pre-signed download URL.
+   *
+   * @param {string}  id
+   * @param {object}  [options]
+   * @param {string}  [options.attachmentFilename] - Force browser download with this filename.
    */
-  async getDownloadUrl(id) {
+  async getDownloadUrl(id, options = {}) {
     const file = await this.getById(id);
     if (!file) throw new NotFoundError('File', id);
 
-    return storageService.getPresignedUrl(file.key);
+    return storageService.getPresignedUrl(file.key, undefined, options);
   }
 
   /**

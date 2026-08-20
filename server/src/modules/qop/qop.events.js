@@ -10,10 +10,24 @@ async function createAppointmentReminders({
   channel,
   language,
 }) {
+  // An appointment without a customer or without a date cannot be reminded
+  // about. Say so rather than letting the model's validation fail into the
+  // handler's catch block, where the problem stayed invisible.
+  const appointmentDate = scheduledDate ? new Date(scheduledDate) : null;
+  if (!appointmentId || !customerId || !appointmentDate || Number.isNaN(appointmentDate.getTime())) {
+    logger.warn('Skipping appointment reminders: incomplete appointment data', {
+      module: 'qop',
+      action: 'createAppointmentReminders',
+      appointmentId: appointmentId || null,
+      customerId: customerId || null,
+      scheduledDate: scheduledDate || null,
+    });
+    return [];
+  }
+
   const { default: appointmentReminderService } = await import('./appointmentReminder.service.js');
   const { default: reminderSettingsService } = await import('./reminderSettings.service.js');
   const settings = await reminderSettingsService.getEffectiveSettings();
-  const appointmentDate = new Date(scheduledDate);
 
   return Promise.all(settings.appointmentReminderHours.map((hoursBefore) => {
     const scheduledAt = new Date(appointmentDate.getTime() - hoursBefore * 60 * 60 * 1000);
@@ -127,6 +141,7 @@ export function registerQopEvents() {
         appointmentId,
         customerId,
         newScheduledDate,
+        scheduledDate,
         channel,
         language,
       } = event.payload;
@@ -142,7 +157,7 @@ export function registerQopEvents() {
       const reminders = await createAppointmentReminders({
         appointmentId,
         customerId,
-        scheduledDate: newScheduledDate,
+        scheduledDate: newScheduledDate || scheduledDate,
         channel,
         language,
       });

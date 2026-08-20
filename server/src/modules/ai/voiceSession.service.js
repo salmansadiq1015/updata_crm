@@ -22,6 +22,13 @@ class VoiceSessionService {
    * @returns {object} Created session
    */
   async create(data, userId, meta = {}) {
+    if (!config.ai.apiKey) {
+      throw new AppError(
+        'Der KI-Assistent ist nicht konfiguriert (OPENAI_API_KEY fehlt). Bitte den Administrator kontaktieren.',
+        503,
+        'AI_NOT_CONFIGURED'
+      );
+    }
     const session = await voiceSessionRepository.create({
       ...data,
       userId,

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { BarChart3, BookOpen, MessageSquareText, Mic, Sparkles } from 'lucide-react';
+import { BarChart3, BookOpen, MessageSquareText, Mic, ShieldCheck, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { AiAdminHeader, AiAdminPageShell } from '@/modules/ai/components/admin/ai-admin-ui';
@@ -10,6 +10,7 @@ const LINKS = [
   { href: '/admin/ai/analytics', icon: BarChart3, labelKey: 'ai.admin.accuracyUsage', descKey: 'ai.admin.accuracyUsageDesc' },
   { href: '/admin/ai/vocabulary', icon: BookOpen, labelKey: 'ai.admin.vocabulary', descKey: 'ai.admin.vocabularyDesc' },
   { href: '/admin/ai/commands', icon: Mic, labelKey: 'ai.admin.commands', descKey: 'ai.admin.commandsDesc' },
+  { href: '/admin/ai/agents', icon: ShieldCheck, labelKey: 'ai.agents.title', descKey: 'ai.agents.hubDesc' },
 ];
 
 export default function AdminAiPage() {
@@ -31,7 +32,7 @@ export default function AdminAiPage() {
         )}
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {LINKS.map(({ href, icon: Icon, labelKey, descKey }) => (
           <Link
             key={href}

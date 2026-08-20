@@ -18,6 +18,7 @@ const ALLOWED_FILTERS = {
   projectId: 'objectId',
   jobId: 'objectId',
   employeeId: 'objectId',
+  installationId: 'objectId',
   ownerUserId: 'objectId',
 };
 

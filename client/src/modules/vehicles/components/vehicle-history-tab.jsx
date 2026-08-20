@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Activity, Plus, Pencil, Trash2, User, Wrench, Package, StickyNote, History,
+  Activity, Plus, Pencil, Trash2, User, Wrench, Package, StickyNote,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -60,8 +60,8 @@ export function VehicleHistoryTab({ vehicleId }) {
     <Card>
       <CardContent className="p-4">
         <div className="mb-4 flex items-center gap-2">
-          <History className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">{t('vehicles.tab.history', 'Historie')}</h3>
+          <Activity className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold">{t('common.activity', 'Aktivität')}</h3>
           <span className="text-xs text-muted-foreground">({events.length})</span>
         </div>
         <div className="relative">
@@ -80,6 +80,11 @@ export function VehicleHistoryTab({ vehicleId }) {
                       <p className="text-sm font-semibold">{t(`vehicles.event.${e.eventType}`, meta.label)}</p>
                       <span className="ml-auto text-[11px] text-muted-foreground">{fmt(e.timestamp)}</span>
                     </div>
+                    {e.userName && (
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {t('common.by', 'von')} {e.userName}
+                      </p>
+                    )}
                     {e.details?.changedFields?.length > 0 && (
                       <p className="mt-0.5 text-xs text-muted-foreground">{e.details.changedFields.join(', ')}</p>
                     )}

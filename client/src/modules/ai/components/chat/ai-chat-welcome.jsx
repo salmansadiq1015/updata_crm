@@ -69,12 +69,15 @@ export function AiChatWelcome({ onSuggestionClick }) {
       >
         {SUGGESTIONS.map(({ key, icon: Icon }) => {
           const label = t(`ai.welcome.suggestion.${key}`);
+          // The caption names the intent; the starter text is what lands in
+          // the field, for the user to complete before sending.
+          const starter = t(`ai.welcome.prompt.${key}`, label);
           return (
             <Button
               key={key}
               variant="outline"
               className="h-auto py-3 px-4 text-left justify-start gap-2.5 text-sm font-normal hover:bg-primary/5 hover:border-primary/30 transition-all"
-              onClick={() => onSuggestionClick?.(label)}
+              onClick={() => onSuggestionClick?.(starter)}
             >
               <Icon className="h-4 w-4 shrink-0 text-primary" />
               <span className="truncate">{label}</span>

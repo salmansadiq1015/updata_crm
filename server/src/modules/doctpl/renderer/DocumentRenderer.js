@@ -52,6 +52,7 @@ export default class DocumentRenderer {
 
     const pm = new PageManager(doc, margins, layout);
     const footer = new FooterRenderer(doc, pm, ciConfig, language, template, data);
+    const qrBillPages = [];
 
     const rendererMap = {
       header:  new HeaderRenderer(),
@@ -99,17 +100,26 @@ export default class DocumentRenderer {
       } else {
         renderer.draw(doc, pm, ciConfig, data, language, sectionConfig);
       }
+
+      // The payment part must stay free of any other content, so the page the
+      // QR-bill landed on gets no footer. swissqrbill draws on the current
+      // page or opens a new one, so the page it ended on is the one to skip.
+      if (section.type === 'qr_bill' && data.qrBill?.iban) {
+        qrBillPages.push(doc.bufferedPageRange().count - 1);
+      }
     }
+
+    const totalPages = doc.bufferedPageRange().count;
 
     return new Promise((resolve, reject) => {
       const chunks = [];
       doc.on('data', (chunk) => chunks.push(chunk));
       doc.on('end', () => {
-        resolve({ buffer: Buffer.concat(chunks), pageCount: pm.pageCount });
+        resolve({ buffer: Buffer.concat(chunks), pageCount: totalPages });
       });
       doc.on('error', reject);
       try {
-        footer.stampPageNumbers(pm.pageCount);
+        footer.render({ skipPages: qrBillPages });
         doc.end();
       } catch (err) {
         reject(err);

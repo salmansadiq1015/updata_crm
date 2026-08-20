@@ -17,11 +17,12 @@ import { Controller } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, Flame, AlertCircle, Check } from 'lucide-react';
-import { INSTALLATION_TYPE_META, FUEL_TYPE_META } from '@/modules/crm/constants/crm-constants';
+import { INSTALLATION_TYPE_META, FUEL_TYPE_META, INSTALLATION_STATUS_META, INSTALLATION_EDITABLE_STATUSES } from '@/modules/crm/constants/crm-constants';
 import { cn } from '@/lib/utils';
 
 const BLANK = {
   type: 'boiler',
+  status: 'active',
   manufacturer: '',
   model: '',
   serialNumber: '',
@@ -66,6 +67,7 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
       reset({
         ...BLANK,
         type: defaultValues.type || 'boiler',
+        status: defaultValues.status || 'active',
         manufacturer: defaultValues.manufacturer || '',
         model: defaultValues.model || '',
         serialNumber: defaultValues.serialNumber || '',
@@ -81,6 +83,7 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
   }, [defaultValues, reset, open]);
 
   const type = watch('type');
+  const status = watch('status');
   const fuelType = watch('fuelType');
   const additionalSiteIds = watch('additionalSiteIds') || [];
 
@@ -105,6 +108,8 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
       fuelType: data.fuelType || null,
       technicalNotes: data.technicalNotes || null,
     };
+    // Stillgelegt is only reachable via the dedicated action — never resend it here.
+    if (!INSTALLATION_EDITABLE_STATUSES.includes(cleaned.status)) delete cleaned.status;
     try {
       await onSubmit(cleaned);
       onOpenChange(false);
@@ -163,6 +168,27 @@ export function InstallationForm({ open, onOpenChange, onSubmit, defaultValues, 
                 </SelectContent>
               </Select>
             </DarkField>
+
+            {isEdit && defaultValues?.status !== 'decommissioned' && (
+              <DarkField label={t('crm.status', 'Status')} error={errors.status}>
+                <Select value={status || 'active'} onValueChange={(v) => setValue('status', v, { shouldDirty: true })}>
+                  <SelectTrigger className={selectTriggerCls}><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-card border-border">
+                    {INSTALLATION_EDITABLE_STATUSES.map((key) => {
+                      const meta = INSTALLATION_STATUS_META[key];
+                      return (
+                        <SelectItem key={key} value={key} className="text-foreground focus:bg-muted/50 focus:text-foreground">
+                          <span className="flex items-center gap-2">
+                            <span className={cn('h-2 w-2 rounded-full shrink-0', meta.dot)} aria-hidden />
+                            {t(`crm.installations.status.${key}`, meta.label)}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </DarkField>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <DarkField label={t('crm.installations.manufacturer', 'Hersteller')} error={errors.manufacturer}>

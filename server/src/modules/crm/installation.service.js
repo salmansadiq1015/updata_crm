@@ -6,6 +6,7 @@ import EVENT_TYPES from '../../shared/events/eventTypes.js';
 import auditService from '../auth/audit.service.js';
 import { buildEntityTimeline, exportCsv, exportPdf } from './activityTimeline.service.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError.js';
+import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
 import { getTemplatesForType } from './maintenanceTemplates.js';
 
@@ -191,7 +192,7 @@ class InstallationService {
     if (!installation) throw new NotFoundError('Installation', id);
 
     if (installation.status === 'decommissioned') {
-      throw new ConflictError('Installation is already decommissioned');
+      throw new ConflictError('Diese Komponente ist bereits stillgelegt.', ERROR_CODES.INSTALLATION_ALREADY_DECOMMISSIONED);
     }
 
     const updated = await installationRepository.updateById(id, {
@@ -210,6 +211,9 @@ class InstallationService {
 
     await this._invalidateInstallationCache(id);
     await this._invalidateSiteInstallationsCache(installation.siteId);
+    for (const linked of installation.additionalSiteIds || []) {
+      await this._invalidateSiteInstallationsCache(linked);
+    }
     await cacheManager.del(`crm:maintenance:installation:${id}`);
     await cacheManager.del('crm:maintenance:dashboard');
 
@@ -287,7 +291,12 @@ class InstallationService {
   }
 
   async _invalidateSiteInstallationsCache(siteId) {
-    await cacheManager.del(`crm:installations:site:${siteId}`);
+    // findById populates siteId, so callers hand over a document as often as an
+    // id — interpolating the document would build a key that matches nothing
+    // and leave the object's component list stale.
+    const id = siteId?._id ?? siteId;
+    if (!id) return;
+    await cacheManager.del(`crm:installations:site:${id}`);
   }
 }
 

@@ -9,6 +9,15 @@ class DocumentIndexController {
     } catch (err) { next(err); }
   }
 
+  // Attachable documents across the repository, generated and project documents.
+  async listAttachable(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const data = await documentIndexService.listAttachable(query);
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async upload(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
@@ -19,8 +28,36 @@ class DocumentIndexController {
 
   async download(req, res, next) {
     try {
-      const data = await documentIndexService.download(req.params.id, req.user);
+      const attachment = req.query.attachment === '1' || req.query.attachment === 'true';
+      const data = await documentIndexService.download(req.params.id, req.user, { attachment });
       return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  async setArchived(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const archived = req.method !== 'DELETE';
+      const doc = await documentIndexService.setArchived(req.params.id, req.user, archived, meta);
+      return res.success({ data: doc, message: archived ? 'Document archived' : 'Document restored from archive' });
+    } catch (err) { next(err); }
+  }
+
+  async setVisum(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const visiert = req.method !== 'DELETE';
+      const doc = await documentIndexService.setVisum(req.params.id, req.user, visiert, meta);
+      return res.success({ data: doc, message: visiert ? 'Document signed off' : 'Sign-off removed' });
+    } catch (err) { next(err); }
+  }
+
+  async setReleased(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const released = req.method !== 'DELETE';
+      const doc = await documentIndexService.setReleased(req.params.id, req.user, released, meta);
+      return res.success({ data: doc, message: released ? 'Document released to the field' : 'Document release revoked' });
     } catch (err) { next(err); }
   }
 

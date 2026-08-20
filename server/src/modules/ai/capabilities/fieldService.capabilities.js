@@ -186,7 +186,7 @@ export async function executeFieldServiceCapability({
         code: 'RBAC_DENIED',
         message: `Missing permission '${capability.requiredPermission}'`,
       },
-      message: 'You do not have permission to run this AI action.',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
       missingFields: ['permission'],
       requiredPermission: capability.requiredPermission,
       resolvedContext: helpers.summarizeContext(context),
@@ -215,7 +215,7 @@ async function createProject({ input, context, userId, helpers }) {
   }
 
   const projectService = (await import('../../pm/project.service.js')).default;
-  const name = helpers.cleanTitle(input, [
+  const name = context.llmDraft?.title || helpers.cleanTitle(input, [
     'create project',
     'new project',
     'add project',
@@ -233,10 +233,22 @@ async function createProject({ input, context, userId, helpers }) {
     notes: 'Created by AI assistant.',
   }, userId, { source: 'ai-agent' });
 
+  // Projekt AI fills the checklist that belongs to this kind of job.
+  const projektService = (await import('../agents/projekt/projekt.service.js')).default;
+  const template = await projektService.selectTemplate({ title: name, description: input });
+  const checklist = await projektService.createChecklist(project, template, userId);
+
+  const blockingNote = checklist.blocking.length
+    ? ` ${checklist.blocking.length} davon müssen vor dem Baustart erledigt sein.`
+    : '';
+  const message = checklist.created.length
+    ? `Projekt ${project.projectNumber} eröffnet: ${project.name}. Checkliste „${template.name}“ mit ${checklist.created.length} Aufgaben angelegt.${blockingNote}`
+    : `Project ${project.projectNumber} created: ${project.name}.`;
+
   return {
     action: ACTIONS.CREATE_PROJECT,
     status: 'completed',
-    message: `Project ${project.projectNumber} created: ${project.name}.`,
+    message,
     recordType: 'project',
     recordId: project._id,
     record: {
@@ -245,6 +257,15 @@ async function createProject({ input, context, userId, helpers }) {
       name: project.name,
       status: project.status,
       customerName: project.customerName,
+      ...(checklist.created.length ? {
+        checklist: template?.name || null,
+        tasks: checklist.created.map((task) => ({
+          title: task.title,
+          dueDate: task.dueDate,
+          blocksStart: task.blocksStart,
+        })),
+        blocksStart: checklist.blocking.map((task) => task.title),
+      } : {}),
     },
   };
 }
@@ -314,7 +335,7 @@ async function updateTask({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.UPDATE_TASK,
     status: 'completed',
-    message: `Task updated: ${task.title}.`,
+    message: `Aufgabe aktualisiert: ${task.title}.`,
     recordType: 'task',
     recordId: task._id,
     record: {
@@ -349,7 +370,7 @@ async function updateOrder({ input, context, userId, helpers }) {
     return {
       action: ACTIONS.UPDATE_ORDER,
       status: 'completed',
-      message: `Order ${order.orderNumber} updated to ${order.status}.`,
+      message: `Auftrag ${order.orderNumber} auf ${order.status} gesetzt.`,
       recordType: 'order',
       recordId: order._id,
       record: { id: order._id, orderNumber: order.orderNumber, status: order.status },
@@ -370,7 +391,7 @@ async function updateOrder({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.UPDATE_ORDER,
     status: 'completed',
-    message: `Order ${order.orderNumber} updated.`,
+    message: `Auftrag ${order.orderNumber} aktualisiert.`,
     recordType: 'order',
     recordId: order._id,
     record: { id: order._id, orderNumber: order.orderNumber, status: order.status, title: order.title },
@@ -398,7 +419,7 @@ async function updateReport({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.UPDATE_REPORT,
     status: 'completed',
-    message: `Service report ${updated.reportNumber} updated.`,
+    message: `Rapport ${updated.reportNumber} aktualisiert.`,
     recordType: 'workReport',
     recordId: updated._id,
     record: {
@@ -438,7 +459,7 @@ async function rescheduleAssignment({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.RESCHEDULE_ASSIGNMENT,
     status: 'completed',
-    message: `Assignment ${assignment.assignmentNumber} rescheduled.`,
+    message: `Einsatz ${assignment.assignmentNumber} verschoben.`,
     recordType: 'assignment',
     recordId: assignment._id,
     record: {
@@ -460,31 +481,61 @@ async function createQuotation({ input, context, userId, helpers }) {
   }
 
   const quotationService = (await import('../../qop/quotation.service.js')).default;
-  const lineItems = extractCommercialLineItems(input, {
-    defaultDescription: helpers.cleanTitle(input, ['create quotation', 'create quote', 'quotation', 'quote', 'offerte', 'angebot']),
-    quotationMode: true,
-  });
+  const fallbackTitle = helpers.cleanTitle(input, ['create quotation', 'create quote', 'quotation', 'quote', 'offerte', 'angebot']);
+
+  // A site visit or dictation carries enough substance for Offerte AI to draft
+  // the nine blocks; a one-line command does not, so it keeps the plain path.
+  const offerteService = (await import('../agents/offerte/offerte.service.js')).default;
+  const draft = input.length >= 120 ? await offerteService.draft(input, {
+    customerName: context.customer.name,
+    siteLabel: context.site?.name || context.installation?.name || null,
+  }) : null;
+
+  const lineItems = draft?.positions?.length
+    ? await offerteService.toLineItems(draft.positions)
+    : extractCommercialLineItems(input, { defaultDescription: fallbackTitle, quotationMode: true });
+
   const quotation = await quotationService.create({
     customerId: helpers.objectIdValue(context.customer),
     customerName: context.customer.name,
     projectId: helpers.objectIdValue(context.project) || null,
     language: 'de',
-    title: helpers.cleanTitle(input, ['create quotation', 'create quote', 'quotation', 'quote', 'offerte', 'angebot']),
-    introduction: 'Draft created by AI assistant. Please review before sending.',
+    title: draft?.title || fallbackTitle,
+    introduction: draft
+      ? offerteService.composeIntroduction(draft.blocks)
+      : 'Entwurf durch den KI-Assistenten erstellt. Bitte vor dem Versand prüfen.',
     validUntil: addDays(new Date(), 30),
     currency: 'CHF',
     lineItems,
     globalDiscountPercent: 0,
     paymentTerms: '',
-    notes: input,
+    notes: draft ? offerteService.composeInternalNotes(draft) : input,
     termsAndConditions: '',
     assignedUserId: helpers.objectIdValue(context.assignee) || userId,
+    ...(draft ? {
+      aiDraft: {
+        blocks: draft.blocks,
+        openPoints: draft.openPoints,
+        missingPrices: draft.missingPrices,
+        recognizedWork: draft.recognizedWork,
+        sourceText: input.slice(0, 20000),
+        generatedAt: new Date(),
+      },
+    } : {}),
   }, userId, { source: 'ai-agent' });
+
+  const followUps = [...(draft?.openPoints || []), ...(draft?.missingPrices || [])];
+  const message = draft
+    ? `Offertenentwurf ${quotation.quotationNumber} für ${quotation.customerName} erstellt`
+      + `${draft.positions.length ? ` — ${draft.positions.length} Positionen` : ''}`
+      + `${followUps.length ? `, ${followUps.length} offene Punkte zu klären` : ''}.`
+      + ' Preise sind noch zu ergänzen.'
+    : `Draft quotation ${quotation.quotationNumber} created for ${quotation.customerName}.`;
 
   return {
     action: ACTIONS.CREATE_QUOTATION,
     status: 'completed',
-    message: `Draft quotation ${quotation.quotationNumber} created for ${quotation.customerName}.`,
+    message,
     recordType: 'quotation',
     recordId: quotation._id,
     record: {
@@ -493,6 +544,12 @@ async function createQuotation({ input, context, userId, helpers }) {
       customerName: quotation.customerName,
       status: quotation.status,
       total: quotation.grandTotalRounded,
+      ...(draft ? {
+        positions: draft.positions.length,
+        openPoints: draft.openPoints,
+        missingPrices: draft.missingPrices,
+        recognizedWork: draft.recognizedWork,
+      } : {}),
     },
   };
 }
@@ -573,7 +630,7 @@ async function createTaskReminder({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.CREATE_TASK_REMINDER,
     status: 'completed',
-    message: `Reminder created for task ${context.task.title}.`,
+    message: `Erinnerung für ${context.task.title} erstellt.`,
     recordType: 'taskReminder',
     recordId: reminder._id,
     record: {
@@ -715,19 +772,18 @@ async function deleteAssignment({ context, userId, state, helpers }) {
 
 async function searchCustomers({ input, context, helpers }) {
   const customerService = (await import('../../crm/customer.service.js')).default;
-  const term = helpers.extractSearchTerm(input);
-  const customers = isListAllIntent(input)
-    ? (await customerService.list({ limit: 10, sortBy: 'createdAt', sortOrder: 'desc' })).data
-    : await customerService.search(term, 10);
-
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_CUSTOMERS, ['customer search term'], context);
   }
+  const customers = listAll
+    ? (await customerService.list({ limit: 10, sortBy: 'createdAt', sortOrder: 'desc' })).data
+    : await customerService.search(term, 10);
 
   return {
     action: ACTIONS.SEARCH_CUSTOMERS,
     status: 'completed',
-    message: customers.length ? `Found ${customers.length} customers.` : 'No customers found.',
+    message: customers.length ? `${customers.length} Kunden gefunden.` : 'Keine Kunden gefunden.',
     records: customers.map((customer) => ({
       id: customer._id,
       customerNumber: customer.customerNumber,
@@ -743,8 +799,8 @@ async function searchCustomers({ input, context, helpers }) {
 
 async function searchTasks({ input, context, userId, state, helpers }) {
   const taskService = (await import('../../tasks/task.service.js')).default;
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_TASKS, ['task search term'], context);
   }
 
@@ -752,14 +808,14 @@ async function searchTasks({ input, context, userId, state, helpers }) {
     limit: 10,
     sortBy: 'createdAt',
     sortOrder: 'desc',
-    ...(isListAllIntent(input) ? {} : { q: term }),
+    ...(listAll ? {} : { q: term }),
   }, userId, { isAdmin: Boolean(state.permissions?.includes('*')) });
   const tasks = result.data || [];
 
   return {
     action: ACTIONS.SEARCH_TASKS,
     status: 'completed',
-    message: tasks.length ? `Found ${tasks.length} tasks.` : 'No tasks found.',
+    message: tasks.length ? `${tasks.length} Aufgaben gefunden.` : 'Keine Aufgaben gefunden.',
     records: tasks.map((task) => ({
       id: task._id,
       title: task.title,
@@ -772,19 +828,19 @@ async function searchTasks({ input, context, userId, state, helpers }) {
 }
 
 async function searchProjects({ input, context, helpers }) {
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_PROJECTS, ['project search term'], context);
   }
 
   const projectService = (await import('../../pm/project.service.js')).default;
-  const projects = isListAllIntent(input)
+  const projects = listAll
     ? (await projectService.list({ limit: 10, sortBy: 'createdAt', sortOrder: 'desc' })).data
     : await projectService.search(term, 10);
   return {
     action: ACTIONS.SEARCH_PROJECTS,
     status: 'completed',
-    message: projects.length ? `Found ${projects.length} projects.` : 'No projects found.',
+    message: projects.length ? `${projects.length} Projekte gefunden.` : 'Keine Projekte gefunden.',
     records: projects.map((project) => ({
       id: project._id,
       projectNumber: project.projectNumber,
@@ -796,8 +852,8 @@ async function searchProjects({ input, context, helpers }) {
 }
 
 async function searchOrders({ input, context, helpers }) {
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_ORDERS, ['job/order search term'], context);
   }
 
@@ -806,14 +862,14 @@ async function searchOrders({ input, context, helpers }) {
     limit: 10,
     sortBy: 'createdAt',
     sortOrder: 'desc',
-    ...(isListAllIntent(input) ? {} : { search: term }),
+    ...(listAll ? {} : { search: term }),
   });
   const orders = result.data || [];
 
   return {
     action: ACTIONS.SEARCH_ORDERS,
     status: 'completed',
-    message: orders.length ? `Found ${orders.length} jobs/orders.` : 'No jobs or orders found.',
+    message: orders.length ? `${orders.length} Aufträge gefunden.` : 'Keine Aufträge gefunden.',
     records: orders.map((order) => ({
       id: order._id,
       orderNumber: order.orderNumber,
@@ -827,8 +883,8 @@ async function searchOrders({ input, context, helpers }) {
 }
 
 async function searchReports({ input, context, helpers }) {
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && !context.assignment && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && !context.assignment && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_REPORTS, ['service report search term'], context);
   }
 
@@ -839,14 +895,14 @@ async function searchReports({ input, context, helpers }) {
       pageSize: 10,
       sortBy: 'createdAt',
       sortOrder: 'desc',
-      ...(isListAllIntent(input) ? {} : { search: term }),
+      ...(listAll ? {} : { search: term }),
     });
   const reports = result.items || [];
 
   return {
     action: ACTIONS.SEARCH_REPORTS,
     status: 'completed',
-    message: reports.length ? `Found ${reports.length} service reports.` : 'No service reports found.',
+    message: reports.length ? `${reports.length} Rapporte gefunden.` : 'Keine Rapporte gefunden.',
     records: reports.map((report) => ({
       id: report._id,
       reportNumber: report.reportNumber,
@@ -859,8 +915,8 @@ async function searchReports({ input, context, helpers }) {
 }
 
 async function searchDocuments({ input, context, userId, state, helpers }) {
-  const term = helpers.extractSearchTerm(input);
-  if (!isListAllIntent(input) && (!term || term.length < 2)) {
+  const { term, listAll } = searchInputs(input, context, helpers);
+  if (!listAll && (!term || term.length < 2)) {
     return helpers.needsFollowUp(ACTIONS.SEARCH_DOCUMENTS, ['document search term'], context);
   }
 
@@ -868,7 +924,7 @@ async function searchDocuments({ input, context, userId, state, helpers }) {
   const user = await User.findById(userId).select('_id role').lean();
   const documentIndexService = (await import('../../documents/documentIndex.service.js')).default;
   const result = await documentIndexService.list({
-    search: isListAllIntent(input) ? undefined : term,
+    search: listAll ? undefined : term,
     limit: 10,
     source: 'all',
     origin: 'all',
@@ -880,7 +936,7 @@ async function searchDocuments({ input, context, userId, state, helpers }) {
   return {
     action: ACTIONS.SEARCH_DOCUMENTS,
     status: 'completed',
-    message: result.data.length ? `Found ${result.data.length} documents.` : 'No documents found.',
+    message: result.data.length ? `${result.data.length} Dokumente gefunden.` : 'Keine Dokumente gefunden.',
     records: result.data.map((document) => ({
       id: document.id || document._id || document.recordId,
       title: document.title,
@@ -897,7 +953,7 @@ function confirmationRequired(action, context, { recordType, recordId, label, ef
   return {
     action,
     status: 'awaiting_confirmation',
-    message: `Please confirm before I continue: ${effect}`,
+    message: `Bitte bestätigen, bevor ich fortfahre: ${effect}`,
     confirmation: {
       action,
       recordType,
@@ -1009,6 +1065,19 @@ function extractReportStatus(input) {
 function isListAllIntent(input) {
   return /\b(show|list|view|get|display|zeige|liste|alle|all|recent|latest|newest)\b/i.test(input)
     && /\b(all|recent|latest|newest|list|alle|overview|uebersicht|übersicht)\b/i.test(input);
+}
+
+// The LLM planner's clean parameters win over keyword extraction when present.
+function searchInputs(input, context, helpers) {
+  const draft = context?.llmDraft || {};
+  const raw = draft.searchTerm || helpers.extractSearchTerm(input);
+  // "Kundendaten von Immobilien Verwaltung" must find the customer; the search
+  // requires every word to match, so the filler has to go first.
+  const cleaned = helpers.stripSearchNoise ? helpers.stripSearchNoise(raw) : raw;
+  return {
+    term: cleaned && cleaned.length >= 2 ? cleaned : raw,
+    listAll: draft.listAll === true || isListAllIntent(input),
+  };
 }
 
 function extractProjectType(input) {

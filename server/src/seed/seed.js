@@ -1,4 +1,8 @@
 import { seedCatalog } from './catalog-seed.js';
+import { seedDoctplTemplates } from './doctplSeed.js';
+import { seedOperations } from './operations-seed.js';
+import { seedAgentRegistry } from './agentRegistrySeed.js';
+import { seedProjectTaskTemplates } from './projectTaskTemplateSeed.js';
 import { seedAiVocabulary } from './ai-vocabulary-seed.js';
 import { seedAiCommands } from './ai-commands-seed.js';
 import Permission from '../modules/auth/permission.model.js';
@@ -104,6 +108,7 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'project', action: 'documents:write',     description: 'Upload and update project documents' },
   { module: 'project', action: 'documents:create',    description: 'Generate project documents from templates' },
   { module: 'project', action: 'documents:delete',    description: 'Delete project documents' },
+  { module: 'project', action: 'documents:read:all', description: 'View every project document, including those not released to the field' },
 
   // Field Service
   { module: 'field-service', action: 'read', description: 'View field service data' },
@@ -148,6 +153,7 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'documents', action: 'read', description: 'View generated PDFs and document repository records' },
   { module: 'documents', action: 'write', description: 'Upload and organize central document repository records' },
   { module: 'documents', action: 'delete', description: 'Delete generated document repository records' },
+  { module: 'documents', action: 'read:all',       description: 'View every document, including those not released to the field' },
 
   // Vehicles (fleet)
   { module: 'vehicles', action: 'read', description: 'View vehicles and their details' },
@@ -209,11 +215,13 @@ export const PERMISSION_DEFINITIONS = [
   { module: 'ai', action: 'commands:manage', description: 'Manage AI voice commands' },
   { module: 'ai', action: 'vocabulary:manage', description: 'Manage AI custom vocabulary' },
   { module: 'ai', action: 'analytics:read', description: 'View AI assistant analytics' },
+  { module: 'ai', action: 'agents:manage', description: 'Enable or disable AI agents, trigger the emergency stop' },
 
   // Time Tracking
   { module: 'time-tracking', action: 'read', description: 'View time entries' },
   { module: 'time-tracking', action: 'write', description: 'Create and update time entries' },
   { module: 'time-tracking', action: 'admin', description: 'Full time tracking administration' },
+  { module: 'time-tracking', action: 'book-others', description: 'Record working time on behalf of other employees' },
 
   // Settings
   { module: 'settings', action: 'read', description: 'View system settings' },
@@ -236,12 +244,13 @@ export const ROLE_DEFINITIONS = [
       'project:create', 'project:edit', 'project:read', 'project:delete',
       'project:status:update', 'project:status:override',
       'project:prep-actions:manage', 'project:schedule:manage',
-      'project:documents:read', 'project:documents:write',
+      'project:documents:read', 'project:documents:read:all', 'project:documents:write',
       'project:documents:create', 'project:documents:delete',
-      'documents:read', 'documents:write', 'documents:delete',
+      'documents:read', 'documents:read:all', 'documents:write', 'documents:delete',
       'quotations:read', 'quotations:write', 'quotations:delete', 'quotations:admin',
       'templates:read', 'templates:write',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
+      'time-tracking:read', 'time-tracking:book-others',
       'meetings:read', 'meetings:write', 'meetings:delete', 'meetings:admin',
       'field-service:read',
       'field-ticket:read', 'field-ticket:write', 'field-ticket:assign', 'field-ticket:comment', 'field-ticket:admin',
@@ -284,8 +293,8 @@ export const ROLE_DEFINITIONS = [
     description: 'Financial operations',
     permissionKeys: [
       'crm:read',
-      'project:read', 'project:documents:read',
-      'documents:read',
+      'project:read', 'project:documents:read', 'project:documents:read:all',
+      'documents:read', 'documents:read:all',
       'invoicing:read', 'invoicing:write', 'invoicing:delete', 'invoicing:admin',
       ...ACCOUNTING_PERMISSION_KEYS,
       'files:upload', 'files:view', 'files:list',
@@ -303,9 +312,10 @@ export const ROLE_DEFINITIONS = [
     description: 'Scheduling and resource planning',
     permissionKeys: [
       'crm:read',
-      'project:read', 'project:schedule:manage', 'project:documents:read',
-      'documents:read',
+      'project:read', 'project:schedule:manage', 'project:documents:read', 'project:documents:read:all',
+      'documents:read', 'documents:read:all',
       'scheduling:read', 'scheduling:write', 'scheduling:admin',
+      'time-tracking:read', 'time-tracking:book-others',
       'meetings:read', 'meetings:write', 'meetings:delete', 'meetings:admin',
       'field-service:read',
       'field-ticket:read', 'field-ticket:write', 'field-ticket:assign', 'field-ticket:comment', 'field-ticket:admin',
@@ -619,6 +629,36 @@ export async function seedDatabase() {
         }
       }
     }
+
+    // 4b. Seed approved default document templates — without them every PDF
+    // preview fails with "DocumentTemplate 'type:…' not found". Idempotent:
+    // only creates types that don't exist yet, never touches edited templates.
+    {
+      const adminRole = await Role.findOne({ name: 'Admin' });
+      const anyAdmin = adminRole ? await User.findOne({ role: adminRole._id }) : null;
+      if (anyAdmin) {
+        await seedDoctplTemplates(anyAdmin._id);
+      } else {
+        logger.warn('No admin user found — skipping document template seed', { module: 'seed' });
+      }
+    }
+
+    // 4c. Seed the working content the office needs on day one — offer text
+    // blocks, the catalogue of standard works, office-hour categories. Without
+    // it a fresh production database opens on empty screens.
+    {
+      const adminRole = await Role.findOne({ name: 'Admin' });
+      const anyAdmin = adminRole ? await User.findOne({ role: adminRole._id }) : null;
+      await seedOperations(anyAdmin?._id);
+    }
+
+    // 4d. Declare the AI agents (registry, kill switches, risk rules). Agents
+    // are seeded disabled and switched on from the admin screen once their
+    // capabilities exist.
+    await seedAgentRegistry();
+
+    // 4e. Standard task checklists Projekt AI opens with a project.
+    await seedProjectTaskTemplates();
 
     // 5. Seed default departments (Abteilungen) — required to create quotations /
     // orders / invoices (and their per-department numbering). Without at least one,

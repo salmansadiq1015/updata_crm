@@ -74,6 +74,17 @@ export function useDocumentMutations(projectId, {
     onError: (err) => showError(err.message),
   });
 
+  const setReleased = useMutation({
+    mutationFn: ({ docId, released = true }) => documentService.setReleased(projectId, docId, released),
+    onSuccess: (_, v) => {
+      invalidate();
+      showSuccess(v.released === false
+        ? t('pm.documents.releaseRevoked', 'Freigabe zurückgezogen')
+        : t('pm.documents.released', 'Für Aussendienst freigegeben'));
+    },
+    onError: (err) => showError(err.message),
+  });
+
   const setArchived = useMutation({
     mutationFn: ({ docId, archived = true }) => documentService.setArchived(projectId, docId, archived),
     onSuccess: (_, v) => {
@@ -83,5 +94,5 @@ export function useDocumentMutations(projectId, {
     onError: (err) => showError(err.message),
   });
 
-  return { upload, updateMetadata, remove, restore, generate, saveDraft, emailDocument, setVisum, setArchived };
+  return { upload, updateMetadata, remove, restore, generate, saveDraft, emailDocument, setVisum, setArchived, setReleased };
 }

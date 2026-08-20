@@ -22,8 +22,11 @@ const lineItemSchema = Joi.object({
   image: Joi.object({
     fileId: objectId.allow(null, ''),
     url: Joi.string().max(2000).allow('', null),
+    size: Joi.string().valid('small', 'medium', 'large'),
   }).allow(null),
 });
+
+const BILLING_ADDRESS_SOURCES = ['customer', 'site_billing', 'site_ownership', 'site_management'];
 
 export const createQuotationSchema = {
   body: Joi.object({
@@ -32,8 +35,12 @@ export const createQuotationSchema = {
     contactId: objectId.allow(null),
     projectId: objectId.allow(null),
     departmentId: objectId.allow(null),
+    siteId: objectId.allow(null),
+    billingAddressSource: Joi.string().valid(...BILLING_ADDRESS_SOURCES),
+    status: Joi.string().valid(...QUOTATION_STATUSES),
     language: Joi.string().valid('de', 'fr', 'it', 'en'),
     title: Joi.string().max(500).allow(''),
+    salutation: Joi.string().max(255).allow(''),
     introduction: Joi.string().max(5000).allow(''),
     validUntil: Joi.date().iso().required(),
     currency: Joi.string().valid('CHF', 'EUR'),
@@ -58,8 +65,11 @@ export const updateQuotationSchema = {
     contactId: objectId.allow(null),
     projectId: objectId.allow(null),
     departmentId: objectId.allow(null),
+    siteId: objectId.allow(null),
+    billingAddressSource: Joi.string().valid(...BILLING_ADDRESS_SOURCES),
     language: Joi.string().valid('de', 'fr', 'it', 'en'),
     title: Joi.string().max(500).allow(''),
+    salutation: Joi.string().max(255).allow(''),
     introduction: Joi.string().max(5000).allow(''),
     validUntil: Joi.date().iso(),
     currency: Joi.string().valid('CHF', 'EUR'),

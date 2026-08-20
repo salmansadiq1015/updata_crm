@@ -22,6 +22,11 @@ export const coarseService = {
     return res;
   },
 
+  async moveAllocation(id, data) {
+    const res = await apiClient.post(ENDPOINTS.DEPLOY.COARSE_ALLOCATION_MOVE(id), data);
+    return res.data;
+  },
+
   async bulkUpsert(data) {
     const res = await apiClient.post(ENDPOINTS.DEPLOY.COARSE_ALLOCATIONS_BULK, data);
     return res;

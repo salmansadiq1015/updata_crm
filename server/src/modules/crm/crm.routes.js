@@ -6,6 +6,7 @@ import installationRoutes, { siteInstallationsRouter } from './installation.rout
 import sparePartRoutes, { installationSparePartsRouter } from './sparePart.routes.js';
 import maintenanceRoutes from './maintenance.routes.js';
 import assetMaintenanceRoutes from './assetMaintenance.routes.js';
+import contactLogRoutes, { customerContactLogRouter } from './contactLog.routes.js';
 import noteRoutes from './note.routes.js';
 import imageRoutes from './image.routes.js';
 import newsletterRoutes from './newsletter/newsletter.routes.js';
@@ -41,9 +42,13 @@ router.use('/address-book', addressBookRoutes);
 // Nested routers under customers
 router.use('/customers/:customerId/contacts', customerContactsRouter);
 router.use('/customers/:customerId/sites', customerSitesRouter);
+router.use('/customers/:customerId/contact-log', customerContactLogRouter);
 
 // Contact standalone routes
 router.use('/contacts', contactRoutes);
+
+// Kundenkontakthistorie: scoped listings + per-entry operations
+router.use('/contact-log', contactLogRoutes);
 
 // Site standalone routes (includes note/image sub-routes)
 router.use('/sites', siteRoutes);

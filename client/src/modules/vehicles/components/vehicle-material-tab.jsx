@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Package, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Package, Trash2, Loader2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,17 +16,34 @@ import { ConfirmDialog } from '@/shared/components/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { showError } from '@/lib/toast';
+import { downloadBlob } from '@/lib/api/download';
+import { vehicleService } from '@/modules/vehicles/services/vehicle-service';
 import { useVehicleMaterials, useVehicleMutations } from '@/modules/vehicles/hooks/use-vehicles';
 
-export function VehicleMaterialTab({ vehicleId, canWrite = false }) {
+export function VehicleMaterialTab({ vehicleId, kennzeichen, canWrite = false }) {
   const { t } = useLanguage();
   const { data: items = [], isLoading } = useVehicleMaterials(vehicleId);
   const { addMaterial, deleteMaterial } = useVehicleMutations(vehicleId);
   const [open, setOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const [form, setForm] = useState({ name: '', quantity: '1', unit: '', note: '' });
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      const blob = await vehicleService.exportMaterialsPdf(vehicleId);
+      const plate = (kennzeichen || 'Fahrzeug').replace(/\s+/g, '_');
+      const dateStr = new Date().toISOString().split('T')[0];
+      downloadBlob(blob, `Materialliste_${plate}_${dateStr}.pdf`, 'application/pdf');
+    } catch (err) {
+      showError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -52,11 +69,17 @@ export function VehicleMaterialTab({ vehicleId, canWrite = false }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{t('vehicles.tab.material', 'Materialliste')}</h3>
-        {canWrite && (
-          <Button size="sm" className="gap-2" onClick={() => setOpen(true)}>
-            <Plus className="h-4 w-4" /> {t('vehicles.material.add', 'Material hinzufügen')}
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-2" onClick={handleExportPdf} disabled={items.length === 0 || exporting}>
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {t('vehicles.material.exportPdf', 'PDF exportieren')}
           </Button>
-        )}
+          {canWrite && (
+            <Button size="sm" className="gap-2" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" /> {t('vehicles.material.add', 'Material hinzufügen')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (

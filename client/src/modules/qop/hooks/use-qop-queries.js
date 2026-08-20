@@ -34,6 +34,15 @@ export function useQuotationHistory(id) {
   });
 }
 
+export function useQuotationRevisions(id) {
+  return useQuery({
+    queryKey: ['qop', 'quotations', 'revisions', id],
+    queryFn: () => quotationService.getRevisions(id),
+    enabled: !!id,
+    select: (r) => (Array.isArray(r.data) ? r.data : []),
+  });
+}
+
 export function useOrders(filters = {}, options = {}) {
   const { enabled = true, ...queryOptions } = options;
   return useQuery({
@@ -147,6 +156,15 @@ export function useQopCustomerSearch(query) {
     queryFn: () => referenceService.searchCustomers(query),
     // Always enabled so the dropdown shows suggestions before the user types
     // (empty query -> default list); typing then filters server-side.
+    enabled: true,
+    select: (r) => normalizeReferenceItems(r.data),
+  });
+}
+
+export function useQopSiteSearch(query) {
+  return useQuery({
+    queryKey: ['qop', 'references', 'sites', query],
+    queryFn: () => referenceService.searchSites(query),
     enabled: true,
     select: (r) => normalizeReferenceItems(r.data),
   });

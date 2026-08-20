@@ -19,6 +19,9 @@ import { PrepActionsTab } from './prep-actions-tab';
 import { ScheduleTab } from './schedule-tab';
 import { DocumentsTab } from './documents-tab';
 import { ProjectActivityTab } from './project-activity-tab';
+import { ContactLogPanel } from '@/modules/crm/components/contact-log-panel';
+import { EntityEmailButton } from '@/modules/crm/components/entity-email-button';
+import { EmailHistoryPanel } from '@/modules/doctpl/components/email-history-panel';
 import { ProjectTasksTab, ProjectTaskSummaryPanel } from './project-tasks-tab';
 import { ProjectChatTab } from './project-chat-tab';
 import { useProjectChatUnread } from '@/modules/chat/hooks/use-chat-rooms';
@@ -38,6 +41,7 @@ import {
   FolderKanban, Building2, User, Calendar, Wallet, FileText,
   ClipboardList, Clock, ListChecks, CalendarClock, Activity, ListTodo, MessagesSquare,
   ScrollText,
+  Mail,
 } from 'lucide-react';
 import { ProjectProtocolsTab } from './project-protocols-tab';
 
@@ -78,6 +82,13 @@ export function ProjectDetail() {
   const { hasPermission } = usePermissions();
 
   const [formOpen, setFormOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  // After sending, land on the E-Mails register with that message already open.
+  const [sentEmailId, setSentEmailId] = useState(null);
+  const handleEmailSent = (record) => {
+    setSentEmailId(record?._id || record?.id || null);
+    setActiveTab('emails');
+  };
   const [archiveOpen, setArchiveOpen] = useState(false); // soft-delete a DRAFT
   const [archiveActionOpen, setArchiveActionOpen] = useState(false); // status → ARCHIVED
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
@@ -215,6 +226,16 @@ export function ProjectDetail() {
                   </TooltipProvider>
                 )}
               </div>
+
+              <div className="mt-2 flex justify-center">
+                <EntityEmailButton
+                  sourceModule="pm"
+                  sourceRecordId={id}
+                  attachmentScope={{ projectId: id }}
+                  defaultTo={typeof project.customerId === 'object' ? project.customerId?.email : undefined}
+                  onSent={handleEmailSent}
+                />
+              </div>
             </div>
 
             <Separator />
@@ -258,7 +279,7 @@ export function ProjectDetail() {
 
         {/* Content area */}
         <div className="flex-1 min-w-0">
-          <Tabs defaultValue="overview" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList variant="line">
               <TabsTrigger value="overview" className="gap-1.5">
                 <ClipboardList className="h-3.5 w-3.5" /> {t('pm.overview', 'Übersicht')}
@@ -291,8 +312,14 @@ export function ProjectDetail() {
                   )}
                 </TabsTrigger>
               )}
+              <TabsTrigger value="emails" className="gap-1.5">
+                <Mail className="h-3.5 w-3.5" /> {t('doctpl.email.tab', 'E-Mails')}
+              </TabsTrigger>
+              <TabsTrigger value="contact-log" className="gap-1.5">
+                <MessagesSquare className="h-3.5 w-3.5" /> {t('crm.contactLog.title', 'Kontakthistorie')}
+              </TabsTrigger>
               <TabsTrigger value="activity" className="gap-1.5">
-                <Activity className="h-3.5 w-3.5" /> {t('pm.activity', 'Aktivität')}
+                <Activity className="h-3.5 w-3.5" /> {t('common.activity', 'Aktivität')}
               </TabsTrigger>
             </TabsList>
 
@@ -365,6 +392,19 @@ export function ProjectDetail() {
                 <ProjectChatTab projectId={id} />
               </TabsContent>
             )}
+
+            <TabsContent value="emails" className="mt-6">
+              <EmailHistoryPanel sourceModule="pm" sourceRecordId={id} highlightId={sentEmailId} />
+            </TabsContent>
+
+            <TabsContent value="contact-log" className="mt-6">
+              <ContactLogPanel
+                customerId={typeof project.customerId === 'object' ? project.customerId?._id : project.customerId}
+                scope={{ projectId: id }}
+                links={{ projectId: id }}
+                compact
+              />
+            </TabsContent>
 
             <TabsContent value="activity" className="mt-6">
               <ProjectActivityTab projectId={id} />

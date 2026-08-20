@@ -133,7 +133,7 @@ export function VehicleDetail() {
           <TabsTrigger value="driverDocs" className="gap-1.5"><IdCard className="h-3.5 w-3.5" /> {t('vehicles.tab.driverDocs', 'Fahrerunterlagen')}</TabsTrigger>
           <TabsTrigger value="material" className="gap-1.5"><Package className="h-3.5 w-3.5" /> {t('vehicles.tab.material', 'Materialliste')}</TabsTrigger>
           <TabsTrigger value="notes" className="gap-1.5"><StickyNote className="h-3.5 w-3.5" /> {t('vehicles.tab.notes', 'Notizen')}</TabsTrigger>
-          <TabsTrigger value="history" className="gap-1.5"><Activity className="h-3.5 w-3.5" /> {t('vehicles.tab.history', 'Historie')}</TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5"><Activity className="h-3.5 w-3.5" /> {t('common.activity', 'Aktivität')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -194,7 +194,7 @@ export function VehicleDetail() {
         </TabsContent>
 
         <TabsContent value="material">
-          <VehicleMaterialTab vehicleId={id} canWrite={canWrite} />
+          <VehicleMaterialTab vehicleId={id} kennzeichen={vehicle.kennzeichen} canWrite={canWrite} />
         </TabsContent>
 
         <TabsContent value="notes">

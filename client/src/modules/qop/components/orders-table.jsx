@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Search, MoreHorizontal, Eye, FileText, Plus, Edit, RefreshCw, Trash2,
 } from 'lucide-react';
@@ -37,7 +37,7 @@ function fmtDate(d, lang) {
   }).format(new Date(d));
 }
 
-export function OrdersTable({ advancedFilters = {} }) {
+export function OrdersTable({ advancedFilters = {}, focusId = null }) {
   const { locale: language, t } = useLanguage();
 
   const [search, setSearch] = useState('');
@@ -64,6 +64,17 @@ export function OrdersTable({ advancedFilters = {} }) {
 
   const { data, isLoading } = useOrders(filters);
   const items = useMemo(() => data?.items ?? [], [data?.items]);
+
+  // Deep link from the AI assistant: open the record named in the URL once.
+  const focusedRef = useRef(null);
+  useEffect(() => {
+    if (!focusId || focusedRef.current === focusId) return;
+    const match = items.find((item) => String(item._id) === String(focusId));
+    if (!match) return;
+    focusedRef.current = focusId;
+    setEditing(match);
+    setFormOpen(true);
+  }, [focusId, items]);
   const visibleIds = useMemo(() => items.map((order) => order._id ?? order.id), [items]);
   const selectedItems = useMemo(
     () => items.filter((order) => selectedIds.has(order._id ?? order.id)),

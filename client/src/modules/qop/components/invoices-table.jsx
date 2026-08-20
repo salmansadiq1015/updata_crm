@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   Search, Plus, MoreHorizontal, FileText, CheckCircle, Eye,
   Send, DollarSign, History, Download, XCircle, Edit, Trash2, RefreshCw,
@@ -58,7 +58,7 @@ function HistoryDrawer({ open, onClose, invoiceId }) {
   );
 }
 
-export function InvoicesTable({ advancedFilters = {} }) {
+export function InvoicesTable({ advancedFilters = {}, focusId = null }) {
   const { locale: language, t } = useLanguage();
 
   const [search, setSearch]           = useState('');
@@ -90,6 +90,17 @@ export function InvoicesTable({ advancedFilters = {} }) {
 
   const { data, isLoading } = useInvoices(filters);
   const items = useMemo(() => data?.items ?? [], [data?.items]);
+
+  // Deep link from the AI assistant: open the record named in the URL once.
+  const focusedRef = useRef(null);
+  useEffect(() => {
+    if (!focusId || focusedRef.current === focusId) return;
+    const match = items.find((item) => String(item._id) === String(focusId));
+    if (!match) return;
+    focusedRef.current = focusId;
+    setEditingInvoice(match);
+    setFormOpen(true);
+  }, [focusId, items]);
   const visibleIds = useMemo(() => items.map((invoice) => invoice._id ?? invoice.id), [items]);
   const selectedItems = useMemo(
     () => items.filter((invoice) => selectedIds.has(invoice._id ?? invoice.id)),

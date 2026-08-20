@@ -19,8 +19,9 @@ const ROUTES = {
   order: (id) => `/field-ops/orders/${id}`,
   chatRoom: (id) => `/field-ops/chat?chatId=${id}`,
   quotation: (id) => `/quotes?quotationId=${id}`,
+  invoice: (id) => `/quotes?invoiceId=${id}`,
+  // No detail route on these list pages yet, so the link leads to the section.
   task: () => '/tasks',
-  invoice: () => '/quotes?tab=invoices',
   workReport: () => '/field-ops/reports',
   assignment: () => '/scheduling',
 };

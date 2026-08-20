@@ -406,7 +406,7 @@ async function createCustomer(input, context, userId) {
   return {
     action: ACTIONS.CREATE_CUSTOMER,
     status: 'completed',
-    message: `Customer ${customer.customerNumber} created: ${customer.name}.`,
+    message: `Kunde ${customer.customerNumber} erfasst: ${customer.name}.`,
     recordType: 'customer',
     recordId: customer._id,
     record: compactCustomer(customer),
@@ -439,7 +439,7 @@ async function createTask(input, context, userId) {
   return {
     action: ACTIONS.CREATE_TASK,
     status: 'completed',
-    message: `Task created: ${task.title}`,
+    message: `Aufgabe erstellt: ${task.title}`,
     recordType: 'task',
     recordId: task._id,
     record: compactTask(task),
@@ -462,7 +462,7 @@ async function updateProject(input, context, userId) {
   return {
     action: ACTIONS.UPDATE_PROJECT,
     status: 'completed',
-    message: `Project ${project.name} updated to ${status}.`,
+    message: `Projekt ${project.name} auf ${status} gesetzt.`,
     recordType: 'project',
     recordId: project._id,
     record: { id: project._id, name: project.name, status: project.status },
@@ -490,7 +490,7 @@ async function createReport(input, context, userId) {
   return {
     action: ACTIONS.CREATE_REPORT,
     status: 'completed',
-    message: `Draft service report ${report.reportNumber} created.`,
+    message: `Rapport-Entwurf ${report.reportNumber} erstellt.`,
     recordType: 'workReport',
     recordId: report._id,
     record: { id: report._id, orderId, reportNumber: report.reportNumber, status: report.status },
@@ -525,7 +525,7 @@ async function createAssignment(input, context, userId) {
   return {
     action: ACTIONS.CREATE_ASSIGNMENT,
     status: 'completed',
-    message: `Assignment scheduled for ${displayUser(employee)}.`,
+    message: `Einsatz für ${displayUser(employee)} geplant.`,
     recordType: 'assignment',
     recordId: result?.[0]?.id,
     record: result?.[0] || null,
@@ -553,7 +553,7 @@ async function recordTime(input, context, userId) {
   return {
     action: ACTIONS.RECORD_TIME,
     status: 'completed',
-    message: `${hours} hour(s) recorded.`,
+    message: `${hours} Stunde(n) erfasst.`,
     recordType: 'timeEntry',
     recordId: entry._id,
     record: { id: entry._id, orderId, netDurationMin: entry.netDurationMin },
@@ -583,7 +583,7 @@ async function analyzeFieldTicket(input, state) {
   return {
     action: ACTIONS.ANALYZE_FIELD_TICKET,
     status: 'completed',
-    message: `Ticket ${result.ticketNumber || ticketId} analyzed.`,
+    message: `Meldung ${result.ticketNumber || ticketId} analysiert.`,
     recordType: 'fieldTicket',
     recordId: ticketId,
     record: result,
@@ -614,7 +614,7 @@ async function analyzeWorkforce(input, state) {
   return {
     action: ACTIONS.ANALYZE_WORKFORCE,
     status: 'completed',
-    message: 'Workforce planning context prepared.',
+    message: 'Personalplanung ausgewertet.',
     recordType: 'workforcePlanningContext',
     record: result,
   };
@@ -636,7 +636,7 @@ async function createNote(input, context, userId) {
   return {
     action: ACTIONS.CREATE_NOTE,
     status: 'completed',
-    message: `Note added to ${entityType}.`,
+    message: 'Notiz erfasst.',
     recordType: 'note',
     recordId: note._id,
   };
@@ -655,7 +655,7 @@ async function sendChat(input, context, userId) {
   return {
     action: ACTIONS.SEND_CHAT,
     status: 'completed',
-    message: 'Chat message sent.',
+    message: 'Chat-Nachricht gesendet.',
     recordType: 'chatMessage',
     recordId: message._id,
   };
@@ -724,7 +724,7 @@ async function searchCustomer(input, context) {
   return {
     action: ACTIONS.SEARCH_CUSTOMER,
     status: 'completed',
-    message: customers.length === 1 ? `Found ${customers[0].name}.` : `Found ${customers.length} customers.`,
+    message: customers.length === 1 ? `${customers[0].name} gefunden.` : `${customers.length} Kunden gefunden.`,
     records: customers.map((customer) => ({
       id: customer._id,
       name: customer.name,
@@ -756,7 +756,7 @@ async function createOrder(input, context, userId) {
   return {
     action: ACTIONS.CREATE_ORDER,
     status: 'completed',
-    message: `Order ${order.orderNumber} created for ${order.customerName}.`,
+    message: `Auftrag ${order.orderNumber} für ${order.customerName} erstellt.`,
     recordType: 'order',
     recordId: order._id,
     record: { id: order._id, orderNumber: order.orderNumber, customerName: order.customerName, status: order.status },

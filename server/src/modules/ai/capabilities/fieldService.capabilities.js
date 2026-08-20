@@ -186,7 +186,7 @@ export async function executeFieldServiceCapability({
         code: 'RBAC_DENIED',
         message: `Missing permission '${capability.requiredPermission}'`,
       },
-      message: 'You do not have permission to run this AI action.',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
       missingFields: ['permission'],
       requiredPermission: capability.requiredPermission,
       resolvedContext: helpers.summarizeContext(context),
@@ -335,7 +335,7 @@ async function updateTask({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.UPDATE_TASK,
     status: 'completed',
-    message: `Task updated: ${task.title}.`,
+    message: `Aufgabe aktualisiert: ${task.title}.`,
     recordType: 'task',
     recordId: task._id,
     record: {
@@ -370,7 +370,7 @@ async function updateOrder({ input, context, userId, helpers }) {
     return {
       action: ACTIONS.UPDATE_ORDER,
       status: 'completed',
-      message: `Order ${order.orderNumber} updated to ${order.status}.`,
+      message: `Auftrag ${order.orderNumber} auf ${order.status} gesetzt.`,
       recordType: 'order',
       recordId: order._id,
       record: { id: order._id, orderNumber: order.orderNumber, status: order.status },
@@ -391,7 +391,7 @@ async function updateOrder({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.UPDATE_ORDER,
     status: 'completed',
-    message: `Order ${order.orderNumber} updated.`,
+    message: `Auftrag ${order.orderNumber} aktualisiert.`,
     recordType: 'order',
     recordId: order._id,
     record: { id: order._id, orderNumber: order.orderNumber, status: order.status, title: order.title },
@@ -419,7 +419,7 @@ async function updateReport({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.UPDATE_REPORT,
     status: 'completed',
-    message: `Service report ${updated.reportNumber} updated.`,
+    message: `Rapport ${updated.reportNumber} aktualisiert.`,
     recordType: 'workReport',
     recordId: updated._id,
     record: {
@@ -459,7 +459,7 @@ async function rescheduleAssignment({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.RESCHEDULE_ASSIGNMENT,
     status: 'completed',
-    message: `Assignment ${assignment.assignmentNumber} rescheduled.`,
+    message: `Einsatz ${assignment.assignmentNumber} verschoben.`,
     recordType: 'assignment',
     recordId: assignment._id,
     record: {
@@ -630,7 +630,7 @@ async function createTaskReminder({ input, context, userId, helpers }) {
   return {
     action: ACTIONS.CREATE_TASK_REMINDER,
     status: 'completed',
-    message: `Reminder created for task ${context.task.title}.`,
+    message: `Erinnerung für ${context.task.title} erstellt.`,
     recordType: 'taskReminder',
     recordId: reminder._id,
     record: {
@@ -783,7 +783,7 @@ async function searchCustomers({ input, context, helpers }) {
   return {
     action: ACTIONS.SEARCH_CUSTOMERS,
     status: 'completed',
-    message: customers.length ? `Found ${customers.length} customers.` : 'No customers found.',
+    message: customers.length ? `${customers.length} Kunden gefunden.` : 'Keine Kunden gefunden.',
     records: customers.map((customer) => ({
       id: customer._id,
       customerNumber: customer.customerNumber,
@@ -815,7 +815,7 @@ async function searchTasks({ input, context, userId, state, helpers }) {
   return {
     action: ACTIONS.SEARCH_TASKS,
     status: 'completed',
-    message: tasks.length ? `Found ${tasks.length} tasks.` : 'No tasks found.',
+    message: tasks.length ? `${tasks.length} Aufgaben gefunden.` : 'Keine Aufgaben gefunden.',
     records: tasks.map((task) => ({
       id: task._id,
       title: task.title,
@@ -840,7 +840,7 @@ async function searchProjects({ input, context, helpers }) {
   return {
     action: ACTIONS.SEARCH_PROJECTS,
     status: 'completed',
-    message: projects.length ? `Found ${projects.length} projects.` : 'No projects found.',
+    message: projects.length ? `${projects.length} Projekte gefunden.` : 'Keine Projekte gefunden.',
     records: projects.map((project) => ({
       id: project._id,
       projectNumber: project.projectNumber,
@@ -869,7 +869,7 @@ async function searchOrders({ input, context, helpers }) {
   return {
     action: ACTIONS.SEARCH_ORDERS,
     status: 'completed',
-    message: orders.length ? `Found ${orders.length} jobs/orders.` : 'No jobs or orders found.',
+    message: orders.length ? `${orders.length} Aufträge gefunden.` : 'Keine Aufträge gefunden.',
     records: orders.map((order) => ({
       id: order._id,
       orderNumber: order.orderNumber,
@@ -902,7 +902,7 @@ async function searchReports({ input, context, helpers }) {
   return {
     action: ACTIONS.SEARCH_REPORTS,
     status: 'completed',
-    message: reports.length ? `Found ${reports.length} service reports.` : 'No service reports found.',
+    message: reports.length ? `${reports.length} Rapporte gefunden.` : 'Keine Rapporte gefunden.',
     records: reports.map((report) => ({
       id: report._id,
       reportNumber: report.reportNumber,
@@ -936,7 +936,7 @@ async function searchDocuments({ input, context, userId, state, helpers }) {
   return {
     action: ACTIONS.SEARCH_DOCUMENTS,
     status: 'completed',
-    message: result.data.length ? `Found ${result.data.length} documents.` : 'No documents found.',
+    message: result.data.length ? `${result.data.length} Dokumente gefunden.` : 'Keine Dokumente gefunden.',
     records: result.data.map((document) => ({
       id: document.id || document._id || document.recordId,
       title: document.title,
@@ -953,7 +953,7 @@ function confirmationRequired(action, context, { recordType, recordId, label, ef
   return {
     action,
     status: 'awaiting_confirmation',
-    message: `Please confirm before I continue: ${effect}`,
+    message: `Bitte bestätigen, bevor ich fortfahre: ${effect}`,
     confirmation: {
       action,
       recordType,

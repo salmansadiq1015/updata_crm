@@ -144,7 +144,9 @@ Respond with JSON only:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      response_format: { type: 'json_object' },
+      // Only OpenAI accepts this; other providers reject it. The prompt already
+      // demands JSON and the parser below is defensive, so dropping it is safe.
+      ...(config.ai.baseUrl ? {} : { response_format: { type: 'json_object' } }),
       max_tokens: config.ai.maxTokens || 2000,
       temperature: 0.1,
     });

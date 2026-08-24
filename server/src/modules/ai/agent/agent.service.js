@@ -38,6 +38,8 @@ const INTENT_TO_WORKFLOW = {
   analyze_workforce: 'FIELD_SERVICE_AGENT',
   sales_followups: 'FIELD_SERVICE_AGENT',
   quality_check: 'FIELD_SERVICE_AGENT',
+  service_due: 'FIELD_SERVICE_AGENT',
+  service_briefing: 'FIELD_SERVICE_AGENT',
   search_customer: 'FIELD_SERVICE_AGENT',
   search_tasks: 'FIELD_SERVICE_AGENT',
   search_projects: 'FIELD_SERVICE_AGENT',

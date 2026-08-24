@@ -23,12 +23,12 @@ un serveur réel, avec de vrais appels OpenAI.
 RATE_LIMIT_GLOBAL=1000 node src/server.js
 
 # Dans un autre terminal :
-node tests/e2e/ai-scenarios.mjs              # les 31 scénarios
+node tests/e2e/ai-scenarios.mjs              # les 35 scénarios
 node tests/e2e/ai-scenarios.mjs --only=offerte   # filtre par nom
 API=http://localhost:9097/api/v1 node tests/e2e/ai-scenarios.mjs
 ```
 
-Sortie : un ✓/✗ par contrôle, puis `31/31 scénarios passés`. Code de sortie
+Sortie : un ✓/✗ par contrôle, puis `35/35 scénarios passés`. Code de sortie
 non nul si un scénario échoue, donc utilisable en pré-livraison.
 
 ## Ce qui est couvert
@@ -66,6 +66,10 @@ non nul si un scénario échoue, donc utilisable en pré-livraison.
 | `abschluss-erdsonde-blockiert` | Sans Bohrbewilligung ni IBN-Protokoll, la clôture est bloquée |
 | `abschluss-boiler-ohne-bewilligung` | La checklist suit le type d'installation, pas une liste fixe |
 | `abschlussfrage-legt-nichts-an` | Demander si on peut clôturer ne change rien au projet |
+| `wartungsliste-nach-verzug` | Les entretiens dus, la plus en retard en tête |
+| `briefing-anlage-nach-nummer` | Le numéro d'installation (A-00003) suffit à obtenir le briefing |
+| `briefing-anlage-ueber-kunde` | On nomme le client, pas l'installation |
+| `briefing-mehrere-anlagen-fragt-nach` | Plusieurs installations chez un client → l'agent demande |
 
 Chaque scénario contrôle aussi qu'**aucun anglais** ne fuit dans le message
 affiché (`ENGLISH_LEAKS`).

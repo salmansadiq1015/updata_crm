@@ -131,15 +131,73 @@ async function onProjectCompleted(event) {
   }
 }
 
+/**
+ * Maintenance gone overdue → Service AI.
+ *
+ * The nightly job says how many intervals turned overdue, not which ones, so
+ * the agent reads the current list itself and leaves one task naming them.
+ * One task, not one per plant: the office wants a worklist, not an inbox.
+ */
+const OVERDUE_TASK_PREFIX = 'Serviceaufträge vorbereiten';
+
+async function onMaintenanceOverdue(event) {
+  const payload = event?.payload || event || {};
+  if (!payload.count) return;
+
+  if (!(await agentIsRunnable('SERVICE'))) return;
+
+  try {
+    const serviceService = (await import('../agents/service/service.service.js')).default;
+    const due = await serviceService.findDueMaintenance();
+    const overdue = due.filter((item) => (item.daysOverdue ?? 0) > 0);
+    if (!overdue.length) return;
+
+    // The job runs daily; without this the same worklist piles up every night.
+    const taskService = (await import('../../tasks/task.service.js')).default;
+    const Task = (await import('../../tasks/task.model.js')).default;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const already = await Task.findOne({
+      title: new RegExp(`^${OVERDUE_TASK_PREFIX}`),
+      status: { $in: ['OPEN', 'IN_PROGRESS'] },
+      createdAt: { $gte: midnight },
+    }).select('_id').lean();
+    if (already) return;
+
+    await taskService.create({
+      title: `${OVERDUE_TASK_PREFIX}: ${overdue.length} überfällige Wartung(en)`,
+      description: serviceService.composeDueList(overdue),
+      priority: 'HIGH',
+    }, payload.assignedTo || null, { source: 'ai-agent' });
+
+    logger.info('Handoff: maintenance overdue → Service AI', {
+      module: 'ai-handoff',
+      action: 'maintenanceOverdue',
+      overdue: overdue.length,
+    });
+  } catch (err) {
+    logger.warn('Handoff maintenance → Service AI failed', {
+      module: 'ai-handoff',
+      action: 'maintenanceOverdue',
+      error: err.message,
+    });
+  }
+}
+
 export function registerAgentHandoffs() {
   eventBus.subscribe(EVENT_TYPES.QUOTATION_ACCEPTED, onQuotationAccepted);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_CHANGED, onProjectCompleted);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_OVERRIDDEN, onProjectCompleted);
+  eventBus.subscribe(EVENT_TYPES.MAINTENANCE_OVERDUE, onMaintenanceOverdue);
 
   logger.info('Agent handoffs registered', {
     module: 'ai-handoff',
     action: 'register',
-    handoffs: ['quotation.accepted → PROJEKT', 'project.completed → QUALITY'],
+    handoffs: [
+      'quotation.accepted → PROJEKT',
+      'project.completed → QUALITY',
+      'maintenance.overdue → SERVICE',
+    ],
   });
 }
 

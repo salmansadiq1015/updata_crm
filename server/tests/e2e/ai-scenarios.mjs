@@ -673,6 +673,74 @@ const SCENARIOS = [
       ];
     },
   },
+
+  // ─── Service AI ────────────────────────────────────────────
+
+  {
+    name: 'wartungsliste-nach-verzug',
+    why: 'Die überfälligste Wartung steht oben — sonst ist die Liste keine Arbeitsliste.',
+    async exec() {
+      const state = await run('Welche Wartungen sind fällig?');
+      const records = state.output?.records || [];
+      const sorted = records.every((r, i) => i === 0 || (records[i - 1].daysOverdue ?? -9999) >= (r.daysOverdue ?? -9999));
+      const text = message(state);
+      return [
+        check('Wartungsliste geliefert', action(state) === 'SERVICE_DUE', `action = ${action(state)}`),
+        check('nichts angelegt', !state.output?.recordId, `recordId = ${state.output?.recordId}`),
+        check('nach Verzug sortiert', sorted, records.map((r) => r.daysOverdue).join(' > ')),
+        check('Kunde und Anlage genannt', records.every((r) => r.customer && r.plant), records.map((r) => `${r.customer}/${r.plant}`).join(' | ')),
+        check('Auftrag nur mit Freigabe', /Freigabe/i.test(text), text.slice(-120)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'briefing-anlage-nach-nummer',
+    why: 'Die Anlagenummer steht auf dem Gerät — damit muss der Monteur sein Briefing bekommen.',
+    async exec() {
+      const state = await run('Briefing für die Anlage A-00003');
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Briefing erstellt', action(state) === 'SERVICE_BRIEFING', `action = ${action(state)}`),
+        check('richtige Anlage', record.installationNumber === 'A-00003', `anlage = ${record.installationNumber}`),
+        check('Anlagedaten im Text', /Buderus/i.test(text), text.slice(0, 120)),
+        check('Wartungsstand im Text', /Wartung/i.test(text) && /überfällig|fällig/i.test(text), text.slice(0, 200)),
+        check('Meldungen abgehandelt', /Offene Meldungen/i.test(text), text.slice(0, 200)),
+        check('Alter berechnet', typeof record.ageYears === 'number', `alter = ${record.ageYears}`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'briefing-anlage-ueber-kunde',
+    why: 'Im Büro sagt niemand eine Anlagenummer — man sagt, bei wem man hinfährt.',
+    async exec() {
+      const state = await run('Was muss ich zur Wartung bei Bäckerei Weber wissen?');
+      const record = state.output?.record || {};
+      return [
+        check('Briefing erstellt', action(state) === 'SERVICE_BRIEFING', `action = ${action(state)}`),
+        check('Anlage über den Kunden gefunden', record.installationNumber === 'A-00003', `anlage = ${record.installationNumber}`),
+        check('Kunde im Briefing', /Weber/i.test(record.customer || ''), `kunde = ${record.customer}`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'briefing-mehrere-anlagen-fragt-nach',
+    why: 'Hat ein Kunde mehrere Anlagen, wird gefragt statt geraten.',
+    async exec() {
+      const state = await run('Briefing für die Anlage bei Anna Schmid');
+      const text = message(state);
+      const options = state.output?.candidates?.installations || [];
+      return [
+        check('Rückfrage statt Raten', state.output?.status === 'needs_follow_up', `status = ${state.output?.status}`),
+        check('Anlagen nummeriert angeboten', options.length > 1, `${options.length} Vorschlag/Vorschläge`),
+        check('fragt nach der Anlage', /Anlage/i.test(text), text.slice(0, 120)),
+        noEnglish(state),
+      ];
+    },
+  },
 ];
 
 // ─── Cleanup ──────────────────────────────────────────────────

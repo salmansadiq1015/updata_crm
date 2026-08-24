@@ -44,6 +44,8 @@ const ACTIONS = Object.freeze({
   ANALYZE_WORKFORCE: 'ANALYZE_WORKFORCE',
   SALES_FOLLOWUPS: 'SALES_FOLLOWUPS',
   QUALITY_CHECK: 'QUALITY_CHECK',
+  SERVICE_DUE: 'SERVICE_DUE',
+  SERVICE_BRIEFING: 'SERVICE_BRIEFING',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -83,6 +85,8 @@ const ACTION_LABELS = {
   [ACTIONS.ANALYZE_WORKFORCE]: 'die Personalplanung auswerten',
   [ACTIONS.SALES_FOLLOWUPS]: 'die offenen Offerten prüfen',
   [ACTIONS.QUALITY_CHECK]: 'den Projektabschluss prüfen',
+  [ACTIONS.SERVICE_DUE]: 'die fälligen Wartungen prüfen',
+  [ACTIONS.SERVICE_BRIEFING]: 'ein Monteur-Briefing vorbereiten',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -366,6 +370,10 @@ async function performAction(action, input, context, userId, state = {}) {
       return salesFollowUps(state);
     case ACTIONS.QUALITY_CHECK:
       return qualityCheck(context, state);
+    case ACTIONS.SERVICE_DUE:
+      return serviceDue(state);
+    case ACTIONS.SERVICE_BRIEFING:
+      return serviceBriefing(context, state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -707,6 +715,69 @@ async function qualityCheck(context, state = {}) {
   };
 }
 
+/**
+ * Service AI: what maintenance is due. A reading, so it always answers —
+ * an empty list is an answer too.
+ */
+async function serviceDue(state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('crm:read')) {
+    return {
+      action: ACTIONS.SERVICE_DUE,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  const serviceService = (await import('../agents/service/service.service.js')).default;
+  const due = await serviceService.findDueMaintenance();
+  return {
+    action: ACTIONS.SERVICE_DUE,
+    status: 'completed',
+    message: serviceService.composeDueList(due),
+    records: due,
+  };
+}
+
+/** Service AI: the briefing for one plant, before a technician drives out. */
+async function serviceBriefing(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('crm:read')) {
+    return {
+      action: ACTIONS.SERVICE_BRIEFING,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  if (context.installationCandidates?.length > 1 || !context.installation) {
+    return needsFollowUp(ACTIONS.SERVICE_BRIEFING, ['installation'], context);
+  }
+
+  const serviceService = (await import('../agents/service/service.service.js')).default;
+  const data = await serviceService.briefing(context.installation);
+  if (!data) {
+    return needsFollowUp(ACTIONS.SERVICE_BRIEFING, ['installation'], context);
+  }
+
+  return {
+    action: ACTIONS.SERVICE_BRIEFING,
+    status: 'completed',
+    message: serviceService.composeBriefing(data),
+    recordType: 'installation',
+    recordId: data.installation._id,
+    record: {
+      id: data.installation._id,
+      installationNumber: data.installation.installationNumber || null,
+      manufacturer: data.installation.manufacturer || null,
+      model: data.installation.model || null,
+      fuelType: data.installation.fuelType || null,
+      ageYears: data.age,
+      customer: data.customer?.name || null,
+      openTickets: data.tickets.length,
+      maintenanceIntervals: data.intervals.length,
+    },
+  };
+}
+
 async function analyzeWorkforce(input, state) {
   const toolInput = {
     ...extractDateRange(input),
@@ -926,6 +997,7 @@ const FIELD_LABELS = {
   'new date and time': 'das neue Datum mit Uhrzeit',
   'hours or start/end time': 'die Stundenzahl oder Start- und Endzeit',
   'customer/site/asset': 'den Kunden, das Objekt oder die Anlage',
+  installation: 'die Anlage',
   'line items or service description': 'die Positionen oder die Leistungsbeschreibung',
   'new status or assignment': 'den neuen Status oder die Zuweisung',
   'new status or details': 'den neuen Status oder die Angaben',
@@ -949,6 +1021,7 @@ const FIELD_CANDIDATE_KEY = {
   'service report': 'reports',
   assignment: 'assignments',
   'customer/site/asset': 'installations',
+  installation: 'installations',
 };
 
 function fieldLabel(field) {
@@ -1000,7 +1073,7 @@ async function resolveContext(input, previousFollowUp = null, requestContext = {
     findProject(input, objectId, previousFollowUp, draft),
     findOrder(input, objectId, previousFollowUp),
     requestResolved.assignment ? { selected: null, candidates: [] } : findAssignment(input, objectId, previousFollowUp),
-    findInstallation(input, objectId),
+    findInstallation(input, objectId, draft),
     shouldResolveTask(input, previousFollowUp, action) ? findTask(input, objectId, previousFollowUp) : { selected: null, candidates: [] },
     shouldResolveReport(input, previousFollowUp, action) ? findReport(input, objectId, previousFollowUp, requestResolved.assignment) : { selected: null, candidates: [] },
   ]);
@@ -1291,12 +1364,65 @@ async function findAssignment(input, objectId, previousFollowUp) {
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
 }
 
-async function findInstallation(input, objectId) {
+const INSTALLATION_FIELDS = 'installationNumber type manufacturer model serialNumber fuelType status siteId';
+
+/**
+ * Finds the plant the office is talking about.
+ *
+ * Nobody says "installation 6a54a691…". They say its number (A-00001), its
+ * serial, its make, or simply whose plant it is — so all four are tried, and
+ * the customer route goes through the sites that belong to them.
+ */
+async function findInstallation(input, objectId, draft = null) {
   const Installation = (await import('../../crm/installation.model.js')).default;
   if (objectId) {
-    const selected = await Installation.findById(objectId).select('name model serialNumber status siteId customerId').lean().catch(() => null);
+    const selected = await Installation.findById(objectId).select(INSTALLATION_FIELDS).lean().catch(() => null);
     return { selected, candidates: selected ? [selected] : [] };
   }
+
+  const text = String(input || '');
+
+  // 1. The plant number, as printed on the record and on the label.
+  const number = text.match(/\b[A-Z]-\d{3,6}\b/i)?.[0];
+  if (number) {
+    const byNumber = await Installation.findOne({ installationNumber: new RegExp(`^${escapeRegex(number)}$`, 'i') })
+      .select(INSTALLATION_FIELDS).lean();
+    if (byNumber) return { selected: byNumber, candidates: [] };
+  }
+
+  const term = draft?.installationName || null;
+
+  // 2. Serial, make or model.
+  if (term && term.length >= 3) {
+    const regex = new RegExp(escapeRegex(term), 'i');
+    const byPlant = await Installation.find({
+      $or: [{ serialNumber: regex }, { manufacturer: regex }, { model: regex }],
+    }).select(INSTALLATION_FIELDS).limit(5).lean();
+    if (byPlant.length === 1) return { selected: byPlant[0], candidates: [] };
+    if (byPlant.length > 1) return { selected: null, candidates: byPlant };
+  }
+
+  // 3. Whose plant it is — customer, then their sites, then what stands there.
+  const customerName = draft?.customerName || term;
+  if (customerName && customerName.length >= 3) {
+    const [Customer, Site] = await Promise.all([
+      import('../../crm/customer.model.js').then((m) => m.default),
+      import('../../crm/site.model.js').then((m) => m.default),
+    ]);
+    const customers = await Customer.find({ name: new RegExp(escapeRegex(customerName), 'i') })
+      .select('_id').limit(5).lean();
+    if (customers.length) {
+      const sites = await Site.find({ customerId: { $in: customers.map((c) => c._id) } })
+        .select('_id').limit(20).lean();
+      if (sites.length) {
+        const candidates = await Installation.find({ siteId: { $in: sites.map((s) => s._id) } })
+          .select(INSTALLATION_FIELDS).limit(5).lean();
+        if (candidates.length === 1) return { selected: candidates[0], candidates: [] };
+        if (candidates.length > 1) return { selected: null, candidates };
+      }
+    }
+  }
+
   return { selected: null, candidates: [] };
 }
 
@@ -1784,7 +1910,8 @@ function summarizeCandidates(context) {
     projects: summarizeCandidateList(context.projectCandidates, (project) => project.name || project.projectNumber),
     assignments: assignmentCandidates,
     orders: assignmentCandidates.length ? assignmentCandidates : summarizeCandidateList(context.orderCandidates, (order) => order.orderNumber || order.title),
-    installations: summarizeCandidateList(context.installationCandidates, (installation) => installation.name || installation.model || installation.serialNumber),
+    installations: summarizeCandidateList(context.installationCandidates, (installation) => [installation.manufacturer, installation.model].filter(Boolean).join(' ')
+      || installation.installationNumber || installation.serialNumber),
     tasks: summarizeCandidateList(context.taskCandidates, (task) => task.title),
     reports: summarizeCandidateList(context.reportCandidates, (report) => report.reportNumber || report.workPerformed),
   };

@@ -19,7 +19,8 @@ export const PLANNER_ACTIONS = Object.freeze([
   'CREATE_REPORT', 'UPDATE_REPORT', 'DELETE_REPORT', 'SEARCH_REPORTS',
   'SEARCH_DOCUMENTS', 'CREATE_QUOTATION', 'CREATE_INVOICE', 'CREATE_NOTE',
   'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE', 'SALES_FOLLOWUPS',
-  'ANALYZE_FIELD_TICKET', 'QUALITY_CHECK', 'SEND_NOTIFICATION', 'GENERAL',
+  'ANALYZE_FIELD_TICKET', 'QUALITY_CHECK', 'SERVICE_DUE', 'SERVICE_BRIEFING',
+  'SEND_NOTIFICATION', 'GENERAL',
 ]);
 
 const VALID_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
@@ -27,7 +28,7 @@ const VALID_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 const SYSTEM_PROMPT = (todayIso) => `You are the planning brain of an ERP assistant for MB Boiler & Heizungen AG (Swiss HVAC company). Users write in German, French, Italian or English.
 
 Classify the user message into exactly ONE action and extract parameters. Reply with JSON only, no markdown fences:
-{"action":"<ACTION>","params":{"title":null,"description":null,"priority":null,"dueDate":null,"dateTime":null,"durationHours":null,"assigneeName":null,"customerName":null,"projectName":null,"searchTerm":null,"listAll":false,"status":null,"messageContent":null}}
+{"action":"<ACTION>","params":{"title":null,"description":null,"priority":null,"dueDate":null,"dateTime":null,"durationHours":null,"assigneeName":null,"customerName":null,"projectName":null,"searchTerm":null,"listAll":false,"status":null,"messageContent":null,"installationName":null}}
 
 Actions: ${PLANNER_ACTIONS.join(', ')}.
 
@@ -37,6 +38,8 @@ Hard rules:
 - "Fasse den Chat zusammen" / summarize a chat/conversation → SUMMARIZE_CHAT.
 - Questions about which quotations need chasing ("Welche Offerten muss ich nachfassen?", "offene Offerten", "Nachfassliste") → SALES_FOLLOWUPS.
 - Asking whether a project can be closed, or what is still missing before closing it ("Kann ich das Projekt abschliessen?", "Abschlussprüfung", "Was fehlt noch beim Projekt X?", "Ist die Dokumentation vollständig?") → QUALITY_CHECK, with projectName set.
+- Questions about maintenance that is due or overdue ("Welche Wartungen sind fällig?", "überfällige Wartungen", "Was steht diesen Monat an Service an?") → SERVICE_DUE.
+- Asking what a technician needs to know before an intervention on a specific plant ("Briefing für die Anlage A-00001", "Was muss ich zur Wartung bei Kunde X wissen?", "Infos zum Boiler bei Y") → SERVICE_BRIEFING, with installationName and/or customerName set.
 - Parameters:
   - title: clean, human-readable title WITHOUT command words ("Erstelle eine Aufgabe Boiler entkalken" → title "Boiler entkalken"). Keep the user's language.
   - priority: LOW | MEDIUM | HIGH | URGENT ("hohe Priorität" → HIGH, "dringend" → URGENT).
@@ -47,6 +50,7 @@ Hard rules:
   - searchTerm: for SEARCH_* — the term to search for; null with listAll=true when the user wants everything / a count ("alle Aufgaben", "wie viele Rechnungen").
   - status: target status when the user wants a status change ("erledigt" → the status they mean, as said).
   - messageContent: the message body for SEND_CHAT / SEND_NOTIFICATION.
+  - installationName: the plant mentioned — its number (A-00001), serial number, make or model.
 - Unknown fields stay null. Never invent values.`;
 
 class LlmPlannerService {
@@ -104,6 +108,7 @@ class LlmPlannerService {
       listAll: raw.listAll === true,
       status: str(raw.status, 60),
       messageContent: str(raw.messageContent, 2000),
+      installationName: str(raw.installationName, 120),
     };
     return params;
   }

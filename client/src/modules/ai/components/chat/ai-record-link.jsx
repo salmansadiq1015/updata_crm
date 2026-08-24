@@ -17,6 +17,7 @@ const ROUTES = {
   project: (id) => `/projects/${id}`,
   customer: (id) => `/crm/customers/${id}`,
   order: (id) => `/field-ops/orders/${id}`,
+  installation: (id) => `/crm/installations/${id}`,
   chatRoom: (id) => `/field-ops/chat?chatId=${id}`,
   quotation: (id) => `/quotes?quotationId=${id}`,
   invoice: (id) => `/quotes?invoiceId=${id}`,
@@ -33,6 +34,7 @@ const LABEL_KEYS = {
   invoice: 'ai.record.openInvoice',
   order: 'ai.record.openOrder',
   customer: 'ai.record.openCustomer',
+  installation: 'ai.record.openInstallation',
   workReport: 'ai.record.openReport',
   assignment: 'ai.record.openAssignment',
   chatRoom: 'ai.record.openChat',
@@ -49,7 +51,8 @@ export function AiRecordLink({ output }) {
 
   const record = output.record || {};
   const caption = record.quotationNumber || record.projectNumber || record.orderNumber
-    || record.invoiceNumber || record.reportNumber || record.title || record.name || null;
+    || record.invoiceNumber || record.reportNumber || record.installationNumber
+    || record.title || record.name || null;
 
   return (
     <Link

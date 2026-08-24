@@ -676,6 +676,64 @@ const SCENARIOS = [
 
   // ─── Service AI ────────────────────────────────────────────
 
+  // ─── Behörden AI ───────────────────────────────────────────
+
+  {
+    name: 'behoerden-erdsonde-sperrt-baustart',
+    why: 'Ohne Bohrbewilligung darf der Baustart nicht freigegeben werden.',
+    async exec() {
+      const project = await projectFixture('ZZTEST Erdsonden-Wärmepumpe Bewilligung');
+      const state = await run(`Welche Bewilligungen braucht das Projekt ${project.name}?`);
+      const record = state.output?.record || {};
+      const keys = (record.procedures || []).map((p) => p.key);
+      const text = message(state);
+      return [
+        check('Behördencheck ausgeführt', action(state) === 'PERMIT_CHECK', `action = ${action(state)}`),
+        check('Bohrbewilligung verlangt', keys.includes('BOHRBEWILLIGUNG'), keys.join(', ')),
+        check('Fördergesuch verlangt', keys.includes('FOERDERGESUCH'), keys.join(', ')),
+        check('Baustart gesperrt', record.startBlocked === true, `startBlocked = ${record.startBlocked}`),
+        check('nichts eingereicht', /nach Freigabe/i.test(text), text.slice(-140)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'behoerden-boiler-braucht-nichts',
+    why: 'Ein Boilerersatz braucht kein Verfahren — das muss der Agent auch so sagen.',
+    async exec() {
+      const project = await projectFixture('ZZTEST Boilerersatz Hygienespeicher Bewilligung', 'RENOVATION');
+      const state = await run(`Behördencheck für das Projekt ${project.name}`);
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Behördencheck ausgeführt', action(state) === 'PERMIT_CHECK', `action = ${action(state)}`),
+        check('kein Verfahren', (record.procedures || []).length === 0, (record.procedures || []).map((p) => p.key).join(', ')),
+        check('sagt es ausdrücklich', /kein Bewilligungsverfahren/i.test(text), text.slice(0, 160)),
+        check('Baustart nicht gesperrt', record.startBlocked === false, `startBlocked = ${record.startBlocked}`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'behoerden-erfindet-keine-kantonsregel',
+    why: 'Welche Formulare ein Kanton verlangt, steht nicht im System — das muss gesagt werden.',
+    async exec() {
+      const project = await projectFixture('ZZTEST Luft-Wasser-Wärmepumpe Bewilligung');
+      const state = await run(`Was muss ich beim Projekt ${project.name} bei der Gemeinde einreichen?`);
+      const record = state.output?.record || {};
+      const keys = (record.procedures || []).map((p) => p.key);
+      const text = message(state);
+      return [
+        check('Behördencheck ausgeführt', action(state) === 'PERMIT_CHECK', `action = ${action(state)}`),
+        check('Baumeldung verlangt', keys.includes('BAUMELDUNG'), keys.join(', ')),
+        check('Schallschutz verlangt', keys.includes('SCHALLSCHUTZ'), keys.join(', ')),
+        check('keine Bohrbewilligung', !keys.includes('BOHRBEWILLIGUNG'), keys.join(', ')),
+        check('nennt die Grenze des Systems', /nicht hinterlegt/i.test(text), text.slice(-220)),
+        noEnglish(state),
+      ];
+    },
+  },
+
   {
     name: 'wartungsliste-nach-verzug',
     why: 'Die überfälligste Wartung steht oben — sonst ist die Liste keine Arbeitsliste.',

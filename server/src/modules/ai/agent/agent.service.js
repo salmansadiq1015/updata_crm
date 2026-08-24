@@ -40,6 +40,7 @@ const INTENT_TO_WORKFLOW = {
   quality_check: 'FIELD_SERVICE_AGENT',
   service_due: 'FIELD_SERVICE_AGENT',
   service_briefing: 'FIELD_SERVICE_AGENT',
+  permit_check: 'FIELD_SERVICE_AGENT',
   search_customer: 'FIELD_SERVICE_AGENT',
   search_tasks: 'FIELD_SERVICE_AGENT',
   search_projects: 'FIELD_SERVICE_AGENT',

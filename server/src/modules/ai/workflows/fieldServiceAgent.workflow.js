@@ -46,6 +46,7 @@ const ACTIONS = Object.freeze({
   QUALITY_CHECK: 'QUALITY_CHECK',
   SERVICE_DUE: 'SERVICE_DUE',
   SERVICE_BRIEFING: 'SERVICE_BRIEFING',
+  PERMIT_CHECK: 'PERMIT_CHECK',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -87,6 +88,7 @@ const ACTION_LABELS = {
   [ACTIONS.QUALITY_CHECK]: 'den Projektabschluss prüfen',
   [ACTIONS.SERVICE_DUE]: 'die fälligen Wartungen prüfen',
   [ACTIONS.SERVICE_BRIEFING]: 'ein Monteur-Briefing vorbereiten',
+  [ACTIONS.PERMIT_CHECK]: 'den Behördenbedarf prüfen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -374,6 +376,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return serviceDue(state);
     case ACTIONS.SERVICE_BRIEFING:
       return serviceBriefing(context, state);
+    case ACTIONS.PERMIT_CHECK:
+      return permitCheck(context, state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -711,6 +715,56 @@ async function qualityCheck(context, state = {}) {
       warnings: result.warnings,
       missingDocuments: result.missing.map((requirement) => requirement.label),
       presentDocuments: result.present.map((item) => item.label),
+    },
+  };
+}
+
+/**
+ * Behörden AI: which procedures a project needs and what is still missing.
+ *
+ * Like the closing check, the reading always succeeds — the question gets an
+ * answer either way, and whether the site start is blocked sits in the record.
+ */
+async function permitCheck(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return {
+      action: ACTIONS.PERMIT_CHECK,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.PERMIT_CHECK, ['project'], context);
+  }
+
+  const behoerdenService = (await import('../agents/behoerden/behoerden.service.js')).default;
+  const result = await behoerdenService.assess(context.project);
+
+  return {
+    action: ACTIONS.PERMIT_CHECK,
+    status: 'completed',
+    message: behoerdenService.compose(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    record: {
+      id: context.project._id,
+      name: result.project?.name || context.project.name,
+      projectNumber: result.project?.projectNumber || null,
+      canton: result.place?.canton || null,
+      municipality: result.place?.city || null,
+      template: result.template?.key || null,
+      startBlocked: (result.procedures || []).some((procedure) => procedure.blocksStart && procedure.status === 'offen'),
+      procedures: (result.procedures || []).map((procedure) => ({
+        key: procedure.key,
+        label: procedure.label,
+        authority: procedure.authority,
+        status: procedure.status,
+        blocksStart: procedure.blocksStart,
+        missingData: procedure.missingData,
+      })),
+      blockers: (result.blockers || []).map((blocker) => blocker.detail),
+      warnings: result.warnings || [],
     },
   };
 }
@@ -1288,10 +1342,24 @@ async function findProject(input, objectId, previousFollowUp, draft = null) {
 
   // A full-text search ranks by shared words, so several projects match as soon
   // as they have a word in common. When one of them is named exactly what was
-  // said, that is the one — asking again would only annoy the reader.
-  const spoken = String(term).trim().toLowerCase();
-  const exact = candidates.filter((project) => String(project.name || '').trim().toLowerCase() === spoken);
-  if (exact.length === 1) return { selected: exact[0], candidates: [] };
+  // said, that is the one — asking again would only annoy the reader. The
+  // whole message is checked too, not just the extracted term: the planner
+  // trims a name down often enough that comparing to it alone misses.
+  const said = `${term} ${input}`.toLowerCase();
+  const named = candidates.filter((project) => {
+    const name = String(project.name || '').trim().toLowerCase();
+    return name.length >= 3 && said.includes(name);
+  });
+  if (named.length === 1) return { selected: named[0], candidates: [] };
+  // Several names appear, but one is longer and contains the others — the
+  // reader said the specific one, the shorter names merely fit inside it.
+  if (named.length > 1) {
+    const longest = named.reduce((a, b) => (String(a.name).length >= String(b.name).length ? a : b));
+    const others = named.filter((project) => project !== longest);
+    if (others.every((project) => String(longest.name).toLowerCase().includes(String(project.name).toLowerCase()))) {
+      return { selected: longest, candidates: [] };
+    }
+  }
 
   return { selected: null, candidates };
 }

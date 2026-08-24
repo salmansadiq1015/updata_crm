@@ -23,12 +23,12 @@ un serveur réel, avec de vrais appels OpenAI.
 RATE_LIMIT_GLOBAL=1000 node src/server.js
 
 # Dans un autre terminal :
-node tests/e2e/ai-scenarios.mjs              # les 35 scénarios
+node tests/e2e/ai-scenarios.mjs              # les 38 scénarios
 node tests/e2e/ai-scenarios.mjs --only=offerte   # filtre par nom
 API=http://localhost:9097/api/v1 node tests/e2e/ai-scenarios.mjs
 ```
 
-Sortie : un ✓/✗ par contrôle, puis `35/35 scénarios passés`. Code de sortie
+Sortie : un ✓/✗ par contrôle, puis `38/38 scénarios passés`. Code de sortie
 non nul si un scénario échoue, donc utilisable en pré-livraison.
 
 ## Ce qui est couvert
@@ -66,6 +66,9 @@ non nul si un scénario échoue, donc utilisable en pré-livraison.
 | `abschluss-erdsonde-blockiert` | Sans Bohrbewilligung ni IBN-Protokoll, la clôture est bloquée |
 | `abschluss-boiler-ohne-bewilligung` | La checklist suit le type d'installation, pas une liste fixe |
 | `abschlussfrage-legt-nichts-an` | Demander si on peut clôturer ne change rien au projet |
+| `behoerden-erdsonde-sperrt-baustart` | Sans Bohrbewilligung, le Baustart reste bloqué |
+| `behoerden-boiler-braucht-nichts` | Un remplacement de boiler ne demande aucune procédure |
+| `behoerden-erfindet-keine-kantonsregel` | L'agent dit que les formulaires cantonaux ne sont pas dans le système |
 | `wartungsliste-nach-verzug` | Les entretiens dus, la plus en retard en tête |
 | `briefing-anlage-nach-nummer` | Le numéro d'installation (A-00003) suffit à obtenir le briefing |
 | `briefing-anlage-ueber-kunde` | On nomme le client, pas l'installation |

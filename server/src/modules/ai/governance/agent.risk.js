@@ -100,6 +100,7 @@ const ACTION_RISK = Object.freeze({
   QUALITY_CHECK: RISK_LEVELS.LOW,
   SERVICE_DUE: RISK_LEVELS.LOW,
   SERVICE_BRIEFING: RISK_LEVELS.LOW,
+  PERMIT_CHECK: RISK_LEVELS.LOW,
   GENERAL: RISK_LEVELS.LOW,
 
   // These pull a whole cascade in behind them — a project opens its checklist,

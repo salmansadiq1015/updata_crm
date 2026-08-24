@@ -19,7 +19,7 @@ export const PLANNER_ACTIONS = Object.freeze([
   'CREATE_REPORT', 'UPDATE_REPORT', 'DELETE_REPORT', 'SEARCH_REPORTS',
   'SEARCH_DOCUMENTS', 'CREATE_QUOTATION', 'CREATE_INVOICE', 'CREATE_NOTE',
   'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE', 'SALES_FOLLOWUPS',
-  'ANALYZE_FIELD_TICKET', 'QUALITY_CHECK', 'SERVICE_DUE', 'SERVICE_BRIEFING',
+  'ANALYZE_FIELD_TICKET', 'QUALITY_CHECK', 'SERVICE_DUE', 'SERVICE_BRIEFING', 'PERMIT_CHECK',
   'SEND_NOTIFICATION', 'GENERAL',
 ]);
 
@@ -39,6 +39,7 @@ Hard rules:
 - Questions about which quotations need chasing ("Welche Offerten muss ich nachfassen?", "offene Offerten", "Nachfassliste") → SALES_FOLLOWUPS.
 - Asking whether a project can be closed, or what is still missing before closing it ("Kann ich das Projekt abschliessen?", "Abschlussprüfung", "Was fehlt noch beim Projekt X?", "Ist die Dokumentation vollständig?") → QUALITY_CHECK, with projectName set.
 - Questions about maintenance that is due or overdue ("Welche Wartungen sind fällig?", "überfällige Wartungen", "Was steht diesen Monat an Service an?") → SERVICE_DUE.
+- Questions about permits, building notifications or subsidy applications for a project ("Welche Bewilligungen braucht das Projekt X?", "Behördencheck für X", "Was muss ich bei der Gemeinde einreichen?", "Ist eine Baumeldung nötig?", "Fördergesuch für X") → PERMIT_CHECK, with projectName set.
 - Asking what a technician needs to know before an intervention on a specific plant ("Briefing für die Anlage A-00001", "Was muss ich zur Wartung bei Kunde X wissen?", "Infos zum Boiler bei Y") → SERVICE_BRIEFING, with installationName and/or customerName set.
 - Parameters:
   - title: clean, human-readable title WITHOUT command words ("Erstelle eine Aufgabe Boiler entkalken" → title "Boiler entkalken"). Keep the user's language.

@@ -184,8 +184,62 @@ async function onMaintenanceOverdue(event) {
   }
 }
 
+/**
+ * Project opened → Behörden AI.
+ *
+ * Projekt AI already puts "Bohrbewilligung einholen" on the checklist, so this
+ * leg does not repeat it. What it adds is the thing nobody notices until the
+ * form is half filled in: the data the procedures need is not in the system.
+ * One task, naming exactly what is missing.
+ */
+async function onProjectCreated(event) {
+  const payload = event?.payload || event || {};
+  const { projectId, createdBy } = payload;
+  if (!projectId) return;
+
+  if (!(await agentIsRunnable('BEHOERDEN'))) return;
+
+  try {
+    const behoerdenService = (await import('../agents/behoerden/behoerden.service.js')).default;
+    const result = await behoerdenService.assess({ _id: projectId });
+    if (!result.verified || !result.procedures.length) return;
+
+    // Only the data gaps: the permits themselves are already on the checklist.
+    const gaps = [...new Set(result.procedures.flatMap((procedure) => procedure.missingData))];
+    if (!gaps.length) return;
+
+    const taskService = (await import('../../tasks/task.service.js')).default;
+    await taskService.create({
+      title: `Behördenangaben vervollständigen: ${result.project.name}`,
+      description: [
+        `Für die Verfahren dieses Projekts fehlen im System: ${gaps.join(', ')}.`,
+        '',
+        behoerdenService.compose(result),
+      ].join('\n'),
+      priority: 'HIGH',
+      projectId,
+      customerId: result.project.customerId || null,
+    }, createdBy || null, { source: 'ai-agent' });
+
+    logger.info('Handoff: project created → Behörden AI', {
+      module: 'ai-handoff',
+      action: 'projectCreated',
+      projectId: String(projectId),
+      gaps: gaps.length,
+    });
+  } catch (err) {
+    logger.warn('Handoff project → Behörden AI failed', {
+      module: 'ai-handoff',
+      action: 'projectCreated',
+      projectId: String(projectId),
+      error: err.message,
+    });
+  }
+}
+
 export function registerAgentHandoffs() {
   eventBus.subscribe(EVENT_TYPES.QUOTATION_ACCEPTED, onQuotationAccepted);
+  eventBus.subscribe(EVENT_TYPES.PROJECT_CREATED, onProjectCreated);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_CHANGED, onProjectCompleted);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_OVERRIDDEN, onProjectCompleted);
   eventBus.subscribe(EVENT_TYPES.MAINTENANCE_OVERDUE, onMaintenanceOverdue);
@@ -195,6 +249,7 @@ export function registerAgentHandoffs() {
     action: 'register',
     handoffs: [
       'quotation.accepted → PROJEKT',
+      'project.created → BEHOERDEN',
       'project.completed → QUALITY',
       'maintenance.overdue → SERVICE',
     ],

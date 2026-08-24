@@ -19,7 +19,7 @@ export const PLANNER_ACTIONS = Object.freeze([
   'CREATE_REPORT', 'UPDATE_REPORT', 'DELETE_REPORT', 'SEARCH_REPORTS',
   'SEARCH_DOCUMENTS', 'CREATE_QUOTATION', 'CREATE_INVOICE', 'CREATE_NOTE',
   'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE', 'SALES_FOLLOWUPS',
-  'ANALYZE_FIELD_TICKET', 'SEND_NOTIFICATION', 'GENERAL',
+  'ANALYZE_FIELD_TICKET', 'QUALITY_CHECK', 'SEND_NOTIFICATION', 'GENERAL',
 ]);
 
 const VALID_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
@@ -36,6 +36,7 @@ Hard rules:
 - Questions about how the system works, greetings, or anything that maps to no ERP data → GENERAL.
 - "Fasse den Chat zusammen" / summarize a chat/conversation → SUMMARIZE_CHAT.
 - Questions about which quotations need chasing ("Welche Offerten muss ich nachfassen?", "offene Offerten", "Nachfassliste") → SALES_FOLLOWUPS.
+- Asking whether a project can be closed, or what is still missing before closing it ("Kann ich das Projekt abschliessen?", "Abschlussprüfung", "Was fehlt noch beim Projekt X?", "Ist die Dokumentation vollständig?") → QUALITY_CHECK, with projectName set.
 - Parameters:
   - title: clean, human-readable title WITHOUT command words ("Erstelle eine Aufgabe Boiler entkalken" → title "Boiler entkalken"). Keep the user's language.
   - priority: LOW | MEDIUM | HIGH | URGENT ("hohe Priorität" → HIGH, "dringend" → URGENT).

@@ -86,13 +86,60 @@ async function onQuotationAccepted(event) {
   }
 }
 
+/**
+ * Project reported finished → Quality AI.
+ *
+ * The specification's trigger for Quality AI is "Projekt abgeschlossen
+ * gemeldet". It runs the closing checklist and, when something is missing,
+ * leaves a Mängelliste behind as a task. It does not touch the status: the
+ * project was closed by a person, and only a person reopens it.
+ */
+async function onProjectCompleted(event) {
+  const payload = event?.payload || event || {};
+  const { projectId, toStatus, changedBy } = payload;
+  if (!projectId || toStatus !== 'COMPLETED') return;
+
+  if (!(await agentIsRunnable('QUALITY'))) return;
+
+  try {
+    const qualityService = (await import('../agents/quality/quality.service.js')).default;
+    const result = await qualityService.checkBeforeClose({ _id: projectId });
+    if (!result.verified || result.ok) return;
+
+    const taskService = (await import('../../tasks/task.service.js')).default;
+    await taskService.create({
+      title: `Abschluss unvollständig: ${result.project.name || result.project.projectNumber}`,
+      description: qualityService.compose(result),
+      priority: 'HIGH',
+      projectId,
+      customerId: result.project.customerId || null,
+    }, changedBy || null, { source: 'ai-agent' });
+
+    logger.info('Handoff: project completed → Quality AI', {
+      module: 'ai-handoff',
+      action: 'projectCompleted',
+      projectId: String(projectId),
+      blockers: result.blockers.length,
+    });
+  } catch (err) {
+    logger.warn('Handoff project → Quality AI failed', {
+      module: 'ai-handoff',
+      action: 'projectCompleted',
+      projectId: String(projectId),
+      error: err.message,
+    });
+  }
+}
+
 export function registerAgentHandoffs() {
   eventBus.subscribe(EVENT_TYPES.QUOTATION_ACCEPTED, onQuotationAccepted);
+  eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_CHANGED, onProjectCompleted);
+  eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_OVERRIDDEN, onProjectCompleted);
 
   logger.info('Agent handoffs registered', {
     module: 'ai-handoff',
     action: 'register',
-    handoffs: ['quotation.accepted → PROJEKT'],
+    handoffs: ['quotation.accepted → PROJEKT', 'project.completed → QUALITY'],
   });
 }
 

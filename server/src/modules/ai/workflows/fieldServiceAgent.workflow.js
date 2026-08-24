@@ -43,6 +43,7 @@ const ACTIONS = Object.freeze({
   RECORD_TIME: 'RECORD_TIME',
   ANALYZE_WORKFORCE: 'ANALYZE_WORKFORCE',
   SALES_FOLLOWUPS: 'SALES_FOLLOWUPS',
+  QUALITY_CHECK: 'QUALITY_CHECK',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -81,6 +82,7 @@ const ACTION_LABELS = {
   [ACTIONS.RECORD_TIME]: 'Arbeitszeit erfassen',
   [ACTIONS.ANALYZE_WORKFORCE]: 'die Personalplanung auswerten',
   [ACTIONS.SALES_FOLLOWUPS]: 'die offenen Offerten prüfen',
+  [ACTIONS.QUALITY_CHECK]: 'den Projektabschluss prüfen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -362,6 +364,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return analyzeWorkforce(input, state);
     case ACTIONS.SALES_FOLLOWUPS:
       return salesFollowUps(state);
+    case ACTIONS.QUALITY_CHECK:
+      return qualityCheck(context, state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -656,6 +660,50 @@ async function salesFollowUps(state = {}) {
     status: 'completed',
     message: salesService.compose(followUps),
     records: followUps,
+  };
+}
+
+/**
+ * Quality AI's closing check.
+ *
+ * The check itself always succeeds — the question "can I close this?" gets an
+ * answer either way. Whether the project may be closed sits in `canClose`, so
+ * a blocked closing reads as a finding, not as a failed run.
+ */
+async function qualityCheck(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return {
+      action: ACTIONS.QUALITY_CHECK,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.QUALITY_CHECK, ['project'], context);
+  }
+
+  const qualityService = (await import('../agents/quality/quality.service.js')).default;
+  const result = await qualityService.checkBeforeClose(context.project);
+
+  return {
+    action: ACTIONS.QUALITY_CHECK,
+    status: 'completed',
+    message: qualityService.compose(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    record: {
+      id: context.project._id,
+      name: result.project?.name || context.project.name,
+      projectNumber: result.project?.projectNumber || null,
+      status: result.project?.status || null,
+      canClose: result.ok,
+      template: result.template?.key || null,
+      blockers: result.blockers.map((blocker) => blocker.detail),
+      warnings: result.warnings,
+      missingDocuments: result.missing.map((requirement) => requirement.label),
+      presentDocuments: result.present.map((item) => item.label),
+    },
   };
 }
 
@@ -1163,7 +1211,16 @@ async function findProject(input, objectId, previousFollowUp, draft = null) {
   const term = draft?.projectName || extractSearchTerm(input);
   if (!term || term.length < 2) return { selected: null, candidates: [] };
   const candidates = await Project.find({ $text: { $search: term } }).select('name projectNumber status customerId customerName').limit(5).lean();
-  return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
+  if (candidates.length === 1) return { selected: candidates[0], candidates: [] };
+
+  // A full-text search ranks by shared words, so several projects match as soon
+  // as they have a word in common. When one of them is named exactly what was
+  // said, that is the one — asking again would only annoy the reader.
+  const spoken = String(term).trim().toLowerCase();
+  const exact = candidates.filter((project) => String(project.name || '').trim().toLowerCase() === spoken);
+  if (exact.length === 1) return { selected: exact[0], candidates: [] };
+
+  return { selected: null, candidates };
 }
 
 async function findOrder(input, objectId, previousFollowUp) {

@@ -126,6 +126,35 @@ async function runAnswering(input, answer = '1') {
   return second;
 }
 
+/**
+ * Creates a project to ask questions about. Quality AI is a reader, so its
+ * scenarios need a subject that already exists — built through the API, the
+ * same way the office builds one.
+ */
+let fixtureRefs = null;
+async function projectFixture(name, projectType = 'NEW_INSTALLATION') {
+  if (!fixtureRefs) {
+    const [me, customers] = await Promise.all([api('/users/me'), api('/crm/customers?limit=1')]);
+    const list = customers.body?.data;
+    const customer = (Array.isArray(list) ? list : list?.data || list?.items || [])[0];
+    if (!customer) throw new Error('no customer to attach the fixture project to');
+    fixtureRefs = { managerId: me.body?.data?._id || me.body?.data?.id, customerId: customer._id || customer.id };
+  }
+  const res = await api('/pm/projects', {
+    method: 'POST',
+    body: {
+      name,
+      projectType,
+      customerId: fixtureRefs.customerId,
+      projectManagerId: fixtureRefs.managerId,
+    },
+  });
+  if (res.status >= 300) throw new Error(`fixture project failed: ${res.status} ${JSON.stringify(res.body?.error || {})}`);
+  const project = res.body.data;
+  track('project', project._id || project.id);
+  return project;
+}
+
 // ─── Assertions ───────────────────────────────────────────────
 
 function check(label, condition, detail = '') {
@@ -586,6 +615,60 @@ const SCENARIOS = [
         check('nichts verändert', !state.output?.recordId, `recordId = ${state.output?.recordId}`),
         check('nach Wert sortiert', sorted, records.map((r) => r.value).join(' > ')),
         check('Gesprächshinweis ohne Preisdruck', !/Rabatt|Preisnachlass/i.test(text), text.slice(0, 80)),
+        noEnglish(state),
+      ];
+    },
+  },
+
+  // ─── Quality AI ────────────────────────────────────────────
+
+  {
+    name: 'abschluss-erdsonde-blockiert',
+    why: 'Eine Erdsonde darf ohne Bohrbewilligung und IBN-Protokoll nicht abgeschlossen werden.',
+    async exec() {
+      const project = await projectFixture('ZZTEST Erdsonden-Wärmepumpe Abschluss');
+      const state = await run(`Kann ich das Projekt ${project.name} abschliessen?`);
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Abschlussprüfung ausgeführt', action(state) === 'QUALITY_CHECK', `action = ${action(state)}`),
+        check('Checkliste Erdsonde erkannt', record.template === 'ERDSONDEN_WP', `vorlage = ${record.template}`),
+        check('Abschluss gesperrt', record.canClose === false, `canClose = ${record.canClose}`),
+        check('Bohrbewilligung verlangt', /Bohrbewilligung/i.test(text), text.slice(0, 140)),
+        check('IBN-Protokoll verlangt', /IBN/i.test(text), text.slice(0, 140)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'abschluss-boiler-ohne-bewilligung',
+    why: 'Die Checkliste hängt am Anlagetyp — ein Boilerersatz braucht keine Bewilligung.',
+    async exec() {
+      const project = await projectFixture('ZZTEST Boilerersatz Hygienespeicher', 'RENOVATION');
+      const state = await run(`Was fehlt noch beim Projekt ${project.name}?`);
+      const record = state.output?.record || {};
+      const missing = (record.missingDocuments || []).join(', ');
+      return [
+        check('Abschlussprüfung ausgeführt', action(state) === 'QUALITY_CHECK', `action = ${action(state)}`),
+        check('Checkliste Boiler erkannt', record.template === 'BOILER_SPEICHER', `vorlage = ${record.template}`),
+        check('keine Bewilligung verlangt', !/Bewilligung|Baumeldung/i.test(missing), missing),
+        check('Garantieunterlagen verlangt', /Garantie/i.test(missing), missing),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'abschlussfrage-legt-nichts-an',
+    why: 'Die Frage nach dem Abschluss ist eine Frage — sie darf nichts anlegen und nichts schliessen.',
+    async exec() {
+      const project = await projectFixture('ZZTEST Abschluss Leseprobe');
+      const state = await run(`Ist die Dokumentation vom Projekt ${project.name} vollständig?`);
+      const after = await api(`/pm/projects/${project._id || project.id}`);
+      const status = after.body?.data?.status;
+      return [
+        check('Abschlussprüfung ausgeführt', action(state) === 'QUALITY_CHECK', `action = ${action(state)}`),
+        check('keine Freigabe nötig', state.status === 'COMPLETED', `status = ${state.status}`),
+        check('Projektstatus unverändert', status === project.status, `${project.status} → ${status}`),
         noEnglish(state),
       ];
     },

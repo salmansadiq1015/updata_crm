@@ -1,6 +1,20 @@
 import config from '../../config/index.js';
 import logger from '../../shared/logger/index.js';
 
+/** Infomaniak transcribes asynchronously; these bound the wait for a result. */
+const STT_POLL_INTERVAL_MS = 1200;
+const STT_RESULT_TIMEOUT_MS = 90_000;
+const STT_UPLOAD_TIMEOUT_MS = 60_000;
+
+/**
+ * Whisper reads at most ~224 tokens of prompt and silently ignores the rest —
+ * and an oversized one does worse than nothing: sending the full 678-term
+ * house vocabulary made the request hang instead of transcribing. German
+ * trade words run long, so the budget is counted in characters, which is what
+ * can actually be measured here.
+ */
+const STT_VOCAB_PROMPT_MAX_CHARS = 700;
+
 /**
  * Speech-to-Text provider abstraction.
  *
@@ -90,14 +104,15 @@ class SttGatewayService {
    * @returns {{ text, confidence, words }}
    */
   async _transcribeWhisper(audioBuffer, { language, mimeType, customVocabulary = [] } = {}) {
-    const openai = await this._getClient();
-
     const localePrompt = this._buildLocalePrompt(language);
-    const vocabPrompt = customVocabulary.length > 0
-      ? `Fachbegriffe: ${customVocabulary.join(', ')}`
-      : '';
+    const vocabPrompt = this._buildVocabularyPrompt(customVocabulary);
     const prompt = [localePrompt, vocabPrompt].filter(Boolean).join('\n');
 
+    if (this._infomaniakAudioBase()) {
+      return this._transcribeInfomaniak(audioBuffer, { language, mimeType, prompt });
+    }
+
+    const openai = await this._getClient();
     const { fileName, fileType } = this._resolveAudioFileInfo(mimeType);
     const file = new File([audioBuffer], fileName, { type: fileType });
 
@@ -138,6 +153,62 @@ class SttGatewayService {
     return { text, confidence, words };
   }
 
+  /**
+   * Infomaniak's audio endpoint, which is OpenAI-compatible in its form only.
+   *
+   * Three things differ from OpenAI and none of them can be papered over by
+   * the SDK: it lives under a different base path than the chat endpoint
+   * (`/1/ai/<product>/openai` rather than `/2/…/openai/v1`), the model is
+   * called `whisper` and `whisper-1` is rejected outright, and it answers with
+   * a batch id rather than a transcript — the result is fetched afterwards.
+   * Word-level timestamps are not offered, so `words` comes back empty.
+   */
+  _infomaniakAudioBase() {
+    const baseUrl = config.ai?.baseUrl || '';
+    const match = baseUrl.match(/^(https?:\/\/api\.infomaniak\.com)\/\d+\/ai\/(\d+)\//);
+    return match ? `${match[1]}/1/ai/${match[2]}` : null;
+  }
+
+  async _transcribeInfomaniak(audioBuffer, { language, mimeType, prompt }) {
+    const base = this._infomaniakAudioBase();
+    const { fileName, fileType } = this._resolveAudioFileInfo(mimeType);
+    const headers = { Authorization: `Bearer ${config.ai.apiKey}` };
+
+    const form = new FormData();
+    form.append('file', new Blob([audioBuffer], { type: fileType }), fileName);
+    form.append('model', 'whisper');
+    form.append('language', language?.split('-')[0] || 'de');
+    if (prompt) form.append('prompt', prompt);
+
+    // Without a deadline a stalled upload holds the whole request open.
+    const dispatched = await fetch(`${base}/openai/audio/transcriptions`, {
+      method: 'POST', headers, body: form, signal: AbortSignal.timeout(STT_UPLOAD_TIMEOUT_MS),
+    }).then((res) => res.json());
+
+    if (!dispatched?.batch_id) {
+      throw new Error(`Infomaniak rejected the transcription: ${JSON.stringify(dispatched).slice(0, 200)}`);
+    }
+
+    const deadline = Date.now() + STT_RESULT_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => { setTimeout(resolve, STT_POLL_INTERVAL_MS); });
+      const result = await fetch(`${base}/results/${dispatched.batch_id}`, { headers })
+        .then((res) => res.json())
+        .catch(() => null);
+      if (result?.status === 'success') {
+        let text = '';
+        try { text = JSON.parse(result.data).text || ''; } catch { text = String(result.data || ''); }
+        // Infomaniak returns no per-segment logprobs, so confidence stays
+        // unknown rather than being invented; the caller treats it as such.
+        return { text: text.trim(), confidence: null, words: [] };
+      }
+      if (result?.status === 'error') {
+        throw new Error(`Infomaniak transcription failed: ${JSON.stringify(result).slice(0, 200)}`);
+      }
+    }
+    throw new Error('Infomaniak transcription timed out');
+  }
+
   async _transcribeGoogle() {
     throw new Error('Google STT provider is not configured in this checkout');
   }
@@ -157,18 +228,45 @@ class SttGatewayService {
     return this._client;
   }
 
+  /**
+   * The prompt is a style example, not just a hint: Whisper imitates its
+   * orthography. Written in transliterated ASCII ("fuer", "Waermepumpe") it
+   * taught the model to return "oehlheizung von wiesmann" — lower case and
+   * umlaut-free. It is therefore written exactly as the office writes:
+   * capitals, umlauts, and no Eszett.
+   */
   _buildLocalePrompt(language) {
     const normalized = String(language || '').toLowerCase();
     if (normalized === 'de-ch' || normalized === 'gsw' || normalized === 'gsw-ch') {
       return [
-        'Transkribiere Schweizerdeutsch und Deutsch fuer Heizungs-, Service- und Baustellenrapporte.',
-        'Typische Begriffe: Auftrag, Rapport, Heizung, Boiler, Waermepumpe, Kessel, Brenner, Stoerung, Anlage, Offerte.',
+        'Transkribiere Schweizerdeutsch und Deutsch für Heizungs-, Service- und Baustellenrapporte.',
+        'Typische Begriffe: Auftrag, Rapport, Heizung, Boiler, Wärmepumpe, Kessel, Brenner, Störung, Anlage, Offerte.',
       ].join(' ');
     }
     if (normalized === 'fr-ch' || normalized === 'it-ch') {
       return 'Transkribiere Schweizer Service- und Heizungsfachsprache mit korrekten Namen, Adressen und technischen Begriffen.';
     }
     return '';
+  }
+
+  /** As many domain terms as Whisper will actually read, and no more. */
+  _buildVocabularyPrompt(customVocabulary = []) {
+    if (!customVocabulary.length) return '';
+    const kept = [];
+    let length = 0;
+    for (const term of customVocabulary) {
+      const word = typeof term === 'string' ? term.trim() : String(term?.term || '').trim();
+      if (!word) continue;
+      if (length + word.length + 2 > STT_VOCAB_PROMPT_MAX_CHARS) break;
+      kept.push(word);
+      length += word.length + 2;
+    }
+    if (kept.length < customVocabulary.length) {
+      logger.debug('STT vocabulary prompt truncated', {
+        module: 'ai', action: 'buildVocabularyPrompt', kept: kept.length, total: customVocabulary.length,
+      });
+    }
+    return kept.length ? `Fachbegriffe: ${kept.join(', ')}` : '';
   }
 
   _resolveAudioFileInfo(mimeType = 'audio/wav') {
@@ -196,7 +294,12 @@ class SttGatewayService {
   _applyCustomVocabulary(text, vocabulary) {
     let corrected = text;
 
-    for (const term of vocabulary) {
+    for (const entry of vocabulary) {
+      // Callers hand over a plain list of words; one that hands over the
+      // vocabulary records instead used to take the whole transcription down.
+      const term = typeof entry === 'string' ? entry.trim() : String(entry?.term || '').trim();
+      if (term.length < 2) continue;
+
       // Build a pattern that matches the term split by spaces or hyphens.
       // e.g. "Heizkessel" should match "Heiz kessel", "Heiz-kessel", "heiz kessel"
       const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -231,7 +334,10 @@ class SttGatewayService {
    * @returns {string} Normalized text
    */
   _normalizeSwissFormats(text) {
-    let result = text;
+    // Switzerland does not use the Eszett — Whisper is trained on German
+    // German and writes "Ausdehnungsgefäß" where the office writes
+    // "Ausdehnungsgefäss". Everything downstream searches on the Swiss form.
+    let result = String(text).replace(/ß/g, 'ss');
 
     // Phone numbers: detect Swiss phone patterns and format as 0XX XXX XX XX
     // Match sequences like "079 123 45 67" or "0791234567" or "079 1234567"

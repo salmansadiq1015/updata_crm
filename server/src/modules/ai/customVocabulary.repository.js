@@ -39,10 +39,29 @@ class CustomVocabularyRepository {
     return CustomVocabulary.findOne({ term, language }).lean();
   }
 
+  /**
+   * Active terms, most worth prompting first.
+   *
+   * Whatever consumes this has a budget — Whisper reads about 224 tokens of
+   * prompt and ignores the rest — so the order decides what survives. Brand
+   * names come first because they are what a speech model cannot guess:
+   * "Viessmann" came back as "Wiesmann" while ordinary German words like
+   * "Heizung" needed no help at all. Alphabetical order put the brands last
+   * and cut exactly the terms that mattered.
+   */
   async findActive(language) {
-    return CustomVocabulary.find({ language, status: 'ACTIVE' })
-      .sort({ term: 1 })
-      .lean();
+    const CATEGORY_RANK = { BRAND: 0, EQUIPMENT: 1, PART: 2, GENERAL: 3 };
+    return CustomVocabulary.aggregate([
+      { $match: { language, status: 'ACTIVE', isDeleted: { $ne: true } } },
+      { $addFields: { _rank: { $ifNull: [{ $switch: {
+        branches: Object.entries(CATEGORY_RANK).map(([category, rank]) => ({
+          case: { $eq: ['$category', category] }, then: rank,
+        })),
+        default: 9,
+      } }, 9] } } },
+      { $sort: { _rank: 1, term: 1 } },
+      { $project: { _rank: 0 } },
+    ]);
   }
 
   async updateById(id, data) {

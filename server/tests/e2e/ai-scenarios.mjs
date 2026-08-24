@@ -218,6 +218,22 @@ const SCENARIOS = [
     },
   },
   {
+    name: 'referenz-im-titel-bleibt-stehen',
+    why: 'Auftragsnummern und Referenzen gehören zum Titel — das Büro sucht danach.',
+    async exec() {
+      const state = await run('Erstelle eine Aufgabe ZZTEST AUF-2026-0052 Nachkontrolle beim Kunden', { confirm: true });
+      const record = state.output?.record || {};
+      track('task', record.id);
+      return [
+        check('Aufgabe angelegt', action(state) === 'CREATE_TASK', `action = ${action(state)}`),
+        check('Auftragsnummer erhalten', /AUF-2026-0052/.test(record.title || ''), `titre = « ${record.title} »`),
+        check('Befehlswörter entfernt', !/Erstelle|Aufgabe erstellen/i.test(record.title || ''), `titre = « ${record.title} »`),
+        check('Text nicht umformuliert', /Nachkontrolle beim Kunden/.test(record.title || ''), `titre = « ${record.title} »`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
     name: 'project-requires-approval',
     why: 'Ein Projekt zieht eine ganze Checkliste nach sich — erst Freigabe.',
     async exec() {

@@ -446,10 +446,12 @@ async function createCustomer(input, context, userId) {
 }
 
 async function createTask(input, context, userId) {
-  if (context.assigneeCandidates?.length > 1) {
+  // Only ask about a person or a project the office actually mentioned. A task
+  // needs neither, and asking about a match nobody asked for is noise.
+  if (saidAssignee(context) && context.assigneeCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_TASK, ['employee/technician'], context);
   }
-  if (context.projectCandidates?.length > 1) {
+  if (saidProject(context) && context.projectCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_TASK, ['project'], context);
   }
   const draft = context.llmDraft || {};
@@ -579,7 +581,9 @@ async function createAssignment(input, context, userId) {
   if (context.assigneeCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_ASSIGNMENT, ['employee/technician'], context);
   }
-  if (context.projectCandidates?.length > 1) {
+  // An assignment needs a person and a slot; a project is optional, so it is
+  // only worth asking about when one was named.
+  if (saidProject(context) && context.projectCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_ASSIGNMENT, ['project'], context);
   }
   const employee = context.assignee;
@@ -595,7 +599,7 @@ async function createAssignment(input, context, userId) {
     title: draft.title || cleanTitle(input, ['schedule', 'assign', 'plan', 'termin']),
     startDatetime: start,
     endDatetime: new Date(start.getTime() + durationHours * 60 * 60 * 1000),
-    projectId: context.project?._id || null,
+    projectId: namedProject(context)?._id || null,
     customerId: context.customer?._id || null,
     priority: ['URGENT', 'HIGH'].includes(draft.priority || extractPriority(input)) ? (draft.priority || extractPriority(input)) : 'NORMAL',
     instructions: input,
@@ -732,15 +736,24 @@ async function qualityCheck(context, state = {}) {
 }
 
 /**
- * The project a dispatch question is about — only when it was actually named.
+ * Whether the office actually named a project, or a person.
  *
- * Context resolution binds a project from any word it shares, so asking about
- * a plant at a customer used to pull in that customer's archived project and
- * declare everybody unavailable. A project enters this check when the office
- * puts it there, not before.
+ * Context resolution binds whatever it can from any shared word, so a task
+ * titled "Nachkontrolle beim Kunden" used to match four projects and the
+ * assistant asked which one was meant — about a project nobody had mentioned.
+ * The planner records what was really said; that is what decides.
  */
+function saidProject(context) {
+  return Boolean(context.llmDraft?.projectName);
+}
+
+function saidAssignee(context) {
+  return Boolean(context.llmDraft?.assigneeName);
+}
+
+/** The project a question is about — only when it was actually named. */
 function namedProject(context) {
-  return context.llmDraft?.projectName ? context.project || null : null;
+  return saidProject(context) ? context.project || null : null;
 }
 
 /** The slot a dispatch question is about, and how long it runs. */

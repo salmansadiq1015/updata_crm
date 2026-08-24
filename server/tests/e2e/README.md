@@ -27,12 +27,12 @@ RATE_LIMIT_GLOBAL=1000 node src/server.js
 #   redis-cli --scan --pattern "mb:ai:agent:ratelimit:*" | xargs -n1 redis-cli del
 
 # Dans un autre terminal :
-node tests/e2e/ai-scenarios.mjs              # les 44 scénarios
+node tests/e2e/ai-scenarios.mjs              # les 45 scénarios
 node tests/e2e/ai-scenarios.mjs --only=offerte   # filtre par nom
 API=http://localhost:9097/api/v1 node tests/e2e/ai-scenarios.mjs
 ```
 
-Sortie : un ✓/✗ par contrôle, puis `44/44 scénarios passés`. Code de sortie
+Sortie : un ✓/✗ par contrôle, puis `45/45 scénarios passés`. Code de sortie
 non nul si un scénario échoue, donc utilisable en pré-livraison.
 
 ## Ce qui est couvert
@@ -42,6 +42,7 @@ non nul si un scénario échoue, donc utilisable en pré-livraison.
 | `question-tasks-does-not-create` | Une question lit, ne crée rien |
 | `question-projects-does-not-create` | Idem pour les projets |
 | `task-attributes-extracted` | Titre propre, priorité HIGH, échéance « morgen » |
+| `referenz-im-titel-bleibt-stehen` | Un numéro d'Auftrag dans un titre n'est pas supprimé |
 | `project-requires-approval` | Ouvrir un projet exige une validation |
 | `customer-resolved-from-name` | Le client nommé est retrouvé, checklist créée |
 | `missing-field-named-in-german` | La relance nomme le champ manquant, en allemand |

@@ -46,7 +46,9 @@ Hard rules:
 - Questions about permits, building notifications or subsidy applications for a project ("Welche Bewilligungen braucht das Projekt X?", "Behördencheck für X", "Was muss ich bei der Gemeinde einreichen?", "Ist eine Baumeldung nötig?", "Fördergesuch für X") → PERMIT_CHECK, with projectName set.
 - Asking what a technician needs to know before an intervention on a specific plant ("Briefing für die Anlage A-00001", "Was muss ich zur Wartung bei Kunde X wissen?", "Infos zum Boiler bei Y") → SERVICE_BRIEFING, with installationName and/or customerName set.
 - Parameters:
-  - title: clean, human-readable title WITHOUT command words ("Erstelle eine Aufgabe Boiler entkalken" → title "Boiler entkalken"). Keep the user's language.
+  - title: the user's OWN words. Remove ONLY the command wrapper ("Erstelle eine Aufgabe", "Neue Aufgabe:", "Aufgabe erstellen") and the trailing attributes you put into other fields (date, priority, assignee). Everything in between stays EXACTLY as written, in the user's language.
+    Reference codes, order and plant numbers, article numbers, project prefixes, abbreviations and words you do not recognise are PART OF THE TITLE, never noise: "Erstelle eine Aufgabe AUF-2026-0052 Nachkontrolle" → title "AUF-2026-0052 Nachkontrolle"; "Erstelle eine Aufgabe XY7 Boiler entkalken" → title "XY7 Boiler entkalken".
+    Never shorten, translate, correct, tidy or beautify a title. The office searches for what it typed.
   - priority: LOW | MEDIUM | HIGH | URGENT ("hohe Priorität" → HIGH, "dringend" → URGENT).
   - dueDate: ISO date YYYY-MM-DD. Resolve relative dates against today = ${todayIso} (timezone Europe/Zurich). "morgen" = today + 1 day.
   - dateTime: ISO datetime for scheduling actions ("morgen um 14 Uhr" → the exact datetime).

@@ -49,6 +49,7 @@ const ACTIONS = Object.freeze({
   PERMIT_CHECK: 'PERMIT_CHECK',
   DISPATCH_CHECK: 'DISPATCH_CHECK',
   DISPATCH_SUGGEST: 'DISPATCH_SUGGEST',
+  MATERIAL_CHECK: 'MATERIAL_CHECK',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -93,6 +94,7 @@ const ACTION_LABELS = {
   [ACTIONS.PERMIT_CHECK]: 'den Behördenbedarf prüfen',
   [ACTIONS.DISPATCH_CHECK]: 'einen Einsatz vorprüfen',
   [ACTIONS.DISPATCH_SUGGEST]: 'einen Monteur vorschlagen',
+  [ACTIONS.MATERIAL_CHECK]: 'den Materialstatus prüfen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -386,6 +388,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return dispatchCheck(input, context, state);
     case ACTIONS.DISPATCH_SUGGEST:
       return dispatchSuggest(input, context, state);
+    case ACTIONS.MATERIAL_CHECK:
+      return materialCheck(context, state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -816,6 +820,46 @@ async function dispatchSuggest(input, context, state = {}) {
       available: result.candidates.length,
       unavailable: result.excluded.length,
       requiredSkills: result.requirements?.requiredSkills || [],
+    },
+  };
+}
+
+/** Material AI: what the job needs, what is ordered, what will not arrive. */
+async function materialCheck(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return { action: ACTIONS.MATERIAL_CHECK, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.MATERIAL_CHECK, ['project'], context);
+  }
+
+  const materialService = (await import('../agents/material/material.service.js')).default;
+  const result = await materialService.check(context.project);
+
+  return {
+    action: ACTIONS.MATERIAL_CHECK,
+    status: 'completed',
+    message: materialService.compose(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    record: {
+      id: context.project._id,
+      name: result.project?.name || context.project.name,
+      projectNumber: result.project?.projectNumber || null,
+      plannedStartDate: result.project?.plannedStartDate || null,
+      articles: (result.articles || []).map((article) => ({
+        articleNumber: article.articleNumber,
+        name: article.name,
+        quantity: article.quantity,
+        unit: article.unit,
+        status: article.cover?.status || 'not_ordered',
+        expectedDelivery: article.cover?.expectedDelivery || null,
+      })),
+      unordered: (result.articles || []).filter((article) => !article.cover).length,
+      startAtRisk: !result.ok,
+      blockers: (result.blockers || []).map((blocker) => blocker.detail),
+      warnings: result.warnings || [],
     },
   };
 }

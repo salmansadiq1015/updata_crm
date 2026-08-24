@@ -20,7 +20,7 @@ export const PLANNER_ACTIONS = Object.freeze([
   'SEARCH_DOCUMENTS', 'CREATE_QUOTATION', 'CREATE_INVOICE', 'CREATE_NOTE',
   'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE', 'SALES_FOLLOWUPS',
   'ANALYZE_FIELD_TICKET', 'QUALITY_CHECK', 'SERVICE_DUE', 'SERVICE_BRIEFING', 'PERMIT_CHECK',
-  'DISPATCH_CHECK', 'DISPATCH_SUGGEST',
+  'DISPATCH_CHECK', 'DISPATCH_SUGGEST', 'MATERIAL_CHECK',
   'SEND_NOTIFICATION', 'GENERAL',
 ]);
 
@@ -40,6 +40,7 @@ Hard rules:
 - Questions about which quotations need chasing ("Welche Offerten muss ich nachfassen?", "offene Offerten", "Nachfassliste") → SALES_FOLLOWUPS.
 - Asking whether a project can be closed, or what is still missing before closing it ("Kann ich das Projekt abschliessen?", "Abschlussprüfung", "Was fehlt noch beim Projekt X?", "Ist die Dokumentation vollständig?") → QUALITY_CHECK, with projectName set.
 - Questions about maintenance that is due or overdue ("Welche Wartungen sind fällig?", "überfällige Wartungen", "Was steht diesen Monat an Service an?") → SERVICE_DUE.
+- Questions about material for a project ("Ist das Material für Projekt X da?", "Materialstatus X", "Was fehlt noch an Material?", "Wurde alles bestellt für X?") → MATERIAL_CHECK, with projectName set.
 - Asking WHO could take a slot ("Wer kann am Dienstag die Wärmepumpe bei X warten?", "Wer ist am Montag frei?", "Wen kann ich schicken?") → DISPATCH_SUGGEST, with dateTime and, if named, installationName/customerName.
 - Asking whether ONE named person can take a slot ("Kann Thomas am Dienstag zu X?", "Passt der Termin bei Sarah?", "Geht das bei Thomas am Montag um 8 Uhr?") → DISPATCH_CHECK, with assigneeName and dateTime.
 - Questions about permits, building notifications or subsidy applications for a project ("Welche Bewilligungen braucht das Projekt X?", "Behördencheck für X", "Was muss ich bei der Gemeinde einreichen?", "Ist eine Baumeldung nötig?", "Fördergesuch für X") → PERMIT_CHECK, with projectName set.

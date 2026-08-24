@@ -676,6 +676,59 @@ const SCENARIOS = [
 
   // ─── Service AI ────────────────────────────────────────────
 
+  // ─── Material AI ───────────────────────────────────────────
+
+  {
+    name: 'material-nennt-was-nicht-bestellt-ist',
+    why: 'Vor dem Baustart muss stehen, welches Material fehlt — und nur Material.',
+    async exec() {
+      const state = await run('Ist das Material für das Projekt Kesselersatz Bäckerei Weber da?');
+      const record = state.output?.record || {};
+      const articles = record.articles || [];
+      const text = message(state);
+      return [
+        check('Materialstatus geliefert', action(state) === 'MATERIAL_CHECK', `action = ${action(state)}`),
+        check('Katalogartikel erkannt', articles.length > 0, `${articles.length} Positionen`),
+        check('keine Arbeitsleistung in der Liste', !articles.some((a) => /Montage|Inbetriebnahme/i.test(a.name || '')),
+          articles.map((a) => a.name).join(', ')),
+        check('offene Bestellungen benannt', record.unordered > 0 || articles.every((a) => a.status !== 'not_ordered'),
+          `unordered = ${record.unordered}`),
+        check('nichts bestellt', /nach Freigabe/i.test(text), text.slice(-120)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'material-sagt-dass-der-projektbezug-fehlt',
+    why: 'Bestellungen tragen keinen Projektbezug — die Zuordnung ist eine Annahme und muss so heissen.',
+    async exec() {
+      const state = await run('Materialstatus für das Projekt Kesselersatz Bäckerei Weber');
+      const text = message(state);
+      return [
+        check('Materialstatus geliefert', action(state) === 'MATERIAL_CHECK', `action = ${action(state)}`),
+        check('nennt die Grenze des Systems', /keinen Projektbezug/i.test(text), text.slice(-260)),
+        check('nichts angelegt', !/erstellt|angelegt/i.test(text.split('Zu beachten')[0] || ''), text.slice(0, 100)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'material-ohne-auftrag-keine-liste',
+    why: 'Ohne Auftrag gibt es keine Materialliste — das darf nicht erfunden werden.',
+    async exec() {
+      const project = await projectFixture('ZZTEST Materialprüfung ohne Auftrag');
+      const state = await run(`Was fehlt noch an Material beim Projekt ${project.name}?`);
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Materialstatus geliefert', action(state) === 'MATERIAL_CHECK', `action = ${action(state)}`),
+        check('keine erfundene Liste', (record.articles || []).length === 0, `${(record.articles || []).length} Positionen`),
+        check('sagt, dass der Auftrag fehlt', /keinen Auftrag/i.test(text), text.slice(0, 200)),
+        noEnglish(state),
+      ];
+    },
+  },
+
   // ─── Dispo AI ──────────────────────────────────────────────
 
   {

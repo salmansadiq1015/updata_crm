@@ -17,18 +17,22 @@ un serveur réel, avec de vrais appels OpenAI.
 ## Lancer
 
 ```bash
-# Serveur local requis. La limite de l'agent est déjà à 200 runs/h ; c'est la
-# passerelle HTTP (100 req/min) que le polling sature — le harnais attend et
-# réessaie, mais la relever raccourcit la série.
+# Serveur local requis. Un run complet consomme ~45 appels agent : la limite de
+# 200/h tient pour deux séries, pas pour une journée de mise au point. La
+# passerelle HTTP (100 req/min) est saturée par le polling — le harnais attend
+# et réessaie, mais la relever raccourcit la série.
 RATE_LIMIT_GLOBAL=1000 node src/server.js
 
+# Si la limite agent est atteinte (« agent rate limit »), vider le compteur :
+#   redis-cli --scan --pattern "mb:ai:agent:ratelimit:*" | xargs -n1 redis-cli del
+
 # Dans un autre terminal :
-node tests/e2e/ai-scenarios.mjs              # les 41 scénarios
+node tests/e2e/ai-scenarios.mjs              # les 44 scénarios
 node tests/e2e/ai-scenarios.mjs --only=offerte   # filtre par nom
 API=http://localhost:9097/api/v1 node tests/e2e/ai-scenarios.mjs
 ```
 
-Sortie : un ✓/✗ par contrôle, puis `41/41 scénarios passés`. Code de sortie
+Sortie : un ✓/✗ par contrôle, puis `44/44 scénarios passés`. Code de sortie
 non nul si un scénario échoue, donc utilisable en pré-livraison.
 
 ## Ce qui est couvert
@@ -66,6 +70,9 @@ non nul si un scénario échoue, donc utilisable en pré-livraison.
 | `abschluss-erdsonde-blockiert` | Sans Bohrbewilligung ni IBN-Protokoll, la clôture est bloquée |
 | `abschluss-boiler-ohne-bewilligung` | La checklist suit le type d'installation, pas une liste fixe |
 | `abschlussfrage-legt-nichts-an` | Demander si on peut clôturer ne change rien au projet |
+| `material-nennt-was-nicht-bestellt-ist` | Le matériel non commandé est nommé — et seulement du matériel |
+| `material-sagt-dass-der-projektbezug-fehlt` | L'agent dit que les commandes n'ont pas de lien projet |
+| `material-ohne-auftrag-keine-liste` | Sans Auftrag, pas de liste inventée |
 | `dispo-schlaegt-passenden-monteur-vor` | L'installation dicte la qualification ; qui l'a passe devant |
 | `dispo-prueft-einen-monteur` | La question sur une personne vérifie les dix points sans réserver |
 | `dispo-ohne-datum-fragt-nach` | Sans date, l'agent demande au lieu d'inventer un créneau |

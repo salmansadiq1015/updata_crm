@@ -237,9 +237,56 @@ async function onProjectCreated(event) {
   }
 }
 
+/**
+ * Site start planned → Material AI.
+ *
+ * The specification's own trigger: "Baustart geplant". Projekt AI already has
+ * "Material bestellen" on the checklist, so this leg does not repeat it — it
+ * fires when the start is actually scheduled and says what will not be there
+ * by then, which is the moment the office can still do something about it.
+ */
+async function onProjectScheduled(event) {
+  const payload = event?.payload || event || {};
+  const { projectId, toStatus, changedBy } = payload;
+  if (!projectId || toStatus !== 'SCHEDULED') return;
+
+  if (!(await agentIsRunnable('MATERIAL'))) return;
+
+  try {
+    const materialService = (await import('../agents/material/material.service.js')).default;
+    const result = await materialService.check({ _id: projectId });
+    if (!result.verified || result.ok || !result.articles.length) return;
+
+    const taskService = (await import('../../tasks/task.service.js')).default;
+    await taskService.create({
+      title: `Material vor Baustart klären: ${result.project.name}`,
+      description: materialService.compose(result),
+      priority: 'URGENT',
+      projectId,
+      customerId: result.project.customerId || null,
+    }, changedBy || null, { source: 'ai-agent' });
+
+    logger.info('Handoff: project scheduled → Material AI', {
+      module: 'ai-handoff',
+      action: 'projectScheduled',
+      projectId: String(projectId),
+      blockers: result.blockers.length,
+    });
+  } catch (err) {
+    logger.warn('Handoff project → Material AI failed', {
+      module: 'ai-handoff',
+      action: 'projectScheduled',
+      projectId: String(projectId),
+      error: err.message,
+    });
+  }
+}
+
 export function registerAgentHandoffs() {
   eventBus.subscribe(EVENT_TYPES.QUOTATION_ACCEPTED, onQuotationAccepted);
   eventBus.subscribe(EVENT_TYPES.PROJECT_CREATED, onProjectCreated);
+  eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_CHANGED, onProjectScheduled);
+  eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_OVERRIDDEN, onProjectScheduled);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_CHANGED, onProjectCompleted);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_OVERRIDDEN, onProjectCompleted);
   eventBus.subscribe(EVENT_TYPES.MAINTENANCE_OVERDUE, onMaintenanceOverdue);
@@ -250,6 +297,7 @@ export function registerAgentHandoffs() {
     handoffs: [
       'quotation.accepted → PROJEKT',
       'project.created → BEHOERDEN',
+      'project.scheduled → MATERIAL',
       'project.completed → QUALITY',
       'maintenance.overdue → SERVICE',
     ],

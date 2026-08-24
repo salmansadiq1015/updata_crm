@@ -47,6 +47,8 @@ const ACTIONS = Object.freeze({
   SERVICE_DUE: 'SERVICE_DUE',
   SERVICE_BRIEFING: 'SERVICE_BRIEFING',
   PERMIT_CHECK: 'PERMIT_CHECK',
+  DISPATCH_CHECK: 'DISPATCH_CHECK',
+  DISPATCH_SUGGEST: 'DISPATCH_SUGGEST',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -89,6 +91,8 @@ const ACTION_LABELS = {
   [ACTIONS.SERVICE_DUE]: 'die fälligen Wartungen prüfen',
   [ACTIONS.SERVICE_BRIEFING]: 'ein Monteur-Briefing vorbereiten',
   [ACTIONS.PERMIT_CHECK]: 'den Behördenbedarf prüfen',
+  [ACTIONS.DISPATCH_CHECK]: 'einen Einsatz vorprüfen',
+  [ACTIONS.DISPATCH_SUGGEST]: 'einen Monteur vorschlagen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -378,6 +382,10 @@ async function performAction(action, input, context, userId, state = {}) {
       return serviceBriefing(context, state);
     case ACTIONS.PERMIT_CHECK:
       return permitCheck(context, state);
+    case ACTIONS.DISPATCH_CHECK:
+      return dispatchCheck(input, context, state);
+    case ACTIONS.DISPATCH_SUGGEST:
+      return dispatchSuggest(input, context, state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -715,6 +723,99 @@ async function qualityCheck(context, state = {}) {
       warnings: result.warnings,
       missingDocuments: result.missing.map((requirement) => requirement.label),
       presentDocuments: result.present.map((item) => item.label),
+    },
+  };
+}
+
+/**
+ * The project a dispatch question is about — only when it was actually named.
+ *
+ * Context resolution binds a project from any word it shares, so asking about
+ * a plant at a customer used to pull in that customer's archived project and
+ * declare everybody unavailable. A project enters this check when the office
+ * puts it there, not before.
+ */
+function namedProject(context) {
+  return context.llmDraft?.projectName ? context.project || null : null;
+}
+
+/** The slot a dispatch question is about, and how long it runs. */
+function dispatchWindow(input, context) {
+  const draft = context.llmDraft || {};
+  const start = draftDate(draft.dateTime) || extractDateTime(input);
+  if (!start) return null;
+  const hours = draft.durationHours || extractDurationHours(input) || 2;
+  return { start, end: new Date(start.getTime() + hours * 60 * 60 * 1000) };
+}
+
+/** Dispo AI: can this one person take this slot? */
+async function dispatchCheck(input, context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('scheduling:read')) {
+    return { action: ACTIONS.DISPATCH_CHECK, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.assigneeCandidates?.length > 1 || !context.assignee) {
+    return needsFollowUp(ACTIONS.DISPATCH_CHECK, ['employee/technician'], context);
+  }
+  const window = dispatchWindow(input, context);
+  if (!window) return needsFollowUp(ACTIONS.DISPATCH_CHECK, ['scheduled date and time'], context);
+
+  const dispoService = (await import('../agents/dispo/dispo.service.js')).default;
+  const result = await dispoService.checkBeforeAssignment({
+    employee: context.assignee,
+    start: window.start,
+    end: window.end,
+    project: namedProject(context),
+    installation: context.installation || null,
+  });
+
+  return {
+    action: ACTIONS.DISPATCH_CHECK,
+    status: 'completed',
+    message: dispoService.composeCheck(result),
+    record: {
+      employee: [context.assignee.firstName, context.assignee.lastName].filter(Boolean).join(' '),
+      start: window.start,
+      end: window.end,
+      canGo: result.ok,
+      blockers: result.blockers.map((blocker) => blocker.detail),
+      warnings: result.warnings,
+    },
+  };
+}
+
+/** Dispo AI: who could take this slot at all? */
+async function dispatchSuggest(input, context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('scheduling:read')) {
+    return { action: ACTIONS.DISPATCH_SUGGEST, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  const window = dispatchWindow(input, context);
+  if (!window) return needsFollowUp(ACTIONS.DISPATCH_SUGGEST, ['scheduled date and time'], context);
+
+  const dispoService = (await import('../agents/dispo/dispo.service.js')).default;
+  const result = await dispoService.suggest({
+    start: window.start,
+    end: window.end,
+    project: namedProject(context),
+    installation: context.installation || null,
+  });
+
+  return {
+    action: ACTIONS.DISPATCH_SUGGEST,
+    status: 'completed',
+    message: dispoService.composeSuggestion(result),
+    records: result.candidates.map((candidate) => ({
+      name: candidate.name,
+      skills: candidate.skills,
+      warnings: candidate.warnings,
+    })),
+    record: {
+      start: window.start,
+      end: window.end,
+      available: result.candidates.length,
+      unavailable: result.excluded.length,
+      requiredSkills: result.requirements?.requiredSkills || [],
     },
   };
 }
@@ -1275,11 +1376,39 @@ async function findUser(input, previousFollowUp, draft = null) {
     if (selected) return { selected, candidates: [] };
   }
   if (!term) return { selected: null, candidates: [] };
-  const candidates = await User.find({ $text: { $search: term }, status: { $ne: 'deactivated' } })
+
+  // Not $text. The text index on users carries language_override: 'language',
+  // and that field holds the person's UI preference — so a colleague whose
+  // interface is set to German is indexed with German stemming and never
+  // matches an English-stemmed query. "Thomas Brunner" returned nobody. The
+  // task repository gave up on $text over users for the same class of reason;
+  // a substring match is what naming a person actually needs.
+  const parts = String(term).trim().split(/\s+/).filter((part) => part.length >= 2).slice(0, 3);
+  if (!parts.length) return { selected: null, candidates: [] };
+  const patterns = parts.map((part) => new RegExp(escapeRegex(part), 'i'));
+  const candidates = await User.find({
+    status: { $ne: 'deactivated' },
+    $or: [
+      ...patterns.map((pattern) => ({ firstName: pattern })),
+      ...patterns.map((pattern) => ({ lastName: pattern })),
+      ...patterns.map((pattern) => ({ email: pattern })),
+    ],
+  })
     .select('firstName lastName email status role')
     .limit(5)
     .lean();
-  return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
+
+  if (candidates.length === 1) return { selected: candidates[0], candidates: [] };
+  // "Thomas Brunner" matches both names on one person and one name on others;
+  // the person every word points at is the one meant.
+  if (candidates.length > 1 && parts.length > 1) {
+    const full = candidates.filter((user) => parts.every((part) => {
+      const rx = new RegExp(escapeRegex(part), 'i');
+      return rx.test(user.firstName || '') || rx.test(user.lastName || '') || rx.test(user.email || '');
+    }));
+    if (full.length === 1) return { selected: full[0], candidates: [] };
+  }
+  return { selected: null, candidates };
 }
 
 async function findCustomer(input, objectId, previousFollowUp, draft = null) {
@@ -1434,6 +1563,16 @@ async function findAssignment(input, objectId, previousFollowUp) {
 
 const INSTALLATION_FIELDS = 'installationNumber type manufacturer model serialNumber fuelType status siteId';
 
+/** How the office names a kind of plant, mapped to what the CRM stores. */
+const INSTALLATION_TYPE_WORDS = Object.freeze([
+  ['wärmepumpe', 'heat_pump'], ['waermepumpe', 'heat_pump'], ['wp\\b', 'heat_pump'],
+  ['boiler', 'boiler'], ['heizkessel', 'boiler'], ['kessel', 'boiler'], ['heizung', 'boiler'],
+  ['solarthermie', 'solar_thermal'], ['solar', 'solar_thermal'],
+  ['lüftung', 'ventilation'], ['lueftung', 'ventilation'],
+  ['warmwasser', 'hot_water'], ['speicher', 'hot_water'],
+  ['heizkörper', 'radiator_system'], ['heizkoerper', 'radiator_system'],
+]);
+
 /**
  * Finds the plant the office is talking about.
  *
@@ -1460,18 +1599,14 @@ async function findInstallation(input, objectId, draft = null) {
 
   const term = draft?.installationName || null;
 
-  // 2. Serial, make or model.
-  if (term && term.length >= 3) {
-    const regex = new RegExp(escapeRegex(term), 'i');
-    const byPlant = await Installation.find({
-      $or: [{ serialNumber: regex }, { manufacturer: regex }, { model: regex }],
-    }).select(INSTALLATION_FIELDS).limit(5).lean();
-    if (byPlant.length === 1) return { selected: byPlant[0], candidates: [] };
-    if (byPlant.length > 1) return { selected: null, candidates: byPlant };
-  }
+  // 2. The kind of plant, when that is what was said. "Den Boiler bei X" names
+  //    a type, not a serial — and matching it as free text hits every
+  //    DEMO-BOILER-0001 in the file, which is how it used to go wrong.
+  const spokenType = INSTALLATION_TYPE_WORDS.find(([word]) => new RegExp(`\\b${word}`, 'i').test(`${term || ''} ${text}`))?.[1] || null;
 
-  // 3. Whose plant it is — customer, then their sites, then what stands there.
-  const customerName = draft?.customerName || term;
+  // 3. Whose plant it is — customer, then their sites, then what stands there,
+  //    narrowed to the kind of plant if one was named.
+  const customerName = draft?.customerName || (spokenType ? null : term);
   if (customerName && customerName.length >= 3) {
     const [Customer, Site] = await Promise.all([
       import('../../crm/customer.model.js').then((m) => m.default),
@@ -1483,12 +1618,25 @@ async function findInstallation(input, objectId, draft = null) {
       const sites = await Site.find({ customerId: { $in: customers.map((c) => c._id) } })
         .select('_id').limit(20).lean();
       if (sites.length) {
-        const candidates = await Installation.find({ siteId: { $in: sites.map((s) => s._id) } })
-          .select(INSTALLATION_FIELDS).limit(5).lean();
+        const all = await Installation.find({ siteId: { $in: sites.map((s) => s._id) } })
+          .select(INSTALLATION_FIELDS).limit(10).lean();
+        const narrowed = spokenType ? all.filter((installation) => installation.type === spokenType) : all;
+        const candidates = narrowed.length ? narrowed : all;
         if (candidates.length === 1) return { selected: candidates[0], candidates: [] };
-        if (candidates.length > 1) return { selected: null, candidates };
+        if (candidates.length > 1) return { selected: null, candidates: candidates.slice(0, 5) };
       }
     }
+  }
+
+  // 4. Serial, make or model — only when a real plant identifier was given,
+  //    never for a bare type word.
+  if (term && term.length >= 3 && !spokenType) {
+    const regex = new RegExp(escapeRegex(term), 'i');
+    const byPlant = await Installation.find({
+      $or: [{ serialNumber: regex }, { manufacturer: regex }, { model: regex }],
+    }).select(INSTALLATION_FIELDS).limit(5).lean();
+    if (byPlant.length === 1) return { selected: byPlant[0], candidates: [] };
+    if (byPlant.length > 1) return { selected: null, candidates: byPlant };
   }
 
   return { selected: null, candidates: [] };

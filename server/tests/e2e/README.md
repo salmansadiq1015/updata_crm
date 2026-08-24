@@ -23,12 +23,12 @@ un serveur réel, avec de vrais appels OpenAI.
 RATE_LIMIT_GLOBAL=1000 node src/server.js
 
 # Dans un autre terminal :
-node tests/e2e/ai-scenarios.mjs              # les 38 scénarios
+node tests/e2e/ai-scenarios.mjs              # les 41 scénarios
 node tests/e2e/ai-scenarios.mjs --only=offerte   # filtre par nom
 API=http://localhost:9097/api/v1 node tests/e2e/ai-scenarios.mjs
 ```
 
-Sortie : un ✓/✗ par contrôle, puis `38/38 scénarios passés`. Code de sortie
+Sortie : un ✓/✗ par contrôle, puis `41/41 scénarios passés`. Code de sortie
 non nul si un scénario échoue, donc utilisable en pré-livraison.
 
 ## Ce qui est couvert
@@ -66,6 +66,9 @@ non nul si un scénario échoue, donc utilisable en pré-livraison.
 | `abschluss-erdsonde-blockiert` | Sans Bohrbewilligung ni IBN-Protokoll, la clôture est bloquée |
 | `abschluss-boiler-ohne-bewilligung` | La checklist suit le type d'installation, pas une liste fixe |
 | `abschlussfrage-legt-nichts-an` | Demander si on peut clôturer ne change rien au projet |
+| `dispo-schlaegt-passenden-monteur-vor` | L'installation dicte la qualification ; qui l'a passe devant |
+| `dispo-prueft-einen-monteur` | La question sur une personne vérifie les dix points sans réserver |
+| `dispo-ohne-datum-fragt-nach` | Sans date, l'agent demande au lieu d'inventer un créneau |
 | `behoerden-erdsonde-sperrt-baustart` | Sans Bohrbewilligung, le Baustart reste bloqué |
 | `behoerden-boiler-braucht-nichts` | Un remplacement de boiler ne demande aucune procédure |
 | `behoerden-erfindet-keine-kantonsregel` | L'agent dit que les formulaires cantonaux ne sont pas dans le système |
@@ -83,6 +86,10 @@ affiché (`ENGLISH_LEAKS`).
 - Le harnais **balaie aussi les restes** d'un run précédent au démarrage : un nom
   de projet est unique par client, un reliquat ferait échouer le run suivant pour
   une mauvaise raison. Il est donc rejouable à l'identique.
+- Un projet ne peut être supprimé qu'à l'état `DRAFT`. Un scénario qui l'a passé
+  en `COMPLETED` le fait donc revenir en arrière (avec `override`) avant de le
+  supprimer, et **signale** en `⚠` ce qu'il n'a pas réussi à enlever — un échec
+  silencieux empoisonnait les runs suivants.
 - **Ne jamais pointer sur la production** : le harnais écrit de vraies données
   et consomme de vrais jetons OpenAI.
 - Identifiants par défaut : `admin@appnity.ch`. Surchargeables via

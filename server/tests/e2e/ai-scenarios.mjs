@@ -676,6 +676,57 @@ const SCENARIOS = [
 
   // ─── Service AI ────────────────────────────────────────────
 
+  // ─── Dispo AI ──────────────────────────────────────────────
+
+  {
+    name: 'dispo-schlaegt-passenden-monteur-vor',
+    why: 'Die Anlage bestimmt die Qualifikation — wer sie hat, steht oben.',
+    async exec() {
+      const state = await run('Wer kann nächsten Dienstag um 8 Uhr den Boiler bei Bäckerei Weber warten?');
+      const records = state.output?.records || [];
+      const text = message(state);
+      return [
+        check('Vorschlag geliefert', action(state) === 'DISPATCH_SUGGEST', `action = ${action(state)}`),
+        check('nichts gebucht', !state.output?.recordId, `recordId = ${state.output?.recordId}`),
+        check('Monteur mit Boiler-Qualifikation zuerst', (records[0]?.skills || []).includes('boiler'),
+          records.map((r) => `${r.name}[${(r.skills || []).join('/')}]`).join(' > ')),
+        check('Freigabe vorbehalten', /nach Freigabe/i.test(text), text.slice(-120)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'dispo-prueft-einen-monteur',
+    why: 'Die Frage nach einer Person muss die zehn Punkte prüfen, nicht buchen.',
+    async exec() {
+      const state = await run('Kann Thomas Brunner nächsten Mittwoch um 9 Uhr einen Einsatz übernehmen?');
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Vorprüfung ausgeführt', action(state) === 'DISPATCH_CHECK', `action = ${action(state)}`),
+        check('Monteur erkannt', /Thomas/i.test(record.employee || ''), `monteur = ${record.employee}`),
+        check('Entscheid geliefert', typeof record.canGo === 'boolean', `canGo = ${record.canGo}`),
+        check('nichts gebucht', !state.output?.recordId, `recordId = ${state.output?.recordId}`),
+        check('Freigabe vorbehalten', /nach Freigabe/i.test(text), text.slice(-120)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'dispo-ohne-datum-fragt-nach',
+    why: 'Ohne Termin darf nichts geprüft und schon gar nichts erfunden werden.',
+    async exec() {
+      const state = await run('Wer kann den Boiler bei Bäckerei Weber warten?');
+      const text = message(state);
+      return [
+        check('Rückfrage statt Raten', state.output?.status === 'needs_follow_up', `status = ${state.output?.status}`),
+        check('fragt nach dem Termin', /Datum|Uhrzeit|Termin/i.test(text), text.slice(0, 140)),
+        check('nichts gebucht', !state.output?.recordId, `recordId = ${state.output?.recordId}`),
+        noEnglish(state),
+      ];
+    },
+  },
+
   // ─── Behörden AI ───────────────────────────────────────────
 
   {
@@ -809,12 +860,38 @@ const DELETE_PATH = {
   quotation: (id) => `/qop/quotations/${id}`,
 };
 
+/**
+ * Removes one record, and does not pretend when it cannot.
+ *
+ * A project can only be deleted while it is still DRAFT — anything a scenario
+ * moved to COMPLETED comes back 409. That failure used to pass unnoticed, so
+ * leftovers piled up and made later runs ask "which project do you mean?"
+ * about names the run had just created. So: walk it back to DRAFT, then
+ * delete, and report anything that still refuses.
+ */
+async function remove(type, id) {
+  let res = await api(DELETE_PATH[type](id), { method: 'DELETE' });
+  if (res.status < 300) return true;
+  if (type === 'project' && res.status === 409) {
+    // Reopening a completed project needs an explicit override with a reason.
+    for (const status of ['IN_PROGRESS', 'DRAFT']) {
+      await api(`/pm/projects/${id}/status`, {
+        method: 'POST',
+        body: { targetStatus: status, comment: 'ZZTEST cleanup', override: true, overrideReason: 'ZZTEST-Aufräumen nach dem Testlauf' },
+      });
+    }
+    res = await api(DELETE_PATH[type](id), { method: 'DELETE' });
+    if (res.status < 300) return true;
+  }
+  console.log(`    ⚠ ${type} ${id} konnte nicht entfernt werden (${res.status})`);
+  return false;
+}
+
 async function cleanup() {
   let removed = 0;
   for (const item of createdRecords) {
     if (!item?.id || !DELETE_PATH[item.type]) continue;
-    const res = await api(DELETE_PATH[item.type](item.id), { method: 'DELETE' });
-    if (res.status < 300) removed += 1;
+    if (await remove(item.type, item.id)) removed += 1;
   }
   for (const runId of createdRuns) {
     await api(`/ai/agent/${runId}`, { method: 'DELETE' });
@@ -839,8 +916,7 @@ async function precleanup() {
     const items = Array.isArray(data) ? data : (data?.data || data?.items || []);
     for (const item of items) {
       if (!/ZZTEST/i.test(item?.[field] || '')) continue;
-      const del = await api(DELETE_PATH[type](item._id || item.id), { method: 'DELETE' });
-      if (del.status < 300) removed += 1;
+      if (await remove(type, item._id || item.id)) removed += 1;
     }
   }
   return removed;

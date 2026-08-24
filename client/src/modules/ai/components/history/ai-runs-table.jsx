@@ -5,11 +5,12 @@ import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { dateLocale } from '../../utils/date-locale';
 import { AiStatusBadge } from '../status/ai-status-badge';
 import { WORKFLOW_LABELS } from '../../constants/ai-constants';
 
 export function AiRunsTable({ runs, isLoading, hasMore, hasPrev, onNext, onPrev }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const router = useRouter();
 
   if (isLoading) {
@@ -53,7 +54,7 @@ export function AiRunsTable({ runs, isLoading, hasMore, hasPrev, onNext, onPrev 
           <div className="flex flex-col items-end gap-1 shrink-0">
             <AiStatusBadge status={run.status} />
             <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
+              {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true, locale: dateLocale(locale) })}
             </span>
           </div>
         </button>

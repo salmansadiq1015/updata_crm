@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { dateLocale } from '../../utils/date-locale';
 import { AiChatMessage } from './ai-chat-message';
 import { AiChatTypingIndicator } from './ai-chat-typing-indicator';
 import { AiChatConfirmation } from './ai-chat-confirmation';
@@ -168,9 +169,9 @@ function AgentContent({ run, onConfirm, isConfirming }) {
 }
 
 function RunPair({ run, onConfirm, isConfirming, onRetry, copyProps, ttsProps }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const timestamp = run.createdAt
-    ? formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })
+    ? formatDistanceToNow(new Date(run.createdAt), { addSuffix: true, locale: dateLocale(locale) })
     : '';
 
   const inputText =

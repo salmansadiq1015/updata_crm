@@ -9,7 +9,6 @@ import { BottomNav } from '@/modules/mobile/components/bottom-nav';
 import { FloatingTimerWidget } from '@/modules/mobile/components/timer-widget';
 import { InstallPrompt } from '@/modules/mobile/components/install-prompt';
 import { setupSyncListeners } from '@/modules/mobile/lib/sync-engine';
-import { registerServiceWorker } from '@/modules/mobile/lib/sw-registration';
 import { requestPersistentStorage } from '@/modules/mobile/db/cleanup';
 import { cacheTokensForOffline } from '@/modules/mobile/lib/auth-offline';
 import { getSocket, disconnectSocket } from '@/modules/mobile/lib/websocket-client';
@@ -36,7 +35,6 @@ export default function MobileLayout({ children }) {
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    registerServiceWorker();
     requestPersistentStorage();
     const cleanup = setupSyncListeners();
     return cleanup;

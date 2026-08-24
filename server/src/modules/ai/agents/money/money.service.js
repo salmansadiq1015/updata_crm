@@ -177,11 +177,11 @@ class MoneyService {
   toBlocked(action, checks) {
     const first = checks.blockers[0];
     const lines = ['Die Rechnung wurde nicht erstellt:'];
-    for (const blocker of checks.blockers) lines.push(`• ${blocker.detail}`);
+    for (const blocker of checks.blockers) lines.push(`- ${blocker.detail}`);
     if (checks.warnings.length) {
       lines.push('');
       lines.push('Zusätzlich zu prüfen:');
-      for (const warning of checks.warnings) lines.push(`• ${warning}`);
+      for (const warning of checks.warnings) lines.push(`- ${warning}`);
     }
     return {
       ...blocked(action, first.reason, { message: lines.join('\n') }),

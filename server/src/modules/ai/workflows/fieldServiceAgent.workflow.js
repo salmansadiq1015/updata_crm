@@ -975,7 +975,7 @@ function needsFollowUp(action, missingFields = [], context = {}) {
       });
       questions.push(`Welchen Treffer meinen Sie für ${fieldLabel(field)}? Antworten Sie mit der Nummer oder dem Namen.`);
     } else {
-      lines.push(`• Bitte ${fieldLabel(field)} angeben.`);
+      lines.push(`- Bitte ${fieldLabel(field)} angeben.`);
       questions.push(`Bitte ${fieldLabel(field)} angeben.`);
     }
   }

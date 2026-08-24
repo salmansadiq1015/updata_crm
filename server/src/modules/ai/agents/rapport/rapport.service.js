@@ -143,7 +143,7 @@ class RapportService {
   composeNotes(draft) {
     const sections = [];
     const add = (label, value) => {
-      const body = Array.isArray(value) ? value.map((v) => `• ${v}`).join('\n') : String(value || '').trim();
+      const body = Array.isArray(value) ? value.map((v) => `- ${v}`).join('\n') : String(value || '').trim();
       if (body) sections.push(`${label}:\n${body}`);
     };
     add('Anfahrt', draft.blocks.anfahrt);

@@ -27,12 +27,12 @@ RATE_LIMIT_GLOBAL=1000 node src/server.js
 #   redis-cli --scan --pattern "mb:ai:agent:ratelimit:*" | xargs -n1 redis-cli del
 
 # Dans un autre terminal :
-node tests/e2e/ai-scenarios.mjs              # les 49 scénarios
+node tests/e2e/ai-scenarios.mjs              # les 50 scénarios
 node tests/e2e/ai-scenarios.mjs --only=offerte   # filtre par nom
 API=http://localhost:9097/api/v1 node tests/e2e/ai-scenarios.mjs
 ```
 
-Sortie : un ✓/✗ par contrôle, puis `49/49 scénarios passés`. Code de sortie
+Sortie : un ✓/✗ par contrôle, puis `50/50 scénarios passés`. Code de sortie
 non nul si un scénario échoue, donc utilisable en pré-livraison.
 
 ## Ce qui est couvert
@@ -73,6 +73,7 @@ non nul si un scénario échoue, donc utilisable en pré-livraison.
 | `abschluss-erdsonde-blockiert` | Sans Bohrbewilligung ni IBN-Protokoll, la clôture est bloquée |
 | `abschluss-boiler-ohne-bewilligung` | La checklist suit le type d'installation, pas une liste fixe |
 | `abschlussfrage-legt-nichts-an` | Demander si on peut clôturer ne change rien au projet |
+| `kreditoren-werden-vor-der-zahlung-geprueft` | Factures fournisseurs, jamais confondues avec la facturation client |
 | `dokumente-werden-eingeordnet` | Les documents mal classés sont nommés, rien n'est déplacé |
 | `dokument-ohne-signal-wird-nicht-geraten` | Un nom sans signal reste non classé plutôt que deviné |
 | `material-nennt-was-nicht-bestellt-ist` | Le matériel non commandé est nommé — et seulement du matériel |

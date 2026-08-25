@@ -51,6 +51,7 @@ const ACTIONS = Object.freeze({
   DISPATCH_SUGGEST: 'DISPATCH_SUGGEST',
   MATERIAL_CHECK: 'MATERIAL_CHECK',
   DOCUMENT_CLASSIFY: 'DOCUMENT_CLASSIFY',
+  PAYMENT_CHECK: 'PAYMENT_CHECK',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -97,6 +98,7 @@ const ACTION_LABELS = {
   [ACTIONS.DISPATCH_SUGGEST]: 'einen Monteur vorschlagen',
   [ACTIONS.MATERIAL_CHECK]: 'den Materialstatus prüfen',
   [ACTIONS.DOCUMENT_CLASSIFY]: 'die Dokumentablage prüfen',
+  [ACTIONS.PAYMENT_CHECK]: 'eine Kreditorenrechnung vor der Zahlung prüfen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -397,6 +399,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return materialCheck(context, state);
     case ACTIONS.DOCUMENT_CLASSIFY:
       return documentClassify(context, state);
+    case ACTIONS.PAYMENT_CHECK:
+      return paymentCheck(input, context, state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -840,6 +844,66 @@ async function dispatchSuggest(input, context, state = {}) {
       available: result.candidates.length,
       unavailable: result.excluded.length,
       requiredSkills: result.requirements?.requiredSkills || [],
+    },
+  };
+}
+
+/**
+ * Finanz AI: is this supplier invoice fit to be paid?
+ *
+ * Addressed by invoice number or by supplier — the office says "die Rechnung
+ * von Meier", not an identifier. With neither, the open ones are listed.
+ */
+async function paymentCheck(input, context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('accounting:read')) {
+    return { action: ACTIONS.PAYMENT_CHECK, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+
+  const finanzService = (await import('../agents/finanz/finanz.service.js')).default;
+  const draft = context.llmDraft || {};
+  const found = await finanzService.findInvoices({
+    number: draft.searchTerm || null,
+    supplier: draft.customerName || null,
+  });
+
+  if (!found.length) {
+    return {
+      action: ACTIONS.PAYMENT_CHECK,
+      status: 'completed',
+      message: 'Es sind keine offenen Kreditorenrechnungen erfasst, auf die das passt.',
+      records: [],
+    };
+  }
+  if (found.length > 1 && (draft.searchTerm || draft.customerName)) {
+    return {
+      action: ACTIONS.PAYMENT_CHECK,
+      status: 'completed',
+      message: finanzService.composeList(found),
+      records: found.map((invoice) => ({
+        id: String(invoice._id),
+        number: invoice.supplierInvoiceNumber,
+        supplier: invoice.supplierName,
+        amount: invoice.outstandingAmount ?? invoice.totalAmount,
+      })),
+    };
+  }
+
+  const result = await finanzService.checkBeforePayment(found[0]);
+  return {
+    action: ACTIONS.PAYMENT_CHECK,
+    status: 'completed',
+    message: finanzService.compose(result),
+    record: {
+      id: String(found[0]._id),
+      number: result.invoice?.supplierInvoiceNumber || null,
+      supplier: result.invoice?.supplierName || null,
+      amount: result.amount ?? null,
+      payable: result.ok,
+      ibanValid: Boolean(result.iban) && !result.blockers.some((b) => /IBAN/.test(b.detail)),
+      referenceKind: result.reference?.kind || null,
+      blockers: result.blockers.map((blocker) => blocker.detail),
+      warnings: result.warnings,
     },
   };
 }

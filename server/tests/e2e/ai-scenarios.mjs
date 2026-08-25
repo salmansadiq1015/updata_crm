@@ -736,6 +736,24 @@ const SCENARIOS = [
 
   // ─── Service AI ────────────────────────────────────────────
 
+  // ─── Finanz AI ─────────────────────────────────────────────
+
+  {
+    name: 'kreditoren-werden-vor-der-zahlung-geprueft',
+    why: 'Kreditoren sind eingehende Rechnungen — nie mit dem Fakturieren eines Kunden verwechseln.',
+    async exec() {
+      const state = await run('Welche Kreditorenrechnungen sind offen?');
+      const text = message(state);
+      return [
+        check('Zahlungsprüfung ausgeführt', action(state) === 'PAYMENT_CHECK', `action = ${action(state)}`),
+        check('keine Kundenrechnung erstellt', !/CREATE_INVOICE/.test(String(action(state))), `action = ${action(state)}`),
+        check('nichts angelegt', !state.output?.recordId, `recordId = ${state.output?.recordId}`),
+        check('nichts bezahlt', !/gebucht|überwiesen/i.test(text) || /nichts automatisch/i.test(text), text.slice(-140)),
+        noEnglish(state),
+      ];
+    },
+  },
+
   // ─── Document AI ───────────────────────────────────────────
 
   {

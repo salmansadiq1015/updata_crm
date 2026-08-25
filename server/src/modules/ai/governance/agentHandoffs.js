@@ -332,9 +332,60 @@ async function onDocumentUploaded(event) {
   }
 }
 
+/**
+ * Supplier invoice recorded → Finanz AI.
+ *
+ * The register's trigger, "Eingangsrechnung erkannt". The checks that matter
+ * are arithmetic — an IBAN whose check digits do not add up is a payment that
+ * never arrives — and the moment to run them is while somebody is still
+ * looking at the invoice, not on the day of the payment run.
+ */
+async function onSupplierInvoiceRecorded(event) {
+  const payload = event?.payload || event || {};
+  const { apInvoiceId, invoiceId, createdBy } = payload;
+  const id = apInvoiceId || invoiceId;
+  if (!id) return;
+
+  if (!(await agentIsRunnable('FINANZ'))) return;
+
+  try {
+    const finanzService = (await import('../agents/finanz/finanz.service.js')).default;
+    const result = await finanzService.checkBeforePayment({ _id: id });
+    if (!result.verified) return;
+
+    // Only the bank coordinates raise a task on their own. "Not approved yet"
+    // is the normal state of a fresh invoice, not something to chase.
+    const bankProblems = result.blockers.filter((blocker) => blocker.reason === 'PAYMENT_OR_BANK_DATA');
+    if (!bankProblems.length) return;
+
+    const taskService = (await import('../../tasks/task.service.js')).default;
+    await taskService.create({
+      title: `Zahlungsdaten prüfen: ${result.invoice.supplierName || 'Kreditorenrechnung'} ${result.invoice.supplierInvoiceNumber || ''}`.trim(),
+      description: finanzService.compose(result),
+      priority: 'HIGH',
+      projectId: result.invoice.projectId || null,
+    }, createdBy || null, { source: 'ai-agent' });
+
+    logger.info('Handoff: supplier invoice recorded → Finanz AI', {
+      module: 'ai-handoff',
+      action: 'supplierInvoiceRecorded',
+      invoiceId: String(id),
+      bankProblems: bankProblems.length,
+    });
+  } catch (err) {
+    logger.warn('Handoff invoice → Finanz AI failed', {
+      module: 'ai-handoff',
+      action: 'supplierInvoiceRecorded',
+      invoiceId: String(id),
+      error: err.message,
+    });
+  }
+}
+
 export function registerAgentHandoffs() {
   eventBus.subscribe(EVENT_TYPES.QUOTATION_ACCEPTED, onQuotationAccepted);
   eventBus.subscribe(EVENT_TYPES.PROJECT_DOCUMENT_UPLOADED, onDocumentUploaded);
+  eventBus.subscribe(EVENT_TYPES.ACCOUNTING_AP_INVOICE_RECORDED, onSupplierInvoiceRecorded);
   eventBus.subscribe(EVENT_TYPES.PROJECT_CREATED, onProjectCreated);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_CHANGED, onProjectScheduled);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_OVERRIDDEN, onProjectScheduled);
@@ -348,6 +399,7 @@ export function registerAgentHandoffs() {
     handoffs: [
       'quotation.accepted → PROJEKT',
       'document.uploaded → DOCUMENT',
+      'ap.invoice.recorded → FINANZ',
       'project.created → BEHOERDEN',
       'project.scheduled → MATERIAL',
       'project.completed → QUALITY',

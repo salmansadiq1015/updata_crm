@@ -20,7 +20,7 @@ export const PLANNER_ACTIONS = Object.freeze([
   'SEARCH_DOCUMENTS', 'CREATE_QUOTATION', 'CREATE_INVOICE', 'CREATE_NOTE',
   'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE', 'SALES_FOLLOWUPS',
   'ANALYZE_FIELD_TICKET', 'QUALITY_CHECK', 'SERVICE_DUE', 'SERVICE_BRIEFING', 'PERMIT_CHECK',
-  'DISPATCH_CHECK', 'DISPATCH_SUGGEST', 'MATERIAL_CHECK', 'DOCUMENT_CLASSIFY',
+  'DISPATCH_CHECK', 'DISPATCH_SUGGEST', 'MATERIAL_CHECK', 'DOCUMENT_CLASSIFY', 'PAYMENT_CHECK',
   'SEND_NOTIFICATION', 'GENERAL',
 ]);
 
@@ -40,6 +40,7 @@ Hard rules:
 - Questions about which quotations need chasing ("Welche Offerten muss ich nachfassen?", "offene Offerten", "Nachfassliste") → SALES_FOLLOWUPS.
 - Asking whether a project can be closed, or what is still missing before closing it ("Kann ich das Projekt abschliessen?", "Abschlussprüfung", "Was fehlt noch beim Projekt X?", "Ist die Dokumentation vollständig?") → QUALITY_CHECK, with projectName set.
 - Questions about maintenance that is due or overdue ("Welche Wartungen sind fällig?", "überfällige Wartungen", "Was steht diesen Monat an Service an?") → SERVICE_DUE.
+- Questions about paying a SUPPLIER invoice — incoming, Kreditoren ("Kann ich die Rechnung von X zahlen?", "Zahlungsprüfung", "Stimmt die IBAN?", "Welche Kreditorenrechnungen sind offen?") → PAYMENT_CHECK, with customerName carrying the supplier and searchTerm the invoice number if given. NOT the same as CREATE_INVOICE, which bills a customer.
 - Questions about how a project's documents are filed ("Sind die Dokumente vom Projekt X richtig abgelegt?", "Klassiere die Dokumente von X", "Wohin gehören die Unterlagen von X?") → DOCUMENT_CLASSIFY, with projectName set.
 - Questions about material for a project ("Ist das Material für Projekt X da?", "Materialstatus X", "Was fehlt noch an Material?", "Wurde alles bestellt für X?") → MATERIAL_CHECK, with projectName set.
 - Asking WHO could take a slot ("Wer kann am Dienstag die Wärmepumpe bei X warten?", "Wer ist am Montag frei?", "Wen kann ich schicken?") → DISPATCH_SUGGEST, with dateTime and, if named, installationName/customerName.

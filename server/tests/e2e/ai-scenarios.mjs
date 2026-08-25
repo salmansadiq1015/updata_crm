@@ -736,6 +736,46 @@ const SCENARIOS = [
 
   // ─── Service AI ────────────────────────────────────────────
 
+  // ─── Customer AI ───────────────────────────────────────────
+
+  {
+    name: 'kundennachricht-bleibt-ein-entwurf',
+    why: 'Versendet nie ohne Freigabe — ein Kundentext ist bindend, sobald er draussen ist.',
+    async exec() {
+      const state = await run('Schreib dem Kunden Immobilien Verwaltung wegen der Verzögerung: das Material kommt eine Woche später');
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Entwurf erstellt', action(state) === 'DRAFT_CUSTOMER_MESSAGE', `action = ${action(state)}`),
+        check('nichts versendet', record.sent === false && !/versendet wurde|gesendet/i.test(text), `sent = ${record.sent}`),
+        check('Anlass erkannt', record.occasion === 'VERZOEGERUNG', `anlass = ${record.occasion}`),
+        check('Grund übernommen', /Material kommt eine Woche später/i.test(record.body || ''), (record.body || '').slice(0, 120)),
+        check('höfliche Anrede, keine Du-Form', /^(Sehr geehrte|Guten Tag)/.test(record.body || '')
+          && !/\b(du|dir|dich|deine?)\b/i.test(record.body || ''), (record.body || '').slice(0, 90)),
+        check('Grund sauber abgeschlossen', !/später [A-ZÄÖÜ]/.test(record.body || ''), (record.body || '').slice(0, 160)),
+        check('kein Eszett', !/ß/.test(text), text.match(/\S*ß\S*/g)?.join(', ') || ''),
+        check('Freigabe vorbehalten', /nach Ihrer Freigabe/i.test(text), text.slice(-120)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'ohne-termin-kein-termin-im-entwurf',
+    why: 'Ein Datum im Kundentext, das nirgends steht, ist eine Zusage, die niemand gemacht hat.',
+    async exec() {
+      const state = await run('Terminbestätigung an den Kunden Immobilien Verwaltung schreiben');
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Entwurf angefragt', action(state) === 'DRAFT_CUSTOMER_MESSAGE', `action = ${action(state)}`),
+        check('kein Entwurf erzeugt', record.drafted === false, `drafted = ${record.drafted}`),
+        check('kein Text mit Datum', !record.body, (record.body || '').slice(0, 120)),
+        check('sagt, dass nichts erfunden wird', /nicht erfunden/i.test(text), text.slice(0, 200)),
+        noEnglish(state),
+      ];
+    },
+  },
+
   // ─── Controlling AI ────────────────────────────────────────
 
   {

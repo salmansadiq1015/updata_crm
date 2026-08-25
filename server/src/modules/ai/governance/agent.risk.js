@@ -107,6 +107,7 @@ const ACTION_RISK = Object.freeze({
   DOCUMENT_CLASSIFY: RISK_LEVELS.LOW,
   PAYMENT_CHECK: RISK_LEVELS.LOW,
   PROJECT_FIGURES: RISK_LEVELS.LOW,
+  DRAFT_CUSTOMER_MESSAGE: RISK_LEVELS.LOW,
   GENERAL: RISK_LEVELS.LOW,
 
   // These pull a whole cascade in behind them — a project opens its checklist,

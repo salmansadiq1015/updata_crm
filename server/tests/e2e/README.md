@@ -27,12 +27,12 @@ RATE_LIMIT_GLOBAL=1000 node src/server.js
 #   redis-cli --scan --pattern "mb:ai:agent:ratelimit:*" | xargs -n1 redis-cli del
 
 # Dans un autre terminal :
-node tests/e2e/ai-scenarios.mjs              # les 51 scénarios
+node tests/e2e/ai-scenarios.mjs              # les 53 scénarios
 node tests/e2e/ai-scenarios.mjs --only=offerte   # filtre par nom
 API=http://localhost:9097/api/v1 node tests/e2e/ai-scenarios.mjs
 ```
 
-Sortie : un ✓/✗ par contrôle, puis `51/51 scénarios passés`. Code de sortie
+Sortie : un ✓/✗ par contrôle, puis `53/53 scénarios passés`. Code de sortie
 non nul si un scénario échoue, donc utilisable en pré-livraison.
 
 ## Ce qui est couvert
@@ -73,6 +73,8 @@ non nul si un scénario échoue, donc utilisable en pré-livraison.
 | `abschluss-erdsonde-blockiert` | Sans Bohrbewilligung ni IBN-Protokoll, la clôture est bloquée |
 | `abschluss-boiler-ohne-bewilligung` | La checklist suit le type d'installation, pas une liste fixe |
 | `abschlussfrage-legt-nichts-an` | Demander si on peut clôturer ne change rien au projet |
+| `kundennachricht-bleibt-ein-entwurf` | Un texte client est préparé, jamais envoyé |
+| `ohne-termin-kein-termin-im-entwurf` | Sans date en base, aucune date dans le courrier |
 | `kennzahlen-nennen-ihre-luecken` | Les chiffres calculables, et le refus explicite d'inventer une marge |
 | `kreditoren-werden-vor-der-zahlung-geprueft` | Factures fournisseurs, jamais confondues avec la facturation client |
 | `dokumente-werden-eingeordnet` | Les documents mal classés sont nommés, rien n'est déplacé |

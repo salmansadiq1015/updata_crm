@@ -53,6 +53,7 @@ const ACTIONS = Object.freeze({
   DOCUMENT_CLASSIFY: 'DOCUMENT_CLASSIFY',
   PAYMENT_CHECK: 'PAYMENT_CHECK',
   PROJECT_FIGURES: 'PROJECT_FIGURES',
+  DRAFT_CUSTOMER_MESSAGE: 'DRAFT_CUSTOMER_MESSAGE',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -101,6 +102,7 @@ const ACTION_LABELS = {
   [ACTIONS.DOCUMENT_CLASSIFY]: 'die Dokumentablage prüfen',
   [ACTIONS.PAYMENT_CHECK]: 'eine Kreditorenrechnung vor der Zahlung prüfen',
   [ACTIONS.PROJECT_FIGURES]: 'die Kennzahlen eines Projekts zeigen',
+  [ACTIONS.DRAFT_CUSTOMER_MESSAGE]: 'eine Kundennachricht entwerfen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -405,6 +407,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return paymentCheck(input, context, state);
     case ACTIONS.PROJECT_FIGURES:
       return projectFigures(context, state);
+    case ACTIONS.DRAFT_CUSTOMER_MESSAGE:
+      return draftCustomerMessage(input, context, state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -848,6 +852,59 @@ async function dispatchSuggest(input, context, state = {}) {
       available: result.candidates.length,
       unavailable: result.excluded.length,
       requiredSkills: result.requirements?.requiredSkills || [],
+    },
+  };
+}
+
+/**
+ * Customer AI: a draft for the customer, and only a draft.
+ *
+ * The draft itself is a reading — nothing leaves the house. Sending it stays
+ * SEND_NOTIFICATION or SEND_CHAT, which both need approval.
+ */
+async function draftCustomerMessage(input, context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('crm:read')) {
+    return { action: ACTIONS.DRAFT_CUSTOMER_MESSAGE, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.customerCandidates?.length > 1) {
+    return needsFollowUp(ACTIONS.DRAFT_CUSTOMER_MESSAGE, ['customer'], context);
+  }
+  if (!context.customer) {
+    return needsFollowUp(ACTIONS.DRAFT_CUSTOMER_MESSAGE, ['customer'], context);
+  }
+
+  const customerService = (await import('../agents/customer/customer.service.js')).default;
+  const draft = context.llmDraft || {};
+  const { occasion, channel } = customerService.read(input);
+
+  const result = await customerService.draft({
+    customer: context.customer,
+    occasion,
+    channel,
+    project: namedProject(context),
+    dateTime: draftDate(draft.dateTime) || extractDateTime(input),
+    reason: draft.messageContent || draft.description || null,
+    technician: context.assignee ? [context.assignee.firstName, context.assignee.lastName].filter(Boolean).join(' ') : null,
+  });
+
+  return {
+    action: ACTIONS.DRAFT_CUSTOMER_MESSAGE,
+    status: 'completed',
+    message: customerService.compose(result),
+    recordType: 'customer',
+    recordId: context.customer._id,
+    record: {
+      customer: context.customer.name,
+      occasion: occasion.key,
+      channel: channel.key,
+      subject: result.subject || null,
+      body: result.body || null,
+      drafted: result.ok,
+      // Nothing left the house. The office sends, or does not.
+      sent: false,
+      blockers: (result.blockers || []).map((blocker) => blocker.detail),
+      warnings: result.warnings || [],
     },
   };
 }

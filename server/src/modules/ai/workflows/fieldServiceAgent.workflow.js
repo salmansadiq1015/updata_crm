@@ -54,6 +54,7 @@ const ACTIONS = Object.freeze({
   PAYMENT_CHECK: 'PAYMENT_CHECK',
   PROJECT_FIGURES: 'PROJECT_FIGURES',
   DRAFT_CUSTOMER_MESSAGE: 'DRAFT_CUSTOMER_MESSAGE',
+  KNOWLEDGE_ASK: 'KNOWLEDGE_ASK',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -103,6 +104,7 @@ const ACTION_LABELS = {
   [ACTIONS.PAYMENT_CHECK]: 'eine Kreditorenrechnung vor der Zahlung prüfen',
   [ACTIONS.PROJECT_FIGURES]: 'die Kennzahlen eines Projekts zeigen',
   [ACTIONS.DRAFT_CUSTOMER_MESSAGE]: 'eine Kundennachricht entwerfen',
+  [ACTIONS.KNOWLEDGE_ASK]: 'im hinterlegten Wissen nachschlagen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -409,6 +411,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return projectFigures(context, state);
     case ACTIONS.DRAFT_CUSTOMER_MESSAGE:
       return draftCustomerMessage(input, context, state);
+    case ACTIONS.KNOWLEDGE_ASK:
+      return knowledgeAsk(input, context);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -852,6 +856,32 @@ async function dispatchSuggest(input, context, state = {}) {
       available: result.candidates.length,
       unavailable: result.excluded.length,
       requiredSkills: result.requirements?.requiredSkills || [],
+    },
+  };
+}
+
+/** Knowledge AI: what the firm has written down, with its source. */
+async function knowledgeAsk(input, context) {
+  const knowledgeService = (await import('../agents/knowledge/knowledge.service.js')).default;
+  // The question as asked, not the planner's trimmed search term: retrieval
+  // wants every word the office used.
+  const question = context.llmDraft?.searchTerm && context.llmDraft.searchTerm.length > input.length
+    ? context.llmDraft.searchTerm
+    : input;
+  const result = await knowledgeService.find(question);
+
+  return {
+    action: ACTIONS.KNOWLEDGE_ASK,
+    status: 'completed',
+    message: knowledgeService.compose(question, result),
+    records: result.hits.map((hit) => ({ kind: hit.kind, title: hit.title, source: hit.source, matched: hit.matched })),
+    record: {
+      question,
+      found: result.hits.length,
+      searched: result.searched || 0,
+      // No sources means no answer — never a guess dressed as one.
+      answered: result.hits.length > 0,
+      sources: result.hits.map((hit) => hit.source),
     },
   };
 }

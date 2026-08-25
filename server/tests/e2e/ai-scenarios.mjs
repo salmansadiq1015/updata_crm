@@ -736,6 +736,43 @@ const SCENARIOS = [
 
   // ─── Service AI ────────────────────────────────────────────
 
+  // ─── Knowledge AI ──────────────────────────────────────────
+
+  {
+    name: 'wissen-antwortet-mit-quelle',
+    why: 'Eine Antwort ohne Quelle ist nicht prüfbar — das CDC verlangt „Antwort mit Quellenangabe".',
+    async exec() {
+      const state = await run('Wie hoch sind die Fördergelder in Basel-Stadt?');
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('im Wissen nachgeschlagen', action(state) === 'KNOWLEDGE_ASK', `action = ${action(state)}`),
+        check('Antwort gefunden', record.answered === true, `found = ${record.found}`),
+        check('Quelle genannt', (record.sources || []).length > 0, (record.sources || []).join(' | ')),
+        check('Fundstelle im Text', /Quelle:/.test(text), text.slice(0, 200)),
+        check('sagt, woher die Antwort stammt', /nicht aus dem Sprachmodell/i.test(text), text.slice(-160)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'wissen-raet-nicht',
+    why: '„Weist auf Unsicherheit hin statt zu raten" — das ist der eigentliche Auftrag dieses Agenten.',
+    async exec() {
+      const state = await run('Welche Versicherung deckt bei uns einen Wasserschaden im Untergeschoss?');
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('im Wissen nachgeschlagen', action(state) === 'KNOWLEDGE_ASK', `action = ${action(state)}`),
+        check('gibt zu, nichts zu haben', record.answered === false, `found = ${record.found}`),
+        check('sagt es ausdrücklich', /nichts hinterlegt/i.test(text), text.slice(0, 160)),
+        check('verweist auf einen Menschen', /Projektleitung fragen/i.test(text), text.slice(-200)),
+        check('keine erfundene Antwort', (record.sources || []).length === 0, (record.sources || []).join(' | ')),
+        noEnglish(state),
+      ];
+    },
+  },
+
   // ─── Customer AI ───────────────────────────────────────────
 
   {

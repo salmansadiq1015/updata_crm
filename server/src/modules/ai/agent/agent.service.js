@@ -70,6 +70,7 @@ const INTENT_TO_WORKFLOW = {
   payment_check: 'FIELD_SERVICE_AGENT',
   project_figures: 'FIELD_SERVICE_AGENT',
   draft_customer_message: 'FIELD_SERVICE_AGENT',
+  knowledge_ask: 'FIELD_SERVICE_AGENT',
   search_customer: 'FIELD_SERVICE_AGENT',
   search_tasks: 'FIELD_SERVICE_AGENT',
   search_projects: 'FIELD_SERVICE_AGENT',

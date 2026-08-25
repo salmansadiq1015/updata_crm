@@ -474,7 +474,7 @@ async function createTask(input, context, userId) {
     return needsFollowUp(ACTIONS.CREATE_TASK, ['project'], context);
   }
   const draft = context.llmDraft || {};
-  const title = draft.title || cleanTitle(input, ['create task', 'task', 'aufgabe', 'erstelle']);
+  const title = titleFrom(draft, input, ['create task', 'task', 'aufgabe', 'erstelle']);
   const priority = draft.priority || extractPriority(input);
   const dueDate = draftDate(draft.dueDate) || extractDate(input);
 
@@ -615,7 +615,7 @@ async function createAssignment(input, context, userId) {
   const result = await assignmentService.create({
     employeeIds: [employee._id],
     assignmentType: hasAny(input.toLowerCase(), ['maintenance', 'wartung']) ? 'MAINTENANCE' : 'PROJECT_WORK',
-    title: draft.title || cleanTitle(input, ['schedule', 'assign', 'plan', 'termin']),
+    title: titleFrom(draft, input, ['schedule', 'assign', 'plan', 'termin']),
     startDatetime: start,
     endDatetime: new Date(start.getTime() + durationHours * 60 * 60 * 1000),
     projectId: namedProject(context)?._id || null,
@@ -1346,7 +1346,7 @@ async function createOrder(input, context, userId) {
     customerId: context.customer._id,
     customerName: context.customer.name,
     projectId: context.project?._id || null,
-    title: context.llmDraft?.title || cleanTitle(input, ['create order', 'create job', 'auftrag', 'order']),
+    title: titleFrom(context.llmDraft || {}, input, ['create order', 'create job', 'auftrag', 'order']),
     notes: context.llmDraft?.description || input,
     lineItems: [],
     language: 'de',
@@ -1665,12 +1665,11 @@ async function findUser(input, previousFollowUp, draft = null) {
   }
   if (!term) return { selected: null, candidates: [] };
 
-  // Not $text. The text index on users carries language_override: 'language',
-  // and that field holds the person's UI preference — so a colleague whose
-  // interface is set to German is indexed with German stemming and never
-  // matches an English-stemmed query. "Thomas Brunner" returned nobody. The
-  // task repository gave up on $text over users for the same class of reason;
-  // a substring match is what naming a person actually needs.
+  // Not $text, even though migration 005 repaired the index it used to be
+  // broken by. A word-stem search cannot match "Thom" against "Thomas", and
+  // half a name is how people are actually looked up — which is why the task
+  // repository gave up on $text over users too. A substring match is simply
+  // the right tool for naming a person.
   const parts = String(term).trim().split(/\s+/).filter((part) => part.length >= 2).slice(0, 3);
   if (!parts.length) return { selected: null, candidates: [] };
   const patterns = parts.map((part) => new RegExp(escapeRegex(part), 'i'));
@@ -2317,6 +2316,36 @@ function extractAfter(input, prefixes) {
     if (idx >= 0) return input.slice(idx + prefix.length).trim();
   }
   return '';
+}
+
+/**
+ * The title to write, from the planner's reading and the sentence itself.
+ *
+ * The planner is told to keep the office's own words and it mostly does, but
+ * measured over repeated runs it still trims the tail about two runs in three:
+ * "AUF-2026-0052 Nachkontrolle beim Kunden" comes back as "AUF-2026-0052
+ * Nachkontrolle". A prompt is not a guarantee, so this recovers the rest.
+ *
+ * It only acts when the planner moved nothing out of the title — no date, no
+ * priority, no assignee, no duration. When it did, the words it dropped are
+ * exactly the ones that became those fields, and putting them back would be
+ * wrong. The planner's title is extended within the sentence rather than
+ * replaced by a stripped one, because stripping command words leaves debris
+ * of its own ("eine ZZTEST …").
+ */
+export function titleFrom(draft, input, removeTerms = []) {
+  const planned = typeof draft?.title === 'string' ? draft.title.trim() : '';
+  if (!planned) return cleanTitle(input, removeTerms);
+
+  const movedOut = Boolean(draft.dueDate || draft.dateTime || draft.priority
+    || draft.assigneeName || draft.durationHours || draft.status);
+  if (movedOut) return planned;
+
+  const at = input.toLowerCase().indexOf(planned.toLowerCase());
+  if (at < 0) return planned;
+
+  const rest = input.slice(at).trim().replace(/[\s.,;:!?]+$/, '');
+  return rest.length > planned.length ? rest.slice(0, 500) : planned;
 }
 
 function cleanTitle(input, removeTerms = []) {

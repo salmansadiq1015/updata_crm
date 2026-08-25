@@ -10,21 +10,20 @@ import { useLanguage } from '@/lib/i18n/language-context';
  * Without it the assistant announces a quotation number and leaves the reader
  * to go and find it. Only record types with a real detail route appear.
  */
-// Only routes that exist. Types whose list page has no detail route yet lead to
-// the list — still one click to the right place, and they become real deep
-// links the day those pages accept an id.
+// Every type here opens the record itself. Three of them used to land on a
+// list — "one click to the right place" that still left the reader hunting for
+// the row the assistant had just been talking about.
 const ROUTES = {
   project: (id) => `/projects/${id}`,
   customer: (id) => `/crm/customers/${id}`,
   order: (id) => `/field-ops/orders/${id}`,
-  installation: (id) => `/crm/installations/${id}`,
   chatRoom: (id) => `/field-ops/chat?chatId=${id}`,
   quotation: (id) => `/quotes?quotationId=${id}`,
   invoice: (id) => `/quotes?invoiceId=${id}`,
-  // No detail route on these list pages yet, so the link leads to the section.
-  task: () => '/tasks',
-  workReport: () => '/field-ops/reports',
-  assignment: () => '/scheduling',
+  task: (id) => `/tasks/all/${id}`,
+  workReport: (id) => `/field-ops/reports?reportId=${id}`,
+  assignment: (id) => `/scheduling/calendar?assignmentId=${id}`,
+  installation: (id) => `/crm/installations/${id}`,
 };
 
 const LABEL_KEYS = {

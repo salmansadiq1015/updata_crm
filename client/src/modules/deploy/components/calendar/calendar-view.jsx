@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { CalendarHeader } from './calendar-header';
 import { CalendarGrid } from './calendar-grid';
@@ -17,7 +17,7 @@ import { useCalendarKeyboard } from '../../hooks/use-calendar-keyboard';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useMediaQuery } from '@/shared/hooks/use-media-query';
 
-export function CalendarView() {
+export function CalendarView({ focusId = null }) {
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission('scheduling:write');
 
@@ -59,6 +59,17 @@ export function CalendarView() {
   // Detail drawer state
   const [drawerAssignmentId, setDrawerAssignmentId] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Deep link from the AI assistant: open the Einsatz it named, once. The
+  // drawer loads by id, so it does not matter whether the calendar happens to
+  // be showing the week that assignment falls in.
+  const focusedRef = useRef(null);
+  useEffect(() => {
+    if (!focusId || focusedRef.current === focusId) return;
+    focusedRef.current = focusId;
+    setDrawerAssignmentId(focusId);
+    setDrawerOpen(true);
+  }, [focusId]);
 
   const handleAssignmentClick = useCallback((assignment) => {
     setDrawerAssignmentId(assignment._id);

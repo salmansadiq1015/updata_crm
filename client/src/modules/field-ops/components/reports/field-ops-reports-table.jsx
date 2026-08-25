@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Archive,
   ArchiveRestore,
@@ -313,7 +313,7 @@ function getReportContext(report) {
   };
 }
 
-export function FieldOpsReportsTable() {
+export function FieldOpsReportsTable({ focusId = null }) {
   const { t } = useLanguage();
 
   // Filters
@@ -379,6 +379,16 @@ export function FieldOpsReportsTable() {
     refetch: refetchSummary,
   } = useFieldOpsReportSummary(baseFilters);
   const reports = reportsResult?.data || [];
+
+  // Deep link from the AI assistant: open the report named in the URL, once.
+  const focusedRef = useRef(null);
+  useEffect(() => {
+    if (!focusId || focusedRef.current === focusId) return;
+    const match = reports.find((report) => String(report._id ?? report.id) === String(focusId));
+    if (!match) return;
+    focusedRef.current = focusId;
+    setSelectedReport(match);
+  }, [focusId, reports]);
   const paginationMeta = reportsResult?.pagination;
   const totalReports = paginationMeta?.total ?? reports.length;
 

@@ -5,12 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query/keys';
 import { showError } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { useSocketEvent } from '@/shared/hooks/use-socket-event';
 import { aiAgentService } from '../services/ai-agent-service';
 import { useAiStore } from '../store/ai-store';
 import {
   PANEL_VIEWS,
   AGENT_STATUSES,
-  AGENT_POLL_INTERVAL_MS,
+  AGENT_FALLBACK_POLL_MS,
   WORKFLOW_LABELS,
   MIN_AGENT_INPUT_LENGTH,
   isTerminalAgentStatus,
@@ -29,13 +30,25 @@ export function useAgentRun() {
     queryFn: () => aiAgentService.getStatus(activeRunId),
     enabled: !!activeRunId,
     staleTime: 0,
+    // Fallback behind the socket events below, not the mechanism.
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       if (!status || isTerminalAgentStatus(status)) return false;
       if (!isPanelOpen) return false;
-      return AGENT_POLL_INTERVAL_MS;
+      return AGENT_FALLBACK_POLL_MS;
     },
   });
+
+  // The run that just settled is the one this panel is showing, or it is not.
+  const onRunSettled = useCallback((payload) => {
+    if (!activeRunId) return;
+    if (payload?.agentRunId && String(payload.agentRunId) !== String(activeRunId)) return;
+    queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentRun(activeRunId) });
+  }, [activeRunId, queryClient]);
+
+  useSocketEvent('ai:agent:completed', onRunSettled);
+  useSocketEvent('ai:agent:failed', onRunSettled);
+  useSocketEvent('ai:agent:awaiting_confirmation', onRunSettled);
 
   const runStatus = runQuery.data?.status;
 

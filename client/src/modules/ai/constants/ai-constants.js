@@ -67,7 +67,13 @@ export const CONFIDENCE = {
 export const MAX_RECORDING_SECONDS = 15 * 60; // 15 minutes
 export const RECORDING_WARNING_SECONDS = 14 * 60; // warn at 14 min
 
-export const AGENT_POLL_INTERVAL_MS = 1000;
+/**
+ * Fallback only. The server pushes ai:agent:* the moment a run settles, so
+ * this exists for the case where the socket is down — not as the mechanism.
+ * At one second it was roughly sixty requests a minute per open chat, almost
+ * all of them learning nothing.
+ */
+export const AGENT_FALLBACK_POLL_MS = 8000;
 export const SESSION_POLL_INTERVAL_MS = 2000;
 export const SESSION_PROCESSING_TIMEOUT_MS = 90000;
 // One character is enough when answering a numbered choice from the assistant.

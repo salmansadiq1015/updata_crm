@@ -1,11 +1,14 @@
 /**
  * Payment coordinates, checked rather than trusted.
  *
- * The AP invoice validator accepts an IBAN on its shape alone
- * (`/^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/`), so a mistyped digit passes and the
- * money leaves for an account that either does not exist or belongs to
- * somebody else. Every format here carries a checksum precisely so that a
- * typo can be caught before that happens; these are those checksums.
+ * Every format here carries a checksum precisely so a typo can be caught
+ * before the money leaves for an account that does not exist or belongs to
+ * somebody else. These are those checksums.
+ *
+ * Shared rather than owned by one agent: Finanz AI reads them before a
+ * payment, and the accounting validators use them at the moment a bank
+ * account or a supplier invoice is written — which is the point where a
+ * mistyped digit should be refused.
  *
  * Nothing here talks to a bank. A valid IBAN is a well-formed one, not a
  * proven one — the difference is stated wherever it is reported.

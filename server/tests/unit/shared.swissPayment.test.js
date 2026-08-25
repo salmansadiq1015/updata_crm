@@ -8,7 +8,7 @@ import {
   isValidIban,
   isValidQrReference,
   mod10CheckDigit,
-} from '../../src/modules/ai/agents/finanz/swissPayment.js';
+} from '../../src/shared/validation/swissPayment.js';
 
 describe('Swiss payment coordinates', () => {
   // The published ISO 13616 examples, plus the Swiss QR-bill specimens.

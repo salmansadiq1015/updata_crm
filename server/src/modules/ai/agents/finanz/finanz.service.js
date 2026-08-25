@@ -6,16 +6,17 @@
  * list is empty on purpose — it prepares and it blocks, and a person pays.
  *
  * The checks that matter are arithmetic, not opinion. An IBAN and a QR
- * reference each carry a checksum, and the AP validator accepts an IBAN on
- * its shape alone today — so a mistyped digit reaches the bank. Those are
- * verified here, against records actually read: money is not a place for a
- * hallucinated all-clear.
+ * reference each carry a checksum, and both are verified here against records
+ * actually read: money is not a place for a hallucinated all-clear. The same
+ * checks now run at write time in the accounting validators, so this agent
+ * mostly confirms — but it still checks, because a record can predate the
+ * validator or arrive by import.
  */
 import mongoose from 'mongoose';
 import { BLOCK_REASONS, blocked } from '../../governance/agent.risk.js';
 import {
   checkReference, formatIban, isQrIban, isSwissIban, isValidIban,
-} from './swissPayment.js';
+} from '../../../../shared/validation/swissPayment.js';
 import logger from '../../../../shared/logger/index.js';
 
 /** Mongoose buffers for 10s when the connection is down; never wait on it. */

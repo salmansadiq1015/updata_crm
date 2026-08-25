@@ -52,6 +52,7 @@ const ACTIONS = Object.freeze({
   MATERIAL_CHECK: 'MATERIAL_CHECK',
   DOCUMENT_CLASSIFY: 'DOCUMENT_CLASSIFY',
   PAYMENT_CHECK: 'PAYMENT_CHECK',
+  PROJECT_FIGURES: 'PROJECT_FIGURES',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -99,6 +100,7 @@ const ACTION_LABELS = {
   [ACTIONS.MATERIAL_CHECK]: 'den Materialstatus prüfen',
   [ACTIONS.DOCUMENT_CLASSIFY]: 'die Dokumentablage prüfen',
   [ACTIONS.PAYMENT_CHECK]: 'eine Kreditorenrechnung vor der Zahlung prüfen',
+  [ACTIONS.PROJECT_FIGURES]: 'die Kennzahlen eines Projekts zeigen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -401,6 +403,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return documentClassify(context, state);
     case ACTIONS.PAYMENT_CHECK:
       return paymentCheck(input, context, state);
+    case ACTIONS.PROJECT_FIGURES:
+      return projectFigures(context, state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -844,6 +848,42 @@ async function dispatchSuggest(input, context, state = {}) {
       available: result.candidates.length,
       unavailable: result.excluded.length,
       requiredSkills: result.requirements?.requiredSkills || [],
+    },
+  };
+}
+
+/** Controlling AI: how a job stands, and what the figures cannot say. */
+async function projectFigures(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return { action: ACTIONS.PROJECT_FIGURES, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.PROJECT_FIGURES, ['project'], context);
+  }
+
+  const controllingService = (await import('../agents/controlling/controlling.service.js')).default;
+  const result = await controllingService.figuresFor(context.project);
+
+  return {
+    action: ACTIONS.PROJECT_FIGURES,
+    status: 'completed',
+    message: controllingService.compose(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    record: {
+      id: context.project._id,
+      name: result.project?.name || context.project.name,
+      budget: result.budget ?? null,
+      ordered: result.ordered ?? null,
+      invoiced: result.invoiced ?? null,
+      openToInvoice: result.openToInvoice ?? null,
+      outstanding: result.outstanding ?? null,
+      hoursWorked: result.hoursWorked ?? null,
+      billingRate: result.billingRate ?? null,
+      // No margin: this system holds no cost rate. Stated, not omitted.
+      margin: null,
+      gaps: result.gaps || [],
     },
   };
 }

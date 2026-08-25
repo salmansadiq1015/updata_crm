@@ -736,6 +736,27 @@ const SCENARIOS = [
 
   // ─── Service AI ────────────────────────────────────────────
 
+  // ─── Controlling AI ────────────────────────────────────────
+
+  {
+    name: 'kennzahlen-nennen-ihre-luecken',
+    why: 'Eine Marge aus einem geratenen Stundensatz wäre schlimmer als gar keine Zahl.',
+    async exec() {
+      const state = await run('Wie steht das Projekt Kesselersatz Bäckerei Weber finanziell?');
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Kennzahlen geliefert', action(state) === 'PROJECT_FIGURES', `action = ${action(state)}`),
+        check('Auftragswert gerechnet', typeof record.ordered === 'number', `ordered = ${record.ordered}`),
+        check('keine Marge behauptet', record.margin === null && !/Marge (beträgt|:)/i.test(text), text.slice(0, 200)),
+        check('fehlender Kostensatz benannt', (record.gaps || []).some((g) => /Kostensatz/.test(g)),
+          (record.gaps || []).join(' | ')),
+        check('als Bestandszahlen gekennzeichnet', /keine Buchhaltungsauswertung/i.test(text), text.slice(-160)),
+        noEnglish(state),
+      ];
+    },
+  },
+
   // ─── Finanz AI ─────────────────────────────────────────────
 
   {

@@ -106,7 +106,7 @@ export function useAiChat({ selectedThreadId, currentThreadId, context, onThread
   });
 
   const confirmMutation = useMutation({
-    mutationFn: ({ decision }) => aiAgentService.confirm(latestRun?._id, decision),
+    mutationFn: ({ decision, overrides }) => aiAgentService.confirm(latestRun?._id, decision, overrides),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentThread(selectedThreadId) });
     },
@@ -177,7 +177,7 @@ export function useAiChat({ selectedThreadId, currentThreadId, context, onThread
   );
 
   const confirm = useCallback(
-    (decision) => confirmMutation.mutate({ decision }),
+    (decision, overrides) => confirmMutation.mutate({ decision, overrides }),
     [confirmMutation],
   );
 

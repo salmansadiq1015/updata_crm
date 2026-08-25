@@ -96,7 +96,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
     return (
       <AiChatConfirmation
         run={run}
-        onConfirm={() => onConfirm(true)}
+        onConfirm={(overrides) => onConfirm(true, overrides)}
         onCancel={() => onConfirm(false)}
         isConfirming={isConfirming}
       />

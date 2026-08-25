@@ -54,6 +54,11 @@ class AiAgentWorker extends BaseWorker {
     const resumeState = { ...savedState.state, confirmed: confirmation?.decision ?? false };
     const resumePermissions = permissions || resumeState.permissions || [];
 
+    // A person approving with corrections (C2 "Override") overrules the
+    // planner's own parameters — the workflow reads them from the same place,
+    // so the corrected run behaves exactly as if the agent had proposed it.
+    const entities = this._applyOverrides(resumeState.entities || {}, confirmation?.overrides);
+
     await agentRunRepository.updateById(agentRunId, { status: 'RUNNING' });
 
     return agentExecutor.execute(
@@ -61,13 +66,25 @@ class AiAgentWorker extends BaseWorker {
       userId,
       resumePermissions,
       savedState.workflowType,
-      resumeState.entities || {},
+      entities,
       resumeState.input || '',
       {
         confirmed: resumeState.confirmed,
         stepCount: resumeState.stepCount || 0,
       },
     );
+  }
+
+  _applyOverrides(entities, overrides) {
+    if (!overrides || !Object.keys(overrides).length) return entities;
+    const plan = entities.llmPlan || { action: null, params: {} };
+    logger.info('Resuming with hand corrections', {
+      module: 'ai-agent', action: 'job.resume', fields: Object.keys(overrides),
+    });
+    return {
+      ...entities,
+      llmPlan: { ...plan, params: { ...(plan.params || {}), ...overrides } },
+    };
   }
 }
 

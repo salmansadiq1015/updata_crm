@@ -77,7 +77,7 @@ async function login() {
  * Pass the threadId back in to continue a conversation — that is how the
  * office answers a follow-up question.
  */
-async function run(input, { confirm = false, threadId } = {}) {
+async function run(input, { confirm = false, overrides = null, threadId } = {}) {
   const dispatched = await api('/ai/agent/run', {
     method: 'POST',
     body: { input, ...(threadId ? { threadId } : {}) },
@@ -91,8 +91,15 @@ async function run(input, { confirm = false, threadId } = {}) {
   let state = await settle(runId);
 
   if (confirm && state.status === 'AWAITING_CONFIRMATION') {
-    await api(`/ai/agent/${runId}/confirm`, { method: 'POST', body: { decision: true } });
+    // What the agent proposed, kept before it is replaced by the settled run —
+    // a scenario checking the preview has nowhere else to read it afterwards.
+    const proposed = state.output;
+    await api(`/ai/agent/${runId}/confirm`, {
+      method: 'POST',
+      body: { decision: true, ...(overrides ? { overrides } : {}) },
+    });
     state = await settle(runId, 'AWAITING_CONFIRMATION');
+    state.pending = proposed;
   }
   state.threadId = state.threadId || thread;
   return state;
@@ -229,6 +236,43 @@ const SCENARIOS = [
         check('Auftragsnummer erhalten', /AUF-2026-0052/.test(record.title || ''), `titre = « ${record.title} »`),
         check('Befehlswörter entfernt', !/Erstelle|Aufgabe erstellen/i.test(record.title || ''), `titre = « ${record.title} »`),
         check('Text nicht umformuliert', /Nachkontrolle beim Kunden/.test(record.title || ''), `titre = « ${record.title} »`),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'lauf-traegt-seine-herkunft',
+    why: 'Monate später zählt nicht, welcher Agent lief, sondern was die Antwort erzeugt hat.',
+    async exec() {
+      const state = await run('Wie viele offene Aufgaben gibt es?');
+      const p = state.provenance || {};
+      return [
+        check('Version festgehalten', Boolean(p.agentVersion), `version = ${p.agentVersion}`),
+        check('Modell festgehalten', Boolean(p.model), `modell = ${p.model}`),
+        check('Anbieter festgehalten', Boolean(p.provider), `anbieter = ${p.provider}`),
+        check('Planungsweg festgehalten', ['llm', 'heuristic', 'follow-up'].includes(p.plannedBy), `weg = ${p.plannedBy}`),
+      ];
+    },
+  },
+  {
+    name: 'freigabe-mit-handkorrektur',
+    why: 'Ein Vorschlag mit einem falschen Wort muss korrigierbar sein, nicht neu zu diktieren.',
+    async exec() {
+      const state = await run(
+        'Erstelle ein Projekt ZZTEST Korrektur Original für Kunde Immobilien Verwaltung',
+        { confirm: true, overrides: { title: 'ZZTEST Korrektur Freigegeben' } },
+      );
+      const record = state.output?.record || {};
+      track('project', record.id);
+      const preview = state.pending?.confirmation?.proposal || [];
+      return [
+        check('Vorschau vor der Freigabe', preview.some((f) => f.field === 'title'),
+          preview.map((f) => f.field).join(', ')),
+        check('Korrektur wurde angelegt', /Korrektur Freigegeben/.test(record.name || ''), `angelegt als « ${record.name} »`),
+        check('Vorschlag bleibt daneben stehen', /Korrektur Original/.test(state.override?.before?.title || ''),
+          JSON.stringify(state.override?.before)),
+        check('Urheber der Korrektur festgehalten', Boolean(state.override?.by && state.override?.at),
+          JSON.stringify(state.override)),
         noEnglish(state),
       ];
     },

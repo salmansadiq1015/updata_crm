@@ -2,6 +2,7 @@ import agentRunRepository from './agentRun.repository.js';
 import agentMemory from './agent.memory.js';
 import llmPlanner from './llmPlanner.service.js';
 import { checkRateLimit, sanitizeUserInput } from './agent.guardrails.js';
+import { OVERRIDABLE_FIELDS } from './agent.validation.js';
 import queueManager from '../../../shared/queue/QueueManager.js';
 import { AppError } from '../../../shared/errors/AppError.js';
 import ERROR_CODES from '../../../shared/errors/errorCodes.js';
@@ -11,6 +12,27 @@ import EVENT_TYPES from '../../../shared/events/eventTypes.js';
 import config from '../../../config/index.js';
 import logger from '../../../shared/logger/index.js';
 import { randomUUID } from 'crypto';
+
+/**
+ * Bumped by hand whenever agent behaviour changes in a way a reader would
+ * need to know about. Stamped on every run so an old answer can be explained
+ * by the version that produced it, not by the code as it stands today.
+ */
+export const AI_AGENT_VERSION = '2026.08.3';
+
+/** What the answer can be traced back to, recorded before the work starts. */
+function provenanceOf(intent, llmPlan, previousFollowUp) {
+  let plannedBy = 'heuristic';
+  if (previousFollowUp) plannedBy = 'follow-up';
+  else if (llmPlan) plannedBy = 'llm';
+  return {
+    agentVersion: AI_AGENT_VERSION,
+    action: llmPlan?.action || String(intent || '').toUpperCase() || null,
+    model: config.ai?.model || null,
+    provider: config.ai?.baseUrl ? 'infomaniak' : 'openai',
+    plannedBy,
+  };
+}
 
 const INTENT_TO_WORKFLOW = {
   create_customer: 'FIELD_SERVICE_AGENT',
@@ -158,6 +180,7 @@ class AgentService {
       idempotencyKey: `${userId}-${randomUUID()}`,
       correlationId: meta.correlationId || randomUUID(),
       metadata: { ipAddress: meta.ipAddress, userAgent: meta.userAgent },
+      provenance: provenanceOf(intent, llmPlan, previousFollowUp),
     });
 
     try {
@@ -279,7 +302,15 @@ class AgentService {
     return { agentRunId: agentRun._id.toString(), status: 'pending', workflowType };
   }
 
-  async confirmRun(agentRunId, userId, decision) {
+  /**
+   * A person's decision on a pending run — approve, approve with corrections,
+   * or refuse.
+   *
+   * Corrections are kept beside what the agent had proposed rather than
+   * replacing it silently: the point of the override is that a wrong
+   * suggestion stays readable next to the human answer.
+   */
+  async confirmRun(agentRunId, userId, decision, overrides = {}) {
     const run = await agentRunRepository.findById(agentRunId);
     if (!run) throw new AppError('Agent run not found', 404, ERROR_CODES.AI_AGENT_NOT_FOUND);
     if (run.userId.toString() !== userId.toString()) {
@@ -289,7 +320,30 @@ class AgentService {
       throw new AppError(`Cannot confirm: status is ${run.status}`, 409, ERROR_CODES.AI_AGENT_INVALID_STATUS);
     }
 
-    await agentMemory.storeConfirmation(agentRunId, decision);
+    const corrections = this._corrections(overrides);
+    if (Object.keys(corrections).length && !decision) {
+      throw new AppError('Korrekturen sind nur bei einer Freigabe möglich.', 400, ERROR_CODES.AI_AGENT_INVALID_STATUS);
+    }
+
+    await agentMemory.storeConfirmation(agentRunId, decision, corrections);
+
+    if (Object.keys(corrections).length) {
+      const before = await this._proposedValues(agentRunId, run, Object.keys(corrections));
+      await agentRunRepository.updateById(agentRunId, {
+        override: { by: userId, at: new Date(), before, after: corrections },
+      });
+      auditService.logEvent({
+        eventType: 'ai.agent.run.overridden',
+        userId,
+        ipAddress: 'internal',
+        result: 'success',
+        details: { agentRunId, fields: Object.keys(corrections) },
+        module: 'ai',
+      });
+      logger.info('Agent proposal corrected by hand', {
+        module: 'ai-agent', action: 'service.confirmRun', agentRunId, fields: Object.keys(corrections),
+      });
+    }
 
     if (decision) {
       try {
@@ -308,7 +362,44 @@ class AgentService {
       eventBus.publish(EVENT_TYPES.AI_AGENT_RUN_CANCELLED, { agentRunId, userId: userId.toString() }, { source: 'ai:agent' });
     }
 
-    return { agentRunId, decision };
+    return { agentRunId, decision, overrides: corrections };
+  }
+
+  /**
+   * What the agent had proposed for the fields being corrected.
+   *
+   * The planner's own parameters are the truthful source — they are what the
+   * override replaces. The pending output is only a fallback, and a partial
+   * one: a project's proposed title lives under `name` there, so reading the
+   * output alone recorded "before: null" and made the whole record useless.
+   */
+  async _proposedValues(agentRunId, run, fields) {
+    let params = {};
+    try {
+      const saved = await agentMemory.loadWorkflowState(agentRunId);
+      params = saved?.state?.entities?.llmPlan?.params || {};
+    } catch { /* the output fallback below still says something */ }
+
+    const output = run.output?.record || run.output || {};
+    const ALIASES = { title: ['title', 'name'], description: ['description', 'notes'] };
+    return Object.fromEntries(fields.map((field) => {
+      if (params[field] !== undefined && params[field] !== null) return [field, params[field]];
+      const candidates = ALIASES[field] || [field];
+      const found = candidates.map((key) => output[key]).find((value) => value !== undefined && value !== null);
+      return [field, found ?? null];
+    }));
+  }
+
+  /** Keeps only real corrections: empty strings and unchanged nulls are not one. */
+  _corrections(overrides = {}) {
+    const kept = {};
+    for (const field of OVERRIDABLE_FIELDS) {
+      const value = overrides[field];
+      if (value === undefined || value === null) continue;
+      if (typeof value === 'string' && !value.trim()) continue;
+      kept[field] = typeof value === 'string' ? value.trim() : value;
+    }
+    return kept;
   }
 
   async archiveRun(agentRunId, userId) {

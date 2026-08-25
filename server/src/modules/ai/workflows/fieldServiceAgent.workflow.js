@@ -341,6 +341,9 @@ async function performAction(action, input, context, userId, state = {}) {
         riskLevel: decision.riskLevel,
         label: ACTION_LABELS[action] || action,
         effect: RISK_LEVEL_LABELS[decision.riskLevel],
+        // What the agent actually intends to write, so the office can read it
+        // before approving — and correct it without dictating again (C2).
+        proposal: proposedFields(context),
         ...target,
       },
       ...target,
@@ -1176,6 +1179,39 @@ const CONFIRMATION_TARGETS = {
   [ACTIONS.DELETE_ASSIGNMENT]: ['assignment', 'assignment'],
   [ACTIONS.RESCHEDULE_ASSIGNMENT]: ['assignment', 'assignment'],
 };
+
+/**
+ * The planner's parameters, as a confirmation preview.
+ *
+ * Only fields it actually set, and only those a person is allowed to correct
+ * — the same list the confirmation endpoint accepts, so what is shown is
+ * exactly what can be changed.
+ */
+const PROPOSAL_FIELDS = Object.freeze([
+  ['title', 'Titel'],
+  ['description', 'Beschreibung'],
+  ['priority', 'Priorität'],
+  ['dueDate', 'Fälligkeit'],
+  ['dateTime', 'Termin'],
+  ['durationHours', 'Dauer (h)'],
+  ['assigneeName', 'Monteur'],
+  ['customerName', 'Kunde'],
+  ['projectName', 'Projekt'],
+  ['installationName', 'Anlage'],
+  ['status', 'Status'],
+  ['messageContent', 'Nachricht'],
+]);
+
+function proposedFields(context = {}) {
+  const draft = context.llmDraft || {};
+  const proposal = [];
+  for (const [field, label] of PROPOSAL_FIELDS) {
+    const value = draft[field];
+    if (value === undefined || value === null || value === '') continue;
+    proposal.push({ field, label, value: value instanceof Date ? value.toISOString() : value });
+  }
+  return proposal;
+}
 
 function confirmationTarget(action, context = {}) {
   const mapping = CONFIRMATION_TARGETS[action];

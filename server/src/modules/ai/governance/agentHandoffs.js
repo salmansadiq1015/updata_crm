@@ -282,8 +282,59 @@ async function onProjectScheduled(event) {
   }
 }
 
+/**
+ * Document filed → Document AI.
+ *
+ * The register's own trigger, "Neues Dokument". A document that lands under
+ * OTHER is invisible to Behörden, Quality and Money AI, which then report the
+ * paperwork missing — so the moment to look at it is the moment it arrives.
+ * A task only when there is something to say: a document already filed where
+ * it belongs needs nobody's attention.
+ */
+async function onDocumentUploaded(event) {
+  const payload = event?.payload || event || {};
+  const { documentId, projectId, fileName, category, uploadedBy } = payload;
+  if (!documentId || !projectId || !fileName) return;
+
+  if (!(await agentIsRunnable('DOCUMENT'))) return;
+
+  try {
+    const documentService = (await import('../agents/document/document.service.js')).default;
+    const result = await documentService.classify({ fileName, projectId });
+
+    // Nothing to propose when the office already filed it correctly.
+    if (result.type && result.category === category) return;
+
+    const taskService = (await import('../../tasks/task.service.js')).default;
+    await taskService.create({
+      title: result.type
+        ? `Dokument einordnen: ${fileName}`
+        : `Dokument unklar: ${fileName}`,
+      description: documentService.compose(result),
+      priority: result.type ? 'MEDIUM' : 'HIGH',
+      projectId,
+      customerId: result.project?.customerId || null,
+    }, uploadedBy || null, { source: 'ai-agent' });
+
+    logger.info('Handoff: document uploaded → Document AI', {
+      module: 'ai-handoff',
+      action: 'documentUploaded',
+      documentId: String(documentId),
+      type: result.type?.key || null,
+    });
+  } catch (err) {
+    logger.warn('Handoff document → Document AI failed', {
+      module: 'ai-handoff',
+      action: 'documentUploaded',
+      documentId: String(documentId),
+      error: err.message,
+    });
+  }
+}
+
 export function registerAgentHandoffs() {
   eventBus.subscribe(EVENT_TYPES.QUOTATION_ACCEPTED, onQuotationAccepted);
+  eventBus.subscribe(EVENT_TYPES.PROJECT_DOCUMENT_UPLOADED, onDocumentUploaded);
   eventBus.subscribe(EVENT_TYPES.PROJECT_CREATED, onProjectCreated);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_CHANGED, onProjectScheduled);
   eventBus.subscribe(EVENT_TYPES.PROJECT_STATUS_OVERRIDDEN, onProjectScheduled);
@@ -296,6 +347,7 @@ export function registerAgentHandoffs() {
     action: 'register',
     handoffs: [
       'quotation.accepted → PROJEKT',
+      'document.uploaded → DOCUMENT',
       'project.created → BEHOERDEN',
       'project.scheduled → MATERIAL',
       'project.completed → QUALITY',

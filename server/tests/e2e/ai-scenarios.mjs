@@ -736,6 +736,44 @@ const SCENARIOS = [
 
   // ─── Service AI ────────────────────────────────────────────
 
+  // ─── Document AI ───────────────────────────────────────────
+
+  {
+    name: 'dokumente-werden-eingeordnet',
+    why: 'Ein Dokument unter OTHER ist für Behörden, Quality und Money AI unsichtbar.',
+    async exec() {
+      const state = await run('Sind die Dokumente vom Projekt Wärmepumpen-Umstellung Liegenschaft Basel richtig abgelegt?');
+      const record = state.output?.record || {};
+      const text = message(state);
+      return [
+        check('Ablage geprüft', action(state) === 'DOCUMENT_CLASSIFY', `action = ${action(state)}`),
+        check('Dokumente gelesen', (record.total || 0) > 0, `${record.total} Dokumente`),
+        check('nichts verschoben', /nichts automatisch/i.test(text), text.slice(-140)),
+        check('sagt, dass der Inhalt nicht gelesen wird', /Inhalt wird nicht gelesen/i.test(text), text.slice(-220)),
+        noEnglish(state),
+      ];
+    },
+  },
+  {
+    name: 'dokument-ohne-signal-wird-nicht-geraten',
+    why: 'Eine Rechnung als Bohrbewilligung abzulegen ist schlimmer, als sie unklassiert zu lassen.',
+    async exec() {
+      const state = await run('Klassiere die Dokumente vom Projekt Wärmepumpen-Umstellung Liegenschaft Basel');
+      const records = state.output?.records || [];
+      const unnamed = records.filter((r) => !r.proposedType);
+      return [
+        check('Ablage geprüft', action(state) === 'DOCUMENT_CLASSIFY', `action = ${action(state)}`),
+        check('nichtssagende Namen gefunden', unnamed.length > 0, records.map((r) => r.fileName).join(', ')),
+        check('und offen gelassen', unnamed.every((r) => !r.suggestedName),
+          unnamed.map((r) => `${r.fileName}→${r.suggestedName}`).join(', ')),
+        check('erkannte behalten ihren Vorschlag',
+          records.filter((r) => r.proposedType).every((r) => Boolean(r.suggestedName)),
+          records.filter((r) => r.proposedType).map((r) => `${r.fileName}→${r.suggestedName}`).join(', ')),
+        noEnglish(state),
+      ];
+    },
+  },
+
   // ─── Material AI ───────────────────────────────────────────
 
   {

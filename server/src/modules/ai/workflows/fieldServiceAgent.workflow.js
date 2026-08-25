@@ -50,6 +50,7 @@ const ACTIONS = Object.freeze({
   DISPATCH_CHECK: 'DISPATCH_CHECK',
   DISPATCH_SUGGEST: 'DISPATCH_SUGGEST',
   MATERIAL_CHECK: 'MATERIAL_CHECK',
+  DOCUMENT_CLASSIFY: 'DOCUMENT_CLASSIFY',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -95,6 +96,7 @@ const ACTION_LABELS = {
   [ACTIONS.DISPATCH_CHECK]: 'einen Einsatz vorprüfen',
   [ACTIONS.DISPATCH_SUGGEST]: 'einen Monteur vorschlagen',
   [ACTIONS.MATERIAL_CHECK]: 'den Materialstatus prüfen',
+  [ACTIONS.DOCUMENT_CLASSIFY]: 'die Dokumentablage prüfen',
   [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
   [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
   [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
@@ -393,6 +395,8 @@ async function performAction(action, input, context, userId, state = {}) {
       return dispatchSuggest(input, context, state);
     case ACTIONS.MATERIAL_CHECK:
       return materialCheck(context, state);
+    case ACTIONS.DOCUMENT_CLASSIFY:
+      return documentClassify(context, state);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -836,6 +840,36 @@ async function dispatchSuggest(input, context, state = {}) {
       available: result.candidates.length,
       unavailable: result.excluded.length,
       requiredSkills: result.requirements?.requiredSkills || [],
+    },
+  };
+}
+
+/** Document AI: what the project's documents are, and where they belong. */
+async function documentClassify(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return { action: ACTIONS.DOCUMENT_CLASSIFY, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.DOCUMENT_CLASSIFY, ['project'], context);
+  }
+
+  const documentService = (await import('../agents/document/document.service.js')).default;
+  const result = await documentService.classifyProject(context.project);
+
+  return {
+    action: ACTIONS.DOCUMENT_CLASSIFY,
+    status: 'completed',
+    message: documentService.composeProject(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    records: result.documents,
+    record: {
+      id: context.project._id,
+      name: context.project.name,
+      total: result.documents.length,
+      unfiled: result.documents.filter((entry) => !entry.settled).length,
+      unrecognised: result.documents.filter((entry) => !entry.proposedType).length,
     },
   };
 }

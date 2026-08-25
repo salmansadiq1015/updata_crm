@@ -14,6 +14,7 @@
  */
 import mongoose from 'mongoose';
 import { BLOCK_REASONS, blocked } from '../../governance/agent.risk.js';
+import { documentTypeLabel, matchDocumentType } from '../document/documentTypes.js';
 import logger from '../../../../shared/logger/index.js';
 
 /** Mongoose buffers for 10s when the connection is down; never wait on it. */
@@ -24,38 +25,40 @@ function dbReady() {
 /**
  * Paperwork a finished job must leave behind, per plant type.
  *
- * The entries follow the trade, not a generic file list: an Erdsonde cannot be
- * closed without its drilling permit and its subsidy settlement, a Luft-Wasser
- * heat pump needs its Baumeldung and its noise assessment, a boiler swap needs
- * its disposal receipt. `blocking` marks what stops the closing; the rest is
- * worth saying out loud without holding the project hostage.
+ * Only what is specific to closing lives here: which document types are
+ * expected, which of them hold the closing, and the name the checklist gives
+ * them. What each type *is* — and how it is recognised in a file — comes from
+ * the shared vocabulary, so a document Document AI files as an IBN-Protokoll
+ * is the same one this checklist then finds.
  */
+const need = (key, blocking, label = null) => ({ key, blocking, label: label || documentTypeLabel(key) });
+
 const CLOSING_DOCUMENTS = Object.freeze({
   ERDSONDEN_WP: [
-    { key: 'BOHRBEWILLIGUNG', label: 'Bohrbewilligung', terms: ['bohrbewilligung', 'bohrgesuch', 'bewilligung'], blocking: true },
-    { key: 'IBN_PROTOKOLL', label: 'IBN-Protokoll', terms: ['ibn', 'inbetriebnahme'], blocking: true },
-    { key: 'WPSM', label: 'WPSM-Einverständniserklärung', terms: ['wpsm', 'einverstaendnis', 'einverständnis'], blocking: true },
-    { key: 'FOERDERABSCHLUSS', label: 'Förderabschluss', terms: ['foerderabschluss', 'förderabschluss', 'foerder', 'förder'], blocking: true },
-    { key: 'FOTOS', label: 'Fotos der fertigen Anlage', terms: ['foto', 'bild', 'aufnahme'], categories: ['PHOTOS'], blocking: true },
-    { key: 'SCHEMA', label: 'Anlagenschema', terms: ['schema', 'hydraulik', 'prinzipschema'], categories: ['PLANS'], blocking: false },
-    { key: 'GARANTIE', label: 'Garantie- und Herstellerunterlagen', terms: ['garantie', 'herstellerunterlagen', 'bedienungsanleitung', 'betriebsanleitung'], blocking: false },
+    need('BOHRBEWILLIGUNG', true),
+    need('IBN_PROTOKOLL', true),
+    need('WPSM', true),
+    need('FOERDERABSCHLUSS', true),
+    need('FOTOS', true, 'Fotos der fertigen Anlage'),
+    need('SCHEMA', false),
+    need('GARANTIE', false),
   ],
   LUFT_WASSER_WP: [
-    { key: 'BAUMELDUNG', label: 'Baumeldung bzw. Baubewilligung', terms: ['baumeldung', 'baugesuch', 'baubewilligung', 'bewilligung'], blocking: true },
-    { key: 'SCHALLSCHUTZ', label: 'Schallschutznachweis', terms: ['schallschutz', 'laerm', 'lärm', 'schallnachweis'], blocking: true },
-    { key: 'IBN_PROTOKOLL', label: 'IBN-Protokoll', terms: ['ibn', 'inbetriebnahme'], blocking: true },
-    { key: 'FOERDERABSCHLUSS', label: 'Förderabschluss', terms: ['foerderabschluss', 'förderabschluss', 'foerder', 'förder'], blocking: true },
-    { key: 'FOTOS', label: 'Fotos der fertigen Anlage', terms: ['foto', 'bild', 'aufnahme'], categories: ['PHOTOS'], blocking: true },
-    { key: 'GARANTIE', label: 'Garantie- und Herstellerunterlagen', terms: ['garantie', 'herstellerunterlagen', 'bedienungsanleitung', 'betriebsanleitung'], blocking: false },
+    need('BAUMELDUNG', true),
+    need('SCHALLSCHUTZ', true),
+    need('IBN_PROTOKOLL', true),
+    need('FOERDERABSCHLUSS', true),
+    need('FOTOS', true, 'Fotos der fertigen Anlage'),
+    need('GARANTIE', false),
   ],
   BOILER_SPEICHER: [
-    { key: 'FOTOS', label: 'Fotos der fertigen Anlage', terms: ['foto', 'bild', 'aufnahme'], categories: ['PHOTOS'], blocking: true },
-    { key: 'GARANTIE', label: 'Garantieunterlagen', terms: ['garantie', 'herstellerunterlagen', 'bedienungsanleitung', 'betriebsanleitung'], blocking: true },
-    { key: 'ENTSORGUNG', label: 'Entsorgungsnachweis Altgerät', terms: ['entsorgung', 'altgeraet', 'altgerät', 'recycling'], blocking: false },
+    need('FOTOS', true, 'Fotos der fertigen Anlage'),
+    need('GARANTIE', true, 'Garantieunterlagen'),
+    need('ENTSORGUNG', false, 'Entsorgungsnachweis Altgerät'),
   ],
   STANDARD: [
-    { key: 'FOTOS', label: 'Fotos der ausgeführten Arbeiten', terms: ['foto', 'bild', 'aufnahme'], categories: ['PHOTOS'], blocking: true },
-    { key: 'ABSCHLUSS', label: 'Abschlussdokumentation', terms: ['abschluss', 'abnahme', 'protokoll', 'dokumentation'], blocking: false },
+    need('FOTOS', true, 'Fotos der ausgeführten Arbeiten'),
+    need('ABNAHME', false, 'Abschlussdokumentation'),
   ],
 });
 
@@ -63,31 +66,22 @@ const CLOSING_DOCUMENTS = Object.freeze({
 const CLOSING_DOCUMENTS_BY_PROJECT_TYPE = Object.freeze({
   NEW_INSTALLATION: CLOSING_DOCUMENTS.STANDARD,
   RENOVATION: CLOSING_DOCUMENTS.BOILER_SPEICHER,
-  MAINTENANCE: [
-    { key: 'RAPPORT', label: 'Servicerapport', terms: ['rapport', 'servicebericht', 'bericht'], blocking: true },
-    { key: 'FOTOS', label: 'Fotos', terms: ['foto', 'bild', 'aufnahme'], categories: ['PHOTOS'], blocking: false },
-  ],
-  SERVICE_CONTRACT: [
-    { key: 'RAPPORT', label: 'Servicerapport', terms: ['rapport', 'servicebericht', 'bericht'], blocking: true },
-  ],
+  MAINTENANCE: [need('RAPPORT', true, 'Servicerapport'), need('FOTOS', false)],
+  SERVICE_CONTRACT: [need('RAPPORT', true, 'Servicerapport')],
   OTHER: CLOSING_DOCUMENTS.STANDARD,
 });
 
-/** Everything a document could be recognised by, folded to lower case. */
-function documentHaystack(document) {
-  return [document.fileName, document.description, document.templateType, document.category]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-    // "Förderabschluss" and "Foerderabschluss" must both match one term list.
-    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue');
-}
-
-function requirementMatches(requirement, document, haystack) {
-  if (requirement.categories?.includes(document.category)) return true;
-  return requirement.terms.some((term) => haystack.includes(
-    term.replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue'),
-  ));
+/**
+ * What each filed document is, decided once per document rather than once per
+ * requirement — the same reading Document AI does when it classifies.
+ *
+ * A document already filed under PHOTOS is a photo whatever its name says;
+ * that is a classification the office made, and it is trusted.
+ */
+function classifyFiled(document) {
+  if (document.category === 'PHOTOS') return 'FOTOS';
+  const text = [document.fileName, document.description, document.templateType].filter(Boolean).join(' ');
+  return matchDocumentType(text)?.key || null;
 }
 
 class QualityService {
@@ -235,9 +229,9 @@ class QualityService {
     if (documents === null) {
       warnings.push('Die Projektdokumente konnten nicht geprüft werden.');
     } else {
-      const indexed = documents.map((document) => ({ document, haystack: documentHaystack(document) }));
+      const indexed = documents.map((document) => ({ document, key: classifyFiled(document) }));
       for (const requirement of requirements) {
-        const hit = indexed.find(({ document, haystack }) => requirementMatches(requirement, document, haystack));
+        const hit = indexed.find(({ key }) => key === requirement.key);
         if (hit) {
           present.push({ key: requirement.key, label: requirement.label, fileName: hit.document.fileName });
           // Filed but still a draft — worth naming, the document exists.

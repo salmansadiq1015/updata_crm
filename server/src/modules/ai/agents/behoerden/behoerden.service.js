@@ -16,6 +16,7 @@
  */
 import mongoose from 'mongoose';
 import { BLOCK_REASONS, blocked } from '../../governance/agent.risk.js';
+import { matchDocumentType } from '../document/documentTypes.js';
 import swissPlzService from '../../../../shared/ai/swissPlz.service.js';
 import logger from '../../../../shared/logger/index.js';
 
@@ -114,21 +115,15 @@ const PROCEDURES = Object.freeze({
   BOILER_SPEICHER: [],
 });
 
-/** Documents already on the project count as the procedure being under way. */
-const DOCUMENT_TERMS = Object.freeze({
-  BOHRBEWILLIGUNG: ['bohrbewilligung', 'bohrgesuch'],
-  BAUMELDUNG: ['baumeldung', 'baugesuch', 'baubewilligung'],
-  SCHALLSCHUTZ: ['schallschutz', 'laerm', 'schallnachweis'],
-  FOERDERGESUCH: ['foerdergesuch', 'foerderung', 'foerder'],
-  WPSM: ['wpsm', 'einverstaendnis'],
-  FOERDERABSCHLUSS: ['foerderabschluss'],
-});
-
-function fold(value) {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue');
-}
+/**
+ * Which document proves a procedure was filed comes from the shared
+ * vocabulary Document AI classifies with, so a document it files as a
+ * Bohrbewilligung is the same one this agent then finds.
+ *
+ * The local list it replaces had drifted: a Fördergesuch matched on the
+ * fragment "foerder", which also matches a Förderabschluss — the paper filed
+ * at the end of a job was being read as the one filed at the start.
+ */
 
 class BehoerdenService {
   /**
@@ -239,12 +234,13 @@ class BehoerdenService {
     const catalogue = template && template.key in PROCEDURES ? PROCEDURES[template.key] : null;
     if (!catalogue) return [];
 
-    const haystacks = documents.map((document) => fold([document.fileName, document.description, document.templateType].filter(Boolean).join(' ')));
+    const filedKeys = new Set(documents
+      .map((document) => matchDocumentType([document.fileName, document.description, document.templateType].filter(Boolean).join(' '))?.key)
+      .filter(Boolean));
     const kw = installations.find((installation) => installation.powerOutputKw)?.powerOutputKw || null;
 
     return catalogue.map((procedure) => {
-      const terms = DOCUMENT_TERMS[procedure.key] || [];
-      const filed = haystacks.some((haystack) => terms.some((term) => haystack.includes(term)));
+      const filed = filedKeys.has(procedure.key);
       const missing = this._missingData(procedure, place, kw, installations);
       return {
         ...procedure,

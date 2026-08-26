@@ -1,3 +1,5 @@
+import { isValidQrReference } from '../../../../shared/validation/swissPayment.js';
+
 export default class QrBillRenderer {
   async draw(doc, pm, ciConfig, data, language) {
     const qrData = data.qrBill;
@@ -9,13 +11,18 @@ export default class QrBillRenderer {
     const SwissQRBill = swissqrbill.SwissQRBill || swissqrbill.default?.SwissQRBill || swissqrbill.default;
     if (!SwissQRBill) throw new Error('Swiss QR-bill renderer is unavailable');
 
-    // A QR-IBAN (IID 30000-31999) requires a compliant 27-char QR reference (QRR).
-    // The document reference (project/quotation number) isn't one, so derive a valid
-    // QRR from its digits using swissqrbill's checksum helper.
+    // A QR-IBAN (IID 30000-31999) requires a compliant 27-char QR reference
+    // (QRR). A document reference like a project or quotation number is not
+    // one, so a valid QRR is derived from its digits.
+    //
+    // A reference that is ALREADY a valid QRR is left exactly as it stands.
+    // Deriving from it produced a different — also valid — reference, and the
+    // payment slip then carried a number the accounting system never issued:
+    // the customer pays, and the incoming payment matches no invoice.
     const account = String(qrData.iban || '').replace(/\s/g, '');
     const isQrIban = /^CH\d{2}3[01]\d{3}/.test(account);
     let reference = qrData.reference || undefined;
-    if (isQrIban) {
+    if (isQrIban && !isValidQrReference(reference)) {
       const { calculateQRReferenceChecksum } = await import('swissqrbill/utils');
       const seed = String(qrData.reference || account).replace(/\D/g, '').slice(-26).padStart(26, '0');
       reference = seed + calculateQRReferenceChecksum(seed);

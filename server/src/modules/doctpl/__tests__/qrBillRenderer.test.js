@@ -45,6 +45,27 @@ describe('QrBillRenderer payload assembly (DOC-003)', () => {
     expect(__qrCalls[0].opts.language).toBe('FR');
   });
 
+  test('a reference that is already a valid QR reference is left alone', async () => {
+    // Deriving from a valid QRR produced a different, also valid, reference —
+    // and the customer then paid against a number no invoice carries.
+    await new QrBillRenderer().draw({}, {}, ciConfig, { qrBill: qrData() }, 'de');
+    expect(__qrCalls[0].data.reference).toBe('210000000003139471430009017');
+  });
+
+  test('a document number on a QR-IBAN becomes a compliant 27-digit reference', async () => {
+    // A quotation number is not a QR reference, and a QR-IBAN accepts nothing
+    // else — so one is derived rather than the slip going out non-compliant.
+    await new QrBillRenderer().draw(
+      {}, {}, ciConfig,
+      { qrBill: { ...qrData(), reference: 'RE-2026-0001' } },
+      'de',
+    );
+
+    const { reference } = __qrCalls[0].data;
+    expect(reference).toMatch(/^\d{27}$/);
+    expect(reference).not.toBe('RE-2026-0001');
+  });
+
   test('does nothing when no IBAN is present (non-invoice documents)', async () => {
     await new QrBillRenderer().draw({}, {}, ciConfig, { qrBill: { amount: 100 } }, 'de');
     expect(__qrCalls).toHaveLength(0);

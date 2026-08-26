@@ -1,6 +1,11 @@
 node_modules/
 .env
 .env.local
+# Toute sauvegarde d'un fichier d'environnement : elles contiennent les mêmes
+# secrets que l'original, et ne sont ignorées par aucune des règles ci-dessus.
+.env.bak*
+.env.*.bak
+*.env.backup
 .next/
 dist/
 build/

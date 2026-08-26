@@ -7,7 +7,7 @@
  * It will NOT duplicate existing data.
  */
 
-import 'dotenv/config';
+import '../config/loadEnv.js';
 import logger from '../shared/logger/index.js';
 import { seedDoctplTemplates } from './doctplSeed.js';
 import { connectDatabase, disconnectDatabase } from '../config/database.js';

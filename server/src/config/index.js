@@ -1,17 +1,11 @@
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+// Must come first: it fills process.env before anything below reads it.
+import './loadEnv.js';
 import configSchema from './schema.js';
 import { normalizeS3Endpoint } from './normalizeS3Endpoint.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Load .env from server root (two levels up from src/config/)
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-
 /**
  * Hierarchical config loader.
- * Precedence: env vars > .env file > defaults in schema
+ * Precedence: env vars > .env.local > .env > defaults in schema
  *
  * Fails fast on startup if required keys are missing or invalid.
  * Returns a frozen, immutable config object.

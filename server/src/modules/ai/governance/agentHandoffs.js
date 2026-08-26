@@ -16,12 +16,26 @@ import EVENT_TYPES from '../../../shared/events/eventTypes.js';
 import agentGovernance from './agentGovernance.service.js';
 import logger from '../../../shared/logger/index.js';
 
-/** An agent only acts on its own initiative when it is switched on. */
-async function agentIsRunnable(agentKey) {
-  if (await agentGovernance.isEmergencyStopped()) return false;
+/**
+ * An agent only acts on its own initiative when it is switched on — and the
+ * refusal is written down.
+ *
+ * Nobody watches an event fire. Without this, an agent switched off last month
+ * is indistinguishable from one that looked and found nothing to say, and the
+ * office has no way to ask which it was.
+ */
+async function agentIsRunnable(agentKey, trigger, source = {}) {
+  if (await agentGovernance.isEmergencyStopped()) {
+    await agentGovernance.recordAutonomous({ agentKey, trigger, ...source, blocked: 'EMERGENCY_STOP' });
+    return false;
+  }
   const { byKey } = await agentGovernance._registry();
   const agent = byKey.get(agentKey);
-  return Boolean(agent?.isEnabled);
+  if (!agent?.isEnabled) {
+    await agentGovernance.recordAutonomous({ agentKey, trigger, ...source, blocked: 'AGENT_DISABLED' });
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -36,7 +50,7 @@ async function onQuotationAccepted(event) {
   const { quotationId, acceptedBy } = payload;
   if (!quotationId) return;
 
-  if (!(await agentIsRunnable('PROJEKT'))) return;
+  if (!(await agentIsRunnable('PROJEKT', 'quotation.accepted', { sourceType: 'quotation', sourceId: quotationId, userId: acceptedBy }))) return;
 
   try {
     const Quotation = (await import('../../qop/quotation.model.js')).default;
@@ -58,7 +72,7 @@ async function onQuotationAccepted(event) {
     const blocking = (template?.tasks || []).filter((task) => task.blocksStart).map((task) => task.title);
 
     // Projekt AI proposes; a person opens the project from the order screen.
-    await taskService.create({
+    const task = await taskService.create({
       title: `Projekt eröffnen: ${quotation.title || quotation.quotationNumber}`,
       description: [
         `Die Offerte ${quotation.quotationNumber} wurde angenommen.`,
@@ -66,9 +80,19 @@ async function onQuotationAccepted(event) {
         blocking.length ? `Vor dem Baustart zu erledigen: ${blocking.join(', ')}.` : null,
         'Projekt über den Auftrag eröffnen, damit die Checkliste automatisch angelegt wird.',
       ].filter(Boolean).join('\n'),
+      source: { type: 'AI_AGENT', label: 'Projekt AI' },
       priority: 'HIGH',
       customerId: quotation.customerId || null,
     }, acceptedBy || null, { source: 'ai-agent' });
+
+    await agentGovernance.recordAutonomous({
+      agentKey: 'PROJEKT',
+      trigger: 'quotation.accepted',
+      sourceType: 'quotation',
+      sourceId: quotationId,
+      userId: acceptedBy || null,
+      produced: { type: 'task', id: String(task._id), title: task.title },
+    });
 
     logger.info('Handoff: quotation accepted → Projekt AI', {
       module: 'ai-handoff',
@@ -99,7 +123,7 @@ async function onProjectCompleted(event) {
   const { projectId, toStatus, changedBy } = payload;
   if (!projectId || toStatus !== 'COMPLETED') return;
 
-  if (!(await agentIsRunnable('QUALITY'))) return;
+  if (!(await agentIsRunnable('QUALITY', 'project.completed', { sourceType: 'project', sourceId: projectId, userId: changedBy }))) return;
 
   try {
     const qualityService = (await import('../agents/quality/quality.service.js')).default;
@@ -107,13 +131,23 @@ async function onProjectCompleted(event) {
     if (!result.verified || result.ok) return;
 
     const taskService = (await import('../../tasks/task.service.js')).default;
-    await taskService.create({
+    const task = await taskService.create({
       title: `Abschluss unvollständig: ${result.project.name || result.project.projectNumber}`,
       description: qualityService.compose(result),
+      source: { type: 'AI_AGENT', label: 'Quality AI' },
       priority: 'HIGH',
       projectId,
       customerId: result.project.customerId || null,
     }, changedBy || null, { source: 'ai-agent' });
+
+    await agentGovernance.recordAutonomous({
+      agentKey: 'QUALITY',
+      trigger: 'project.completed',
+      sourceType: 'project',
+      sourceId: projectId,
+      userId: changedBy || null,
+      produced: { type: 'task', id: String(task._id), title: task.title },
+    });
 
     logger.info('Handoff: project completed → Quality AI', {
       module: 'ai-handoff',
@@ -144,7 +178,7 @@ async function onMaintenanceOverdue(event) {
   const payload = event?.payload || event || {};
   if (!payload.count) return;
 
-  if (!(await agentIsRunnable('SERVICE'))) return;
+  if (!(await agentIsRunnable('SERVICE', 'maintenance.overdue', { sourceType: 'maintenance', sourceId: null, userId: payload.assignedTo }))) return;
 
   try {
     const serviceService = (await import('../agents/service/service.service.js')).default;
@@ -164,11 +198,21 @@ async function onMaintenanceOverdue(event) {
     }).select('_id').lean();
     if (already) return;
 
-    await taskService.create({
+    const task = await taskService.create({
       title: `${OVERDUE_TASK_PREFIX}: ${overdue.length} überfällige Wartung(en)`,
       description: serviceService.composeDueList(overdue),
+      source: { type: 'AI_AGENT', label: 'Service AI' },
       priority: 'HIGH',
     }, payload.assignedTo || null, { source: 'ai-agent' });
+
+    await agentGovernance.recordAutonomous({
+      agentKey: 'SERVICE',
+      trigger: 'maintenance.overdue',
+      sourceType: 'maintenance',
+      sourceId: null,
+      userId: payload.assignedTo || null,
+      produced: { type: 'task', id: String(task._id), title: task.title },
+    });
 
     logger.info('Handoff: maintenance overdue → Service AI', {
       module: 'ai-handoff',
@@ -197,7 +241,7 @@ async function onProjectCreated(event) {
   const { projectId, createdBy } = payload;
   if (!projectId) return;
 
-  if (!(await agentIsRunnable('BEHOERDEN'))) return;
+  if (!(await agentIsRunnable('BEHOERDEN', 'project.created', { sourceType: 'project', sourceId: projectId, userId: createdBy }))) return;
 
   try {
     const behoerdenService = (await import('../agents/behoerden/behoerden.service.js')).default;
@@ -209,17 +253,27 @@ async function onProjectCreated(event) {
     if (!gaps.length) return;
 
     const taskService = (await import('../../tasks/task.service.js')).default;
-    await taskService.create({
+    const task = await taskService.create({
       title: `Behördenangaben vervollständigen: ${result.project.name}`,
       description: [
         `Für die Verfahren dieses Projekts fehlen im System: ${gaps.join(', ')}.`,
         '',
         behoerdenService.compose(result),
       ].join('\n'),
+      source: { type: 'AI_AGENT', label: 'Behörden AI' },
       priority: 'HIGH',
       projectId,
       customerId: result.project.customerId || null,
     }, createdBy || null, { source: 'ai-agent' });
+
+    await agentGovernance.recordAutonomous({
+      agentKey: 'BEHOERDEN',
+      trigger: 'project.created',
+      sourceType: 'project',
+      sourceId: projectId,
+      userId: createdBy || null,
+      produced: { type: 'task', id: String(task._id), title: task.title },
+    });
 
     logger.info('Handoff: project created → Behörden AI', {
       module: 'ai-handoff',
@@ -250,7 +304,7 @@ async function onProjectScheduled(event) {
   const { projectId, toStatus, changedBy } = payload;
   if (!projectId || toStatus !== 'SCHEDULED') return;
 
-  if (!(await agentIsRunnable('MATERIAL'))) return;
+  if (!(await agentIsRunnable('MATERIAL', 'project.scheduled', { sourceType: 'project', sourceId: projectId, userId: changedBy }))) return;
 
   try {
     const materialService = (await import('../agents/material/material.service.js')).default;
@@ -258,13 +312,23 @@ async function onProjectScheduled(event) {
     if (!result.verified || result.ok || !result.articles.length) return;
 
     const taskService = (await import('../../tasks/task.service.js')).default;
-    await taskService.create({
+    const task = await taskService.create({
       title: `Material vor Baustart klären: ${result.project.name}`,
       description: materialService.compose(result),
+      source: { type: 'AI_AGENT', label: 'Material AI' },
       priority: 'URGENT',
       projectId,
       customerId: result.project.customerId || null,
     }, changedBy || null, { source: 'ai-agent' });
+
+    await agentGovernance.recordAutonomous({
+      agentKey: 'MATERIAL',
+      trigger: 'project.scheduled',
+      sourceType: 'project',
+      sourceId: projectId,
+      userId: changedBy || null,
+      produced: { type: 'task', id: String(task._id), title: task.title },
+    });
 
     logger.info('Handoff: project scheduled → Material AI', {
       module: 'ai-handoff',
@@ -296,7 +360,7 @@ async function onDocumentUploaded(event) {
   const { documentId, projectId, fileName, category, uploadedBy } = payload;
   if (!documentId || !projectId || !fileName) return;
 
-  if (!(await agentIsRunnable('DOCUMENT'))) return;
+  if (!(await agentIsRunnable('DOCUMENT', 'document.uploaded', { sourceType: 'projectDocument', sourceId: documentId, userId: uploadedBy }))) return;
 
   try {
     const documentService = (await import('../agents/document/document.service.js')).default;
@@ -306,15 +370,25 @@ async function onDocumentUploaded(event) {
     if (result.type && result.category === category) return;
 
     const taskService = (await import('../../tasks/task.service.js')).default;
-    await taskService.create({
+    const task = await taskService.create({
       title: result.type
         ? `Dokument einordnen: ${fileName}`
         : `Dokument unklar: ${fileName}`,
       description: documentService.compose(result),
+      source: { type: 'AI_AGENT', label: 'Document AI' },
       priority: result.type ? 'MEDIUM' : 'HIGH',
       projectId,
       customerId: result.project?.customerId || null,
     }, uploadedBy || null, { source: 'ai-agent' });
+
+    await agentGovernance.recordAutonomous({
+      agentKey: 'DOCUMENT',
+      trigger: 'document.uploaded',
+      sourceType: 'projectDocument',
+      sourceId: documentId,
+      userId: uploadedBy || null,
+      produced: { type: 'task', id: String(task._id), title: task.title },
+    });
 
     logger.info('Handoff: document uploaded → Document AI', {
       module: 'ai-handoff',
@@ -346,7 +420,7 @@ async function onSupplierInvoiceRecorded(event) {
   const id = apInvoiceId || invoiceId;
   if (!id) return;
 
-  if (!(await agentIsRunnable('FINANZ'))) return;
+  if (!(await agentIsRunnable('FINANZ', 'ap.invoice.recorded', { sourceType: 'apInvoice', sourceId: id, userId: createdBy }))) return;
 
   try {
     const finanzService = (await import('../agents/finanz/finanz.service.js')).default;
@@ -359,12 +433,22 @@ async function onSupplierInvoiceRecorded(event) {
     if (!bankProblems.length) return;
 
     const taskService = (await import('../../tasks/task.service.js')).default;
-    await taskService.create({
+    const task = await taskService.create({
       title: `Zahlungsdaten prüfen: ${result.invoice.supplierName || 'Kreditorenrechnung'} ${result.invoice.supplierInvoiceNumber || ''}`.trim(),
       description: finanzService.compose(result),
+      source: { type: 'AI_AGENT', label: 'Finanz AI' },
       priority: 'HIGH',
       projectId: result.invoice.projectId || null,
     }, createdBy || null, { source: 'ai-agent' });
+
+    await agentGovernance.recordAutonomous({
+      agentKey: 'FINANZ',
+      trigger: 'ap.invoice.recorded',
+      sourceType: 'apInvoice',
+      sourceId: id,
+      userId: createdBy || null,
+      produced: { type: 'task', id: String(task._id), title: task.title },
+    });
 
     logger.info('Handoff: supplier invoice recorded → Finanz AI', {
       module: 'ai-handoff',

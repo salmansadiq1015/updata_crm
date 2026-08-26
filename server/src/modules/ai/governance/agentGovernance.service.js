@@ -206,6 +206,45 @@ class AgentGovernanceService {
     };
   }
 
+  /**
+   * Records what an agent did on its own initiative.
+   *
+   * An action a person asks for leaves a run, a thread and an answer on the
+   * screen. An action an agent takes off a business event leaves a task and a
+   * line in the server log — neither of which the office can search, and the
+   * specification asks Risk AI to document every agent action, not only the
+   * ones it stops. This is the trail: which agent, on which event, on which
+   * record, and what came of it.
+   */
+  async recordAutonomous({ agentKey, trigger, sourceType, sourceId, produced = null, userId = null, blocked: blockedReason = null, detail = null }) {
+    try {
+      await auditService.logEvent({
+        eventType: blockedReason ? 'ai.agent.autonomous.blocked' : 'ai.agent.autonomous',
+        userId,
+        ipAddress: 'internal',
+        result: blockedReason ? 'blocked' : 'success',
+        details: {
+          agentKey,
+          trigger,
+          sourceType,
+          sourceId: sourceId ? String(sourceId) : null,
+          produced,
+          blockReason: blockedReason,
+          detail: detail ? String(detail).slice(0, 300) : null,
+        },
+        module: 'ai',
+      });
+    } catch (err) {
+      logger.warn('Failed to record an autonomous agent action', {
+        module: 'ai-governance',
+        action: 'recordAutonomous',
+        agentKey,
+        trigger,
+        error: err.message,
+      });
+    }
+  }
+
   /** Records a blocked or approval-pending decision in the audit trail. */
   async record(decision, { action, userId, agentRunId, input }) {
     try {

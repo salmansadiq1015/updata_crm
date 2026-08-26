@@ -43,6 +43,7 @@ import taskListRoutes from './modules/tasks/taskList.routes.js';
 import taskFolderRoutes from './modules/tasks/taskFolder.routes.js';
 import meetingRoutes from './modules/meetings/meeting.routes.js';
 import fieldTicketRoutes from './modules/fieldTickets/fieldTicket.routes.js';
+import supportRoutes from './modules/support/supportTicket.routes.js';
 import notificationsRoutes, {
   notificationFeedRoutes,
   notificationPreferenceRoutes,
@@ -158,6 +159,7 @@ export function createApp() {
   app.use("/api/v1/task-folders", taskFolderRoutes);
   app.use("/api/v1/meetings", meetingRoutes);
   app.use("/api/v1/field-tickets", fieldTicketRoutes);
+  app.use("/api/v1/support", supportRoutes);
   app.use("/api/v1/projects/:projectId/tasks", projectTaskRouter);
   app.use("/api/v1/orders/:orderId/tasks", orderTaskRouter);
   app.use("/api/v1/projects/tasks", crossProjectRouter);

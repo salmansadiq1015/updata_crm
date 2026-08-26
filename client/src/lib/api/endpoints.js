@@ -403,6 +403,12 @@ export const ENDPOINTS = Object.freeze({
     ACTIVITY: (id) => `/field-tickets/${id}/activity`,
     AI_ANALYZE: (id) => `/field-tickets/${id}/ai/analyze`,
   },
+  SUPPORT: {
+    LIST: '/support',
+    MY_TICKETS: '/support/my-tickets',
+    STATS: '/support/stats',
+    BY_ID: (id) => `/support/${id}`,
+  },
   MOBILE: {
     ORDERS: '/mobile/orders',
     ORDERS_EXPORT: '/mobile/orders/export',

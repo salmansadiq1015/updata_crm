@@ -1,16 +1,30 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Sparkles, Wrench, Bell, UserPlus, Receipt } from 'lucide-react';
+import {
+  Sparkles, Wrench, CalendarClock, Package, Stamp, BarChart3, ListChecks,
+} from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
 
+/**
+ * What the assistant is actually good for, as of the agents that exist.
+ *
+ * The four it used to offer were all creations — a task, a notification, a
+ * customer, an invoice — from before any of the reading agents existed. A new
+ * reader saw four ways to write and no hint that they could ask which permits
+ * a job needs, whether the material will arrive, or who is free on Tuesday.
+ * Reads lead here on purpose: they are safe, and they are where the answers
+ * are. Keep this list in step with the agents; it is the only help screen.
+ */
 const SUGGESTIONS = [
-  { key: 'maintenanceTask', icon: Wrench },
-  { key: 'teamNotification', icon: Bell },
-  { key: 'newCustomerLead', icon: UserPlus },
-  { key: 'generateInvoice', icon: Receipt },
+  { key: 'dueMaintenance', icon: Wrench },
+  { key: 'whoIsFree', icon: CalendarClock },
+  { key: 'materialStatus', icon: Package },
+  { key: 'permitsNeeded', icon: Stamp },
+  { key: 'projectFigures', icon: BarChart3 },
+  { key: 'maintenanceTask', icon: ListChecks },
 ];
 
 function getGreetingKey() {

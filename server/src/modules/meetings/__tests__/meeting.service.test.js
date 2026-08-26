@@ -81,13 +81,24 @@ beforeEach(() => {
   mockCacheInvalidatePattern.mockResolvedValue(undefined);
 });
 
+/**
+ * A meeting far enough ahead that its reminders are still due.
+ *
+ * These fixtures used to carry 2026-07-01, and the reminder test passed until
+ * that date went by: a reminder whose moment has passed is marked FAILED
+ * instead of being scheduled, so the suite started failing on a calendar day
+ * rather than on a change. Dates that matter are relative from here on.
+ */
+const FUTURE_START = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+const FUTURE_END = new Date(FUTURE_START.getTime() + 60 * 60 * 1000);
+
 function meetingPayload(overrides = {}) {
   return {
     _id: meetingId,
     title: 'Projekt Kickoff',
     agenda: 'Scope, dates, responsibilities',
-    startAt: new Date('2026-07-01T10:00:00.000Z'),
-    endAt: new Date('2026-07-01T11:00:00.000Z'),
+    startAt: FUTURE_START,
+    endAt: FUTURE_END,
     participants: [
       { userId: creatorId, role: 'ORGANIZER', rsvpStatus: 'ACCEPTED' },
       { userId: attendeeId, role: 'RESPONSIBLE', rsvpStatus: 'PENDING' },
@@ -186,8 +197,8 @@ describe('meetingService.create', () => {
     await meetingService.create({
       title: 'Projekt Kickoff',
       agenda: 'Scope, dates, responsibilities',
-      startAt: '2026-07-01T10:00:00.000Z',
-      endAt: '2026-07-01T11:00:00.000Z',
+      startAt: FUTURE_START.toISOString(),
+      endAt: FUTURE_END.toISOString(),
       participants: [{ userId: attendeeId, role: 'RESPONSIBLE' }],
       onlineMeeting: { provider: 'INTERNAL' },
       reminderMinutesBefore: [60],

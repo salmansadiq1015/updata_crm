@@ -24,8 +24,8 @@ beforeAll(async () => {
   await import('../../src/modules/crm/installation.model.js');
   await import('../../src/modules/crm/maintenanceInterval.model.js');
   await import('../../src/modules/deploy/assignment.model.js');
-  await import('../../src/modules/deploy/appointment.model.js');
-  await import('../../src/modules/deploy/conflict.model.js');
+  await import('../../src/modules/deploy/appointmentDetails.model.js');
+  await import('../../src/modules/deploy/conflictRecord.model.js');
   await import('../../src/modules/deploy/employeeAvailability.model.js');
 
   Customer = mongoose.model('Customer');

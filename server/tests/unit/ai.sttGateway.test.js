@@ -47,6 +47,54 @@ describe('AI STT gateway', () => {
     expect(result.text).toBe('Hallo Welt');
   });
 
+  test('writes Swiss German: no Eszett survives the transcription', async () => {
+    createSpy.mockResolvedValueOnce({
+      text: 'Das Ausdehnungsgefäß ist defekt, die Straße ist gesperrt.',
+      segments: [{ avg_logprob: -0.1 }],
+      words: [],
+    });
+    const { default: sttGatewayService } = await import('../../src/modules/ai/sttGateway.service.js');
+    const result = await sttGatewayService.transcribe(Buffer.from('audio-bytes'), { language: 'de-CH' });
+
+    expect(result.text).toBe('Das Ausdehnungsgefäss ist defekt, die Strasse ist gesperrt.');
+  });
+
+  test('prompts Whisper in the orthography it should answer in', async () => {
+    const { default: sttGatewayService } = await import('../../src/modules/ai/sttGateway.service.js');
+    await sttGatewayService.transcribe(Buffer.from('audio-bytes'), { language: 'de-CH' });
+
+    // The prompt is a style example: written "fuer" and "Waermepumpe" it
+    // taught the model to answer without umlauts and in lower case.
+    const { prompt } = createSpy.mock.calls[0][0];
+    expect(prompt).toContain('Wärmepumpe');
+    expect(prompt).not.toMatch(/fuer|Waermepumpe|Stoerung/);
+    expect(prompt).not.toMatch(/ß/);
+  });
+
+  test('caps the vocabulary prompt at what Whisper actually reads', async () => {
+    const { default: sttGatewayService } = await import('../../src/modules/ai/sttGateway.service.js');
+    const many = Array.from({ length: 700 }, (_, i) => `Fachbegriff${i}`);
+    await sttGatewayService.transcribe(Buffer.from('audio-bytes'), {
+      language: 'de-CH',
+      customVocabulary: many,
+    });
+
+    const { prompt } = createSpy.mock.calls[0][0];
+    expect(prompt.length).toBeLessThan(1200);
+    expect(prompt).toContain('Fachbegriff0');
+    expect(prompt).not.toContain('Fachbegriff699');
+  });
+
+  test('survives a caller that hands over vocabulary records instead of words', async () => {
+    const { default: sttGatewayService } = await import('../../src/modules/ai/sttGateway.service.js');
+    const result = await sttGatewayService.transcribe(Buffer.from('audio-bytes'), {
+      language: 'de-CH',
+      customVocabulary: [{ term: 'Viessmann' }, { term: 'Hoval' }],
+    });
+
+    expect(result.text).toBe('Hallo Welt');
+  });
+
   test('rejects providers it cannot handle', async () => {
     mockConfig.ai.sttProvider = 'unknown-provider';
     const { default: sttGatewayService } = await import('../../src/modules/ai/sttGateway.service.js');

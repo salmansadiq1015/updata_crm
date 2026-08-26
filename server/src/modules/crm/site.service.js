@@ -20,7 +20,9 @@ class SiteService {
     const customer = await customerRepository.findById(customerId);
     if (!customer) throw new NotFoundError('Customer', customerId);
     if (customer.status !== 'active') {
-      throw new ConflictError('Cannot create a site for an archived customer');
+      // Customers are deactivated, never archived — the wording lagged behind
+      // the rename and named a state the record can no longer be in.
+      throw new ConflictError('Cannot create a site for an inactive customer');
     }
 
     const siteNumber = await counterService.getNextSiteNumber(customerId);

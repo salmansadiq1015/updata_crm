@@ -13,6 +13,7 @@ import {
 } from '@jest/globals';
 import { connectTestDb, clearTestDb, disconnectTestDb } from '../setup.js';
 import { PERMISSIONS } from '../../src/shared/constants/roles.js';
+import { PERMISSION_DEFINITIONS } from '../../src/seed/seed.js';
 
 let Customer, Site, Installation, MaintenanceInterval, MaintenanceSettings, EntityNote, EntityImage, SparePart, AuditLog, Permission, Role, User;
 let customerService, contactService, siteService, installationService, maintenanceIntervalService;
@@ -535,14 +536,22 @@ describe('CRM Route Permissions', () => {
     }
 
     expect(routeFiles.length).toBeGreaterThan(0);
-    expect([...guardedPermissions].sort()).toEqual([
-      'crm:admin',
-      'crm:delete',
-      'crm:read',
-      'crm:write',
-    ]);
+    expect(guardedPermissions.size).toBeGreaterThan(0);
+
+    // The invariant is that a guard names a permission somebody can actually
+    // be granted — not that the set never grows. The list used to be spelled
+    // out here, so adding crm:merge broke a test that had nothing to say
+    // about it.
+    const seeded = new Set(
+      PERMISSION_DEFINITIONS
+        .filter((definition) => definition.module === 'crm')
+        .map((definition) => `${definition.module}:${definition.action}`),
+    );
     for (const permission of guardedPermissions) {
       expect(knownPermissions.has(permission)).toBe(true);
+      // Without a seeded permission there is no row in the role matrix, so the
+      // route is reachable by wildcard admins and by nobody else.
+      expect(seeded.has(permission)).toBe(true);
     }
   });
 });
@@ -606,7 +615,7 @@ describe('CRM Service Contracts', () => {
     expect(new Date(listed.lastServiceDate).toISOString()).toBe('2026-01-15T00:00:00.000Z');
   });
 
-  test('customer merge reassigns contacts and sites then archives the duplicate', async () => {
+  test('customer merge reassigns contacts and sites then deactivates the duplicate', async () => {
     const user = await seedUser();
     const source = await seedCustomer({ createdBy: user._id, name: 'Duplicate AG', customerNumber: 'K-91001' });
     const target = await seedCustomer({ createdBy: user._id, name: 'Survivor AG', customerNumber: 'K-91002' });
@@ -619,14 +628,16 @@ describe('CRM Service Contracts', () => {
 
     await customerService.merge(source._id, target._id, user._id);
 
-    const [archivedSource, movedContact, movedSite] = await Promise.all([
+    const [mergedSource, movedContact, movedSite] = await Promise.all([
       Customer.findById(source._id).lean(),
       mongoose.model('Contact').findById(contact._id).lean(),
       Site.findById(site._id).lean(),
     ]);
 
-    expect(archivedSource.status).toBe('archived');
-    expect(String(archivedSource.mergedIntoId)).toBe(String(target._id));
+    // The duplicate stays findable — a merge is reversible, and a record that
+    // disappeared could not be undone.
+    expect(mergedSource.status).toBe('inactive');
+    expect(String(mergedSource.mergedIntoId)).toBe(String(target._id));
     expect(String(movedContact.customerId)).toBe(String(target._id));
     expect(String(movedSite.customerId)).toBe(String(target._id));
   });
@@ -749,16 +760,18 @@ describe('CRM Service Contracts', () => {
     expect(promoted.isPrimary).toBe(true);
   });
 
-  test('site creation rejects archived customers', async () => {
+  test('site creation rejects inactive customers', async () => {
+    // A customer is deactivated, never archived: the record stays listed and
+    // searchable, and "archived" is no longer a state it can be in.
     const user = await seedUser();
-    const customer = await seedCustomer({ createdBy: user._id, status: 'archived' });
+    const customer = await seedCustomer({ createdBy: user._id, status: 'inactive' });
 
     await expect(siteService.create(customer._id, {
-      name: 'Archived customer site',
+      name: 'Inactive customer site',
       street: 'Hauptstrasse 1',
       postalCode: '3000',
       city: 'Bern',
-    }, user._id)).rejects.toThrow('Cannot create a site for an archived customer');
+    }, user._id)).rejects.toThrow('Cannot create a site for an inactive customer');
   });
 
   test('site deactivation cascades active installations out of active maintenance', async () => {

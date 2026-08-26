@@ -6,11 +6,12 @@ import { queryKeys } from '@/lib/query/keys';
 import { showError, showSuccess } from '@/lib/toast';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { aiAgentService } from '../services/ai-agent-service';
+import { useSocketEvent } from '@/shared/hooks/use-socket-event';
 import { useAiHistory } from './use-ai-history';
 import { useVoiceSession } from './use-voice-session';
 import { useAudioRecorder } from './use-audio-recorder';
 import {
-  AGENT_POLL_INTERVAL_MS,
+  AGENT_FALLBACK_POLL_MS,
   AGENT_STATUSES,
   MIN_AGENT_INPUT_LENGTH,
   isTerminalAgentStatus,
@@ -54,13 +55,30 @@ export function useAiChat({ selectedThreadId, currentThreadId, context, onThread
     queryFn: () => aiAgentService.getThread(selectedThreadId),
     enabled: !!selectedThreadId,
     staleTime: 0,
+    // The server pushes ai:agent:* the moment a run settles, so polling is a
+    // fallback rather than the mechanism: it keeps the chat honest if the
+    // socket is down, at a fraction of the traffic. Every second was ~60
+    // requests a minute per open chat to learn nothing.
     refetchInterval: (q) => {
       const runs = q.state.data;
-      if (!runs?.length) return AGENT_POLL_INTERVAL_MS;
+      if (!runs?.length) return AGENT_FALLBACK_POLL_MS;
       const latest = runs[runs.length - 1];
-      return !latest || isTerminalAgentStatus(latest.status) ? false : AGENT_POLL_INTERVAL_MS;
+      return !latest || isTerminalAgentStatus(latest.status) ? false : AGENT_FALLBACK_POLL_MS;
     },
   });
+
+  // A settled run arrives as an event; refresh the thread it belongs to.
+  const onRunSettled = useCallback(() => {
+    if (selectedThreadId) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentThread(selectedThreadId) });
+    }
+    // The sidebar lists runs under a paged key; refresh the family.
+    queryClient.invalidateQueries({ queryKey: ['ai', 'agentRuns'] });
+  }, [queryClient, selectedThreadId]);
+
+  useSocketEvent('ai:agent:completed', onRunSettled);
+  useSocketEvent('ai:agent:failed', onRunSettled);
+  useSocketEvent('ai:agent:awaiting_confirmation', onRunSettled);
 
   const threadRuns = Array.isArray(threadQuery.data) ? threadQuery.data : [];
   const latestRun = threadRuns[threadRuns.length - 1] ?? null;
@@ -106,7 +124,7 @@ export function useAiChat({ selectedThreadId, currentThreadId, context, onThread
   });
 
   const confirmMutation = useMutation({
-    mutationFn: ({ decision }) => aiAgentService.confirm(latestRun?._id, decision),
+    mutationFn: ({ decision, overrides }) => aiAgentService.confirm(latestRun?._id, decision, overrides),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.ai.agentThread(selectedThreadId) });
     },
@@ -177,7 +195,7 @@ export function useAiChat({ selectedThreadId, currentThreadId, context, onThread
   );
 
   const confirm = useCallback(
-    (decision) => confirmMutation.mutate({ decision }),
+    (decision, overrides) => confirmMutation.mutate({ decision, overrides }),
     [confirmMutation],
   );
 

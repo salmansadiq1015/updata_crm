@@ -1,10 +1,8 @@
-import withSerwistInit from '@serwist/next';
-
-const withSerwist = withSerwistInit({
-  swSrc: 'src/sw.js',
-  swDest: 'public/sw.js',
-  disable: process.env.NODE_ENV === 'development',
-});
+// TODO: PWA cleanup complete. Remove these unused deps from package.json:
+//   - "@serwist/next" (dependencies)
+//   - "serwist" (dependencies)
+// Also remove cleanupDevelopmentServiceWorkers() from app-providers.jsx
+// once all users have cleared their cached service workers.
 
 const EMBED_PARENT_ORIGINS = [
   'https://appnity.ch',
@@ -78,4 +76,4 @@ const nextConfig = {
   },
 };
 
-export default withSerwist(nextConfig);
+export default nextConfig;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   BrainCircuit,
   ClipboardList,
@@ -183,7 +183,14 @@ export function AiPanelChat({ onClose }) {
   const [currentThreadId, setCurrentThreadId] = useState(() => newThreadId());
   const [showHelp, setShowHelp] = useState(false);
   const [localRuns, setLocalRuns] = useState([]);
-  const routeContext = useMemo(() => buildAiRouteContext(pathname), [pathname]);
+  // The panel already sits under the layout's Suspense boundary, so reading
+  // the query here does not push a whole page into client-side rendering —
+  // and lists that open one row keep their subject in the query.
+  const searchParams = useSearchParams();
+  const routeContext = useMemo(
+    () => buildAiRouteContext(pathname, searchParams),
+    [pathname, searchParams],
+  );
 
   const handleThreadSelected = useCallback((id) => {
     setSelectedThreadId((current) => (current === id ? current : id));

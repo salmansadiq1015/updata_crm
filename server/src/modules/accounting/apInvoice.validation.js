@@ -1,9 +1,8 @@
 import Joi from 'joi';
-import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
+import { objectId, cursorPagination, iban } from '../../shared/validation/commonSchemas.js';
 
 const AP_STATUSES = ['RECORDED', 'APPROVED', 'PAID', 'PARTIALLY_PAID', 'DISPUTED', 'CANCELLED'];
 const CURRENCIES = ['CHF', 'EUR'];
-const IBAN_PATTERN = /^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/i;
 const BIC_PATTERN = /^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/i;
 
 const lineAllocationSchema = Joi.object({
@@ -32,7 +31,7 @@ export const createApSchema = {
   body: Joi.object({
     supplierId: objectId.required(),
     supplierName: Joi.string().required().trim().max(255),
-    supplierIban: Joi.string().trim().pattern(IBAN_PATTERN).max(34).allow('', null),
+    supplierIban: iban.allow('', null),
     supplierBic: Joi.string().trim().pattern(BIC_PATTERN).max(11).allow('', null),
     supplierInvoiceNumber: Joi.string().required().trim().max(50),
     invoiceDate: Joi.date().iso().required(),
@@ -51,7 +50,7 @@ export const updateApSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     supplierName: Joi.string().trim().max(255),
-    supplierIban: Joi.string().trim().pattern(IBAN_PATTERN).max(34).allow('', null),
+    supplierIban: iban.allow('', null),
     supplierBic: Joi.string().trim().pattern(BIC_PATTERN).max(11).allow('', null),
     supplierInvoiceNumber: Joi.string().trim().max(50),
     invoiceDate: Joi.date().iso(),

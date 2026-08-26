@@ -9,8 +9,27 @@ export const runAgentSchema = Joi.object({
   context: Joi.object().unknown(true).allow(null).optional(),
 });
 
+/**
+ * The fields a person may correct when approving (C2 "Override").
+ *
+ * Deliberately the planner's own parameters and nothing else: approving with
+ * changes must not become a way to reach fields the agent was never allowed
+ * to set. Prices, for instance, are not here — no agent sets one.
+ */
+export const OVERRIDABLE_FIELDS = Object.freeze([
+  'title', 'description', 'priority', 'dueDate', 'dateTime', 'durationHours',
+  'assigneeName', 'customerName', 'projectName', 'installationName',
+  'status', 'messageContent',
+]);
+
 export const confirmAgentSchema = Joi.object({
   decision: Joi.boolean().required(),
+  overrides: Joi.object(
+    Object.fromEntries(OVERRIDABLE_FIELDS.map((field) => [
+      field,
+      Joi.alternatives().try(Joi.string().allow('', null).max(2000), Joi.number(), Joi.date()),
+    ])),
+  ).unknown(false).default({}),
 });
 
 export const listAgentRunsSchema = Joi.object({

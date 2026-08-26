@@ -43,6 +43,36 @@ const AgentRunSchema = new Schema({
     ipAddress: String,
     userAgent: String,
   },
+  /**
+   * What produced this answer (C2 "Versioning").
+   *
+   * The question somebody asks months later is never "which agent ran" but
+   * "why did it say that" — and the answer needs the model, the provider, the
+   * agent version, and whether the planner or the fallback heuristics decided.
+   * Recorded when the run is dispatched, so it survives a later config change.
+   */
+  provenance: {
+    agentVersion: String,
+    action: String,
+    /** Which registered agent owns this action, per its `allowedActions`. */
+    agentKey: String,
+    model: String,
+    provider: String,
+    plannedBy: { type: String, enum: ['llm', 'heuristic', 'follow-up'] },
+  },
+  /**
+   * A person's correction of what the agent proposed (C2 "Override").
+   *
+   * The office approves with changes rather than re-dictating the whole
+   * request; what they changed is kept beside what the agent had suggested,
+   * so a wrong proposal stays visible next to the corrected one.
+   */
+  override: {
+    by: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    at: { type: Date, default: null },
+    before: { type: Schema.Types.Mixed, default: null },
+    after: { type: Schema.Types.Mixed, default: null },
+  },
   archived:    { type: Boolean, default: false },
   completedAt: Date,
   failedAt: Date,

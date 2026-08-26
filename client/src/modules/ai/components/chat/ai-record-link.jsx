@@ -10,19 +10,20 @@ import { useLanguage } from '@/lib/i18n/language-context';
  * Without it the assistant announces a quotation number and leaves the reader
  * to go and find it. Only record types with a real detail route appear.
  */
-// Only routes that exist. Types whose list page has no detail route yet lead to
-// the list — still one click to the right place, and they become real deep
-// links the day those pages accept an id.
+// Every type here opens the record itself. Three of them used to land on a
+// list — "one click to the right place" that still left the reader hunting for
+// the row the assistant had just been talking about.
 const ROUTES = {
   project: (id) => `/projects/${id}`,
   customer: (id) => `/crm/customers/${id}`,
   order: (id) => `/field-ops/orders/${id}`,
   chatRoom: (id) => `/field-ops/chat?chatId=${id}`,
   quotation: (id) => `/quotes?quotationId=${id}`,
-  task: () => '/tasks',
-  invoice: () => '/quotes?tab=invoices',
-  workReport: () => '/field-ops/reports',
-  assignment: () => '/scheduling',
+  invoice: (id) => `/quotes?invoiceId=${id}`,
+  task: (id) => `/tasks/all/${id}`,
+  workReport: (id) => `/field-ops/reports?reportId=${id}`,
+  assignment: (id) => `/scheduling/calendar?assignmentId=${id}`,
+  installation: (id) => `/crm/installations/${id}`,
 };
 
 const LABEL_KEYS = {
@@ -32,6 +33,7 @@ const LABEL_KEYS = {
   invoice: 'ai.record.openInvoice',
   order: 'ai.record.openOrder',
   customer: 'ai.record.openCustomer',
+  installation: 'ai.record.openInstallation',
   workReport: 'ai.record.openReport',
   assignment: 'ai.record.openAssignment',
   chatRoom: 'ai.record.openChat',
@@ -48,7 +50,8 @@ export function AiRecordLink({ output }) {
 
   const record = output.record || {};
   const caption = record.quotationNumber || record.projectNumber || record.orderNumber
-    || record.invoiceNumber || record.reportNumber || record.title || record.name || null;
+    || record.invoiceNumber || record.reportNumber || record.installationNumber
+    || record.title || record.name || null;
 
   return (
     <Link

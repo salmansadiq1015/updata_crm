@@ -1,3 +1,4 @@
+import config from '../../config/index.js';
 import { isAiConfigured } from './llmFactory.js';
 
 // ─── Lazy-init singleton ─────────────────────────────────────
@@ -85,7 +86,8 @@ Rules:
     ],
     max_tokens: parseInt(process.env.OPENAI_MAX_TOKENS) || 2000,
     temperature: 0.1,
-    response_format: { type: "json_object" },
+    // See nlpPipeline: this option is OpenAI-only.
+    ...(config.ai.baseUrl ? {} : { response_format: { type: 'json_object' } }),
   });
 
   const rawResponse = response.choices[0]?.message?.content || "{}";

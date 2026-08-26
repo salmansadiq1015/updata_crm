@@ -219,18 +219,24 @@ class CustomVocabularyService {
    * @param {string} language - Language code (e.g. 'de')
    * @returns {object[]} Active vocabulary terms
    */
+  /**
+   * The vocabulary is held per language, not per region, so a regional tag
+   * has to be reduced first: asking for "de-CH" used to match nothing at all
+   * and return an empty list without a word of complaint.
+   */
   async getActiveTerms(language) {
-    const cacheKey = `ai:vocab:active:${language}`;
+    const base = String(language || 'de').split('-')[0].toLowerCase();
+    const cacheKey = `ai:vocab:active:${base}`;
 
     return cacheManager.getOrSet(
       cacheKey,
-      () => customVocabularyRepository.findActive(language),
+      () => customVocabularyRepository.findActive(base),
       ACTIVE_TERMS_TTL,
     );
   }
 
   async _invalidateActiveTermsCache(language) {
-    await cacheManager.del(`ai:vocab:active:${language}`);
+    await cacheManager.del(`ai:vocab:active:${String(language || 'de').split('-')[0].toLowerCase()}`);
   }
 
   async _invalidateListCache() {

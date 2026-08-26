@@ -18,7 +18,7 @@ function buildDispatchPayload(input, threadId, correlationId, context) {
 export const aiAgentService = {
   dispatch:       (input, threadId, correlationId, context) => apiClient.post(ENDPOINTS.AI.AGENT_RUN, buildDispatchPayload(input, threadId, correlationId, context)).then((r) => r.data),
   getStatus:      (runId)              => apiClient.get(ENDPOINTS.AI.AGENT_STATUS(runId)).then((r) => r.data),
-  confirm:        (runId, decision)    => apiClient.post(ENDPOINTS.AI.AGENT_CONFIRM(runId), { decision }).then((r) => r.data),
+  confirm:        (runId, decision, overrides) => apiClient.post(ENDPOINTS.AI.AGENT_CONFIRM(runId), { decision, ...(overrides && Object.keys(overrides).length ? { overrides } : {}) }).then((r) => r.data),
   list:           (params)             => apiClient.get(ENDPOINTS.AI.AGENT_RUNS, { params }).then((r) => r.data),
   getThread:      (threadId)           => apiClient.get(ENDPOINTS.AI.AGENT_THREAD(threadId)).then((r) => r.data),
   archiveThread:  (threadId)           => apiClient.patch(ENDPOINTS.AI.AGENT_THREAD_ARCHIVE(threadId)).then((r) => r.data),

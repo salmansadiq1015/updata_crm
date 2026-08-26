@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { dateLocale } from '../../utils/date-locale';
 import {
   Dialog,
   DialogContent,
@@ -45,12 +46,12 @@ function groupByDate(threads) {
 
 function ThreadItem({ thread, isActive, onSelect, onArchive, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const workflowLabel = t(`ai.workflow.${thread.workflowType}`, WORKFLOW_LABELS[thread.workflowType] ?? thread.workflowType ?? t('ai.chat.run'));
   const title = typeof thread.input === 'string' && thread.input ? thread.input : workflowLabel;
   const dot = STATUS_DOT[thread.status] ?? 'bg-muted-foreground/50';
   const ago = thread.createdAt
-    ? formatDistanceToNow(new Date(thread.createdAt), { addSuffix: false })
+    ? formatDistanceToNow(new Date(thread.createdAt), { addSuffix: false, locale: dateLocale(locale) })
     : '';
   const threadId = thread.threadId || thread._id;
   const truncatedTitle = `${title.slice(0, 60)}${title.length > 60 ? '...' : ''}`;

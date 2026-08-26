@@ -37,11 +37,11 @@ class AgentMemory {
     return workflowStateRepository.deleteByAgentRunId(agentRunId);
   }
 
-  async storeConfirmation(agentRunId, decision) {
+  async storeConfirmation(agentRunId, decision, overrides = {}) {
     const redis = getRedisClient();
     await redis.set(
       `ai:agent:confirm:${agentRunId}`,
-      JSON.stringify({ decision, at: new Date().toISOString() }),
+      JSON.stringify({ decision, overrides, at: new Date().toISOString() }),
       'EX', CONFIRM_TTL
     );
   }

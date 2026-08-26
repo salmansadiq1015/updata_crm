@@ -28,6 +28,13 @@ async function loadService({ aggregateRows = [] } = {}) {
   jest.unstable_mockModule('../../src/modules/accounting/dunningTemplate.repository.js', () => ({
     default: {},
   }));
+  // The service reaches the fiscal-period guard, which pulls in a model —
+  // and a model definition needs a real mongoose Schema, which the stub above
+  // deliberately does not provide. Stubbing the guard keeps this test about
+  // the aggregation it is named for.
+  jest.unstable_mockModule('../../src/modules/accounting/fiscalPeriod.service.js', () => ({
+    default: { assertPostingDateOpen: jest.fn() },
+  }));
   jest.unstable_mockModule('../../src/shared/events/EventBus.js', () => ({
     default: { publish: jest.fn() },
   }));

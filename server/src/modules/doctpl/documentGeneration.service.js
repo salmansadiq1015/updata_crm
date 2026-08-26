@@ -44,6 +44,15 @@ class DocumentGenerationService {
     // 2. Find active CI configuration
     const CIConfiguration = (await import('./ciConfiguration.model.js')).default;
     const ciConfig = await CIConfiguration.findOne({ isActive: true }).lean();
+    // Every document carries the company's letterhead, so without an active CI
+    // configuration the renderer fails deep inside with an opaque 500. Say so
+    // here instead — a fresh environment has none until someone fills it in.
+    if (!ciConfig) {
+      throw new ValidationError('No active CI configuration', [{
+        field: 'ciConfiguration',
+        message: 'Keine aktive CI-Konfiguration hinterlegt. Bitte unter Verwaltung → Vorlagen → CI die Firmenangaben erfassen und aktivieren.',
+      }]);
+    }
     const { default: ciRenderAssetsService } = await import('./ciRenderAssets.service.js');
     const renderCiConfig = await ciRenderAssetsService.prepare(ciConfig);
 

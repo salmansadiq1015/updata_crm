@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { isValidIban } from './swissPayment.js';
 
 /**
  * Reusable Joi schemas for common patterns.
@@ -44,3 +45,18 @@ export default {
   dateRange,
   idParam,
 };
+
+/**
+ * An IBAN whose check digits add up.
+ *
+ * A shape pattern accepts CH9300762011623852958 — one digit off a real
+ * account — and the payment then leaves for an account that does not exist.
+ * The mod-97 checksum exists to catch exactly that, so it runs at the moment
+ * the number is written rather than only when somebody later looks at it.
+ */
+export const iban = Joi.string().trim().max(34).custom((value, helpers) => {
+  if (!value) return value;
+  return isValidIban(value) ? value.replace(/[\s-]/g, '').toUpperCase() : helpers.error('any.invalid');
+}, 'IBAN checksum').messages({
+  'any.invalid': 'Die IBAN ist ungültig — die Prüfziffer stimmt nicht.',
+});

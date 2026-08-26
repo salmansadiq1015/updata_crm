@@ -226,8 +226,8 @@ function QuotesPageInner() {
 
       <div>
         {tab === 'quotations' && <QuotationsTable advancedFilters={quotationFilters} focusId={focus.quotations} />}
-        {tab === 'orders' && <OrdersTable advancedFilters={orderFilters} />}
-        {tab === 'invoices' && <InvoicesTable advancedFilters={invoiceFilters} />}
+        {tab === 'orders' && <OrdersTable advancedFilters={orderFilters} focusId={focus.orders} />}
+        {tab === 'invoices' && <InvoicesTable advancedFilters={invoiceFilters} focusId={focus.invoices} />}
       </div>
     </div>
   );

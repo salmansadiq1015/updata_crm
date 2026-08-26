@@ -27,6 +27,7 @@ class AgentController {
         req.params.runId,
         req.user._id.toString(),
         req.body.decision,
+        req.body.overrides || {},
       );
       res.success({
         data: result,

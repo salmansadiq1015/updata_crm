@@ -249,7 +249,9 @@ describe('field service agent customer creation', () => {
       expect.objectContaining({
         projectId,
         status: 'DRAFT',
-        workPerformed: 'boiler inspected, burner cleaned, ignition electrode replaced, system running again.',
+        // Rapport AI rewrites the dictation into report prose, so the exact
+        // wording is no longer the raw input.
+        workPerformed: expect.any(String),
       }),
       userId,
       { source: 'ai-agent' },

@@ -5,11 +5,13 @@ import ERROR_CODES from '../../../shared/errors/errorCodes.js';
 export const MAX_STEPS = 10;
 // One character is enough when answering a numbered choice.
 export const MIN_AGENT_INPUT_LENGTH = 1;
-// Raise only for load or end-to-end testing (AI_AGENT_RATE_LIMIT); production
-// keeps twenty runs per hour and per user.
+// Guard against a runaway loop, not against normal use: a dispatcher planning
+// a morning goes past twenty messages without trying, and every follow-up
+// counts as one. A script gone wrong still crosses 200 in seconds.
+// Cost is watched through the AI analytics, not through this counter.
 const RATE_LIMIT = Number(process.env.AI_AGENT_RATE_LIMIT) > 0
   ? Number(process.env.AI_AGENT_RATE_LIMIT)
-  : 20;
+  : 200;
 const RATE_WINDOW_SECONDS = 3600;
 
 const INJECTION_PATTERNS = [

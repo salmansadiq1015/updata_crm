@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { objectId, cursorPagination } from '../../shared/validation/commonSchemas.js';
+import { objectId, cursorPagination, iban } from '../../shared/validation/commonSchemas.js';
 
 const CURRENCIES = ['CHF', 'EUR'];
 const CONNECTION_TYPES = ['MANUAL', 'EBICS', 'SFTP'];
@@ -8,7 +8,7 @@ const RECONCILIATION_STATUSES = ['UNMATCHED', 'AUTO_MATCHED', 'MANUALLY_MATCHED'
 export const createBankAccountSchema = {
   body: Joi.object({
     name: Joi.string().required().trim().max(100),
-    iban: Joi.string().required().trim().max(34),
+    iban: iban.required(),
     bic: Joi.string().trim().max(11).allow('', null),
     bankName: Joi.string().trim().max(200).allow('', null),
     currency: Joi.string().valid(...CURRENCIES),
@@ -27,7 +27,7 @@ export const updateBankAccountSchema = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({
     name: Joi.string().trim().max(100),
-    iban: Joi.string().trim().max(34),
+    iban,
     bic: Joi.string().trim().max(11).allow('', null),
     bankName: Joi.string().trim().max(200).allow('', null),
     currency: Joi.string().valid(...CURRENCIES),

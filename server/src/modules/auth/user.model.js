@@ -222,9 +222,14 @@ userSchema.index(
   { initials: 1 },
   { unique: true, partialFilterExpression: { initials: { $type: 'string' }, isDeleted: false } },
 );
+// language_override points at a field no user carries, on purpose. MongoDB
+// defaults it to `language`, and `language` here is the person's UI preference
+// — so a colleague who chose German was indexed with the German stemmer while
+// queries were stemmed as English, and searching a name returned nothing.
+// Migration 005 rebuilds the index on existing databases.
 userSchema.index(
   { firstName: 'text', lastName: 'text', email: 'text' },
-  { weights: { email: 3, firstName: 2, lastName: 2 } },
+  { weights: { email: 3, firstName: 2, lastName: 2 }, language_override: '_textLanguage' },
 );
 
 // --- Virtuals ---

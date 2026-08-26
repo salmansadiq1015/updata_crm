@@ -32,9 +32,11 @@ async function loadService() {
     create: jest.fn(async (data) => ({ _id: 'doc-1', ...data })),
   };
   const fileService = {
-    upload: jest.fn(async () => ({
+    // The storage key follows the name it was given, the way the real service
+    // builds it — a fixed key here hid the naming convention change.
+    upload: jest.fn(async ({ module, entityType, entityId, originalName }) => ({
       _id: 'file-1',
-      key: 'qop/invoice/invoice-1/Rechnung_RE-2026-00001.pdf',
+      key: `${module}/${entityType}/${entityId}/${originalName}`,
       checksumSha256: 'abc123',
     })),
   };
@@ -103,8 +105,12 @@ describe('invoice PDF generation', () => {
 
     const result = await invoicePdfService.generateAndStore('invoice-1', 'user-1');
 
+    // The client's own naming convention: date, object, MB, document type and
+    // version — no record number, by their decision.
+    const EXPECTED_NAME = /^\d{4}_\d{2}_\d{2}_(.+_)?MB_Rechnung RG_V1\.pdf$/;
+
     expect(fileService.upload).toHaveBeenCalledWith(expect.objectContaining({
-      originalName: 'Rechnung_RE-2026-00001.pdf',
+      originalName: expect.stringMatching(EXPECTED_NAME),
       mimeType: 'application/pdf',
       module: 'qop',
       entityType: 'invoice',
@@ -114,9 +120,11 @@ describe('invoice PDF generation', () => {
     }));
     expect(fileService.upload.mock.calls[0][0].buffer).toBeInstanceOf(Buffer);
     expect(fileService.upload.mock.calls[0][0].buffer.length).toBeGreaterThan(1000);
+    // The archived copy is filed under the same name it was uploaded with.
+    const uploadedName = fileService.upload.mock.calls[0][0].originalName;
     expect(accountingDocumentRepository.create).toHaveBeenCalledWith(expect.objectContaining({
-      filePath: 'qop/invoice/invoice-1/Rechnung_RE-2026-00001.pdf',
-      fileName: 'Rechnung_RE-2026-00001.pdf',
+      filePath: `qop/invoice/invoice-1/${uploadedName}`,
+      fileName: uploadedName,
       mimeType: 'application/pdf',
       documentType: 'AR_INVOICE_PDF',
       ocrStatus: 'NOT_APPLICABLE',

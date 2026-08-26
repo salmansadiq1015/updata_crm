@@ -99,31 +99,30 @@ const notificationTemplateService = (await import('../../src/modules/notificatio
 const notificationService = (await import('../../src/modules/notifications/notification.service.js')).default;
 const { PushAdapter } = await import('../../src/modules/notifications/adapters/push.adapter.js');
 
-function queryResult(items) {
-  return {
-    select: jest.fn(() => ({
-      lean: jest.fn(async () => items),
-    })),
-  };
-}
-
 describe('module 13 notification service hardening', () => {
   const originalFetch = global.fetch;
-  const originalFcmKey = process.env.FCM_SERVER_KEY;
+  const originalAppId = process.env.ONESIGNAL_APP_ID;
+  const originalApiKey = process.env.ONESIGNAL_REST_API_KEY;
 
   beforeEach(() => {
     jest.clearAllMocks();
     cacheManager.getOrSet.mockImplementation((key, factory) => factory());
-    process.env.FCM_SERVER_KEY = 'test-fcm-key';
+    process.env.ONESIGNAL_APP_ID = 'test-onesignal-app-id';
+    process.env.ONESIGNAL_REST_API_KEY = 'test-onesignal-api-key';
     delete global.io;
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
-    if (originalFcmKey === undefined) {
-      delete process.env.FCM_SERVER_KEY;
+    if (originalAppId === undefined) {
+      delete process.env.ONESIGNAL_APP_ID;
     } else {
-      process.env.FCM_SERVER_KEY = originalFcmKey;
+      process.env.ONESIGNAL_APP_ID = originalAppId;
+    }
+    if (originalApiKey === undefined) {
+      delete process.env.ONESIGNAL_REST_API_KEY;
+    } else {
+      process.env.ONESIGNAL_REST_API_KEY = originalApiKey;
     }
   });
 
@@ -204,18 +203,12 @@ describe('module 13 notification service hardening', () => {
     expect(notificationService._getRetryDelay('EMAIL', 5)).toBe(3600000);
   });
 
-  test('deactivates invalid FCM device tokens while delivering to remaining tokens', async () => {
-    deviceTokenModel.find.mockReturnValue(queryResult([
-      { deviceToken: 'valid-token', platform: 'ANDROID' },
-      { deviceToken: 'expired-token', platform: 'IOS' },
-    ]));
-    deviceTokenModel.updateMany.mockResolvedValue({ modifiedCount: 1 });
+  test('sends push notification via OneSignal API targeting external_user_id', async () => {
     global.fetch = jest.fn(async () => ({
       ok: true,
       json: async () => ({
-        success: 1,
-        failure: 1,
-        results: [{ message_id: 'fcm-1' }, { error: 'NotRegistered' }],
+        id: 'onesignal-msg-1',
+        recipients: 1,
       }),
     }));
 
@@ -237,20 +230,28 @@ describe('module 13 notification service hardening', () => {
 
     expect(result).toMatchObject({
       success: true,
-      provider: 'fcm',
+      provider: 'onesignal',
+      providerMessageId: 'onesignal-msg-1',
       targetCount: 1,
-      invalidTokenCount: 1,
     });
-    expect(deviceTokenModel.updateMany).toHaveBeenCalledWith(
-      { deviceToken: { $in: ['expired-token'] } },
-      { $set: { isActive: false } },
-    );
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.any(String),
+      'https://api.onesignal.com/notifications',
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ Authorization: 'key=test-fcm-key' }),
+        headers: expect.objectContaining({
+          Authorization: 'Key test-onesignal-api-key',
+          'Content-Type': 'application/json',
+        }),
       }),
     );
+
+    // Verify the request body contains the external_user_id
+    const fetchCall = global.fetch.mock.calls[0];
+    const requestBody = JSON.parse(fetchCall[1].body);
+    expect(requestBody.app_id).toBe('test-onesignal-app-id');
+    expect(requestBody.include_external_user_ids).toEqual(['user-1']);
+    expect(requestBody.headings).toEqual({ en: 'Dispatch' });
+    expect(requestBody.contents).toEqual({ en: 'Assigned task' });
+    expect(requestBody.data.deepLink).toBe('/tasks/1');
   });
 });

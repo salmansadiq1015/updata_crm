@@ -25,6 +25,7 @@ import {
   AiAdminHeader,
   AiAdminPageShell,
 } from '@/modules/ai/components/admin/ai-admin-ui';
+import { AiAgentContract } from '@/modules/ai/components/admin/ai-agent-contract';
 
 const QUERY_KEY = ['ai', 'admin', 'governance'];
 
@@ -35,9 +36,7 @@ const RISK_BADGE = {
   CRITICAL: 'bg-red-500/10 text-red-600 dark:text-red-400',
 };
 
-function AgentRow({ agent, onToggle, isPending, t }) {
-  const actionCount = (agent.allowedActions || []).length;
-
+function AgentRow({ agent, onToggle, isPending, t, actions, blockReasons, agentNames }) {
   return (
     <div className="flex flex-col gap-3 border-b border-border px-4 py-4 last:border-b-0 sm:flex-row sm:items-start sm:gap-6">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -65,11 +64,12 @@ function AgentRow({ agent, onToggle, isPending, t }) {
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
             {t(`ai.agents.purpose.${agent.key}`, agent.purpose)}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {actionCount > 0
-              ? `${t('ai.agents.actions')}: ${(agent.allowedActions || []).join(', ')}`
-              : t('ai.agents.noActionsYet')}
-          </p>
+          <AiAgentContract
+            agent={agent}
+            actions={actions}
+            blockReasons={blockReasons}
+            agentNames={agentNames}
+          />
           {!agent.isEnabled && agent.disabledReason ? (
             <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
               {t('ai.agents.disabledReason')}: {agent.disabledReason}
@@ -126,6 +126,8 @@ export default function AiAgentsAdminPage() {
   const agents = data?.agents || [];
   const stopActive = Boolean(data?.emergencyStop?.active);
   const activeCount = agents.filter((agent) => agent.isEnabled).length;
+  // Handoffs are declared by key; the office reads names.
+  const agentNames = Object.fromEntries(agents.map((agent) => [agent.key, agent.name]));
 
   const handleToggle = (agent, checked) => {
     toggleMutation.mutate({
@@ -196,6 +198,9 @@ export default function AiAgentsAdminPage() {
               onToggle={handleToggle}
               isPending={toggleMutation.isPending || stopActive}
               t={t}
+              actions={data?.actions || []}
+              blockReasons={data?.blockReasons || []}
+              agentNames={agentNames}
             />
           ))
         )}

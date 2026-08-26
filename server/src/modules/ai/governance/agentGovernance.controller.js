@@ -4,6 +4,8 @@ import {
   RISK_LEVEL_LABELS,
   BLOCK_REASONS,
   BLOCK_REASON_LABELS,
+  ACTION_LABELS,
+  riskLevelFor,
 } from './agent.risk.js';
 
 class AgentGovernanceController {
@@ -28,6 +30,14 @@ class AgentGovernanceController {
           blockReasons: Object.values(BLOCK_REASONS).map((reason) => ({
             reason,
             label: BLOCK_REASON_LABELS[reason],
+          })),
+          // The register screen shows what an agent may and may not do. Sent
+          // with its wording and its risk level so the screen never has to
+          // print a bare CREATE_INVOICE at the office.
+          actions: Object.entries(ACTION_LABELS).map(([action, label]) => ({
+            action,
+            label,
+            riskLevel: riskLevelFor(action),
           })),
         },
       });

@@ -18,8 +18,10 @@ export const PLANNER_ACTIONS = Object.freeze([
   'CREATE_ASSIGNMENT', 'RESCHEDULE_ASSIGNMENT', 'DELETE_ASSIGNMENT',
   'CREATE_REPORT', 'UPDATE_REPORT', 'DELETE_REPORT', 'SEARCH_REPORTS',
   'SEARCH_DOCUMENTS', 'CREATE_QUOTATION', 'CREATE_INVOICE', 'CREATE_NOTE',
-  'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE',
-  'ANALYZE_FIELD_TICKET', 'SEND_NOTIFICATION', 'GENERAL',
+  'SEND_CHAT', 'SUMMARIZE_CHAT', 'RECORD_TIME', 'ANALYZE_WORKFORCE', 'SALES_FOLLOWUPS',
+  'ANALYZE_FIELD_TICKET', 'QUALITY_CHECK', 'SERVICE_DUE', 'SERVICE_BRIEFING', 'PERMIT_CHECK',
+  'DISPATCH_CHECK', 'DISPATCH_SUGGEST', 'MATERIAL_CHECK', 'DOCUMENT_CLASSIFY', 'PAYMENT_CHECK', 'PROJECT_FIGURES', 'DRAFT_CUSTOMER_MESSAGE', 'KNOWLEDGE_ASK',
+  'SEND_NOTIFICATION', 'GENERAL',
 ]);
 
 const VALID_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
@@ -27,7 +29,7 @@ const VALID_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 const SYSTEM_PROMPT = (todayIso) => `You are the planning brain of an ERP assistant for MB Boiler & Heizungen AG (Swiss HVAC company). Users write in German, French, Italian or English.
 
 Classify the user message into exactly ONE action and extract parameters. Reply with JSON only, no markdown fences:
-{"action":"<ACTION>","params":{"title":null,"description":null,"priority":null,"dueDate":null,"dateTime":null,"durationHours":null,"assigneeName":null,"customerName":null,"projectName":null,"searchTerm":null,"listAll":false,"status":null,"messageContent":null}}
+{"action":"<ACTION>","params":{"title":null,"description":null,"priority":null,"dueDate":null,"dateTime":null,"durationHours":null,"assigneeName":null,"customerName":null,"projectName":null,"searchTerm":null,"listAll":false,"status":null,"messageContent":null,"installationName":null}}
 
 Actions: ${PLANNER_ACTIONS.join(', ')}.
 
@@ -35,8 +37,23 @@ Hard rules:
 - QUESTIONS are never mutations. "Wie viele offene Aufgaben gibt es?", "Welche Projekte laufen?", "Zeige mir…" → the matching SEARCH_* action (SEARCH_TASKS, SEARCH_PROJECTS, SEARCH_ORDERS, SEARCH_CUSTOMER, SEARCH_REPORTS, SEARCH_DOCUMENTS). Only choose CREATE_*/UPDATE_*/DELETE_* when the user explicitly asks to create, change or delete something.
 - Questions about how the system works, greetings, or anything that maps to no ERP data → GENERAL.
 - "Fasse den Chat zusammen" / summarize a chat/conversation → SUMMARIZE_CHAT.
+- Questions about which quotations need chasing ("Welche Offerten muss ich nachfassen?", "offene Offerten", "Nachfassliste") → SALES_FOLLOWUPS.
+- Asking whether a project can be closed, or what is still missing before closing it ("Kann ich das Projekt abschliessen?", "Abschlussprüfung", "Was fehlt noch beim Projekt X?", "Ist die Dokumentation vollständig?") → QUALITY_CHECK, with projectName set.
+- Questions about maintenance that is due or overdue ("Welche Wartungen sind fällig?", "überfällige Wartungen", "Was steht diesen Monat an Service an?") → SERVICE_DUE.
+- Internal how-do-we-do-it questions about the firm's own processes, wording, checklists or agents ("Welche Zahlungsfrist gilt bei uns?", "Wie hoch sind die Fördergelder in Basel-Stadt?", "Was gehört auf die Checkliste einer Erdsonde?", "Was darf Money AI?") → KNOWLEDGE_ASK, with searchTerm carrying the question as asked. NOT GENERAL, which is small talk about the system.
+- Asking to WRITE to a customer — a draft, never a send ("Schreib dem Kunden X wegen der Verzögerung", "Terminbestätigung an X", "Entwurf für eine WhatsApp an X", "SMS an X wegen dem Baustart") → DRAFT_CUSTOMER_MESSAGE, with customerName, dateTime if a date is named, and messageContent carrying the reason in the user's own words. NOT SEND_CHAT, which writes to a colleague.
+- Questions about the figures on a project — budget, invoiced, hours, how it stands ("Wie steht das Projekt X finanziell?", "Kennzahlen X", "Wie viel ist bei X schon verrechnet?", "Zahlen zum Projekt X") → PROJECT_FIGURES, with projectName set.
+- Questions about paying a SUPPLIER invoice — incoming, Kreditoren ("Kann ich die Rechnung von X zahlen?", "Zahlungsprüfung", "Stimmt die IBAN?", "Welche Kreditorenrechnungen sind offen?") → PAYMENT_CHECK, with customerName carrying the supplier and searchTerm the invoice number if given. NOT the same as CREATE_INVOICE, which bills a customer.
+- Questions about how a project's documents are filed ("Sind die Dokumente vom Projekt X richtig abgelegt?", "Klassiere die Dokumente von X", "Wohin gehören die Unterlagen von X?") → DOCUMENT_CLASSIFY, with projectName set.
+- Questions about material for a project ("Ist das Material für Projekt X da?", "Materialstatus X", "Was fehlt noch an Material?", "Wurde alles bestellt für X?") → MATERIAL_CHECK, with projectName set.
+- Asking WHO could take a slot ("Wer kann am Dienstag die Wärmepumpe bei X warten?", "Wer ist am Montag frei?", "Wen kann ich schicken?") → DISPATCH_SUGGEST, with dateTime and, if named, installationName/customerName.
+- Asking whether ONE named person can take a slot ("Kann Thomas am Dienstag zu X?", "Passt der Termin bei Sarah?", "Geht das bei Thomas am Montag um 8 Uhr?") → DISPATCH_CHECK, with assigneeName and dateTime.
+- Questions about permits, building notifications or subsidy applications for a project ("Welche Bewilligungen braucht das Projekt X?", "Behördencheck für X", "Was muss ich bei der Gemeinde einreichen?", "Ist eine Baumeldung nötig?", "Fördergesuch für X") → PERMIT_CHECK, with projectName set.
+- Asking what a technician needs to know before an intervention on a specific plant ("Briefing für die Anlage A-00001", "Was muss ich zur Wartung bei Kunde X wissen?", "Infos zum Boiler bei Y") → SERVICE_BRIEFING, with installationName and/or customerName set.
 - Parameters:
-  - title: clean, human-readable title WITHOUT command words ("Erstelle eine Aufgabe Boiler entkalken" → title "Boiler entkalken"). Keep the user's language.
+  - title: the user's OWN words. Remove ONLY the command wrapper ("Erstelle eine Aufgabe", "Neue Aufgabe:", "Aufgabe erstellen") and the trailing attributes you put into other fields (date, priority, assignee). Everything in between stays EXACTLY as written, in the user's language.
+    Reference codes, order and plant numbers, article numbers, project prefixes, abbreviations and words you do not recognise are PART OF THE TITLE, never noise: "Erstelle eine Aufgabe AUF-2026-0052 Nachkontrolle" → title "AUF-2026-0052 Nachkontrolle"; "Erstelle eine Aufgabe XY7 Boiler entkalken" → title "XY7 Boiler entkalken".
+    Never shorten, translate, correct, tidy or beautify a title. The office searches for what it typed.
   - priority: LOW | MEDIUM | HIGH | URGENT ("hohe Priorität" → HIGH, "dringend" → URGENT).
   - dueDate: ISO date YYYY-MM-DD. Resolve relative dates against today = ${todayIso} (timezone Europe/Zurich). "morgen" = today + 1 day.
   - dateTime: ISO datetime for scheduling actions ("morgen um 14 Uhr" → the exact datetime).
@@ -45,6 +62,7 @@ Hard rules:
   - searchTerm: for SEARCH_* — the term to search for; null with listAll=true when the user wants everything / a count ("alle Aufgaben", "wie viele Rechnungen").
   - status: target status when the user wants a status change ("erledigt" → the status they mean, as said).
   - messageContent: the message body for SEND_CHAT / SEND_NOTIFICATION.
+  - installationName: the plant mentioned — its number (A-00001), serial number, make or model.
 - Unknown fields stay null. Never invent values.`;
 
 class LlmPlannerService {
@@ -102,6 +120,7 @@ class LlmPlannerService {
       listAll: raw.listAll === true,
       status: str(raw.status, 60),
       messageContent: str(raw.messageContent, 2000),
+      installationName: str(raw.installationName, 120),
     };
     return params;
   }

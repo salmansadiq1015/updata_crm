@@ -20,7 +20,7 @@ import {
 } from '../capabilities/fieldService.capabilities.js';
 import { WorkflowState } from './workflow.state.js';
 import agentGovernance from '../governance/agentGovernance.service.js';
-import { RISK_LEVEL_LABELS } from '../governance/agent.risk.js';
+import { ACTION_LABELS, RISK_LEVEL_LABELS } from '../governance/agent.risk.js';
 import logger from '../../../shared/logger/index.js';
 import swissPlzService from '../../../shared/ai/swissPlz.service.js';
 
@@ -42,6 +42,19 @@ const ACTIONS = Object.freeze({
   SUMMARIZE_CHAT: 'SUMMARIZE_CHAT',
   RECORD_TIME: 'RECORD_TIME',
   ANALYZE_WORKFORCE: 'ANALYZE_WORKFORCE',
+  SALES_FOLLOWUPS: 'SALES_FOLLOWUPS',
+  QUALITY_CHECK: 'QUALITY_CHECK',
+  SERVICE_DUE: 'SERVICE_DUE',
+  SERVICE_BRIEFING: 'SERVICE_BRIEFING',
+  PERMIT_CHECK: 'PERMIT_CHECK',
+  DISPATCH_CHECK: 'DISPATCH_CHECK',
+  DISPATCH_SUGGEST: 'DISPATCH_SUGGEST',
+  MATERIAL_CHECK: 'MATERIAL_CHECK',
+  DOCUMENT_CLASSIFY: 'DOCUMENT_CLASSIFY',
+  PAYMENT_CHECK: 'PAYMENT_CHECK',
+  PROJECT_FIGURES: 'PROJECT_FIGURES',
+  DRAFT_CUSTOMER_MESSAGE: 'DRAFT_CUSTOMER_MESSAGE',
+  KNOWLEDGE_ASK: 'KNOWLEDGE_ASK',
   ANALYZE_FIELD_TICKET: 'ANALYZE_FIELD_TICKET',
   DELETE_CUSTOMER: 'DELETE_CUSTOMER',
   DELETE_TASK: 'DELETE_TASK',
@@ -61,42 +74,6 @@ const ACTIONS = Object.freeze({
   GENERAL: 'GENERAL',
 });
 
-const ACTION_LABELS = {
-  [ACTIONS.CREATE_CUSTOMER]: 'einen Kunden erfassen',
-  [ACTIONS.UPDATE_CUSTOMER]: 'einen Kunden aktualisieren',
-  [ACTIONS.CREATE_TASK]: 'eine Aufgabe erstellen',
-  [ACTIONS.UPDATE_TASK]: 'eine Aufgabe aktualisieren',
-  [ACTIONS.CREATE_PROJECT]: 'ein Projekt eröffnen',
-  [ACTIONS.CREATE_ORDER]: 'einen Auftrag erstellen',
-  [ACTIONS.UPDATE_ORDER]: 'einen Auftrag aktualisieren',
-  [ACTIONS.CREATE_ASSIGNMENT]: 'einen Einsatz planen',
-  [ACTIONS.RESCHEDULE_ASSIGNMENT]: 'einen Einsatz verschieben',
-  [ACTIONS.CREATE_REPORT]: 'einen Rapport erstellen',
-  [ACTIONS.UPDATE_REPORT]: 'einen Rapport aktualisieren',
-  [ACTIONS.UPDATE_PROJECT]: 'ein Projekt aktualisieren',
-  [ACTIONS.CREATE_NOTE]: 'eine Notiz erfassen',
-  [ACTIONS.SEND_CHAT]: 'eine Chat-Nachricht senden',
-  [ACTIONS.SUMMARIZE_CHAT]: 'einen Chat zusammenfassen',
-  [ACTIONS.RECORD_TIME]: 'Arbeitszeit erfassen',
-  [ACTIONS.ANALYZE_WORKFORCE]: 'die Personalplanung auswerten',
-  [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
-  [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
-  [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
-  [ACTIONS.DELETE_PROJECT]: 'ein Projekt löschen',
-  [ACTIONS.DELETE_ORDER]: 'einen Auftrag löschen',
-  [ACTIONS.DELETE_REPORT]: 'einen Rapport löschen',
-  [ACTIONS.DELETE_ASSIGNMENT]: 'einen Einsatz löschen',
-  [ACTIONS.SEARCH_CUSTOMER]: 'Kundendaten suchen',
-  [ACTIONS.SEARCH_TASKS]: 'Aufgaben suchen',
-  [ACTIONS.SEARCH_PROJECTS]: 'Projekte suchen',
-  [ACTIONS.SEARCH_ORDERS]: 'Aufträge suchen',
-  [ACTIONS.SEARCH_REPORTS]: 'Rapporte suchen',
-  [ACTIONS.SEARCH_DOCUMENTS]: 'Dokumente suchen',
-  [ACTIONS.CREATE_QUOTATION]: 'eine Offerte erstellen',
-  [ACTIONS.CREATE_INVOICE]: 'eine Rechnung erstellen',
-  [ACTIONS.CREATE_TASK_REMINDER]: 'eine Erinnerung erstellen',
-  [ACTIONS.GENERAL]: 'beim System helfen',
-};
 
 const PROJECT_STATUS_BY_PHRASE = [
   ['waiting for material', 'WAITING_FOR_MATERIAL'],
@@ -325,6 +302,9 @@ async function performAction(action, input, context, userId, state = {}) {
         riskLevel: decision.riskLevel,
         label: ACTION_LABELS[action] || action,
         effect: RISK_LEVEL_LABELS[decision.riskLevel],
+        // What the agent actually intends to write, so the office can read it
+        // before approving — and correct it without dictating again (C2).
+        proposal: proposedFields(context),
         ...target,
       },
       ...target,
@@ -358,6 +338,32 @@ async function performAction(action, input, context, userId, state = {}) {
       return recordTime(input, context, userId);
     case ACTIONS.ANALYZE_WORKFORCE:
       return analyzeWorkforce(input, state);
+    case ACTIONS.SALES_FOLLOWUPS:
+      return salesFollowUps(state);
+    case ACTIONS.QUALITY_CHECK:
+      return qualityCheck(context, state);
+    case ACTIONS.SERVICE_DUE:
+      return serviceDue(state);
+    case ACTIONS.SERVICE_BRIEFING:
+      return serviceBriefing(context, state);
+    case ACTIONS.PERMIT_CHECK:
+      return permitCheck(context, state);
+    case ACTIONS.DISPATCH_CHECK:
+      return dispatchCheck(input, context, state);
+    case ACTIONS.DISPATCH_SUGGEST:
+      return dispatchSuggest(input, context, state);
+    case ACTIONS.MATERIAL_CHECK:
+      return materialCheck(context, state);
+    case ACTIONS.DOCUMENT_CLASSIFY:
+      return documentClassify(context, state);
+    case ACTIONS.PAYMENT_CHECK:
+      return paymentCheck(input, context, state);
+    case ACTIONS.PROJECT_FIGURES:
+      return projectFigures(context, state);
+    case ACTIONS.DRAFT_CUSTOMER_MESSAGE:
+      return draftCustomerMessage(input, context, state);
+    case ACTIONS.KNOWLEDGE_ASK:
+      return knowledgeAsk(input, context);
     case ACTIONS.ANALYZE_FIELD_TICKET:
       return analyzeFieldTicket(input, state);
     case ACTIONS.CREATE_NOTE:
@@ -414,14 +420,16 @@ async function createCustomer(input, context, userId) {
 }
 
 async function createTask(input, context, userId) {
-  if (context.assigneeCandidates?.length > 1) {
+  // Only ask about a person or a project the office actually mentioned. A task
+  // needs neither, and asking about a match nobody asked for is noise.
+  if (saidAssignee(context) && context.assigneeCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_TASK, ['employee/technician'], context);
   }
-  if (context.projectCandidates?.length > 1) {
+  if (saidProject(context) && context.projectCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_TASK, ['project'], context);
   }
   const draft = context.llmDraft || {};
-  const title = draft.title || cleanTitle(input, ['create task', 'task', 'aufgabe', 'erstelle']);
+  const title = titleFrom(draft, input, ['create task', 'task', 'aufgabe', 'erstelle']);
   const priority = draft.priority || extractPriority(input);
   const dueDate = draftDate(draft.dueDate) || extractDate(input);
 
@@ -547,7 +555,9 @@ async function createAssignment(input, context, userId) {
   if (context.assigneeCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_ASSIGNMENT, ['employee/technician'], context);
   }
-  if (context.projectCandidates?.length > 1) {
+  // An assignment needs a person and a slot; a project is optional, so it is
+  // only worth asking about when one was named.
+  if (saidProject(context) && context.projectCandidates?.length > 1) {
     return needsFollowUp(ACTIONS.CREATE_ASSIGNMENT, ['project'], context);
   }
   const employee = context.assignee;
@@ -560,10 +570,10 @@ async function createAssignment(input, context, userId) {
   const result = await assignmentService.create({
     employeeIds: [employee._id],
     assignmentType: hasAny(input.toLowerCase(), ['maintenance', 'wartung']) ? 'MAINTENANCE' : 'PROJECT_WORK',
-    title: draft.title || cleanTitle(input, ['schedule', 'assign', 'plan', 'termin']),
+    title: titleFrom(draft, input, ['schedule', 'assign', 'plan', 'termin']),
     startDatetime: start,
     endDatetime: new Date(start.getTime() + durationHours * 60 * 60 * 1000),
-    projectId: context.project?._id || null,
+    projectId: namedProject(context)?._id || null,
     customerId: context.customer?._id || null,
     priority: ['URGENT', 'HIGH'].includes(draft.priority || extractPriority(input)) ? (draft.priority || extractPriority(input)) : 'NORMAL',
     instructions: input,
@@ -633,6 +643,529 @@ async function analyzeFieldTicket(input, state) {
     recordType: 'fieldTicket',
     recordId: ticketId,
     record: result,
+  };
+}
+
+async function salesFollowUps(state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('quotations:read')) {
+    return {
+      action: ACTIONS.SALES_FOLLOWUPS,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  const salesService = (await import('../agents/sales/sales.service.js')).default;
+  const followUps = await salesService.findFollowUps();
+  return {
+    action: ACTIONS.SALES_FOLLOWUPS,
+    status: 'completed',
+    message: salesService.compose(followUps),
+    records: followUps,
+  };
+}
+
+/**
+ * Quality AI's closing check.
+ *
+ * The check itself always succeeds — the question "can I close this?" gets an
+ * answer either way. Whether the project may be closed sits in `canClose`, so
+ * a blocked closing reads as a finding, not as a failed run.
+ */
+async function qualityCheck(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return {
+      action: ACTIONS.QUALITY_CHECK,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.QUALITY_CHECK, ['project'], context);
+  }
+
+  const qualityService = (await import('../agents/quality/quality.service.js')).default;
+  const result = await qualityService.checkBeforeClose(context.project);
+
+  return {
+    action: ACTIONS.QUALITY_CHECK,
+    status: 'completed',
+    message: qualityService.compose(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    record: {
+      id: context.project._id,
+      name: result.project?.name || context.project.name,
+      projectNumber: result.project?.projectNumber || null,
+      status: result.project?.status || null,
+      canClose: result.ok,
+      template: result.template?.key || null,
+      blockers: result.blockers.map((blocker) => blocker.detail),
+      warnings: result.warnings,
+      missingDocuments: result.missing.map((requirement) => requirement.label),
+      presentDocuments: result.present.map((item) => item.label),
+    },
+  };
+}
+
+/**
+ * Whether the office actually named a project, or a person.
+ *
+ * Context resolution binds whatever it can from any shared word, so a task
+ * titled "Nachkontrolle beim Kunden" used to match four projects and the
+ * assistant asked which one was meant — about a project nobody had mentioned.
+ * The planner records what was really said; that is what decides.
+ */
+function saidProject(context) {
+  return Boolean(context.llmDraft?.projectName);
+}
+
+function saidAssignee(context) {
+  return Boolean(context.llmDraft?.assigneeName);
+}
+
+/** The project a question is about — only when it was actually named. */
+function namedProject(context) {
+  return saidProject(context) ? context.project || null : null;
+}
+
+/** The slot a dispatch question is about, and how long it runs. */
+function dispatchWindow(input, context) {
+  const draft = context.llmDraft || {};
+  const start = draftDate(draft.dateTime) || extractDateTime(input);
+  if (!start) return null;
+  const hours = draft.durationHours || extractDurationHours(input) || 2;
+  return { start, end: new Date(start.getTime() + hours * 60 * 60 * 1000) };
+}
+
+/** Dispo AI: can this one person take this slot? */
+async function dispatchCheck(input, context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('scheduling:read')) {
+    return { action: ACTIONS.DISPATCH_CHECK, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.assigneeCandidates?.length > 1 || !context.assignee) {
+    return needsFollowUp(ACTIONS.DISPATCH_CHECK, ['employee/technician'], context);
+  }
+  const window = dispatchWindow(input, context);
+  if (!window) return needsFollowUp(ACTIONS.DISPATCH_CHECK, ['scheduled date and time'], context);
+
+  const dispoService = (await import('../agents/dispo/dispo.service.js')).default;
+  const result = await dispoService.checkBeforeAssignment({
+    employee: context.assignee,
+    start: window.start,
+    end: window.end,
+    project: namedProject(context),
+    installation: context.installation || null,
+  });
+
+  return {
+    action: ACTIONS.DISPATCH_CHECK,
+    status: 'completed',
+    message: dispoService.composeCheck(result),
+    record: {
+      employee: [context.assignee.firstName, context.assignee.lastName].filter(Boolean).join(' '),
+      start: window.start,
+      end: window.end,
+      canGo: result.ok,
+      blockers: result.blockers.map((blocker) => blocker.detail),
+      warnings: result.warnings,
+    },
+  };
+}
+
+/** Dispo AI: who could take this slot at all? */
+async function dispatchSuggest(input, context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('scheduling:read')) {
+    return { action: ACTIONS.DISPATCH_SUGGEST, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  const window = dispatchWindow(input, context);
+  if (!window) return needsFollowUp(ACTIONS.DISPATCH_SUGGEST, ['scheduled date and time'], context);
+
+  const dispoService = (await import('../agents/dispo/dispo.service.js')).default;
+  const result = await dispoService.suggest({
+    start: window.start,
+    end: window.end,
+    project: namedProject(context),
+    installation: context.installation || null,
+  });
+
+  return {
+    action: ACTIONS.DISPATCH_SUGGEST,
+    status: 'completed',
+    message: dispoService.composeSuggestion(result),
+    records: result.candidates.map((candidate) => ({
+      name: candidate.name,
+      skills: candidate.skills,
+      warnings: candidate.warnings,
+    })),
+    record: {
+      start: window.start,
+      end: window.end,
+      available: result.candidates.length,
+      unavailable: result.excluded.length,
+      requiredSkills: result.requirements?.requiredSkills || [],
+    },
+  };
+}
+
+/** Knowledge AI: what the firm has written down, with its source. */
+async function knowledgeAsk(input, context) {
+  const knowledgeService = (await import('../agents/knowledge/knowledge.service.js')).default;
+  // The question as asked, not the planner's trimmed search term: retrieval
+  // wants every word the office used.
+  const question = context.llmDraft?.searchTerm && context.llmDraft.searchTerm.length > input.length
+    ? context.llmDraft.searchTerm
+    : input;
+  const result = await knowledgeService.find(question);
+
+  return {
+    action: ACTIONS.KNOWLEDGE_ASK,
+    status: 'completed',
+    message: knowledgeService.compose(question, result),
+    records: result.hits.map((hit) => ({ kind: hit.kind, title: hit.title, source: hit.source, matched: hit.matched })),
+    record: {
+      question,
+      found: result.hits.length,
+      searched: result.searched || 0,
+      // No sources means no answer — never a guess dressed as one.
+      answered: result.hits.length > 0,
+      sources: result.hits.map((hit) => hit.source),
+    },
+  };
+}
+
+/**
+ * Customer AI: a draft for the customer, and only a draft.
+ *
+ * The draft itself is a reading — nothing leaves the house. Sending it stays
+ * SEND_NOTIFICATION or SEND_CHAT, which both need approval.
+ */
+async function draftCustomerMessage(input, context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('crm:read')) {
+    return { action: ACTIONS.DRAFT_CUSTOMER_MESSAGE, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.customerCandidates?.length > 1) {
+    return needsFollowUp(ACTIONS.DRAFT_CUSTOMER_MESSAGE, ['customer'], context);
+  }
+  if (!context.customer) {
+    return needsFollowUp(ACTIONS.DRAFT_CUSTOMER_MESSAGE, ['customer'], context);
+  }
+
+  const customerService = (await import('../agents/customer/customer.service.js')).default;
+  const draft = context.llmDraft || {};
+  const { occasion, channel } = customerService.read(input);
+
+  const result = await customerService.draft({
+    customer: context.customer,
+    occasion,
+    channel,
+    project: namedProject(context),
+    dateTime: draftDate(draft.dateTime) || extractDateTime(input),
+    reason: draft.messageContent || draft.description || null,
+    technician: context.assignee ? [context.assignee.firstName, context.assignee.lastName].filter(Boolean).join(' ') : null,
+  });
+
+  return {
+    action: ACTIONS.DRAFT_CUSTOMER_MESSAGE,
+    status: 'completed',
+    message: customerService.compose(result),
+    recordType: 'customer',
+    recordId: context.customer._id,
+    record: {
+      customer: context.customer.name,
+      occasion: occasion.key,
+      channel: channel.key,
+      subject: result.subject || null,
+      body: result.body || null,
+      drafted: result.ok,
+      // Nothing left the house. The office sends, or does not.
+      sent: false,
+      blockers: (result.blockers || []).map((blocker) => blocker.detail),
+      warnings: result.warnings || [],
+    },
+  };
+}
+
+/** Controlling AI: how a job stands, and what the figures cannot say. */
+async function projectFigures(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return { action: ACTIONS.PROJECT_FIGURES, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.PROJECT_FIGURES, ['project'], context);
+  }
+
+  const controllingService = (await import('../agents/controlling/controlling.service.js')).default;
+  const result = await controllingService.figuresFor(context.project);
+
+  return {
+    action: ACTIONS.PROJECT_FIGURES,
+    status: 'completed',
+    message: controllingService.compose(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    record: {
+      id: context.project._id,
+      name: result.project?.name || context.project.name,
+      budget: result.budget ?? null,
+      ordered: result.ordered ?? null,
+      invoiced: result.invoiced ?? null,
+      openToInvoice: result.openToInvoice ?? null,
+      outstanding: result.outstanding ?? null,
+      hoursWorked: result.hoursWorked ?? null,
+      billingRate: result.billingRate ?? null,
+      // No margin: this system holds no cost rate. Stated, not omitted.
+      margin: null,
+      gaps: result.gaps || [],
+    },
+  };
+}
+
+/**
+ * Finanz AI: is this supplier invoice fit to be paid?
+ *
+ * Addressed by invoice number or by supplier — the office says "die Rechnung
+ * von Meier", not an identifier. With neither, the open ones are listed.
+ */
+async function paymentCheck(input, context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('accounting:read')) {
+    return { action: ACTIONS.PAYMENT_CHECK, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+
+  const finanzService = (await import('../agents/finanz/finanz.service.js')).default;
+  const draft = context.llmDraft || {};
+  const found = await finanzService.findInvoices({
+    number: draft.searchTerm || null,
+    supplier: draft.customerName || null,
+  });
+
+  if (!found.length) {
+    return {
+      action: ACTIONS.PAYMENT_CHECK,
+      status: 'completed',
+      message: 'Es sind keine offenen Kreditorenrechnungen erfasst, auf die das passt.',
+      records: [],
+    };
+  }
+  if (found.length > 1 && (draft.searchTerm || draft.customerName)) {
+    return {
+      action: ACTIONS.PAYMENT_CHECK,
+      status: 'completed',
+      message: finanzService.composeList(found),
+      records: found.map((invoice) => ({
+        id: String(invoice._id),
+        number: invoice.supplierInvoiceNumber,
+        supplier: invoice.supplierName,
+        amount: invoice.outstandingAmount ?? invoice.totalAmount,
+      })),
+    };
+  }
+
+  const result = await finanzService.checkBeforePayment(found[0]);
+  return {
+    action: ACTIONS.PAYMENT_CHECK,
+    status: 'completed',
+    message: finanzService.compose(result),
+    record: {
+      id: String(found[0]._id),
+      number: result.invoice?.supplierInvoiceNumber || null,
+      supplier: result.invoice?.supplierName || null,
+      amount: result.amount ?? null,
+      payable: result.ok,
+      ibanValid: Boolean(result.iban) && !result.blockers.some((b) => /IBAN/.test(b.detail)),
+      referenceKind: result.reference?.kind || null,
+      blockers: result.blockers.map((blocker) => blocker.detail),
+      warnings: result.warnings,
+    },
+  };
+}
+
+/** Document AI: what the project's documents are, and where they belong. */
+async function documentClassify(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return { action: ACTIONS.DOCUMENT_CLASSIFY, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.DOCUMENT_CLASSIFY, ['project'], context);
+  }
+
+  const documentService = (await import('../agents/document/document.service.js')).default;
+  const result = await documentService.classifyProject(context.project);
+
+  return {
+    action: ACTIONS.DOCUMENT_CLASSIFY,
+    status: 'completed',
+    message: documentService.composeProject(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    records: result.documents,
+    record: {
+      id: context.project._id,
+      name: context.project.name,
+      total: result.documents.length,
+      unfiled: result.documents.filter((entry) => !entry.settled).length,
+      unrecognised: result.documents.filter((entry) => !entry.proposedType).length,
+    },
+  };
+}
+
+/** Material AI: what the job needs, what is ordered, what will not arrive. */
+async function materialCheck(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return { action: ACTIONS.MATERIAL_CHECK, status: 'failed', message: 'Für diese Aktion fehlt Ihnen die Berechtigung.' };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.MATERIAL_CHECK, ['project'], context);
+  }
+
+  const materialService = (await import('../agents/material/material.service.js')).default;
+  const result = await materialService.check(context.project);
+
+  return {
+    action: ACTIONS.MATERIAL_CHECK,
+    status: 'completed',
+    message: materialService.compose(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    record: {
+      id: context.project._id,
+      name: result.project?.name || context.project.name,
+      projectNumber: result.project?.projectNumber || null,
+      plannedStartDate: result.project?.plannedStartDate || null,
+      articles: (result.articles || []).map((article) => ({
+        articleNumber: article.articleNumber,
+        name: article.name,
+        quantity: article.quantity,
+        unit: article.unit,
+        status: article.cover?.status || 'not_ordered',
+        expectedDelivery: article.cover?.expectedDelivery || null,
+      })),
+      unordered: (result.articles || []).filter((article) => !article.cover).length,
+      startAtRisk: !result.ok,
+      blockers: (result.blockers || []).map((blocker) => blocker.detail),
+      warnings: result.warnings || [],
+    },
+  };
+}
+
+/**
+ * Behörden AI: which procedures a project needs and what is still missing.
+ *
+ * Like the closing check, the reading always succeeds — the question gets an
+ * answer either way, and whether the site start is blocked sits in the record.
+ */
+async function permitCheck(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('projects:read')) {
+    return {
+      action: ACTIONS.PERMIT_CHECK,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  if (context.projectCandidates?.length > 1 || !context.project) {
+    return needsFollowUp(ACTIONS.PERMIT_CHECK, ['project'], context);
+  }
+
+  const behoerdenService = (await import('../agents/behoerden/behoerden.service.js')).default;
+  const result = await behoerdenService.assess(context.project);
+
+  return {
+    action: ACTIONS.PERMIT_CHECK,
+    status: 'completed',
+    message: behoerdenService.compose(result),
+    recordType: 'project',
+    recordId: context.project._id,
+    record: {
+      id: context.project._id,
+      name: result.project?.name || context.project.name,
+      projectNumber: result.project?.projectNumber || null,
+      canton: result.place?.canton || null,
+      municipality: result.place?.city || null,
+      template: result.template?.key || null,
+      startBlocked: (result.procedures || []).some((procedure) => procedure.blocksStart && procedure.status === 'offen'),
+      procedures: (result.procedures || []).map((procedure) => ({
+        key: procedure.key,
+        label: procedure.label,
+        authority: procedure.authority,
+        status: procedure.status,
+        blocksStart: procedure.blocksStart,
+        missingData: procedure.missingData,
+      })),
+      blockers: (result.blockers || []).map((blocker) => blocker.detail),
+      warnings: result.warnings || [],
+    },
+  };
+}
+
+/**
+ * Service AI: what maintenance is due. A reading, so it always answers —
+ * an empty list is an answer too.
+ */
+async function serviceDue(state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('crm:read')) {
+    return {
+      action: ACTIONS.SERVICE_DUE,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  const serviceService = (await import('../agents/service/service.service.js')).default;
+  const due = await serviceService.findDueMaintenance();
+  return {
+    action: ACTIONS.SERVICE_DUE,
+    status: 'completed',
+    message: serviceService.composeDueList(due),
+    records: due,
+  };
+}
+
+/** Service AI: the briefing for one plant, before a technician drives out. */
+async function serviceBriefing(context, state = {}) {
+  const permissions = state.permissions || [];
+  if (!permissions.includes('*') && !permissions.includes('crm:read')) {
+    return {
+      action: ACTIONS.SERVICE_BRIEFING,
+      status: 'failed',
+      message: 'Für diese Aktion fehlt Ihnen die Berechtigung.',
+    };
+  }
+  if (context.installationCandidates?.length > 1 || !context.installation) {
+    return needsFollowUp(ACTIONS.SERVICE_BRIEFING, ['installation'], context);
+  }
+
+  const serviceService = (await import('../agents/service/service.service.js')).default;
+  const data = await serviceService.briefing(context.installation);
+  if (!data) {
+    return needsFollowUp(ACTIONS.SERVICE_BRIEFING, ['installation'], context);
+  }
+
+  return {
+    action: ACTIONS.SERVICE_BRIEFING,
+    status: 'completed',
+    message: serviceService.composeBriefing(data),
+    recordType: 'installation',
+    recordId: data.installation._id,
+    record: {
+      id: data.installation._id,
+      installationNumber: data.installation.installationNumber || null,
+      manufacturer: data.installation.manufacturer || null,
+      model: data.installation.model || null,
+      fuelType: data.installation.fuelType || null,
+      ageYears: data.age,
+      customer: data.customer?.name || null,
+      openTickets: data.tickets.length,
+      maintenanceIntervals: data.intervals.length,
+    },
   };
 }
 
@@ -794,7 +1327,7 @@ async function createOrder(input, context, userId) {
     customerId: context.customer._id,
     customerName: context.customer.name,
     projectId: context.project?._id || null,
-    title: context.llmDraft?.title || cleanTitle(input, ['create order', 'create job', 'auftrag', 'order']),
+    title: titleFrom(context.llmDraft || {}, input, ['create order', 'create job', 'auftrag', 'order']),
     notes: context.llmDraft?.description || input,
     lineItems: [],
     language: 'de',
@@ -822,6 +1355,39 @@ const CONFIRMATION_TARGETS = {
   [ACTIONS.DELETE_ASSIGNMENT]: ['assignment', 'assignment'],
   [ACTIONS.RESCHEDULE_ASSIGNMENT]: ['assignment', 'assignment'],
 };
+
+/**
+ * The planner's parameters, as a confirmation preview.
+ *
+ * Only fields it actually set, and only those a person is allowed to correct
+ * — the same list the confirmation endpoint accepts, so what is shown is
+ * exactly what can be changed.
+ */
+const PROPOSAL_FIELDS = Object.freeze([
+  ['title', 'Titel'],
+  ['description', 'Beschreibung'],
+  ['priority', 'Priorität'],
+  ['dueDate', 'Fälligkeit'],
+  ['dateTime', 'Termin'],
+  ['durationHours', 'Dauer (h)'],
+  ['assigneeName', 'Monteur'],
+  ['customerName', 'Kunde'],
+  ['projectName', 'Projekt'],
+  ['installationName', 'Anlage'],
+  ['status', 'Status'],
+  ['messageContent', 'Nachricht'],
+]);
+
+function proposedFields(context = {}) {
+  const draft = context.llmDraft || {};
+  const proposal = [];
+  for (const [field, label] of PROPOSAL_FIELDS) {
+    const value = draft[field];
+    if (value === undefined || value === null || value === '') continue;
+    proposal.push({ field, label, value: value instanceof Date ? value.toISOString() : value });
+  }
+  return proposal;
+}
 
 function confirmationTarget(action, context = {}) {
   const mapping = CONFIRMATION_TARGETS[action];
@@ -855,6 +1421,7 @@ const FIELD_LABELS = {
   'new date and time': 'das neue Datum mit Uhrzeit',
   'hours or start/end time': 'die Stundenzahl oder Start- und Endzeit',
   'customer/site/asset': 'den Kunden, das Objekt oder die Anlage',
+  installation: 'die Anlage',
   'line items or service description': 'die Positionen oder die Leistungsbeschreibung',
   'new status or assignment': 'den neuen Status oder die Zuweisung',
   'new status or details': 'den neuen Status oder die Angaben',
@@ -878,6 +1445,7 @@ const FIELD_CANDIDATE_KEY = {
   'service report': 'reports',
   assignment: 'assignments',
   'customer/site/asset': 'installations',
+  installation: 'installations',
 };
 
 function fieldLabel(field) {
@@ -904,7 +1472,7 @@ function needsFollowUp(action, missingFields = [], context = {}) {
       });
       questions.push(`Welchen Treffer meinen Sie für ${fieldLabel(field)}? Antworten Sie mit der Nummer oder dem Namen.`);
     } else {
-      lines.push(`• Bitte ${fieldLabel(field)} angeben.`);
+      lines.push(`- Bitte ${fieldLabel(field)} angeben.`);
       questions.push(`Bitte ${fieldLabel(field)} angeben.`);
     }
   }
@@ -929,7 +1497,7 @@ async function resolveContext(input, previousFollowUp = null, requestContext = {
     findProject(input, objectId, previousFollowUp, draft),
     findOrder(input, objectId, previousFollowUp),
     requestResolved.assignment ? { selected: null, candidates: [] } : findAssignment(input, objectId, previousFollowUp),
-    findInstallation(input, objectId),
+    findInstallation(input, objectId, draft),
     shouldResolveTask(input, previousFollowUp, action) ? findTask(input, objectId, previousFollowUp) : { selected: null, candidates: [] },
     shouldResolveReport(input, previousFollowUp, action) ? findReport(input, objectId, previousFollowUp, requestResolved.assignment) : { selected: null, candidates: [] },
   ]);
@@ -947,11 +1515,11 @@ async function resolveContext(input, previousFollowUp = null, requestContext = {
     assignmentCandidates: assignmentResult.selected || requestResolved.assignment ? [] : assignmentResult.candidates,
     installation: installationResult.selected || requestResolved.installation || previousResolved.installation,
     installationCandidates: installationResult.selected || requestResolved.installation ? [] : installationResult.candidates,
-    task: taskResult.selected || previousResolved.task,
-    taskCandidates: taskResult.selected ? [] : taskResult.candidates,
+    task: taskResult.selected || requestResolved.task || previousResolved.task,
+    taskCandidates: taskResult.selected || requestResolved.task ? [] : taskResult.candidates,
     report: reportResult.selected || requestResolved.report || previousResolved.report,
     reportCandidates: reportResult.selected || requestResolved.report ? [] : reportResult.candidates,
-    site: null,
+    site: requestResolved.site,
     roomId: extractRoomId(input),
   };
 }
@@ -984,14 +1552,20 @@ async function loadRequestResolvedContext(requestContext = {}) {
   const reportId = requestContext.reportId
     || requestContext.workReportId
     || (['report', 'workreport', 'work_report', 'work-report'].includes(recordType) ? recordId : null);
+  const taskId = requestContext.taskId || (recordType === 'task' ? recordId : null);
+  // An object page carries no record the agent works on directly — but the
+  // customer who owns it is what the question there is about.
+  const siteId = requestContext.siteId || (recordType === 'site' ? recordId : null);
 
-  const [assignment, order, project, customer, installation, report] = await Promise.all([
+  const [assignment, order, project, customer, installation, report, task, site] = await Promise.all([
     loadPreviousAssignment(assignmentId),
     loadPreviousOrder(qopOrderId),
     loadPreviousProject(projectId),
     loadPreviousCustomer(customerId),
     loadPreviousInstallation(installationId),
     loadPreviousReport(reportId),
+    loadPreviousTask(taskId),
+    loadContextSite(siteId),
   ]);
 
   return {
@@ -1000,10 +1574,20 @@ async function loadRequestResolvedContext(requestContext = {}) {
     project: project
       || (assignment?.projectId && typeof assignment.projectId === 'object' ? assignment.projectId : null)
       || (report?.projectId && typeof report.projectId === 'object' ? report.projectId : null),
-    customer: customer || (assignment?.customerId && typeof assignment.customerId === 'object' ? assignment.customerId : null),
+    customer: customer
+      || (assignment?.customerId && typeof assignment.customerId === 'object' ? assignment.customerId : null)
+      || (site ? await loadPreviousCustomer(site.customerId) : null),
     installation,
     report,
+    task,
+    site,
   };
+}
+
+async function loadContextSite(id) {
+  if (!id) return null;
+  const Site = (await import('../../crm/site.model.js')).default;
+  return Site.findById(id).select('name siteNumber street postalCode city customerId').lean().catch(() => null);
 }
 
 function normalizeContextRecordType(value) {
@@ -1077,11 +1661,38 @@ async function findUser(input, previousFollowUp, draft = null) {
     if (selected) return { selected, candidates: [] };
   }
   if (!term) return { selected: null, candidates: [] };
-  const candidates = await User.find({ $text: { $search: term }, status: { $ne: 'deactivated' } })
+
+  // Not $text, even though migration 005 repaired the index it used to be
+  // broken by. A word-stem search cannot match "Thom" against "Thomas", and
+  // half a name is how people are actually looked up — which is why the task
+  // repository gave up on $text over users too. A substring match is simply
+  // the right tool for naming a person.
+  const parts = String(term).trim().split(/\s+/).filter((part) => part.length >= 2).slice(0, 3);
+  if (!parts.length) return { selected: null, candidates: [] };
+  const patterns = parts.map((part) => new RegExp(escapeRegex(part), 'i'));
+  const candidates = await User.find({
+    status: { $ne: 'deactivated' },
+    $or: [
+      ...patterns.map((pattern) => ({ firstName: pattern })),
+      ...patterns.map((pattern) => ({ lastName: pattern })),
+      ...patterns.map((pattern) => ({ email: pattern })),
+    ],
+  })
     .select('firstName lastName email status role')
     .limit(5)
     .lean();
-  return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
+
+  if (candidates.length === 1) return { selected: candidates[0], candidates: [] };
+  // "Thomas Brunner" matches both names on one person and one name on others;
+  // the person every word points at is the one meant.
+  if (candidates.length > 1 && parts.length > 1) {
+    const full = candidates.filter((user) => parts.every((part) => {
+      const rx = new RegExp(escapeRegex(part), 'i');
+      return rx.test(user.firstName || '') || rx.test(user.lastName || '') || rx.test(user.email || '');
+    }));
+    if (full.length === 1) return { selected: full[0], candidates: [] };
+  }
+  return { selected: null, candidates };
 }
 
 async function findCustomer(input, objectId, previousFollowUp, draft = null) {
@@ -1140,7 +1751,30 @@ async function findProject(input, objectId, previousFollowUp, draft = null) {
   const term = draft?.projectName || extractSearchTerm(input);
   if (!term || term.length < 2) return { selected: null, candidates: [] };
   const candidates = await Project.find({ $text: { $search: term } }).select('name projectNumber status customerId customerName').limit(5).lean();
-  return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
+  if (candidates.length === 1) return { selected: candidates[0], candidates: [] };
+
+  // A full-text search ranks by shared words, so several projects match as soon
+  // as they have a word in common. When one of them is named exactly what was
+  // said, that is the one — asking again would only annoy the reader. The
+  // whole message is checked too, not just the extracted term: the planner
+  // trims a name down often enough that comparing to it alone misses.
+  const said = `${term} ${input}`.toLowerCase();
+  const named = candidates.filter((project) => {
+    const name = String(project.name || '').trim().toLowerCase();
+    return name.length >= 3 && said.includes(name);
+  });
+  if (named.length === 1) return { selected: named[0], candidates: [] };
+  // Several names appear, but one is longer and contains the others — the
+  // reader said the specific one, the shorter names merely fit inside it.
+  if (named.length > 1) {
+    const longest = named.reduce((a, b) => (String(a.name).length >= String(b.name).length ? a : b));
+    const others = named.filter((project) => project !== longest);
+    if (others.every((project) => String(longest.name).toLowerCase().includes(String(project.name).toLowerCase()))) {
+      return { selected: longest, candidates: [] };
+    }
+  }
+
+  return { selected: null, candidates };
 }
 
 async function findOrder(input, objectId, previousFollowUp) {
@@ -1211,12 +1845,84 @@ async function findAssignment(input, objectId, previousFollowUp) {
   return { selected: candidates.length === 1 ? candidates[0] : null, candidates };
 }
 
-async function findInstallation(input, objectId) {
+const INSTALLATION_FIELDS = 'installationNumber type manufacturer model serialNumber fuelType status siteId';
+
+/** How the office names a kind of plant, mapped to what the CRM stores. */
+const INSTALLATION_TYPE_WORDS = Object.freeze([
+  ['wärmepumpe', 'heat_pump'], ['waermepumpe', 'heat_pump'], ['wp\\b', 'heat_pump'],
+  ['boiler', 'boiler'], ['heizkessel', 'boiler'], ['kessel', 'boiler'], ['heizung', 'boiler'],
+  ['solarthermie', 'solar_thermal'], ['solar', 'solar_thermal'],
+  ['lüftung', 'ventilation'], ['lueftung', 'ventilation'],
+  ['warmwasser', 'hot_water'], ['speicher', 'hot_water'],
+  ['heizkörper', 'radiator_system'], ['heizkoerper', 'radiator_system'],
+]);
+
+/**
+ * Finds the plant the office is talking about.
+ *
+ * Nobody says "installation 6a54a691…". They say its number (A-00001), its
+ * serial, its make, or simply whose plant it is — so all four are tried, and
+ * the customer route goes through the sites that belong to them.
+ */
+async function findInstallation(input, objectId, draft = null) {
   const Installation = (await import('../../crm/installation.model.js')).default;
   if (objectId) {
-    const selected = await Installation.findById(objectId).select('name model serialNumber status siteId customerId').lean().catch(() => null);
+    const selected = await Installation.findById(objectId).select(INSTALLATION_FIELDS).lean().catch(() => null);
     return { selected, candidates: selected ? [selected] : [] };
   }
+
+  const text = String(input || '');
+
+  // 1. The plant number, as printed on the record and on the label.
+  const number = text.match(/\b[A-Z]-\d{3,6}\b/i)?.[0];
+  if (number) {
+    const byNumber = await Installation.findOne({ installationNumber: new RegExp(`^${escapeRegex(number)}$`, 'i') })
+      .select(INSTALLATION_FIELDS).lean();
+    if (byNumber) return { selected: byNumber, candidates: [] };
+  }
+
+  const term = draft?.installationName || null;
+
+  // 2. The kind of plant, when that is what was said. "Den Boiler bei X" names
+  //    a type, not a serial — and matching it as free text hits every
+  //    DEMO-BOILER-0001 in the file, which is how it used to go wrong.
+  const spokenType = INSTALLATION_TYPE_WORDS.find(([word]) => new RegExp(`\\b${word}`, 'i').test(`${term || ''} ${text}`))?.[1] || null;
+
+  // 3. Whose plant it is — customer, then their sites, then what stands there,
+  //    narrowed to the kind of plant if one was named.
+  const customerName = draft?.customerName || (spokenType ? null : term);
+  if (customerName && customerName.length >= 3) {
+    const [Customer, Site] = await Promise.all([
+      import('../../crm/customer.model.js').then((m) => m.default),
+      import('../../crm/site.model.js').then((m) => m.default),
+    ]);
+    const customers = await Customer.find({ name: new RegExp(escapeRegex(customerName), 'i') })
+      .select('_id').limit(5).lean();
+    if (customers.length) {
+      const sites = await Site.find({ customerId: { $in: customers.map((c) => c._id) } })
+        .select('_id').limit(20).lean();
+      if (sites.length) {
+        const all = await Installation.find({ siteId: { $in: sites.map((s) => s._id) } })
+          .select(INSTALLATION_FIELDS).limit(10).lean();
+        const narrowed = spokenType ? all.filter((installation) => installation.type === spokenType) : all;
+        const candidates = narrowed.length ? narrowed : all;
+        if (candidates.length === 1) return { selected: candidates[0], candidates: [] };
+        if (candidates.length > 1) return { selected: null, candidates: candidates.slice(0, 5) };
+      }
+    }
+  }
+
+  // 4. Serial, make or model — only when a real plant identifier was given,
+  //    never for a bare type word.
+  if (term && term.length >= 3 && !spokenType) {
+    const regex = new RegExp(escapeRegex(term), 'i');
+    const byPlant = await Installation.find({
+      $or: [{ serialNumber: regex }, { manufacturer: regex }, { model: regex }],
+    }).select(INSTALLATION_FIELDS).limit(5).lean();
+    if (byPlant.length === 1) return { selected: byPlant[0], candidates: [] };
+    if (byPlant.length > 1) return { selected: null, candidates: byPlant };
+  }
+
   return { selected: null, candidates: [] };
 }
 
@@ -1609,6 +2315,36 @@ function extractAfter(input, prefixes) {
   return '';
 }
 
+/**
+ * The title to write, from the planner's reading and the sentence itself.
+ *
+ * The planner is told to keep the office's own words and it mostly does, but
+ * measured over repeated runs it still trims the tail about two runs in three:
+ * "AUF-2026-0052 Nachkontrolle beim Kunden" comes back as "AUF-2026-0052
+ * Nachkontrolle". A prompt is not a guarantee, so this recovers the rest.
+ *
+ * It only acts when the planner moved nothing out of the title — no date, no
+ * priority, no assignee, no duration. When it did, the words it dropped are
+ * exactly the ones that became those fields, and putting them back would be
+ * wrong. The planner's title is extended within the sentence rather than
+ * replaced by a stripped one, because stripping command words leaves debris
+ * of its own ("eine ZZTEST …").
+ */
+export function titleFrom(draft, input, removeTerms = []) {
+  const planned = typeof draft?.title === 'string' ? draft.title.trim() : '';
+  if (!planned) return cleanTitle(input, removeTerms);
+
+  const movedOut = Boolean(draft.dueDate || draft.dateTime || draft.priority
+    || draft.assigneeName || draft.durationHours || draft.status);
+  if (movedOut) return planned;
+
+  const at = input.toLowerCase().indexOf(planned.toLowerCase());
+  if (at < 0) return planned;
+
+  const rest = input.slice(at).trim().replace(/[\s.,;:!?]+$/, '');
+  return rest.length > planned.length ? rest.slice(0, 500) : planned;
+}
+
 function cleanTitle(input, removeTerms = []) {
   let title = input.trim();
   for (const term of removeTerms) {
@@ -1704,7 +2440,8 @@ function summarizeCandidates(context) {
     projects: summarizeCandidateList(context.projectCandidates, (project) => project.name || project.projectNumber),
     assignments: assignmentCandidates,
     orders: assignmentCandidates.length ? assignmentCandidates : summarizeCandidateList(context.orderCandidates, (order) => order.orderNumber || order.title),
-    installations: summarizeCandidateList(context.installationCandidates, (installation) => installation.name || installation.model || installation.serialNumber),
+    installations: summarizeCandidateList(context.installationCandidates, (installation) => [installation.manufacturer, installation.model].filter(Boolean).join(' ')
+      || installation.installationNumber || installation.serialNumber),
     tasks: summarizeCandidateList(context.taskCandidates, (task) => task.title),
     reports: summarizeCandidateList(context.reportCandidates, (report) => report.reportNumber || report.workPerformed),
   };

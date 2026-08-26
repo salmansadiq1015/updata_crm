@@ -70,11 +70,16 @@ describe('maintenance notification events', () => {
         sourceEvent: 'MAINTENANCE_OVERDUE',
         sourceEntityType: 'MaintenanceInterval',
         sourceEntityId: 'maintenance-1',
-        payload: {
+        // The payload also carries the German title and body the office
+        // reads; asserting the whole object made this test break the day
+        // wording was added to it.
+        payload: expect.objectContaining({
           installationName: 'Boiler A',
           siteName: 'Main site',
           dueDate: '2026-05-01',
-        },
+          title: 'Wartung überfällig',
+          body: 'Boiler A – Main site',
+        }),
       }),
       null,
       { ipAddress: 'internal', userAgent: 'event-handler' },
@@ -117,10 +122,12 @@ describe('maintenance notification events', () => {
         sourceEvent: 'MAINTENANCE_ESCALATED',
         sourceEntityType: 'MaintenanceInterval',
         sourceEntityId: 'maintenance-2',
-        payload: {
+        payload: expect.objectContaining({
           count: 2,
           daysOverdue: 14,
-        },
+          title: 'Wartung eskaliert',
+          body: '2 Wartungen seit 14 Tagen überfällig',
+        }),
       }),
       null,
       { ipAddress: 'internal', userAgent: 'event-handler' },

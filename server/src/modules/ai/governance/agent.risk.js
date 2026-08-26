@@ -163,3 +163,60 @@ export function blocked(action, reason, { message, details = {} } = {}) {
     details,
   };
 }
+
+/**
+ * What each action does, in the words the office reads.
+ *
+ * Written as a verb phrase so the same string carries the confirmation
+ * prompt ("Ich soll eine Aufgabe erstellen") and the register screen
+ * ("Darf: eine Aufgabe erstellen"). One list, so the two can never drift.
+ */
+export const ACTION_LABELS = Object.freeze({
+  CREATE_CUSTOMER: 'einen Kunden erfassen',
+  UPDATE_CUSTOMER: 'einen Kunden aktualisieren',
+  CREATE_TASK: 'eine Aufgabe erstellen',
+  UPDATE_TASK: 'eine Aufgabe aktualisieren',
+  CREATE_PROJECT: 'ein Projekt eröffnen',
+  CREATE_ORDER: 'einen Auftrag erstellen',
+  UPDATE_ORDER: 'einen Auftrag aktualisieren',
+  CREATE_ASSIGNMENT: 'einen Einsatz planen',
+  RESCHEDULE_ASSIGNMENT: 'einen Einsatz verschieben',
+  CREATE_REPORT: 'einen Rapport erstellen',
+  UPDATE_REPORT: 'einen Rapport aktualisieren',
+  UPDATE_PROJECT: 'ein Projekt aktualisieren',
+  CREATE_NOTE: 'eine Notiz erfassen',
+  SEND_CHAT: 'eine Chat-Nachricht senden',
+  SUMMARIZE_CHAT: 'einen Chat zusammenfassen',
+  RECORD_TIME: 'Arbeitszeit erfassen',
+  ANALYZE_WORKFORCE: 'die Personalplanung auswerten',
+  SALES_FOLLOWUPS: 'die offenen Offerten prüfen',
+  QUALITY_CHECK: 'den Projektabschluss prüfen',
+  SERVICE_DUE: 'die fälligen Wartungen prüfen',
+  SERVICE_BRIEFING: 'ein Monteur-Briefing vorbereiten',
+  PERMIT_CHECK: 'den Behördenbedarf prüfen',
+  DISPATCH_CHECK: 'einen Einsatz vorprüfen',
+  DISPATCH_SUGGEST: 'einen Monteur vorschlagen',
+  MATERIAL_CHECK: 'den Materialstatus prüfen',
+  DOCUMENT_CLASSIFY: 'die Dokumentablage prüfen',
+  PAYMENT_CHECK: 'eine Kreditorenrechnung vor der Zahlung prüfen',
+  PROJECT_FIGURES: 'die Kennzahlen eines Projekts zeigen',
+  DRAFT_CUSTOMER_MESSAGE: 'eine Kundennachricht entwerfen',
+  KNOWLEDGE_ASK: 'im hinterlegten Wissen nachschlagen',
+  ANALYZE_FIELD_TICKET: 'eine Störungsmeldung analysieren',
+  DELETE_CUSTOMER: 'einen Kunden archivieren',
+  DELETE_TASK: 'eine Aufgabe löschen',
+  DELETE_PROJECT: 'ein Projekt löschen',
+  DELETE_ORDER: 'einen Auftrag löschen',
+  DELETE_REPORT: 'einen Rapport löschen',
+  DELETE_ASSIGNMENT: 'einen Einsatz löschen',
+  SEARCH_CUSTOMER: 'Kundendaten suchen',
+  SEARCH_TASKS: 'Aufgaben suchen',
+  SEARCH_PROJECTS: 'Projekte suchen',
+  SEARCH_ORDERS: 'Aufträge suchen',
+  SEARCH_REPORTS: 'Rapporte suchen',
+  SEARCH_DOCUMENTS: 'Dokumente suchen',
+  CREATE_QUOTATION: 'eine Offerte erstellen',
+  CREATE_INVOICE: 'eine Rechnung erstellen',
+  CREATE_TASK_REMINDER: 'eine Erinnerung erstellen',
+  GENERAL: 'beim System helfen',
+});

@@ -20,7 +20,7 @@ import {
 } from '../capabilities/fieldService.capabilities.js';
 import { WorkflowState } from './workflow.state.js';
 import agentGovernance from '../governance/agentGovernance.service.js';
-import { RISK_LEVEL_LABELS } from '../governance/agent.risk.js';
+import { ACTION_LABELS, RISK_LEVEL_LABELS } from '../governance/agent.risk.js';
 import logger from '../../../shared/logger/index.js';
 import swissPlzService from '../../../shared/ai/swissPlz.service.js';
 
@@ -74,55 +74,6 @@ const ACTIONS = Object.freeze({
   GENERAL: 'GENERAL',
 });
 
-const ACTION_LABELS = {
-  [ACTIONS.CREATE_CUSTOMER]: 'einen Kunden erfassen',
-  [ACTIONS.UPDATE_CUSTOMER]: 'einen Kunden aktualisieren',
-  [ACTIONS.CREATE_TASK]: 'eine Aufgabe erstellen',
-  [ACTIONS.UPDATE_TASK]: 'eine Aufgabe aktualisieren',
-  [ACTIONS.CREATE_PROJECT]: 'ein Projekt eröffnen',
-  [ACTIONS.CREATE_ORDER]: 'einen Auftrag erstellen',
-  [ACTIONS.UPDATE_ORDER]: 'einen Auftrag aktualisieren',
-  [ACTIONS.CREATE_ASSIGNMENT]: 'einen Einsatz planen',
-  [ACTIONS.RESCHEDULE_ASSIGNMENT]: 'einen Einsatz verschieben',
-  [ACTIONS.CREATE_REPORT]: 'einen Rapport erstellen',
-  [ACTIONS.UPDATE_REPORT]: 'einen Rapport aktualisieren',
-  [ACTIONS.UPDATE_PROJECT]: 'ein Projekt aktualisieren',
-  [ACTIONS.CREATE_NOTE]: 'eine Notiz erfassen',
-  [ACTIONS.SEND_CHAT]: 'eine Chat-Nachricht senden',
-  [ACTIONS.SUMMARIZE_CHAT]: 'einen Chat zusammenfassen',
-  [ACTIONS.RECORD_TIME]: 'Arbeitszeit erfassen',
-  [ACTIONS.ANALYZE_WORKFORCE]: 'die Personalplanung auswerten',
-  [ACTIONS.SALES_FOLLOWUPS]: 'die offenen Offerten prüfen',
-  [ACTIONS.QUALITY_CHECK]: 'den Projektabschluss prüfen',
-  [ACTIONS.SERVICE_DUE]: 'die fälligen Wartungen prüfen',
-  [ACTIONS.SERVICE_BRIEFING]: 'ein Monteur-Briefing vorbereiten',
-  [ACTIONS.PERMIT_CHECK]: 'den Behördenbedarf prüfen',
-  [ACTIONS.DISPATCH_CHECK]: 'einen Einsatz vorprüfen',
-  [ACTIONS.DISPATCH_SUGGEST]: 'einen Monteur vorschlagen',
-  [ACTIONS.MATERIAL_CHECK]: 'den Materialstatus prüfen',
-  [ACTIONS.DOCUMENT_CLASSIFY]: 'die Dokumentablage prüfen',
-  [ACTIONS.PAYMENT_CHECK]: 'eine Kreditorenrechnung vor der Zahlung prüfen',
-  [ACTIONS.PROJECT_FIGURES]: 'die Kennzahlen eines Projekts zeigen',
-  [ACTIONS.DRAFT_CUSTOMER_MESSAGE]: 'eine Kundennachricht entwerfen',
-  [ACTIONS.KNOWLEDGE_ASK]: 'im hinterlegten Wissen nachschlagen',
-  [ACTIONS.ANALYZE_FIELD_TICKET]: 'eine Störungsmeldung analysieren',
-  [ACTIONS.DELETE_CUSTOMER]: 'einen Kunden archivieren',
-  [ACTIONS.DELETE_TASK]: 'eine Aufgabe löschen',
-  [ACTIONS.DELETE_PROJECT]: 'ein Projekt löschen',
-  [ACTIONS.DELETE_ORDER]: 'einen Auftrag löschen',
-  [ACTIONS.DELETE_REPORT]: 'einen Rapport löschen',
-  [ACTIONS.DELETE_ASSIGNMENT]: 'einen Einsatz löschen',
-  [ACTIONS.SEARCH_CUSTOMER]: 'Kundendaten suchen',
-  [ACTIONS.SEARCH_TASKS]: 'Aufgaben suchen',
-  [ACTIONS.SEARCH_PROJECTS]: 'Projekte suchen',
-  [ACTIONS.SEARCH_ORDERS]: 'Aufträge suchen',
-  [ACTIONS.SEARCH_REPORTS]: 'Rapporte suchen',
-  [ACTIONS.SEARCH_DOCUMENTS]: 'Dokumente suchen',
-  [ACTIONS.CREATE_QUOTATION]: 'eine Offerte erstellen',
-  [ACTIONS.CREATE_INVOICE]: 'eine Rechnung erstellen',
-  [ACTIONS.CREATE_TASK_REMINDER]: 'eine Erinnerung erstellen',
-  [ACTIONS.GENERAL]: 'beim System helfen',
-};
 
 const PROJECT_STATUS_BY_PHRASE = [
   ['waiting for material', 'WAITING_FOR_MATERIAL'],

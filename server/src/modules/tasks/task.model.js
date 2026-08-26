@@ -10,6 +10,10 @@ export const MAX_SUBTASK_DEPTH = 3;
 export const TASK_SOURCE_TYPES = [
   'MANUAL', 'PROJECT', 'ORDER', 'SITE', 'MAINTENANCE', 'QUOTATION',
   'CUSTOMER_INQUIRY', 'DISPOSITION', 'INVOICE', 'DOCUMENT', 'MEETING',
+  // Proposed by an agent rather than put there by a person. It is ordinary
+  // work in every other respect; what it is not is a commitment somebody made,
+  // which is why closing a project does not wait on it.
+  'AI_AGENT',
 ];
 
 const taskSchema = new mongoose.Schema(

@@ -91,9 +91,17 @@ class StatusService {
         );
       }
 
+      // What an agent proposed does not hold the project shut. The agents put
+      // their findings on the project as tasks — missing authority data, an
+      // unfiled document, material not yet ordered — and every one of those
+      // would otherwise have to be closed by hand before the project could be
+      // reported finished. They prepare; a person decides. Quality AI's own
+      // closing check is what stands between a project and its completion, and
+      // that one runs after this transition, not as a task before it.
       const openTasks = await Task.find({
         projectId,
         status: { $in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
+        'source.type': { $ne: 'AI_AGENT' },
         isDeleted: false,
       }).select('title status assigneeId dueDate').limit(100).lean();
 

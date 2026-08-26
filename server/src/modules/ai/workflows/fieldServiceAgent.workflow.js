@@ -1515,11 +1515,11 @@ async function resolveContext(input, previousFollowUp = null, requestContext = {
     assignmentCandidates: assignmentResult.selected || requestResolved.assignment ? [] : assignmentResult.candidates,
     installation: installationResult.selected || requestResolved.installation || previousResolved.installation,
     installationCandidates: installationResult.selected || requestResolved.installation ? [] : installationResult.candidates,
-    task: taskResult.selected || previousResolved.task,
-    taskCandidates: taskResult.selected ? [] : taskResult.candidates,
+    task: taskResult.selected || requestResolved.task || previousResolved.task,
+    taskCandidates: taskResult.selected || requestResolved.task ? [] : taskResult.candidates,
     report: reportResult.selected || requestResolved.report || previousResolved.report,
     reportCandidates: reportResult.selected || requestResolved.report ? [] : reportResult.candidates,
-    site: null,
+    site: requestResolved.site,
     roomId: extractRoomId(input),
   };
 }
@@ -1552,14 +1552,20 @@ async function loadRequestResolvedContext(requestContext = {}) {
   const reportId = requestContext.reportId
     || requestContext.workReportId
     || (['report', 'workreport', 'work_report', 'work-report'].includes(recordType) ? recordId : null);
+  const taskId = requestContext.taskId || (recordType === 'task' ? recordId : null);
+  // An object page carries no record the agent works on directly — but the
+  // customer who owns it is what the question there is about.
+  const siteId = requestContext.siteId || (recordType === 'site' ? recordId : null);
 
-  const [assignment, order, project, customer, installation, report] = await Promise.all([
+  const [assignment, order, project, customer, installation, report, task, site] = await Promise.all([
     loadPreviousAssignment(assignmentId),
     loadPreviousOrder(qopOrderId),
     loadPreviousProject(projectId),
     loadPreviousCustomer(customerId),
     loadPreviousInstallation(installationId),
     loadPreviousReport(reportId),
+    loadPreviousTask(taskId),
+    loadContextSite(siteId),
   ]);
 
   return {
@@ -1568,10 +1574,20 @@ async function loadRequestResolvedContext(requestContext = {}) {
     project: project
       || (assignment?.projectId && typeof assignment.projectId === 'object' ? assignment.projectId : null)
       || (report?.projectId && typeof report.projectId === 'object' ? report.projectId : null),
-    customer: customer || (assignment?.customerId && typeof assignment.customerId === 'object' ? assignment.customerId : null),
+    customer: customer
+      || (assignment?.customerId && typeof assignment.customerId === 'object' ? assignment.customerId : null)
+      || (site ? await loadPreviousCustomer(site.customerId) : null),
     installation,
     report,
+    task,
+    site,
   };
+}
+
+async function loadContextSite(id) {
+  if (!id) return null;
+  const Site = (await import('../../crm/site.model.js')).default;
+  return Site.findById(id).select('name siteNumber street postalCode city customerId').lean().catch(() => null);
 }
 
 function normalizeContextRecordType(value) {

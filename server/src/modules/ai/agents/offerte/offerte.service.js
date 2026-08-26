@@ -7,8 +7,14 @@
  * cannot price from the catalogue are listed as open points for the office to
  * fill in, because "Preise festlegen" is on the agent's forbidden list.
  */
+import mongoose from 'mongoose';
 import { createChatModel } from '../../../../shared/ai/llmFactory.js';
 import logger from '../../../../shared/logger/index.js';
+
+/** Mongoose buffers for 10s when the connection is down; never wait on it. */
+function dbReady() {
+  return mongoose.connection?.readyState === 1;
+}
 
 /** The nine blocks the client prescribes, in order. */
 export const OFFERTE_BLOCKS = Object.freeze([
@@ -68,6 +74,7 @@ ${catalogue}`;
 class OfferteService {
   /** Catalogue names help the model map dictated work onto real positions. */
   async _catalogue() {
+    if (!dbReady()) return '(Katalog nicht verfügbar)';
     try {
       const WorkType = (await import('../../../deploy/workType.model.js')).default;
       const types = await WorkType.find({}).select('name standardDurationMin').limit(200).lean();

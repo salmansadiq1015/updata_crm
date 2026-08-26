@@ -16,7 +16,7 @@
  * It reports and warns. Ordering stays a human act.
  */
 import mongoose from 'mongoose';
-import { BLOCK_REASONS, blocked } from '../../governance/agent.risk.js';
+import { BLOCK_REASONS } from '../../governance/agent.risk.js';
 import logger from '../../../../shared/logger/index.js';
 
 /** Mongoose buffers for 10s when the connection is down; never wait on it. */
@@ -334,15 +334,6 @@ class MaterialService {
     return lines.join('\n');
   }
 
-  /** The blocked outcome, in the shape every agent uses. */
-  toBlocked(action, result) {
-    const first = result.blockers[0];
-    return {
-      ...blocked(action, first.reason, { message: this.compose(result) }),
-      blockers: result.blockers.map((blocker) => blocker.detail),
-      warnings: result.warnings,
-    };
-  }
 }
 
 export default new MaterialService();

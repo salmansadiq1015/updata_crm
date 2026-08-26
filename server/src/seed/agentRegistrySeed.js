@@ -1,9 +1,15 @@
 /**
- * Declares the fourteen agents of the 09.05.2026 specification.
+ * Declares the sixteen agents of the 09.05.2026 specification.
  *
  * Order follows the client's own ranking ("Reihenfolge entspricht der
  * Wichtigkeit"), with one deliberate exception: Risk AI is listed last by the
  * client but carries the shared governance, so it is registered first.
+ *
+ * `allowedActions` is the register's contract, and requirement C4 asks it to
+ * be true: every action an agent serves is listed here, reads included. The
+ * governance layer builds its action → agent index from these lists, so an
+ * action missing here has no owner, and the audit trail cannot say which
+ * agent produced it.
  *
  * Every agent starts DISABLED. An agent is switched on from the admin screen
  * once its capabilities actually exist — that way the registry never promises
@@ -40,7 +46,7 @@ const AGENTS = [
     purpose:
       'Erkennt, klassifiziert, benennt und verknüpft eingehende Dokumente. Grundlage für Behörden, Finanz, Quality und Money AI.',
     dataSources: ['documents', 'email', 'scanOrdner', 'crm', 'projects'],
-    allowedActions: ['SEARCH_DOCUMENTS'],
+    allowedActions: ['SEARCH_DOCUMENTS', 'DOCUMENT_CLASSIFY'],
     forbiddenActions: ['DELETE_CUSTOMER', 'DELETE_PROJECT', 'DELETE_ORDER'],
     triggers: ['Neues Dokument', 'E-Mail-Anhang', 'Scan'],
     requiredData: ['Dokumenttyp', 'Kunde oder Projekt'],
@@ -72,7 +78,7 @@ const AGENTS = [
     purpose:
       'Kreditoren: erkennt Lieferantenrechnungen, prüft IBAN und QR-Referenz, bereitet Zahlungen zur Freigabe vor.',
     dataSources: ['documents', 'accounting', 'email'],
-    allowedActions: [],
+    allowedActions: ['PAYMENT_CHECK'],
     forbiddenActions: ['CREATE_INVOICE'],
     triggers: ['Eingangsrechnung erkannt', 'Zahlungslauf fällig'],
     requiredData: ['Lieferant', 'Betrag', 'IBAN', 'Fälligkeit'],
@@ -105,7 +111,7 @@ const AGENTS = [
     purpose:
       'Bereitet Baumeldungen, Baugesuche, Bohrbewilligungen, Fördergesuche und WPSM-Unterlagen vor. Reicht nie selbständig ein.',
     dataSources: ['projects', 'documents', 'crm'],
-    allowedActions: [],
+    allowedActions: ['PERMIT_CHECK'],
     forbiddenActions: ['CREATE_INVOICE', 'SEND_CHAT'],
     triggers: ['Projekt eröffnet', 'Anlagetyp erkannt', 'Frist läuft ab'],
     requiredData: ['Kanton', 'Gemeinde', 'Anlagetyp', 'Leistung kW'],
@@ -122,7 +128,10 @@ const AGENTS = [
     purpose:
       'Erkennt fällige Wartungen, strukturiert Störungsmeldungen, bereitet Serviceaufträge und Monteur-Briefings vor.',
     dataSources: ['installations', 'fieldTickets', 'mobile', 'crm'],
-    allowedActions: ['CREATE_ORDER', 'ANALYZE_FIELD_TICKET', 'CREATE_TASK'],
+    allowedActions: [
+      'CREATE_ORDER', 'ANALYZE_FIELD_TICKET', 'CREATE_TASK',
+      'SERVICE_DUE', 'SERVICE_BRIEFING',
+    ],
     forbiddenActions: ['CREATE_INVOICE'],
     triggers: ['Wartung fällig', 'Störungsmeldung eingegangen', 'Rapport abgeschlossen'],
     requiredData: ['Anlage', 'Kunde'],
@@ -171,7 +180,7 @@ const AGENTS = [
     purpose:
       'Überwacht offene Offerten, priorisiert Nachfassaktionen nach Auftragswert und pflegt den CRM-Status.',
     dataSources: ['qop', 'crm', 'tasks'],
-    allowedActions: ['CREATE_TASK', 'SEARCH_ORDERS'],
+    allowedActions: ['CREATE_TASK', 'SEARCH_ORDERS', 'SALES_FOLLOWUPS'],
     forbiddenActions: ['CREATE_INVOICE', 'CREATE_QUOTATION'],
     triggers: ['Offerte versendet', 'Nachfassfrist erreicht'],
     requiredData: ['Offerte', 'Kunde'],
@@ -187,7 +196,7 @@ const AGENTS = [
     purpose:
       'Beantwortet interne Fragen zu Prozessen, Vorlagen und Checklisten. Weist auf Unsicherheit hin statt zu raten.',
     dataSources: ['documents', 'textBlocks', 'checklists'],
-    allowedActions: ['SEARCH_DOCUMENTS', 'GENERAL'],
+    allowedActions: ['SEARCH_DOCUMENTS', 'GENERAL', 'KNOWLEDGE_ASK'],
     forbiddenActions: ['CREATE_INVOICE', 'CREATE_QUOTATION', 'DELETE_CUSTOMER'],
     triggers: ['Interne Frage'],
     requiredData: [],
@@ -203,7 +212,7 @@ const AGENTS = [
     purpose:
       'Liefert Kennzahlen, Umsatz- und Liquiditätsprognosen sowie Wochen- und Monatsberichte. Markiert unvollständige Datengrundlagen.',
     dataSources: ['qop', 'accounting', 'projects', 'timeTracking'],
-    allowedActions: [],
+    allowedActions: ['PROJECT_FIGURES'],
     forbiddenActions: ['CREATE_INVOICE', 'SEND_CHAT'],
     triggers: ['Woche beginnt', 'Monat abgeschlossen'],
     requiredData: [],
@@ -219,7 +228,10 @@ const AGENTS = [
     purpose:
       'Schlägt Einsätze vor anhand von Qualifikation, Zeit, Ort, Material- und Bewilligungsstatus. Prüft zehn Punkte vor jedem Einsatz.',
     dataSources: ['scheduling', 'employees', 'projects', 'material'],
-    allowedActions: ['CREATE_ASSIGNMENT', 'RESCHEDULE_ASSIGNMENT'],
+    allowedActions: [
+      'CREATE_ASSIGNMENT', 'RESCHEDULE_ASSIGNMENT',
+      'DISPATCH_CHECK', 'DISPATCH_SUGGEST',
+    ],
     forbiddenActions: ['CREATE_INVOICE'],
     triggers: ['Projekt eingeplant', 'Notfall gemeldet', 'Material eingetroffen'],
     requiredData: ['Monteur', 'Termin', 'Objekt'],
@@ -235,7 +247,7 @@ const AGENTS = [
     purpose:
       'Ermittelt den Materialbedarf je Projekt, überwacht Bestellungen und warnt vor fehlendem Material vor Baustart.',
     dataSources: ['catalog', 'qop', 'projects'],
-    allowedActions: ['CREATE_TASK'],
+    allowedActions: ['CREATE_TASK', 'MATERIAL_CHECK'],
     forbiddenActions: ['CREATE_INVOICE'],
     triggers: ['Offerte angenommen', 'Baustart geplant'],
     requiredData: ['Projekt', 'Materialliste'],
@@ -251,7 +263,7 @@ const AGENTS = [
     purpose:
       'Prüft die Abschluss-Checkliste je Projekttyp und sperrt den Projektabschluss bei fehlenden Unterlagen.',
     dataSources: ['documents', 'projects', 'mobile'],
-    allowedActions: ['CREATE_TASK'],
+    allowedActions: ['CREATE_TASK', 'QUALITY_CHECK'],
     forbiddenActions: ['CREATE_INVOICE', 'DELETE_PROJECT'],
     triggers: ['Projekt abgeschlossen gemeldet', 'Dokument eingegangen'],
     requiredData: ['Projekt', 'Projekttyp'],
@@ -267,7 +279,7 @@ const AGENTS = [
     purpose:
       'Erstellt Entwürfe für Kundenkommunikation per E-Mail, WhatsApp oder SMS. Versendet nie ohne Freigabe.',
     dataSources: ['crm', 'projects', 'scheduling', 'textBlocks'],
-    allowedActions: ['SEND_NOTIFICATION', 'SEND_CHAT'],
+    allowedActions: ['SEND_NOTIFICATION', 'SEND_CHAT', 'DRAFT_CUSTOMER_MESSAGE'],
     forbiddenActions: ['CREATE_INVOICE', 'CREATE_QUOTATION'],
     triggers: ['Termin bestätigt', 'Projektstatus geändert', 'Projekt abgeschlossen'],
     requiredData: ['Kunde', 'Anlass'],

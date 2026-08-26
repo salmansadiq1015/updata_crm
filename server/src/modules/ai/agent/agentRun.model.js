@@ -54,6 +54,8 @@ const AgentRunSchema = new Schema({
   provenance: {
     agentVersion: String,
     action: String,
+    /** Which registered agent owns this action, per its `allowedActions`. */
+    agentKey: String,
     model: String,
     provider: String,
     plannedBy: { type: String, enum: ['llm', 'heuristic', 'follow-up'] },

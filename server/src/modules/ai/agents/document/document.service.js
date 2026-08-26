@@ -17,7 +17,7 @@
  * It proposes. Filing stays a human act — the register puts it at MEDIUM.
  */
 import mongoose from 'mongoose';
-import { BLOCK_REASONS, blocked } from '../../governance/agent.risk.js';
+import { BLOCK_REASONS } from '../../governance/agent.risk.js';
 import { buildDocumentFilename } from '../../../../shared/utils/documentFilename.js';
 import { DOCUMENT_TYPES, looksLikeImage, matchDocumentType } from './documentTypes.js';
 import logger from '../../../../shared/logger/index.js';
@@ -306,15 +306,6 @@ class DocumentService {
     return lines.join('\n');
   }
 
-  /** The blocked outcome, in the shape every agent uses. */
-  toBlocked(action, result) {
-    const first = result.blockers[0];
-    return {
-      ...blocked(action, first.reason, { message: this.compose(result) }),
-      blockers: result.blockers.map((blocker) => blocker.detail),
-      warnings: result.warnings,
-    };
-  }
 }
 
 export default new DocumentService();

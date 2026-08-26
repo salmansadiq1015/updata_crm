@@ -23,7 +23,6 @@
  * similarity score.
  */
 import mongoose from 'mongoose';
-import { BLOCK_REASONS, blocked } from '../../governance/agent.risk.js';
 import { DOCUMENT_TYPES, foldForMatching } from '../document/documentTypes.js';
 import logger from '../../../../shared/logger/index.js';
 
@@ -227,10 +226,6 @@ class KnowledgeService {
     return lines.join('\n');
   }
 
-  /** The blocked outcome, in the shape every agent uses. */
-  toBlocked(action, question, result) {
-    return blocked(action, BLOCK_REASONS.MISSING_DOCUMENT, { message: this.compose(question, result) });
-  }
 }
 
 export default new KnowledgeService();

@@ -13,7 +13,7 @@
  * validator or arrive by import.
  */
 import mongoose from 'mongoose';
-import { BLOCK_REASONS, blocked } from '../../governance/agent.risk.js';
+import { BLOCK_REASONS } from '../../governance/agent.risk.js';
 import {
   checkReference, formatIban, isQrIban, isSwissIban, isValidIban,
 } from '../../../../shared/validation/swissPayment.js';
@@ -342,15 +342,6 @@ class FinanzService {
     return lines.join('\n');
   }
 
-  /** The blocked outcome, in the shape every agent uses. */
-  toBlocked(action, result) {
-    const first = result.blockers[0];
-    return {
-      ...blocked(action, first.reason, { message: this.compose(result) }),
-      blockers: result.blockers.map((blocker) => blocker.detail),
-      warnings: result.warnings,
-    };
-  }
 }
 
 export default new FinanzService();

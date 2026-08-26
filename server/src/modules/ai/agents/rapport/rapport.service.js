@@ -7,8 +7,14 @@
  * incomplete report cannot be released — the agent says what is missing
  * rather than filling the gaps itself.
  */
+import mongoose from 'mongoose';
 import { createChatModel } from '../../../../shared/ai/llmFactory.js';
 import logger from '../../../../shared/logger/index.js';
+
+/** Mongoose buffers for 10s when the connection is down; never wait on it. */
+function dbReady() {
+  return mongoose.connection?.readyState === 1;
+}
 
 /** The eleven blocks, in the order the office reads them. */
 export const RAPPORT_BLOCKS = Object.freeze([
@@ -65,6 +71,7 @@ ${catalogue}`;
 
 class RapportService {
   async _catalogue() {
+    if (!dbReady()) return '(Katalog nicht verfügbar)';
     try {
       const CatalogItem = (await import('../../../catalog/catalogItem.model.js')).default;
       const items = await CatalogItem.find({}).select('name articleNumber unit').limit(120).lean();

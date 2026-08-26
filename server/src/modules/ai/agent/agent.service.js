@@ -3,6 +3,7 @@ import agentMemory from './agent.memory.js';
 import llmPlanner from './llmPlanner.service.js';
 import { checkRateLimit, sanitizeUserInput } from './agent.guardrails.js';
 import { OVERRIDABLE_FIELDS } from './agent.validation.js';
+import agentGovernance from '../governance/agentGovernance.service.js';
 import queueManager from '../../../shared/queue/QueueManager.js';
 import { AppError } from '../../../shared/errors/AppError.js';
 import ERROR_CODES from '../../../shared/errors/errorCodes.js';
@@ -20,14 +21,24 @@ import { randomUUID } from 'crypto';
  */
 export const AI_AGENT_VERSION = '2026.08.3';
 
-/** What the answer can be traced back to, recorded before the work starts. */
-function provenanceOf(intent, llmPlan, previousFollowUp) {
+/**
+ * What the answer can be traced back to, recorded before the work starts.
+ *
+ * `agentKey` comes from the register rather than from the caller: the office
+ * asks a question, and which of the sixteen agents owns that question is the
+ * register's answer, not the questioner's. Unowned actions keep a null — that
+ * is a reading of the register, and a gap in it should be visible.
+ */
+async function provenanceOf(intent, llmPlan, previousFollowUp) {
   let plannedBy = 'heuristic';
   if (previousFollowUp) plannedBy = 'follow-up';
   else if (llmPlan) plannedBy = 'llm';
+  const action = llmPlan?.action || String(intent || '').toUpperCase() || null;
+  const owner = action ? await agentGovernance.agentForAction(action) : null;
   return {
     agentVersion: AI_AGENT_VERSION,
-    action: llmPlan?.action || String(intent || '').toUpperCase() || null,
+    action,
+    agentKey: owner?.key || null,
     model: config.ai?.model || null,
     provider: config.ai?.baseUrl ? 'infomaniak' : 'openai',
     plannedBy,
@@ -185,7 +196,7 @@ class AgentService {
       idempotencyKey: `${userId}-${randomUUID()}`,
       correlationId: meta.correlationId || randomUUID(),
       metadata: { ipAddress: meta.ipAddress, userAgent: meta.userAgent },
-      provenance: provenanceOf(intent, llmPlan, previousFollowUp),
+      provenance: await provenanceOf(intent, llmPlan, previousFollowUp),
     });
 
     try {

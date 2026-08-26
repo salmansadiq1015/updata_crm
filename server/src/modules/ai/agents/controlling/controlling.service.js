@@ -15,7 +15,6 @@
  * It reads. Its allowedActions list is empty.
  */
 import mongoose from 'mongoose';
-import { BLOCK_REASONS, blocked } from '../../governance/agent.risk.js';
 import logger from '../../../../shared/logger/index.js';
 
 /** Mongoose buffers for 10s when the connection is down; never wait on it. */
@@ -207,10 +206,6 @@ class ControllingService {
     return lines.join('\n');
   }
 
-  /** The blocked outcome, in the shape every agent uses. */
-  toBlocked(action, result) {
-    return blocked(action, BLOCK_REASONS.MISSING_REQUIRED_DATA, { message: this.compose(result) });
-  }
 }
 
 export default new ControllingService();

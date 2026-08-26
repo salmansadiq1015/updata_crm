@@ -128,18 +128,26 @@ class AgentGovernanceService {
    * the kill switches do not apply — the human is the initiator, and only the
    * risk-based approval rule and the emergency stop stand in the way.
    *
+   * Either way the decision names an owner. Where the initiator did not say
+   * which agent it is, the register does: the action → agent index answers it
+   * from `allowedActions`. That is attribution and nothing more — the owner
+   * never widens or narrows what a person may do, it only puts a name in the
+   * audit trail where `null` used to stand, so a block can be traced back to
+   * the agent whose logic produced it.
+   *
    * @returns {Promise<{allowed: boolean, requiresApproval: boolean, riskLevel: string,
    *                    agentKey: string|null, block?: object}>}
    */
   async evaluate(action, { confirmed = false, agentKey = null } = {}) {
     const riskLevel = riskLevelFor(action);
+    const owner = agentKey ? null : await this.agentForAction(action);
 
     if (await this.isEmergencyStopped()) {
       return {
         allowed: false,
         requiresApproval: false,
         riskLevel,
-        agentKey,
+        agentKey: agentKey || owner?.key || null,
         block: blocked(action, BLOCK_REASONS.MISSING_APPROVAL, {
           message: 'Der Notfall-Stopp ist aktiv. Es werden zurzeit keine KI-Aktionen ausgeführt.',
         }),
@@ -184,7 +192,7 @@ class AgentGovernanceService {
       allowed: true,
       requiresApproval: needsApproval && !confirmed,
       riskLevel,
-      agentKey: agent?.key || null,
+      agentKey: agent?.key || owner?.key || null,
     };
   }
 

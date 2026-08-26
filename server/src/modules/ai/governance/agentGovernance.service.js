@@ -123,68 +123,78 @@ class AgentGovernanceService {
   /**
    * The decision for one action.
    *
-   * `agentKey` is the agent acting on its own initiative (event trigger, job).
-   * When it is absent the action was typed by a person in the assistant, so
-   * the kill switches do not apply — the human is the initiator, and only the
-   * risk-based approval rule and the emergency stop stand in the way.
+   * Two questions, answered from two different places.
    *
-   * Either way the decision names an owner. Where the initiator did not say
-   * which agent it is, the register does: the action → agent index answers it
-   * from `allowedActions`. That is attribution and nothing more — the owner
-   * never widens or narrows what a person may do, it only puts a name in the
-   * audit trail where `null` used to stand, so a block can be traced back to
-   * the agent whose logic produced it.
+   * *May this run at all* is the agent's own question, and the register
+   * answers it whoever asked. A switch marked "aus" in the office means the
+   * agent is silent — on its own triggers and in the chat alike, because to
+   * the person who threw the switch there is no difference between an agent
+   * that misbehaves by itself and one that misbehaves when asked. Which agent
+   * an action belongs to comes from `allowedActions` when the caller did not
+   * say; an action no agent claims belongs to the assistant itself and no
+   * switch governs it.
+   *
+   * *Does a person have to approve it* depends on who started it. `agentKey`
+   * is set when an agent acts on its own initiative (event trigger, job), and
+   * such an agent is held to its own rule, which is often stricter than the
+   * house threshold — that rule exists to limit what it may do unwatched.
+   * A person typing in the chat is already watching, so the house threshold
+   * applies: reading answers, and anything binding still asks first.
    *
    * @returns {Promise<{allowed: boolean, requiresApproval: boolean, riskLevel: string,
    *                    agentKey: string|null, block?: object}>}
    */
   async evaluate(action, { confirmed = false, agentKey = null } = {}) {
     const riskLevel = riskLevelFor(action);
-    const owner = agentKey ? null : await this.agentForAction(action);
+    const proactive = Boolean(agentKey);
+
+    let agent;
+    if (proactive) {
+      const { byKey } = await this._registry();
+      agent = byKey.get(String(agentKey).toUpperCase()) || null;
+    } else {
+      agent = await this.agentForAction(action);
+    }
 
     if (await this.isEmergencyStopped()) {
       return {
         allowed: false,
         requiresApproval: false,
         riskLevel,
-        agentKey: agentKey || owner?.key || null,
+        agentKey: agent?.key || agentKey || null,
         block: blocked(action, BLOCK_REASONS.MISSING_APPROVAL, {
           message: 'Der Notfall-Stopp ist aktiv. Es werden zurzeit keine KI-Aktionen ausgeführt.',
         }),
       };
     }
 
-    let agent = null;
-    if (agentKey) {
-      const { byKey } = await this._registry();
-      agent = byKey.get(String(agentKey).toUpperCase()) || null;
-
-      if (agent && (agent.forbiddenActions || []).includes(action)) {
-        return {
-          allowed: false,
-          requiresApproval: false,
-          riskLevel,
-          agentKey: agent.key,
-          block: blocked(action, BLOCK_REASONS.MISSING_APPROVAL, {
-            message: `Diese Aktion ist für ${agent.name} ausdrücklich nicht zugelassen.`,
-          }),
-        };
-      }
-      if (agent && !agent.isEnabled) {
-        return {
-          allowed: false,
-          requiresApproval: false,
-          riskLevel,
-          agentKey: agent.key,
-          block: blocked(action, BLOCK_REASONS.MISSING_APPROVAL, {
-            message: `${agent.name} ist zurzeit deaktiviert${agent.disabledReason ? ` (${agent.disabledReason})` : ''}.`,
-          }),
-        };
-      }
+    if (agent && (agent.forbiddenActions || []).includes(action)) {
+      return {
+        allowed: false,
+        requiresApproval: false,
+        riskLevel,
+        agentKey: agent.key,
+        block: blocked(action, BLOCK_REASONS.MISSING_APPROVAL, {
+          message: `Diese Aktion ist für ${agent.name} ausdrücklich nicht zugelassen.`,
+        }),
+      };
     }
 
-    // An agent may demand approval earlier than the global threshold.
-    const threshold = agent?.approvalRule || RISK_LEVELS.MEDIUM;
+    if (agent && !agent.isEnabled) {
+      return {
+        allowed: false,
+        requiresApproval: false,
+        riskLevel,
+        agentKey: agent.key,
+        block: blocked(action, BLOCK_REASONS.MISSING_APPROVAL, {
+          // Names the screen, because the person reading this is usually the
+          // one who can undo it.
+          message: `${agent.name} ist ausgeschaltet${agent.disabledReason ? ` (${agent.disabledReason})` : ''} — einschalten unter Verwaltung › KI-Assistent › KI-Agenten.`,
+        }),
+      };
+    }
+
+    const threshold = (proactive && agent?.approvalRule) || RISK_LEVELS.MEDIUM;
     const needsApproval =
       RISK_LEVEL_ORDER.indexOf(riskLevel) >= RISK_LEVEL_ORDER.indexOf(threshold);
 
@@ -192,7 +202,7 @@ class AgentGovernanceService {
       allowed: true,
       requiresApproval: needsApproval && !confirmed,
       riskLevel,
-      agentKey: agent?.key || owner?.key || null,
+      agentKey: agent?.key || null,
     };
   }
 

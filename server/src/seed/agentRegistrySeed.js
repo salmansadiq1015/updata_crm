@@ -11,9 +11,10 @@
  * action missing here has no owner, and the audit trail cannot say which
  * agent produced it.
  *
- * Every agent starts DISABLED. An agent is switched on from the admin screen
- * once its capabilities actually exist — that way the registry never promises
- * behaviour the code cannot deliver.
+ * Every agent starts ON. They were seeded off while their capabilities were
+ * being written, so the registry would never promise behaviour the code could
+ * not deliver; all sixteen now have theirs. An agent switched off by hand
+ * stays off — `isEnabled` is only ever set when the declaration is created.
  */
 import AgentRegistry from '../modules/ai/governance/agentRegistry.model.js';
 import { RISK_LEVELS, BLOCK_REASONS } from '../modules/ai/governance/agent.risk.js';
@@ -315,7 +316,7 @@ export async function seedAgentRegistry() {
           handoffTo: agent.handoffTo,
           verboseAudit: Boolean(agent.verboseAudit),
         },
-        $setOnInsert: { isEnabled: false, isDeleted: false },
+        $setOnInsert: { isEnabled: true, isDeleted: false },
       },
       { upsert: true },
     );

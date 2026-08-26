@@ -1218,8 +1218,36 @@ async function remove(type, id) {
   return false;
 }
 
+/**
+ * Tasks the agents made on their own during the run.
+ *
+ * The handoffs are live now, so opening a ZZTEST project wakes Behörden AI and
+ * finishing one wakes Quality AI, each leaving a task behind. The harness never
+ * asked for those, so it did not track them — and they outlived every run,
+ * piling up against projects that no longer exist.
+ */
+const AGENT_TASK_TITLES = /^(Behördenangaben vervollständigen|Abschluss unvollständig|Material vor Baustart klären|Dokument (einordnen|unklar)|Zahlungsdaten prüfen|Projekt eröffnen):/;
+
+async function sweepAgentTasks() {
+  const res = await api('/tasks?limit=100');
+  const data = res.body?.data;
+  const items = Array.isArray(data) ? data : (data?.data || data?.items || []);
+  let removed = 0;
+  for (const item of items) {
+    const title = item?.title || '';
+    // Recognised by the same ZZTEST convention as everything else here: an
+    // agent names its task after the project, and the task list does not
+    // return the project id to match on.
+    if (!AGENT_TASK_TITLES.test(title) || !/ZZTEST/i.test(title)) continue;
+    if (await remove('task', item._id || item.id)) removed += 1;
+  }
+  return removed;
+}
+
 async function cleanup() {
   let removed = 0;
+  removed += await sweepAgentTasks();
+
   for (const item of createdRecords) {
     if (!item?.id || !DELETE_PATH[item.type]) continue;
     if (await remove(item.type, item.id)) removed += 1;

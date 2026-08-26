@@ -5,6 +5,14 @@
  * Wichtigkeit"), with one deliberate exception: Risk AI is listed last by the
  * client but carries the shared governance, so it is registered first.
  *
+ * `triggers` says when the agent starts by itself, and lists only what is
+ * actually wired to a business event. The specification names more of them —
+ * an e-mail attachment, a scan folder, an expiring deadline, an incoming fault
+ * report — and those are not built. An agent that says it watches a deadline
+ * and does not is worse than one that says nothing: the office stops watching
+ * it too. "Nur auf Anfrage im Assistenten" means exactly that — switched on,
+ * it answers; it never acts unasked.
+ *
  * `allowedActions` is the register's contract, and requirement C4 asks it to
  * be true: every action an agent serves is listed here, reads included. The
  * governance layer builds its action → agent index from these lists, so an
@@ -32,7 +40,7 @@ const AGENTS = [
     dataSources: ['agentRun', 'toolExecution', 'auditLog'],
     allowedActions: [],
     forbiddenActions: ['CREATE_INVOICE', 'CREATE_QUOTATION', 'SEND_CHAT', 'SEND_NOTIFICATION'],
-    triggers: ['Agentenaktion', 'Zahlung', 'Rollenänderung', 'Datenzugriff'],
+    triggers: ['Jede Agentenaktion'],
     requiredData: [],
     blockReasons: Object.values(B),
     approvalRule: RISK_LEVELS.LOW,
@@ -49,7 +57,7 @@ const AGENTS = [
     dataSources: ['documents', 'email', 'scanOrdner', 'crm', 'projects'],
     allowedActions: ['SEARCH_DOCUMENTS', 'DOCUMENT_CLASSIFY'],
     forbiddenActions: ['DELETE_CUSTOMER', 'DELETE_PROJECT', 'DELETE_ORDER'],
-    triggers: ['Neues Dokument', 'E-Mail-Anhang', 'Scan'],
+    triggers: ['Neues Dokument im Projekt'],
     requiredData: ['Dokumenttyp', 'Kunde oder Projekt'],
     blockReasons: [B.UNCLEAR_CUSTOMER, B.UNCLEAR_PROJECT, B.MISSING_DOCUMENT, B.CONTRADICTORY_DATA],
     approvalRule: RISK_LEVELS.MEDIUM,
@@ -65,7 +73,7 @@ const AGENTS = [
     dataSources: ['voiceSessions', 'catalog', 'textBlocks', 'crm', 'projects'],
     allowedActions: ['CREATE_QUOTATION'],
     forbiddenActions: ['SEND_CHAT'],
-    triggers: ['Besichtigung erfasst', 'Diktat abgeschlossen', 'Folgearbeit erkannt'],
+    triggers: ['Nur auf Anfrage im Assistenten'],
     requiredData: ['Kunde', 'Objekt', 'Leistungsumfang'],
     blockReasons: [B.MISSING_PRICE, B.UNCLEAR_CUSTOMER, B.MISSING_REQUIRED_DATA],
     approvalRule: RISK_LEVELS.MEDIUM,
@@ -81,7 +89,7 @@ const AGENTS = [
     dataSources: ['documents', 'accounting', 'email'],
     allowedActions: ['PAYMENT_CHECK'],
     forbiddenActions: ['CREATE_INVOICE'],
-    triggers: ['Eingangsrechnung erkannt', 'Zahlungslauf fällig'],
+    triggers: ['Eingangsrechnung erfasst'],
     requiredData: ['Lieferant', 'Betrag', 'IBAN', 'Fälligkeit'],
     blockReasons: [B.PAYMENT_OR_BANK_DATA, B.MISSING_APPROVAL, B.CONTRADICTORY_DATA, B.UNCLEAR_PROJECT],
     approvalRule: RISK_LEVELS.LOW,
@@ -98,7 +106,7 @@ const AGENTS = [
     dataSources: ['projects', 'qop', 'crm', 'tasks', 'scheduling'],
     allowedActions: ['CREATE_PROJECT', 'UPDATE_PROJECT', 'CREATE_TASK'],
     forbiddenActions: ['SEND_CHAT', 'CREATE_INVOICE'],
-    triggers: ['Offerte angenommen', 'Auftragsbestätigung erfasst'],
+    triggers: ['Offerte angenommen'],
     requiredData: ['Kunde', 'Objekt', 'Projekttyp'],
     blockReasons: [B.MISSING_PERMIT, B.MISSING_APPROVAL, B.UNCLEAR_RESPONSIBILITY],
     approvalRule: RISK_LEVELS.MEDIUM,
@@ -114,7 +122,7 @@ const AGENTS = [
     dataSources: ['projects', 'documents', 'crm'],
     allowedActions: ['PERMIT_CHECK'],
     forbiddenActions: ['CREATE_INVOICE', 'SEND_CHAT'],
-    triggers: ['Projekt eröffnet', 'Anlagetyp erkannt', 'Frist läuft ab'],
+    triggers: ['Projekt eröffnet'],
     requiredData: ['Kanton', 'Gemeinde', 'Anlagetyp', 'Leistung kW'],
     blockReasons: [B.MISSING_PERMIT, B.MISSING_DOCUMENT, B.LEGAL_PROCESS, B.MISSING_APPROVAL],
     approvalRule: RISK_LEVELS.LOW,
@@ -134,7 +142,7 @@ const AGENTS = [
       'SERVICE_DUE', 'SERVICE_BRIEFING',
     ],
     forbiddenActions: ['CREATE_INVOICE'],
-    triggers: ['Wartung fällig', 'Störungsmeldung eingegangen', 'Rapport abgeschlossen'],
+    triggers: ['Wartung überfällig (täglicher Lauf um 06:00)'],
     requiredData: ['Anlage', 'Kunde'],
     blockReasons: [B.UNCLEAR_CUSTOMER, B.MISSING_REQUIRED_DATA],
     approvalRule: RISK_LEVELS.MEDIUM,
@@ -150,7 +158,7 @@ const AGENTS = [
     dataSources: ['voiceSessions', 'mobile', 'catalog'],
     allowedActions: ['CREATE_REPORT', 'UPDATE_REPORT', 'RECORD_TIME'],
     forbiddenActions: ['CREATE_INVOICE'],
-    triggers: ['Diktat abgeschlossen', 'Einsatz beendet'],
+    triggers: ['Nur auf Anfrage im Assistenten'],
     requiredData: ['Auftrag', 'Arbeitszeit', 'Ausgeführte Arbeiten'],
     blockReasons: [B.MISSING_REQUIRED_DATA, B.MISSING_DOCUMENT],
     approvalRule: RISK_LEVELS.MEDIUM,
@@ -166,7 +174,7 @@ const AGENTS = [
     dataSources: ['qop', 'projects', 'scheduling', 'mobile'],
     allowedActions: ['CREATE_INVOICE'],
     forbiddenActions: ['SEND_CHAT'],
-    triggers: ['Projekt gestartet', 'Kalenderwoche beginnt', 'Projekt abgeschlossen'],
+    triggers: ['Nur auf Anfrage im Assistenten'],
     requiredData: ['Kunde', 'Projekt', 'Leistungsstand'],
     blockReasons: [B.MISSING_PRICE, B.MISSING_APPROVAL, B.MISSING_REQUIRED_DATA, B.CONTRADICTORY_DATA],
     approvalRule: RISK_LEVELS.LOW,
@@ -183,7 +191,7 @@ const AGENTS = [
     dataSources: ['qop', 'crm', 'tasks'],
     allowedActions: ['CREATE_TASK', 'SEARCH_ORDERS', 'SALES_FOLLOWUPS'],
     forbiddenActions: ['CREATE_INVOICE', 'CREATE_QUOTATION'],
-    triggers: ['Offerte versendet', 'Nachfassfrist erreicht'],
+    triggers: ['Nur auf Anfrage im Assistenten'],
     requiredData: ['Offerte', 'Kunde'],
     blockReasons: [B.UNCLEAR_CUSTOMER, B.MISSING_REQUIRED_DATA],
     approvalRule: RISK_LEVELS.MEDIUM,
@@ -202,7 +210,7 @@ const AGENTS = [
     // unable to ask the assistant anything at all.
     allowedActions: ['SEARCH_DOCUMENTS', 'KNOWLEDGE_ASK'],
     forbiddenActions: ['CREATE_INVOICE', 'CREATE_QUOTATION', 'DELETE_CUSTOMER'],
-    triggers: ['Interne Frage'],
+    triggers: ['Nur auf Anfrage im Assistenten'],
     requiredData: [],
     blockReasons: [B.CONTRADICTORY_DATA, B.MISSING_DOCUMENT],
     approvalRule: RISK_LEVELS.HIGH,
@@ -218,7 +226,7 @@ const AGENTS = [
     dataSources: ['qop', 'accounting', 'projects', 'timeTracking'],
     allowedActions: ['PROJECT_FIGURES'],
     forbiddenActions: ['CREATE_INVOICE', 'SEND_CHAT'],
-    triggers: ['Woche beginnt', 'Monat abgeschlossen'],
+    triggers: ['Nur auf Anfrage im Assistenten'],
     requiredData: [],
     blockReasons: [B.CONTRADICTORY_DATA, B.MISSING_REQUIRED_DATA],
     approvalRule: RISK_LEVELS.HIGH,
@@ -237,7 +245,7 @@ const AGENTS = [
       'DISPATCH_CHECK', 'DISPATCH_SUGGEST',
     ],
     forbiddenActions: ['CREATE_INVOICE'],
-    triggers: ['Projekt eingeplant', 'Notfall gemeldet', 'Material eingetroffen'],
+    triggers: ['Nur auf Anfrage im Assistenten'],
     requiredData: ['Monteur', 'Termin', 'Objekt'],
     blockReasons: [B.MISSING_PERMIT, B.MISSING_REQUIRED_DATA, B.UNCLEAR_RESPONSIBILITY],
     approvalRule: RISK_LEVELS.MEDIUM,
@@ -253,7 +261,7 @@ const AGENTS = [
     dataSources: ['catalog', 'qop', 'projects'],
     allowedActions: ['CREATE_TASK', 'MATERIAL_CHECK'],
     forbiddenActions: ['CREATE_INVOICE'],
-    triggers: ['Offerte angenommen', 'Baustart geplant'],
+    triggers: ['Baustart geplant'],
     requiredData: ['Projekt', 'Materialliste'],
     blockReasons: [B.MISSING_REQUIRED_DATA, B.CONTRADICTORY_DATA],
     approvalRule: RISK_LEVELS.MEDIUM,
@@ -269,7 +277,7 @@ const AGENTS = [
     dataSources: ['documents', 'projects', 'mobile'],
     allowedActions: ['CREATE_TASK', 'QUALITY_CHECK'],
     forbiddenActions: ['CREATE_INVOICE', 'DELETE_PROJECT'],
-    triggers: ['Projekt abgeschlossen gemeldet', 'Dokument eingegangen'],
+    triggers: ['Projekt abgeschlossen gemeldet'],
     requiredData: ['Projekt', 'Projekttyp'],
     blockReasons: [B.MISSING_DOCUMENT, B.MISSING_APPROVAL, B.MISSING_REQUIRED_DATA],
     approvalRule: RISK_LEVELS.LOW,
@@ -289,7 +297,7 @@ const AGENTS = [
     // register promise a capability the code has not got.
     allowedActions: ['DRAFT_CUSTOMER_MESSAGE'],
     forbiddenActions: ['CREATE_INVOICE', 'CREATE_QUOTATION'],
-    triggers: ['Termin bestätigt', 'Projektstatus geändert', 'Projekt abgeschlossen'],
+    triggers: ['Nur auf Anfrage im Assistenten'],
     requiredData: ['Kunde', 'Anlass'],
     blockReasons: [B.UNCLEAR_CUSTOMER, B.MISSING_APPROVAL, B.MISSING_REQUIRED_DATA],
     approvalRule: RISK_LEVELS.LOW,

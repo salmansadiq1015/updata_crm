@@ -262,7 +262,10 @@ export const ROLE_DEFINITIONS = [
       'notifications:dispatch', 'notifications:templates:manage', 'notifications:scheduled:manage',
       'notifications:metrics:read',
       'integrations:widget:manage',
-      'ai:sessions',
+      // The Projektleiter is the key user for the assistant: they see what an
+      // agent produced on their own jobs, so they are the one who has to be
+      // able to switch it off — without an administrator account.
+      'ai:sessions', 'ai:agents:manage',
       'reports:read', 'reports:write',
       'time-tracking:read',
       'users:read', 'roles:read',

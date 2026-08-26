@@ -210,6 +210,8 @@ export const ACTION_LABELS = Object.freeze({
   DELETE_REPORT: 'einen Rapport löschen',
   DELETE_ASSIGNMENT: 'einen Einsatz löschen',
   SEARCH_CUSTOMER: 'Kundendaten suchen',
+  SEARCH_CUSTOMERS: 'Kunden suchen',
+  SEND_NOTIFICATION: 'eine Benachrichtigung senden',
   SEARCH_TASKS: 'Aufgaben suchen',
   SEARCH_PROJECTS: 'Projekte suchen',
   SEARCH_ORDERS: 'Aufträge suchen',

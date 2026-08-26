@@ -197,7 +197,10 @@ const AGENTS = [
     purpose:
       'Beantwortet interne Fragen zu Prozessen, Vorlagen und Checklisten. Weist auf Unsicherheit hin statt zu raten.',
     dataSources: ['documents', 'textBlocks', 'checklists'],
-    allowedActions: ['SEARCH_DOCUMENTS', 'GENERAL', 'KNOWLEDGE_ASK'],
+    // Not GENERAL: an ordinary conversational answer is the assistant's own,
+    // and claiming it would mean switching Knowledge AI off left the office
+    // unable to ask the assistant anything at all.
+    allowedActions: ['SEARCH_DOCUMENTS', 'KNOWLEDGE_ASK'],
     forbiddenActions: ['CREATE_INVOICE', 'CREATE_QUOTATION', 'DELETE_CUSTOMER'],
     triggers: ['Interne Frage'],
     requiredData: [],
@@ -280,7 +283,11 @@ const AGENTS = [
     purpose:
       'Erstellt Entwürfe für Kundenkommunikation per E-Mail, WhatsApp oder SMS. Versendet nie ohne Freigabe.',
     dataSources: ['crm', 'projects', 'scheduling', 'textBlocks'],
-    allowedActions: ['SEND_NOTIFICATION', 'SEND_CHAT', 'DRAFT_CUSTOMER_MESSAGE'],
+    // Drafting is all of it. SEND_NOTIFICATION reaches colleagues in the
+    // system and SEND_CHAT posts in an internal room — neither reaches a
+    // customer, and no action in this system does. Claiming them made the
+    // register promise a capability the code has not got.
+    allowedActions: ['DRAFT_CUSTOMER_MESSAGE'],
     forbiddenActions: ['CREATE_INVOICE', 'CREATE_QUOTATION'],
     triggers: ['Termin bestätigt', 'Projektstatus geändert', 'Projekt abgeschlossen'],
     requiredData: ['Kunde', 'Anlass'],

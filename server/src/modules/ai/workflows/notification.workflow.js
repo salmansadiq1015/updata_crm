@@ -156,7 +156,9 @@ async function executeTools(state) {
 
   const toolInput = {
     recipientIds,
-    title: 'Message from AI Assistant',
+    // The colleague who receives this reads German everywhere else in the
+    // system; an English heading was the one line that said otherwise.
+    title: 'Nachricht aus dem KI-Assistenten',
     body,
     type: 'INFO',
   };

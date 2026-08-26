@@ -1053,6 +1053,70 @@ const SCENARIOS = [
   },
 
   {
+    name: 'ausgeschalteter-agent-schweigt-auch-im-chat',
+    why: 'Ein Schalter auf „aus" muss auch im Chat gelten — sonst ist er keiner.',
+    async exec() {
+      // Switched off and back on inside the scenario, so a failure between the
+      // two cannot leave Service AI dark for every later run.
+      const off = async (isEnabled) => api('/ai/governance/agents/SERVICE', {
+        method: 'PATCH',
+        body: { isEnabled, reason: isEnabled ? null : 'ZZTEST Kill-Switch' },
+      });
+
+      await off(false);
+      let blocked;
+      let after;
+      try {
+        blocked = await run('Welche Wartungen sind fällig?');
+      } finally {
+        await off(true);
+      }
+      after = await run('Welche Wartungen sind fällig?');
+
+      const text = message(blocked);
+      return [
+        check('nicht ausgeführt', blocked.status !== 'COMPLETED' || !blocked.output?.records,
+          `status = ${blocked.status}`),
+        check('sagt, dass der Agent aus ist', /ausgeschaltet/i.test(text), text.slice(0, 140)),
+        check('nennt den Agenten', /Service AI/i.test(text), text.slice(0, 140)),
+        check('nennt den Grund', /ZZTEST Kill-Switch/.test(text), text.slice(0, 140)),
+        check('sagt, wo man ihn einschaltet', /KI-Agenten/i.test(text), text.slice(-120)),
+        check('nach dem Einschalten antwortet er wieder',
+          action(after) === 'SERVICE_DUE' && Array.isArray(after.output?.records),
+          `action = ${action(after)}`),
+        noEnglish(blocked),
+      ];
+    },
+  },
+  {
+    name: 'anderer-agent-bleibt-erreichbar',
+    why: 'Einen Agenten abzuschalten darf nicht den ganzen Assistenten stilllegen.',
+    async exec() {
+      const off = async (isEnabled) => api('/ai/governance/agents/SERVICE', {
+        method: 'PATCH',
+        body: { isEnabled, reason: isEnabled ? null : 'ZZTEST Kill-Switch' },
+      });
+
+      await off(false);
+      let state;
+      try {
+        // Looking a customer up belongs to no agent — the assistant's own work.
+        state = await run('Suche den Kunden Immobilien Verwaltung Basel');
+      } finally {
+        await off(true);
+      }
+
+      return [
+        // Two customer searches exist — the assistant's own and the capability
+        // module's richer one. Which of them ran does not matter here.
+        check('Suche ausgeführt', /^SEARCH_CUSTOMERS?$/.test(action(state)), `action = ${action(state)}`),
+        check('Treffer geliefert', (state.output?.records || []).length > 0,
+          `${(state.output?.records || []).length} Treffer`),
+        check('kein Sperrhinweis', !/ausgeschaltet/i.test(message(state)), message(state).slice(0, 120)),
+      ];
+    },
+  },
+  {
     name: 'wartungsliste-nach-verzug',
     why: 'Die überfälligste Wartung steht oben — sonst ist die Liste keine Arbeitsliste.',
     async exec() {

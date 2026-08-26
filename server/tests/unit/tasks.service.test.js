@@ -74,6 +74,12 @@ beforeAll(async () => {
   await import('../../src/modules/pm/project.model.js');
   await import('../../src/modules/qop/order.model.js');
   await import('../../src/modules/meetings/meeting.model.js');
+  // A task points at an object since the trade work landed; populating it
+  // needs the model registered, which the server does at boot and a test
+  // has to do by hand.
+  await import('../../src/modules/crm/customer.model.js');
+  await import('../../src/modules/crm/site.model.js');
+  await import('../../src/modules/qop/department.model.js');
   ({ default: TaskList } = await import('../../src/modules/tasks/taskList.model.js'));
   await import('../../src/modules/tasks/taskListMember.model.js');
   ({ default: Task } = await import('../../src/modules/tasks/task.model.js'));
@@ -91,9 +97,12 @@ afterAll(async () => {
 });
 
 describe('Task service access and hierarchy guards', () => {
-  test('requires task read access before returning subtasks', async () => {
+  test('subtasks are readable by any colleague, because tasks are central', async () => {
+    // The office decided every task is visible to everyone: work that only
+    // one person can see is work nobody can pick up. Reading is open; writing
+    // still follows the list.
     const ownerId = objectId();
-    const outsiderId = objectId();
+    const colleagueId = objectId();
     const list = await createList(ownerId);
     const parent = await createTask(list._id, ownerId, { title: 'Parent' });
     const child = await createTask(list._id, ownerId, {
@@ -102,12 +111,33 @@ describe('Task service access and hierarchy guards', () => {
       depth: 1,
     });
 
-    await expect(taskService.getSubtasks(parent._id, outsiderId)).rejects.toMatchObject({
-      code: 'TASK_ACCESS_DENIED',
-    });
+    for (const userId of [ownerId, colleagueId]) {
+      const subtasks = await taskService.getSubtasks(parent._id, userId);
+      expect(subtasks.map((task) => String(task._id))).toEqual([String(child._id)]);
+    }
+  });
 
-    const subtasks = await taskService.getSubtasks(parent._id, ownerId);
-    expect(subtasks.map((task) => String(task._id))).toEqual([String(child._id)]);
+  test('a locked task stays shut to everyone but its owner', async () => {
+    // The one exception to central visibility, and the reason the rule is
+    // safe to have: a confidential task is reachable by its owner alone.
+    const ownerId = objectId();
+    const colleagueId = objectId();
+    const list = await createList(ownerId);
+    // Locking records who did it, and that is what reopens the task for them:
+    // assigneeId and createdBy come back populated, so they are user documents
+    // and not ids — lockedBy is the field that answers without a join.
+    const parent = await createTask(list._id, ownerId, {
+      title: 'Parent',
+      locked: true,
+      lockedBy: ownerId,
+      lockedAt: new Date(),
+    });
+    await createTask(list._id, ownerId, { title: 'Child', parentTaskId: parent._id, depth: 1 });
+
+    await expect(taskService.getSubtasks(parent._id, colleagueId)).rejects.toMatchObject({
+      code: 'TASK_LOCKED',
+    });
+    await expect(taskService.getSubtasks(parent._id, ownerId)).resolves.toHaveLength(1);
   });
 
   test('rejects subtask reorder payloads containing non-child task ids', async () => {

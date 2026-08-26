@@ -114,7 +114,7 @@ router.post('/merges/:mergeId/undo', authenticate, requirePermission('crm:merge'
  *         name: status
  *         schema:
  *           type: string
- *           enum: [active, inactive, archived]
+ *           enum: [active, inactive]
  *     responses:
  *       200:
  *         description: Paginated list of customers

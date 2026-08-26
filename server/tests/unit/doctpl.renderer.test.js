@@ -132,9 +132,13 @@ describe('CI renderer helpers', () => {
     registerCiFonts(doc, ciConfig);
     expect(doc.registerFont).toHaveBeenCalledWith('MBB-CI-Light', ciConfig.fontBuffers.light);
     expect(doc.registerFont).toHaveBeenCalledWith('MBB-CI-Bold', ciConfig.fontBuffers.bold);
+    // A weight the CI has not supplied falls back inside the family rather
+    // than to Helvetica: documents used to go out in Helvetica silently, and
+    // one missing face must not bring it back. Italic is the exception —
+    // the family ships no italic cut at all.
     expect(pdfFonts(ciConfig)).toEqual({
       body: 'MBB-CI-Light',
-      medium: 'Helvetica-Bold',
+      medium: 'MBB-CI-Light',
       bold: 'MBB-CI-Bold',
       italic: 'Helvetica-Oblique',
     });

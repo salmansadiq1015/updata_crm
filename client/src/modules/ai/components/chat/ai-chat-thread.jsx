@@ -12,6 +12,7 @@ import { AiChatMessage } from './ai-chat-message';
 import { AiChatTypingIndicator } from './ai-chat-typing-indicator';
 import { AiChatConfirmation } from './ai-chat-confirmation';
 import { AiRecordLink } from './ai-record-link';
+import { AiRecordCards } from './ai-record-cards';
 import { AiProgressSteps } from '../status/ai-progress-steps';
 import { AiRunSteps } from '../history/ai-run-steps';
 import { AGENT_STATUSES, WORKFLOW_LABELS } from '../../constants/ai-constants';
@@ -108,6 +109,7 @@ function AgentContent({ run, onConfirm, isConfirming }) {
       return (
         <div>
           <MarkdownMessage content={output.message} />
+          <AiRecordCards output={output} />
           <AiRecordLink output={output} />
         </div>
       );

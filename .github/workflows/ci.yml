@@ -20,6 +20,25 @@ jobs:
     defaults:
       run:
         working-directory: server
+
+    # A handful of suites boot the whole Express application and call it over
+    # HTTP. Those need the services the app connects to at startup — without
+    # Redis they do not fail, they hang, and the job dies on a 60-second
+    # timeout with nothing useful in the log.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      mongo:
+        image: mongo:6
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand(\"ping\")' --quiet"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,6 +65,7 @@ jobs:
           JWT_SECRET: ci-secret-that-is-long-enough-for-the-schema
           SESSION_SECRET: ci-session-secret-value
           MONGODB_URI: mongodb://127.0.0.1:27017/ci
+          REDIS_URL: redis://127.0.0.1:6379
 
   client:
     name: Client — tests

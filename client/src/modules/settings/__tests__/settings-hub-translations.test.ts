@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { translations } from '@/lib/i18n/translations';
 import { SETTINGS_HUB_I18N_KEYS } from '../constants/settings-hub';
 
-const SUPPORTED_LOCALES = ['de', 'en', 'fr', 'it'] as const;
+const SUPPORTED_LOCALES = ['de', 'en'] as const;
 const SOURCE_FILES = [
   'src/app/(platform)/admin/settings/page.jsx',
   'src/layout/sidebar.jsx',

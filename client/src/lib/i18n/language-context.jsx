@@ -7,7 +7,7 @@ import { normalizeGermanOrthography } from './german-orthography';
 const LanguageContext = createContext(null);
 
 const STORAGE_KEY = 'mb-locale';
-const SUPPORTED_LOCALES = ['de', 'fr', 'it', 'en'];
+const SUPPORTED_LOCALES = ['de', 'en'];
 const DEFAULT_LOCALE = 'de';
 
 /**

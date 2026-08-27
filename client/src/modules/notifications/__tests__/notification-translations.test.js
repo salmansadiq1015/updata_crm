@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { translations } from '@/lib/i18n/translations';
 import { NOTIFICATION_I18N_KEYS } from '../constants/notification-i18n-keys';
 
-const SUPPORTED_LOCALES = ['de', 'en', 'fr', 'it'];
+const SUPPORTED_LOCALES = ['de', 'en'];
 const ADMIN_CONSOLE_SOURCE = readFileSync(
   resolve(process.cwd(), 'src/modules/notifications/components/notification-admin-console.jsx'),
   'utf8',

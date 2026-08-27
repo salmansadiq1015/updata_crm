@@ -5,8 +5,8 @@ import { translations } from '@/lib/i18n/translations';
 import { DOCTPL_TEMPLATE_ADMIN_I18N_KEYS } from '../constants/template-admin';
 import { BUILT_IN_TEMPLATE_TYPES } from '../utils/template-defaults';
 
-const locales = ['en', 'fr', 'it'] as const;
-const allLocales = ['de', 'en', 'fr', 'it'] as const;
+const locales = ['en'] as const;
+const allLocales = ['de', 'en'] as const;
 const templateAdminSourceFiles = [
   'src/app/(platform)/admin/templates/page.jsx',
   'src/modules/doctpl/components/template-admin-page.jsx',

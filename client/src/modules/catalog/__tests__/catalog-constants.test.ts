@@ -154,7 +154,7 @@ describe('catalog constants', () => {
       ].includes(key)
     );
 
-    for (const locale of ['de', 'en', 'fr', 'it'] as const) {
+    for (const locale of ['de', 'en'] as const) {
       for (const key of requiredKeys) {
         expect(translations[locale][key], `${locale}:${key}`).toBeDefined();
       }

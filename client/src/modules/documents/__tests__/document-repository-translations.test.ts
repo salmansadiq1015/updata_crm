@@ -8,7 +8,7 @@ import {
   LINK_TYPE_OPTIONS,
 } from '../utils/document-formatters';
 
-const locales = ['de', 'en', 'fr', 'it'] as const;
+const locales = ['de', 'en'] as const;
 
 const repositoryKeys = [
   'documents.repository.titlePage',

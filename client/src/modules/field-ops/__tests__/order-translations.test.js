@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { translations } from '@/lib/i18n/translations';
 
-const SUPPORTED_LOCALES = ['de', 'en', 'fr', 'it'];
+const SUPPORTED_LOCALES = ['de', 'en'];
 
 const ORDER_I18N_KEYS = [
   'fieldOps.orders.title',

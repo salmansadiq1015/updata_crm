@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { translations } from '@/lib/i18n/translations';
 import { REMINDER_ADMIN_I18N_KEYS } from '../constants/reminder-admin';
 
-const SUPPORTED_LOCALES = ['de', 'en', 'fr', 'it'] as const;
+const SUPPORTED_LOCALES = ['de', 'en'] as const;
 const SOURCE_FILES = [
   'src/modules/qop/components/reminder-admin-page.jsx',
   'src/modules/qop/hooks/use-reminder-admin-controller.js',

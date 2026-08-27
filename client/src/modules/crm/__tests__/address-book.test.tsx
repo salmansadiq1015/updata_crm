@@ -203,7 +203,7 @@ function baseHookValue() {
 
 describe('AddressBook', () => {
   it('has complete translations for every supported locale', () => {
-    const locales = ['de', 'en', 'fr', 'it'] as const;
+    const locales = ['de', 'en'] as const;
 
     for (const locale of locales) {
       for (const key of ADDRESS_BOOK_TRANSLATION_KEYS) {

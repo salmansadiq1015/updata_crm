@@ -7,7 +7,7 @@ import {
   DASHBOARD_METRIC_LABEL_KEYS,
 } from '../utils/dashboard-i18n';
 
-const locales = ['de', 'en', 'fr', 'it'];
+const locales = ['de', 'en'];
 const dashboardRoot = path.resolve(process.cwd(), 'src/modules/dashboard');
 
 const sourceFiles = [

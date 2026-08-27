@@ -34,6 +34,7 @@ import qopRoutes from './modules/qop/qop.routes.js';
 import departmentRoutes from './modules/qop/department.routes.js';
 import doctplRoutes from './modules/doctpl/doctpl.routes.js';
 import documentIndexRoutes from './modules/documents/documentIndex.routes.js';
+import documentIngestionRoutes from './modules/documents/ingestion/ingestion.routes.js';
 import vehicleRoutes from './modules/vehicles/vehicle.routes.js';
 import webhookRoutes from './modules/doctpl/webhook.routes.js';
 import catalogRoutes from './modules/catalog/catalog.routes.js';
@@ -150,6 +151,7 @@ export function createApp() {
   app.use("/api/v1/qop", qopRoutes);
   app.use("/api/v1/admin/departments", departmentRoutes);
   app.use("/api/v1/doctpl", doctplRoutes);
+  app.use("/api/v1/documents/ingestion", documentIngestionRoutes);
   app.use("/api/v1/documents", documentIndexRoutes);
   app.use("/api/v1/vehicles", vehicleRoutes);
   app.use("/api/v1/catalog", catalogRoutes);

@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 export const INTEGRATION_KEYS = [
   'igh_catalog', 'banking_camt', 'whatsapp', 'smtp_email',
   'ocr_service', 'cloud_storage', 'calendar_google', 'calendar_outlook', 'website_widget',
+  // Where paperwork comes in from without anybody uploading it: a dedicated
+  // mailbox, and the folder the office copier scans to.
+  'document_inbox', 'document_scan_folder',
 ];
 export const INTEGRATION_STATUSES = ['healthy', 'degraded', 'down', 'disabled', 'unknown'];
 

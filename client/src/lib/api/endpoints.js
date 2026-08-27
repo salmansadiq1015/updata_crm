@@ -159,6 +159,11 @@ export const ENDPOINTS = Object.freeze({
   DOCUMENTS: {
     LIST: '/documents',
     UPLOAD: '/documents/upload',
+    // Paperwork that arrives without anybody uploading it.
+    INGESTION: '/documents/ingestion',
+    INGESTION_SOURCE: (key) => `/documents/ingestion/${key}`,
+    INGESTION_TEST: (key) => `/documents/ingestion/${key}/test`,
+    INGESTION_RUN: (key) => `/documents/ingestion/${key}/run`,
     ATTACHABLE: '/documents/attachable',
     VISUM: (id) => `/documents/${id}/visum`,
     RELEASE: (id) => `/documents/${id}/release`,

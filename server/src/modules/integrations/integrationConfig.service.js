@@ -20,6 +20,8 @@ const INTEGRATION_DEFAULTS = {
   calendar_google: { displayName: 'Google Calendar', provider: 'google' },
   calendar_outlook: { displayName: 'Outlook Calendar', provider: 'microsoft' },
   website_widget: { displayName: 'Website Widget', provider: 'self' },
+  document_inbox: { displayName: 'Dokumenten-Postfach', provider: 'imap' },
+  document_scan_folder: { displayName: 'Scan-Ordner', provider: 'filesystem' },
 };
 
 let integrationConfigRepository;

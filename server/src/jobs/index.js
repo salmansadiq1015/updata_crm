@@ -5,6 +5,7 @@ import { AuthEmailWorker } from './authEmail.job.js';
 import { AuditLogWorker } from './auditLog.job.js';
 import { AuditCleanupWorker } from './auditCleanup.job.js';
 import { MaintenanceCheckWorker } from './maintenanceCheck.job.js';
+import { DocumentIngestionWorker } from './documentIngestion.job.js';
 import { ProjectArchiveWorker } from './projectArchive.job.js';
 import { PrepActionOverdueWorker } from './prepActionOverdue.job.js';
 import { AppointmentReminderWorker } from './appointmentReminder.job.js';
@@ -93,6 +94,20 @@ export function registerJobs() {
     concurrency: 1,
   });
 
+  // Document ingestion — mailbox and scan folder, every five minutes.
+  // Both sources are off until somebody configures them in the admin screen,
+  // so this costs a database read per pass until then.
+  const documentIngestion = new DocumentIngestionWorker();
+  queueManager.registerQueue('document-ingestion', documentIngestion.getHandler(), {
+    concurrency: 1,
+    jobOptions: {
+      // One retry: the next pass is five minutes away, and a mailbox that is
+      // down stays down longer than a backoff.
+      attempts: 2,
+      backoff: { type: 'fixed', delay: 60000 },
+    },
+  });
+
   // Maintenance check — daily scan for due/overdue maintenance intervals
   const maintenanceCheck = new MaintenanceCheckWorker();
   queueManager.registerQueue('maintenance-check', maintenanceCheck.getHandler(), {
@@ -126,6 +141,15 @@ export function registerJobs() {
       attempts: 3,
       backoff: { type: 'exponential', delay: 30000 },
     },
+  });
+
+  // Every five minutes: often enough that a forwarded invoice appears while
+  // the person who sent it is still at their desk.
+  queueManager.addScheduledJob('document-ingestion', 'document-ingestion-sweep', {}, '*/5 * * * *').catch((err) => {
+    logger.warn('Failed to schedule document ingestion', {
+      module: 'jobs',
+      error: { message: err.message },
+    });
   });
 
   // Daily maintenance check at 06:00 Zurich time
@@ -618,7 +642,7 @@ export function registerJobs() {
   logger.info('Background jobs registered', {
     module: 'jobs',
     action: 'register',
-    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'catalog-sync', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'field-ticket-escalation', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', 'ai-agent', 'ai-agent-timeout'],
+    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'document-ingestion', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'catalog-sync', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'field-ticket-escalation', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', 'ai-agent', 'ai-agent-timeout'],
   });
 }
 

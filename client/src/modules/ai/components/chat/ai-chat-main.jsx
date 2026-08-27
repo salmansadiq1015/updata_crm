@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Menu, PenSquare, ArrowLeft } from 'lucide-react';
+import { Menu, PenSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { SESSION_TYPES } from '../../constants/ai-constants';
@@ -28,7 +27,6 @@ export function AiChatMain({
   recorder,
   voiceSession,
 }) {
-  const router = useRouter();
   const { t } = useLanguage();
 
   const { copy, voice } = useInteractionLayer({ onDispatch: dispatch });
@@ -112,15 +110,6 @@ export function AiChatMain({
             isSTTSupported={voice.isSTTSupported}
             isTTSSupported={voice.isTTSSupported}
           />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => router.push('/dashboard')}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {t('ai.chat.dashboard')}
-          </Button>
         </div>
       </div>
 
@@ -140,7 +129,7 @@ export function AiChatMain({
             />
           </div>
         ) : (
-          <div className="flex flex-col h-full min-h-[calc(100vh-8rem)]">
+          <div className="flex h-full flex-col">
             <AiChatWelcome onSuggestionClick={handleSuggestion} />
           </div>
         )}

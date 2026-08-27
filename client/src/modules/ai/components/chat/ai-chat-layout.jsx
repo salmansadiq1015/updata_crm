@@ -23,7 +23,14 @@ export function AiChatLayout({ initialThreadId, initialContext, initialPrompt } 
   const [selectedThreadId, setSelectedThreadId] = useState(initialThreadId ?? null);
   // currentThreadId = thread new messages are sent into (may differ from selected while browsing history)
   const [currentThreadId, setCurrentThreadId] = useState(initialThreadId ?? newThreadId());
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Sur un écran étroit la liste des conversations n'est pas une colonne mais
+  // un panneau qui recouvre tout : ouverte d'emblée, elle cache exactement ce
+  // qu'on vient lire. Le chat n'est monté qu'après la porte d'authentification,
+  // donc côté navigateur uniquement — lire la largeur ici ne risque aucun
+  // désaccord avec le rendu du serveur.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches,
+  );
   const routeContext = useMemo(() => {
     const base = buildAiRouteContext(pathname);
     if (!initialContext) return base;

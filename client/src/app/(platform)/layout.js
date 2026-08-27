@@ -21,6 +21,9 @@ export default function PlatformLayout({ children }) {
   const { isAuthenticated, isLoading } = useAuthStore();
   const pathname = usePathname();
   const isChatPage = pathname?.includes('/chat');
+  // The assistant has its own page, but it is a page like any other: the
+  // sidebar and the header stay. What it does not get is the floating panel,
+  // which would be a second assistant on top of the one being used.
   const isAiPage   = pathname === '/ai' || pathname?.startsWith('/ai/');
   const isAiPanelOpen = useAiStore((s) => s.isPanelOpen);
   // Dock (reserve space) for the non-modal AI panel on wide screens; on smaller
@@ -41,15 +44,11 @@ export default function PlatformLayout({ children }) {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* Desktop sidebar — hidden on AI chat page */}
-      {!isAiPage && (
-        <div className="hidden md:block shrink-0">
-          <Sidebar />
-        </div>
-      )}
+      <div className="hidden md:block shrink-0">
+        <Sidebar />
+      </div>
 
-      {/* Mobile sidebar — hidden on AI chat page */}
-      {!isAiPage && <MobileSidebar />}
+      <MobileSidebar />
 
       {/* Main content area */}
       <div className={cn(
@@ -57,8 +56,9 @@ export default function PlatformLayout({ children }) {
         'transition-all duration-300',
         isDocked && 'xl:pr-96'
       )}>
-        {/* Header — hidden on AI chat page */}
-        {!isAiPage && <Header />}
+        {/* On the assistant's own page the header keeps everything but its
+            shortcut to the assistant, which would only reopen where you are. */}
+        <Header showAiAssistant={!isAiPage} />
 
         <main className={cn(
           'flex-1',
@@ -73,9 +73,10 @@ export default function PlatformLayout({ children }) {
       </div>
 
       {/* Right drawer */}
-      {!isAiPage && <RightDrawer />}
+      <RightDrawer />
 
-      {/* AI Assistant panel — button lives in the header; hidden on AI page */}
+      {/* AI Assistant panel — button lives in the header; not on the AI page,
+          where the full chat is already the whole screen. */}
       {!isAiPage && (
         <Suspense fallback={null}>
           <AiAssistantPanel />

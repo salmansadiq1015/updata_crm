@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   BrainCircuit,
   ClipboardList,
@@ -176,7 +176,6 @@ function AiPanelChatWelcome({ onSuggestionClick }) {
 }
 
 export function AiPanelChat({ onClose }) {
-  const router = useRouter();
   const pathname = usePathname();
   const { t } = useLanguage();
   const [selectedThreadId, setSelectedThreadId] = useState(null);
@@ -275,11 +274,7 @@ export function AiPanelChat({ onClose }) {
     dispatch(input, correlationId);
   }, [chat.pendingRuns, dispatch, threadRuns]);
 
-  const handleOpenFullChat = useCallback(() => {
-    const path = selectedThreadId ? `/ai/${selectedThreadId}` : '/ai';
-    onClose?.();
-    router.push(path);
-  }, [onClose, router, selectedThreadId]);
+  const fullChatHref = selectedThreadId ? `/ai/${selectedThreadId}` : '/ai';
 
   const prevRunKeyRef = useRef(null);
   useEffect(() => {
@@ -323,6 +318,26 @@ export function AiPanelChat({ onClose }) {
             </div>
           </div>
         </div>
+        {/* Un vrai lien : le clic du milieu et le menu contextuel marchent
+            comme partout ailleurs. Il ouvre un onglet et le panneau reste —
+            l'idée est d'atteindre l'historique complet sans perdre la page
+            depuis laquelle la question a été posée. */}
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="h-11 shrink-0 gap-1.5 rounded-xl px-3 text-xs text-slate-300 hover:bg-white/10 hover:text-white"
+        >
+          <a
+            href={fullChatHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={t('ai.panel.openFullChatNewTab', 'Open the full chat in a new tab')}
+          >
+            <ExternalLink className="h-4 w-4" />
+            <span className="hidden sm:inline">{t('ai.panel.fullChatShort', 'Full chat')}</span>
+          </a>
+        </Button>
         <Button
           variant="ghost"
           size="icon"
@@ -372,15 +387,6 @@ export function AiPanelChat({ onClose }) {
             title={t('ai.panel.helpTrigger', 'What can I say?')}
           >
             <HelpCircle className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-xl text-slate-300 hover:bg-white/10 hover:text-white"
-            onClick={handleOpenFullChat}
-            title={t('ai.panel.openFullChat', 'Open full chat')}
-          >
-            <ExternalLink className="h-4 w-4" />
           </Button>
         </div>
       </div>

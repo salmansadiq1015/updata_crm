@@ -14,7 +14,12 @@ const AiAssistantButton = lazy(() =>
   import('@/modules/ai/components/ai-assistant-button').then((m) => ({ default: m.AiAssistantButton }))
 );
 
-export function Header() {
+/**
+ * @param {object} props
+ * @param {boolean} [props.showAiAssistant] - false on the assistant's own page,
+ *   where the shortcut would only reopen what is already on screen.
+ */
+export function Header({ showAiAssistant = true }) {
   const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
 
   return (
@@ -40,13 +45,15 @@ export function Header() {
         <LanguageToggle />
         <NotificationBell />
         <ThemeToggle />
-        <Suspense
-          fallback={
-            <div className="ml-2 h-14 w-14 shrink-0 bg-gradient-to-br from-brand-500 via-brand-500 to-cyan-500" />
-          }
-        >
-          <AiAssistantButton variant="header" className="ml-2" />
-        </Suspense>
+        {showAiAssistant && (
+          <Suspense
+            fallback={
+              <div className="ml-2 h-14 w-14 shrink-0 bg-gradient-to-br from-brand-500 via-brand-500 to-cyan-500" />
+            }
+          >
+            <AiAssistantButton variant="header" className="ml-2" />
+          </Suspense>
+        )}
       </div>
     </header>
   );

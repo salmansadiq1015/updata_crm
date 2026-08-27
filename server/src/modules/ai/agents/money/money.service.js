@@ -115,9 +115,13 @@ class MoneyService {
       warnings.push('Positionen und Beträge konnten nicht geprüft werden.');
     }
 
-    // 3. Prices present
+    // 3. Prices present.
+    //
+    // No exemption for text lines here, unlike on a quotation: an order line
+    // has no `type` at all — headings and notes do not survive the conversion —
+    // so every line carries a price and a zero is a zero.
     const lineItems = verified ? (order?.lineItems || []) : [];
-    const unpriced = lineItems.filter((item) => !item.unitPrice && item.type !== 'text');
+    const unpriced = lineItems.filter((item) => !item.unitPrice);
     if (lineItems.length && unpriced.length) {
       blockers.push({
         reason: BLOCK_REASONS.MISSING_PRICE,
@@ -143,17 +147,18 @@ class MoneyService {
         });
       }
     }
-    // 7. Order status plausible for billing
-    if (order?.status && ['DRAFT', 'CANCELLED'].includes(order.status)) {
+    // 7. Order status plausible for billing. An order starts at CONFIRMED —
+    // DRAFT is a quotation's state, and naming it here read as coverage of a
+    // case that cannot occur.
+    if (order?.status === 'CANCELLED') {
       blockers.push({
         reason: BLOCK_REASONS.CONTRADICTORY_DATA,
         detail: `Auftragsstatus ${order.status} — noch nicht verrechenbar.`,
       });
     }
-    // 8. VAT set
-    if (lineItems.length && lineItems.every((item) => item.vatRate === undefined || item.vatRate === null)) {
-      warnings.push('Auf keiner Position ist ein MWST-Satz gesetzt.');
-    }
+    // 8. VAT was checked here for a rate that was never set. On an order the
+    //    rate is required by the record itself, so the warning could not fire;
+    //    and 0 % is a legitimate rate, not a missing one. Nothing to check.
     // 9. Already invoiced — checked against what is actually left to bill,
     //    because an order is invoiced line by line, not in one go.
     if (verified && order?._id && lineItems.length) {

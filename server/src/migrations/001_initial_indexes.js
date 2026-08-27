@@ -2,15 +2,49 @@ import mongoose from 'mongoose';
 
 /**
  * Initial migration: ensure indexes exist.
- * Mongoose auto-creates indexes from schema definitions,
- * but this migration ensures they exist before any data is written
- * and provides visibility into what was created.
+ *
+ * Mongoose creates these from the schema when the application boots, and this
+ * migration states them explicitly so a fresh database has them before any
+ * data is written.
+ *
+ * Which means both can happen — and on any server where the application ran
+ * before the migrations did, mongoose got there first. It names an index after
+ * its keys (`bucket_1_key_1`); this file names the same index `idx_bucket_key`,
+ * and MongoDB refuses a second name for keys it already indexes. The migration
+ * then failed, the runner stopped, and every later migration stayed unapplied.
+ *
+ * That is how a production server ended up with an empty `migrations`
+ * collection while the code carried six of them: 001 had been failing since
+ * the first boot, and nothing after it ever ran.
+ *
+ * So an index that already exists — under any name — is what this migration
+ * wanted. Only a real failure is raised.
  */
+
+/** MongoDB's code for "these keys are already indexed, under another name". */
+const INDEX_EXISTS_UNDER_ANOTHER_NAME = 85;
+/** And for "this name is taken by different keys". */
+const INDEX_NAME_TAKEN = 86;
+
+async function ensureIndexes(db, collectionName, specs) {
+  for (const spec of specs) {
+    try {
+      await db.collection(collectionName).createIndexes([spec]);
+    } catch (err) {
+      if (err?.code === INDEX_EXISTS_UNDER_ANOTHER_NAME || err?.code === INDEX_NAME_TAKEN) {
+        // eslint-disable-next-line no-console
+        console.log(`001_initial_indexes: ${collectionName}.${spec.name} already covered — skipped`);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 export async function up() {
   const db = mongoose.connection.db;
 
-  // Ensure file_metadata indexes
-  await db.collection('filemetadatas').createIndexes([
+  await ensureIndexes(db, 'filemetadatas', [
     { key: { bucket: 1, key: 1 }, unique: true, name: 'idx_bucket_key' },
     { key: { module: 1, entityType: 1, entityId: 1 }, name: 'idx_module_entity' },
     { key: { uploadedBy: 1, createdAt: -1 }, name: 'idx_uploader_date' },
@@ -21,7 +55,7 @@ export async function up() {
   // Ensure event_log indexes (if collection exists)
   const collections = await db.listCollections({ name: 'eventlogs' }).toArray();
   if (collections.length > 0) {
-    await db.collection('eventlogs').createIndexes([
+    await ensureIndexes(db, 'eventlogs', [
       { key: { type: 1, publishedAt: -1 }, name: 'idx_type_published' },
       { key: { correlationId: 1 }, name: 'idx_correlation' },
       { key: { status: 1, publishedAt: -1 }, name: 'idx_status_published' },

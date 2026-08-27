@@ -1,0 +1,65 @@
+name: CI
+
+# Runs on every push and every pull request. Nothing here touches the server —
+# it only says whether the code is sound. Deployment stays a deliberate act.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A second push to the same branch cancels the first: the older answer is
+  # about code nobody is looking at any more.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server — tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # The suites that need a database start their own in-memory MongoDB.
+      # Caching the binary keeps every run from downloading 55 MB — and a
+      # corrupt download once failed two tests for a week on a checksum.
+      - name: Cache the in-memory MongoDB binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}-6.0.16
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+        env:
+          # The schema refuses to boot without these; the values are never used
+          # by a test, they only have to satisfy the length checks.
+          JWT_SECRET: ci-secret-that-is-long-enough-for-the-schema
+          SESSION_SECRET: ci-session-secret-value
+          MONGODB_URI: mongodb://127.0.0.1:27017/ci
+
+  client:
+    name: Client — tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test

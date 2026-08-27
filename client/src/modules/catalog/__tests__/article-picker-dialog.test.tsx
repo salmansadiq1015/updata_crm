@@ -92,14 +92,20 @@ describe('ArticlePickerDialog', () => {
     expect(await screen.findByText('Rohr 28mm', {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
-  it('calls onSelect with snapshot when article clicked', async () => {
+  it('calls onSelect with the snapshot once the article is confirmed', async () => {
     const onSelect = vi.fn();
     render(
       <ArticlePickerDialog open={true} onClose={() => {}} onSelect={onSelect} />,
       { wrapper: makeWrapper() }
     );
     await userEvent.type(screen.getByPlaceholderText(/search/i), 'Rohr');
+    // Two steps since the picker gained its options: clicking an article
+    // selects it and offers to include the description and the price, and the
+    // snapshot is only taken when the office confirms.
     fireEvent.click(await screen.findByText('Rohr 28mm', {}, { timeout: 5000 }));
+    expect(onSelect).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByRole('button', { name: /übernehmen|confirm/i }));
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({
       catalogArticleId: 'art1',
       articleNumber: 'A001',

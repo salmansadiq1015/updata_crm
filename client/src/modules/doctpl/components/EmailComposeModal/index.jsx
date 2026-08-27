@@ -246,7 +246,15 @@ function EmailComposeForm({ initialValues, onClose, onSent }) {
         <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
         <Button
           onClick={handleSend}
-          disabled={send.isPending || !toRecipientList(form.to).length || !form.subject.trim()}
+          // An attachment is required, not optional: this modal exists to send a
+          // generated document (DOC-008), and sending it empty would still mark
+          // the quotation as sent while the customer received nothing.
+          disabled={
+            send.isPending
+            || !toRecipientList(form.to).length
+            || !form.subject.trim()
+            || !form.attachments.length
+          }
         >
           {send.isPending ? t('doctpl.sending') : t('common.send')}
         </Button>

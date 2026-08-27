@@ -19,6 +19,12 @@ export default [
         URLSearchParams: 'readonly',
         File: 'readonly',
         fetch: 'readonly',
+        // Standard on Node 18 and later, and used to post audio to the
+        // transcription gateway. Missing here, they read as three undefined
+        // globals and made `npm run lint` fail on correct code.
+        FormData: 'readonly',
+        Blob: 'readonly',
+        AbortSignal: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
       },

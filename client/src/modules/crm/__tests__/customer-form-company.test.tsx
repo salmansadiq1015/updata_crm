@@ -5,6 +5,16 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import { CustomerForm } from '../components/customer-form';
 
+// The form asks what the user may do since the permission gate landed on it.
+// Without the store, usePermissions throws before anything renders.
+vi.mock('@/stores/auth-store', () => ({
+  useAuthStore: () => ({
+    user: { permissions: ['crm:read', 'crm:write'] },
+    isAuthenticated: true,
+    isLoading: false,
+  }),
+}));
+
 vi.mock('@/lib/i18n/language-context', () => ({
   useLanguage: () => ({
     locale: 'en',
@@ -45,7 +55,10 @@ describe('CustomerForm company flow', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /firma/i }));
+    // The Partner card describes itself as "Firma oder Privat", so a loose
+    // /firma/i matches two cards. Each card's accessible name is its title plus
+    // its description, and only the business one says "Unternehmen".
+    await user.click(screen.getByRole('button', { name: /firma\s*unternehmen/i }));
 
     expect(screen.getByText('Firmenname')).toBeInTheDocument();
     expect(screen.getByText('Inhabername')).toBeInTheDocument();

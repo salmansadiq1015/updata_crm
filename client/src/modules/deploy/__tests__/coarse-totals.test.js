@@ -58,7 +58,12 @@ describe('coarse totals', () => {
     expect(kpis.rowCount).toBe(2);
     // cells: 50,100,150,0 -> avg 75
     expect(kpis.avgUtilization).toBe(75);
-    expect(kpis.freeCapacity).toBe(25);
+    // Free capacity is measured on the busiest week, not on the average.
+    // Averaging diluted near-term bookings with empty future weeks, so a week
+    // that was already full still read as mostly free and invited a conflict
+    // (module 08 client feedback). Week 1 is at 100 %, so nothing is free.
+    expect(kpis.peakWeekLoad).toBe(100);
+    expect(kpis.freeCapacity).toBe(0);
     expect(kpis.overAllocatedRows).toBe(1);
   });
 
@@ -66,6 +71,7 @@ describe('coarse totals', () => {
     expect(computeKpis([], [1, 2])).toEqual({
       rowCount: 0,
       avgUtilization: 0,
+      peakWeekLoad: 0,
       freeCapacity: 100,
       overAllocatedRows: 0,
     });

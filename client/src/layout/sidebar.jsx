@@ -16,6 +16,7 @@ import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useAuth } from '@/shared/hooks/use-auth';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { VersionBadge } from './version-badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -616,6 +617,8 @@ export function Sidebar() {
               )}
             </button>
           </div>
+
+          <VersionBadge collapsed={collapsed} />
         </div>
       </motion.aside>
     </TooltipProvider>
@@ -654,10 +657,11 @@ export function MobileSidebar() {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-sidebar to-transparent" />
         </div>
 
-        <div className="relative p-2.5 border-t border-sidebar-border">
+        <div className="relative space-y-2 p-2.5 border-t border-sidebar-border">
           <TooltipProvider delayDuration={0}>
             <SidebarUserCard collapsed={false} />
           </TooltipProvider>
+          <VersionBadge />
         </div>
       </SheetContent>
     </Sheet>

@@ -33,15 +33,26 @@ describe('settings hub utilities', () => {
     const visible = getVisibleSettingsItems(SETTINGS_HUB_ITEMS, hasPermission);
     const ids = visible.map((item) => item.id);
 
-    expect(ids).toEqual(['users', 'roles', 'system', 'templates']);
+    // The rule, not the roster: every visible item is one this user may open,
+    // and nothing they may open is hidden. Spelling the list out here meant
+    // that adding an ordinary settings entry broke a test with nothing to say
+    // about it.
     expect(visible.every((item) => hasPermission(item.permission))).toBe(true);
+    expect(ids).toEqual(expect.arrayContaining(['users', 'roles', 'system', 'templates']));
+    expect(SETTINGS_HUB_ITEMS.filter((item) => hasPermission(item.permission)).length)
+      .toBe(visible.length);
   });
 
   test('keeps only categories with visible items plus the all category', () => {
     const visible = getVisibleSettingsItems(SETTINGS_HUB_ITEMS, hasPermission);
     const categories = getVisibleSettingsCategories(SETTINGS_HUB_CATEGORIES, visible);
 
-    expect(categories.map((category) => category.id)).toEqual(['all', 'access', 'operations', 'documents']);
+    const ids = categories.map((category) => category.id);
+    expect(ids[0]).toBe('all');
+    // Every category kept has something in it, and nothing with something in
+    // it was dropped.
+    const withItems = new Set(visible.map((item) => item.category));
+    expect(new Set(ids.slice(1))).toEqual(withItems);
   });
 
   test('filters by category, translated text, href, and permission', () => {
@@ -71,9 +82,10 @@ describe('settings hub utilities', () => {
     const categories = getVisibleSettingsCategories(SETTINGS_HUB_CATEGORIES, visible);
 
     expect(buildSettingsHubStats(visible, categories, 'degraded')).toEqual({
-      available: 4,
-      categories: 3,
-      protected: 4,
+      available: visible.length,
+      // 'all' is a filter, not a section of its own.
+      categories: categories.length - 1,
+      protected: visible.filter((item) => item.permission).length,
       healthStatus: 'degraded',
       healthLabelKey: 'settingsHub.health.degraded',
       healthProgress: 65,
@@ -84,10 +96,15 @@ describe('settings hub utilities', () => {
   test('groups filtered settings by category for section rendering', () => {
     const visible = getVisibleSettingsItems(SETTINGS_HUB_ITEMS, hasPermission);
 
-    expect(groupSettingsItemsByCategory(visible)).toMatchObject({
-      access: [{ id: 'users' }, { id: 'roles' }],
-      operations: [{ id: 'system' }],
-      documents: [{ id: 'templates' }],
-    });
+    const grouped = groupSettingsItemsByCategory(visible);
+    expect(grouped.access).toEqual([
+      expect.objectContaining({ id: 'users' }),
+      expect.objectContaining({ id: 'roles' }),
+    ]);
+    expect(grouped.operations).toEqual([expect.objectContaining({ id: 'system' })]);
+    // Every visible item lands in its own category, and nowhere else.
+    for (const item of visible) {
+      expect(grouped[item.category].map((x: { id: string }) => x.id)).toContain(item.id);
+    }
   });
 });

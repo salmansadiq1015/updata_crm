@@ -44,7 +44,7 @@ function Field({ label, hint, children }) {
   );
 }
 
-function SourceCard({ icon: Icon, title, description, source, fields, onSave, onTest, onRun, busy, t }) {
+function SourceCard({ icon: Icon, title, description, source, fields, note, noteValue, onSave, onTest, onRun, busy, t }) {
   // Seeded from the server once, then owned by whoever is typing. Syncing it
   // back on every refetch looked tidier and was worse: react-query refetches
   // on window focus, so switching to the mail app to copy the password and
@@ -97,6 +97,19 @@ function SourceCard({ icon: Icon, title, description, source, fields, onSave, on
           </Field>
         ))}
       </div>
+
+      {note ? (
+        <div className="mx-4 mb-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
+          <p className="text-xs leading-5 text-muted-foreground">
+            {note}
+          </p>
+          {noteValue ? (
+            <code className="mt-1 inline-block rounded bg-background px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+              {noteValue}
+            </code>
+          ) : null}
+        </div>
+      ) : null}
 
       {probe ? (
         <div className="mx-4 mb-3 flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
@@ -201,15 +214,11 @@ export function DocumentIngestionAdmin() {
           { name: 'host', label: 'IMAP-Server', placeholder: 'imap.hostpoint.ch' },
           { name: 'port', label: 'Port', placeholder: '993', type: 'number', fallback: 993 },
           { name: 'user', label: 'Benutzer', placeholder: 'dokumente@mb-boiler.ch' },
-          {
-            name: 'passwordEnv',
-            label: 'Passwort — Umgebungsvariable',
-            fallback: 'DOCUMENT_INBOX_PASSWORD',
-            hint: data?.passwordHint,
-          },
           { name: 'folder', label: 'Ordner', fallback: 'INBOX' },
           { name: 'maxPerRun', label: 'Nachrichten pro Durchlauf', type: 'number', fallback: 20 },
         ]}
+        note={data?.passwordHint}
+        noteValue={data?.passwordEnv}
         onSave={(payload) => save.mutate({ key: 'document_inbox', payload })}
         onTest={(config) => probe(() => ingestionService.test('document_inbox', config))}
         onRun={() => probe(() => ingestionService.runNow('document_inbox'))}

@@ -1,20 +1,20 @@
 import {
-  Wrench,
-  Clock4,
-  Mail,
   Activity,
   BellRing,
   BookOpen,
   Boxes,
   Building2,
   ClipboardList,
+  Clock4,
   Eraser,
   FileText,
   Gauge,
   Hash,
+  Inbox,
   KeyRound,
   LayoutTemplate,
   Link2,
+  Mail,
   MonitorCog,
   RefreshCw,
   Ruler,
@@ -26,6 +26,7 @@ import {
   Sparkles,
   Users,
   Webhook,
+  Wrench,
   Zap,
 } from 'lucide-react';
 
@@ -125,6 +126,16 @@ export const SETTINGS_HUB_ITEMS = [
     permission: 'settings:read',
     accent: 'emerald',
     badgeKey: 'settingsHub.badgeLive',
+  },
+  {
+    id: 'document-ingestion',
+    category: 'documents',
+    titleKey: 'settingsHub.item.documentIngestion.title',
+    descriptionKey: 'settingsHub.item.documentIngestion.description',
+    href: '/settings/document-ingestion',
+    icon: Inbox,
+    permission: 'integrations:admin',
+    accent: 'sky',
   },
   {
     id: 'email-templates',
@@ -393,4 +404,8 @@ export const SETTINGS_HUB_I18N_KEYS = [
   ...SETTINGS_HUB_ITEMS.flatMap((item) => [item.titleKey, item.descriptionKey, item.badgeKey]),
   ...SETTINGS_HUB_STATS.flatMap((stat) => [stat.labelKey, stat.descriptionKey]),
   ...Object.values(SETTINGS_HEALTH_META).map((meta) => meta.labelKey),
-];
+  // A badge is optional, so an item without one contributes `undefined` here.
+  // Left in, the completeness check looked for a translation of "undefined"
+  // and reported it missing in every locale — four times over, once per item
+  // that simply has no badge.
+].filter(Boolean);

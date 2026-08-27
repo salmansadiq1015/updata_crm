@@ -36,12 +36,24 @@ export function isWorthTaking(attachment) {
   return ACCEPTED.has(String(attachment.contentType || '').toLowerCase());
 }
 
+/**
+ * The one environment variable this reads the password from — fixed here, and
+ * deliberately not configurable.
+ *
+ * Letting the admin screen name the variable looked flexible and was a way to
+ * read any secret the server holds: point the host at a mailbox you control,
+ * set the variable to JWT_SECRET, press "test connection", and the server
+ * hands your own server its signing key as an IMAP password. The name of a
+ * variable is not configuration, it is code.
+ */
+export const PASSWORD_ENV = 'DOCUMENT_INBOX_PASSWORD';
+
 /** Everything the connection needs, or the reason it cannot be made. */
 export function readConfig(config = {}) {
   const problems = [];
   const host = config.host?.trim();
   const user = config.user?.trim();
-  const passwordEnv = config.passwordEnv?.trim() || 'DOCUMENT_INBOX_PASSWORD';
+  const passwordEnv = PASSWORD_ENV;
   const password = process.env[passwordEnv];
 
   if (!host) problems.push('Kein IMAP-Server hinterlegt.');

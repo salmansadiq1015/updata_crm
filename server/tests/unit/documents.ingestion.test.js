@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
 import ingestionService, { findRecordNumbers } from '../../src/modules/documents/ingestion/ingestion.service.js';
-import { isWorthTaking as mailAttachmentWorthTaking, readConfig as readMailboxConfig } from '../../src/modules/documents/ingestion/mailbox.source.js';
+import { isWorthTaking as mailAttachmentWorthTaking, readConfig as readMailboxConfig, PASSWORD_ENV } from '../../src/modules/documents/ingestion/mailbox.source.js';
 import { isWorthTaking as scanFileWorthTaking, readConfig as readFolderConfig } from '../../src/modules/documents/ingestion/scanFolder.source.js';
 
 /**
@@ -83,21 +83,43 @@ describe('the mailbox will not connect on half a configuration', () => {
     expect(read.problems.join(' ')).toMatch(/Benutzer/);
   });
 
-  test('the password is read from the environment, never from the form', () => {
-    const read = readMailboxConfig({ host: 'imap.example.test', user: 'a@b.test', passwordEnv: 'NOT_SET_ANYWHERE' });
+  test('the password comes from one fixed variable, and the message says which', () => {
+    const read = readMailboxConfig({ host: 'imap.example.test', user: 'a@b.test' });
     expect(read.ok).toBe(false);
-    // And the message says where to put it, because the person reading it is
-    // the one with access to the server.
-    expect(read.problems.join(' ')).toContain('NOT_SET_ANYWHERE');
+    // The person reading this is the one with access to the server.
+    expect(read.problems.join(' ')).toContain(PASSWORD_ENV);
   });
 
-  test('with the password in the environment it is ready', () => {
-    process.env.ZZTEST_INBOX_PASSWORD = 'geheim';
-    const read = readMailboxConfig({ host: 'imap.example.test', user: 'a@b.test', passwordEnv: 'ZZTEST_INBOX_PASSWORD' });
+  test('a configuration cannot name a different variable to read', () => {
+    // The exfiltration this closes: point the host at a mailbox you control,
+    // name the server's signing key, press "test connection", and the server
+    // offers it as a password. The name of a variable is code, not config.
+    process.env.ZZTEST_FAKE_SECRET = 'das-wäre-das-jwt-geheimnis';
+    const read = readMailboxConfig({
+      host: 'imap.attacker.test', user: 'a@b.test', passwordEnv: 'ZZTEST_FAKE_SECRET',
+    });
+    expect(read.passwordEnv).toBe(PASSWORD_ENV);
+    expect(read.options.auth.pass).not.toBe('das-wäre-das-jwt-geheimnis');
+    delete process.env.ZZTEST_FAKE_SECRET;
+  });
+
+  test('with the password in that variable it is ready', () => {
+    process.env[PASSWORD_ENV] = 'geheim';
+    const read = readMailboxConfig({ host: 'imap.example.test', user: 'a@b.test' });
     expect(read.ok).toBe(true);
     expect(read.options.auth.pass).toBe('geheim');
     expect(read.options.port).toBe(993);
-    delete process.env.ZZTEST_INBOX_PASSWORD;
+    delete process.env[PASSWORD_ENV];
+  });
+
+  test('the API refuses a configuration that tries to name one', async () => {
+    const { updateSourceSchema } = await import('../../src/modules/documents/ingestion/ingestion.validation.js');
+    const { error } = updateSourceSchema.body.validate({
+      isEnabled: true,
+      config: { host: 'imap.example.test', user: 'a@b.test', passwordEnv: 'JWT_SECRET' },
+    });
+    expect(error).toBeDefined();
+    expect(error.message).toMatch(/passwordEnv/);
   });
 
   test('a folder without a path is not a source', () => {

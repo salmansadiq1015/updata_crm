@@ -1,5 +1,5 @@
 import ingestionService from './ingestion.service.js';
-import mailboxSource from './mailbox.source.js';
+import mailboxSource, { PASSWORD_ENV } from './mailbox.source.js';
 import scanFolderSource from './scanFolder.source.js';
 import integrationConfigService from '../../integrations/integrationConfig.service.js';
 import { AppError } from '../../../shared/errors/AppError.js';
@@ -54,7 +54,8 @@ class IngestionController {
           summary,
           // Said here rather than in the form's help text: the operator needs
           // to know the password is not something this screen can hold.
-          passwordHint: 'Das Postfach-Passwort wird nie in der Datenbank gespeichert. Es steht in einer Umgebungsvariablen auf dem Server.',
+          passwordEnv: PASSWORD_ENV,
+          passwordHint: `Das Postfach-Passwort wird nie hier gespeichert und lässt sich hier auch nicht ändern. Es steht in der Umgebungsvariablen ${PASSWORD_ENV} auf dem Server.`,
         },
       });
     } catch (err) { next(err); }
@@ -67,7 +68,9 @@ class IngestionController {
       const updated = await integrationConfigService.upsert(key, {
         config: req.body.config || {},
         isEnabled: Boolean(req.body.isEnabled),
-        credentialsRef: req.body.config?.passwordEnv || null,
+        // Recorded from the source, never from the request: which variable
+        // holds the password is code, not something this screen decides.
+        credentialsRef: key === 'document_inbox' ? PASSWORD_ENV : null,
       }, req.user?._id, { ipAddress: req.ip });
       res.success({ data: serialise(updated), message: 'Konfiguration gespeichert.' });
     } catch (err) { next(err); }

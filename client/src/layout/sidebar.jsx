@@ -159,11 +159,11 @@ const navSectionDefs = [
       { type: 'leaf', labelKey: 'sidebar.users', href: '/settings/users', icon: Users, permission: 'users:read' },
       { type: 'leaf', labelKey: 'sidebar.roles', href: '/settings/roles', icon: ShieldCheck, permission: 'roles:read' },
       { type: 'leaf', labelKey: 'sidebar.audit', href: '/settings/audit', icon: ScrollText, permission: 'audit:read' },
+      { type: 'leaf', labelKey: 'sidebar.documentIngestion', href: '/settings/document-ingestion', icon: Inbox, permission: 'integrations:admin' },
       { type: 'leaf', labelKey: 'sidebar.departments', href: '/admin/departments', icon: Building2, permission: 'quotations:admin' },
       { type: 'leaf', labelKey: 'sidebar.numbering', href: '/admin/numbering', icon: Hash, permission: 'quotations:admin' },
       { type: 'leaf', labelKey: 'sidebar.reminders', href: '/admin/reminders', icon: BellRing, permission: 'quotations:admin' },
       { type: 'leaf', labelKey: 'sidebar.notificationOperations', href: '/admin/notifications', icon: BellRing, permission: PERMISSIONS.NOTIFICATIONS_METRICS_READ },
-      { type: 'leaf', labelKey: 'sidebar.documentIngestion', href: '/admin/documents/ingestion', icon: Inbox, permission: 'integrations:admin' },
       {
         type: 'group', key: 'ai-admin', labelKey: 'sidebar.aiAdmin', icon: Sparkles,
         basePath: '/admin/ai', permission: 'ai:analytics:read',

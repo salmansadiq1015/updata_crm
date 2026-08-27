@@ -22,3 +22,6 @@ client/start-remote.sh
 server/package.json
 server/src/seed/demo-seed.js
 client/package-lock.json
+
+# Cache de vitest : régénéré à chaque exécution des tests.
+.vite/

@@ -60,6 +60,7 @@ import aiRoutes from './modules/ai/ai.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 import chatRoutes from './modules/chat/chat.routes.js';
 import migrationRoutes from './modules/migration/migration.routes.js';
+import apkRoutes from './modules/apk/apk.routes.js';
 
 // Metrics
 import { metricsMiddleware, metricsEndpoint } from './metrics/index.js';
@@ -188,6 +189,7 @@ export function createApp() {
   app.use("/api/v1/system", systemRoutes);
   app.use("/api/v1/chat", chatRoutes);
   app.use("/api/v1/admin/migration", migrationRoutes);
+  app.use("/api/v1/admin/apk", apkRoutes);
 
   // --- Swagger API docs (non-production or explicitly enabled) ---
   if (

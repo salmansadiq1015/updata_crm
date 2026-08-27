@@ -780,6 +780,10 @@ export const ENDPOINTS = Object.freeze({
     GOVERNANCE_AGENT:       (key) => `/ai/governance/agents/${key}`,
     GOVERNANCE_STOP:        '/ai/governance/emergency-stop',
   },
+  APK: {
+    INFO: '/admin/apk',
+    UPLOAD_CREDENTIALS: '/admin/apk/upload-credentials',
+  },
   DOCTPL: {
     TEMPLATES:            '/doctpl/templates',
     TEMPLATE_BY_ID:       (id)      => `/doctpl/templates/${id}`,

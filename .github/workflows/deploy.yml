@@ -1,0 +1,95 @@
+# Mise en production, déclenchée à la main.
+#
+# Il n'y a pas de déploiement automatique et c'est voulu : la CI dit si le code
+# tient debout, une personne dit quand il part en ligne. Le bouton se trouve
+# dans l'onglet Actions → « Mise en production » → « Run workflow ».
+#
+# Le travail n'est pas fait ici. La clé SSH utilisée est posée sur le serveur
+# avec un command= forcé : ouvrir une session avec elle exécute le script de
+# déploiement et rien d'autre. Ce fichier n'a donc qu'un rôle — appuyer sur le
+# bouton depuis GitHub plutôt que depuis un terminal — et une clé volée ici ne
+# donne pas un shell sur le serveur.
+name: Mise en production
+
+on:
+  workflow_dispatch:
+    inputs:
+      raison:
+        description: "Pourquoi ce déploiement (apparaît dans l'historique)"
+        required: false
+        default: ''
+
+concurrency:
+  # Deux déploiements en même temps se marchent dessus, et celui qu'on annule
+  # laisse la base migrée et le code à moitié construit. On attend.
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Déployer origin/main
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # Le serveur déploie toujours origin/main. Le sélecteur de branche de
+      # GitHub laisse pourtant choisir n'importe quoi : sans ce garde-fou on
+      # croirait avoir déployé une branche alors que c'est main qui part.
+      - name: Refuser toute branche autre que main
+        if: github.ref != 'refs/heads/main'
+        env:
+          BRANCHE: ${{ github.ref_name }}
+        run: |
+          echo "::error::Ce workflow déploie toujours origin/main. Branche demandée : $BRANCHE."
+          exit 1
+
+      - name: Préparer la clé SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # L'empreinte du serveur est fixée d'avance : sans elle le runner
+          # accepterait n'importe quel hôte qui répond à cette adresse.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Déployer
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          set -o pipefail
+          # La commande demandée est ignorée : authorized_keys impose la sienne.
+          ssh -o BatchMode=yes -o ConnectTimeout=20 \
+            "$DEPLOY_USER@$DEPLOY_HOST" 'deploy' 2>&1 | tee deploy.log
+
+      - name: Vérifier que le site répond
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          code="$(curl -s -o /dev/null -m 30 -w '%{http_code}' "http://$DEPLOY_HOST:8005/login")"
+          echo "GET /login → $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Le site ne répond pas correctement après le déploiement (HTTP $code)."
+            exit 1
+          fi
+
+      # Le journal du déploiement, lisible sur la page du run sans dérouler
+      # les étapes : ce qui a été livré, les migrations, les agents allumés.
+      - name: Journal
+        if: always()
+        env:
+          RAISON: ${{ inputs.raison }}
+        run: |
+          {
+            echo "## Mise en production"
+            if [ -n "$RAISON" ]; then
+              printf '**Raison :** %s\n\n' "$RAISON"
+            fi
+            echo '```'
+            cat deploy.log 2>/dev/null || echo "(le déploiement n'a produit aucune sortie)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

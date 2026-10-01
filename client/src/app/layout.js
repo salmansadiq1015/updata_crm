@@ -1,11 +1,12 @@
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { AppProviders } from "@/providers/app-providers";
+import { APP_DESCRIPTION, APP_PRODUCT_NAME } from "@/shared/constants/application";
 import "./globals.css";
 
 export const metadata = {
-  title: "MB Boiler ERP",
-  description: "MB Boiler & Heizung AG — Enterprise Resource Planning",
+  title: APP_PRODUCT_NAME,
+  description: APP_DESCRIPTION,
 };
 
 export const viewport = {

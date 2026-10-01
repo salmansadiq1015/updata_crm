@@ -12,8 +12,8 @@ import { buildDocumentFilename } from '../../shared/utils/documentFilename.js';
 
 const QR_REFERENCE_TABLE = [0, 9, 4, 6, 8, 2, 7, 1, 3, 5];
 const PDF_MIME_TYPE = 'application/pdf';
-const MB_BLUE = '#1f4f9a';
-const MB_RED = '#d91f2e';
+const BRAND_BLUE = '#102A56';
+const BRAND_RED = '#e11d48';
 const TEXT = '#111827';
 const MUTED = '#5f6f8f';
 const BORDER = '#d9dee8';
@@ -33,9 +33,8 @@ function companyLine(...parts) {
 
 function drawTextLogo(doc, x, y) {
   doc.save();
-  doc.font('Helvetica-Bold').fontSize(29).fillColor(MB_BLUE).text('M', x, y, { continued: true });
-  doc.fillColor(MB_RED).text('B');
-  doc.fontSize(9).fillColor(MB_BLUE).text('BOILER & HEIZUNG AG', x + 2, y + 31, { characterSpacing: 0.6 });
+  doc.font('Helvetica-Bold').fontSize(29).fillColor(BRAND_BLUE).text('Updata', x, y);
+  doc.fontSize(9).fillColor(BRAND_RED).text('ERP', x + 2, y + 31, { characterSpacing: 0.6 });
   doc.restore();
 }
 
@@ -47,13 +46,13 @@ function drawCompanyHeader(doc, margin, y) {
     companyLine(config.company.street, config.company.buildingNumber),
     companyLine(config.company.zip, config.company.city),
   ].filter(Boolean);
-  doc.save().fontSize(8).fillColor(MB_BLUE);
+  doc.save().fontSize(8).fillColor(BRAND_BLUE);
   addressLines.forEach((line, index) => doc.text(line, margin, y + 50 + (index * 11)));
 
   const contactRows = [
     ['Telefon', config.company.phone],
     ['E-Mail', config.company.email],
-    ['WEB', 'www.mb-heizung.ch'],
+    ['WEB', 'updata.ai'],
     ['MWST-Nr.', 'CHE-108.593.165'],
   ].filter(([, value]) => value);
   const labelX = pageWidth - margin - 134;
@@ -125,7 +124,7 @@ function writeInvoiceContent(doc, invoice) {
     : invoice.invoiceType === 'CREDIT_NOTE'
     ? 'Gutschrift'
     : 'Rechnung';
-  doc.save().fontSize(15).font('Helvetica-Bold').fillColor(MB_BLUE)
+  doc.save().fontSize(15).font('Helvetica-Bold').fillColor(BRAND_BLUE)
     .text(`${invoiceTitle} ${invoice.invoiceNumber}`, margin, y, { width: usableWidth, align: 'right' });
   doc.font('Helvetica').fontSize(9).fillColor(TEXT)
     .text(`Oberwil, ${formatDate(invoice.invoiceDate)}`, margin, y + 22, { width: usableWidth, align: 'right' })
@@ -150,7 +149,7 @@ function writeInvoiceContent(doc, invoice) {
 
   doc.moveTo(margin, y).lineTo(pageWidth - margin, y).lineWidth(0.8).strokeColor(BORDER).stroke();
   y += 8;
-  doc.fillColor(MB_BLUE).fontSize(8).font('Helvetica-Bold')
+  doc.fillColor(BRAND_BLUE).fontSize(8).font('Helvetica-Bold')
     .text('Nr.', columns.position, y)
     .text('Code', columns.code, y)
     .text('Text', columns.description, y)

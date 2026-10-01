@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { APP_NAME } from '@/shared/constants/application';
 
 export function LandingNavbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -39,7 +40,7 @@ export function LandingNavbar() {
               <Zap className="h-4.5 w-4.5 text-white" />
             </div>
             <span className="text-[1.1rem] font-bold tracking-tight">
-              MB Boiler{' '}
+              {APP_NAME}{' '}
               <span className="text-gradient">ERP</span>
             </span>
           </Link>
@@ -92,7 +93,7 @@ export function LandingNavbar() {
                         <Zap className="h-4.5 w-4.5 text-white" />
                       </div>
                       <span className="text-lg font-bold tracking-tight">
-                        MB Boiler <span className="text-gradient">ERP</span>
+                        {APP_NAME} <span className="text-gradient">ERP</span>
                       </span>
                     </Link>
                   </div>

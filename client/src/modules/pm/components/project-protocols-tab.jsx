@@ -88,7 +88,7 @@ export function ProjectProtocolsTab({ projectId }) {
               <span className="text-sm font-semibold">{t('pm.protocolExternalTitle', 'Externes Protokoll')}</span>
             </div>
             <ul className="mb-3 space-y-0.5 text-[12px] text-muted-foreground">
-              <li>· MB Boiler & Heizung AG</li>
+              <li>· Updata</li>
               <li>· {t('pm.protocolExternF2', 'Verantwortlicher Projektleiter')}</li>
               <li>· {t('pm.protocolExternF3', 'Nur kundenrelevante Informationen')}</li>
             </ul>
@@ -220,7 +220,7 @@ function ProtocolPreviewDialog({ open, onOpenChange, canWrite, pending, onCreate
             includes={[
               t('pm.protocolPreviewExt1', 'Alle relevanten Termine'),
               t('pm.protocolPreviewExt2', 'Verantwortlicher Projektleiter'),
-              t('pm.protocolPreviewExt3', 'Kontakt MB Boiler & Heizung AG'),
+              t('pm.protocolPreviewExt3', 'Kontakt Updata'),
               t('pm.protocolPreviewExt4', 'Wichtige Meilensteine'),
             ]}
             excludes={[t('pm.protocolPreviewExt5', 'Ohne interne Details')]}

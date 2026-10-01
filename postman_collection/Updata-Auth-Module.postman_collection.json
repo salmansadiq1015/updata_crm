@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "MB Boiler - Module 02 - Authentication & Users",
+    "name": "Updata - Module 02 - Authentication & Users",
     "description": "Complete API collection for Module 02: Authentication, User Management, Roles & Permissions, Sessions, Audit Logs.\n\nBase URL: {{baseUrl}}\nDefault: http://localhost:9097/api/v1\n\n**Quick Start:**\n1. Import this collection + environment file\n2. Run \"Login (Admin)\" — tokens & IDs auto-save\n3. Run \"List All Roles\" — captures {{roleId}}\n4. Run \"List Permissions\" — captures {{permissionId}}\n5. All authenticated requests use {{accessToken}} automatically\n\n**Total: 38 requests across 5 modules**",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -18,7 +18,7 @@
     { "key": "permissionId2", "value": "" },
     { "key": "activationToken", "value": "" },
     { "key": "resetToken", "value": "" },
-    { "key": "adminEmail", "value": "admin@mbboiler.ch" },
+    { "key": "adminEmail", "value": "admin@updata.ai" },
     { "key": "adminPassword", "value": "Admin@12345!" },
     { "key": "technikerRoleId", "value": "" }
   ],
@@ -164,7 +164,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@mbboiler.ch\"\n}"
+              "raw": "{\n  \"email\": \"admin@updata.ai\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/auth/login",
@@ -656,7 +656,7 @@
                       "if (res.success && res.data) {",
                       "  pm.collectionVariables.set('createdUserId', res.data._id || res.data.id);",
                       "  pm.test('Status is pending_activation', () => pm.expect(res.data.status).to.eql('pending_activation'));",
-                      "  pm.test('Has email', () => pm.expect(res.data.email).to.eql('techniker@mbboiler.ch'));",
+                      "  pm.test('Has email', () => pm.expect(res.data.email).to.eql('techniker@updata.ai'));",
                       "}"
                     ]
                   }
@@ -667,7 +667,7 @@
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"techniker@mbboiler.ch\",\n  \"firstName\": \"Max\",\n  \"lastName\": \"Technik\",\n  \"roleId\": \"{{roleId}}\",\n  \"language\": \"de\",\n  \"phone\": \"+41 79 999 88 77\"\n}"
+                  "raw": "{\n  \"email\": \"techniker@updata.ai\",\n  \"firstName\": \"Max\",\n  \"lastName\": \"Technik\",\n  \"roleId\": \"{{roleId}}\",\n  \"language\": \"de\",\n  \"phone\": \"+41 79 999 88 77\"\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/users",
@@ -698,7 +698,7 @@
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"disponent@mbboiler.ch\",\n  \"firstName\": \"Anna\",\n  \"lastName\": \"Disponentin\",\n  \"roleId\": \"{{roleId}}\",\n  \"language\": \"de\",\n  \"phone\": \"+41 79 555 44 33\"\n}"
+                  "raw": "{\n  \"email\": \"disponent@updata.ai\",\n  \"firstName\": \"Anna\",\n  \"lastName\": \"Disponentin\",\n  \"roleId\": \"{{roleId}}\",\n  \"language\": \"de\",\n  \"phone\": \"+41 79 555 44 33\"\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/users",

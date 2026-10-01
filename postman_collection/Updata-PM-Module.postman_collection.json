@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "MB Boiler - Module 04 - Project Management",
+    "name": "Updata - Module 04 - Project Management",
     "description": "Complete API collection for Module 04: Projects, Status Tracking, Preparatory Actions, Construction Schedule, Partner Confirmations, Documents.\n\nBase URL: {{baseUrl}} (http://localhost:9097/api/v1)\n\n**Quick Start:**\n1. Run Login from Auth collection first to get {{accessToken}}\n2. Ensure a customer exists (run CRM Create Customer)\n3. Run 'Create Project' — auto-captures {{projectId}}\n4. Run status transitions, prep actions, schedule entries in order\n\n**Total: 52 requests across 6 groups**",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },

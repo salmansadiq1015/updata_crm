@@ -4,10 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Shield, FolderKanban, BarChart3, Users } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
-// Static imports: the emitted URL carries a content hash, so swapping the file
-// in public/ invalidates every browser cache on its own.
-import logoFull from '../../../../public/logo.png';
-import logoFullDark from '../../../../public/logo-dark.png';
+import { APP_LOGOS, APP_PRODUCT_NAME, COMPANY_NAME } from '@/shared/constants/application';
 
 const features = [
   { icon: FolderKanban, labelKey: 'auth.layout.feature.projects', fallback: 'Projektmanagement' },
@@ -34,9 +31,9 @@ export function AuthLayout({ children }) {
         {/* Content */}
         <div className="relative flex flex-col justify-between p-10 xl:p-14 w-full">
           {/* Logo */}
-          <Link href="/" className="flex items-center" aria-label="MB Boiler — ERP System">
+          <Link href="/" className="flex items-center" aria-label={APP_PRODUCT_NAME}>
             {/* White variant: the panel is always the brand gradient, in both themes */}
-            <Image src={logoFullDark} alt="MB Boiler — ERP System" priority className="h-11 w-auto object-contain" />
+            <Image src={APP_LOGOS.fullDark} alt={APP_PRODUCT_NAME} priority width={220} height={56} className="h-11 w-auto object-contain" />
           </Link>
 
           {/* Middle content */}
@@ -69,7 +66,7 @@ export function AuthLayout({ children }) {
 
           {/* Footer */}
           <div className="text-xs text-white/30">
-            &copy; {new Date().getFullYear()} MB Boiler & Heizung AG
+            &copy; {new Date().getFullYear()} {COMPANY_NAME}
           </div>
         </div>
       </div>
@@ -78,8 +75,8 @@ export function AuthLayout({ children }) {
       <div className="flex flex-1 flex-col">
         {/* Mobile logo bar */}
         <div className="flex items-center p-6 lg:hidden">
-          <Image src={logoFull} alt="MB Boiler — ERP System" priority className="block h-9 w-auto object-contain dark:hidden" />
-          <Image src={logoFullDark} alt="MB Boiler — ERP System" priority className="hidden h-9 w-auto object-contain dark:block" />
+          <Image src={APP_LOGOS.full} alt={APP_PRODUCT_NAME} priority width={220} height={56} className="block h-9 w-auto object-contain dark:hidden" />
+          <Image src={APP_LOGOS.fullDark} alt={APP_PRODUCT_NAME} priority width={220} height={56} className="hidden h-9 w-auto object-contain dark:block" />
         </div>
 
         {/* Form container */}

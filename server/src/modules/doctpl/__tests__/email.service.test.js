@@ -83,7 +83,7 @@ afterEach(() => {
 describe('emailService.send sender identity', () => {
   test('defaults sender from the active CI company email', async () => {
     mockCiFindOne.mockReturnValue(ciQuery({
-      companyName: 'MB Boiler & Heizung AG',
+      companyName: 'Updata',
       companyDetails: { email: 'company@example.com' },
     }));
     mockEmailRecordCreate.mockImplementation(async (payload) => ({ _id: 'email-1', ...payload }));
@@ -92,7 +92,7 @@ describe('emailService.send sender identity', () => {
 
     expect(mockEmailRecordCreate).toHaveBeenCalledWith(expect.objectContaining({
       senderAddress: 'company@example.com',
-      senderName: 'MB Boiler & Heizung AG',
+      senderName: 'Updata',
     }));
     expect(mockQueueAddJob).toHaveBeenCalledWith('email-dispatch', 'email-email-1', { emailRecordId: 'email-1' });
   });

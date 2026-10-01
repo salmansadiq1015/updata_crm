@@ -537,7 +537,7 @@ async function seedStarterObject() {
     accessInstructions: 'Schlüssel bei Hauswart Muster.',
     emergencyHeating: { present: true, number: 'NH-2023-07' },
     keyBox: { present: true, code: '2580', depositedBy: 'Klaus Huber', depositedAt: new Date('2024-03-12') },
-    advertisingBoard: { count: 2, type: 'MB Boiler Standard', location: 'Eingang / Fassade' },
+    advertisingBoard: { count: 2, type: 'Updata Standard', location: 'Eingang / Fassade' },
     createdBy: creatorId,
   });
   logger.info('Seeded starter object with Objektinformationen', { module: 'seed' });

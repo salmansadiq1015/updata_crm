@@ -3,7 +3,7 @@ import { AuthLayout } from '@/modules/auth/components/auth-layout';
 import { ResetPasswordConfirmForm } from '@/modules/auth/components/reset-password-confirm-form';
 
 export const metadata = {
-  title: 'Neues Passwort setzen — MB Boiler ERP',
+  title: 'Neues Passwort setzen — Updata ERP',
 };
 
 function ConfirmFallback() {

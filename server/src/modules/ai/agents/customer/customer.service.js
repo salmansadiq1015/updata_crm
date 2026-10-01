@@ -207,7 +207,7 @@ class CustomerService {
       // fact. The sentences are written to follow a salutation comma, so the
       // first one is capitalised when it has to stand on its own.
       const text = sentences.join(' ').replace(/\s+/g, ' ').trim();
-      return `MB Boiler: ${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+      return `Updata: ${text.charAt(0).toUpperCase()}${text.slice(1)}`;
     }
 
     return [
@@ -216,7 +216,7 @@ class CustomerService {
       sentences.join(' '),
       '',
       'Freundliche Grüsse',
-      'MB Boiler & Heizungen AG',
+      'Updata',
     ].join('\n');
   }
 

@@ -85,7 +85,7 @@ const getTransporter = () => {
  * @param {string} options.subject   - Email subject line
  * @param {string} [options.template] - Template filename (e.g., "resetPassword.ejs")
  * @param {Object} options.data      - Data passed to the EJS template
- * @param {string} [options.fromName="MB Boiler"] - Sender display name
+ * @param {string} [options.fromName="Updata"] - Sender display name
  * @param {string} [options.fromAddress] - Sender address override
  * @param {Array}  [options.attachments] - Nodemailer attachments array
  * @param {string} [options._rawHtml] - Pre-rendered HTML body for DocTpl emails
@@ -101,7 +101,7 @@ const sendMail = async (options) => {
       subject,
       template,
       data = {},
-      fromName = "MB Boiler",
+      fromName = "Updata",
       fromAddress,
       attachments,
       _rawHtml,
@@ -138,7 +138,7 @@ const sendMail = async (options) => {
       // Render template with common variables
       html = await ejs.renderFile(templatePath, {
         ...data,
-        appName: "MB Boiler",
+        appName: "Updata",
         supportEmail: process.env.SUPPORT_EMAIL || "installation@bolliger-heizungen.ch",
         clientUrl: process.env.CLIENT_URI || "http://localhost:3000",
         year: new Date().getFullYear(),
@@ -190,7 +190,7 @@ const escapeHtml = (value = "") => String(value)
 export const sendPasswordResetEmail = async (email, name, resetUrl) => {
   return sendMail({
     email,
-    subject: "Password Reset Request - MB Boiler",
+    subject: "Password Reset Request - Updata",
     template: "resetPassword.ejs",
     data: { name, resetUrl },
   });
@@ -202,7 +202,7 @@ export const sendPasswordResetEmail = async (email, name, resetUrl) => {
 export const sendWelcomeEmail = async (email, name, tempPassword) => {
   return sendMail({
     email,
-    subject: "Welcome to MB Boiler - Your Account Details",
+    subject: "Welcome to Updata - Your Account Details",
     template: "welcome.ejs",
     data: { name, tempPassword, loginUrl: `${process.env.CLIENT_URI || "http://localhost:3000"}/login` },
   });
@@ -214,7 +214,7 @@ export const sendWelcomeEmail = async (email, name, tempPassword) => {
 export const sendActivationEmail = async (email, name, activationUrl) => {
   return sendMail({
     email,
-    subject: "Activate Your Account - MB Boiler",
+    subject: "Activate Your Account - Updata",
     template: "accountActivation.ejs",
     data: { name, activationUrl },
   });
@@ -226,7 +226,7 @@ export const sendActivationEmail = async (email, name, activationUrl) => {
 export const sendPasswordChangedEmail = async (email, name) => {
   return sendMail({
     email,
-    subject: "Password Changed - MB Boiler",
+    subject: "Password Changed - Updata",
     template: "passwordChanged.ejs",
     data: { name },
   });
@@ -238,7 +238,7 @@ export const sendPasswordChangedEmail = async (email, name) => {
 export const sendInvoiceEmail = async (email, invoiceData, pdfAttachment = null) => {
   const options = {
     email,
-    subject: `Invoice ${invoiceData.invoiceNumber} - MB Boiler`,
+    subject: `Invoice ${invoiceData.invoiceNumber} - Updata`,
     template: "invoiceEmail.ejs",
     data: {
       invoiceNumber: invoiceData.invoiceNumber,
@@ -273,7 +273,7 @@ export const sendInvoiceEmail = async (email, invoiceData, pdfAttachment = null)
 export const sendReportRejectedEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Report ${data.reportNumber} Requires Revision - MB Boiler`,
+    subject: `Report ${data.reportNumber} Requires Revision - Updata`,
     template: "reportRejected.ejs",
     data: {
       technicianName: data.technicianName,
@@ -293,7 +293,7 @@ export const sendReportRejectedEmail = async (email, data) => {
 export const sendOrderAssignedEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `New Order Assigned: ${data.orderNumber} - MB Boiler`,
+    subject: `New Order Assigned: ${data.orderNumber} - Updata`,
     template: "orderAssigned.ejs",
     data: {
       technicianName: data.technicianName,
@@ -316,7 +316,7 @@ export const sendOrderAssignedEmail = async (email, data) => {
 export const sendSubscriptionReminderEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Subscription Expiring: ${data.customerName} - MB Boiler`,
+    subject: `Subscription Expiring: ${data.customerName} - Updata`,
     template: "subscriptionReminder.ejs",
     data: {
       customerName: data.customerName,
@@ -338,7 +338,7 @@ export const sendSubscriptionReminderEmail = async (email, data) => {
 export const sendPartnerConfirmationEmail = async (email, data, pdfAttachment = null) => {
   const options = {
     email,
-    subject: `Terminbestaetigung: ${data.projectName} - ${data.entryName} - MB Boiler`,
+    subject: `Terminbestaetigung: ${data.projectName} - ${data.entryName} - Updata`,
     template: "partnerAppointmentConfirmation.ejs",
     data: {
       partnerName: data.partnerName,
@@ -368,7 +368,7 @@ export const sendPartnerConfirmationEmail = async (email, data, pdfAttachment = 
 export const sendProjectStatusNotification = async (email, data) => {
   return sendMail({
     email,
-    subject: `Projektstatus geaendert: ${data.projectName} - MB Boiler`,
+    subject: `Projektstatus geaendert: ${data.projectName} - Updata`,
     template: "projectStatusNotification.ejs",
     data: {
       recipientName: data.recipientName,
@@ -389,7 +389,7 @@ export const sendProjectStatusNotification = async (email, data) => {
 export const sendAppointmentConfirmationEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Terminbestaetigung: ${data.appointmentDate} - MB Boiler`,
+    subject: `Terminbestaetigung: ${data.appointmentDate} - Updata`,
     template: "appointmentConfirmation.ejs",
     data: {
       customerName: data.customerName,
@@ -410,7 +410,7 @@ export const sendAppointmentConfirmationEmail = async (email, data) => {
 export const sendAppointmentReminderEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Terminerinnerung morgen: ${data.appointmentDate} - MB Boiler`,
+    subject: `Terminerinnerung morgen: ${data.appointmentDate} - Updata`,
     template: "appointmentReminder.ejs",
     data: {
       customerName: data.customerName,
@@ -429,7 +429,7 @@ export const sendAppointmentReminderEmail = async (email, data) => {
 export const sendAppointmentCancellationEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Termin storniert: ${data.appointmentDate || "MB Boiler"}`,
+    subject: `Termin storniert: ${data.appointmentDate || "Updata"}`,
     template: "notificationGeneric.ejs",
     data: {
       recipientName: data.customerName,
@@ -451,7 +451,7 @@ export const sendAppointmentCancellationEmail = async (email, data) => {
 export const sendAppointmentRescheduledEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Termin neu geplant: ${data.appointmentDate || "MB Boiler"}`,
+    subject: `Termin neu geplant: ${data.appointmentDate || "Updata"}`,
     template: "notificationGeneric.ejs",
     data: {
       recipientName: data.customerName,
@@ -474,7 +474,7 @@ export const sendAppointmentRescheduledEmail = async (email, data) => {
 export const sendAssignmentNotificationEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Neuer Einsatz: ${data.assignmentNumber} - MB Boiler`,
+    subject: `Neuer Einsatz: ${data.assignmentNumber} - Updata`,
     template: "assignmentNotification.ejs",
     data: {
       technicianName: data.technicianName,
@@ -497,7 +497,7 @@ export const sendAssignmentNotificationEmail = async (email, data) => {
 export const sendReportSubmittedEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Arbeitsbericht eingereicht: ${data.reportNumber} - MB Boiler`,
+    subject: `Arbeitsbericht eingereicht: ${data.reportNumber} - Updata`,
     template: "reportSubmitted.ejs",
     data: {
       recipientName: data.recipientName,
@@ -519,7 +519,7 @@ export const sendReportSubmittedEmail = async (email, data) => {
 export const sendQuotationEmail = async (email, data, pdfAttachment = null) => {
   const options = {
     email,
-    subject: `Offerte ${data.quotationNumber} - MB Boiler`,
+    subject: `Offerte ${data.quotationNumber} - Updata`,
     template: "quotationSent.ejs",
     data: {
       customerName: data.customerName,
@@ -529,7 +529,7 @@ export const sendQuotationEmail = async (email, data, pdfAttachment = null) => {
       validUntil: data.validUntil,
       currency: data.currency || "CHF",
       grandTotal: data.grandTotal,
-      salesPersonName: data.salesPersonName || "MB Boiler Team",
+      salesPersonName: data.salesPersonName || "Updata Team",
     },
   };
   if (pdfAttachment) {
@@ -544,7 +544,7 @@ export const sendQuotationEmail = async (email, data, pdfAttachment = null) => {
 export const sendOrderConfirmationQopEmail = async (email, data, pdfAttachment = null) => {
   const options = {
     email,
-    subject: `Auftragsbestaetigung ${data.orderNumber} - MB Boiler`,
+    subject: `Auftragsbestaetigung ${data.orderNumber} - Updata`,
     template: "orderConfirmation.ejs",
     data: {
       customerName: data.customerName,
@@ -568,7 +568,7 @@ export const sendOrderConfirmationQopEmail = async (email, data, pdfAttachment =
 export const sendInvoiceSentEmail = async (email, data, pdfAttachment = null) => {
   const options = {
     email,
-    subject: `Rechnung ${data.invoiceNumber} - MB Boiler`,
+    subject: `Rechnung ${data.invoiceNumber} - Updata`,
     template: "invoiceSent.ejs",
     data: {
       customerName: data.customerName,
@@ -596,7 +596,7 @@ export const sendInvoiceSentEmail = async (email, data, pdfAttachment = null) =>
 export const sendQopAppointmentReminderEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Terminerinnerung: ${data.appointmentDate} - MB Boiler`,
+    subject: `Terminerinnerung: ${data.appointmentDate} - Updata`,
     template: "appointmentReminderWhatsapp.ejs",
     data: {
       customerName: data.customerName,
@@ -616,7 +616,7 @@ export const sendQopAppointmentReminderEmail = async (email, data) => {
 export const sendTaskAssignedEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `Neue Aufgabe zugewiesen: ${data.taskTitle} - MB Boiler`,
+    subject: `Neue Aufgabe zugewiesen: ${data.taskTitle} - Updata`,
     template: "taskAssigned.ejs",
     data: {
       assigneeName: data.assigneeName,
@@ -647,7 +647,7 @@ export const sendMeetingNotificationEmail = async (email, data) => {
 
   return sendMail({
     email,
-    subject: `${data.subjectPrefix || 'Meeting'}: ${title} - MB Boiler`,
+    subject: `${data.subjectPrefix || 'Meeting'}: ${title} - Updata`,
     template: 'notificationGeneric.ejs',
     data: {
       recipientName: data.recipientName || email,
@@ -669,7 +669,7 @@ export const sendMeetingNotificationEmail = async (email, data) => {
 export const sendProjectDocumentEmail = async (email, data, pdfAttachment = null) => {
   const options = {
     email,
-    subject: `Dokument: ${data.projectName || data.fileName} - MB Boiler`,
+    subject: `Dokument: ${data.projectName || data.fileName} - Updata`,
     template: "projectDocument.ejs",
     data: {
       projectName: data.projectName || "",
@@ -694,7 +694,7 @@ export const sendProjectDocumentEmail = async (email, data, pdfAttachment = null
 export const sendTaskReminderEmail = async (email, data) => {
   return sendMail({
     email,
-    subject: `${data.isOverdue ? 'Überfällige Aufgabe' : 'Aufgabenerinnerung'}: ${data.taskTitle} - MB Boiler`,
+    subject: `${data.isOverdue ? 'Überfällige Aufgabe' : 'Aufgabenerinnerung'}: ${data.taskTitle} - Updata`,
     template: "taskReminder.ejs",
     data: {
       userName: data.userName,

@@ -61,7 +61,7 @@ async function buildPdfBuffer(writeContent) {
 
 function writeCompanyHeader(pdf, title, subtitle) {
   const rightX = 360;
-  pdf.font('Helvetica-Bold').fontSize(16).text(config.company?.name || 'MB Boiler', 48, 44);
+  pdf.font('Helvetica-Bold').fontSize(16).text(config.company?.name || 'Updata', 48, 44);
   pdf.font('Helvetica').fontSize(8).fillColor('#4b5563')
     .text(
       [
@@ -260,7 +260,7 @@ class AccountingDocumentOutputService {
     if (options.sendEmail) {
       email = await sendMail({
         email: options.recipientEmail,
-        subject: `Kontoauszug - ${config.company?.name || 'MB Boiler'}`,
+        subject: `Kontoauszug - ${config.company?.name || 'Updata'}`,
         template: 'accountingStatement.ejs',
         data: {
           entityName: statement.entityName || '',

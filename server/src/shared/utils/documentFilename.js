@@ -1,8 +1,8 @@
 /**
  * Shared document filename builder.
  *
- * Convention: JJJJ_MM_TT_Objektadresse_MB_Dokumenttyp_Version.ext
- * Example:    2026_08_10_Hohestrasse 199, Oberwil_MB_Offerte O_V1.pdf
+ * Convention: JJJJ_MM_TT_Objektadresse_Updata_Dokumenttyp_Version.ext
+ * Example:    2026_08_10_Hohestrasse 199, Oberwil_Updata_Offerte O_V1.pdf
  */
 
 const TEMPLATE_TYPE_LABELS = {
@@ -53,7 +53,7 @@ export function buildDocumentFilename({ templateType, objectAddress, version, da
 
   const segments = [datePart];
   if (addressPart) segments.push(addressPart);
-  segments.push('MB');
+  segments.push('Updata');
   segments.push(typeLabel);
   segments.push(versionPart);
 

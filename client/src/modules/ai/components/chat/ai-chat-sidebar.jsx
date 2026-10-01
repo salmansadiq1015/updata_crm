@@ -174,7 +174,7 @@ function SidebarContent({
           <div className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
           </div>
-          <span className="font-semibold text-sm truncate">MB Boiler</span>
+          <span className="font-semibold text-sm truncate">Updata</span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onNewChat} title={t('ai.chat.newChat')}>

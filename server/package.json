@@ -1,5 +1,5 @@
 {
-  "name": "mb-boiler-api",
+  "name": "updata-api",
   "version": "1.0.0",
   "main": "src/server.js",
   "type": "module",
@@ -24,7 +24,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "MB Boiler & Heizung AG — Digital Platform API",
+  "description": "Updata - Digital Platform API",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1019.0",
     "@aws-sdk/s3-request-presigner": "^3.1019.0",

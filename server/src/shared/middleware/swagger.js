@@ -5,7 +5,7 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Animmza Boiler ERP API',
+      title: 'Updata ERP API',
       version: '1.0.0',
       description: 'Swiss HVAC ERP System API Documentation',
     },
@@ -31,7 +31,7 @@ const swaggerSpec = swaggerJsdoc(options);
 export function setupSwagger(app) {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'Animmza ERP API Docs',
+    customSiteTitle: 'Updata ERP API Docs',
   }));
 
   app.get('/api/docs.json', (req, res) => {

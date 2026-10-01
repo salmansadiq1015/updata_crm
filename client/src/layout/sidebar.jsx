@@ -3,12 +3,6 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-// Statically imported so the emitted URL carries a content hash: replacing a
-// logo file in public/ busts every browser cache automatically.
-import logoFull from '../../public/logo.png';
-import logoFullDark from '../../public/logo-dark.png';
-import logoMark from '../../public/logo-mark.png';
-import logoMarkDark from '../../public/logo-mark-dark.png';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { useSidebarStore } from '@/stores/sidebar-store';
@@ -84,6 +78,7 @@ import { authService } from '@/modules/auth/services/auth-service';
 import { useUnreadCount } from '@/modules/notifications/hooks/use-notification-feed';
 import { useUiConfig, applySidebarConfig } from '@/shared/hooks/use-ui-config';
 import { UiPreviewBanner } from '@/shared/components/ui-preview-banner';
+import { APP_LOGOS, APP_NAME, APP_PRODUCT_NAME } from '@/shared/constants/application';
 
 // Nav model. A section item is either a leaf (link) or a group (parent w/ children).
 const navSectionDefs = [
@@ -445,32 +440,40 @@ function SidebarLogo({ collapsed }) {
       collapsed && 'justify-center px-0'
     )}>
       {collapsed ? (
-        <Link href="/dashboard" className="flex items-center justify-center" aria-label="MB Boiler">
+        <Link href="/dashboard" className="flex items-center justify-center" aria-label={APP_NAME}>
           <Image
-            src={logoMark}
-            alt="MB Boiler"
+            src={APP_LOGOS.mark}
+            alt={APP_NAME}
             priority
+            width={64}
+            height={64}
             className="block h-10 w-10 object-contain dark:hidden"
           />
           <Image
-            src={logoMarkDark}
-            alt="MB Boiler"
+            src={APP_LOGOS.markDark}
+            alt={APP_NAME}
             priority
+            width={64}
+            height={64}
             className="hidden h-10 w-10 object-contain dark:block"
           />
         </Link>
       ) : (
-        <Link href="/dashboard" className="flex items-center group" aria-label="MB Boiler — ERP System">
+        <Link href="/dashboard" className="flex items-center group" aria-label={APP_PRODUCT_NAME}>
           <Image
-            src={logoFull}
-            alt="MB Boiler — ERP System"
+            src={APP_LOGOS.full}
+            alt={APP_PRODUCT_NAME}
             priority
+            width={220}
+            height={56}
             className="block h-9 w-auto object-contain dark:hidden"
           />
           <Image
-            src={logoFullDark}
-            alt="MB Boiler — ERP System"
+            src={APP_LOGOS.fullDark}
+            alt={APP_PRODUCT_NAME}
             priority
+            width={220}
+            height={56}
             className="hidden h-9 w-auto object-contain dark:block"
           />
         </Link>

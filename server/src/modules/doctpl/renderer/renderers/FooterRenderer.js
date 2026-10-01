@@ -39,7 +39,7 @@ export default class FooterRenderer {
       });
     } else {
       doc.font(this.fonts.body).fontSize(7).fillColor(this.colors.muted);
-      const company = this.ci?.companyName || 'MB Boiler & Heizung AG';
+      const company = this.ci?.companyName || 'Updata';
       const vat = this.ci?.companyDetails?.vatNumber || '';
       const bank = this.ci?.companyDetails?.bankDetails?.bankName || '';
       doc.text(`${company} | ${vat} | ${bank}`, left, y + 6, { width: width - 64, align: 'center' });

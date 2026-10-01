@@ -6,7 +6,7 @@ export const PRIORITIES = ['niedrig', 'mittel', 'hoch'];
 
 const widgetSubmissionSchema = new mongoose.Schema(
   {
-    widgetId: { type: String, required: true, default: 'mb-boiler-main-site' },
+    widgetId: { type: String, required: true, default: 'updata-main-site' },
     referenceNumber: { type: String, unique: true },
     contactName: { type: String, required: true, trim: true, maxlength: 200 },
     contactEmail: { type: String, trim: true, maxlength: 200, default: null },

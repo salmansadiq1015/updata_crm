@@ -84,13 +84,13 @@ export function renderVehicleMaterialPdf({ vehicle, materials, ciConfig }) {
     let pageNum = 1;
 
     doc.info.Title = `Materialliste – ${vehicle.kennzeichen || ''}`;
-    doc.info.Author = ciConfig?.companyName || 'MB Boiler & Heizung AG';
-    doc.info.Creator = 'MB Boiler ERP';
+    doc.info.Author = ciConfig?.companyName || 'Updata';
+    doc.info.Creator = 'Updata ERP';
     doc.info.CreationDate = new Date();
 
     // ── Footer ──
     const drawFooter = (num) => {
-      const company = ciConfig?.companyName || 'MB Boiler & Heizung AG';
+      const company = ciConfig?.companyName || 'Updata';
       // FOOTER_Y sits below the bottom margin, and pdfkit answers any write
       // past that margin by starting a new page — which is how a one-page list
       // came out as three, the extras carrying nothing but this footer. Drop
@@ -122,7 +122,7 @@ export function renderVehicleMaterialPdf({ vehicle, materials, ciConfig }) {
     const ci = ciConfig?.companyDetails || {};
     doc.font(fonts.body).fontSize(8).fillColor(colors.primary);
     const companyLines = [
-      ciConfig?.companyName || 'MB Boiler & Heizung AG',
+      ciConfig?.companyName || 'Updata',
       ci.address?.street,
       `${ci.address?.zip || ''} ${ci.address?.city || ''}`.trim() || null,
       ci.phone,

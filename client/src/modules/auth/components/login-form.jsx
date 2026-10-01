@@ -96,7 +96,7 @@ export function LoginForm() {
           <Input
             id="email"
             type="email"
-            placeholder="name@mb-boiler.ch"
+            placeholder="name@updata.ai"
             autoComplete="email"
             autoFocus
             className="h-11 rounded-xl bg-muted/40 border-border/60 focus:bg-background transition-colors"

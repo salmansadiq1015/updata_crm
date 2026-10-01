@@ -44,7 +44,7 @@ export default class HeaderRenderer {
     const ci = ciConfig?.companyDetails || {};
     doc.save().font(fonts.body).fontSize(8).fillColor(colors.primary);
     const companyLines = [
-      ciConfig?.companyName || 'MB Boiler & Heizung AG',
+      ciConfig?.companyName || 'Updata',
       ci.address?.street || '',
       `${ci.address?.zip || ''} ${ci.address?.city || ''}`.trim(),
       ci.phone || '',

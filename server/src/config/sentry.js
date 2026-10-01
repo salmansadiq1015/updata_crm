@@ -19,7 +19,7 @@ if (config.logging?.sentryDsn) {
       environment: config.env,
       tracesSampleRate: config.isProduction ? 0.1 : 1.0,
       // Attach server name for multi-instance debugging
-      serverName: `mb-boiler-api-${config.env}`,
+      serverName: `updata-api-${config.env}`,
     });
   } catch {
     // @sentry/node not installed — continue without error tracking

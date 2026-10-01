@@ -305,7 +305,7 @@ export function AiPanelChat({ onClose }) {
             <BrainCircuit className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <SheetTitle className="truncate text-sm font-semibold text-white">MB Boiler AI</SheetTitle>
+            <SheetTitle className="truncate text-sm font-semibold text-white">Updata AI</SheetTitle>
             <div className="mt-1 flex items-center gap-2 text-[11px] font-medium text-slate-400">
               <span className="inline-flex max-w-64 items-center gap-1 truncate rounded-full bg-emerald-400/10 px-2 py-0.5 text-emerald-200 ring-1 ring-emerald-300/15">
                 <ShieldCheck className="h-3 w-3 shrink-0" />

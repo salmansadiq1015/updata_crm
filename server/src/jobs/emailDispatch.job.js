@@ -87,7 +87,7 @@ export class EmailDispatchWorker extends BaseWorker {
         cc: record.cc || [],
         bcc: record.bcc || [],
         subject: record.subject,
-        fromName: record.senderName || 'MB Boiler',
+        fromName: record.senderName || 'Updata',
         fromAddress: record.senderAddress || undefined,
         attachments,
         _rawHtml: record.bodyHtml,

@@ -183,7 +183,7 @@ export default function SettingsPage() {
         <SettingsSection title={lang === 'de' ? 'Über die App' : 'About'}>
           <SettingsItem
             icon={Info}
-            label="MB Boiler Techniker"
+            label="Updata Techniker"
             desc="v1.0.0 — PWA"
           />
           <SettingsItem

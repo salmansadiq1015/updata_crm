@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="56" viewBox="0 0 220 56" role="img" aria-label="Updata ERP">
+  <rect x="0" y="0" width="56" height="56" rx="12" fill="#102A56"/>
+  <path d="M15 14.5v16.7c0 7.7 5.3 12.8 13 12.8s13-5.1 13-12.8V14.5h-7.6v16.2c0 4.3-2 6.6-5.4 6.6s-5.4-2.3-5.4-6.6V14.5H15z" fill="#FFFFFF"/>
+  <path d="M40.6 13.2 29.3 43.8h6.8l11.3-30.6h-6.8z" fill="#E11D48"/>
+  <text x="72" y="31" fill="#102A56" font-family="Inter, Geist, Arial, sans-serif" font-size="24" font-weight="760">Updata</text>
+  <text x="72" y="46" fill="#64748B" font-family="Inter, Geist, Arial, sans-serif" font-size="11" font-weight="650" letter-spacing="3">ERP</text>
+</svg>

@@ -31,7 +31,7 @@ export const RAPPORT_BLOCKS = Object.freeze([
   'verrechenbarkeit',
 ]);
 
-const SYSTEM_PROMPT = (catalogue, todayIso) => `Du bist Rapport AI der MB Boiler & Heizungen AG (Gebäudetechnik, Schweiz).
+const SYSTEM_PROMPT = (catalogue, todayIso) => `Du bist Rapport AI der Updata (Gebäudetechnik, Schweiz).
 
 Aus einem gesprochenen oder getippten Arbeitsrapport machst du einen strukturierten Entwurf. Du erfindest nichts: Was nicht gesagt wurde, bleibt leer und kommt unter "fehlendeAngaben".
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from '@jest/globals';
 import DocumentRenderer from '../renderer/DocumentRenderer.js';
 
 const ciConfig = {
-  companyName: 'MB Boiler & Heizung AG',
+  companyName: 'Updata',
   companyDetails: {
     address: { street: 'Bahnhofstrasse 1', zip: '3000', city: 'Bern' },
     bankDetails: { iban: 'CH4431999123000889012', qrIban: 'CH4431999123000889012' },
@@ -24,7 +24,7 @@ describe('DocumentRenderer end-to-end (DOC-006)', () => {
       templateType: 'quotation',
       layout: { pageSize: 'A4', margins: { top: 25, bottom: 20, left: 20, right: 15 } },
       sections: [section('header', 0), section('body', 1), section('table', 2), section('totals', 3), section('footer', 99)],
-      textBlocks: { de: { footer: 'MB Boiler AG | CHE-123.456.789 MWST' } },
+      textBlocks: { de: { footer: 'Updata AG | CHE-123.456.789 MWST' } },
       tableColumns: [],
     };
     const data = {

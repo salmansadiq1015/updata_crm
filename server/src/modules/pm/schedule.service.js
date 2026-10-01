@@ -646,7 +646,7 @@ class ScheduleService {
     // Internal-only extras: who is responsible for each phase (Zuständigkeiten)
     // and the internal phase notes. The external protocol omits these.
     const projectManagerName = pm ? `${pm.firstName || ''} ${pm.lastName || ''}`.trim() : '';
-    let companyName = 'MB Boiler & Heizung AG';
+    let companyName = 'Updata';
     try {
       const CIConfiguration = (await import('../doctpl/ciConfiguration.model.js')).default;
       const ci = await CIConfiguration.findOne({ isActive: true }).lean();

@@ -213,7 +213,7 @@ export function DocumentIngestionAdmin() {
         fields={[
           { name: 'host', label: 'IMAP-Server', placeholder: 'imap.hostpoint.ch' },
           { name: 'port', label: 'Port', placeholder: '993', type: 'number', fallback: 993 },
-          { name: 'user', label: 'Benutzer', placeholder: 'dokumente@mb-boiler.ch' },
+          { name: 'user', label: 'Benutzer', placeholder: 'dokumente@updata.ai' },
           { name: 'folder', label: 'Ordner', fallback: 'INBOX' },
           { name: 'maxPerRun', label: 'Nachrichten pro Durchlauf', type: 'number', fallback: 20 },
         ]}

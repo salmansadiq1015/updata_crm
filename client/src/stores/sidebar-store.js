@@ -20,7 +20,7 @@ export const useSidebarStore = create(
         })),
     }),
     {
-      name: 'mb-sidebar-state',
+      name: 'updata-sidebar-state',
       partialize: (state) => ({
         isCollapsed: state.isCollapsed,
         expandedGroups: state.expandedGroups,

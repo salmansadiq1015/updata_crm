@@ -92,7 +92,7 @@ export class NewsletterDispatchWorker extends BaseWorker {
             subject: newsletter.subject,
             template: 'newsletter.ejs',
             data: { subject: newsletter.subject, bodyHtml },
-            fromName: 'MB Boiler',
+            fromName: 'Updata',
           });
 
           // Mark delivery as sent

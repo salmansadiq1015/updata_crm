@@ -9,7 +9,7 @@ import { useCIConfig } from '../../hooks/useCIQueries';
 import { useUpdateCIConfig } from '../../hooks/useCIMutations';
 
 const COMPANY_FIELDS = [
-  ['doctpl.ci.companyName', 'companyName', 'MB Boiler & Heizung AG'],
+  ['doctpl.ci.companyName', 'companyName', 'Updata'],
   ['doctpl.ci.vatNumber', 'vatNumber', 'CHE-000.000.000 MWST'],
   ['doctpl.ci.iban', 'iban', 'CH00 0000 0000 0000 0000 0'],
   ['doctpl.ci.qrIban', 'qrIban', 'CH00 3000 0000 0000 0000 0'],

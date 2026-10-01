@@ -3,7 +3,7 @@ import { AuthLayout } from '@/modules/auth/components/auth-layout';
 import { LoginForm } from '@/modules/auth/components/login-form';
 
 export const metadata = {
-  title: 'Anmelden — MB Boiler ERP',
+  title: 'Anmelden — Updata ERP',
 };
 
 function LoginFallback() {

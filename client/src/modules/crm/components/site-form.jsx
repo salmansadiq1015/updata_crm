@@ -543,7 +543,7 @@ export function SiteForm({ open, onOpenChange, onSubmit, defaultValues, isLoadin
                   <Input type="number" min="0" {...register('advertisingBoard.count')} placeholder="0" className={inputCls} />
                 </DarkField>
                 <DarkField label={t('crm.sites.advertisingType', 'Art der Werbetafel')} error={errors.advertisingBoard?.type}>
-                  <Input {...register('advertisingBoard.type')} placeholder="z.B. MB Boiler Standard" className={inputCls} />
+                  <Input {...register('advertisingBoard.type')} placeholder="z.B. Updata Standard" className={inputCls} />
                 </DarkField>
               </div>
               <DarkField label={t('crm.sites.advertisingLocation', 'Standort')} error={errors.advertisingBoard?.location}>

@@ -8,11 +8,11 @@
 # code it is about to run. Doing it by hand is how a step gets skipped —
 # and the step that got skipped was the one that switches the agents on.
 #
-#   sudo -u ubuntu /var/www/boiler/deploy/deploy.sh
+#   sudo -u ubuntu /var/www/updata/deploy/deploy.sh
 #
 set -euo pipefail
 
-ROOT="${DEPLOY_ROOT:-/var/www/boiler}"
+ROOT="${DEPLOY_ROOT:-/var/www/updata}"
 BRANCH="${DEPLOY_BRANCH:-main}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
@@ -42,14 +42,14 @@ say "Sauvegarde de la base"
 # Before the migrations, never after: a migration that goes wrong is exactly
 # when the previous state is needed.
 URI="$(grep -E '^MONGODB_URI=' "$ROOT/server/.env" | cut -d= -f2-)"
-BACKUP="/home/ubuntu/backups/boiler-$STAMP"
+BACKUP="/home/ubuntu/backups/updata-$STAMP"
 if command -v mongodump >/dev/null 2>&1; then
   mkdir -p "$BACKUP"
   mongodump --uri="$URI" --out="$BACKUP" --quiet
   echo "  $BACKUP ($(du -sh "$BACKUP" | cut -f1))"
   # Keep a fortnight; a dump nobody looked at in two weeks is not the one
   # anybody will restore.
-  find /home/ubuntu/backups -maxdepth 1 -name 'boiler-*' -mtime +14 -exec rm -rf {} + 2>/dev/null || true
+  find /home/ubuntu/backups -maxdepth 1 -name 'updata-*' -mtime +14 -exec rm -rf {} + 2>/dev/null || true
 else
   echo "  mongodump absent — AUCUNE sauvegarde prise"
 fi
@@ -69,12 +69,12 @@ npm ci
 npm run build
 
 say "Redémarrage"
-pm2 restart boiler-api --update-env
-pm2 restart boiler-client --update-env
+pm2 restart updata-api --update-env
+pm2 restart updata-client --update-env
 sleep 5
 
 say "Vérification"
-pm2 list | grep -E 'boiler-(api|client)' || true
+pm2 list | grep -E 'updata-(api|client)' || true
 cd "$ROOT/server"
 node -e "
 require('dotenv').config();

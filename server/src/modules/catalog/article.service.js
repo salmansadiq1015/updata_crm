@@ -279,7 +279,7 @@ class ArticleService {
       'CHF',
       'Boiler Supplier AG',
       'SUP-BW200',
-      'MB Boiler',
+      'Updata',
       'BW-200',
       'Boiler',
       '',

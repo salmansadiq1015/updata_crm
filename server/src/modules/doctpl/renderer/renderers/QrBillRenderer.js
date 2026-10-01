@@ -32,7 +32,7 @@ export default class QrBillRenderer {
       currency: qrData.currency || 'CHF',
       amount: qrData.amount,
       creditor: {
-        name: ciConfig?.companyName || 'MB Boiler & Heizung AG',
+        name: ciConfig?.companyName || 'Updata',
         address: ciConfig?.companyDetails?.address?.street || '',
         zip: String(ciConfig?.companyDetails?.address?.zip || '3000'),
         city: ciConfig?.companyDetails?.address?.city || 'Bern',

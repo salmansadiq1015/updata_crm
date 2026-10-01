@@ -8,7 +8,7 @@ beforeEach(() => __resetQrMock());
 afterEach(() => __resetQrMock());
 
 const ciConfig = {
-  companyName: 'MB Boiler & Heizung AG',
+  companyName: 'Updata',
   companyDetails: { address: { street: 'Bahnhofstrasse 1', zip: '3000', city: 'Bern' } },
 };
 
@@ -31,7 +31,7 @@ describe('QrBillRenderer payload assembly (DOC-003)', () => {
     expect(__qrCalls).toHaveLength(1);
     const { data, opts } = __qrCalls[0];
     expect(data.creditor.account).toBe('CH4431999123000889012');
-    expect(data.creditor.name).toBe('MB Boiler & Heizung AG');
+    expect(data.creditor.name).toBe('Updata');
     expect(data.amount).toBe(1081.5);
     expect(data.currency).toBe('CHF');
     expect(data.reference).toBe('210000000003139471430009017');

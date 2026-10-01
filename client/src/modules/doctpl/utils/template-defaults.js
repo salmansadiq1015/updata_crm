@@ -29,10 +29,10 @@ export const REQUIRED_VISIBLE_TEMPLATE_SECTIONS = {
 };
 
 const DEFAULT_FOOTERS = {
-  de: 'MB Boiler & Heizung AG | CHE-000.000.000 MWST',
-  fr: 'MB Boiler & Heizung AG | CHE-000.000.000 TVA',
-  it: 'MB Boiler & Heizung AG | CHE-000.000.000 IVA',
-  en: 'MB Boiler & Heizung AG | CHE-000.000.000 VAT',
+  de: 'Updata | CHE-000.000.000 MWST',
+  fr: 'Updata | CHE-000.000.000 TVA',
+  it: 'Updata | CHE-000.000.000 IVA',
+  en: 'Updata | CHE-000.000.000 VAT',
 };
 
 const DEFAULT_LABELS = {

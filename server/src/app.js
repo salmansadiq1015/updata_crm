@@ -125,7 +125,7 @@ export function createApp() {
   // Root status endpoint (no auth)
   app.get("/", (req, res) => {
     res.success({
-      service: "mb-boiler-api",
+      service: "updata-api",
       status: "running",
       version: process.env.npm_package_version || "1.0.0",
       uptime: Math.floor(process.uptime()),

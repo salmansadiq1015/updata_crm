@@ -3,7 +3,7 @@ import { AuthLayout } from '@/modules/auth/components/auth-layout';
 import { ActivateAccountForm } from '@/modules/auth/components/activate-account-form';
 
 export const metadata = {
-  title: 'Konto aktivieren — MB Boiler ERP',
+  title: 'Konto aktivieren — Updata ERP',
 };
 
 function ActivateFallback() {

@@ -30,14 +30,14 @@ describe('qop document form reference utilities', () => {
         _id: 'project-1',
         name: 'Boiler retrofit',
         projectNumber: 'PRJ-100',
-        customerName: 'MB Boiler',
+        customerName: 'Updata',
       }],
     })).toEqual([
       {
         value: 'project-1',
         label: 'Boiler retrofit',
         badge: 'PRJ-100',
-        keywords: 'PRJ-100 Boiler retrofit MB Boiler',
+        keywords: 'PRJ-100 Boiler retrofit Updata',
       },
     ]);
   });

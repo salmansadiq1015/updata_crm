@@ -26,7 +26,7 @@ export const PLANNER_ACTIONS = Object.freeze([
 
 const VALID_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 
-const SYSTEM_PROMPT = (todayIso) => `You are the planning brain of an ERP assistant for MB Boiler & Heizungen AG (Swiss HVAC company). Users write in German, French, Italian or English.
+const SYSTEM_PROMPT = (todayIso) => `You are the planning brain of an ERP assistant for Updata (Swiss HVAC company). Users write in German, French, Italian or English.
 
 Classify the user message into exactly ONE action and extract parameters. Reply with JSON only, no markdown fences:
 {"action":"<ACTION>","params":{"title":null,"description":null,"priority":null,"dueDate":null,"dateTime":null,"durationHours":null,"assigneeName":null,"customerName":null,"projectName":null,"searchTerm":null,"listAll":false,"status":null,"messageContent":null,"installationName":null}}

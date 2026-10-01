@@ -70,7 +70,7 @@ function emailRecord(overrides = {}) {
     cc: [],
     bcc: [],
     subject: 'Offerte OFF-1',
-    senderName: 'MB Boiler',
+    senderName: 'Updata',
     senderAddress: 'sales@example.com',
     bodyHtml: '<p>Hello</p>',
     bodyText: 'Hello',
@@ -99,7 +99,7 @@ describe('EmailDispatchWorker', () => {
     expect(mockSendMail).toHaveBeenCalledWith(expect.objectContaining({
       email: ['customer@example.com'],
       subject: 'Offerte OFF-1',
-      fromName: 'MB Boiler',
+      fromName: 'Updata',
       fromAddress: 'sales@example.com',
       _rawHtml: '<p>Hello</p>',
     }));

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Zap } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
+import { APP_NAME, SUPPORT_EMAIL } from '@/shared/constants/application';
 
 export function LandingFooter() {
   const { t } = useLanguage();
@@ -20,7 +21,7 @@ export function LandingFooter() {
       title: t('footer.support'),
       links: [
         { label: t('footer.support.help'), href: '#' },
-        { label: t('footer.support.it'), href: 'mailto:it-support@mbboiler.ch' },
+        { label: t('footer.support.it'), href: `mailto:${SUPPORT_EMAIL}` },
         { label: t('footer.support.status'), href: '#' },
         { label: t('footer.support.training'), href: '#' },
       ],
@@ -45,7 +46,7 @@ export function LandingFooter() {
                 <Zap className="h-4 w-4 text-white" />
               </div>
               <span className="text-lg font-bold tracking-tight">
-                MB Boiler <span className="text-gradient">ERP</span>
+                {APP_NAME} <span className="text-gradient">ERP</span>
               </span>
             </Link>
             <p className="mt-4 text-sm text-muted-foreground leading-relaxed">

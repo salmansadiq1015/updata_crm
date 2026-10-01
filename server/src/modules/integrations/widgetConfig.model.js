@@ -16,11 +16,11 @@ const requestTypeSchema = new mongoose.Schema({
 
 const widgetConfigSchema = new mongoose.Schema(
   {
-    widgetId: { type: String, required: true, unique: true, default: 'mb-boiler-main-site' },
+    widgetId: { type: String, required: true, unique: true, default: 'updata-main-site' },
     branding: {
       logoUrl: { type: String, default: null },
       primaryColor: { type: String, default: '#0056b3' },
-      companyName: { type: String, default: 'MB Boiler & Heizung AG' },
+      companyName: { type: String, default: 'Updata' },
     },
     fields: {
       contactName: { type: fieldConfigSchema, default: () => ({ visible: true, required: true }) },

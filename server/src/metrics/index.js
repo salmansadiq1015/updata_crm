@@ -12,17 +12,17 @@ import client from 'prom-client';
  */
 
 // Collect default metrics (GC, memory, CPU)
-client.collectDefaultMetrics({ prefix: 'mb_boiler_' });
+client.collectDefaultMetrics({ prefix: 'updata_' });
 
 // --- HTTP Metrics ---
 export const httpRequestsTotal = new client.Counter({
-  name: 'mb_boiler_http_requests_total',
+  name: 'updata_http_requests_total',
   help: 'Total HTTP requests',
   labelNames: ['method', 'path', 'status'],
 });
 
 export const httpRequestDuration = new client.Histogram({
-  name: 'mb_boiler_http_request_duration_seconds',
+  name: 'updata_http_request_duration_seconds',
   help: 'HTTP request duration in seconds',
   labelNames: ['method', 'path'],
   buckets: [0.01, 0.05, 0.1, 0.5, 1, 5],
@@ -30,33 +30,33 @@ export const httpRequestDuration = new client.Histogram({
 
 // --- Cache Metrics ---
 export const cacheHitsTotal = new client.Counter({
-  name: 'mb_boiler_cache_hits_total',
+  name: 'updata_cache_hits_total',
   help: 'Total cache hits',
   labelNames: ['layer', 'namespace'],
 });
 
 export const cacheMissesTotal = new client.Counter({
-  name: 'mb_boiler_cache_misses_total',
+  name: 'updata_cache_misses_total',
   help: 'Total cache misses',
   labelNames: ['layer', 'namespace'],
 });
 
 // --- Event Bus Metrics ---
 export const eventBusPublishedTotal = new client.Counter({
-  name: 'mb_boiler_event_bus_published_total',
+  name: 'updata_event_bus_published_total',
   help: 'Total events published',
   labelNames: ['type'],
 });
 
 export const eventBusConsumedTotal = new client.Counter({
-  name: 'mb_boiler_event_bus_consumed_total',
+  name: 'updata_event_bus_consumed_total',
   help: 'Total events consumed',
   labelNames: ['type', 'status'],
 });
 
 // --- Queue Metrics ---
 export const queueJobsTotal = new client.Counter({
-  name: 'mb_boiler_queue_jobs_total',
+  name: 'updata_queue_jobs_total',
   help: 'Total background jobs',
   labelNames: ['queue', 'status'],
 });

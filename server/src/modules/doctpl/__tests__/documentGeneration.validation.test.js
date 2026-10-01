@@ -87,14 +87,14 @@ describe('documentGeneration _prepareRenderData (DOC-003)', () => {
 });
 
 describe('documentGeneration _buildFilename (DOC-007)', () => {
-  test('follows the client convention JJJJ_MM_TT_Objektadresse_MB_Dokumenttyp_Version', () => {
+  test('follows the client convention JJJJ_MM_TT_Objektadresse_Updata_Dokumenttyp_Version', () => {
     const name = documentGenerationService._buildFilename('invoice_standard', {
       documentNumber: 'RE-2026-0042',
       objectAddress: 'Hohestrasse 199, Oberwil',
       customer: { name: 'Müller & Co AG' },
     }, 'de');
     // The date part is the generation date.
-    expect(name).toMatch(/^\d{4}_\d{2}_\d{2}_Hohestrasse 199, Oberwil_MB_Rechnung RG_V1\.pdf$/);
+    expect(name).toMatch(/^\d{4}_\d{2}_\d{2}_Hohestrasse 199, Oberwil_Updata_Rechnung RG_V1\.pdf$/);
     // Filesystem-hostile characters never survive sanitisation.
     expect(name).not.toMatch(/[/\\:*?"<>|]/);
   });

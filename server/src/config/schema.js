@@ -30,7 +30,7 @@ const configSchema = Joi.object({
   JWT_REFRESH_EXPIRY: Joi.string().default('7d'),
   JWT_ACCESS_TTL: Joi.string().default('15m'),
   JWT_REFRESH_TTL: Joi.string().default('7d'),
-  JWT_ISSUER: Joi.string().default('mb-boiler-api'),
+  JWT_ISSUER: Joi.string().default('updata-api'),
   SESSION_SECRET: Joi.string().min(16).required(),
 
   // Auth Module
@@ -69,7 +69,7 @@ const configSchema = Joi.object({
   SMTP_PASSWORD: Joi.string().allow('').default(''),
 
   // Company / invoice document defaults
-  COMPANY_NAME: Joi.string().default('MB Boiler & Heizung AG'),
+  COMPANY_NAME: Joi.string().default('Updata'),
   COMPANY_STREET: Joi.string().default('Buchenstrasse'),
   COMPANY_BUILDING_NUMBER: Joi.string().allow('').default('57B'),
   COMPANY_ZIP: Joi.string().default('4142'),

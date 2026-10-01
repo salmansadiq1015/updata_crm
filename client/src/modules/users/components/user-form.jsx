@@ -463,7 +463,7 @@ export function UserForm({ open, onOpenChange, onSubmit, defaultValues, roles = 
             {currentStep === 1 && (
               <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                 <FormField label={t('users.email')} error={errors.email?.message} required>
-                  <Input type="email" placeholder="max.muster@mbboiler.ch" {...register('email')} autoFocus />
+                  <Input type="email" placeholder="max.muster@updata.ai" {...register('email')} autoFocus />
                 </FormField>
                 <FormField
                   label={`${t('users.phone')} (${t('common.optional', 'optional')})`}

@@ -205,7 +205,7 @@ export default function AccountingEntitiesPage() {
 
             <div className="grid gap-1.5">
               <Label className="text-xs text-muted-foreground">{de ? 'Name' : 'Name'}</Label>
-              <Input className="h-9 border-border bg-card text-foreground" value={form.name} onChange={(event) => set('name', event.target.value)} placeholder="MB Boiler Switzerland" required />
+              <Input className="h-9 border-border bg-card text-foreground" value={form.name} onChange={(event) => set('name', event.target.value)} placeholder="Updata Switzerland" required />
             </div>
 
             <div className="grid gap-1.5">

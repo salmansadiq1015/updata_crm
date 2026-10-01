@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Updata">
+  <rect width="64" height="64" rx="14" fill="#FFFFFF"/>
+  <path d="M18 17v18c0 8.3 5.7 13.8 14 13.8s14-5.5 14-13.8V17h-8.2v17.5c0 4.6-2.1 7.1-5.8 7.1s-5.8-2.5-5.8-7.1V17H18z" fill="#102A56"/>
+  <path d="M45.5 15.5 33.3 48.5h7.3l12.2-33h-7.3z" fill="#E11D48"/>
+</svg>

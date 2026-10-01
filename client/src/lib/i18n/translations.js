@@ -1215,13 +1215,13 @@ export const translations = {
     'nav.openMenu': 'Menu öffnen',
 
     // Hero
-    'hero.badge': 'Internes Teamportal der MB Boiler & Heizung AG',
+    'hero.badge': 'Internes Teamportal der Updata',
     'hero.title.line1': 'Ein zentraler Arbeitsbereich für',
     'hero.title.line2': 'unser Team',
-    'hero.subtitle': 'MB Boiler ERP bündelt Kunden, Projekte, Einsätze, Dokumente, Aufgaben und Finanzen für den internen Tagesbetrieb. Büro, Projektleitung, Service und Montage arbeiten damit auf derselben aktuellen Datengrundlage.',
+    'hero.subtitle': 'Updata ERP bündelt Kunden, Projekte, Einsätze, Dokumente, Aufgaben und Finanzen für den internen Tagesbetrieb. Büro, Projektleitung, Service und Montage arbeiten damit auf derselben aktuellen Datengrundlage.',
     'hero.cta.start': 'Internes Portal öffnen',
     'hero.cta.demo': 'Arbeitsbereiche ansehen',
-    'hero.mockup.url': 'app.mbboiler.ch/dashboard',
+    'hero.mockup.url': 'app.updata.ai/dashboard',
     'hero.mockup.customers': 'Kunden',
     'hero.mockup.projects': 'Aktive Projekte',
     'hero.mockup.appointments': 'Termine heute',
@@ -1328,7 +1328,7 @@ export const translations = {
     'cta.contact': 'IT Support kontaktieren',
 
     // Footer
-    'footer.description': 'Der interne Arbeitsbereich für MB Boiler Teams, Prozesse und operative Entscheidungen.',
+    'footer.description': 'Der interne Arbeitsbereich für Updata Teams, Prozesse und operative Entscheidungen.',
     'footer.product': 'Internes Portal',
     'footer.product.features': 'Arbeitsbereiche',
     'footer.product.modules': 'Arbeitsabläufe',
@@ -1342,7 +1342,7 @@ export const translations = {
     'footer.legal.imprint': 'Impressum',
     'footer.legal.privacy': 'Datenschutz',
     'footer.legal.terms': 'Nutzungsbedingungen',
-    'footer.copyright': 'MB Boiler & Heizung AG. Alle Rechte vorbehalten.',
+    'footer.copyright': 'Updata. Alle Rechte vorbehalten.',
     'footer.madeIn': 'Hergestellt in der Schweiz',
 
     // Platform — Dashboard
@@ -4798,7 +4798,7 @@ export const translations = {
     'pm.protocolPreviewExtSub': 'Übersicht für den Kunden',
     'pm.protocolPreviewExt1': 'Alle relevanten Termine',
     'pm.protocolPreviewExt2': 'Verantwortlicher Projektleiter',
-    'pm.protocolPreviewExt3': 'Kontakt MB Boiler & Heizung AG',
+    'pm.protocolPreviewExt3': 'Kontakt Updata',
     'pm.protocolPreviewExt4': 'Wichtige Meilensteine',
     'pm.protocolPreviewExt5': 'Ohne interne Details',
     'pm.totalProjects': 'Projekte gesamt',
@@ -5522,7 +5522,7 @@ export const translations = {
     'auth.passwordResetDesc': 'Ihr Passwort wurde erfolgreich geändert.',
     'auth.goToLogin': 'Zur Anmeldung',
     'auth.activateAccount': 'Konto aktivieren',
-    'auth.activateDesc': 'Willkommen bei MB Boiler ERP! Setzen Sie Ihr Passwort.',
+    'auth.activateDesc': 'Willkommen bei Updata ERP! Setzen Sie Ihr Passwort.',
     'auth.activateButton': 'Konto aktivieren',
     'auth.weak': 'Schwach',
     'auth.medium': 'Mittel',
@@ -6250,13 +6250,13 @@ export const translations = {
     'nav.openMenu': 'Open menu',
 
     // Hero
-    'hero.badge': 'Internal team portal for MB Boiler & Heizung AG',
+    'hero.badge': 'Internal team portal for Updata',
     'hero.title.line1': 'One central workspace for',
     'hero.title.line2': 'our team',
-    'hero.subtitle': 'MB Boiler ERP brings customers, projects, field work, documents, tasks, and finance into one internal operating hub. Office, project, service, and installation teams work from the same current information.',
+    'hero.subtitle': 'Updata ERP brings customers, projects, field work, documents, tasks, and finance into one internal operating hub. Office, project, service, and installation teams work from the same current information.',
     'hero.cta.start': 'Open Internal Portal',
     'hero.cta.demo': 'View Work Areas',
-    'hero.mockup.url': 'app.mbboiler.ch/dashboard',
+    'hero.mockup.url': 'app.updata.ai/dashboard',
     'hero.mockup.customers': 'Customers',
     'hero.mockup.projects': 'Active Projects',
     'hero.mockup.appointments': 'Today\'s Appointments',
@@ -6363,7 +6363,7 @@ export const translations = {
     'cta.contact': 'Contact IT Support',
 
     // Footer
-    'footer.description': 'The internal workspace for MB Boiler teams, processes, and operational decisions.',
+    'footer.description': 'The internal workspace for Updata Teams, processes, and operational decisions.',
     'footer.product': 'Internal Portal',
     'footer.product.features': 'Work Areas',
     'footer.product.modules': 'Workflows',
@@ -6377,7 +6377,7 @@ export const translations = {
     'footer.legal.imprint': 'Imprint',
     'footer.legal.privacy': 'Privacy Policy',
     'footer.legal.terms': 'Terms of Use',
-    'footer.copyright': 'MB Boiler & Heizung AG. All rights reserved.',
+    'footer.copyright': 'Updata. All rights reserved.',
     'footer.madeIn': 'Made in Switzerland',
 
     // Platform — Dashboard
@@ -9762,7 +9762,7 @@ export const translations = {
     'pm.protocolPreviewExtSub': 'Overview for the customer',
     'pm.protocolPreviewExt1': 'All relevant dates',
     'pm.protocolPreviewExt2': 'Responsible project manager',
-    'pm.protocolPreviewExt3': 'Contact MB Boiler & Heizung AG',
+    'pm.protocolPreviewExt3': 'Contact Updata',
     'pm.protocolPreviewExt4': 'Key milestones',
     'pm.protocolPreviewExt5': 'Without internal details',
     'pm.totalProjects': 'Total Projects',
@@ -10421,7 +10421,7 @@ export const translations = {
     'auth.passwordResetDesc': 'Your password has been successfully changed.',
     'auth.goToLogin': 'Go to Sign In',
     'auth.activateAccount': 'Activate Account',
-    'auth.activateDesc': 'Welcome to MB Boiler ERP! Set your password.',
+    'auth.activateDesc': 'Welcome to Updata ERP! Set your password.',
     'auth.activateButton': 'Activate Account',
     'auth.weak': 'Weak',
     'auth.medium': 'Medium',

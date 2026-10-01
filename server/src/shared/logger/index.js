@@ -77,7 +77,7 @@ const developmentFormat = winston.format.combine(
 const logger = winston.createLogger({
   level: config.isDevelopment ? 'debug' : config.logging.level,
   defaultMeta: {
-    service: 'mb-boiler-api',
+    service: 'updata-api',
     environment: config.env,
   },
   format: config.isProduction ? productionFormat : developmentFormat,

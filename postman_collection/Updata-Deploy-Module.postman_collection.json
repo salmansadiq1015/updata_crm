@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "MB Boiler - Module 05 - Field Deployment Planning",
+    "name": "Updata - Module 05 - Field Deployment Planning",
     "description": "Complete API collection for Module 05: Calendar, Assignments, Appointments, Conflicts, Dashboard, Coarse Scheduling (OF-Bau), Mobile.\n\nBase URL: {{baseUrl}} (http://localhost:9097/api/v1)\n\n**Quick Start:**\n1. Run Login from Auth collection first to get {{accessToken}}\n2. Ensure a customer + site exists (CRM module)\n3. Run 'Create Assignment' — auto-captures {{assignmentId}}\n\n**Total: 55 requests across 7 groups**",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },

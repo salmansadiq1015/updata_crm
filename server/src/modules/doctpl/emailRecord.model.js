@@ -59,7 +59,7 @@ const emailRecordSchema = new mongoose.Schema(
     },
     senderName: {
       type: String,
-      default: 'MB Boiler',
+      default: 'Updata',
     },
     status: {
       type: String,

@@ -45,8 +45,8 @@ export default class DocumentRenderer {
     });
 
     doc.info.Title = data.documentNumber || templateType || 'Document';
-    doc.info.Author = ciConfig?.companyName || 'MB Boiler & Heizung AG';
-    doc.info.Creator = 'MB Boiler ERP';
+    doc.info.Author = ciConfig?.companyName || 'Updata';
+    doc.info.Creator = 'Updata ERP';
     doc.info.CreationDate = new Date();
     registerCiFonts(doc, ciConfig);
 

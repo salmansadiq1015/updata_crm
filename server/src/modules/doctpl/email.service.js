@@ -77,7 +77,7 @@ class EmailService {
 
     return {
       senderAddress: senderAddress || ciConfig?.companyDetails?.email || process.env.COMPANY_EMAIL || process.env.SMTP_MAIL || undefined,
-      senderName: senderName || ciConfig?.companyName || 'MB Boiler',
+      senderName: senderName || ciConfig?.companyName || 'Updata',
     };
   }
 
@@ -131,7 +131,7 @@ class EmailService {
       isDeleted: false,
     }).lean();
 
-    let subject = `Dokument - MB Boiler`;
+    let subject = `Dokument - Updata`;
     let bodyHtml = '<p>Bitte finden Sie das Dokument im Anhang.</p>';
     let bodyText = 'Bitte finden Sie das Dokument im Anhang.';
 

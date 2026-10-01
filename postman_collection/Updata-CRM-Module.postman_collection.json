@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "MB Boiler - Module 03 - CRM & Asset Management",
+    "name": "Updata - Module 03 - CRM & Asset Management",
     "description": "Complete API collection for Module 03: Customers, Contacts, Sites, Installations, Maintenance, Notes, Images.\n\nBase URL: {{baseUrl}} (http://localhost:9097/api/v1)\n\n**Quick Start:**\n1. Run Login from Auth collection first to get {{accessToken}}\n2. Run 'Create Customer' — auto-captures {{customerId}}\n3. Run 'Create Contact' — auto-captures {{contactId}}\n4. Run 'Create Site' — auto-captures {{siteId}}\n5. Run 'Create Installation' — auto-captures {{installationId}}\n\n**Total: 75 requests across 7 groups**",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },

@@ -117,7 +117,7 @@
    Design System — Light Theme (hex-based)
    ═══════════════════════════════════════════ */
 :root {
-  /* MB Boiler brand scale, anchored on the logo navy #1C388E (= 700).
+  /* Updata brand scale, anchored on the logo navy #1C388E (= 700).
      Light mode uses the brand navy itself; dark mode needs a lighter step
      (the navy only reaches 1.87:1 on the dark background). */
   --brand-50:  #EEF2FB;
@@ -130,7 +130,7 @@
   --brand-700: #1C388E;
   --brand-800: #162C6F;
   --brand-900: #101F4E;
-  /* Logo secondary — the red of the MB mark */
+  /* Logo secondary - the red of the Updata mark */
   --brand-red: #D00A19;
   --brand-red-dark: #A00812;
 

@@ -3,7 +3,7 @@ import HeaderRenderer from '../renderer/renderers/HeaderRenderer.js';
 import { createFakeDoc, createFakePageManager } from './helpers/fakeDoc.js';
 
 const ciConfig = {
-  companyName: 'MB Boiler & Heizung AG',
+  companyName: 'Updata',
   companyDetails: { address: { street: 'Bahnhofstrasse 1', zip: '8001', city: 'Zürich' } },
 };
 

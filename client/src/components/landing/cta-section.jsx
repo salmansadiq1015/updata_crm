@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useIntersection } from '@/shared/hooks/use-intersection';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
+import { SUPPORT_EMAIL } from '@/shared/constants/application';
 
 export function CtaSection() {
   const [ref, isInView] = useIntersection({ threshold: 0.15 });
@@ -48,7 +49,7 @@ export function CtaSection() {
                 className="gap-2.5 text-[0.95rem] px-8 h-12 rounded-xl border-white/25 text-white hover:bg-white/10 bg-transparent font-semibold transition-all"
                 asChild
               >
-                <a href="mailto:it-support@mbboiler.ch">
+                <a href={`mailto:${SUPPORT_EMAIL}`}>
                   <Headphones className="h-4 w-4" />
                   {t('cta.contact')}
                 </a>

@@ -26,6 +26,7 @@ import { registerNotificationsEvents } from './modules/notifications/notificatio
 import { registerIntegrationsEvents } from './modules/integrations/integrations.events.js';
 import { registerAiEvents } from './modules/ai/ai.events.js';
 import { registerAgentHandoffs } from './modules/ai/governance/agentHandoffs.js';
+import { registerDiscoverySocket } from './modules/businessDiscovery/discovery.events.js';
 import { seedDatabase } from './seed/seed.js';
 import logger from './shared/logger/index.js';
 
@@ -137,6 +138,8 @@ async function start() {
     // 5. Start HTTP server + Socket.IO
     server = http.createServer(app);
     initializeSocketServer(server);
+    // Discovery realtime: subscribe/unsubscribe handlers + progress emit bridge (uses global.io)
+    registerDiscoverySocket(global.io);
 
     server.listen(config.server.port, config.server.host, () => {
       logger.info(`Server started on ${config.server.host}:${config.server.port}`, {

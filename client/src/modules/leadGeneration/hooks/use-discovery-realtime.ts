@@ -1,0 +1,188 @@
+'use client';
+
+import { useEffect } from 'react';
+import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
+import type { Socket } from 'socket.io-client';
+import { getSocket, onSocketConnect } from '@/lib/socket/client';
+import { discoveryKeys } from './use-discovery';
+import { discoveryResultSchema } from '../schemas/discovery-schemas';
+import {
+  DISCOVERY_EVENTS,
+  DISCOVERY_SUBSCRIBE,
+  DISCOVERY_UNSUBSCRIBE,
+  type CursorPage,
+  type DiscoveryCompletedEvent,
+  type DiscoveryProgressEvent,
+  type DiscoveryResult,
+  type DiscoveryResultEvent,
+  type DiscoverySession,
+} from '../types/discovery-types';
+
+type ResultPage = CursorPage<DiscoveryResult>;
+
+/**
+ * Newer-or-equal wins, compared by `updatedAt` timestamp. When the current
+ * value has no timestamp (or is absent) the incoming event is always applied.
+ */
+const isNewer = (incoming: string | undefined, current: string | undefined): boolean => {
+  if (!current) return true;
+  if (!incoming) return false;
+  return new Date(incoming).getTime() >= new Date(current).getTime();
+};
+
+const normalizeResult = (value: unknown): DiscoveryResult | null => {
+  try {
+    return discoveryResultSchema.parse(value);
+  } catch {
+    return null;
+  }
+};
+
+const upsertResultInPages = (
+  oldData: InfiniteData<ResultPage> | undefined,
+  result: DiscoveryResult,
+): InfiniteData<ResultPage> | undefined => {
+  if (!oldData) return oldData;
+
+  let patched = false;
+  const pages = oldData.pages.map((page) => ({
+    ...page,
+    data: page.data.map((existing) => {
+      if (existing.id !== result.id) return existing;
+      patched = true;
+      return isNewer(result.updatedAt, existing.updatedAt) ? result : existing;
+    }),
+  }));
+
+  if (patched) return { ...oldData, pages };
+
+  const [firstPage, ...rest] = pages;
+  if (!firstPage) return { ...oldData, pages };
+  return {
+    ...oldData,
+    pages: [
+      { ...firstPage, data: [result, ...firstPage.data].slice(0, firstPage.pagination.limit) },
+      ...rest,
+    ],
+  };
+};
+
+/**
+ * Subscribe to `discovery:session:<id>` and merge live progress / new-result /
+ * completion events into the session + results query caches (updatedAt-guarded).
+ * Mirrors `use-task-realtime.ts`.
+ */
+export function useDiscoveryRealtime(sessionId: string | null) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const patchSession = (patch: Partial<DiscoverySession>, updatedAt: string | undefined) => {
+      queryClient.setQueryData<DiscoverySession>(discoveryKeys.session(sessionId), (current) => {
+        if (!current) return current;
+        if (!isNewer(updatedAt, current.updatedAt)) return current;
+        return {
+          ...current,
+          ...patch,
+          counts: patch.counts ? { ...current.counts, ...patch.counts } : current.counts,
+          progress: patch.progress ? { ...current.progress, ...patch.progress } : current.progress,
+          usage: patch.usage ? { ...current.usage, ...patch.usage } : current.usage,
+          updatedAt: updatedAt ?? current.updatedAt,
+        };
+      });
+    };
+
+    const forEachResultCache = (
+      fn: (oldData: InfiniteData<ResultPage> | undefined) => InfiniteData<ResultPage> | undefined,
+    ) => {
+      const caches = queryClient.getQueriesData<InfiniteData<ResultPage>>({
+        queryKey: discoveryKeys.results(),
+      });
+      for (const [key, oldData] of caches) {
+        if (key[3] !== sessionId) continue; // resultList key: [...results(), sessionId, params]
+        queryClient.setQueryData(key, fn(oldData));
+      }
+    };
+
+    const handleProgress = (payload: DiscoveryProgressEvent) => {
+      if (payload?.sessionId !== sessionId) return;
+      patchSession(
+        {
+          ...(payload.status ? { status: payload.status } : {}),
+          ...(payload.progress ? { progress: payload.progress as DiscoverySession['progress'] } : {}),
+          ...(payload.counts ? { counts: payload.counts as DiscoverySession['counts'] } : {}),
+          ...(payload.usage ? { usage: payload.usage as DiscoverySession['usage'] } : {}),
+        },
+        payload.updatedAt,
+      );
+    };
+
+    const handleResult = (payload: DiscoveryResultEvent) => {
+      if (payload?.sessionId !== sessionId) return;
+      const incoming = [
+        ...(payload.result ? [payload.result] : []),
+        ...(Array.isArray(payload.results) ? payload.results : []),
+      ]
+        .map(normalizeResult)
+        .filter((r): r is DiscoveryResult => r !== null);
+
+      if (incoming.length) {
+        forEachResultCache((oldData) => {
+          let next = oldData;
+          for (const result of incoming) next = upsertResultInPages(next, result);
+          return next;
+        });
+      } else {
+        // The backend emits a lightweight "results persisted" signal (no inline
+        // rows) per bulk-write batch. Refetch this session's results list so newly
+        // discovered businesses appear live during the run.
+        queryClient.invalidateQueries({
+          queryKey: discoveryKeys.results(),
+          predicate: (q) => q.queryKey[3] === sessionId,
+        });
+      }
+      if (payload.counts) {
+        patchSession({ counts: payload.counts as DiscoverySession['counts'] }, payload.updatedAt);
+      }
+    };
+
+    const handleCompleted = (payload: DiscoveryCompletedEvent) => {
+      if (payload?.sessionId !== sessionId) return;
+      patchSession(
+        {
+          status: payload.status,
+          ...(payload.counts ? { counts: payload.counts as DiscoverySession['counts'] } : {}),
+          ...(payload.progress ? { progress: payload.progress as DiscoverySession['progress'] } : {}),
+        },
+        payload.updatedAt,
+      );
+      queryClient.invalidateQueries({ queryKey: discoveryKeys.results() });
+    };
+
+    const bind = (socket: Socket | null) => {
+      if (!socket) return;
+      socket.off(DISCOVERY_EVENTS.PROGRESS, handleProgress);
+      socket.off(DISCOVERY_EVENTS.RESULT, handleResult);
+      socket.off(DISCOVERY_EVENTS.COMPLETED, handleCompleted);
+      socket.on(DISCOVERY_EVENTS.PROGRESS, handleProgress);
+      socket.on(DISCOVERY_EVENTS.RESULT, handleResult);
+      socket.on(DISCOVERY_EVENTS.COMPLETED, handleCompleted);
+    };
+
+    bind(getSocket() as Socket | null);
+    const offConnect = onSocketConnect((socket: Socket) => {
+      socket.emit(DISCOVERY_SUBSCRIBE, { sessionId });
+      bind(socket);
+    });
+
+    return () => {
+      offConnect();
+      const socket = getSocket();
+      socket?.off(DISCOVERY_EVENTS.PROGRESS, handleProgress);
+      socket?.off(DISCOVERY_EVENTS.RESULT, handleResult);
+      socket?.off(DISCOVERY_EVENTS.COMPLETED, handleCompleted);
+      socket?.emit(DISCOVERY_UNSUBSCRIBE, { sessionId });
+    };
+  }, [queryClient, sessionId]);
+}

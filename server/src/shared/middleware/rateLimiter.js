@@ -80,5 +80,18 @@ export const uploadLimiter = createLimiter({
   message: 'Too many file uploads, please try again later',
 });
 
+// Lead website-enrichment limiter. Enrichment makes outbound HTTP requests to
+// third-party sites, so it is throttled per authenticated user in its own key
+// namespace. Generous in development where it is exercised by tests.
+export const enrichLimiter = createLimiter({
+  windowMs: config.rateLimit.windowMs,
+  keyGenerator: (req, res) =>
+    (req.user?._id ? `enrich:user:${req.user._id}` : `enrich:ip:${ipKeyGenerator(req, res)}`),
+  max: config.isDevelopment ? 10_000 : 30,
+  message: 'Too many enrichment requests, please try again later',
+});
+
 export { createLimiter };
-export default { globalLimiter, authLimiter, uploadLimiter, createLimiter };
+export default {
+  globalLimiter, authLimiter, uploadLimiter, enrichLimiter, createLimiter,
+};

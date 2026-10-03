@@ -7,6 +7,7 @@
 import '@/lib/dom/install-dom-guards';
 
 import { useEffect, useRef } from 'react';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
 import { ThemeProvider } from './theme-provider';
 import { QueryProvider } from './query-provider';
 import { SocketProvider } from './socket-provider';
@@ -98,7 +99,7 @@ function AuthInitializer({ children }) {
   return children;
 }
 
-export function AppProviders({ children }) {
+export function AppProviders({ children, initialLocale }) {
   const sentryInitialized = useRef(false);
   useEffect(() => {
     cleanupDevelopmentServiceWorkers();
@@ -111,13 +112,18 @@ export function AppProviders({ children }) {
 
   return (
     <ThemeProvider>
-      <LanguageProvider>
+      <LanguageProvider initialLocale={initialLocale}>
         <QueryProvider>
           <AuthInitializer>
             <SocketProvider>
               <ToastProvider>
                 <TooltipProvider>
-                  {children}
+                  {/* App-wide URL query-state adapter so `useDrawer`'s `?detail=`
+                      works on every route, not only ones with a per-route adapter.
+                      nuqs wraps its own `useSearchParams` (NavigationSpy) in Suspense,
+                      so this does not opt pages into dynamic rendering, and the
+                      per-route NuqsAdapters remain harmless when nested under this. */}
+                  <NuqsAdapter>{children}</NuqsAdapter>
                 </TooltipProvider>
               </ToastProvider>
             </SocketProvider>

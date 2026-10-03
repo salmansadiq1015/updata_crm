@@ -202,6 +202,37 @@ const config = Object.freeze({
       .filter(Boolean),
   },
 
+  // Google Maps Platform. Empty string = not configured (the app still boots).
+  // placesApiKey / geocodingApiKey are secrets: server-side only, never logged
+  // and never returned in a response. browserKey is public by design (it is
+  // shipped to browsers) and must be restricted by HTTP referrer in Google Cloud.
+  maps: {
+    placesApiKey: envVars.GOOGLE_PLACES_API_KEY,
+    browserKey: envVars.GOOGLE_MAPS_BROWSER_KEY,
+    // Geocoding reuses the Places key unless a dedicated one is configured.
+    geocodingApiKey: envVars.GOOGLE_GEOCODING_API_KEY || envVars.GOOGLE_PLACES_API_KEY,
+  },
+
+  // Business Discovery / Lead Generation: per-session cost and load guards.
+  discovery: {
+    maxResults: envVars.DISCOVERY_MAX_RESULTS,
+    maxSearchRequests: envVars.DISCOVERY_MAX_SEARCH_REQUESTS,
+    maxCoverageCells: envVars.DISCOVERY_MAX_COVERAGE_CELLS,
+    concurrency: envVars.DISCOVERY_CONCURRENCY,
+    resultTtlDays: envVars.DISCOVERY_RESULT_TTL_DAYS,
+  },
+
+  // Website enrichment — responsible-scraping guards for the lead contact-fill
+  // pipeline. timeoutMs + maxBytes bound every HTTP fetch; concurrency bounds the
+  // bulk fan-out; respectRobots honours robots.txt; userAgent identifies the tool.
+  enrichment: {
+    timeoutMs: envVars.ENRICHMENT_TIMEOUT_MS,
+    maxBytes: envVars.ENRICHMENT_MAX_BYTES,
+    concurrency: envVars.ENRICHMENT_CONCURRENCY,
+    respectRobots: envVars.ENRICHMENT_RESPECT_ROBOTS,
+    userAgent: envVars.ENRICHMENT_USER_AGENT,
+  },
+
   autoMigrate: envVars.AUTO_MIGRATE,
 });
 

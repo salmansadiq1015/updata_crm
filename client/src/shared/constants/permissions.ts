@@ -34,6 +34,20 @@ export const PERMISSIONS = {
   CRM_DELETE: 'crm:delete',
   CRM_ADMIN: 'crm:admin',
 
+  // Lead Generation / Business Discovery
+  DISCOVERY_CREATE: 'discovery:create',
+  DISCOVERY_READ: 'discovery:read',
+  DISCOVERY_DELETE: 'discovery:delete',
+
+  // Leads (CRM prospect entity)
+  LEAD_READ: 'lead:read',
+  LEAD_WRITE: 'lead:write',
+  LEAD_IMPORT: 'lead:import',
+  LEAD_CONVERT: 'lead:convert',
+  LEAD_DELETE: 'lead:delete',
+  LEAD_WHATSAPP: 'lead:whatsapp',
+  LEAD_ENRICH: 'lead:enrich',
+
   // Projects (future)
   PROJECTS_READ: 'projects:read',
   PROJECTS_WRITE: 'projects:write',

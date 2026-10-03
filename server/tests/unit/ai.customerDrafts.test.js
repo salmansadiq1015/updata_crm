@@ -109,7 +109,7 @@ describe('Customer AI — the channel', () => {
       channel: CHANNELS.SMS,
     });
 
-    expect(draft.body.startsWith('MB Boiler: ')).toBe(true);
+    expect(draft.body.startsWith('Updata: ')).toBe(true);
     expect(draft.body).not.toContain('Guten Tag');
     expect(draft.body).not.toContain('Freundliche Grüsse');
   });

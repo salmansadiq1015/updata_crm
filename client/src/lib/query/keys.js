@@ -394,4 +394,26 @@ export const queryKeys = {
       list: (f) => ['doctpl', 'emails', 'list', f],
     },
   },
+  discovery: {
+    all: () => ['discovery'],
+    businessTypes: () => ['discovery', 'businessTypes'],
+    usage: () => ['discovery', 'usage'],
+    sessions: {
+      all: () => ['discovery', 'sessions'],
+      list: (params) => ['discovery', 'sessions', 'list', params],
+      detail: (id) => ['discovery', 'sessions', 'detail', id],
+    },
+    results: {
+      all: (sessionId) => ['discovery', 'results', sessionId],
+      list: (sessionId, params) => ['discovery', 'results', sessionId, 'list', params],
+      detail: (sessionId, resultId) => ['discovery', 'results', sessionId, 'detail', resultId],
+    },
+    importJob: (jobId) => ['discovery', 'importJob', jobId],
+  },
+  leads: {
+    all: () => ['leads'],
+    list: (params) => ['leads', 'list', params],
+    detail: (id) => ['leads', 'detail', id],
+    duplicates: (params) => ['leads', 'duplicates', params],
+  },
 };

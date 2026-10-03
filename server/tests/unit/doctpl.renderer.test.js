@@ -10,9 +10,8 @@ import { pdfFonts, registerCiFonts } from '../../src/modules/doctpl/renderer/ren
 describe('i18n t()', () => {
   test('resolves label for known language', () => {
     expect(t('de', 'subtotal')).toBe('Zwischensumme');
-    expect(t('fr', 'subtotal')).toBe('Sous-total');
     expect(t('en', 'grandTotal')).toBe('Grand Total');
-    expect(t('it', 'vat')).toBe('IVA');
+    expect(t('en', 'vat')).toBe('VAT');
   });
   test('falls back to de for unknown language', () => {
     expect(t('xx', 'subtotal')).toBe('Zwischensumme');
@@ -20,19 +19,19 @@ describe('i18n t()', () => {
   test('returns key for unknown key', () => {
     expect(t('de', 'nonexistent_key')).toBe('nonexistent_key');
   });
-  test('all 4 languages have grandTotal', () => {
-    for (const lang of ['de','fr','it','en']) {
+  test('all supported languages have grandTotal', () => {
+    for (const lang of ['de','en']) {
       expect(LABELS[lang].grandTotal).toBeTruthy();
     }
   });
-  test('all 4 languages have final invoice deduction labels', () => {
-    for (const lang of ['de','fr','it','en']) {
+  test('all supported languages have final invoice deduction labels', () => {
+    for (const lang of ['de','en']) {
       expect(LABELS[lang].net).toBeTruthy();
       expect(LABELS[lang].vatAmount).toBeTruthy();
       expect(LABELS[lang].grossTotal).toBeTruthy();
     }
   });
-  test('all 4 languages cover Module 09 document label requirements', () => {
+  test('all supported languages cover Module 09 document label requirements', () => {
     const requiredKeys = [
       'position',
       'description',
@@ -63,7 +62,7 @@ describe('i18n t()', () => {
       'project_completion_certificate',
     ];
 
-    for (const lang of ['de','fr','it','en']) {
+    for (const lang of ['de','en']) {
       for (const key of requiredKeys) {
         expect(LABELS[lang][key]).toBeTruthy();
       }

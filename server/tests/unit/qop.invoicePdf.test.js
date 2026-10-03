@@ -105,9 +105,9 @@ describe('invoice PDF generation', () => {
 
     const result = await invoicePdfService.generateAndStore('invoice-1', 'user-1');
 
-    // The client's own naming convention: date, object, MB, document type and
+    // The client's own naming convention: date, object, Updata, document type and
     // version — no record number, by their decision.
-    const EXPECTED_NAME = /^\d{4}_\d{2}_\d{2}_(.+_)?MB_Rechnung RG_V1\.pdf$/;
+    const EXPECTED_NAME = /^\d{4}_\d{2}_\d{2}_(.+_)?Updata_Rechnung RG_V1\.pdf$/;
 
     expect(fileService.upload).toHaveBeenCalledWith(expect.objectContaining({
       originalName: expect.stringMatching(EXPECTED_NAME),

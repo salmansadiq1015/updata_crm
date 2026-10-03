@@ -1,6 +1,8 @@
 import contactLogRepository from './contactLog.repository.js';
 import auditService from '../auth/audit.service.js';
-import { NotFoundError, ConflictError, AuthorizationError } from '../../shared/errors/AppError.js';
+import {
+  NotFoundError, ConflictError, AuthorizationError, ValidationError,
+} from '../../shared/errors/AppError.js';
 import logger from '../../shared/logger/index.js';
 
 const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -51,12 +53,25 @@ class ContactLogService {
   }
 
   async create(customerId, data, userId, meta = {}) {
-    const Customer = (await import('./customer.model.js')).default;
-    const customer = await Customer.findById(customerId).select('_id name').lean();
-    if (!customer) throw new NotFoundError('Customer', customerId);
+    // An entry belongs to a customer (the usual case) or, when no customer is
+    // given, a lead (prospect communications). Validate whichever owner applies.
+    const leadId = data.leadId || null;
+    let owner = null;
+    if (customerId) {
+      const Customer = (await import('./customer.model.js')).default;
+      owner = await Customer.findById(customerId).select('_id name').lean();
+      if (!owner) throw new NotFoundError('Customer', customerId);
+    } else if (leadId) {
+      const Lead = (await import('./lead.model.js')).default;
+      owner = await Lead.findById(leadId).select('_id name').lean();
+      if (!owner) throw new NotFoundError('Lead', leadId);
+    } else {
+      throw new ValidationError('A contact log entry requires a customerId or a leadId');
+    }
 
     const payload = {
-      customerId,
+      customerId: customerId || null,
+      leadId,
       occurredAt: data.occurredAt || new Date(),
       employeeId: data.employeeId || userId,
       channel: data.channel,
@@ -76,7 +91,7 @@ class ContactLogService {
     // "Wiedervorlage oder Aufgabe": the follow-up becomes a real task so it
     // surfaces where people already work instead of only inside this history.
     if (data.createFollowUpTask && payload.followUpAt) {
-      const task = await this._createFollowUpTask(entry, customer, data, userId, meta);
+      const task = await this._createFollowUpTask(entry, owner, data, userId, meta);
       if (task) entry = await contactLogRepository.updateById(entry._id, { followUpTaskId: task._id });
     }
 
@@ -86,13 +101,24 @@ class ContactLogService {
       ipAddress: meta.ipAddress || 'internal',
       userAgent: meta.userAgent,
       result: 'success',
-      details: { contactLogId: entry._id, customerId, siteId: payload.siteId, channel: payload.channel },
+      details: {
+        contactLogId: entry._id, customerId: customerId || null, leadId, siteId: payload.siteId, channel: payload.channel,
+      },
       module: 'crm',
     });
 
-    logger.info('Customer contact logged', { module: 'crm', action: 'contactLog.create', contactLogId: entry._id, customerId });
+    logger.info('Contact logged', {
+      module: 'crm', action: 'contactLog.create', contactLogId: entry._id, customerId: customerId || null, leadId,
+    });
 
     return entry;
+  }
+
+  /** A lead's contact-log entries, newest first (used by the lead service). */
+  async listByLead(leadId, { createdBy } = {}) {
+    const filter = { leadId };
+    if (createdBy) filter.createdBy = createdBy;
+    return contactLogRepository.find(filter, { limit: 200 });
   }
 
   async update(id, data, userId, meta = {}) {

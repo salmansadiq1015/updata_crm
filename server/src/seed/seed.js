@@ -226,6 +226,20 @@ export const PERMISSION_DEFINITIONS = [
   // Settings
   { module: 'settings', action: 'read', description: 'View system settings' },
   { module: 'settings', action: 'admin', description: 'Manage system settings' },
+
+  // Business Discovery (Google Places lead generation)
+  { module: 'discovery', action: 'create', description: 'Start and cancel business discovery searches' },
+  { module: 'discovery', action: 'read', description: 'View business discovery searches, results and usage' },
+  { module: 'discovery', action: 'delete', description: 'Delete business discovery searches' },
+
+  // Leads
+  { module: 'lead', action: 'read', description: 'View leads' },
+  { module: 'lead', action: 'write', description: 'Create and update leads' },
+  { module: 'lead', action: 'import', description: 'Import discovered businesses as leads' },
+  { module: 'lead', action: 'convert', description: 'Convert leads into customers' },
+  { module: 'lead', action: 'whatsapp', description: 'Log WhatsApp contacts for leads' },
+  { module: 'lead', action: 'enrich', description: 'Enrich leads from their website (fill missing contact fields)' },
+  { module: 'lead', action: 'delete', description: 'Delete leads' },
 ];
 
 // Role definitions with permission keys

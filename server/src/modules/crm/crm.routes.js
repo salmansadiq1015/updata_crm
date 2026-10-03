@@ -14,6 +14,7 @@ import supplierRoutes from './supplier.routes.js';
 import purchaseOrderRoutes from './purchaseOrder.routes.js';
 import procurementRoutes from './procurement.routes.js';
 import addressBookRoutes from './addressBook.routes.js';
+import leadRoutes from './lead.routes.js';
 
 /**
  * CRM route aggregator.
@@ -38,6 +39,9 @@ router.use('/customers', customerRoutes);
 
 // Shared address book read model over customers, contacts, and sites
 router.use('/address-book', addressBookRoutes);
+
+// Lead routes (prospect entity; Google Places discovery imports create leads here)
+router.use('/leads', leadRoutes);
 
 // Nested routers under customers
 router.use('/customers/:customerId/contacts', customerContactsRouter);

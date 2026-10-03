@@ -579,22 +579,22 @@ class OpenItemsService {
           import('./apInvoice.model.js').then((module) => module.default),
         ]);
 
-        const [arInvoices, apInvoices] = await Promise.all([
-          Invoice.find({
-            _id: { $in: arInvoiceIds },
-            customerId,
-            isDeleted: false,
-            status: { $in: OPEN_AR_STATUSES },
-            amountDue: { $gt: 0 },
-          }).session(session).lean(),
-          ApInvoice.find({
-            _id: { $in: apInvoiceIds },
-            supplierId,
-            isDeleted: false,
-            status: { $in: OPEN_AP_STATUSES },
-            outstandingAmount: { $gt: 0 },
-          }).session(session).lean(),
-        ]);
+        // A ClientSession allows only one operation in flight at a time, so these
+        // two session-bound queries must run sequentially, not via Promise.all.
+        const arInvoices = await Invoice.find({
+          _id: { $in: arInvoiceIds },
+          customerId,
+          isDeleted: false,
+          status: { $in: OPEN_AR_STATUSES },
+          amountDue: { $gt: 0 },
+        }).session(session).lean();
+        const apInvoices = await ApInvoice.find({
+          _id: { $in: apInvoiceIds },
+          supplierId,
+          isDeleted: false,
+          status: { $in: OPEN_AP_STATUSES },
+          outstandingAmount: { $gt: 0 },
+        }).session(session).lean();
 
         if (arInvoices.length !== arInvoiceIds.length) {
           const found = new Set(arInvoices.map((invoice) => String(invoice._id)));
@@ -674,10 +674,10 @@ class OpenItemsService {
           }
         }
 
-        const [payableAccountId, receivableAccountId] = await Promise.all([
-          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AP_PAYABLE, { session }),
-          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE, { session }),
-        ]);
+        // Sequential: both calls share the transaction's session, which only
+        // allows one operation in flight at a time.
+        const payableAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AP_PAYABLE, { session });
+        const receivableAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE, { session });
 
         await journalEntryService.createFromEvent(
           'NETTING',

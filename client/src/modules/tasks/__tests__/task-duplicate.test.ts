@@ -64,6 +64,10 @@ const SOURCE_TASK = {
   completedAt: null,
   completedBy: null,
   cancelledAt: null,
+  locked: false,
+  lockedBy: null,
+  inPool: false,
+  poolHelperId: null,
 };
 
 function makeWrapper() {

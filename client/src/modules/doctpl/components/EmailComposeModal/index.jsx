@@ -73,7 +73,7 @@ function buildInitialForm(initialValues = {}) {
   };
 }
 
-function EmailComposeForm({ initialValues, onClose, onSent }) {
+function EmailComposeForm({ initialValues, onClose, onSent, requireAttachment = true, leadId }) {
   const { t, language } = useLanguage();
   const [form, setForm] = useState(() => buildInitialForm(initialValues));
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -92,6 +92,9 @@ function EmailComposeForm({ initialValues, onClose, onSent }) {
       customerId: scope.customerId,
       siteId: scope.siteId,
       projectId: scope.projectId,
+      // A lead has no documents to attach, but its template variables
+      // (businessName, city, …) resolve server-side when leadId is supplied.
+      ...(leadId ? { leadId } : {}),
     });
     const rendered = res?.data;
     if (!rendered) return;
@@ -246,14 +249,15 @@ function EmailComposeForm({ initialValues, onClose, onSent }) {
         <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
         <Button
           onClick={handleSend}
-          // An attachment is required, not optional: this modal exists to send a
-          // generated document (DOC-008), and sending it empty would still mark
-          // the quotation as sent while the customer received nothing.
+          // For a document send (DOC-008) an attachment is mandatory: sending it
+          // empty would still mark the quotation as sent while the customer got
+          // nothing. Callers that send a plain message (e.g. a lead) opt out with
+          // requireAttachment={false}.
           disabled={
             send.isPending
             || !toRecipientList(form.to).length
             || !form.subject.trim()
-            || !form.attachments.length
+            || (requireAttachment && !form.attachments.length)
           }
         >
           {send.isPending ? t('doctpl.sending') : t('common.send')}
@@ -271,7 +275,7 @@ function EmailComposeForm({ initialValues, onClose, onSent }) {
   );
 }
 
-export function EmailComposeModal({ open, onClose, initialValues = {}, onSent }) {
+export function EmailComposeModal({ open, onClose, initialValues = {}, onSent, requireAttachment = true, leadId }) {
   const attachmentKey = Array.isArray(initialValues.attachments)
     ? initialValues.attachments.map((a) => a?.id || a?._id || a?.fileId).join('-')
     : '';
@@ -279,7 +283,16 @@ export function EmailComposeModal({ open, onClose, initialValues = {}, onSent })
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      {open && <EmailComposeForm key={formKey} initialValues={initialValues} onClose={onClose} onSent={onSent} />}
+      {open && (
+        <EmailComposeForm
+          key={formKey}
+          initialValues={initialValues}
+          onClose={onClose}
+          onSent={onSent}
+          requireAttachment={requireAttachment}
+          leadId={leadId}
+        />
+      )}
     </Dialog>
   );
 }

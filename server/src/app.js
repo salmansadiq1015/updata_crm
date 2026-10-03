@@ -61,6 +61,8 @@ import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 import chatRoutes from './modules/chat/chat.routes.js';
 import migrationRoutes from './modules/migration/migration.routes.js';
 import apkRoutes from './modules/apk/apk.routes.js';
+import discoveryRoutes from './modules/businessDiscovery/discovery.routes.js';
+import businessDiscoveryImportRoutes from './modules/businessDiscovery/import.routes.js';
 
 // Metrics
 import { metricsMiddleware, metricsEndpoint } from './metrics/index.js';
@@ -145,6 +147,10 @@ export function createApp() {
   app.use("/api/v1/roles", roleRoutes);
   app.use("/api/v1/permissions", permissionRouter);
   app.use("/api/v1/crm", crmRoutes);
+  // Lead Generation / Business Discovery — discovery sessions/results + lead import.
+  // Two routers share the prefix (disjoint paths/methods): discovery first, then import.
+  app.use("/api/v1/business-discovery", discoveryRoutes);
+  app.use("/api/v1/business-discovery", businessDiscoveryImportRoutes);
   app.use("/api/v1/pm", pmRoutes);
   app.use("/api/v1/scheduling", deployRoutes);
   app.use("/api/v1/mobile", mobileRoutes);

@@ -1,4 +1,5 @@
 import { dashboardAnalyticsTranslations } from './dashboard-analytics-translations';
+import { leadgenTranslations, leadgenCommonTranslations } from './leadgen-translations';
 
 const notificationAdminTranslations = {
   de: {
@@ -1208,6 +1209,7 @@ export const translations = {
     ...integrationAdminTranslations.de,
     ...migrationTranslations.de,
     ...assetMaintenanceTranslations.de,
+    ...leadgenTranslations.de,
     // Navbar
     'nav.features': 'Arbeitsbereiche',
     'nav.modules': 'Arbeitsabläufe',
@@ -2813,6 +2815,8 @@ export const translations = {
     'common.edit': 'Bearbeiten',
     'common.delete': 'Löschen',
     'common.view': 'Anzeigen',
+    'common.editMode': 'Bearbeiten',
+    'common.viewMode': 'Ansehen',
     'common.archive': 'Archivieren',
     'common.rename': 'Umbenennen',
     'common.duplicate': 'Duplizieren',
@@ -6243,6 +6247,7 @@ export const translations = {
     ...integrationAdminTranslations.en,
     ...migrationTranslations.en,
     ...assetMaintenanceTranslations.en,
+    ...leadgenTranslations.en,
     // Navbar
     'nav.features': 'Work Areas',
     'nav.modules': 'Workflows',
@@ -7791,6 +7796,8 @@ export const translations = {
     'common.edit': 'Edit',
     'common.delete': 'Delete',
     'common.view': 'View',
+    'common.editMode': 'Edit mode',
+    'common.viewMode': 'View mode',
     'common.archive': 'Archive',
     'common.rename': 'Rename',
     'common.duplicate': 'Duplicate',
@@ -11281,5 +11288,19 @@ export const translations = {
     'crm.event.invoice.paid': 'Invoice paid',
     'crm.event.meeting.created': 'Meeting scheduled',
     'crm.event.meeting.updated': 'Meeting updated',
+  },
+
+  // French — module-complete (leadgen.*/leads.* + shared common.*); the rest of
+  // the app falls back to German (DEFAULT_LOCALE) until translated.
+  fr: {
+    ...leadgenCommonTranslations.fr,
+    ...leadgenTranslations.fr,
+  },
+
+  // Arabic (RTL) — module-complete (leadgen.*/leads.* + shared common.*); the
+  // rest of the app falls back to German (DEFAULT_LOCALE) until translated.
+  ar: {
+    ...leadgenCommonTranslations.ar,
+    ...leadgenTranslations.ar,
   },
 };

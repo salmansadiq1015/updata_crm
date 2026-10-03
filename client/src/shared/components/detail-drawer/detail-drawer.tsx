@@ -18,14 +18,19 @@ import {
   Eye,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/i18n/language-context';
 
 export type DrawerMode = 'view' | 'edit';
 export type DrawerSize = 'sm' | 'md' | 'lg';
 
+// The underlying Sheet forces `data-[side=*]:sm:max-w-sm` with attribute-selector
+// specificity, so a plain `sm:max-w-[…]` from here loses. Matching the Sheet's own
+// `data-[side=*]:sm:` variants lets tailwind-merge drop the Sheet's cap and makes
+// this width win on whichever side the drawer opens from (right in LTR, left in RTL).
 const sizeMap: Record<DrawerSize, string> = {
-  sm: 'sm:max-w-[400px]',
-  md: 'sm:max-w-[520px]',
-  lg: 'sm:max-w-[640px]',
+  sm: 'data-[side=left]:sm:max-w-[400px] data-[side=right]:sm:max-w-[400px]',
+  md: 'data-[side=left]:sm:max-w-[520px] data-[side=right]:sm:max-w-[520px]',
+  lg: 'data-[side=left]:sm:max-w-[640px] data-[side=right]:sm:max-w-[640px]',
 };
 
 interface DetailDrawerProps {
@@ -69,6 +74,10 @@ export function DetailDrawer({
   children,
   footer,
 }: DetailDrawerProps) {
+  const { t, isRTL } = useLanguage();
+  // Open from the inline-end edge: right in LTR, left in RTL.
+  const side = isRTL ? 'left' : 'right';
+
   // Keyboard shortcuts
   React.useEffect(() => {
     if (!open) return;
@@ -91,6 +100,10 @@ export function DetailDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
+        side={side}
+        // The drawer renders its own close button in the header, so suppress the
+        // Sheet's default absolute X (it would overlap the title, especially in RTL).
+        showCloseButton={false}
         className={cn(
           'flex flex-col p-0 gap-0',
           sizeMap[size]
@@ -109,7 +122,7 @@ export function DetailDrawer({
             )}
           </div>
 
-          <div className="flex items-center gap-1 ml-4">
+          <div className="flex items-center gap-1 ms-4">
             {/* Navigation */}
             {(onPrevious || onNext) && (
               <>
@@ -119,7 +132,7 @@ export function DetailDrawer({
                   className="h-8 w-8"
                   onClick={onPrevious}
                   disabled={!hasPrevious}
-                  title="Vorheriger (Alt+↑)"
+                  title={`${t('common.previous', 'Previous')} (Alt+↑)`}
                 >
                   <ChevronUp className="h-4 w-4" />
                 </Button>
@@ -129,7 +142,7 @@ export function DetailDrawer({
                   className="h-8 w-8"
                   onClick={onNext}
                   disabled={!hasNext}
-                  title="Nächster (Alt+↓)"
+                  title={`${t('common.next', 'Next')} (Alt+↓)`}
                 >
                   <ChevronDown className="h-4 w-4" />
                 </Button>
@@ -146,7 +159,7 @@ export function DetailDrawer({
                 onClick={() =>
                   onModeChange(mode === 'view' ? 'edit' : 'view')
                 }
-                title={mode === 'view' ? 'Bearbeiten' : 'Ansehen'}
+                title={mode === 'view' ? t('common.editMode', 'Edit mode') : t('common.viewMode', 'View mode')}
               >
                 {mode === 'view' ? (
                   <Pencil className="h-4 w-4" />
@@ -162,8 +175,10 @@ export function DetailDrawer({
               size="icon"
               className="h-8 w-8"
               onClick={() => onOpenChange(false)}
+              title={t('common.close', 'Close')}
             >
               <X className="h-4 w-4" />
+              <span className="sr-only">{t('common.close', 'Close')}</span>
             </Button>
           </div>
         </div>

@@ -19,7 +19,7 @@ const USERS: WorkspaceUser[] = [
 ];
 
 beforeEach(() => {
-  window.localStorage.setItem('mb-locale', 'en');
+  window.localStorage.setItem('updata-locale', 'en');
   vi.clearAllMocks();
 });
 

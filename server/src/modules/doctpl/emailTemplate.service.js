@@ -92,18 +92,32 @@ class EmailTemplateService {
 
   /**
    * Fill a template's placeholders from the record the email is sent from.
-   * Templates are written once with {{customerName}}, {{siteAddress}} and the
-   * like; the caller passes whichever ids it has and the rest resolve to ''.
+   * Templates are written once with {{customerName}}, {{siteAddress}}, the LEAD
+   * variables ({{businessName}}, {{city}}, …) and the like; the caller passes
+   * whichever ids it has and the rest resolve to ''.
+   *
+   * Substitution is a plain regex over an allowlist — never EJS, never any form
+   * of code execution. Every allowlisted key is seeded below, so an allowlisted
+   * token ALWAYS resolves (to its value, or '' when unset) and never leaks as a
+   * raw {{var}}; only NON-allowlisted tokens are left verbatim, so an unknown
+   * placeholder stays visible instead of being silently dropped.
    */
-  async render(id, { customerId, siteId, projectId, user } = {}) {
+  async render(id, { customerId, siteId, projectId, leadId, user } = {}) {
     const template = await this.getById(id);
 
     const vars = {
       customerName: '', customerEmail: '',
       siteName: '', siteAddress: '',
       projectName: '', projectNumber: '',
+      // Lead variables — resolved from a Lead when leadId is given and there is
+      // no customer context (customer/site/project always take precedence).
+      businessName: '', contactName: '', businessType: '',
+      city: '', address: '', website: '', phone: '', email: '',
+      // Sender / company identity.
       senderName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || '',
       senderEmail: user?.email || '',
+      senderTitle: user?.title || user?.jobTitle || user?.position || '',
+      companyName: 'Updata',
     };
 
     if (siteId) {
@@ -134,9 +148,39 @@ class EmailTemplateService {
       }
     }
 
+    // Lead context — lazily imported so doctpl stays decoupled from the CRM
+    // module. Only consulted when no customer context resolved above.
+    if (leadId && !customerId) {
+      const Lead = (await import('../crm/lead.model.js')).default;
+      const lead = await Lead.findById(leadId)
+        .select('name ownerName phone mobile email website address sourceMetadata.businessType')
+        .lean();
+      if (lead) {
+        vars.businessName = lead.name || '';
+        vars.contactName = lead.ownerName || lead.name || '';
+        vars.businessType = lead.sourceMetadata?.businessType || '';
+        vars.city = lead.address?.city || '';
+        vars.address = [
+          lead.address?.street,
+          [lead.address?.postalCode, lead.address?.city].filter(Boolean).join(' '),
+        ].filter(Boolean).join(', ');
+        vars.website = lead.website || '';
+        vars.phone = lead.phone || lead.mobile || '';
+        vars.email = lead.email || '';
+      }
+    }
+
+    // Sending company's identity, from the active CI configuration — the same
+    // source the email sender uses. Falls back to the default company name.
+    try {
+      const CIConfiguration = (await import('./ciConfiguration.model.js')).default;
+      const ci = await CIConfiguration.findOne({ isActive: true }).select('companyName').lean();
+      if (ci?.companyName) vars.companyName = ci.companyName;
+    } catch { /* no CI configured — keep the default company name */ }
+
     const fill = (text) => String(text || '').replace(
       /\{\{\s*([a-zA-Z]+)\s*\}\}/g,
-      (match, key) => (key in vars ? vars[key] : match),
+      (match, key) => (key in vars ? (vars[key] ?? '') : match),
     );
 
     return {

@@ -9,6 +9,7 @@ import client from 'prom-client';
  * - Cache hit/miss counters
  * - Event bus counters
  * - Queue job counters
+ * - Business discovery counters and run-duration histogram
  */
 
 // Collect default metrics (GC, memory, CPU)
@@ -61,6 +62,38 @@ export const queueJobsTotal = new client.Counter({
   labelNames: ['queue', 'status'],
 });
 
+// --- Business Discovery Metrics ---
+// Label values must come from small fixed sets (never place IDs, session IDs
+// or user input) so series cardinality stays bounded.
+export const discoverySearchesTotal = new client.Counter({
+  name: 'updata_discovery_searches_total',
+  help: 'Total business discovery searches, by final status',
+  labelNames: ['status'],
+});
+
+export const discoveryPlacesApiCallsTotal = new client.Counter({
+  name: 'updata_discovery_places_api_calls_total',
+  help: 'Total Google Places and Geocoding API calls made by business discovery',
+  labelNames: ['endpoint', 'status'],
+});
+
+export const discoveryResultsDiscoveredTotal = new client.Counter({
+  name: 'updata_discovery_results_discovered_total',
+  help: 'Total businesses discovered across all discovery searches',
+});
+
+export const leadImportsTotal = new client.Counter({
+  name: 'updata_lead_imports_total',
+  help: 'Total discovered businesses processed by lead import, by result',
+  labelNames: ['result'],
+});
+
+export const discoveryRunDuration = new client.Histogram({
+  name: 'updata_discovery_run_duration_seconds',
+  help: 'Business discovery run duration in seconds',
+  buckets: [1, 5, 10, 30, 60, 120, 300, 600],
+});
+
 // --- Middleware for recording request metrics ---
 export function metricsMiddleware(req, res, next) {
   const start = process.hrtime.bigint();
@@ -103,4 +136,9 @@ export default {
   eventBusPublishedTotal,
   eventBusConsumedTotal,
   queueJobsTotal,
+  discoverySearchesTotal,
+  discoveryPlacesApiCallsTotal,
+  discoveryResultsDiscoveredTotal,
+  leadImportsTotal,
+  discoveryRunDuration,
 };

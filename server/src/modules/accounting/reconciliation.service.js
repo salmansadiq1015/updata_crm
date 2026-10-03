@@ -471,10 +471,10 @@ class ReconciliationService {
           throw new ConflictError('Transaction is already matched or categorized');
         }
 
-        const [bankAccountId, receivableAccountId] = await Promise.all([
-          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.BANK_CLEARING, { session }),
-          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE, { session }),
-        ]);
+        // Sequential: both calls share the transaction's session, which only
+        // allows one operation in flight at a time.
+        const bankAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.BANK_CLEARING, { session });
+        const receivableAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE, { session });
 
         await journalEntryService.createFromEvent(
           journalReferenceType,
@@ -551,10 +551,10 @@ class ReconciliationService {
           throw new ConflictError('Transaction is already matched or categorized');
         }
 
-        const [payableAccountId, bankAccountId] = await Promise.all([
-          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AP_PAYABLE, { session }),
-          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.BANK_CLEARING, { session }),
-        ]);
+        // Sequential: both calls share the transaction's session, which only
+        // allows one operation in flight at a time.
+        const payableAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AP_PAYABLE, { session });
+        const bankAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.BANK_CLEARING, { session });
 
         await journalEntryService.createFromEvent(
           journalReferenceType,

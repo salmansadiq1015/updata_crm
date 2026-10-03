@@ -126,6 +126,31 @@ const configSchema = Joi.object({
   // Comma-separated extra recipients CC'd on every project status-change email.
   PROJECT_STATUS_NOTIFICATION_CC: Joi.string().allow('').default(''),
 
+  // Business Discovery / Lead Generation (Google Maps Platform).
+  // Every key is optional so the API still boots without them; the discovery
+  // module reports "not configured" until GOOGLE_PLACES_API_KEY is set.
+  // Server key (secret, IP/API-restricted): Places API (New) + Geocoding API.
+  GOOGLE_PLACES_API_KEY: Joi.string().trim().allow('').default(''),
+  // Browser key (public, HTTP-referrer-restricted): Maps JavaScript API only.
+  GOOGLE_MAPS_BROWSER_KEY: Joi.string().trim().allow('').default(''),
+  // Optional dedicated Geocoding key — falls back to GOOGLE_PLACES_API_KEY when empty.
+  GOOGLE_GEOCODING_API_KEY: Joi.string().trim().allow('').default(''),
+  // Per-session cost and load guards: every run is bounded, never an open-ended loop.
+  DISCOVERY_MAX_RESULTS: Joi.number().integer().min(1).max(5000).default(500),
+  DISCOVERY_MAX_SEARCH_REQUESTS: Joi.number().integer().min(1).max(500).default(40),
+  DISCOVERY_MAX_COVERAGE_CELLS: Joi.number().integer().min(1).max(500).default(50),
+  DISCOVERY_CONCURRENCY: Joi.number().integer().min(1).max(10).default(3),
+  // Retention of discovery sessions and their results (TTL on expiresAt).
+  DISCOVERY_RESULT_TTL_DAYS: Joi.number().integer().min(1).max(365).default(60),
+
+  // Website enrichment — responsible scraper that fills MISSING lead contact
+  // fields (email / phone / socials) from a lead's own website over plain HTTP.
+  ENRICHMENT_TIMEOUT_MS: Joi.number().integer().min(1000).max(60000).default(8000),
+  ENRICHMENT_MAX_BYTES: Joi.number().integer().min(10000).default(1_500_000),
+  ENRICHMENT_CONCURRENCY: Joi.number().integer().min(1).max(10).default(3),
+  ENRICHMENT_RESPECT_ROBOTS: Joi.boolean().default(true),
+  ENRICHMENT_USER_AGENT: Joi.string().trim().default('UpdataCRM-Enrichment/1.0'),
+
   // Misc
   AUTO_MIGRATE: Joi.boolean().default(false),
 }).unknown(true); // allow extra env vars we don't manage

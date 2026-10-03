@@ -34,6 +34,11 @@ class CounterService {
     return this._getNext('installation_number', 'A-', 5);
   }
 
+  /** L-00001, L-00002, ... */
+  async getNextLeadNumber() {
+    return this._getNext('lead_number', 'L-', 5);
+  }
+
   /** O-001, O-002, ... (scoped per customer) */
   async getNextSiteNumber(customerId) {
     return this._getNext(`site_number:${customerId}`, 'O-', 3);

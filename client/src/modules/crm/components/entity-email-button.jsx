@@ -24,6 +24,10 @@ export function EntityEmailButton({
   variant = 'outline',
   size = 'sm',
   className = 'gap-1.5',
+  // Plain-message senders (e.g. a lead) opt out of the mandatory attachment.
+  requireAttachment = true,
+  // When set, lead template variables resolve server-side on render.
+  leadId,
 }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -38,6 +42,8 @@ export function EntityEmailButton({
         open={open}
         onClose={() => setOpen(false)}
         onSent={onSent}
+        requireAttachment={requireAttachment}
+        leadId={leadId}
         initialValues={{
           to: defaultTo || '',
           sourceModule,

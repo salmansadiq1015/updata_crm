@@ -15,10 +15,19 @@ export const CONTACT_CHANNELS = ['phone', 'email', 'whatsapp', 'in_person', 'let
  */
 const contactLogSchema = new mongoose.Schema(
   {
+    // A logged exchange belongs to EITHER a customer (the usual case) or a lead
+    // (prospect communications, e.g. a WhatsApp chat opened from the lead). The
+    // pre-validate hook below enforces that exactly one owner is present.
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',
-      required: true,
+      default: null,
+      index: true,
+    },
+    leadId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Lead',
+      default: null,
       index: true,
     },
     // Optional links — the exchange shows up on each record it names.
@@ -55,8 +64,17 @@ const contactLogSchema = new mongoose.Schema(
 );
 
 contactLogSchema.index({ customerId: 1, occurredAt: -1 });
+contactLogSchema.index({ leadId: 1, occurredAt: -1 });
 contactLogSchema.index({ followUpAt: 1 }, { sparse: true });
 contactLogSchema.index({ isDeleted: 1 });
+
+// Exactly one owner is required: a customer or a lead. Enforced at the schema
+// level so a direct model write cannot create an orphaned entry.
+contactLogSchema.pre('validate', function () {
+  if (!this.customerId && !this.leadId) {
+    this.invalidate('customerId', 'A contact log entry requires either a customerId or a leadId');
+  }
+});
 
 contactLogSchema.pre(/^find/, function () {
   if (this.getOptions().includeDeleted) return;

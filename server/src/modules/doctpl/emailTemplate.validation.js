@@ -34,5 +34,6 @@ export const renderEmailTemplateSchema = {
     customerId: objectId,
     siteId: objectId,
     projectId: objectId,
+    leadId: objectId,
   }),
 };

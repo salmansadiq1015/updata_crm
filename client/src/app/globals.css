@@ -307,6 +307,38 @@
 }
 
 /* ═══════════════════════════════════════════
+   RTL (Right-to-Left) Baseline  — Arabic ('ar')
+   ───────────────────────────────────────────
+   `LanguageProvider` sets `dir="rtl"` on <html> at runtime for Arabic
+   (see lib/i18n/language-context.jsx). Tailwind v4's LOGICAL utilities then
+   mirror automatically, so this baseline stays intentionally MINIMAL.
+
+   CONVENTION for all NEW module UI (lead-generation, leads, …): author with
+   LOGICAL Tailwind utilities so layouts mirror without per-direction CSS:
+     • padding / margin : ps-/pe-/ms-/me-      (not pl-/pr-/ml-/mr-)
+     • position         : start-/end-          (not left-/right-)
+     • text align       : text-start/text-end  (not text-left/text-right)
+     • border / radius  : border-s/border-e, rounded-s-*/rounded-e-*
+   Reach for the built-in `rtl:` / `ltr:` variants only when a logical utility
+   can't express it (e.g. flipping an inherently-directional glyph).
+
+   Direction-specific COMPONENT fixes live with their components, not here.
+   NOTE: existing shared/shell components are LTR-authored and not yet
+   RTL-audited — a full-app RTL pass is a separate follow-up (design §17).
+   ═══════════════════════════════════════════ */
+
+/* Text alignment follows the inherited writing direction everywhere. */
+[dir="rtl"] body {
+  text-align: start;
+}
+
+/* Opt-in hook: mirror an inherently-directional glyph (chevron/arrow used as an
+   affordance) under RTL. Add `className="rtl-flip"` on the icon — no effect in LTR. */
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* ═══════════════════════════════════════════
    Dialog — auto horizontal padding
    Any element placed directly inside DialogContent that is NOT a
    shadcn slot (header / body / footer / close button) gets px-6

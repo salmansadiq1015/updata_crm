@@ -11,9 +11,14 @@ import {
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
 
+// Each entry carries its endonym (language name in its own language). `dir`
+// pins the item's own text direction so the Arabic label renders RTL even
+// while the surrounding UI is still LTR (and vice-versa).
 const LOCALES = [
-  { code: 'de', label: 'Deutsch', short: 'DE' },
-  { code: 'en', label: 'English', short: 'EN' },
+  { code: 'de', label: 'Deutsch', short: 'DE', dir: 'ltr' },
+  { code: 'en', label: 'English', short: 'EN', dir: 'ltr' },
+  { code: 'fr', label: 'Français', short: 'FR', dir: 'ltr' },
+  { code: 'ar', label: 'العربية', short: 'AR', dir: 'rtl' },
 ];
 
 export function LanguageToggle({ compact = false, align = 'end' }) {
@@ -33,16 +38,18 @@ export function LanguageToggle({ compact = false, align = 'end' }) {
           <span className={compact ? 'sr-only sm:not-sr-only' : 'hidden sm:inline'}>{active.short}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={align} className="w-36">
+      <DropdownMenuContent align={align} className="w-40">
         {LOCALES.map((l) => (
           <DropdownMenuItem
             key={l.code}
+            dir={l.dir}
             onSelect={(e) => { e.preventDefault(); setLocale(l.code); }}
             className={cn('gap-2', locale === l.code && 'font-medium')}
+            aria-current={locale === l.code ? 'true' : undefined}
           >
             <span className="font-mono text-[10px] text-muted-foreground w-6">{l.short}</span>
             <span className="flex-1">{l.label}</span>
-            {locale === l.code && <Check className="h-3.5 w-3.5 text-primary" />}
+            {locale === l.code && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

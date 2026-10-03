@@ -506,10 +506,10 @@ class ArReceivablesService {
         }).session(session).lean();
         if (!invoice) throw new NotFoundError('Invoice', invoiceId);
 
-        const [writeOffExpenseAccountId, receivableAccountId] = await Promise.all([
-          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.WRITE_OFF_EXPENSE, { session }),
-          accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE, { session }),
-        ]);
+        // Sequential: both calls share the transaction's session, which only
+        // allows one operation in flight at a time.
+        const writeOffExpenseAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.WRITE_OFF_EXPENSE, { session });
+        const receivableAccountId = await accountMappingService.resolveGlobal(ACCOUNT_MAPPING.AR_RECEIVABLE, { session });
 
         await journalEntryService.createFromEvent(
           'WRITE_OFF',

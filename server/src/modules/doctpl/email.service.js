@@ -40,6 +40,26 @@ class EmailService {
       createdBy,
     });
 
+    // Lead communication tracking: an email sent for a lead stamps that lead's
+    // "last contacted" marker. Best-effort and isolated — a failure here must
+    // never fail the email send. Lazy import avoids a doctpl ↔ crm module cycle.
+    if (sourceModule === 'lead' && sourceRecordId) {
+      try {
+        const { default: Lead } = await import('../crm/lead.model.js');
+        await Lead.updateOne(
+          { _id: sourceRecordId },
+          { $set: { lastContactedAt: new Date(), lastContactChannel: 'email' } },
+        );
+      } catch (err) {
+        logger.warn('Could not stamp lead lastContactedAt after email send (ignored)', {
+          module: 'doctpl',
+          action: 'email.send',
+          sourceRecordId,
+          error: { message: err.message },
+        });
+      }
+    }
+
     // Enqueue email dispatch job
     await queueManager.addJob('email-dispatch', `email-${emailRecord._id}`, {
       emailRecordId: emailRecord._id.toString(),

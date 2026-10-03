@@ -818,4 +818,39 @@ export const ENDPOINTS = Object.freeze({
     EMAIL_TEMPLATE_DUPLICATE:(id)   => `/doctpl/email-templates/${id}/duplicate`,
     EMAIL_TEMPLATE_RENDER:(id)      => `/doctpl/email-templates/${id}/render`,
   },
+  DISCOVERY: {
+    // Static catalog + usage
+    BUSINESS_TYPES: '/business-discovery/business-types',
+    USAGE: '/business-discovery/usage',
+    // Sessions
+    SESSIONS: '/business-discovery/sessions',
+    SESSION_BY_ID: (id) => `/business-discovery/sessions/${id}`,
+    SESSION_CANCEL: (id) => `/business-discovery/sessions/${id}/cancel`,
+    // Results (per session)
+    SESSION_RESULTS: (id) => `/business-discovery/sessions/${id}/results`,
+    SESSION_RESULT_BY_ID: (id, resultId) => `/business-discovery/sessions/${id}/results/${resultId}`,
+    // Import
+    IMPORT_PREVIEW: (id) => `/business-discovery/sessions/${id}/import/preview`,
+    SESSION_IMPORT: (id) => `/business-discovery/sessions/${id}/import`,
+    RESULT_IMPORT: (resultId) => `/business-discovery/results/${resultId}/import`,
+    IMPORT_JOB: (jobId) => `/business-discovery/import-jobs/${jobId}`,
+    // Location proxies (cached)
+    GEOCODE: '/business-discovery/location/geocode',
+    AUTOCOMPLETE: '/business-discovery/location/autocomplete',
+  },
+  LEADS: {
+    LIST: '/crm/leads',
+    BY_ID: (id) => `/crm/leads/${id}`,
+    CONVERT: (id) => `/crm/leads/${id}/convert`,
+    DUPLICATES: '/crm/leads/duplicates',
+    BULK_IMPORT: '/crm/leads/bulk-import',
+    IMPORT: '/crm/leads/import',
+    EXPORT: '/crm/leads/export',
+    IMPORT_TEMPLATE: '/crm/leads/import/template',
+    WHATSAPP: (id) => `/crm/leads/${id}/whatsapp`,
+    CONTACT_LOG: (id) => `/crm/leads/${id}/contact-log`,
+    ENRICH: (id) => `/crm/leads/${id}/enrich`,
+    ENRICH_BULK: '/crm/leads/enrich-bulk',
+    ENRICH_JOB: (jobId) => `/crm/leads/enrich-jobs/${jobId}`,
+  },
 });

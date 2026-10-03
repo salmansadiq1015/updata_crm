@@ -88,6 +88,10 @@ describe('useTaskWorkspaceMutations', () => {
               completedAt: null,
               completedBy: null,
               cancelledAt: null,
+              locked: false,
+              lockedBy: null,
+              inPool: false,
+              poolHelperId: null,
             },
           });
         })
@@ -142,6 +146,10 @@ describe('useTaskWorkspaceMutations', () => {
               completedAt: new Date().toISOString(),
               completedBy: null,
               cancelledAt: null,
+              locked: false,
+              lockedBy: null,
+              inPool: false,
+              poolHelperId: null,
             },
           });
         })
@@ -195,6 +203,10 @@ describe('useTaskWorkspaceMutations', () => {
               completedAt: null,
               completedBy: null,
               cancelledAt: null,
+              locked: false,
+              lockedBy: null,
+              inPool: false,
+              poolHelperId: null,
             },
           });
         })
@@ -255,6 +267,10 @@ describe('useTaskWorkspaceMutations', () => {
               completedAt: null,
               completedBy: null,
               cancelledAt: null,
+              locked: false,
+              lockedBy: null,
+              inPool: false,
+              poolHelperId: null,
             },
           });
         })

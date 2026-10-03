@@ -1,8 +1,8 @@
 # WORLD-CLASS LEAD GENERATION & GOOGLE MAPS BUSINESS DISCOVERY MODULE
 
-
 ## Principal-Level Architecture, MongoDB Design, Geographic Discovery, Deduplication & Bulk Lead Import
 
+Ref Design images: /Users/app/Downloads/Development/updata_crm/requirements/Lead_img_doc/design_imgs
 You are acting as a **Principal Solution Architect, Staff Backend Engineer, Distributed Systems Architect, Database Architect, Security Architect, Frontend Architect, UX Architect, QA Architect, and Technical Product Designer with 20+ years of production experience**.
 
 You are extending an **existing production CRM**.
@@ -19,25 +19,25 @@ Your job is to design and implement a **world-class Lead Generation / Business D
 
 The existing application already contains some or all of:
 
-* Authentication
-* Users
-* Organizations / tenants
-* RBAC / permissions
-* Existing CRM Lead entity
-* Lead services
-* Lead APIs
-* Database infrastructure
-* Audit logs
-* Notifications
-* Queue infrastructure
-* Redis/cache
-* WebSockets/realtime infrastructure
-* Existing UI component system
-* Existing API conventions
-* Existing error handling
-* Existing validation
-* Existing observability
-* Existing duplicate detection
+- Authentication
+- Users
+- Organizations / tenants
+- RBAC / permissions
+- Existing CRM Lead entity
+- Lead services
+- Lead APIs
+- Database infrastructure
+- Audit logs
+- Notifications
+- Queue infrastructure
+- Redis/cache
+- WebSockets/realtime infrastructure
+- Existing UI component system
+- Existing API conventions
+- Existing error handling
+- Existing validation
+- Existing observability
+- Existing duplicate detection
 
 ### FIRST ACTION
 
@@ -138,81 +138,81 @@ Examples:
 
 ### Food & Hospitality
 
-* Restaurant
-* Cafe
-* Coffee Shop
-* Bakery
-* Fast Food
-* Hotel
-* Motel
-* Resort
-* Catering
+- Restaurant
+- Cafe
+- Coffee Shop
+- Bakery
+- Fast Food
+- Hotel
+- Motel
+- Resort
+- Catering
 
 ### Healthcare
 
-* Hospital
-* Clinic
-* Medical Store
-* Pharmacy
-* Dentist
-* Dental Clinic
-* Diagnostic Center
-* Laboratory
-* Physiotherapy Center
-* Medical Center
-* Veterinary Clinic
+- Hospital
+- Clinic
+- Medical Store
+- Pharmacy
+- Dentist
+- Dental Clinic
+- Diagnostic Center
+- Laboratory
+- Physiotherapy Center
+- Medical Center
+- Veterinary Clinic
 
 ### Professional Services
 
-* Law Firm
-* Accountant
-* Accounting Firm
-* Real Estate Agency
-* Insurance Agency
-* Consulting Firm
-* Marketing Agency
-* Software Company
-* IT Company
+- Law Firm
+- Accountant
+- Accounting Firm
+- Real Estate Agency
+- Insurance Agency
+- Consulting Firm
+- Marketing Agency
+- Software Company
+- IT Company
 
 ### Retail
 
-* Supermarket
-* Grocery Store
-* Clothing Store
-* Electronics Store
-* Furniture Store
-* Jewelry Store
-* Automobile Dealer
-* Mobile Phone Store
+- Supermarket
+- Grocery Store
+- Clothing Store
+- Electronics Store
+- Furniture Store
+- Jewelry Store
+- Automobile Dealer
+- Mobile Phone Store
 
 ### Personal Services
 
-* Gym
-* Fitness Center
-* Salon
-* Barber
-* Spa
-* Beauty Center
-* Car Wash
+- Gym
+- Fitness Center
+- Salon
+- Barber
+- Spa
+- Beauty Center
+- Car Wash
 
 ### Education
 
-* School
-* College
-* University
-* Training Center
-* Language School
-* Tutoring Center
+- School
+- College
+- University
+- Training Center
+- Language School
+- Tutoring Center
 
 ### Construction / Industrial
 
-* Construction Company
-* Contractor
-* Architecture Firm
-* Engineering Company
-* Manufacturer
-* Factory
-* Hardware Store
+- Construction Company
+- Contractor
+- Architecture Firm
+- Engineering Company
+- Manufacturer
+- Factory
+- Hardware Store
 
 ### Custom
 
@@ -301,13 +301,13 @@ The mapping must be centralized rather than scattered throughout controllers.
 
 Requirements:
 
-* configurable
-* testable
-* versionable if necessary
-* documented
-* safe fallback for unsupported categories
-* no fake Google types
-* distinguish structured Places type filtering from text search
+- configurable
+- testable
+- versionable if necessary
+- documented
+- safe fallback for unsupported categories
+- no fake Google types
+- distinguish structured Places type filtering from text search
 
 If Google does not support an exact business type, use the appropriate supported search mechanism and clearly document the limitation.
 
@@ -354,10 +354,10 @@ The main screen should contain:
 
 Support:
 
-* Radius
-* Circle
-* Rectangle
-* Polygon
+- Radius
+- Circle
+- Rectangle
+- Polygon
 
 Where technically supported.
 
@@ -455,13 +455,13 @@ Point-in-polygon validation
 
 The coverage algorithm must have:
 
-* maximum cell count
-* configurable limits
-* protection against runaway API costs
-* cancellation support
-* progress tracking
-* concurrency limits
-* retry handling
+- maximum cell count
+- configurable limits
+- protection against runaway API costs
+- cancellation support
+- progress tracking
+- concurrency limits
+- retry handling
 
 Never create an unbounded Google API request loop.
 
@@ -619,13 +619,13 @@ COMPLETE
 
 Each stage must define:
 
-* input
-* output
-* timeout
-* retry policy
-* idempotency key
-* failure behavior
-* metrics
+- input
+- output
+- timeout
+- retry policy
+- idempotency key
+- failure behavior
+- metrics
 
 ---
 
@@ -647,16 +647,16 @@ Do not spread Google API calls across controllers/services.
 
 The provider must encapsulate:
 
-* text/nearby search where appropriate
-* place details
-* pagination
-* provider errors
-* rate limits
-* timeouts
-* field selection
-* API version specifics
-* request logging without secrets
-* provider response normalization
+- text/nearby search where appropriate
+- place details
+- pagination
+- provider errors
+- rate limits
+- timeouts
+- field selection
+- API version specifics
+- request logging without secrets
+- provider response normalization
 
 This makes future provider replacement possible without rewriting the discovery system.
 
@@ -698,14 +698,14 @@ where supported and appropriate.
 
 Implement:
 
-* request budgets
-* maximum places/session
-* maximum searches/session
-* concurrency limits
-* timeout
-* quota handling
-* cancellation
-* organization-level usage tracking if appropriate
+- request budgets
+- maximum places/session
+- maximum searches/session
+- concurrency limits
+- timeout
+- quota handling
+- cancellation
+- organization-level usage tracking if appropriate
 
 ---
 
@@ -723,11 +723,11 @@ Backend environment / secret manager
 
 Never:
 
-* commit secrets
-* store API secrets in MongoDB
-* return secrets through APIs
-* log secrets
-* expose provider credentials to frontend
+- commit secrets
+- store API secrets in MongoDB
+- return secrets through APIs
+- log secrets
+- expose provider credentials to frontend
 
 ---
 
@@ -1002,11 +1002,11 @@ minimal provider metadata
 
 If raw provider responses are required for debugging/compliance:
 
-* isolate them
-* apply retention rules
-* avoid unnecessary PII
-* avoid uncontrolled document growth
-* never expose them directly to the client
+- isolate them
+- apply retention rules
+- avoid unnecessary PII
+- avoid uncontrolled document growth
+- never expose them directly to the client
 
 ---
 
@@ -1414,11 +1414,11 @@ two workers process same batch
 
 Use:
 
-* atomic status transitions
-* unique constraints
-* conditional updates
-* idempotency keys
-* job locking where appropriate
+- atomic status transitions
+- unique constraints
+- conditional updates
+- idempotency keys
+- job locking where appropriate
 
 The system must remain correct under concurrency.
 
@@ -1538,11 +1538,11 @@ Change filters
 
 For large datasets:
 
-* marker clustering
-* viewport-aware rendering
-* virtualized list
-* server pagination
-* avoid rendering thousands of DOM nodes
+- marker clustering
+- viewport-aware rendering
+- virtualized list
+- server pagination
+- avoid rendering thousands of DOM nodes
 
 ---
 
@@ -1676,14 +1676,14 @@ Hotel · DHA · Polygon
 
 Support:
 
-* view
-* filter
-* search
-* reopen results
-* inspect summary
-* optionally re-run
-* cancel running job
-* delete/expire according to retention policy
+- view
+- filter
+- search
+- reopen results
+- inspect summary
+- optionally re-run
+- cancel running job
+- delete/expire according to retention policy
 
 Do not allow one organization to see another organization's sessions.
 
@@ -1735,13 +1735,13 @@ result limits
 
 Reject:
 
-* invalid coordinates
-* malformed polygons
-* self-intersecting polygons where unsupported
-* absurd radius
-* excessive polygon complexity
-* invalid ObjectIds
-* unauthorized session IDs
+- invalid coordinates
+- malformed polygons
+- self-intersecting polygons where unsupported
+- absurd radius
+- excessive polygon complexity
+- invalid ObjectIds
+- unauthorized session IDs
 
 ---
 
@@ -1778,7 +1778,7 @@ Every discovery query must be organization-scoped.
 Never execute:
 
 ```js
-DiscoveryResult.findById(id)
+DiscoveryResult.findById(id);
 ```
 
 alone if the system requires tenant isolation.
@@ -1886,13 +1886,13 @@ Progress
 
 Worker must support:
 
-* retries
-* exponential backoff
-* timeout
-* dead-letter handling if existing architecture supports it
-* cancellation
-* idempotency
-* concurrency limits
+- retries
+- exponential backoff
+- timeout
+- dead-letter handling if existing architecture supports it
+- cancellation
+- idempotency
+- concurrency limits
 
 ---
 
@@ -2454,13 +2454,13 @@ Some provider requests could not be completed.
 
 The UI must support:
 
-* keyboard navigation
-* accessible labels
-* focus management
-* contrast
-* screen-reader semantics
-* non-color-only status indicators
-* accessible map controls where possible
+- keyboard navigation
+- accessible labels
+- focus management
+- contrast
+- screen-reader semantics
+- non-color-only status indicators
+- accessible map controls where possible
 
 ---
 
@@ -2498,16 +2498,16 @@ Avoid making the map unusable on smaller screens.
 
 Target:
 
-* fast initial UI
-* paginated results
-* virtualized lists
-* marker clustering
-* incremental result loading
-* small API payloads
-* compressed responses
-* indexed MongoDB queries
-* background discovery
-* batch imports
+- fast initial UI
+- paginated results
+- virtualized lists
+- marker clustering
+- incremental result loading
+- small API payloads
+- compressed responses
+- indexed MongoDB queries
+- background discovery
+- batch imports
 
 Never do:
 
@@ -2947,13 +2947,13 @@ malicious provider query injection
 
 Normalize:
 
-* whitespace
-* casing where appropriate
-* phone numbers
-* URLs
-* domains
-* addresses
-* business names
+- whitespace
+- casing where appropriate
+- phone numbers
+- URLs
+- domains
+- addresses
+- business names
 
 Do not normalize away meaningful business distinctions.
 
@@ -2966,7 +2966,7 @@ Use a proper international phone normalization strategy if the existing CRM alre
 Do not implement naive:
 
 ```js
-phone.replace(/\D/g, "")
+phone.replace(/\D/g, "");
 ```
 
 as the entire normalization system.
@@ -3100,11 +3100,11 @@ Persist normalized results
 
 because users need:
 
-* history
-* re-open
-* filtering
-* import later
-* auditability
+- history
+- re-open
+- filtering
+- import later
+- auditability
 
 But apply retention rules so discovery history does not grow without bounds.
 
@@ -3200,32 +3200,32 @@ Before declaring complete, implement:
 
 ## Unit tests
 
-* business type mapping
-* geometry validation
-* point-in-polygon
-* normalization
-* deduplication
-* match classification
-* import mapping
-* idempotency
+- business type mapping
+- geometry validation
+- point-in-polygon
+- normalization
+- deduplication
+- match classification
+- import mapping
+- idempotency
 
 ## Integration tests
 
-* discovery session creation
-* provider adapter
-* Mongo persistence
-* duplicate detection
-* import service
-* queue worker
+- discovery session creation
+- provider adapter
+- Mongo persistence
+- duplicate detection
+- import service
+- queue worker
 
 ## API tests
 
-* authorization
-* tenant isolation
-* validation
-* pagination
-* rate limits
-* error responses
+- authorization
+- tenant isolation
+- validation
+- pagination
+- rate limits
+- error responses
 
 ## E2E tests
 
@@ -3336,14 +3336,14 @@ IDs cannot bypass organization filters
 
 Verify:
 
-* user understands Business Type
-* user understands selected area
-* user understands progress
-* user understands result coverage
-* user understands duplicates
-* user understands what Add All will do
-* user understands import completion
-* failures are actionable
+- user understands Business Type
+- user understands selected area
+- user understands progress
+- user understands result coverage
+- user understands duplicates
+- user understands what Add All will do
+- user understands import completion
+- failures are actionable
 
 Do not hide important information inside tooltips.
 

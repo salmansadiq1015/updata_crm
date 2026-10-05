@@ -24,9 +24,9 @@ import type {
   ImportSelection,
 } from '../types/discovery-types';
 
-export const DISCOVERY_PAGE_SIZE = 500;
-export const DISCOVERY_PAGE_SIZE_OPTIONS = [100, 250, 500] as const;
-export const DISCOVERY_MARKER_PAGE_SIZE = 500;
+export const DISCOVERY_PAGE_SIZE = 300;
+export const DISCOVERY_PAGE_SIZE_OPTIONS = [100, 200, 300] as const;
+export const DISCOVERY_MARKER_PAGE_SIZE = 300;
 
 const ACTIVE_SESSION_STATUSES = new Set<DiscoverySessionStatus>([
   'DRAFT',

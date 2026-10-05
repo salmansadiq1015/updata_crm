@@ -113,6 +113,10 @@ export class DiscoveryRunWorker extends BaseWorker {
         ? session.config.maxSearchRequests
         : undefined;
       const concurrency = session.config?.concurrency ?? config.discovery.concurrency;
+      const configuredInitialLimit = session.config?.initialResultLimit ?? config.discovery.initialResultLimit;
+      const initialResultLimit = Number.isFinite(configuredInitialLimit) && configuredInitialLimit > 0
+        ? Math.floor(configuredInitialLimit)
+        : 300;
 
       // ── Plan coverage from the stored normalized polygon ──
       const plan = planCoverage({ type: 'polygon', geometry: session.area?.geometry }, {
@@ -180,6 +184,7 @@ export class DiscoveryRunWorker extends BaseWorker {
       const liveCounts = { new: 0, existing: 0, possibleDuplicates: 0 };
       let persisted = 0;
       let duplicatesRemoved = 0;
+      let resultLimitReached = false;
 
       const identityDuplicate = (business) => {
         const phone = business.normalizedPhone || null;
@@ -210,6 +215,10 @@ export class DiscoveryRunWorker extends BaseWorker {
       const persistPlaces = async (rawPlaces, context = {}) => {
         const normalized = [];
         for (const raw of rawPlaces) {
+          if (inAreaPlaceIds.size >= initialResultLimit) {
+            resultLimitReached = true;
+            break;
+          }
           const rawPlaceId = raw?.id ?? raw?.placeId ?? null;
           if (rawPlaceId && seenPlaceIds.has(String(rawPlaceId))) {
             duplicatesRemoved += 1;
@@ -233,6 +242,7 @@ export class DiscoveryRunWorker extends BaseWorker {
           }
           inAreaPlaceIds.add(key);
           normalized.push({ placeId, business });
+          if (inAreaPlaceIds.size >= initialResultLimit) resultLimitReached = true;
         }
         if (!normalized.length) return;
 
@@ -295,6 +305,8 @@ export class DiscoveryRunWorker extends BaseWorker {
         });
       };
 
+      const shouldStopSearch = () => resultLimitReached || inAreaPlaceIds.size >= initialResultLimit;
+
       let lastCancelCheck = 0;
       const isCancelled = async () => {
         if (Date.now() - lastCancelCheck < 1000) return false;
@@ -315,6 +327,7 @@ export class DiscoveryRunWorker extends BaseWorker {
         maxSearchRequests,
         concurrency,
         isCancelled,
+        shouldStop: shouldStopSearch,
         onBatch: persistPlaces,
         onRequest: (status, error) => {
           discoverySearchesTotal.inc({ status });
@@ -375,7 +388,7 @@ export class DiscoveryRunWorker extends BaseWorker {
       const counts = await discoveryRepository.countsForSession(sessionId, { createdBy });
       const finalStatus = state.cancelled
         ? STATUS.CANCELLED
-        : (state.errors > 0 || state.budgetExhausted || state.unresolvedSaturation || plan.truncated)
+        : (state.errors > 0 || state.budgetExhausted || state.unresolvedSaturation || plan.truncated || state.stoppedEarly || resultLimitReached)
           ? STATUS.PARTIAL
           : STATUS.COMPLETED;
       const coverageReasonCodes = ['PROVIDER_CATALOG_NOT_GUARANTEED'];
@@ -383,6 +396,7 @@ export class DiscoveryRunWorker extends BaseWorker {
       if (state.budgetExhausted) coverageReasonCodes.push('LEGACY_REQUEST_BUDGET_EXHAUSTED');
       if (state.unresolvedSaturation) coverageReasonCodes.push('PROVIDER_RESULT_CAP_UNRESOLVED');
       if (plan.truncated) coverageReasonCodes.push('COVERAGE_PLAN_TRUNCATED');
+      if (state.stoppedEarly || resultLimitReached) coverageReasonCodes.push('INITIAL_RESULT_LIMIT_REACHED');
       if (state.cancelled) coverageReasonCodes.push('CANCELLED_BY_USER');
 
       await discoveryRepository.updateSessionProgress(sessionId, {
@@ -459,6 +473,8 @@ export class DiscoveryRunWorker extends BaseWorker {
           discovered: counts.discovered,
           searchRequests: state.searchRequests,
           errors: state.errors,
+          initialResultLimit,
+          initialResultLimitReached: state.stoppedEarly || resultLimitReached,
         },
         module: 'discovery',
       });

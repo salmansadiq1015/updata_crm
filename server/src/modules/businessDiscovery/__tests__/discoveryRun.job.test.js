@@ -25,6 +25,7 @@ jest.unstable_mockModule('../../../config/index.js', () => ({
       maxSearchRequests: 50,
       maxCoverageCells: 25,
       concurrency: 3,
+      initialResultLimit: 300,
       resultTtlDays: 30,
     },
   },
@@ -136,7 +137,7 @@ function makeSession(overrides = {}) {
     status: 'QUEUED',
     cancelRequested: false,
     keyword: null,
-    config: { maxResults: 200, maxSearchRequests: 50, maxCoverageCells: 25, concurrency: 2 },
+    config: { maxResults: 200, initialResultLimit: 300, maxSearchRequests: 50, maxCoverageCells: 25, concurrency: 2 },
     area: { type: 'radius', geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] } },
     location: {
       name: 'Paris', city: 'Paris', countryCode: 'FR', formattedAddress: 'Paris, France',
@@ -223,6 +224,45 @@ describe('DiscoveryRunWorker.process', () => {
     expect(mockEmitCompleted).toHaveBeenCalledWith('sess-2', expect.objectContaining({ status: 'PARTIAL' }));
     expect(out.status).toBe('PARTIAL');
     expect(mockSearchesInc).toHaveBeenCalledWith({ status: 'error' });
+  });
+
+  test('stops the initial run after the configured result window is filled', async () => {
+    repo.getSessionById.mockResolvedValue(makeSession({
+      _id: 'sess-limit',
+      config: { maxResults: 200, initialResultLimit: 3, maxSearchRequests: 50, maxCoverageCells: 25, concurrency: 1 },
+    }));
+    mockPlanCoverage.mockReturnValue(oneCellPlan());
+    mockResolveProviderQuery.mockReturnValue({ includedType: 'restaurant' });
+    mockProvider.searchNearby.mockResolvedValue({
+      places: Array.from({ length: 20 }, (_, index) => ({
+        id: `place-${index + 1}`,
+        displayName: { text: `Restaurant ${index + 1}` },
+      })),
+    });
+    mockNormalizeBusiness.mockImplementation((raw) => ({
+      name: raw.displayName.text,
+      location: { type: 'Point', coordinates: [8.54, 47.37] },
+    }));
+    mockPointInArea.mockReturnValue(true);
+    mockClassifyBatch.mockImplementation(async (businesses) =>
+      businesses.map(() => ({ status: 'NEW', matchedBy: [] })));
+    repo.bulkUpsertResults.mockResolvedValue({ upsertedCount: 3, modifiedCount: 0 });
+    repo.countsForSession.mockResolvedValue({
+      discovered: 3, new: 3, existing: 0, possibleDuplicates: 0, imported: 0, skipped: 0, failed: 0,
+    });
+
+    const worker = new DiscoveryRunWorker();
+    const out = await worker.process({ data: { sessionId: 'sess-limit', createdBy: 'user-1' } });
+
+    expect(repo.bulkUpsertResults).toHaveBeenCalledTimes(1);
+    expect(repo.bulkUpsertResults.mock.calls[0][0]).toHaveLength(3);
+    expect(out).toMatchObject({ status: 'PARTIAL', discovered: 3 });
+    expect(mockEmitCompleted).toHaveBeenCalledWith('sess-limit', expect.objectContaining({
+      status: 'PARTIAL',
+      coverage: expect.objectContaining({
+        reasonCodes: expect.arrayContaining(['INITIAL_RESULT_LIMIT_REACHED']),
+      }),
+    }));
   });
 
   test('cancellation detected between cells → CANCELLED, provider not hit', async () => {

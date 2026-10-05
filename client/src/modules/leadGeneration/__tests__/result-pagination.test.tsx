@@ -5,9 +5,9 @@ import { ResultPagination } from '../ui/result-pagination';
 
 function renderPagination(overrides: Partial<React.ComponentProps<typeof ResultPagination>> = {}) {
   const props: React.ComponentProps<typeof ResultPagination> = {
-    pageSize: 500,
+    pageSize: 300,
     total: 2333,
-    loadedCount: 500,
+    loadedCount: 300,
     hasNextPage: true,
     onLoadMore: vi.fn(),
     onPageSizeChange: vi.fn(),
@@ -24,7 +24,7 @@ function renderPagination(overrides: Partial<React.ComponentProps<typeof ResultP
 describe('ResultPagination', () => {
   it('shows the loaded result count for large result sets', () => {
     renderPagination();
-    expect(screen.getByText(/showing 500 of 2,333|showing 500 of 2333/i)).toBeInTheDocument();
+    expect(screen.getByText(/showing 300 of 2,333|showing 300 of 2333/i)).toBeInTheDocument();
   });
 
   it('fetches only when the user requests more results', () => {

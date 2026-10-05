@@ -151,10 +151,11 @@ class DiscoveryService {
       areaSqKm: normalized.areaSqKm,
     };
 
-    // 5. Per-session provider-call/load guards. There is deliberately no result
-    //    count ceiling: every discoverable row is persisted.
+    // 5. Per-session provider-call/load guards. The first run returns quickly
+    //    with a bounded result window; the UI loads saved rows by cursor.
     const sessionConfig = {
       maxResults: null,
+      initialResultLimit: config.discovery.initialResultLimit,
       maxSearchRequests: null,
       maxCoverageCells: config.discovery.maxCoverageCells,
       concurrency: config.discovery.concurrency,

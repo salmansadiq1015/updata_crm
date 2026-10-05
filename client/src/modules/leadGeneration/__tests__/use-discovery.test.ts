@@ -112,8 +112,8 @@ describe('use-discovery hooks', () => {
         return HttpResponse.json(okPage(
           [],
           cursor
-            ? { hasNext: false, nextCursor: null, limit: 500 }
-            : { hasNext: true, nextCursor: 'results-cursor-2', limit: 500 },
+            ? { hasNext: false, nextCursor: null, limit: 300 }
+            : { hasNext: true, nextCursor: 'results-cursor-2', limit: 300 },
         ));
       }),
     );
@@ -142,7 +142,7 @@ describe('use-discovery hooks', () => {
         if (!cursor) {
           return HttpResponse.json(okPage(
             [{ id: 'marker-1', lat: 47.37, lng: 8.54, status: 'NEW' }],
-            { hasNext: true, nextCursor: 'cursor-2', limit: 500 },
+            { hasNext: true, nextCursor: 'cursor-2', limit: 300 },
           ));
         }
         return HttpResponse.json({ success: false, error: { message: 'Too many requests' } }, { status: 429 });

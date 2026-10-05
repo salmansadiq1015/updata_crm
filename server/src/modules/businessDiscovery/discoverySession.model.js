@@ -107,9 +107,11 @@ const discoverySessionSchema = new mongoose.Schema(
       version: { type: String, trim: true, maxlength: 60, default: null },
     },
     config: {
-      // Deprecated: retained so old sessions still deserialize. The worker does
-      // not use a result-count ceiling.
+      // Deprecated: retained so old sessions still deserialize.
       maxResults: { type: Number, default: null },
+      // The initial discovery run stops after this many unique in-area results.
+      // Additional database rows are loaded by cursor pagination in the UI.
+      initialResultLimit: { type: Number, default: 300 },
       // Deprecated for new sessions. A finite value is still understood by the
       // worker so old sessions can resume with their original behavior.
       maxSearchRequests: { type: Number, default: null },

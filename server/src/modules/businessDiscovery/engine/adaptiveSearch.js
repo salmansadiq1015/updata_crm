@@ -51,6 +51,7 @@ export async function runAdaptiveSearch({
   onProgress = async () => {},
   onRequest = () => {},
   isCancelled = async () => false,
+  shouldStop = async () => false,
   retryDelay = sleep,
   maxTextPagesPerRegion = DEFAULT_MAX_TEXT_PAGES_PER_REGION,
 } = {}) {
@@ -70,6 +71,7 @@ export async function runAdaptiveSearch({
     subdividedRegions: 0,
     unresolvedRegions: 0,
     textPages: 0,
+    stoppedEarly: false,
   };
 
   const types = (businessTypes || []).map((businessType) => {
@@ -109,12 +111,22 @@ export async function runAdaptiveSearch({
 
   const emitProgress = async () => onProgress({ ...state });
 
+  const stopRequested = async () => {
+    if (state.stoppedEarly) return true;
+    if (await shouldStop()) {
+      state.stoppedEarly = true;
+      return true;
+    }
+    return false;
+  };
+
   const processUnit = async (unit) => {
-    if (state.cancelled || state.budgetExhausted) return [];
+    if (state.cancelled || state.budgetExhausted || state.stoppedEarly) return [];
     if (await isCancelled()) {
       state.cancelled = true;
       return [];
     }
+    if (await stopRequested()) return [];
 
     const { cell, businessType, query } = unit;
     let saturated = false;
@@ -137,6 +149,7 @@ export async function runAdaptiveSearch({
         state.rawResults += places.length;
         saturated = places.length >= PROVIDER_PAGE_SIZE;
         if (places.length) await onBatch(places, { cell, businessType, query });
+        await stopRequested();
       } else {
         let pageToken;
         let lastPageSize = 0;
@@ -147,6 +160,7 @@ export async function runAdaptiveSearch({
             state.cancelled = true;
             break;
           }
+          if (await stopRequested()) break;
           const response = await callWithRetry(() => provider.searchText({
             textQuery: query.textQuery,
             includedType: query.includedType,
@@ -163,6 +177,7 @@ export async function runAdaptiveSearch({
           lastPageSize = places.length;
           state.rawResults += places.length;
           if (places.length) await onBatch(places, { cell, businessType, query });
+          if (await stopRequested()) break;
 
           const next = response?.nextPageToken || null;
           if (next && pagesForRegion >= maxTextPagesPerRegion) {
@@ -179,7 +194,7 @@ export async function runAdaptiveSearch({
             if (next) usedTokens.add(next);
             pageToken = next;
           }
-        } while (pageToken && !state.cancelled && !state.budgetExhausted);
+        } while (pageToken && !state.cancelled && !state.budgetExhausted && !state.stoppedEarly);
         saturated = lastPageSize >= PROVIDER_PAGE_SIZE;
       }
     } catch (error) {
@@ -196,7 +211,7 @@ export async function runAdaptiveSearch({
       state.regionsCompleted += 1;
     }
 
-    if (failed || state.cancelled || !saturated) {
+    if (failed || state.cancelled || state.stoppedEarly || !saturated) {
       await emitProgress();
       return [];
     }
@@ -228,7 +243,7 @@ export async function runAdaptiveSearch({
     return children;
   };
 
-  while (pending.length && !state.cancelled && !state.budgetExhausted) {
+  while (pending.length && !state.cancelled && !state.budgetExhausted && !state.stoppedEarly) {
     const wave = pending;
     pending = [];
     const children = await runWave(wave, concurrency, processUnit);

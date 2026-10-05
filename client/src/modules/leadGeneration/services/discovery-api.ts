@@ -129,6 +129,16 @@ export const discoveryApi = {
     return discoveryApi.getSession(id);
   },
 
+  async loadMoreSession(id: string): Promise<DiscoverySession> {
+    const response = toApiResponse<unknown>(
+      await apiClient.post(ENDPOINTS.DISCOVERY.SESSION_LOAD_MORE(id)),
+    );
+    if (isRecord(response.data) && (response.data.id || response.data._id || response.data.status)) {
+      return discoverySessionSchema.parse(response.data);
+    }
+    return discoveryApi.getSession(id);
+  },
+
   async deleteSession(id: string): Promise<{ deleted: boolean }> {
     const response = toApiResponse<{ deleted?: boolean }>(
       await apiClient.delete(ENDPOINTS.DISCOVERY.SESSION_BY_ID(id)),

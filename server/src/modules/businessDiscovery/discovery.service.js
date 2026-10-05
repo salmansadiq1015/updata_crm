@@ -277,6 +277,60 @@ class DiscoveryService {
     return this.toSessionDTO(fresh);
   }
 
+  async loadMore(id, createdBy, meta = {}) {
+    const session = await discoveryRepository.getSessionById(id, { createdBy });
+    if (!session) {
+      throw new AppError('Discovery session not found', 404, ERROR_CODES.DISCOVERY_SESSION_NOT_FOUND);
+    }
+    if (!TERMINAL_STATUSES.includes(session.status)) {
+      throw new AppError('Discovery is already running', 409, ERROR_CODES.DISCOVERY_ALREADY_RUNNING);
+    }
+    if (session.status === DISCOVERY_SESSION_STATUS.CANCELLED || session.status === DISCOVERY_SESSION_STATUS.EXPIRED) {
+      throw new AppError('Discovery session is not ready for loading more results', 409, ERROR_CODES.DISCOVERY_SESSION_NOT_READY);
+    }
+
+    const currentLimit = Number.isFinite(session.config?.initialResultLimit)
+      ? Number(session.config.initialResultLimit)
+      : config.discovery.initialResultLimit;
+    const currentCount = session.counts?.discovered ?? 0;
+    const nextLimit = Math.max(currentLimit || 0, currentCount) + config.discovery.initialResultLimit;
+
+    const updated = await DiscoverySession.findOneAndUpdate(
+      { _id: id, createdBy },
+      {
+        $set: {
+          status: DISCOVERY_SESSION_STATUS.QUEUED,
+          cancelRequested: false,
+          error: null,
+          completedAt: null,
+          'config.initialResultLimit': nextLimit,
+          'progress.stage': 'queued',
+          'progress.percent': 1,
+          'coverage.state': 'RUNNING',
+          'coverage.reasonCodes': ['PROVIDER_CATALOG_NOT_GUARANTEED'],
+        },
+      },
+      { returnDocument: 'after' },
+    ).lean();
+
+    await queueManager.addJob(DISCOVERY_QUEUE_NAME, `${DISCOVERY_JOB_NAME}-${id}-more-${Date.now()}`, {
+      sessionId: String(id),
+      createdBy: String(createdBy),
+    });
+
+    await auditService.logEvent({
+      eventType: 'discovery.session.load_more',
+      userId: createdBy,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { sessionId: String(id), nextLimit },
+      module: 'discovery',
+    });
+
+    return this.toSessionDTO(updated);
+  }
+
   /**
    * Soft-delete a session (scoped). Uses the guarded status setter to flip
    * `isDeleted` without otherwise changing the record's status.

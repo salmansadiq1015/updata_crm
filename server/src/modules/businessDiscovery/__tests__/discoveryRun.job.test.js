@@ -50,6 +50,7 @@ const repo = {
   updateSessionProgress: jest.fn(),
   bulkUpsertResults: jest.fn(),
   countsForSession: jest.fn(),
+  listSessionPlaceIds: jest.fn(),
 };
 jest.unstable_mockModule('../discovery.repository.js', () => ({ default: repo }));
 
@@ -127,6 +128,7 @@ beforeEach(() => {
   repo.countsForSession.mockResolvedValue({
     discovered: 0, new: 0, existing: 0, possibleDuplicates: 0, imported: 0, skipped: 0, failed: 0,
   });
+  repo.listSessionPlaceIds.mockResolvedValue([]);
   mockNotifCreate.mockResolvedValue({});
 });
 

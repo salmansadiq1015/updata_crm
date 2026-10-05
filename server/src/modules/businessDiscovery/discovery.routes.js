@@ -126,6 +126,13 @@ router.post(
   validate(sessionIdParam),
   (req, res, next) => discoveryController.cancelSession(req, res, next),
 );
+router.post(
+  '/sessions/:id/load-more',
+  authenticate,
+  requirePermission('discovery:create'),
+  validate(sessionIdParam),
+  (req, res, next) => discoveryController.loadMore(req, res, next),
+);
 router.get(
   '/sessions/:id/markers',
   authenticate,

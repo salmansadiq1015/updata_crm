@@ -8,7 +8,7 @@ export const ok = (data: unknown) => ({ success: true, data });
 
 export const okPage = (
   data: unknown[],
-  pagination: Partial<{ hasNext: boolean; nextCursor: string | null; limit: number }> = {},
+  pagination: Partial<{ hasNext: boolean; nextCursor: string | null; limit: number; total: number }> = {},
 ) => ({
   success: true,
   data,
@@ -63,6 +63,7 @@ export function makeSessionDTO(overrides: Record<string, unknown> = {}) {
     provider: { name: 'google_places', version: 'v1' },
     config: {
       maxResults: 200,
+      initialResultLimit: 300,
       maxSearchRequests: 50,
       maxCoverageCells: 25,
       concurrency: 2,

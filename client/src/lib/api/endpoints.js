@@ -826,6 +826,7 @@ export const ENDPOINTS = Object.freeze({
     SESSIONS: '/business-discovery/sessions',
     SESSION_BY_ID: (id) => `/business-discovery/sessions/${id}`,
     SESSION_CANCEL: (id) => `/business-discovery/sessions/${id}/cancel`,
+    SESSION_LOAD_MORE: (id) => `/business-discovery/sessions/${id}/load-more`,
     // Results (per session)
     SESSION_RESULTS: (id) => `/business-discovery/sessions/${id}/results`,
     SESSION_MARKERS: (id) => `/business-discovery/sessions/${id}/markers`,

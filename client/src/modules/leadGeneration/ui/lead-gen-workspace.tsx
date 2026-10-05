@@ -32,6 +32,7 @@ import {
   useDiscoverySession,
   useFlattenedResults,
   useImportResult,
+  useLoadMoreDiscovery,
 } from '../hooks/use-discovery';
 import { useDiscoveryRealtime } from '../hooks/use-discovery-realtime';
 import {
@@ -123,6 +124,7 @@ export function LeadGenWorkspace() {
 
   const createDiscovery = useCreateDiscovery();
   const cancelDiscovery = useCancelDiscovery();
+  const loadMoreDiscovery = useLoadMoreDiscovery();
   useDiscoveryRealtime(sessionId);
   // Keep a light server-truth heartbeat even when realtime is connected. A
   // missed socket event should never leave the analysis screen stale forever.
@@ -156,6 +158,11 @@ export function LeadGenWorkspace() {
 
   const inResults = step === 3 && Boolean(sessionId);
   const hasResults = (session?.counts.discovered ?? 0) > 0 || results.length > 0;
+  const canDiscoverMore = Boolean(
+    session
+    && !isActiveSession(session.status)
+    && session.coverage.reasonCodes.includes('INITIAL_RESULT_LIMIT_REACHED'),
+  );
   const showProgress = inResults && (!session || (isActiveSession(session.status) && !hasResults));
   const showResults = inResults && Boolean(session) && (hasResults || !isActiveSession(session!.status));
 
@@ -260,8 +267,13 @@ export function LeadGenWorkspace() {
   };
 
   const handleNextResultPage = async () => {
-    if (!resultsQuery.hasNextPage || resultsQuery.isFetchingNextPage) return;
-    await resultsQuery.fetchNextPage({ cancelRefetch: false });
+    if (resultsQuery.hasNextPage) {
+      if (resultsQuery.isFetchingNextPage) return;
+      await resultsQuery.fetchNextPage({ cancelRefetch: false });
+      return;
+    }
+    if (!sessionId || !canDiscoverMore || loadMoreDiscovery.isPending) return;
+    loadMoreDiscovery.mutate(sessionId);
   };
 
   const handleReopen = (target: DiscoverySession) => {
@@ -360,8 +372,8 @@ export function LeadGenWorkspace() {
             pageSize={pageSize}
             filteredTotal={filteredTotal}
             loadedCount={results.length}
-            hasNextPage={resultsQuery.hasNextPage}
-            isFetchingNextPage={resultsQuery.isFetchingNextPage}
+            hasNextPage={resultsQuery.hasNextPage || canDiscoverMore}
+            isFetchingNextPage={resultsQuery.isFetchingNextPage || loadMoreDiscovery.isPending}
             isFetchNextPageError={resultsQuery.isFetchNextPageError}
             onLoadMore={() => void handleNextResultPage()}
             onPageSizeChange={setPageSize}

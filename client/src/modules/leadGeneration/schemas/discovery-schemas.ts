@@ -376,6 +376,7 @@ export const discoverySessionSchema = z.unknown().transform((value): DiscoverySe
     },
     config: {
       maxResults: readNumberOrNull(config.maxResults),
+      initialResultLimit: readNumberOrNull(config.initialResultLimit),
       maxSearchRequests: readNumberOrNull(config.maxSearchRequests),
       maxCoverageCells: readNumberOrNull(config.maxCoverageCells),
       concurrency: readNumberOrNull(config.concurrency),

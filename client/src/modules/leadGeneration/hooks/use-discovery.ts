@@ -300,6 +300,24 @@ export function useCancelDiscovery() {
   });
 }
 
+export function useLoadMoreDiscovery() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => discoveryApi.loadMoreSession(id),
+    onSuccess: (session) => {
+      queryClient.setQueryData(discoveryKeys.session(session.id), session);
+      void queryClient.invalidateQueries({ queryKey: discoveryKeys.sessions() });
+      void queryClient.invalidateQueries({
+        queryKey: discoveryKeys.results(),
+        predicate: (query) => query.queryKey[3] === session.id,
+      });
+      void queryClient.invalidateQueries({ queryKey: discoveryKeys.markers(session.id) });
+      showSuccess('Weitere Ergebnisse werden geladen');
+    },
+    onError: (error) => showError(error),
+  });
+}
+
 export function useDeleteDiscovery() {
   const queryClient = useQueryClient();
   return useMutation({

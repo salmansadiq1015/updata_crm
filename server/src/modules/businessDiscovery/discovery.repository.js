@@ -284,6 +284,12 @@ class DiscoveryRepository {
     return DiscoveryResult.findOne(filter).lean();
   }
 
+  async listSessionPlaceIds(sessionId, { createdBy } = {}) {
+    const filter = { discoverySessionId: sessionId };
+    if (createdBy) filter.createdBy = createdBy;
+    return DiscoveryResult.distinct('provider.placeId', filter);
+  }
+
   /** Lightweight, independently paginated marker stream for the complete map. */
   async listResultMarkers(sessionId, { cursor, limit = 500, createdBy } = {}) {
     const baseFilter = { discoverySessionId: sessionId, 'business.location.coordinates.1': { $exists: true } };

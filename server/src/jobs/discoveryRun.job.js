@@ -175,8 +175,10 @@ export class DiscoveryRunWorker extends BaseWorker {
         providerIncludedType: businessType.providerIncludedType ?? null,
         providerTextQuery: businessType.providerTextQuery ?? null,
       }));
-      const seenPlaceIds = new Set();
-      const inAreaPlaceIds = new Set();
+      const existingPlaceIds = await discoveryRepository.listSessionPlaceIds(sessionId, { createdBy });
+      const seededPlaceIds = (existingPlaceIds || []).filter(Boolean).map(String);
+      const seenPlaceIds = new Set(seededPlaceIds);
+      const inAreaPlaceIds = new Set(seededPlaceIds);
       const seenPhones = new Set();
       const seenDomains = new Set();
       const seenNamesAndAddresses = new Set();

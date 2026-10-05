@@ -34,6 +34,10 @@ export const handlers = [
     HttpResponse.json(ok(makeSessionDTO({ id: params.id as string, status: 'CANCELLED', cancelRequested: true }))),
   ),
 
+  http.post(`${D}/sessions/:id/load-more`, ({ params }) =>
+    HttpResponse.json(ok(makeSessionDTO({ id: params.id as string, status: 'QUEUED' })), { status: 202 }),
+  ),
+
   http.delete(`${D}/sessions/:id`, () => HttpResponse.json(ok({ deleted: true }))),
 
   http.get(`${D}/sessions/:id/results`, () =>

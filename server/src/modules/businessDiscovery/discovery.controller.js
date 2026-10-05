@@ -40,6 +40,14 @@ class DiscoveryController {
     } catch (err) { next(err); }
   }
 
+  async loadMore(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const session = await discoveryService.loadMore(req.params.id, req.user._id, meta);
+      return res.success({ data: session, message: 'Discovery load-more queued', statusCode: 202 });
+    } catch (err) { next(err); }
+  }
+
   async deleteSession(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

@@ -163,6 +163,7 @@ export type DiscoverySession = {
   provider: { name: string; version: string | null };
   config: {
     maxResults: number | null;
+    initialResultLimit: number | null;
     maxSearchRequests: number | null;
     maxCoverageCells: number | null;
     concurrency: number | null;

@@ -5,14 +5,11 @@ import { ResultPagination } from '../ui/result-pagination';
 
 function renderPagination(overrides: Partial<React.ComponentProps<typeof ResultPagination>> = {}) {
   const props: React.ComponentProps<typeof ResultPagination> = {
-    pageIndex: 0,
-    pageSize: 50,
+    pageSize: 500,
     total: 2333,
-    loadedPages: 1,
+    loadedCount: 500,
     hasNextPage: true,
-    onFirst: vi.fn(),
-    onPrevious: vi.fn(),
-    onNext: vi.fn(),
+    onLoadMore: vi.fn(),
     onPageSizeChange: vi.fn(),
     ...overrides,
   };
@@ -25,23 +22,21 @@ function renderPagination(overrides: Partial<React.ComponentProps<typeof ResultP
 }
 
 describe('ResultPagination', () => {
-  it('shows an exact range and total page count for large result sets', () => {
+  it('shows the loaded result count for large result sets', () => {
     renderPagination();
-    expect(screen.getByText(/1.*50.*2,333|1.*50.*2333/)).toBeInTheDocument();
-    expect(screen.getByText(/page 1 of 47/i)).toBeInTheDocument();
+    expect(screen.getByText(/showing 500 of 2,333|showing 500 of 2333/i)).toBeInTheDocument();
   });
 
-  it('fetches only when the user requests the next page', () => {
+  it('fetches only when the user requests more results', () => {
     const props = renderPagination();
-    expect(props.onNext).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
-    expect(props.onNext).toHaveBeenCalledTimes(1);
+    expect(props.onLoadMore).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /load more results/i }));
+    expect(props.onLoadMore).toHaveBeenCalledTimes(1);
   });
 
-  it('disables navigation while a cursor page is loading', () => {
-    renderPagination({ pageIndex: 1, loadedPages: 2, isFetching: true });
-    expect(screen.getByRole('button', { name: /previous page/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /next page/i })).toBeDisabled();
+  it('disables loading while a cursor page is loading', () => {
+    renderPagination({ isFetching: true });
+    expect(screen.getByRole('button', { name: /load more results/i })).toBeDisabled();
   });
 
   it('offers one explicit retry after a failed next page', () => {

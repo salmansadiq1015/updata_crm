@@ -112,8 +112,8 @@ describe('use-discovery hooks', () => {
         return HttpResponse.json(okPage(
           [],
           cursor
-            ? { hasNext: false, nextCursor: null, limit: 50 }
-            : { hasNext: true, nextCursor: 'results-cursor-2', limit: 50 },
+            ? { hasNext: false, nextCursor: null, limit: 500 }
+            : { hasNext: true, nextCursor: 'results-cursor-2', limit: 500 },
         ));
       }),
     );
@@ -133,7 +133,7 @@ describe('use-discovery hooks', () => {
     expect(requests).toBeGreaterThan(initialRequests);
   });
 
-  it('loads each marker cursor once and pauses after a 429 until manual retry', async () => {
+  it('loads one marker cursor and waits for an explicit next-page request', async () => {
     const requestedCursors: Array<string | null> = [];
     server.use(
       http.get(`${D}/sessions/:id/markers`, ({ request }) => {
@@ -142,7 +142,7 @@ describe('use-discovery hooks', () => {
         if (!cursor) {
           return HttpResponse.json(okPage(
             [{ id: 'marker-1', lat: 47.37, lng: 8.54, status: 'NEW' }],
-            { hasNext: true, nextCursor: 'cursor-2', limit: 1000 },
+            { hasNext: true, nextCursor: 'cursor-2', limit: 500 },
           ));
         }
         return HttpResponse.json({ success: false, error: { message: 'Too many requests' } }, { status: 429 });
@@ -154,19 +154,19 @@ describe('use-discovery hooks', () => {
       { wrapper: makeWrapper() },
     );
 
-    await waitFor(() => expect(result.current.isFetchNextPageError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(requestedCursors.filter((cursor) => cursor === null).length).toBeGreaterThan(0);
-    expect(requestedCursors.filter((cursor) => cursor === 'cursor-2').length).toBeGreaterThan(0);
+    expect(requestedCursors.filter((cursor) => cursor === 'cursor-2')).toHaveLength(0);
 
-    const requestsAfterFailure = requestedCursors.length;
+    const requestsAfterFirstPage = requestedCursors.length;
     rerender();
-    expect(requestedCursors).toHaveLength(requestsAfterFailure);
+    expect(requestedCursors).toHaveLength(requestsAfterFirstPage);
 
     await act(async () => {
-      await result.current.retryFailedPage();
+      await result.current.fetchNextPage({ cancelRefetch: false });
     });
-    expect(requestedCursors.length).toBeGreaterThan(requestsAfterFailure);
-    expect(requestedCursors.slice(requestsAfterFailure).every((cursor) => cursor === 'cursor-2')).toBe(true);
+    expect(requestedCursors.length).toBeGreaterThan(requestsAfterFirstPage);
+    expect(requestedCursors.slice(requestsAfterFirstPage).every((cursor) => cursor === 'cursor-2')).toBe(true);
   });
 
   it('useCreateDiscovery returns a sessionId on success', async () => {

@@ -55,16 +55,13 @@ export type ResultsPanelProps = {
   isError?: boolean;
   errorStatusCode?: number;
   onRetry?: () => void;
-  pageIndex: number;
   pageSize: number;
   filteredTotal: number;
-  loadedPages: number;
+  loadedCount: number;
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   isFetchNextPageError?: boolean;
-  onFirstPage: () => void;
-  onPreviousPage: () => void;
-  onNextPage: () => void;
+  onLoadMore: () => void;
   onPageSizeChange: (pageSize: number) => void;
   markersLoading?: boolean;
   markersError?: boolean;
@@ -86,16 +83,13 @@ export function ResultsPanel({
   isError,
   errorStatusCode,
   onRetry,
-  pageIndex,
   pageSize,
   filteredTotal,
-  loadedPages,
+  loadedCount,
   hasNextPage,
   isFetchingNextPage,
   isFetchNextPageError,
-  onFirstPage,
-  onPreviousPage,
-  onNextPage,
+  onLoadMore,
   onPageSizeChange,
   markersLoading,
   markersError,
@@ -190,6 +184,8 @@ export function ResultsPanel({
   const coverageState = session?.coverage.state ?? 'PENDING';
   const coveragePartial = coverageState === 'PARTIAL';
   const coverageExhausted = coverageState === 'EXHAUSTED';
+  const analysisFailed = session?.status === 'FAILED';
+  const analysisCancelled = session?.status === 'CANCELLED';
   const locationLabel = session?.location.formattedAddress
     ?? session?.location.city
     ?? session?.location.name
@@ -220,9 +216,13 @@ export function ResultsPanel({
               {' · '}
               {coveragePartial
                 ? t('leadgen.results.incomplete', 'Coverage incomplete')
-                : coverageExhausted
-                  ? t('leadgen.results.complete', 'Provider search exhausted')
-                  : t('leadgen.results.searching', 'Search still running')}
+                : analysisFailed
+                  ? t('leadgen.results.failed', 'Analysis failed')
+                  : analysisCancelled
+                    ? t('leadgen.results.cancelled', 'Analysis cancelled')
+                    : coverageExhausted
+                      ? t('leadgen.results.complete', 'Provider search exhausted')
+                      : t('leadgen.results.searching', 'Search still running')}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {locationLabel && (
@@ -300,27 +300,37 @@ export function ResultsPanel({
         </div>
       </header>
 
-      {(coveragePartial || coverageExhausted) && (
+      {(analysisFailed || analysisCancelled || coveragePartial || coverageExhausted) && (
         <div
           role="status"
           className={cn(
             'flex shrink-0 items-start gap-2 border-b px-4 py-2.5 text-xs',
-            coveragePartial
+            analysisFailed
+              ? 'border-destructive/25 bg-destructive/8 text-destructive'
+              : analysisCancelled || coveragePartial
               ? 'border-amber-500/20 bg-amber-500/8 text-amber-950 dark:text-amber-100'
               : 'border-emerald-500/20 bg-emerald-500/8 text-emerald-950 dark:text-emerald-100',
           )}
         >
-          {coveragePartial
+          {analysisFailed || analysisCancelled || coveragePartial
             ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
             : <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
           <div>
             <p className="font-semibold">
-              {coveragePartial
+              {analysisFailed
+                ? t('leadgen.results.failedTitle', 'Analysis stopped before completion')
+                : analysisCancelled
+                  ? t('leadgen.results.cancelledTitle', 'Analysis cancelled')
+                  : coveragePartial
                 ? t('leadgen.results.coveragePartialTitle', 'Some search regions could not be exhausted')
                 : t('leadgen.results.coverageExhaustedTitle', 'Every planned region was searched to provider exhaustion')}
             </p>
             <p className="mt-0.5 opacity-80">
-              {coveragePartial
+              {analysisFailed
+                ? session?.error?.message ?? t('leadgen.results.failedBody', 'Start a new search or try a smaller area.')
+                : analysisCancelled
+                  ? t('leadgen.results.cancelledBody', 'Start a new search when you are ready.')
+                  : coveragePartial
                 ? t(
                     'leadgen.results.coveragePartialBody',
                     '{unresolved} unresolved regions after {searches} provider requests. Results are shown, but are not presented as complete.',
@@ -435,6 +445,9 @@ export function ResultsPanel({
               onHover={setHoveredResultId}
               onAddLead={onAddLead}
               addingId={addingId}
+              hasNextPage={hasNextPage}
+              isFetchingNextPage={isFetchingNextPage}
+              onLoadMore={onLoadMore}
               isLoading={isLoading}
               isError={isError}
               errorStatusCode={errorStatusCode}
@@ -443,18 +456,15 @@ export function ResultsPanel({
             />
           </div>
           <ResultPagination
-            pageIndex={pageIndex}
             pageSize={pageSize}
             total={filteredTotal}
-            loadedPages={loadedPages}
+            loadedCount={loadedCount}
             hasNextPage={hasNextPage}
             isFetching={isFetchingNextPage}
             isError={isFetchNextPageError}
-            onFirst={onFirstPage}
-            onPrevious={onPreviousPage}
-            onNext={onNextPage}
+            onLoadMore={onLoadMore}
             onPageSizeChange={onPageSizeChange}
-            onRetry={onNextPage}
+            onRetry={onLoadMore}
           />
         </div>
       </div>

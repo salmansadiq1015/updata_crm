@@ -9,6 +9,7 @@ import { resolveProviderQuery } from '../businessTypeCatalog.js';
 
 const RETRY_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 250;
+const DEFAULT_MAX_TEXT_PAGES_PER_REGION = 10;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -51,6 +52,7 @@ export async function runAdaptiveSearch({
   onRequest = () => {},
   isCancelled = async () => false,
   retryDelay = sleep,
+  maxTextPagesPerRegion = DEFAULT_MAX_TEXT_PAGES_PER_REGION,
 } = {}) {
   const requestLimit = Number.isFinite(maxSearchRequests) && maxSearchRequests > 0
     ? Math.floor(maxSearchRequests)
@@ -105,6 +107,8 @@ export async function runAdaptiveSearch({
     throw lastError;
   };
 
+  const emitProgress = async () => onProgress({ ...state });
+
   const processUnit = async (unit) => {
     if (state.cancelled || state.budgetExhausted) return [];
     if (await isCancelled()) {
@@ -114,6 +118,8 @@ export async function runAdaptiveSearch({
 
     const { cell, businessType, query } = unit;
     let saturated = false;
+    let failed = false;
+    let saturationAlreadyHandled = false;
     try {
       if (query.includedType && !keyword) {
         const response = await callWithRetry(() => provider.searchNearby({
@@ -135,7 +141,12 @@ export async function runAdaptiveSearch({
         let pageToken;
         let lastPageSize = 0;
         const usedTokens = new Set();
+        let pagesForRegion = 0;
         do {
+          if (await isCancelled()) {
+            state.cancelled = true;
+            break;
+          }
           const response = await callWithRetry(() => provider.searchText({
             textQuery: query.textQuery,
             includedType: query.includedType,
@@ -148,14 +159,21 @@ export async function runAdaptiveSearch({
           }));
           const places = Array.isArray(response?.places) ? response.places : [];
           state.textPages += 1;
+          pagesForRegion += 1;
           lastPageSize = places.length;
           state.rawResults += places.length;
           if (places.length) await onBatch(places, { cell, businessType, query });
 
           const next = response?.nextPageToken || null;
-          if (next && usedTokens.has(next)) {
+          if (next && pagesForRegion >= maxTextPagesPerRegion) {
             state.unresolvedSaturation = true;
             state.unresolvedRegions += 1;
+            saturationAlreadyHandled = true;
+            pageToken = null;
+          } else if (next && usedTokens.has(next)) {
+            state.unresolvedSaturation = true;
+            state.unresolvedRegions += 1;
+            saturationAlreadyHandled = true;
             pageToken = null;
           } else {
             if (next) usedTokens.add(next);
@@ -172,22 +190,31 @@ export async function runAdaptiveSearch({
       } else {
         state.errors += 1;
         state.unresolvedRegions += 1;
-        return [];
+        failed = true;
       }
     } finally {
       state.regionsCompleted += 1;
     }
 
-    if (!saturated) return [];
+    if (failed || state.cancelled || !saturated) {
+      await emitProgress();
+      return [];
+    }
     state.saturatedRegions += 1;
+    if (saturationAlreadyHandled) {
+      await emitProgress();
+      return [];
+    }
     if (state.budgetExhausted) {
       state.unresolvedSaturation = true;
       if (state.unresolvedRegions === 0) state.unresolvedRegions += 1;
+      await emitProgress();
       return [];
     }
     if (!canSubdivideCoverageCell(cell)) {
       state.unresolvedSaturation = true;
       state.unresolvedRegions += 1;
+      await emitProgress();
       return [];
     }
     const children = splitCoverageCell(cell).map((child) => ({
@@ -197,6 +224,7 @@ export async function runAdaptiveSearch({
     }));
     state.subdividedRegions += 1;
     state.regionsTotal += children.length;
+    await emitProgress();
     return children;
   };
 
@@ -205,7 +233,6 @@ export async function runAdaptiveSearch({
     pending = [];
     const children = await runWave(wave, concurrency, processUnit);
     for (const group of children) if (Array.isArray(group)) pending.push(...group);
-    await onProgress({ ...state });
   }
 
   if (pending.length > 0 && state.budgetExhausted) state.unresolvedSaturation = true;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   type InfiniteData,
   keepPreviousData,
@@ -24,9 +24,9 @@ import type {
   ImportSelection,
 } from '../types/discovery-types';
 
-export const DISCOVERY_PAGE_SIZE = 50;
-export const DISCOVERY_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
-export const DISCOVERY_MARKER_PAGE_SIZE = 1000;
+export const DISCOVERY_PAGE_SIZE = 500;
+export const DISCOVERY_PAGE_SIZE_OPTIONS = [100, 250, 500] as const;
+export const DISCOVERY_MARKER_PAGE_SIZE = 500;
 
 const ACTIVE_SESSION_STATUSES = new Set<DiscoverySessionStatus>([
   'DRAFT',
@@ -171,8 +171,8 @@ export function useDiscoveryResults(
     retry: shouldRetryDiscoveryQuery,
   });
   // BusinessList requests the next cursor only when the user scrolls near the
-  // end. Counts and "Add all" remain session-scoped on the server, so the
-  // browser never needs to materialize thousands of full result documents.
+  // end or clicks "Load more". Counts and "Add all" remain session-scoped on
+  // the server, so the browser never needs to materialize every result at once.
   return query;
 }
 
@@ -180,16 +180,11 @@ export function useFlattenedResults(data: InfiniteData<ResultPage> | undefined):
   return useMemo(() => dedupeById(data?.pages.flatMap((page) => page.data) ?? []), [data]);
 }
 
-/**
- * Load lightweight markers in bounded pages, independently of list paging.
- * Each cursor is automatically attempted once; an error pauses the sequence
- * until the user explicitly retries, preventing a failed page from looping.
- */
+/** Load one bounded page of lightweight markers without auto-draining the set. */
 export function useDiscoveryMarkers(
   sessionId: string | null,
   options: { enabled?: boolean } = {},
 ) {
-  const attemptedCursors = useRef(new Set<string>());
   const enabled = Boolean(sessionId) && (options.enabled ?? true);
   const query = useInfiniteQuery({
     queryKey: discoveryKeys.markers(sessionId),
@@ -205,33 +200,13 @@ export function useDiscoveryMarkers(
     refetchOnReconnect: false,
     retry: shouldRetryDiscoveryQuery,
   });
-  const {
-    hasNextPage,
-    isFetchingNextPage,
-    isFetchNextPageError,
-    fetchNextPage,
-    data,
-  } = query;
-
-  useEffect(() => {
-    attemptedCursors.current.clear();
-  }, [sessionId]);
-
-  const nextCursor = data?.pages.at(-1)?.pagination.nextCursor ?? null;
-  useEffect(() => {
-    if (!enabled || !hasNextPage || !nextCursor || isFetchingNextPage || isFetchNextPageError) return;
-    if (attemptedCursors.current.has(nextCursor)) return;
-    attemptedCursors.current.add(nextCursor);
-    void fetchNextPage({ cancelRefetch: false });
-  }, [enabled, hasNextPage, nextCursor, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
-
+  const nextCursor = query.data?.pages.at(-1)?.pagination.nextCursor ?? null;
   const retryFailedPage = useCallback(async () => {
     if (query.isFetchNextPageError && nextCursor) {
-      attemptedCursors.current.delete(nextCursor);
-      return fetchNextPage({ cancelRefetch: false });
+      return query.fetchNextPage({ cancelRefetch: false });
     }
     return query.refetch({ cancelRefetch: false });
-  }, [fetchNextPage, nextCursor, query]);
+  }, [nextCursor, query]);
 
   return { ...query, retryFailedPage };
 }

@@ -58,6 +58,7 @@ jest.unstable_mockModule('../../../config/index.js', () => ({
       maxSearchRequests: 50,
       maxCoverageCells: 25,
       concurrency: 3,
+      staleTimeoutMs: 600000,
       resultTtlDays: 30,
     },
   },
@@ -294,6 +295,58 @@ describe('discoveryService DTOs', () => {
 
     expect(dto.coverage.state).toBe('EXHAUSTED');
     expect(dto.coverage.reasonCodes).not.toContain('LEGACY_SINGLE_QUERY_NOT_EXHAUSTIVE');
+  });
+});
+
+describe('discoveryService.getSession', () => {
+  test('marks a stale active session failed so analysis cannot spin forever', async () => {
+    const staleSession = {
+      _id: 'stale-session',
+      status: DISCOVERY_SESSION_STATUS.FETCHING,
+      updatedAt: new Date('2026-01-01T00:00:00Z'),
+      progress: { stage: 'fetching', percent: 2, searchesCompleted: 0, searchesTotal: 16 },
+      counts: { discovered: 0, new: 0, existing: 0, possibleDuplicates: 0, imported: 0, skipped: 0, failed: 0 },
+    };
+    const failedSession = {
+      ...staleSession,
+      status: DISCOVERY_SESSION_STATUS.FAILED,
+      completedAt: new Date('2026-01-01T00:20:00Z'),
+      error: {
+        code: 'DISCOVERY_PROVIDER_ERROR',
+        message: 'Discovery analysis timed out after no progress from the worker.',
+        retryable: true,
+      },
+    };
+    mockGetSessionById.mockResolvedValue(staleSession);
+    mockSetSessionStatus.mockResolvedValue(failedSession);
+
+    const dto = await discoveryService.getSession('stale-session', USER);
+
+    expect(mockSetSessionStatus).toHaveBeenCalledWith('stale-session', DISCOVERY_SESSION_STATUS.FAILED, expect.objectContaining({
+      expectedStatus: expect.arrayContaining([DISCOVERY_SESSION_STATUS.FETCHING]),
+      set: expect.objectContaining({
+        error: expect.objectContaining({ retryable: true }),
+      }),
+      createdBy: USER,
+    }));
+    expect(dto.status).toBe(DISCOVERY_SESSION_STATUS.FAILED);
+    expect(dto.error?.message).toMatch(/timed out/i);
+  });
+
+  test('leaves recently updated active sessions running', async () => {
+    const freshSession = {
+      _id: 'fresh-session',
+      status: DISCOVERY_SESSION_STATUS.FETCHING,
+      updatedAt: new Date(),
+      progress: { stage: 'fetching', percent: 2 },
+      counts: { discovered: 0 },
+    };
+    mockGetSessionById.mockResolvedValue(freshSession);
+
+    const dto = await discoveryService.getSession('fresh-session', USER);
+
+    expect(mockSetSessionStatus).not.toHaveBeenCalled();
+    expect(dto.status).toBe(DISCOVERY_SESSION_STATUS.FETCHING);
   });
 });
 

@@ -217,6 +217,7 @@ const config = Object.freeze({
   discovery: {
     maxCoverageCells: envVars.DISCOVERY_MAX_COVERAGE_CELLS,
     concurrency: envVars.DISCOVERY_CONCURRENCY,
+    staleTimeoutMs: envVars.DISCOVERY_STALE_TIMEOUT_MS,
     resultTtlDays: envVars.DISCOVERY_RESULT_TTL_DAYS,
   },
 

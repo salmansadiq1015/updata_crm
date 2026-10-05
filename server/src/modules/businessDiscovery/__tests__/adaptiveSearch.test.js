@@ -38,6 +38,32 @@ describe('runAdaptiveSearch', () => {
     expect(state.unresolvedSaturation).toBe(false);
   });
 
+  test('reports progress after each completed region instead of waiting for the whole wave', async () => {
+    const provider = {
+      searchNearby: jest.fn(async ({ center }) => ({
+        places: places(`ok-${center.lat}`, 1),
+      })),
+      searchText: jest.fn(),
+    };
+    const progressEvents = [];
+
+    await runAdaptiveSearch({
+      provider,
+      cells: [
+        rootCell,
+        { ...rootCell, id: '1', center: { lat: 48.9, lng: 2.4 } },
+      ],
+      businessTypes: [{ id: 'restaurant' }],
+      concurrency: 1,
+      maxSearchRequests: 10,
+      retryDelay: async () => {},
+      onProgress: async (progress) => progressEvents.push(progress),
+    });
+
+    expect(progressEvents.map((event) => event.regionsCompleted)).toEqual([1, 2]);
+    expect(progressEvents.every((event) => event.regionsTotal === 2)).toBe(true);
+  });
+
   test('follows every Text Search nextPageToken and uses cell restriction bounds', async () => {
     const provider = {
       searchNearby: jest.fn(),

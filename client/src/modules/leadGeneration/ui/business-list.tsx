@@ -5,7 +5,7 @@
 // selection, hover and open are driven by the parent through callbacks so the
 // same list is trivially testable.
 
-import { memo, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { AlertTriangle, Loader2, MapPin, Plus, SearchX, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -147,6 +147,9 @@ export type BusinessListProps = {
   onHover: (id: string | null) => void;
   onAddLead: (result: DiscoveryResult) => void;
   addingId?: string | null;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
   isLoading?: boolean;
   isError?: boolean;
   errorStatusCode?: number;
@@ -164,6 +167,9 @@ export function BusinessList({
   onHover,
   onAddLead,
   addingId,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
   isLoading,
   isError,
   errorStatusCode,
@@ -173,6 +179,7 @@ export function BusinessList({
   const { t } = useLanguage();
   const parentRef = useRef<HTMLDivElement | null>(null);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual is the existing virtualization layer for large result lists.
   const rowVirtualizer = useVirtualizer({
     count: results.length,
     getScrollElement: () => parentRef.current,
@@ -181,6 +188,13 @@ export function BusinessList({
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
+  const lastVirtualItem = virtualItems.at(-1);
+  const lastVirtualIndex = lastVirtualItem?.index ?? -1;
+
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage || !onLoadMore || results.length === 0) return;
+    if (lastVirtualIndex >= results.length - 12) onLoadMore();
+  }, [hasNextPage, isFetchingNextPage, lastVirtualIndex, onLoadMore, results.length]);
 
   if (isLoading) {
     return (
@@ -270,6 +284,13 @@ export function BusinessList({
           );
         })}
       </div>
+      {hasNextPage && (
+        <div className="border-t border-border px-3 py-3 text-center text-xs text-muted-foreground">
+          {isFetchingNextPage
+            ? t('leadgen.pagination.loadingMore', 'Loading more results…')
+            : t('leadgen.pagination.scrollHint', 'Scroll for more results or use Load more.')}
+        </div>
+      )}
     </div>
   );
 }

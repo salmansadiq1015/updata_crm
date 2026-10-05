@@ -9,7 +9,7 @@
 // Server state = TanStack Query (foundation hooks); UI state = the lead-gen
 // store; the open result = the `?detail=` URL param. Realtime merges live
 // progress/results into the cache, with `useDiscoverySession({poll:true})` as a
-// socket-less fallback.
+// server-truth heartbeat.
 
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -29,9 +29,8 @@ import {
   useCancelDiscovery,
   useCreateDiscovery,
   useDiscoveryResults,
-  useDiscoveryMarkers,
   useDiscoverySession,
-  useFlattenedMarkers,
+  useFlattenedResults,
   useImportResult,
 } from '../hooks/use-discovery';
 import { useDiscoveryRealtime } from '../hooks/use-discovery-realtime';
@@ -117,7 +116,6 @@ export function LeadGenWorkspace() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pageSize, setPageSize] = useState(DISCOVERY_PAGE_SIZE);
-  const [resultPagination, setResultPagination] = useState({ scopeKey: '', pageIndex: 0 });
   const [importDialog, setImportDialog] = useState<{ open: boolean; selection: ImportSelection }>({
     open: false,
     selection: { kind: 'ALL_NEW' },
@@ -125,9 +123,10 @@ export function LeadGenWorkspace() {
 
   const createDiscovery = useCreateDiscovery();
   const cancelDiscovery = useCancelDiscovery();
-  const realtimeConnected = useDiscoveryRealtime(sessionId);
-  // Socket events are primary. Poll only while the socket is unavailable.
-  const sessionQuery = useDiscoverySession(sessionId, { poll: !realtimeConnected });
+  useDiscoveryRealtime(sessionId);
+  // Keep a light server-truth heartbeat even when realtime is connected. A
+  // missed socket event should never leave the analysis screen stale forever.
+  const sessionQuery = useDiscoverySession(sessionId, { poll: true, pollInterval: 5000 });
   const importResult = useImportResult(sessionId ?? '');
   const usersQuery = useWorkspaceUsers();
 
@@ -149,27 +148,11 @@ export function LeadGenWorkspace() {
   );
   const resultsQuery = useDiscoveryResults(sessionId, resultParams);
   const session = sessionQuery.data;
-  const markerPagingEnabled = Boolean(session && !isActiveSession(session.status));
-  const markersQuery = useDiscoveryMarkers(sessionId, { enabled: markerPagingEnabled });
-  const markers = useFlattenedMarkers(markersQuery.data);
   const resultPages = resultsQuery.data?.pages ?? [];
-  const resultScopeKey = `${sessionId ?? ''}:${JSON.stringify(resultParams)}`;
-  const scopedPageIndex = resultPagination.scopeKey === resultScopeKey ? resultPagination.pageIndex : 0;
-  const resultPageIndex = Math.min(scopedPageIndex, Math.max(0, resultPages.length - 1));
-  const results = resultPages[resultPageIndex]?.data ?? [];
+  const results = useFlattenedResults(resultsQuery.data);
   const filteredTotal = resultPages[0]?.pagination.total
     ?? session?.counts.discovered
     ?? results.length;
-  const setResultPageIndex = useCallback(
-    (next: number | ((current: number) => number)) => {
-      setResultPagination((current) => {
-        const currentPage = current.scopeKey === resultScopeKey ? current.pageIndex : 0;
-        const nextPage = typeof next === 'function' ? next(currentPage) : next;
-        return { scopeKey: resultScopeKey, pageIndex: Math.max(0, nextPage) };
-      });
-    },
-    [resultScopeKey],
-  );
 
   const inResults = step === 3 && Boolean(sessionId);
   const hasResults = (session?.counts.discovered ?? 0) > 0 || results.length > 0;
@@ -277,14 +260,8 @@ export function LeadGenWorkspace() {
   };
 
   const handleNextResultPage = async () => {
-    const nextPageIndex = resultPageIndex + 1;
-    if (resultPages[nextPageIndex]) {
-      setResultPageIndex(nextPageIndex);
-      return;
-    }
     if (!resultsQuery.hasNextPage || resultsQuery.isFetchingNextPage) return;
-    const next = await resultsQuery.fetchNextPage({ cancelRefetch: false });
-    if (next.data?.pages[nextPageIndex]) setResultPageIndex(nextPageIndex);
+    await resultsQuery.fetchNextPage({ cancelRefetch: false });
   };
 
   const handleReopen = (target: DiscoverySession) => {
@@ -375,28 +352,19 @@ export function LeadGenWorkspace() {
             sessionId={sessionId!}
             session={session}
             results={results}
-            markers={markers}
+            markers={[]}
             isLoading={resultsQuery.isLoading}
             isError={resultsQuery.isError}
             errorStatusCode={(resultsQuery.error as { statusCode?: number } | null)?.statusCode}
             onRetry={() => void resultsQuery.refetch()}
-            pageIndex={resultPageIndex}
             pageSize={pageSize}
             filteredTotal={filteredTotal}
-            loadedPages={resultPages.length}
+            loadedCount={results.length}
             hasNextPage={resultsQuery.hasNextPage}
             isFetchingNextPage={resultsQuery.isFetchingNextPage}
             isFetchNextPageError={resultsQuery.isFetchNextPageError}
-            onFirstPage={() => setResultPageIndex(0)}
-            onPreviousPage={() => setResultPageIndex((page) => Math.max(0, page - 1))}
-            onNextPage={() => void handleNextResultPage()}
-            onPageSizeChange={(size) => {
-              setResultPageIndex(0);
-              setPageSize(size);
-            }}
-            markersLoading={markerPagingEnabled && (markersQuery.isLoading || markersQuery.isFetchingNextPage)}
-            markersError={markersQuery.isError || markersQuery.isFetchNextPageError}
-            onRetryMarkers={() => void markersQuery.retryFailedPage()}
+            onLoadMore={() => void handleNextResultPage()}
+            onPageSizeChange={setPageSize}
             onOpenResult={openResult}
             onOpenResultId={openResultId}
             onAddLead={addLead}

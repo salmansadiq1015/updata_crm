@@ -124,13 +124,14 @@ export const listSessions = {
 
 export const listResults = {
   query: cursorPagination.keys({
+    limit: Joi.number().integer().min(1).max(1000).default(500),
     search: Joi.string().trim().max(120).allow(''),
     matchingStatus: Joi.string().valid(...Object.values(RESULT_MATCHING_STATUS)),
     importStatus: Joi.string().valid(...Object.values(RESULT_IMPORT_STATUS)),
     hasPhone: Joi.boolean(),
     hasWebsite: Joi.boolean(),
     minRating: Joi.number().min(0).max(5),
-    sortBy: Joi.string().valid('discoveredAt', 'rating', 'reviewCount', 'business.name').default('discoveredAt'),
+    sortBy: Joi.string().valid('discoveredAt', 'rating', 'reviewCount', 'business.name', 'name').default('discoveredAt'),
   }),
 };
 

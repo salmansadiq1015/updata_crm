@@ -32,7 +32,7 @@ export class DocumentIngestionWorker extends BaseWorker {
       try {
         settings = await integrationConfigService.getByKey(source.key);
       } catch (err) {
-        logger.warn('Could not read an ingestion source configuration', {
+        logger.debug('Skipping unconfigured ingestion source', {
           module: 'document-ingestion', action: 'job', source: source.key, error: err.message,
         });
         continue;

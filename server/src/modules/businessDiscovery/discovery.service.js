@@ -61,6 +61,12 @@ const NON_TERMINAL_STATUSES = Object.freeze([
   DISCOVERY_SESSION_STATUS.MATCHING,
 ]);
 
+const STALE_FAILURE_ERROR = Object.freeze({
+  code: ERROR_CODES.DISCOVERY_PROVIDER_ERROR,
+  message: 'Discovery analysis timed out after no progress from the worker.',
+  retryable: true,
+});
+
 function toObjectId(id) {
   if (id instanceof mongoose.Types.ObjectId) return id;
   return new mongoose.Types.ObjectId(String(id));
@@ -222,10 +228,11 @@ class DiscoveryService {
 
   /** Get one session (scoped), or throw DISCOVERY_SESSION_NOT_FOUND. */
   async getSession(id, createdBy) {
-    const session = await discoveryRepository.getSessionById(id, { createdBy });
+    let session = await discoveryRepository.getSessionById(id, { createdBy });
     if (!session) {
       throw new AppError('Discovery session not found', 404, ERROR_CODES.DISCOVERY_SESSION_NOT_FOUND);
     }
+    session = await this._markStaleActiveSession(session, createdBy);
     return this.toSessionDTO(session);
   }
 
@@ -565,6 +572,31 @@ class DiscoveryService {
       }
     }
     return out;
+  }
+
+  async _markStaleActiveSession(session, createdBy) {
+    if (!session || !NON_TERMINAL_STATUSES.includes(session.status)) return session;
+    const updatedAt = session.updatedAt ? new Date(session.updatedAt).getTime() : 0;
+    const timeoutMs = config.discovery.staleTimeoutMs ?? 10 * 60 * 1000;
+    if (!updatedAt || Date.now() - updatedAt < timeoutMs) return session;
+
+    const updated = await discoveryRepository.setSessionStatus(session._id, DISCOVERY_SESSION_STATUS.FAILED, {
+      expectedStatus: NON_TERMINAL_STATUSES,
+      set: {
+        completedAt: new Date(),
+        error: STALE_FAILURE_ERROR,
+      },
+      createdBy,
+    });
+    if (!updated) return session;
+
+    logger.warn('Marked stale discovery session as failed', {
+      module: LOG_MODULE,
+      action: 'staleSession.fail',
+      sessionId: String(session._id),
+      staleMs: Date.now() - updatedAt,
+    });
+    return updated;
   }
 }
 

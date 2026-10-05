@@ -1,47 +1,37 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, ChevronsLeft, Loader2, RotateCcw } from 'lucide-react';
+import { ChevronDown, Loader2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { DISCOVERY_PAGE_SIZE_OPTIONS } from '../hooks/use-discovery';
 
 type ResultPaginationProps = {
-  pageIndex: number;
   pageSize: number;
   total: number;
-  loadedPages: number;
+  loadedCount: number;
   hasNextPage?: boolean;
   isFetching?: boolean;
   isError?: boolean;
-  onFirst: () => void;
-  onPrevious: () => void;
-  onNext: () => void;
+  onLoadMore: () => void;
   onPageSizeChange: (pageSize: number) => void;
   onRetry?: () => void;
 };
 
 export function ResultPagination({
-  pageIndex,
   pageSize,
   total,
-  loadedPages,
+  loadedCount,
   hasNextPage,
   isFetching,
   isError,
-  onFirst,
-  onPrevious,
-  onNext,
+  onLoadMore,
   onPageSizeChange,
   onRetry,
 }: ResultPaginationProps) {
   const { t } = useLanguage();
-  const page = pageIndex + 1;
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const start = total === 0 ? 0 : pageIndex * pageSize + 1;
-  const end = Math.min((pageIndex + 1) * pageSize, total);
-  const canGoBack = pageIndex > 0 && !isFetching;
-  const canGoNext = !isFetching && page < pageCount && (pageIndex + 1 < loadedPages || Boolean(hasNextPage));
+  const loaded = Math.min(loadedCount, total || loadedCount);
+  const canLoadMore = !isFetching && Boolean(hasNextPage);
 
   return (
     <nav
@@ -50,12 +40,12 @@ export function ResultPagination({
     >
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
         <span className="whitespace-nowrap tabular-nums" aria-live="polite">
-          {t('leadgen.pagination.range', '{start}–{end} of {total}', { start, end, total })}
+          {t('leadgen.pagination.loaded', 'Showing {loaded} of {total}', { loaded, total })}
         </span>
         <Select value={String(pageSize)} onValueChange={(value: string) => onPageSizeChange(Number(value))}>
           <SelectTrigger
             className="h-7 w-[72px] rounded-lg text-[11px]"
-            aria-label={t('common.rowsPerPage', 'Rows per page')}
+            aria-label={t('common.rowsPerBatch', 'Rows per batch')}
           >
             <SelectValue />
           </SelectTrigger>
@@ -74,43 +64,19 @@ export function ResultPagination({
             {t('common.retry', 'Retry')}
           </Button>
         )}
-        <span className="me-1 whitespace-nowrap text-[11px] text-muted-foreground tabular-nums">
-          {t('common.pageOf', 'Page {page} of {total}', { page, total: pageCount })}
-        </span>
         <Button
           type="button"
           variant="outline"
-          size="icon"
-          className="h-7 w-7 rounded-lg"
-          onClick={onFirst}
-          disabled={!canGoBack}
-          aria-label={t('common.firstPage', 'First page')}
-        >
-          <ChevronsLeft className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-7 w-7 rounded-lg"
-          onClick={onPrevious}
-          disabled={!canGoBack}
-          aria-label={t('common.previousPage', 'Previous page')}
-        >
-          <ChevronLeft className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden="true" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-7 w-7 rounded-lg"
-          onClick={onNext}
-          disabled={!canGoNext}
-          aria-label={t('common.nextPage', 'Next page')}
+          size="sm"
+          className="h-7 gap-1.5 rounded-lg px-2 text-[11px]"
+          onClick={onLoadMore}
+          disabled={!canLoadMore}
+          aria-label={t('leadgen.pagination.loadMore', 'Load more results')}
         >
           {isFetching
             ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-            : <ChevronRight className="h-3.5 w-3.5 rtl:-scale-x-100" aria-hidden="true" />}
+            : <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />}
+          {t('leadgen.pagination.loadMore', 'Load more')}
         </Button>
       </div>
     </nav>

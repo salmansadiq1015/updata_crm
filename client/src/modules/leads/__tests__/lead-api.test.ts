@@ -27,6 +27,18 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 describe('leadApi', () => {
+  it('getFilterOptions normalizes database-backed place and type facets', async () => {
+    const options = await leadApi.getFilterOptions();
+    expect(options.places).toEqual([
+      { city: 'Basel', cantons: ['BS'], count: 1 },
+      { city: 'Zürich', cantons: ['ZH'], count: 2 },
+    ]);
+    expect(options.types).toEqual([
+      { value: 'business', count: 2 },
+      { value: 'private', count: 1 },
+    ]);
+  });
+
   it('listLeads returns the cursor page shape { data, pagination }', async () => {
     server.use(
       http.get(L, () => HttpResponse.json(okPage([makeLeadDTO()], { hasNext: true, nextCursor: 'c2', limit: 20 }))),

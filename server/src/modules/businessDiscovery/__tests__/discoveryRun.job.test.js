@@ -58,22 +58,30 @@ jest.unstable_mockModule('../provider/GooglePlacesProvider.js', () => ({
 }));
 
 const mockPlanCoverage = jest.fn();
-jest.unstable_mockModule('../engine/coveragePlanner.js', () => ({ planCoverage: mockPlanCoverage }));
-
-const mockMergeCellResults = jest.fn();
-jest.unstable_mockModule('../engine/deduplicator.js', () => ({ mergeCellResults: mockMergeCellResults }));
+jest.unstable_mockModule('../engine/coveragePlanner.js', () => ({
+  planCoverage: mockPlanCoverage,
+  PROVIDER_PAGE_SIZE: 20,
+  canSubdivideCoverageCell: () => false,
+  splitCoverageCell: () => [],
+}));
 
 const mockNormalizeBusiness = jest.fn();
 jest.unstable_mockModule('../engine/normalizer.js', () => ({ normalizeBusiness: mockNormalizeBusiness }));
 
-const mockPointInPolygon = jest.fn();
-jest.unstable_mockModule('../engine/geometry.js', () => ({ pointInPolygon: mockPointInPolygon }));
+const mockPointInArea = jest.fn();
+jest.unstable_mockModule('../engine/geometry.js', () => ({
+  pointInArea: mockPointInArea,
+  haversineMeters: jest.fn(() => 1000),
+}));
 
 const mockClassifyBatch = jest.fn();
 jest.unstable_mockModule('../engine/crmMatcher.js', () => ({ default: { classifyBatch: mockClassifyBatch } }));
 
 const mockResolveProviderQuery = jest.fn();
-jest.unstable_mockModule('../businessTypeCatalog.js', () => ({ resolveProviderQuery: mockResolveProviderQuery }));
+jest.unstable_mockModule('../businessTypeCatalog.js', () => ({
+  resolveProviderQuery: mockResolveProviderQuery,
+  matchesProviderType: () => true,
+}));
 
 jest.unstable_mockModule('../discoverySession.model.js', () => ({
   DISCOVERY_SESSION_STATUS: {
@@ -130,6 +138,10 @@ function makeSession(overrides = {}) {
     keyword: null,
     config: { maxResults: 200, maxSearchRequests: 50, maxCoverageCells: 25, concurrency: 2 },
     area: { type: 'radius', geometry: { type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] } },
+    location: {
+      name: 'Paris', city: 'Paris', countryCode: 'FR', formattedAddress: 'Paris, France',
+      center: { type: 'Point', coordinates: [2.3522, 48.8566] },
+    },
     businessTypes: [{ id: 'restaurant' }],
     ...overrides,
   };
@@ -144,14 +156,17 @@ const oneCellPlan = () => ({
 });
 
 describe('DiscoveryRunWorker.process', () => {
+  test('uses the versioned adaptive discovery queue', () => {
+    expect(new DiscoveryRunWorker().name).toBe('discovery-run-v2');
+  });
+
   test('happy path persists results and marks COMPLETED', async () => {
     repo.getSessionById.mockResolvedValue(makeSession());
     mockPlanCoverage.mockReturnValue(oneCellPlan());
     mockResolveProviderQuery.mockReturnValue({ includedType: 'restaurant' });
     mockProvider.searchNearby.mockResolvedValue({ places: [{ id: 'place-1', displayName: { text: 'R1' } }] });
-    mockMergeCellResults.mockReturnValue([{ id: 'place-1', displayName: { text: 'R1' } }]);
     mockNormalizeBusiness.mockReturnValue({ name: 'R1', location: { type: 'Point', coordinates: [8.54, 47.37] } });
-    mockPointInPolygon.mockReturnValue(true);
+    mockPointInArea.mockReturnValue(true);
     mockClassifyBatch.mockResolvedValue([{ status: 'NEW', matchedBy: [] }]);
     repo.bulkUpsertResults.mockResolvedValue({ upsertedCount: 1, modifiedCount: 0 });
     repo.countsForSession.mockResolvedValue({
@@ -161,10 +176,10 @@ describe('DiscoveryRunWorker.process', () => {
     const worker = new DiscoveryRunWorker();
     const out = await worker.process({ data: { sessionId: 'sess-1', createdBy: 'user-1' } });
 
-    // searchNearby used (includedType, no keyword) with the discovery field mask
+    // Search responses include contact fields for accurate CRM matching.
     expect(mockProvider.searchNearby).toHaveBeenCalledWith(expect.objectContaining({
       includedTypes: ['restaurant'],
-      fieldProfile: 'DISCOVERY_MINIMAL',
+      fieldProfile: 'DETAILS_IMPORT',
     }));
 
     // persisted result doc shape
@@ -177,6 +192,13 @@ describe('DiscoveryRunWorker.process', () => {
       provider: { name: 'google_places', placeId: 'place-1' },
       matching: { status: 'NEW' },
       import: { status: 'NOT_IMPORTED' },
+      discoveryContext: expect.objectContaining({
+        businessTypeIds: ['restaurant'],
+        matchedBusinessTypeId: 'restaurant',
+        location: expect.objectContaining({ city: 'Paris', countryCode: 'FR' }),
+        area: expect.objectContaining({ type: 'radius' }),
+        searchCoordinates: expect.objectContaining({ radiusMeters: 1000 }),
+      }),
     });
 
     const statuses = repo.setSessionStatus.mock.calls.map((c) => c[1]);
@@ -191,7 +213,6 @@ describe('DiscoveryRunWorker.process', () => {
     mockResolveProviderQuery.mockReturnValue({ includedType: 'restaurant' });
     const providerErr = Object.assign(new Error('google unavailable'), { code: 'DISCOVERY_PROVIDER_ERROR', retryable: true });
     mockProvider.searchNearby.mockRejectedValue(providerErr);
-    mockMergeCellResults.mockReturnValue([]);
 
     const worker = new DiscoveryRunWorker();
     const out = await worker.process({ data: { sessionId: 'sess-2', createdBy: 'user-1' } });
@@ -211,7 +232,6 @@ describe('DiscoveryRunWorker.process', () => {
       .mockResolvedValueOnce(notCancelled) // process() start
       .mockResolvedValue(cancelled); // in-cell cancel check
     mockPlanCoverage.mockReturnValue(oneCellPlan());
-    mockMergeCellResults.mockReturnValue([]);
 
     const worker = new DiscoveryRunWorker();
     const out = await worker.process({ data: { sessionId: 'sess-3', createdBy: 'user-1' } });

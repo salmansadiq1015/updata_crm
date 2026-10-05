@@ -2,12 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { translations } from '@/lib/i18n/translations';
+import { SUPPORTED_LOCALES } from '@/lib/i18n/locale-config';
 import {
   DASHBOARD_BREAKDOWN_LABEL_KEYS,
   DASHBOARD_METRIC_LABEL_KEYS,
 } from '../utils/dashboard-i18n';
 
-const locales = ['de', 'en'];
+const locales = SUPPORTED_LOCALES;
 const dashboardRoot = path.resolve(process.cwd(), 'src/modules/dashboard');
 
 const sourceFiles = [

@@ -828,6 +828,7 @@ export const ENDPOINTS = Object.freeze({
     SESSION_CANCEL: (id) => `/business-discovery/sessions/${id}/cancel`,
     // Results (per session)
     SESSION_RESULTS: (id) => `/business-discovery/sessions/${id}/results`,
+    SESSION_MARKERS: (id) => `/business-discovery/sessions/${id}/markers`,
     SESSION_RESULT_BY_ID: (id, resultId) => `/business-discovery/sessions/${id}/results/${resultId}`,
     // Import
     IMPORT_PREVIEW: (id) => `/business-discovery/sessions/${id}/import/preview`,
@@ -840,6 +841,7 @@ export const ENDPOINTS = Object.freeze({
   },
   LEADS: {
     LIST: '/crm/leads',
+    FILTER_OPTIONS: '/crm/leads/filter-options',
     BY_ID: (id) => `/crm/leads/${id}`,
     CONVERT: (id) => `/crm/leads/${id}/convert`,
     DUPLICATES: '/crm/leads/duplicates',

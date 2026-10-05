@@ -31,6 +31,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 // Named routes BEFORE /:id
 router.get('/duplicates', authenticate, requirePermission('lead:read'), validate(duplicates), (req, res, next) => leadController.duplicates(req, res, next));
+router.get('/filter-options', authenticate, requirePermission('lead:read'), (req, res, next) => leadController.filterOptions(req, res, next));
 
 // Import / export (named routes, BEFORE /:id)
 router.post('/import', authenticate, requirePermission('lead:import'), uploadLimiter, upload.single('file'), (req, res, next) => leadController.importLeads(req, res, next));

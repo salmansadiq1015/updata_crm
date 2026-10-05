@@ -42,6 +42,7 @@ import { AiAccuracyAggregationWorker } from './aiAccuracyAggregation.job.js';
 import { NewsletterDispatchWorker } from './newsletterDispatch.job.js';
 import { ScheduledNewsletterWorker } from './scheduledNewsletter.job.js';
 import { DiscoveryRunWorker } from './discoveryRun.job.js';
+import { DISCOVERY_QUEUE_NAME } from '../modules/businessDiscovery/discovery.constants.js';
 import { LeadImportWorker } from './leadImport.job.js';
 import { LeadEnrichmentWorker } from './leadEnrichment.job.js';
 import { registerAiAgentJob } from './aiAgent.job.js';
@@ -638,7 +639,7 @@ export function registerJobs() {
 
   // Business discovery — Google Places search pipeline (fan-out, bounded concurrency)
   const discoveryRun = new DiscoveryRunWorker();
-  queueManager.registerQueue('discovery-run', discoveryRun.getHandler(), {
+  queueManager.registerQueue(DISCOVERY_QUEUE_NAME, discoveryRun.getHandler(), {
     concurrency: 2,
     jobOptions: {
       attempts: 3,
@@ -676,7 +677,7 @@ export function registerJobs() {
   logger.info('Background jobs registered', {
     module: 'jobs',
     action: 'register',
-    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'document-ingestion', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'catalog-sync', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'field-ticket-escalation', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', 'discovery-run', 'lead-import', 'lead-enrichment', 'ai-agent', 'ai-agent-timeout'],
+    queues: ['file-cleanup', 'health-check', 'auth-email', 'audit-log', 'audit-cleanup', 'maintenance-check', 'document-ingestion', 'project-archive', 'prep-action-overdue', 'appointment-reminder', 'daily-report-reminder', 'report-escalation', 'quotation-expiry', 'quotation-follow-up', 'invoice-overdue', 'qop-appointment-dispatch', 'number-sequence-reset', 'document-generation', 'email-dispatch', 'igh-import', 'catalog-sync', 'scheduled-price-update', 'article-import', 'bank-statement-import', 'auto-reconciliation', 'ocr-processing', 'scheduled-payment-batch', 'task-reminder-dispatch', 'task-overdue-check', 'field-ticket-escalation', 'notification-dispatch', 'notification-push', 'notification-email', 'notification-in-app', 'scheduled-notification-poll', 'integration-health-check', 'widget-submission-process', 'ai-transcription', 'ai-accuracy-aggregation', 'newsletter-dispatch', 'scheduled-newsletter', DISCOVERY_QUEUE_NAME, 'lead-import', 'lead-enrichment', 'ai-agent', 'ai-agent-timeout'],
   });
 }
 

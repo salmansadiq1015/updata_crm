@@ -7,6 +7,7 @@ import {
   discoveryResultsDiscoveredTotal,
   discoveryRunDuration,
 } from '../metrics/index.js';
+import { DISCOVERY_QUEUE_NAME } from '../modules/businessDiscovery/discovery.constants.js';
 
 /**
  * Discovery run worker (Module 15).
@@ -27,31 +28,10 @@ import {
 
 const LOG_MODULE = 'businessDiscovery';
 const PERSIST_BATCH = 100;
-// Google Places (New) Text Search paginates to ~3 pages (60 results); bound it.
-const MAX_TEXT_PAGES = 3;
-
-/** Run an async worker over items with a bounded concurrency pool. */
-async function runWithConcurrency(items, limit, worker) {
-  const results = new Array(items.length);
-  let index = 0;
-  const size = Math.max(1, Math.min(limit || 1, items.length || 1));
-  const runners = [];
-  for (let i = 0; i < size; i += 1) {
-    runners.push((async () => {
-      while (index < items.length) {
-        const current = index;
-        index += 1;
-        results[current] = await worker(items[current]);
-      }
-    })());
-  }
-  await Promise.all(runners);
-  return results;
-}
 
 export class DiscoveryRunWorker extends BaseWorker {
   constructor() {
-    super('discovery-run');
+    super(DISCOVERY_QUEUE_NAME);
   }
 
   /** Skip when the session already reached a terminal state (COMPLETED/CANCELLED). */
@@ -76,11 +56,11 @@ export class DiscoveryRunWorker extends BaseWorker {
     const { default: discoveryRepository } = await import('../modules/businessDiscovery/discovery.repository.js');
     const { getPlacesProvider } = await import('../modules/businessDiscovery/provider/GooglePlacesProvider.js');
     const { planCoverage } = await import('../modules/businessDiscovery/engine/coveragePlanner.js');
-    const { mergeCellResults } = await import('../modules/businessDiscovery/engine/deduplicator.js');
+    const { runAdaptiveSearch } = await import('../modules/businessDiscovery/engine/adaptiveSearch.js');
     const { normalizeBusiness } = await import('../modules/businessDiscovery/engine/normalizer.js');
-    const { pointInPolygon } = await import('../modules/businessDiscovery/engine/geometry.js');
+    const { pointInArea, haversineMeters } = await import('../modules/businessDiscovery/engine/geometry.js');
     const { default: crmMatcher } = await import('../modules/businessDiscovery/engine/crmMatcher.js');
-    const { resolveProviderQuery } = await import('../modules/businessDiscovery/businessTypeCatalog.js');
+    const { matchesProviderType } = await import('../modules/businessDiscovery/businessTypeCatalog.js');
     const { DISCOVERY_SESSION_STATUS } = await import('../modules/businessDiscovery/discoverySession.model.js');
     const { RESULT_MATCHING_STATUS, RESULT_IMPORT_STATUS } = await import('../modules/businessDiscovery/discoveryResult.model.js');
     const {
@@ -126,230 +106,296 @@ export class DiscoveryRunWorker extends BaseWorker {
 
       const provider = getPlacesProvider();
       const keyword = session.keyword && String(session.keyword).trim() ? String(session.keyword).trim() : null;
-      const maxResults = session.config?.maxResults ?? config.discovery.maxResults;
-      const maxSearchRequests = session.config?.maxSearchRequests ?? config.discovery.maxSearchRequests;
+      // New sessions deliberately store null: result coverage must not stop at
+      // an application-defined request count. Only honor a finite value carried
+      // by a legacy session that was created under the old budgeted behavior.
+      const maxSearchRequests = Number.isFinite(session.config?.maxSearchRequests)
+        ? session.config.maxSearchRequests
+        : undefined;
       const concurrency = session.config?.concurrency ?? config.discovery.concurrency;
 
       // ── Plan coverage from the stored normalized polygon ──
       const plan = planCoverage({ type: 'polygon', geometry: session.area?.geometry }, {
         maxCoverageCells: session.config?.maxCoverageCells,
-        maxSearchRequests,
       });
-      const totalCells = plan.cells.length;
+      const initialRegions = plan.cells.length * Math.max(1, session.businessTypes?.length || 0);
 
       await discoveryRepository.setSessionStatus(sessionId, STATUS.FETCHING, {
-        set: { 'progress.stage': 'fetching', 'progress.searchesTotal': totalCells },
+        set: {
+          'progress.stage': 'fetching',
+          'progress.searchesTotal': initialRegions,
+          'coverage.strategy': plan.strategy,
+          'coverage.state': 'RUNNING',
+          'coverage.providerGuaranteesCompleteness': false,
+          'coverage.searchesTotal': initialRegions,
+          'coverage.reasonCodes': ['PROVIDER_CATALOG_NOT_GUARANTEED'],
+        },
         createdBy,
       });
       emitDiscoveryProgress(sessionId, {
         sessionId, status: STATUS.FETCHING, stage: 'fetching', percent: 2,
-        searchesCompleted: 0, searchesTotal: totalCells, resultsDiscovered: 0,
+        searchesCompleted: 0, searchesTotal: initialRegions, resultsDiscovered: 0,
       });
-
-      const state = {
-        searchesUsed: 0,
-        cellsCompleted: 0,
-        cellErrors: 0,
-        collected: 0,
-        cancelled: false,
-        budgetExhausted: false,
+      const centerCoordinates = session.location?.center?.coordinates;
+      const exactArea = {
+        type: session.area?.type,
+        radiusMeters: session.area?.radiusMeters,
+        bounds: session.area?.bounds,
+        geometry: session.area?.geometry,
+        center: Array.isArray(centerCoordinates)
+          ? { lng: centerCoordinates[0], lat: centerCoordinates[1] }
+          : null,
       };
-
-      const reserveSearch = () => {
-        if (state.searchesUsed >= maxSearchRequests) {
-          state.budgetExhausted = true;
-          return false;
-        }
-        state.searchesUsed += 1;
-        return true;
-      };
-
-      // ── Per-cell fetch (one coverage circle; every selected business type) ──
-      const processCell = async (cell) => {
-        if (state.cancelled || state.budgetExhausted) return [];
-
-        // Cooperative cancellation: re-check the flag between cells.
-        try {
-          const fresh = await discoveryRepository.getSessionById(sessionId, { createdBy });
-          if (!fresh || fresh.cancelRequested) {
-            state.cancelled = true;
-            return [];
-          }
-        } catch { /* transient read error — keep going */ }
-
-        const places = [];
-        for (const businessType of session.businessTypes || []) {
-          if (state.cancelled || state.budgetExhausted) break;
-
-          let query;
-          try {
-            query = resolveProviderQuery(businessType.id, keyword);
-          } catch (err) {
-            if (err?.code === 'INVALID_BUSINESS_TYPE') continue;
-            throw err;
-          }
-
-          try {
-            if (query.includedType && !keyword) {
-              if (!reserveSearch()) break;
-              const { places: found } = await provider.searchNearby({
-                center: cell.center,
-                radiusMeters: cell.radiusMeters,
-                includedTypes: [query.includedType],
-                fieldProfile: 'DISCOVERY_MINIMAL',
-              });
-              discoverySearchesTotal.inc({ status: 'success' });
-              places.push(...found);
-              state.collected += found.length;
-            } else {
-              let pageToken;
-              let pages = 0;
-              do {
-                if (state.collected >= maxResults) break;
-                if (!reserveSearch()) break;
-                const resp = await provider.searchText({
-                  textQuery: query.textQuery,
-                  includedType: query.includedType,
-                  center: cell.center,
-                  radiusMeters: cell.radiusMeters,
-                  fieldProfile: 'DISCOVERY_MINIMAL',
-                  pageToken,
-                });
-                discoverySearchesTotal.inc({ status: 'success' });
-                places.push(...resp.places);
-                state.collected += resp.places.length;
-                pageToken = resp.nextPageToken;
-                pages += 1;
-              } while (pageToken && pages < MAX_TEXT_PAGES);
-            }
-          } catch (err) {
-            discoverySearchesTotal.inc({ status: 'error' });
-            // Not-configured would fail every call → fatal for the whole run.
-            if (err?.code === ERROR_CODES.DISCOVERY_NOT_CONFIGURED) throw err;
-            state.cellErrors += 1;
-            logger.warn('Discovery cell search failed (continuing — partial)', {
-              module: LOG_MODULE, action: 'process.cell', sessionId: String(sessionId),
-              code: err?.code ?? null, retryable: err?.retryable ?? null,
-            });
-            // Continue to the next business type → partial coverage, not a failure.
-          }
-        }
-
-        state.cellsCompleted += 1;
-        const percent = Math.min(80, 2 + Math.round((state.cellsCompleted / Math.max(1, totalCells)) * 78));
-        await discoveryRepository.updateSessionProgress(sessionId, {
-          progress: {
-            stage: 'fetching',
-            percent,
-            searchesCompleted: state.cellsCompleted,
-            searchesTotal: totalCells,
-            resultsDiscovered: state.collected,
-            errors: state.cellErrors,
-          },
-          usage: { searchRequests: state.searchesUsed },
-        }, { createdBy });
-        emitDiscoveryProgress(sessionId, {
-          sessionId, status: STATUS.FETCHING, stage: 'fetching', percent,
-          searchesCompleted: state.cellsCompleted, searchesTotal: totalCells,
-          resultsDiscovered: state.collected, errors: state.cellErrors,
-        });
-        return places;
-      };
-
-      const cellResults = await runWithConcurrency(plan.cells, concurrency, processCell);
-
-      // ── Merge + dedupe (raw places) ──
-      await discoveryRepository.setSessionStatus(sessionId, STATUS.DEDUPLICATING, {
-        set: { 'progress.stage': 'deduplicating', 'progress.percent': 82 }, createdBy,
-      });
-      const uniqueRaw = mergeCellResults(cellResults);
-
-      // ── Normalize each unique place ──
-      await discoveryRepository.setSessionStatus(sessionId, STATUS.NORMALIZING, {
-        set: { 'progress.stage': 'normalizing', 'progress.percent': 85 }, createdBy,
-      });
-      const normalized = uniqueRaw
-        .map((raw) => {
-          const business = normalizeBusiness(raw);
-          const placeId = raw?.id ?? raw?.placeId ?? business?.provider?.placeId ?? null;
-          return { business, placeId };
-        })
-        .filter((entry) => entry.placeId); // placeId is required to upsert
-
-      // ── In-area geometry filter ──
-      const polygon = plan.polygon;
-      const inArea = normalized.filter((entry) =>
-        entry.business?.location
-        && Array.isArray(entry.business.location.coordinates)
-        && pointInPolygon(entry.business.location.coordinates, polygon));
-
-      // ── CRM matching (batched) ──
-      await discoveryRepository.setSessionStatus(sessionId, STATUS.MATCHING, {
-        set: { 'progress.stage': 'matching', 'progress.percent': 88 }, createdBy,
-      });
-      let matches = [];
-      if (inArea.length) {
-        matches = await crmMatcher.classifyBatch(
-          inArea.map((entry) => entry.business),
-          { placeIds: inArea.map((entry) => entry.placeId) },
-        );
-      }
-
-      // ── Build + persist discovery results ──
-      const discoveredAt = new Date();
       const businessTypeIds = (session.businessTypes || []).map((bt) => bt.id).filter(Boolean);
-      const docs = inArea.map((entry, i) => {
-        const match = matches[i] || { status: RESULT_MATCHING_STATUS.NEW, matchedBy: [] };
-        return {
-          createdBy,
-          discoverySessionId: sessionId,
-          provider: { name: 'google_places', placeId: entry.placeId },
-          business: entry.business,
-          matching: {
-            status: match.status || RESULT_MATCHING_STATUS.NEW,
-            matchedLeadId: match.matchedLeadId ?? null,
-            matchedCustomerId: match.matchedCustomerId ?? null,
-            matchedBy: match.matchedBy ?? [],
-          },
-          import: { status: RESULT_IMPORT_STATUS.NOT_IMPORTED },
-          discoveryContext: {
-            businessTypeIds,
-            keyword,
-            areaType: session.area?.type ?? null,
-          },
-          discoveredAt,
-        };
-      });
-
+      const selectedLocation = {
+        name: session.location?.name ?? null,
+        mode: session.location?.mode ?? null,
+        center: session.location?.center ?? null,
+        placeId: session.location?.placeId ?? null,
+        countryCode: session.location?.countryCode ?? null,
+        country: session.location?.country ?? null,
+        region: session.location?.region ?? null,
+        city: session.location?.city ?? null,
+        formattedAddress: session.location?.formattedAddress ?? null,
+      };
+      const selectedArea = {
+        type: session.area?.type ?? null,
+        radiusMeters: session.area?.radiusMeters ?? null,
+        geometry: session.area?.geometry ?? null,
+        bounds: session.area?.bounds ?? null,
+        areaSqKm: session.area?.areaSqKm ?? null,
+      };
+      const selectedBusinessTypes = (session.businessTypes || []).map((businessType) => ({
+        id: businessType.id,
+        name: businessType.name ?? null,
+        providerIncludedType: businessType.providerIncludedType ?? null,
+        providerTextQuery: businessType.providerTextQuery ?? null,
+      }));
+      const seenPlaceIds = new Set();
+      const inAreaPlaceIds = new Set();
+      const seenPhones = new Set();
+      const seenDomains = new Set();
+      const seenNamesAndAddresses = new Set();
+      const locationsByName = new Map();
+      const liveCounts = { new: 0, existing: 0, possibleDuplicates: 0 };
       let persisted = 0;
-      for (let i = 0; i < docs.length; i += PERSIST_BATCH) {
-        const batch = docs.slice(i, i + PERSIST_BATCH);
-        const res = await discoveryRepository.bulkUpsertResults(batch);
-        persisted += (res?.upsertedCount || 0) + (res?.modifiedCount || 0) + (res?.insertedCount || 0);
+      let duplicatesRemoved = 0;
+
+      const identityDuplicate = (business) => {
+        const phone = business.normalizedPhone || null;
+        const domain = business.websiteDomain || null;
+        const name = business.normalizedName || null;
+        const address = business.address?.formatted?.toLowerCase().replace(/\s+/g, ' ').trim() || null;
+        const nameAddress = name && address ? `${name}|${address}` : null;
+        const coords = business.location?.coordinates;
+
+        if (phone && seenPhones.has(phone)) return true;
+        if (domain && seenDomains.has(domain)) return true;
+        if (nameAddress && seenNamesAndAddresses.has(nameAddress)) return true;
+        if (name && Array.isArray(coords)) {
+          const sameNameLocations = locationsByName.get(name) || [];
+          if (sameNameLocations.some((location) => haversineMeters(coords, location) <= 30)) return true;
+        }
+
+        if (phone) seenPhones.add(phone);
+        if (domain) seenDomains.add(domain);
+        if (nameAddress) seenNamesAndAddresses.add(nameAddress);
+        if (name && Array.isArray(coords)) {
+          if (!locationsByName.has(name)) locationsByName.set(name, []);
+          locationsByName.get(name).push(coords);
+        }
+        return false;
+      };
+
+      const persistPlaces = async (rawPlaces, context = {}) => {
+        const normalized = [];
+        for (const raw of rawPlaces) {
+          const rawPlaceId = raw?.id ?? raw?.placeId ?? null;
+          if (rawPlaceId && seenPlaceIds.has(String(rawPlaceId))) {
+            duplicatesRemoved += 1;
+            continue;
+          }
+          const business = normalizeBusiness(raw);
+          const placeId = rawPlaceId ?? business?.provider?.placeId ?? null;
+          if (!placeId) continue;
+          const key = String(placeId);
+          if (seenPlaceIds.has(key)) {
+            duplicatesRemoved += 1;
+            continue;
+          }
+          const coords = business?.location?.coordinates;
+          if (!Array.isArray(coords) || !pointInArea(coords, exactArea)) continue;
+          if (!matchesProviderType(business, context.query?.includedType)) continue;
+          seenPlaceIds.add(key);
+          if (identityDuplicate(business)) {
+            duplicatesRemoved += 1;
+            continue;
+          }
+          inAreaPlaceIds.add(key);
+          normalized.push({ placeId, business });
+        }
+        if (!normalized.length) return;
+
+        const matches = await crmMatcher.classifyBatch(
+          normalized.map((entry) => entry.business),
+          { placeIds: normalized.map((entry) => entry.placeId) },
+        );
+        const discoveredAt = new Date();
+        const docs = normalized.map((entry, index) => {
+          const match = matches[index] || { status: RESULT_MATCHING_STATUS.NEW, matchedBy: [] };
+          if (match.status === RESULT_MATCHING_STATUS.EXISTING) liveCounts.existing += 1;
+          else if (match.status === RESULT_MATCHING_STATUS.POSSIBLE_DUPLICATE) liveCounts.possibleDuplicates += 1;
+          else liveCounts.new += 1;
+          return {
+            createdBy,
+            discoverySessionId: sessionId,
+            provider: { name: 'google_places', placeId: entry.placeId },
+            business: entry.business,
+            matching: {
+              status: match.status || RESULT_MATCHING_STATUS.NEW,
+              matchedLeadId: match.matchedLeadId ?? null,
+              matchedCustomerId: match.matchedCustomerId ?? null,
+              matchedBy: match.matchedBy ?? [],
+            },
+            import: { status: RESULT_IMPORT_STATUS.NOT_IMPORTED },
+            details: { fetchedAt: discoveredAt, source: 'google_places_search' },
+            discoveryContext: {
+              businessTypeIds,
+              businessTypes: selectedBusinessTypes,
+              matchedBusinessTypeId: context.businessType?.id ?? null,
+              keyword,
+              areaType: session.area?.type ?? null,
+              location: selectedLocation,
+              area: selectedArea,
+              providerQuery: {
+                includedType: context.query?.includedType ?? null,
+                textQuery: context.query?.textQuery ?? null,
+              },
+              searchCoordinates: context.cell ? {
+                cellId: context.cell.id ?? null,
+                depth: context.cell.depth ?? 0,
+                center: context.cell.center ?? null,
+                radiusMeters: context.cell.radiusMeters ?? null,
+                bounds: context.cell.bounds ?? null,
+              } : null,
+            },
+            discoveredAt,
+          };
+        });
+
+        for (let i = 0; i < docs.length; i += PERSIST_BATCH) {
+          const batch = docs.slice(i, i + PERSIST_BATCH);
+          const result = await discoveryRepository.bulkUpsertResults(batch);
+          persisted += (result?.upsertedCount || 0) + (result?.modifiedCount || 0) + (result?.insertedCount || 0);
+        }
         emitDiscoveryResult(sessionId, {
           sessionId,
-          batch: batch.length,
-          discovered: Math.min(i + batch.length, docs.length),
+          batch: docs.length,
+          discovered: inAreaPlaceIds.size,
         });
-      }
+      };
+
+      let lastCancelCheck = 0;
+      const isCancelled = async () => {
+        if (Date.now() - lastCancelCheck < 1000) return false;
+        lastCancelCheck = Date.now();
+        try {
+          const fresh = await discoveryRepository.getSessionById(sessionId, { createdBy });
+          return !fresh || fresh.cancelRequested;
+        } catch {
+          return false;
+        }
+      };
+
+      const state = await runAdaptiveSearch({
+        provider,
+        cells: plan.cells,
+        businessTypes: session.businessTypes,
+        keyword,
+        maxSearchRequests,
+        concurrency,
+        isCancelled,
+        onBatch: persistPlaces,
+        onRequest: (status, error) => {
+          discoverySearchesTotal.inc({ status });
+          if (status === 'error' && error?.code !== ERROR_CODES.DISCOVERY_NOT_CONFIGURED) {
+            logger.warn('Discovery provider request failed; retrying when allowed', {
+              module: LOG_MODULE, action: 'process.search', sessionId: String(sessionId),
+              code: error?.code ?? null, retryable: error?.retryable ?? null,
+            });
+          }
+        },
+        onProgress: async (progress) => {
+          const percent = Math.min(90, 2 + Math.round((progress.regionsCompleted / Math.max(1, progress.regionsTotal)) * 88));
+          await discoveryRepository.updateSessionProgress(sessionId, {
+            progress: {
+              stage: 'fetching',
+              percent,
+              searchesCompleted: progress.regionsCompleted,
+              searchesTotal: progress.regionsTotal,
+              resultsDiscovered: inAreaPlaceIds.size,
+              resultsPersisted: persisted,
+              rawResults: progress.rawResults,
+              duplicatesRemoved,
+              errors: progress.errors,
+            },
+            counts: {
+              discovered: inAreaPlaceIds.size,
+              new: liveCounts.new,
+              existing: liveCounts.existing,
+              possibleDuplicates: liveCounts.possibleDuplicates,
+            },
+            usage: { searchRequests: progress.searchRequests },
+            coverage: {
+              state: 'RUNNING',
+              searchesCompleted: progress.regionsCompleted,
+              searchesTotal: progress.regionsTotal,
+              saturatedRegions: progress.saturatedRegions,
+              subdividedRegions: progress.subdividedRegions,
+              unresolvedRegions: progress.unresolvedRegions,
+            },
+          }, { createdBy });
+          emitDiscoveryProgress(sessionId, {
+            sessionId, status: STATUS.FETCHING, stage: 'fetching', percent,
+            searchesCompleted: progress.regionsCompleted,
+            searchesTotal: progress.regionsTotal,
+            resultsDiscovered: inAreaPlaceIds.size,
+            resultsPersisted: persisted,
+            duplicatesRemoved,
+            errors: progress.errors,
+          });
+        },
+      });
+
+      await discoveryRepository.setSessionStatus(sessionId, STATUS.DEDUPLICATING, {
+        set: { 'progress.stage': 'finalizing', 'progress.percent': 94 }, createdBy,
+      });
 
       // ── Finalize ──
       const counts = await discoveryRepository.countsForSession(sessionId, { createdBy });
       const finalStatus = state.cancelled
         ? STATUS.CANCELLED
-        : (state.cellErrors > 0 || state.budgetExhausted || plan.truncated)
+        : (state.errors > 0 || state.budgetExhausted || state.unresolvedSaturation || plan.truncated)
           ? STATUS.PARTIAL
           : STATUS.COMPLETED;
+      const coverageReasonCodes = ['PROVIDER_CATALOG_NOT_GUARANTEED'];
+      if (state.errors > 0) coverageReasonCodes.push('PROVIDER_REQUEST_ERRORS');
+      if (state.budgetExhausted) coverageReasonCodes.push('LEGACY_REQUEST_BUDGET_EXHAUSTED');
+      if (state.unresolvedSaturation) coverageReasonCodes.push('PROVIDER_RESULT_CAP_UNRESOLVED');
+      if (plan.truncated) coverageReasonCodes.push('COVERAGE_PLAN_TRUNCATED');
+      if (state.cancelled) coverageReasonCodes.push('CANCELLED_BY_USER');
 
       await discoveryRepository.updateSessionProgress(sessionId, {
         progress: {
           stage: finalStatus === STATUS.CANCELLED ? 'cancelled' : 'completed',
           percent: 100,
-          searchesCompleted: state.cellsCompleted,
-          searchesTotal: totalCells,
-          resultsDiscovered: state.collected,
+          searchesCompleted: state.regionsCompleted,
+          searchesTotal: state.regionsTotal,
+          resultsDiscovered: counts.discovered,
           resultsPersisted: persisted,
-          errors: state.cellErrors,
+          rawResults: state.rawResults,
+          duplicatesRemoved,
+          errors: state.errors,
         },
         counts: {
           discovered: counts.discovered,
@@ -360,14 +406,25 @@ export class DiscoveryRunWorker extends BaseWorker {
           skipped: counts.skipped,
           failed: counts.failed,
         },
-        usage: { searchRequests: state.searchesUsed },
+        usage: { searchRequests: state.searchRequests },
+        coverage: {
+          strategy: plan.strategy,
+          state: state.cancelled ? 'CANCELLED' : finalStatus === STATUS.PARTIAL ? 'PARTIAL' : 'EXHAUSTED',
+          providerGuaranteesCompleteness: false,
+          searchesCompleted: state.regionsCompleted,
+          searchesTotal: state.regionsTotal,
+          saturatedRegions: state.saturatedRegions,
+          subdividedRegions: state.subdividedRegions,
+          unresolvedRegions: state.unresolvedRegions,
+          reasonCodes: coverageReasonCodes,
+        },
       }, { createdBy });
 
       await discoveryRepository.setSessionStatus(sessionId, finalStatus, {
         set: { completedAt: new Date() }, createdBy,
       });
 
-      discoveryResultsDiscoveredTotal.inc(docs.length);
+      discoveryResultsDiscoveredTotal.inc(counts.discovered);
       discoveryRunDuration.observe((Date.now() - startTime) / 1000);
 
       emitDiscoveryCompleted(sessionId, {
@@ -380,9 +437,15 @@ export class DiscoveryRunWorker extends BaseWorker {
           possibleDuplicates: counts.possibleDuplicates,
         },
         coverage: {
+          state: state.cancelled ? 'CANCELLED' : finalStatus === STATUS.PARTIAL ? 'PARTIAL' : 'EXHAUSTED',
           truncated: finalStatus === STATUS.PARTIAL,
-          searchesCompleted: state.cellsCompleted,
-          searchesTotal: totalCells,
+          providerGuaranteesCompleteness: false,
+          searchesCompleted: state.regionsCompleted,
+          searchesTotal: state.regionsTotal,
+          saturatedRegions: state.saturatedRegions,
+          subdividedRegions: state.subdividedRegions,
+          unresolvedRegions: state.unresolvedRegions,
+          reasonCodes: coverageReasonCodes,
         },
       });
 
@@ -394,8 +457,8 @@ export class DiscoveryRunWorker extends BaseWorker {
           sessionId: String(sessionId),
           status: finalStatus,
           discovered: counts.discovered,
-          searchRequests: state.searchesUsed,
-          errors: state.cellErrors,
+          searchRequests: state.searchRequests,
+          errors: state.errors,
         },
         module: 'discovery',
       });
@@ -434,7 +497,7 @@ export class DiscoveryRunWorker extends BaseWorker {
         status: finalStatus,
         discovered: counts.discovered,
         persisted,
-        searchRequests: state.searchesUsed,
+        searchRequests: state.searchRequests,
       });
 
       return { sessionId, status: finalStatus, discovered: counts.discovered, persisted };

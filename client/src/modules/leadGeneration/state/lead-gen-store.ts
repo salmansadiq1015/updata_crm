@@ -21,6 +21,9 @@ export type LocationDraft = {
   name: string;
   mode: LocationMode;
   center: GeoPoint | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
   countryCode: string | null;
   formattedAddress: string | null;
   placeId: string | null;
@@ -54,6 +57,9 @@ const INITIAL_LOCATION: LocationDraft = {
   name: '',
   mode: 'search',
   center: null,
+  country: null,
+  region: null,
+  city: null,
   countryCode: 'CH',
   formattedAddress: null,
   placeId: null,

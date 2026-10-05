@@ -29,8 +29,9 @@ import {
   useCancelDiscovery,
   useCreateDiscovery,
   useDiscoveryResults,
+  useDiscoveryMarkers,
   useDiscoverySession,
-  useFlattenedResults,
+  useFlattenedMarkers,
   useImportResult,
 } from '../hooks/use-discovery';
 import { useDiscoveryRealtime } from '../hooks/use-discovery-realtime';
@@ -68,7 +69,11 @@ function buildCreateInput(session: DiscoverySession): CreateDiscoveryInput | nul
       ...(session.location.name ? { name: session.location.name } : {}),
       ...(session.location.mode ? { mode: session.location.mode } : {}),
       ...(session.location.center ? { center: session.location.center } : {}),
+      ...(session.location.placeId ? { placeId: session.location.placeId } : {}),
       ...(session.location.countryCode ? { countryCode: session.location.countryCode } : {}),
+      ...(session.location.country ? { country: session.location.country } : {}),
+      ...(session.location.region ? { region: session.location.region } : {}),
+      ...(session.location.city ? { city: session.location.city } : {}),
       ...(session.location.formattedAddress ? { formattedAddress: session.location.formattedAddress } : {}),
     },
     area: {
@@ -111,6 +116,8 @@ export function LeadGenWorkspace() {
   const drawer = useDrawer('detail');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [pageSize, setPageSize] = useState(DISCOVERY_PAGE_SIZE);
+  const [resultPagination, setResultPagination] = useState({ scopeKey: '', pageIndex: 0 });
   const [importDialog, setImportDialog] = useState<{ open: boolean; selection: ImportSelection }>({
     open: false,
     selection: { kind: 'ALL_NEW' },
@@ -118,8 +125,9 @@ export function LeadGenWorkspace() {
 
   const createDiscovery = useCreateDiscovery();
   const cancelDiscovery = useCancelDiscovery();
-  const sessionQuery = useDiscoverySession(sessionId, { poll: true });
-  useDiscoveryRealtime(sessionId);
+  const realtimeConnected = useDiscoveryRealtime(sessionId);
+  // Socket events are primary. Poll only while the socket is unavailable.
+  const sessionQuery = useDiscoverySession(sessionId, { poll: !realtimeConnected });
   const importResult = useImportResult(sessionId ?? '');
   const usersQuery = useWorkspaceUsers();
 
@@ -127,7 +135,7 @@ export function LeadGenWorkspace() {
   const debouncedSearch = useDebounce(filters.search, 300);
   const resultParams = useMemo(
     () => ({
-      limit: DISCOVERY_PAGE_SIZE,
+      limit: pageSize,
       sortBy: sort.sortBy,
       sortOrder: sort.sortOrder,
       ...(filters.crmStatus !== 'ALL' ? { crmStatus: filters.crmStatus } : {}),
@@ -137,12 +145,32 @@ export function LeadGenWorkspace() {
       ...(filters.hasWebsite ? { hasWebsite: true } : {}),
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
     }),
-    [filters, sort, debouncedSearch],
+    [filters, sort, debouncedSearch, pageSize],
   );
   const resultsQuery = useDiscoveryResults(sessionId, resultParams);
-  const results = useFlattenedResults(resultsQuery.data);
-
   const session = sessionQuery.data;
+  const markerPagingEnabled = Boolean(session && !isActiveSession(session.status));
+  const markersQuery = useDiscoveryMarkers(sessionId, { enabled: markerPagingEnabled });
+  const markers = useFlattenedMarkers(markersQuery.data);
+  const resultPages = resultsQuery.data?.pages ?? [];
+  const resultScopeKey = `${sessionId ?? ''}:${JSON.stringify(resultParams)}`;
+  const scopedPageIndex = resultPagination.scopeKey === resultScopeKey ? resultPagination.pageIndex : 0;
+  const resultPageIndex = Math.min(scopedPageIndex, Math.max(0, resultPages.length - 1));
+  const results = resultPages[resultPageIndex]?.data ?? [];
+  const filteredTotal = resultPages[0]?.pagination.total
+    ?? session?.counts.discovered
+    ?? results.length;
+  const setResultPageIndex = useCallback(
+    (next: number | ((current: number) => number)) => {
+      setResultPagination((current) => {
+        const currentPage = current.scopeKey === resultScopeKey ? current.pageIndex : 0;
+        const nextPage = typeof next === 'function' ? next(currentPage) : next;
+        return { scopeKey: resultScopeKey, pageIndex: Math.max(0, nextPage) };
+      });
+    },
+    [resultScopeKey],
+  );
+
   const inResults = step === 3 && Boolean(sessionId);
   const hasResults = (session?.counts.discovered ?? 0) > 0 || results.length > 0;
   const showProgress = inResults && (!session || (isActiveSession(session.status) && !hasResults));
@@ -180,7 +208,11 @@ export function LeadGenWorkspace() {
         ...(locationDraft.name ? { name: locationDraft.name } : {}),
         mode: locationDraft.mode,
         ...(locationDraft.center ? { center: locationDraft.center } : {}),
+        ...(locationDraft.placeId ? { placeId: locationDraft.placeId } : {}),
         ...(locationDraft.countryCode ? { countryCode: locationDraft.countryCode } : {}),
+        ...(locationDraft.country ? { country: locationDraft.country } : {}),
+        ...(locationDraft.region ? { region: locationDraft.region } : {}),
+        ...(locationDraft.city ? { city: locationDraft.city } : {}),
         ...(locationDraft.formattedAddress ? { formattedAddress: locationDraft.formattedAddress } : {}),
       },
       area: {
@@ -213,6 +245,13 @@ export function LeadGenWorkspace() {
     },
     [drawer, mapSync],
   );
+  const openResultId = useCallback(
+    (id: string) => {
+      mapSync.setSelectedResultId(id);
+      drawer.open(id);
+    },
+    [drawer, mapSync],
+  );
 
   const addLead = useCallback(
     (result: DiscoveryResult) => {
@@ -237,6 +276,17 @@ export function LeadGenWorkspace() {
     router.push('/leads');
   };
 
+  const handleNextResultPage = async () => {
+    const nextPageIndex = resultPageIndex + 1;
+    if (resultPages[nextPageIndex]) {
+      setResultPageIndex(nextPageIndex);
+      return;
+    }
+    if (!resultsQuery.hasNextPage || resultsQuery.isFetchingNextPage) return;
+    const next = await resultsQuery.fetchNextPage({ cancelRefetch: false });
+    if (next.data?.pages[nextPageIndex]) setResultPageIndex(nextPageIndex);
+  };
+
   const handleReopen = (target: DiscoverySession) => {
     // Rehydrate the map drafts so the reopened session shows its own area.
     setLocationDraft({
@@ -244,8 +294,11 @@ export function LeadGenWorkspace() {
       mode: target.location.mode ?? 'search',
       center: target.location.center,
       countryCode: target.location.countryCode,
+      country: target.location.country,
+      region: target.location.region,
+      city: target.location.city,
       formattedAddress: target.location.formattedAddress,
-      placeId: null,
+      placeId: target.location.placeId,
     });
     setAreaDraft({
       type: target.area.type,
@@ -322,15 +375,30 @@ export function LeadGenWorkspace() {
             sessionId={sessionId!}
             session={session}
             results={results}
+            markers={markers}
             isLoading={resultsQuery.isLoading}
             isError={resultsQuery.isError}
+            errorStatusCode={(resultsQuery.error as { statusCode?: number } | null)?.statusCode}
             onRetry={() => void resultsQuery.refetch()}
+            pageIndex={resultPageIndex}
+            pageSize={pageSize}
+            filteredTotal={filteredTotal}
+            loadedPages={resultPages.length}
             hasNextPage={resultsQuery.hasNextPage}
             isFetchingNextPage={resultsQuery.isFetchingNextPage}
-            onFetchNextPage={() => {
-              if (!resultsQuery.isFetchingNextPage) void resultsQuery.fetchNextPage();
+            isFetchNextPageError={resultsQuery.isFetchNextPageError}
+            onFirstPage={() => setResultPageIndex(0)}
+            onPreviousPage={() => setResultPageIndex((page) => Math.max(0, page - 1))}
+            onNextPage={() => void handleNextResultPage()}
+            onPageSizeChange={(size) => {
+              setResultPageIndex(0);
+              setPageSize(size);
             }}
+            markersLoading={markerPagingEnabled && (markersQuery.isLoading || markersQuery.isFetchingNextPage)}
+            markersError={markersQuery.isError || markersQuery.isFetchNextPageError}
+            onRetryMarkers={() => void markersQuery.retryFailedPage()}
             onOpenResult={openResult}
+            onOpenResultId={openResultId}
             onAddLead={addLead}
             addingId={addingId}
             onAddAllNew={() => setImportDialog({ open: true, selection: { kind: 'ALL_NEW' } })}

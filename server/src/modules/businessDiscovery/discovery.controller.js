@@ -63,6 +63,14 @@ class DiscoveryController {
     } catch (err) { next(err); }
   }
 
+  async listMarkers(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const result = await discoveryService.listMarkers(req.params.id, req.user._id, query);
+      return res.success({ data: result.data, pagination: result.pagination });
+    } catch (err) { next(err); }
+  }
+
   async getUsage(req, res, next) {
     try {
       const data = await discoveryService.getUsage(req.user._id);

@@ -1,125 +1,180 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { Menu, Globe, Zap } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { useRouter } from 'next/navigation';
+import { ArrowUpRight, Check, ChevronDown, Globe2, LayoutDashboard, LogOut, Menu, UserRound, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n/language-context';
 import { cn } from '@/lib/utils';
-import { APP_NAME } from '@/shared/constants/application';
+import { useAuthStore } from '@/stores/auth-store';
+import { authService } from '@/modules/auth/services/auth-service';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { loginHref } from './auth-aware-link';
+
+const localeOptions = [
+  { code: 'en', label: 'English', short: 'EN', dir: 'ltr' },
+  { code: 'de', label: 'Deutsch', short: 'DE', dir: 'ltr' },
+  { code: 'fr', label: 'Français', short: 'FR', dir: 'ltr' },
+  { code: 'ar', label: 'العربية', short: 'AR', dir: 'rtl' },
+];
+
+function userInitials(user) {
+  const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
+  return initials || user?.email?.[0]?.toUpperCase() || 'U';
+}
+
+function userName(user) {
+  return [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'Updata user';
+}
+
+function userRole(user) {
+  return (typeof user?.role === 'object' ? user.role?.name : user?.role) || user?.email || '';
+}
+
+function ProfileMenu({ user, onLogout, t }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" aria-label={t('userMenu.profile')} className="grid size-10 place-items-center rounded-full border border-white/[0.09] bg-white/[0.035] transition-colors hover:border-blue-300/25 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+          <Avatar className="size-8 border border-blue-300/20 bg-blue-500/15">
+            <AvatarImage src={user?.avatarUrl || user?.avatar} alt="" />
+            <AvatarFallback className="bg-blue-500/15 text-[10px] font-bold text-blue-100">{userInitials(user)}</AvatarFallback>
+          </Avatar>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={8} className="w-60 border border-white/[0.1] bg-[#0b1220] p-1.5 text-slate-200 shadow-2xl">
+        <DropdownMenuLabel className="px-2 py-2">
+          <span className="block truncate text-xs font-semibold text-white">{userName(user)}</span>
+          <span className="mt-0.5 block truncate text-[10px] font-normal text-slate-500">{user?.email}</span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator className="bg-white/[0.07]" />
+        <DropdownMenuItem asChild className="px-2.5 py-2 text-xs focus:bg-white/[0.06] focus:text-white">
+          <Link href="/dashboard"><LayoutDashboard className="size-3.5 text-blue-300" />{t('landing.ecosystem.dashboard')}</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="px-2.5 py-2 text-xs focus:bg-white/[0.06] focus:text-white">
+          <Link href="/profile"><UserRound className="size-3.5 text-cyan-300" />{t('userMenu.profile')}</Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator className="bg-white/[0.07]" />
+        <DropdownMenuItem onSelect={onLogout} className="px-2.5 py-2 text-xs text-rose-300 focus:bg-rose-400/10 focus:text-rose-200">
+          <LogOut className="size-3.5" />{t('userMenu.logout')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function LandingNavbar() {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const { t, locale, toggleLanguage } = useLanguage();
+  const router = useRouter();
+  const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const languageRef = useRef(null);
+  const { t, locale, setLocale } = useLanguage();
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
 
   useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 10);
+    const onScroll = () => setScrolled(window.scrollY > 18);
+    onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (languageRef.current && !languageRef.current.contains(event.target)) setLanguageOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, []);
+
   const navLinks = [
-    { label: t('nav.features'), href: '#features' },
-    { label: t('nav.modules'), href: '#modules' },
+    { label: t('landing.nav.product'), href: '#product' },
+    { label: t('landing.nav.solutions'), href: '#operations' },
+    { label: t('landing.nav.features'), href: '#features' },
+    { label: t('landing.nav.ai'), href: '#ai' },
+    { label: t('landing.nav.leadGeneration'), href: '#lead-generation' },
   ];
+  const currentLocale = localeOptions.find((item) => item.code === locale) ?? localeOptions[0];
+
+  const chooseLocale = (code) => {
+    setLocale(code);
+    setLanguageOpen(false);
+  };
+
+  const handleLogout = async () => {
+    await authService.logout();
+    setMenuOpen(false);
+    router.replace('/');
+  };
 
   return (
-    <header
-      className={cn(
-        'fixed top-0 left-0 right-0 z-50 transition-all duration-500',
-        isScrolled
-          ? 'glass border-b border-border/40 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]'
-          : 'bg-transparent'
-      )}
-    >
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-[72px] items-center justify-between">
-          <Link href="/" className="group flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br bg-primary-gradient shadow-md shadow-primary/25 transition-transform duration-200 group-hover:scale-105">
-              <Zap className="h-4.5 w-4.5 text-white" />
-            </div>
-            <span className="text-[1.1rem] font-bold tracking-tight">
-              {APP_NAME}{' '}
-              <span className="text-gradient">ERP</span>
-            </span>
-          </Link>
+    <header className={cn('fixed inset-x-0 top-0 z-50 border-b transition-[background-color,border-color,box-shadow] duration-300', scrolled ? 'border-white/[0.08] bg-[#060b16]/88 shadow-[0_8px_40px_rgba(0,0,0,.22)] backdrop-blur-xl' : 'border-transparent bg-transparent')}>
+      <div className="mx-auto flex h-[68px] max-w-[1440px] items-center justify-between px-4 sm:px-6 lg:px-10">
+        <Link href="/" className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" aria-label="Updata ERP home">
+          <Image src="/updata-logo-dark.svg" alt="Updata ERP" width={220} height={56} priority className="h-8 w-auto" />
+        </Link>
 
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="relative rounded-full px-4 py-2 text-[0.875rem] font-medium text-muted-foreground transition-all duration-200 hover:text-foreground hover:bg-primary/5"
-              >
-                {link.label}
-              </a>
-            ))}
-          </nav>
+        <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Public navigation">
+          {navLinks.map((link) => <a key={link.href} href={link.href} className="rounded-lg px-3 py-2 text-[13px] font-medium text-slate-400 transition-colors hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">{link.label}</a>)}
+        </nav>
 
-          <div className="hidden items-center gap-2 md:flex">
-            <button
-              onClick={toggleLanguage}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:text-foreground hover:bg-primary/5"
-            >
-              <Globe className="h-3.5 w-3.5" />
-              {locale === 'de' ? 'EN' : 'DE'}
+        <div className="hidden items-center gap-2 lg:flex">
+          <div className="relative" ref={languageRef}>
+            <button type="button" onClick={() => setLanguageOpen((open) => !open)} aria-expanded={languageOpen} aria-haspopup="listbox" className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-slate-400 transition-colors hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+              <Globe2 className="size-3.5" aria-hidden="true" />{currentLocale.short}<ChevronDown className={cn('size-3 transition-transform', languageOpen && 'rotate-180')} aria-hidden="true" />
+              <span className="sr-only">{t('landing.nav.language')}</span>
             </button>
-            <Button className="rounded-full shadow-md shadow-primary/25 text-[0.875rem]" asChild>
-              <Link href="/login">{t('nav.login')}</Link>
-            </Button>
+            <AnimatePresence>
+              {languageOpen ? (
+                <motion.div initial={{ opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.98 }} transition={{ duration: 0.18 }} role="listbox" aria-label={t('landing.nav.language')} className="absolute end-0 mt-2 w-48 overflow-hidden rounded-xl border border-white/[0.1] bg-[#0b1220] p-1.5 shadow-2xl">
+                  {localeOptions.map((item) => <button key={item.code} type="button" role="option" dir={item.dir} aria-selected={locale === item.code} onClick={() => chooseLocale(item.code)} className="flex w-full items-center rounded-lg px-3 py-2 text-start text-xs text-slate-300 transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400"><span>{item.label}</span>{locale === item.code ? <Check className="ms-auto size-3.5 text-blue-400" aria-hidden="true" /> : null}</button>)}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </div>
-
-          <div className="flex items-center gap-2 md:hidden">
-            <button
-              onClick={toggleLanguage}
-              className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
-            >
-              <Globe className="h-3.5 w-3.5" />
-              {locale === 'de' ? 'EN' : 'DE'}
-            </button>
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">{t('nav.openMenu')}</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-80 border-l-0 p-0">
-                <div className="flex flex-col h-full">
-                  <div className="p-6 pb-2">
-                    <Link href="/" className="flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br bg-primary-gradient">
-                        <Zap className="h-4.5 w-4.5 text-white" />
-                      </div>
-                      <span className="text-lg font-bold tracking-tight">
-                        {APP_NAME} <span className="text-gradient">ERP</span>
-                      </span>
-                    </Link>
-                  </div>
-                  <nav className="flex-1 px-4 py-4">
-                    {navLinks.map((link) => (
-                      <SheetClose key={link.href} asChild>
-                        <a
-                          href={link.href}
-                          className="flex items-center rounded-xl px-4 py-3.5 text-[0.925rem] font-medium text-muted-foreground transition-all hover:text-foreground hover:bg-accent"
-                        >
-                          {link.label}
-                        </a>
-                      </SheetClose>
-                    ))}
-                  </nav>
-                  <div className="border-t p-4">
-                    <Button className="w-full rounded-xl h-11 shadow-md shadow-primary/25" asChild>
-                      <Link href="/login">{t('nav.login')}</Link>
-                    </Button>
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
+          {isLoading ? <span className="h-9 w-28 animate-pulse rounded-xl bg-white/[0.06]" aria-label="Loading account" /> : isAuthenticated && user ? <ProfileMenu user={user} onLogout={handleLogout} t={t} /> : <Link href={loginHref('/dashboard')} className="rounded-lg px-3 py-2 text-[13px] font-medium text-slate-300 transition-colors hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">{t('landing.nav.signIn')}</Link>}
+          <Link href={isAuthenticated ? '/dashboard' : loginHref('/dashboard')} className="flex h-9 items-center gap-1.5 rounded-lg bg-white px-3.5 text-[13px] font-semibold text-slate-950 shadow-[0_8px_30px_rgba(255,255,255,.12)] transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">{t('landing.nav.openPortal')}<ArrowUpRight className="size-3.5" aria-hidden="true" /></Link>
         </div>
+
+        <button type="button" onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-controls="landing-mobile-menu" className="grid size-10 place-items-center rounded-lg border border-white/[0.08] bg-white/[0.035] text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 lg:hidden">
+          {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}<span className="sr-only">{t('landing.nav.menu')}</span>
+        </button>
       </div>
+
+      <AnimatePresence>
+        {menuOpen ? (
+          <motion.div id="landing-mobile-menu" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }} className="overflow-hidden border-t border-white/[0.07] bg-[#080e1b]/98 backdrop-blur-xl lg:hidden">
+            <div className="mx-auto max-w-[1440px] px-4 py-4 sm:px-6">
+              <nav className="grid gap-1" aria-label="Mobile public navigation">{navLinks.map((link) => <a key={link.href} href={link.href} onClick={() => setMenuOpen(false)} className="rounded-lg px-3 py-3 text-sm font-medium text-slate-300 hover:bg-white/[0.05]">{link.label}</a>)}</nav>
+              <div className="mt-4 border-t border-white/[0.07] pt-4">
+                <p className="px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t('landing.nav.language')}</p>
+                <div className="mt-2 grid grid-cols-2 gap-1">{localeOptions.map((item) => <button key={item.code} type="button" dir={item.dir} onClick={() => chooseLocale(item.code)} className={cn('rounded-lg px-3 py-2.5 text-start text-xs', locale === item.code ? 'bg-blue-500/12 text-blue-300' : 'text-slate-400 hover:bg-white/[0.04]')}>{item.label}</button>)}</div>
+              </div>
+              {isLoading ? <div className="mt-4 h-16 animate-pulse rounded-xl bg-white/[0.05]" /> : isAuthenticated && user ? (
+                <div className="mt-4 space-y-2 border-t border-white/[0.07] pt-4">
+                  <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+                    <Avatar className="size-10 border border-blue-300/20"><AvatarImage src={user?.avatarUrl || user?.avatar} alt="" /><AvatarFallback className="bg-blue-500/15 text-xs font-bold text-blue-100">{userInitials(user)}</AvatarFallback></Avatar>
+                    <div className="min-w-0"><p className="truncate text-sm font-semibold text-white">{userName(user)}</p><p className="truncate text-[10px] text-slate-500">{userRole(user)}</p></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2"><Link href="/dashboard" onClick={() => setMenuOpen(false)} className="grid h-11 place-items-center rounded-lg bg-white text-sm font-semibold text-slate-950">{t('landing.nav.openPortal')}</Link><button type="button" onClick={handleLogout} className="grid h-11 place-items-center rounded-lg border border-white/[0.1] text-sm font-medium text-rose-300">{t('userMenu.logout')}</button></div>
+                </div>
+              ) : <div className="mt-4 grid grid-cols-2 gap-2"><Link href={loginHref('/dashboard')} className="grid h-11 place-items-center rounded-lg border border-white/[0.1] text-sm font-medium text-white">{t('landing.nav.signIn')}</Link><Link href={loginHref('/dashboard')} className="grid h-11 place-items-center rounded-lg bg-white text-sm font-semibold text-slate-950">{t('landing.nav.openPortal')}</Link></div>}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </header>
   );
 }

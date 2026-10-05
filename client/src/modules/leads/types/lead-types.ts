@@ -26,12 +26,43 @@ export type LeadProviderMeta = {
   priceLevel: number | string | null;
 };
 
+export type LeadDiscoveryLocation = {
+  name: string | null;
+  placeId: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  countryCode: string | null;
+  formattedAddress: string | null;
+  center: GeoPoint | null;
+};
+
+export type LeadDiscoveryArea = {
+  type: string | null;
+  radiusMeters: number | null;
+  areaSqKm: number | null;
+  bounds: { north: number; south: number; east: number; west: number } | null;
+  geometry: { type: 'Polygon'; coordinates: number[][][] } | null;
+};
+
+export type LeadDiscoverySearchCoordinates = {
+  cellId: string | null;
+  depth: number | null;
+  center: GeoPoint | null;
+  radiusMeters: number | null;
+  bounds: { north: number; south: number; east: number; west: number } | null;
+};
+
 export type LeadSourceMetadata = {
   googlePlaceId: string | null;
   discoverySessionId: string | null;
   discoveryResultId: string | null;
   businessType: string | null;
   keyword: string | null;
+  discoveryLocation?: LeadDiscoveryLocation | null;
+  discoveryArea?: LeadDiscoveryArea | null;
+  discoverySearchCoordinates?: LeadDiscoverySearchCoordinates | null;
+  discoveryBusinessTypes?: Array<{ id: string; name: string | null }>;
   discoveredAt: string | null;
 };
 
@@ -112,7 +143,25 @@ export type LeadFilters = {
   status?: LeadStatus;
   assignedTo?: string;
   source?: LeadSource;
+  type?: LeadType;
+  city?: string;
   q?: string;
+};
+
+export type LeadPlaceFilterOption = {
+  city: string;
+  cantons: string[];
+  count: number;
+};
+
+export type LeadTypeFilterOption = {
+  value: LeadType;
+  count: number;
+};
+
+export type LeadFilterOptions = {
+  places: LeadPlaceFilterOption[];
+  types: LeadTypeFilterOption[];
 };
 
 export type LeadListParams = LeadFilters & {

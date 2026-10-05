@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   type InfiniteData,
   keepPreviousData,
@@ -15,6 +15,7 @@ import type {
   CreateDiscoveryInput,
   CursorPage,
   DiscoveryResult,
+  DiscoveryMarker,
   DiscoveryResultListParams,
   DiscoverySession,
   DiscoverySessionListParams,
@@ -24,6 +25,8 @@ import type {
 } from '../types/discovery-types';
 
 export const DISCOVERY_PAGE_SIZE = 50;
+export const DISCOVERY_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+export const DISCOVERY_MARKER_PAGE_SIZE = 1000;
 
 const ACTIVE_SESSION_STATUSES = new Set<DiscoverySessionStatus>([
   'DRAFT',
@@ -52,13 +55,30 @@ export const discoveryKeys = {
     [...discoveryKeys.results(), sessionId, params] as const,
   result: (sessionId: string | null, resultId: string | null) =>
     [...discoveryKeys.root, 'result', sessionId, resultId] as const,
+  markers: (sessionId: string | null) => [...discoveryKeys.root, 'markers', sessionId] as const,
   importPreview: (sessionId: string | null, mode: ImportMode, selection: ImportSelection | null) =>
     [...discoveryKeys.root, 'importPreview', sessionId, mode, selection] as const,
   importJob: (jobId: string | null) => [...discoveryKeys.root, 'importJob', jobId] as const,
 };
 
 type ResultPage = CursorPage<DiscoveryResult>;
+type MarkerPage = CursorPage<DiscoveryMarker>;
 type SessionPage = CursorPage<DiscoverySession>;
+
+type DiscoveryQueryError = {
+  statusCode?: number;
+  isCanceled?: boolean;
+  response?: { status?: number };
+};
+
+/** Never amplify authorization/rate-limit failures with automatic retries. */
+export const shouldRetryDiscoveryQuery = (failureCount: number, error: unknown): boolean => {
+  const queryError = error as DiscoveryQueryError | null;
+  if (queryError?.isCanceled) return false;
+  const statusCode = queryError?.statusCode ?? queryError?.response?.status ?? 0;
+  if ([401, 403, 404, 429].includes(statusCode)) return false;
+  return failureCount < 1;
+};
 
 const updateResultInPages = (
   oldData: InfiniteData<ResultPage> | undefined,
@@ -83,6 +103,7 @@ export function useBusinessTypes() {
     queryFn: () => discoveryApi.getBusinessTypes(),
     staleTime: 60 * 60_000,
     gcTime: 2 * 60 * 60_000,
+    retry: shouldRetryDiscoveryQuery,
   });
 }
 
@@ -91,6 +112,7 @@ export function useDiscoveryUsage() {
     queryKey: discoveryKeys.usage(),
     queryFn: () => discoveryApi.getUsage(),
     staleTime: 30_000,
+    retry: shouldRetryDiscoveryQuery,
   });
 }
 
@@ -103,6 +125,7 @@ export function useDiscoverySessions(baseParams: DiscoverySessionListParams = {}
       lastPage.pagination.hasNext ? lastPage.pagination.nextCursor : undefined,
     staleTime: 20_000,
     placeholderData: keepPreviousData,
+    retry: shouldRetryDiscoveryQuery,
   });
 }
 
@@ -120,9 +143,11 @@ export function useDiscoverySession(
     queryFn: () => discoveryApi.getSession(id ?? ''),
     enabled: Boolean(id),
     staleTime: 5_000,
+    retry: shouldRetryDiscoveryQuery,
     // Polling fallback for when the socket bridge is unavailable (§10/§12).
     refetchInterval: (query) => {
       if (!poll) return false;
+      if ((query.state.error as DiscoveryQueryError | null)?.statusCode === 429) return false;
       const status = query.state.data?.status;
       return status && isActiveSession(status) ? pollInterval : false;
     },
@@ -133,7 +158,7 @@ export function useDiscoveryResults(
   sessionId: string | null,
   baseParams: Omit<DiscoveryResultListParams, 'cursor'> = {},
 ) {
-  return useInfiniteQuery({
+  const query = useInfiniteQuery({
     queryKey: discoveryKeys.resultList(sessionId, baseParams),
     queryFn: ({ pageParam }) =>
       discoveryApi.listResults(sessionId ?? '', { ...baseParams, cursor: pageParam }),
@@ -143,11 +168,80 @@ export function useDiscoveryResults(
     enabled: Boolean(sessionId),
     staleTime: 15_000,
     placeholderData: keepPreviousData,
+    retry: shouldRetryDiscoveryQuery,
   });
+  // BusinessList requests the next cursor only when the user scrolls near the
+  // end. Counts and "Add all" remain session-scoped on the server, so the
+  // browser never needs to materialize thousands of full result documents.
+  return query;
 }
 
 export function useFlattenedResults(data: InfiniteData<ResultPage> | undefined): DiscoveryResult[] {
   return useMemo(() => dedupeById(data?.pages.flatMap((page) => page.data) ?? []), [data]);
+}
+
+/**
+ * Load lightweight markers in bounded pages, independently of list paging.
+ * Each cursor is automatically attempted once; an error pauses the sequence
+ * until the user explicitly retries, preventing a failed page from looping.
+ */
+export function useDiscoveryMarkers(
+  sessionId: string | null,
+  options: { enabled?: boolean } = {},
+) {
+  const attemptedCursors = useRef(new Set<string>());
+  const enabled = Boolean(sessionId) && (options.enabled ?? true);
+  const query = useInfiniteQuery({
+    queryKey: discoveryKeys.markers(sessionId),
+    queryFn: ({ pageParam }) =>
+      discoveryApi.listMarkers(sessionId ?? '', {
+        cursor: pageParam,
+        limit: DISCOVERY_MARKER_PAGE_SIZE,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.pagination.hasNext ? lastPage.pagination.nextCursor : undefined,
+    enabled,
+    staleTime: 60_000,
+    refetchOnReconnect: false,
+    retry: shouldRetryDiscoveryQuery,
+  });
+  const {
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+    fetchNextPage,
+    data,
+  } = query;
+
+  useEffect(() => {
+    attemptedCursors.current.clear();
+  }, [sessionId]);
+
+  const nextCursor = data?.pages.at(-1)?.pagination.nextCursor ?? null;
+  useEffect(() => {
+    if (!enabled || !hasNextPage || !nextCursor || isFetchingNextPage || isFetchNextPageError) return;
+    if (attemptedCursors.current.has(nextCursor)) return;
+    attemptedCursors.current.add(nextCursor);
+    void fetchNextPage({ cancelRefetch: false });
+  }, [enabled, hasNextPage, nextCursor, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
+
+  const retryFailedPage = useCallback(async () => {
+    if (query.isFetchNextPageError && nextCursor) {
+      attemptedCursors.current.delete(nextCursor);
+      return fetchNextPage({ cancelRefetch: false });
+    }
+    return query.refetch({ cancelRefetch: false });
+  }, [fetchNextPage, nextCursor, query]);
+
+  return { ...query, retryFailedPage };
+}
+
+export function useFlattenedMarkers(data: InfiniteData<MarkerPage> | undefined): DiscoveryMarker[] {
+  return useMemo(() => {
+    const byId = new Map<string, DiscoveryMarker>();
+    for (const marker of data?.pages.flatMap((page) => page.data) ?? []) byId.set(marker.id, marker);
+    return [...byId.values()];
+  }, [data]);
 }
 
 export function useDiscoveryResult(sessionId: string | null, resultId: string | null) {
@@ -156,6 +250,7 @@ export function useDiscoveryResult(sessionId: string | null, resultId: string | 
     queryFn: () => discoveryApi.getResult(sessionId ?? '', resultId ?? ''),
     enabled: Boolean(sessionId && resultId),
     staleTime: 15_000,
+    retry: shouldRetryDiscoveryQuery,
   });
 }
 
@@ -170,6 +265,7 @@ export function useImportPreview(
     queryFn: () => discoveryApi.importPreview(sessionId ?? '', mode, selection ?? undefined),
     enabled: Boolean(sessionId) && (options.enabled ?? true),
     staleTime: 5_000,
+    retry: shouldRetryDiscoveryQuery,
   });
 }
 
@@ -179,6 +275,7 @@ export function useImportJob(jobId: string | null, options: { poll?: boolean } =
     queryKey: discoveryKeys.importJob(jobId),
     queryFn: () => discoveryApi.getImportJob(jobId ?? ''),
     enabled: Boolean(jobId),
+    retry: shouldRetryDiscoveryQuery,
     refetchInterval: (query) => {
       if (!poll) return false;
       const status = query.state.data?.status;
@@ -247,8 +344,14 @@ export function useImport(sessionId: string) {
     mutationFn: (body: { mode: ImportMode; selection: ImportSelection; assignedTo?: string }) =>
       discoveryApi.importSession(sessionId, body),
     onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: discoveryKeys.results() });
-      queryClient.invalidateQueries({ queryKey: discoveryKeys.session(sessionId) });
+      void queryClient.resetQueries(
+        {
+          queryKey: discoveryKeys.results(),
+          predicate: (query) => query.queryKey[3] === sessionId,
+        },
+        { cancelRefetch: true },
+      );
+      void queryClient.invalidateQueries({ queryKey: discoveryKeys.session(sessionId), exact: true });
       if (response.kind === 'sync') {
         const { imported, existing, skipped, failed } = response.summary;
         showSuccess(
@@ -268,12 +371,17 @@ export function useImportResult(sessionId: string) {
     mutationFn: ({ resultId, mode }: { resultId: string; mode?: ImportMode }) =>
       discoveryApi.importResult(resultId, mode ? { mode } : {}),
     onMutate: async ({ resultId }) => {
-      await queryClient.cancelQueries({ queryKey: discoveryKeys.results() });
+      const currentSessionResults = {
+        queryKey: discoveryKeys.results(),
+        predicate: (query: { queryKey: readonly unknown[] }) => query.queryKey[3] === sessionId,
+      };
+      await queryClient.cancelQueries(currentSessionResults);
       const previous = queryClient.getQueriesData<InfiniteData<ResultPage>>({
         queryKey: discoveryKeys.results(),
+        predicate: (query) => query.queryKey[3] === sessionId,
       });
       queryClient.setQueriesData<InfiniteData<ResultPage>>(
-        { queryKey: discoveryKeys.results() },
+        currentSessionResults,
         (oldData) =>
           updateResultInPages(oldData, resultId, (result) => ({
             ...result,
@@ -287,8 +395,14 @@ export function useImportResult(sessionId: string) {
       showError(error);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: discoveryKeys.results() });
-      queryClient.invalidateQueries({ queryKey: discoveryKeys.session(sessionId) });
+      void queryClient.resetQueries(
+        {
+          queryKey: discoveryKeys.results(),
+          predicate: (query) => query.queryKey[3] === sessionId,
+        },
+        { cancelRefetch: true },
+      );
+      void queryClient.invalidateQueries({ queryKey: discoveryKeys.session(sessionId), exact: true });
       showSuccess('Zum CRM hinzugefügt');
     },
   });

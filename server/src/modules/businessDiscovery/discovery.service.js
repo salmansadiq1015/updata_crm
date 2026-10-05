@@ -30,10 +30,13 @@ import {
 import { AppError } from '../../shared/errors/errors.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import { enrichResultWithDetails } from './engine/detailsEnricher.js';
+import {
+  DISCOVERY_JOB_NAME,
+  DISCOVERY_PROVIDER_VERSION,
+  DISCOVERY_QUEUE_NAME,
+} from './discovery.constants.js';
 
 const LOG_MODULE = 'businessDiscovery';
-const QUEUE_NAME = 'discovery-run';
-const JOB_NAME = 'discovery-run';
 
 // Sane upper bound on the selectable area (design §7: never an unbounded area).
 // Roughly the size of a small country — the coverage planner still caps the
@@ -125,6 +128,12 @@ class DiscoveryService {
       name: input.location?.name ?? null,
       mode: input.location?.mode,
       center: center ? { type: 'Point', coordinates: [center.lng, center.lat] } : undefined,
+      placeId: input.location?.placeId ?? null,
+      countryCode: input.location?.countryCode ?? null,
+      country: input.location?.country ?? null,
+      region: input.location?.region ?? null,
+      city: input.location?.city ?? null,
+      formattedAddress: input.location?.formattedAddress ?? null,
     };
 
     // 4. Area sub-doc — the normalized polygon drives coverage + in-area filtering.
@@ -136,10 +145,11 @@ class DiscoveryService {
       areaSqKm: normalized.areaSqKm,
     };
 
-    // 5. Per-session cost / load guards (config defaults; options may tighten).
+    // 5. Per-session provider-call/load guards. There is deliberately no result
+    //    count ceiling: every discoverable row is persisted.
     const sessionConfig = {
-      maxResults: input.options?.maxResults ?? config.discovery.maxResults,
-      maxSearchRequests: input.options?.maxSearchRequests ?? config.discovery.maxSearchRequests,
+      maxResults: null,
+      maxSearchRequests: null,
       maxCoverageCells: config.discovery.maxCoverageCells,
       concurrency: config.discovery.concurrency,
       detailsOnImport: true,
@@ -154,7 +164,7 @@ class DiscoveryService {
       area,
       businessTypes,
       keyword: input.keyword ? String(input.keyword).trim() || null : null,
-      provider: { name: 'google_places' },
+      provider: { name: 'google_places', version: DISCOVERY_PROVIDER_VERSION },
       config: sessionConfig,
       expiresAt,
     });
@@ -162,7 +172,7 @@ class DiscoveryService {
     const sessionId = String(session._id);
 
     // 6. Enqueue the worker (private identity travels in the job payload).
-    await queueManager.addJob(QUEUE_NAME, `${JOB_NAME}-${sessionId}`, {
+    await queueManager.addJob(DISCOVERY_QUEUE_NAME, `${DISCOVERY_JOB_NAME}-${sessionId}`, {
       sessionId,
       createdBy: String(createdBy),
     });
@@ -306,6 +316,7 @@ class DiscoveryService {
         hasWebsite: query.hasWebsite,
         minRating: query.minRating,
       },
+      search: query.search,
       createdBy,
     });
 
@@ -321,15 +332,36 @@ class DiscoveryService {
     if (!result) {
       throw new AppError('Discovery result not found', 404, ERROR_CODES.DISCOVERY_RESULT_NOT_FOUND);
     }
-    // Contact fields (phone / website / hours / price) are fetched lazily the
-    // first time a result is opened, then cached on the doc so a second open is
-    // free (design §6/§14 — details deferred to control Places cost). Best-effort:
-    // if the fetch fails or discovery is unconfigured, the sweep-only DTO is returned.
+    // Current discovery runs already request contact fields for correct display
+    // and strong deduplication. This remains as a backwards-compatible fallback
+    // for older stored sessions whose rows predate that behavior.
     const { result: enriched } = await enrichResultWithDetails(result, {
       fieldProfile: 'DETAILS_STANDARD',
       createdBy,
     });
     return this.toResultDTO(enriched);
+  }
+
+  /** Paginated lightweight points used to render every stored map marker. */
+  async listMarkers(sessionId, createdBy, query = {}) {
+    const session = await discoveryRepository.getSessionById(sessionId, { createdBy });
+    if (!session) {
+      throw new AppError('Discovery session not found', 404, ERROR_CODES.DISCOVERY_SESSION_NOT_FOUND);
+    }
+    const result = await discoveryRepository.listResultMarkers(sessionId, {
+      cursor: query.cursor,
+      limit: query.limit,
+      createdBy,
+    });
+    return {
+      data: result.data.map((row) => ({
+        id: String(row._id),
+        lat: row.business.location.coordinates[1],
+        lng: row.business.location.coordinates[0],
+        status: row.matching?.status ?? null,
+      })),
+      pagination: result.pagination,
+    };
   }
 
   /**
@@ -422,6 +454,23 @@ class DiscoveryService {
     if (!session) return null;
     const center = session.location?.center?.coordinates;
     const progress = session.progress || {};
+    const providerVersion = session.provider?.version ?? null;
+    const usesAdaptiveCoverage = providerVersion === DISCOVERY_PROVIDER_VERSION;
+    const legacyTerminalSession = !usesAdaptiveCoverage && (
+      session.status === DISCOVERY_SESSION_STATUS.COMPLETED
+      || session.status === DISCOVERY_SESSION_STATUS.PARTIAL
+    );
+    const coverageState = legacyTerminalSession
+      ? 'PARTIAL'
+      : session.coverage?.state ?? (
+        session.status === DISCOVERY_SESSION_STATUS.PARTIAL
+          ? 'PARTIAL'
+          : 'PENDING'
+      );
+    const coverageReasonCodes = Array.from(new Set([
+      ...(session.coverage?.reasonCodes ?? []),
+      ...(legacyTerminalSession ? ['LEGACY_SINGLE_QUERY_NOT_EXHAUSTIVE'] : []),
+    ]));
 
     return {
       id: String(session._id),
@@ -430,6 +479,7 @@ class DiscoveryService {
         name: session.location?.name ?? null,
         mode: session.location?.mode ?? null,
         center: Array.isArray(center) && center.length >= 2 ? { lat: center[1], lng: center[0] } : null,
+        placeId: session.location?.placeId ?? null,
         countryCode: session.location?.countryCode ?? null,
         country: session.location?.country ?? null,
         region: session.location?.region ?? null,
@@ -445,18 +495,30 @@ class DiscoveryService {
       },
       businessTypes: session.businessTypes ?? [],
       keyword: session.keyword ?? null,
+      provider: session.provider ?? { name: 'google_places', version: null },
+      config: session.config ?? null,
       progress,
       counts: session.counts ?? null,
       usage: session.usage ?? null,
+      coverage: {
+        strategy: session.coverage?.strategy ?? null,
+        state: coverageState,
+        providerGuaranteesCompleteness: false,
+        searchesCompleted: session.coverage?.searchesCompleted ?? progress.searchesCompleted ?? 0,
+        searchesTotal: session.coverage?.searchesTotal ?? progress.searchesTotal ?? 0,
+        saturatedRegions: session.coverage?.saturatedRegions ?? 0,
+        subdividedRegions: session.coverage?.subdividedRegions ?? 0,
+        unresolvedRegions: session.coverage?.unresolvedRegions ?? 0,
+        reasonCodes: coverageReasonCodes,
+      },
+      cancelRequested: Boolean(session.cancelRequested),
+      error: session.error ?? null,
+      createdBy: session.createdBy ?? null,
+      startedAt: session.startedAt ?? null,
       createdAt: session.createdAt ?? null,
       completedAt: session.completedAt ?? null,
-      coverage: {
-        // The session schema has no dedicated `truncated` flag, so incomplete
-        // coverage (capped cells and/or failed cells) is surfaced via PARTIAL.
-        truncated: session.status === DISCOVERY_SESSION_STATUS.PARTIAL,
-        searchesCompleted: progress.searchesCompleted ?? 0,
-        searchesTotal: progress.searchesTotal ?? 0,
-      },
+      expiresAt: session.expiresAt ?? null,
+      updatedAt: session.updatedAt ?? null,
     };
   }
 

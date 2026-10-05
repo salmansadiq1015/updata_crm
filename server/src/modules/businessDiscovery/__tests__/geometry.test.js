@@ -3,6 +3,7 @@ import {
   normalizeArea,
   boundingBox,
   pointInPolygon,
+  pointInArea,
   haversineMeters,
   validateGeometry,
   areaSqKm,
@@ -120,6 +121,29 @@ describe('pointInPolygon', () => {
     const { polygon, center } = normalizeArea({ type: 'radius', center: ZURICH, radiusMeters: 5000 });
     expect(pointInPolygon([center.lng, center.lat], polygon)).toBe(true);
     expect(pointInPolygon([center.lng + 1, center.lat], polygon)).toBe(false);
+  });
+
+  test('includes outer boundaries and excludes polygon-hole interiors', () => {
+    const withHole = {
+      type: 'Polygon',
+      coordinates: [
+        [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+        [[3, 3], [7, 3], [7, 7], [3, 7], [3, 3]],
+      ],
+    };
+    expect(pointInPolygon([0, 5], withHole)).toBe(true);
+    expect(pointInPolygon([2, 5], withHole)).toBe(true);
+    expect(pointInPolygon([5, 5], withHole)).toBe(false);
+    expect(pointInPolygon([3, 5], withHole)).toBe(true);
+  });
+});
+
+describe('pointInArea', () => {
+  test('uses exact spherical distance for radius selections and includes the edge', () => {
+    const edge = normalizeArea({ type: 'radius', center: ZURICH, radiusMeters: 5000 }).polygon.coordinates[0][0];
+    expect(pointInArea([ZURICH.lng, ZURICH.lat], { type: 'radius', center: ZURICH, radiusMeters: 5000 })).toBe(true);
+    expect(pointInArea(edge, { type: 'radius', center: ZURICH, radiusMeters: 5000 })).toBe(true);
+    expect(pointInArea([ZURICH.lng + 1, ZURICH.lat], { type: 'radius', center: ZURICH, radiusMeters: 5000 })).toBe(false);
   });
 });
 

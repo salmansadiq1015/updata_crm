@@ -1,216 +1,174 @@
 /**
- * Coverage planner for Business Discovery (Module 15).
+ * Geographic coverage planning for Business Discovery.
  *
- * Pure, DB-free. Turns a user-selected area into a bounded set of search
- * circles ("cells") the provider layer can hit one-by-one (design §7):
- *
- *   small area  → a single searchNearby circle.
- *   large area  → the bounding box is tiled with overlapping circles sized to
- *                 the provider's radius cap, kept where they intersect the real
- *                 polygon, and capped at `min(maxCoverageCells, maxSearchRequests)`.
- *
- * The output is ALWAYS bounded: the full grid is coarsened toward the provider
- * radius cap to try to fit the budget (preferring complete coverage), candidate
- * generation is hard-limited, and anything still over budget is truncated with
- * `truncated: true` so the caller can surface coverage honesty ("N/M regions").
- *
- * References: LEAD_GENERATION_DESIGN.md §7 (coverage). Geometry comes from
- * {@link ./geometry.js} — coordinates are GeoJSON [lng, lat].
+ * Every supported selection is partitioned into rectangular cells. Each cell is
+ * searched with a circle that covers all four corners, then provider results are
+ * filtered against the original geometry. Dense (20-result) cells are split by
+ * the worker with `splitCoverageCell`; this is the key difference from the old
+ * one-centre strategy, which could only ever return Google's first 20 results.
  */
 
 import config from '../../../config/index.js';
-import {
-  normalizeArea,
-  pointInPolygon,
-  haversineMeters,
-} from './geometry.js';
+import { normalizeArea, haversineMeters } from './geometry.js';
 
-// Google searchNearby hard-caps the radius at 50 km. Never request more.
-const PROVIDER_RADIUS_CAP_M = 50000;
+export const PROVIDER_RADIUS_CAP_M = 50000;
+export const PROVIDER_PAGE_SIZE = 20;
 
-// "Small" thresholds (design §7: radius ≤ R0 AND area ≤ A0). A single circle up
-// to ~25 km radius (≈1963 km²) is treated as one search; beyond that the
-// result-density of a single searchNearby (max ~20 hits) is too poor, so we tile.
-const SINGLE_SEARCH_MAX_RADIUS_M = 25000;
-const SINGLE_SEARCH_MAX_SQKM = 2000;
-
-// Starting grid cell radius for large areas. The planner coarsens upward from
-// here (toward the provider cap) until the grid fits the budget, so dense areas
-// stay complete rather than being truncated.
-const GRID_CELL_RADIUS_M = 5000;
-
-// Overlapping square grid: a circle of radius r covers a square of side r·√2, so
-// placing centres ≤ r·√2 apart guarantees the union covers the box.
+// A 2 km query circle is a useful first pass: sparse areas finish cheaply while
+// dense cells are recursively refined. It is not a completeness boundary.
+const INITIAL_QUERY_RADIUS_M = 2000;
+const MAX_INITIAL_CELLS = 5000;
 const SQRT2 = Math.SQRT2;
 
-// Hard ceiling on candidate centres generated before polygon filtering, so a
-// pathological (e.g. continent-sized) area can never spin an unbounded loop.
-const MAX_GRID_CANDIDATES = 2000;
+const isPos = (value) => Number.isFinite(value) && value > 0;
 
-// How aggressively the cell radius grows per coarsening step, and a bounded
-// number of steps (radius grows geometrically to the cap, so this terminates).
-const COARSEN_FACTOR = 1.4;
-const MAX_COARSEN_STEPS = 24;
-
-const isPos = (n) => typeof n === 'number' && Number.isFinite(n) && n > 0;
-
-/**
- * Resolve the per-session cell budget, guarding against NaN / non-positive
- * input by falling back to the configured defaults, never below 1.
- */
-function resolveCap(maxCoverageCells, maxSearchRequests) {
-  const cells = isPos(maxCoverageCells) ? Math.floor(maxCoverageCells) : config.discovery.maxCoverageCells;
-  const requests = isPos(maxSearchRequests) ? Math.floor(maxSearchRequests) : config.discovery.maxSearchRequests;
-  return Math.max(1, Math.min(cells, requests));
-}
-
-/** Largest great-circle distance (m) from the area centre to any polygon vertex. */
-function coveringRadiusMeters(center, ring) {
+function cellFromBounds(bounds, depth = 0, id = '0') {
+  const center = {
+    lat: (bounds.north + bounds.south) / 2,
+    lng: (bounds.east + bounds.west) / 2,
+  };
   const origin = [center.lng, center.lat];
-  let max = 0;
-  for (const point of ring) {
-    const d = haversineMeters(origin, point);
-    if (d > max) max = d;
-  }
-  return max;
+  const corners = [
+    [bounds.west, bounds.south],
+    [bounds.east, bounds.south],
+    [bounds.east, bounds.north],
+    [bounds.west, bounds.north],
+  ];
+  const radiusMeters = Math.max(1, Math.ceil(Math.max(...corners.map((corner) => haversineMeters(origin, corner))))) + 1;
+  return { id, depth, bounds, center, radiusMeters };
+}
+
+/** Divide one rectangular coverage cell into four complete child regions. */
+export function splitCoverageCell(cell) {
+  if (!cell?.bounds) return [];
+  const { north, south, east, west } = cell.bounds;
+  const midLat = (north + south) / 2;
+  const midLng = (east + west) / 2;
+  const depth = (cell.depth || 0) + 1;
+  const id = cell.id || '0';
+  return [
+    cellFromBounds({ north: midLat, south, east: midLng, west }, depth, `${id}.0`),
+    cellFromBounds({ north: midLat, south, east, west: midLng }, depth, `${id}.1`),
+    cellFromBounds({ north, south: midLat, east: midLng, west }, depth, `${id}.2`),
+    cellFromBounds({ north, south: midLat, east, west: midLng }, depth, `${id}.3`),
+  ];
 }
 
 /**
- * Tile a bounding box with an overlapping square grid of circles, keeping only
- * cells that intersect the polygon. Returns the kept cells (row-major) plus
- * whether the full grid had to be truncated/clamped to stay bounded.
+ * Return whether a saturated cell can be refined further. The floor prevents an
+ * infinite subdivision loop in exceptionally dense buildings while still
+ * reaching roughly street/building-sized searches.
  */
-function buildGrid({ polygon, bounds, cap, provMax }) {
+export function canSubdivideCoverageCell(cell, { minRadiusMeters = 5, maxDepth = 14 } = {}) {
+  if (!cell?.bounds || (cell.depth || 0) >= maxDepth) return false;
+  const children = splitCoverageCell(cell);
+  return children.length > 0 && children[0].radiusMeters >= minRadiusMeters;
+}
+
+function resolveInitialCellCap(value) {
+  const configured = isPos(value) ? value : config.discovery.maxCoverageCells;
+  return Math.max(1, Math.min(MAX_INITIAL_CELLS, Math.floor(configured || 1)));
+}
+
+function boxDimensions(bounds) {
   const { north, south, east, west } = bounds;
-  const midLat = (north + south) / 2;
+  return {
+    widthM: Math.max(
+      haversineMeters([west, south], [east, south]),
+      haversineMeters([west, north], [east, north]),
+    ),
+    heightM: haversineMeters([west, south], [west, north]),
+  };
+}
 
-  // Box dimensions in metres. Width is taken at the wider edge so spacing covers
-  // the widest row; height is the meridional span.
-  const widthM = Math.max(
-    haversineMeters([west, south], [east, south]),
-    haversineMeters([west, north], [east, north]),
-  );
-  const heightM = haversineMeters([west, south], [west, north]);
+function gridShape(bounds, cap, providerMaxRadiusMeters) {
+  const { widthM, heightM } = boxDimensions(bounds);
+  const targetSideM = INITIAL_QUERY_RADIUS_M * SQRT2;
+  let columns = Math.max(1, Math.ceil(widthM / targetSideM));
+  let rows = Math.max(1, Math.ceil(heightM / targetSideM));
 
-  // Coarsen the cell radius upward until the raw grid fits the budget or we hit
-  // the provider cap. Prefers complete coverage over truncation.
-  let cellRadius = Math.min(GRID_CELL_RADIUS_M, provMax);
-  let nLng = 1;
-  let nLat = 1;
-  for (let step = 0; step < MAX_COARSEN_STEPS; step++) {
-    const spacing = cellRadius * SQRT2;
-    nLng = Math.max(1, Math.ceil(widthM / spacing));
-    nLat = Math.max(1, Math.ceil(heightM / spacing));
-    if ((nLng + 1) * (nLat + 1) <= cap || cellRadius >= provMax) break;
-    cellRadius = Math.min(provMax, cellRadius * COARSEN_FACTOR);
-  }
-
-  // Final hard clamp so generation is always bounded, even for absurd areas.
-  let clamped = false;
-  if ((nLng + 1) * (nLat + 1) > MAX_GRID_CANDIDATES) {
-    const scale = Math.sqrt(MAX_GRID_CANDIDATES / ((nLng + 1) * (nLat + 1)));
-    nLng = Math.max(1, Math.floor((nLng + 1) * scale) - 1);
-    nLat = Math.max(1, Math.floor((nLat + 1) * scale) - 1);
-    clamped = true;
-  }
-
-  // Evenly-spaced centres, inclusive of both edges → every centre is inside the
-  // bounds, and the metric spacing stays ≤ cellRadius·√2 (we used ceil above).
-  const lngs = [];
-  for (let i = 0; i <= nLng; i++) lngs.push(west + ((east - west) * i) / nLng);
-  const lats = [];
-  for (let j = 0; j <= nLat; j++) lats.push(south + ((north - south) * j) / nLat);
-
-  // Inside flags, then a one-ring dilation so boundary ("edge") cells whose
-  // centre falls just outside the polygon are still searched.
-  const inside = lats.map((lat) => lngs.map((lng) => pointInPolygon([lng, lat], polygon)));
-  const radiusMeters = Math.min(provMax, Math.max(1, Math.round(cellRadius)));
-  const kept = [];
-  for (let j = 0; j < lats.length; j++) {
-    for (let i = 0; i < lngs.length; i++) {
-      let keep = inside[j][i];
-      if (!keep) {
-        for (let dj = -1; dj <= 1 && !keep; dj++) {
-          for (let di = -1; di <= 1 && !keep; di++) {
-            const nj = j + dj;
-            const ni = i + di;
-            if (nj >= 0 && nj < lats.length && ni >= 0 && ni < lngs.length && inside[nj][ni]) keep = true;
-          }
-        }
-      }
-      if (keep) kept.push({ center: { lat: lats[j], lng: lngs[i] }, radiusMeters });
+  // Coarsen the initial pass only enough to fit the configured region budget.
+  // Saturated coarse regions are subsequently subdivided, so no geographic
+  // strip is discarded as the previous slice(0, cap) implementation did.
+  if (columns * rows > cap) {
+    const scale = Math.sqrt(cap / (columns * rows));
+    columns = Math.max(1, Math.floor(columns * scale));
+    rows = Math.max(1, Math.floor(rows * scale));
+    while (columns * rows > cap) {
+      if (columns >= rows && columns > 1) columns -= 1;
+      else if (rows > 1) rows -= 1;
+      else break;
     }
   }
 
-  // Degenerate safety net: a polygon smaller than one cell → cover it with one
-  // circle at the centre so we never emit zero cells.
-  if (kept.length === 0) {
-    const center = { lat: midLat, lng: (east + west) / 2 };
-    kept.push({ center, radiusMeters });
-  }
+  // A coverage circle must stay under the provider's radius cap. If coarsening
+  // made a cell too large, add rows/columns even when that exceeds the preferred
+  // initial cap; full geographic coverage is more important than that hint.
+  const maxSide = (providerMaxRadiusMeters * SQRT2) * 0.999;
+  columns = Math.max(columns, Math.ceil(widthM / maxSide));
+  rows = Math.max(rows, Math.ceil(heightM / maxSide));
 
-  const overBudget = kept.length > cap;
-  const cells = overBudget ? kept.slice(0, cap) : kept;
-  return { cells, truncated: overBudget || clamped };
+  const rawCount = columns * rows;
+  if (rawCount > MAX_INITIAL_CELLS) {
+    const err = new Error(`Selected area requires ${rawCount} provider coverage regions; maximum is ${MAX_INITIAL_CELLS}`);
+    err.code = 'DISCOVERY_AREA_TOO_LARGE';
+    throw err;
+  }
+  return { columns, rows };
 }
 
 /**
- * Plan provider search coverage for a user-selected area.
- *
- * @param {object} area - a discovery area (radius/circle/rectangle/polygon),
- *   as accepted by {@link normalizeArea}.
- * @param {object} [options]
- * @param {number} [options.maxCoverageCells] - cap on grid cells (default config.discovery).
- * @param {number} [options.maxSearchRequests] - cap on provider searches (default config.discovery).
- * @param {number} [options.providerMaxRadiusMeters=50000] - provider radius cap.
- * @returns {{
- *   strategy: 'single'|'grid',
- *   cells: Array<{ center: { lat: number, lng: number }, radiusMeters: number }>,
- *   polygon: object, bounds: object,
- *   truncated: boolean, estimatedSearches: number
- * }}
- * @throws {Error} with `.code === 'INVALID_GEOMETRY'` when the area is invalid.
+ * Plan an initial, gap-free rectangular partition of the selected geometry's
+ * bounding box. The original polygon is returned for exact result filtering.
  */
 export function planCoverage(
   area,
   {
     maxCoverageCells = config.discovery.maxCoverageCells,
-    maxSearchRequests = config.discovery.maxSearchRequests,
     providerMaxRadiusMeters = PROVIDER_RADIUS_CAP_M,
   } = {},
 ) {
-  const { polygon, bounds, areaSqKm, center } = normalizeArea(area);
-  const provMax = isPos(providerMaxRadiusMeters)
-    ? Math.min(providerMaxRadiusMeters, PROVIDER_RADIUS_CAP_M)
+  const normalized = normalizeArea(area);
+  const providerCap = isPos(providerMaxRadiusMeters)
+    ? Math.min(PROVIDER_RADIUS_CAP_M, providerMaxRadiusMeters)
     : PROVIDER_RADIUS_CAP_M;
-  const cap = resolveCap(maxCoverageCells, maxSearchRequests);
+  const cap = resolveInitialCellCap(maxCoverageCells);
+  const { columns, rows } = gridShape(normalized.bounds, cap, providerCap);
+  const { north, south, east, west } = normalized.bounds;
+  const cells = [];
 
-  const ring = polygon.coordinates[0];
-  const covering = coveringRadiusMeters(center, ring);
-
-  // SMALL: one circle covers the whole polygon and the area is modest.
-  if (covering <= Math.min(provMax, SINGLE_SEARCH_MAX_RADIUS_M) && areaSqKm <= SINGLE_SEARCH_MAX_SQKM) {
-    const radiusMeters = Math.min(provMax, Math.max(1, Math.ceil(covering) || 1));
-    return {
-      strategy: 'single',
-      cells: [{ center: { lat: center.lat, lng: center.lng }, radiusMeters }],
-      polygon,
-      bounds,
-      truncated: false,
-      estimatedSearches: 1,
-    };
+  for (let row = 0; row < rows; row += 1) {
+    const cellSouth = south + ((north - south) * row) / rows;
+    const cellNorth = south + ((north - south) * (row + 1)) / rows;
+    for (let column = 0; column < columns; column += 1) {
+      const cellWest = west + ((east - west) * column) / columns;
+      const cellEast = west + ((east - west) * (column + 1)) / columns;
+      const cell = cellFromBounds(
+        { north: cellNorth, south: cellSouth, east: cellEast, west: cellWest },
+        0,
+        `${row}.${column}`,
+      );
+      if (cell.radiusMeters > providerCap) {
+        const err = new Error('Coverage cell exceeds the provider radius limit');
+        err.code = 'DISCOVERY_AREA_TOO_LARGE';
+        throw err;
+      }
+      cells.push(cell);
+    }
   }
 
-  // LARGE: tile the bounding box.
-  const { cells, truncated } = buildGrid({ polygon, bounds, cap, provMax });
   return {
-    strategy: 'grid',
+    strategy: cells.length === 1 ? 'single' : 'grid',
     cells,
-    polygon,
-    bounds,
-    truncated,
+    polygon: normalized.polygon,
+    bounds: normalized.bounds,
+    truncated: false,
     estimatedSearches: cells.length,
   };
 }
 
-export default { planCoverage };
+export default {
+  planCoverage,
+  splitCoverageCell,
+  canSubdivideCoverageCell,
+};

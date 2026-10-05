@@ -149,14 +149,14 @@ function InfoList({ children, label }: { children: ReactNode; label: string }) {
 }
 
 /**
- * The platform pins a 48px "report a problem" button 24px from the bottom-right
- * corner, above sheets. Together with the footer's own 24px padding, 48px more
+ * The platform pins a 48px "report a problem" button 24px from the bottom-left
+ * of the content area, above sheets. Together with the footer's own 24px padding, 48px more
  * keeps the footer's actions out from under it.
  *
- * The button and the sheet are positioned physically (always on the right), so
- * the clear space is on the footer's end in LTR but on its start in RTL.
+ * The button is positioned physically (always on the left), so the clear space
+ * is on the footer's start in LTR but on its end in RTL.
  */
-const FOOTER_FAB_CLEARANCE = 'pe-12 rtl:pe-0 rtl:ps-12';
+const FOOTER_FAB_CLEARANCE = 'ps-12 rtl:ps-0 rtl:pe-12';
 
 const linkClass =
   'rounded-sm text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -615,6 +615,18 @@ function LeadDetailBody({
   const assignee = findUser(users, lead.assignedTo);
   const creatorName = getLeadCreatorName(lead.createdBy, users);
   const meta = lead.sourceMetadata;
+  const discoveryLocationLabel = meta.discoveryLocation?.formattedAddress
+    ?? meta.discoveryLocation?.city
+    ?? meta.discoveryLocation?.name
+    ?? null;
+  const discoveryAreaLabel = meta.discoveryArea
+    ? meta.discoveryArea.radiusMeters
+      ? `${(meta.discoveryArea.radiusMeters / 1000).toLocaleString(locale, { maximumFractionDigits: 2 })} km radius`
+      : [
+          meta.discoveryArea.type,
+          meta.discoveryArea.areaSqKm ? `${meta.discoveryArea.areaSqKm.toLocaleString(locale, { maximumFractionDigits: 2 })} km²` : null,
+        ].filter(Boolean).join(' · ')
+    : null;
   const rating = lead.providerMeta.rating;
   const reviewCount = lead.providerMeta.reviewCount;
   const priceLevelLabel = getPriceLevelLabel(t, lead.providerMeta.priceLevel);
@@ -975,6 +987,26 @@ function LeadDetailBody({
           {meta.keyword && (
             <InfoRow icon={Search} label={t('leads.drawer.keyword', 'Keyword')}>
               {meta.keyword}
+            </InfoRow>
+          )}
+          {discoveryLocationLabel && (
+            <InfoRow icon={MapPin} label={t('leads.drawer.discoveryLocation', 'Selected location')}>
+              {discoveryLocationLabel}
+            </InfoRow>
+          )}
+          {discoveryAreaLabel && (
+            <InfoRow icon={Compass} label={t('leads.drawer.discoveryArea', 'Selected search area')}>
+              {discoveryAreaLabel}
+            </InfoRow>
+          )}
+          {meta.discoverySearchCoordinates?.center && (
+            <InfoRow icon={Compass} label={t('leads.drawer.discoverySearchCoordinates', 'Discovery search coordinates')}>
+              <LtrText className="font-mono text-xs">
+                {meta.discoverySearchCoordinates.center.lat.toFixed(5)}, {meta.discoverySearchCoordinates.center.lng.toFixed(5)}
+                {meta.discoverySearchCoordinates.radiusMeters
+                  ? ` · ${Math.round(meta.discoverySearchCoordinates.radiusMeters)} m`
+                  : ''}
+              </LtrText>
             </InfoRow>
           )}
           {rating !== null && (

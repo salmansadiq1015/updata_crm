@@ -4,6 +4,7 @@ import { createContext, useContext, useCallback, useEffect, useMemo, useState } 
 import Cookies from 'js-cookie';
 import { translations } from './translations';
 import { normalizeGermanOrthography } from './german-orthography';
+import { localizeFallback } from './locale-completion';
 import {
   LOCALE_COOKIE,
   SUPPORTED_LOCALES,
@@ -71,6 +72,8 @@ export function LanguageProvider({ children, initialLocale }) {
   useEffect(() => {
     const client = readClientLocale();
     writeClientLocale(client); // backfill the cookie for migrated/first-time users
+    // This is a one-time post-hydration reconciliation with the persisted locale.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLocaleState((curr) => (client !== curr ? client : curr));
 
     const onStorage = (e) => {
@@ -80,7 +83,6 @@ export function LanguageProvider({ children, initialLocale }) {
     return () => window.removeEventListener('storage', onStorage);
     // Mount-only: subsequent changes flow through `setLocale`/`toggleLanguage`
     // or the storage event above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setLocale = useCallback((next) => {
@@ -137,10 +139,14 @@ export function LanguageProvider({ children, initialLocale }) {
       } else {
         out = key;
       }
+      if (locale !== 'de' && typeof out === 'string') {
+        out = localizeFallback(out, locale);
+      }
       if (vars && typeof out === 'string') {
         out = out.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : `{${k}}`));
       }
-      return locale === 'de' ? normalizeGermanOrthography(out) : out;
+      if (locale === 'de') return normalizeGermanOrthography(out);
+      return out;
     },
     [locale],
   );

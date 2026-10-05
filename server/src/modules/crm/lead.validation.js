@@ -47,13 +47,71 @@ const addressSchema = Joi.object({
   country: Joi.string().trim().max(2).default('CH'),
 });
 
+const discoveryBounds = Joi.object({
+  north: Joi.number().min(-90).max(90).required(),
+  south: Joi.number().min(-90).max(90).required(),
+  east: Joi.number().min(-180).max(180).required(),
+  west: Joi.number().min(-180).max(180).required(),
+});
+
+const discoveryLocation = Joi.object({
+  name: Joi.string().trim().max(255).allow('', null),
+  mode: Joi.string().valid('search', 'draw', 'upload').allow(null),
+  center: geoPoint.allow(null),
+  placeId: Joi.string().trim().max(255).allow('', null),
+  countryCode: Joi.string().trim().uppercase().length(2).allow('', null),
+  country: Joi.string().trim().max(100).allow('', null),
+  region: Joi.string().trim().max(120).allow('', null),
+  city: Joi.string().trim().max(120).allow('', null),
+  formattedAddress: Joi.string().trim().max(500).allow('', null),
+}).allow(null);
+
+const discoveryArea = Joi.object({
+  type: Joi.string().valid('radius', 'circle', 'rectangle', 'polygon').allow(null),
+  radiusMeters: Joi.number().positive().max(50000).allow(null),
+  areaSqKm: Joi.number().min(0).allow(null),
+  bounds: discoveryBounds.allow(null),
+  geometry: Joi.object({
+    type: Joi.string().valid('Polygon').required(),
+    coordinates: Joi.array().items(
+      Joi.array().items(
+        Joi.array().ordered(
+          Joi.number().min(-180).max(180).required(),
+          Joi.number().min(-90).max(90).required(),
+        ).length(2),
+      ),
+    ),
+  }).allow(null),
+}).allow(null);
+
+const discoverySearchCoordinates = Joi.object({
+  cellId: Joi.string().trim().max(120).allow('', null),
+  depth: Joi.number().integer().min(0).allow(null),
+  center: latLngPoint.allow(null),
+  radiusMeters: Joi.number().positive().max(50000).allow(null),
+  bounds: discoveryBounds.allow(null),
+}).allow(null);
+
+const discoveryBusinessType = Joi.alternatives().try(
+  Joi.string().trim().max(120),
+  Joi.object({
+    id: Joi.string().trim().max(120).required(),
+    name: Joi.string().trim().max(200).allow('', null),
+    providerIncludedType: Joi.string().trim().max(120).allow('', null),
+    providerTextQuery: Joi.string().trim().max(200).allow('', null),
+  }),
+);
+
 const sourceMetadataSchema = Joi.object({
   googlePlaceId: Joi.string().trim().max(255).allow('', null),
   discoverySessionId: objectId.allow(null),
   discoveryResultId: objectId.allow(null),
   businessType: Joi.string().trim().max(120).allow('', null),
   keyword: Joi.string().trim().max(120).allow('', null),
-  discoveryArea: Joi.any(),
+  discoveryLocation,
+  discoveryArea,
+  discoverySearchCoordinates,
+  discoveryBusinessTypes: Joi.array().items(discoveryBusinessType).max(50),
   discoveredAt: Joi.date().iso().allow(null),
 });
 
@@ -108,6 +166,7 @@ export const listLeads = {
     assignedTo: objectId,
     source: Joi.string().valid(...LEAD_SOURCES),
     type: Joi.string().valid(...LEAD_TYPES),
+    city: Joi.string().trim().max(120),
     q: Joi.string().trim().max(100).allow(''),
     sortBy: Joi.string().valid('createdAt', 'name', 'status').default('createdAt'),
   }),

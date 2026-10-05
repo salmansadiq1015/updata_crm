@@ -295,7 +295,15 @@ export function FullPageSpinner() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: LOADER_STYLES }} />
-      <div className="mb-loader-root" role="status" aria-live="polite" aria-label="Updata ERP wird geladen">
+      <div
+        className="mb-loader-root notranslate"
+        role="status"
+        aria-live="polite"
+        aria-label="Updata ERP wird geladen"
+        translate="no"
+        data-no-translation="true"
+        suppressHydrationWarning
+      >
         <div className="mb-loader-card">
           <div className="mb-loader-scan" />
           <div className="mb-loader-scene" aria-hidden="true">
@@ -315,8 +323,8 @@ export function FullPageSpinner() {
               </div>
             </div>
           </div>
-          <p className="mb-loader-title">Updata ERP</p>
-          <p className="mb-loader-subtitle">System wird vorbereitet</p>
+          <p className="mb-loader-title" suppressHydrationWarning>Updata ERP</p>
+          <p className="mb-loader-subtitle" suppressHydrationWarning>System wird vorbereitet</p>
           <div className="mb-loader-progress" aria-hidden="true" />
         </div>
       </div>

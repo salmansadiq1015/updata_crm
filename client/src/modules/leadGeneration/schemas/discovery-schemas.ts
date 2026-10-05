@@ -311,6 +311,7 @@ export const discoverySessionSchema = z.unknown().transform((value): DiscoverySe
   const progress = readRecord(raw.progress);
   const counts = readRecord(raw.counts);
   const usage = readRecord(raw.usage);
+  const coverage = readRecord(raw.coverage);
   const error = isRecord(raw.error)
     ? {
         code: readStringOrNull(raw.error.code),
@@ -330,6 +331,13 @@ export const discoverySessionSchema = z.unknown().transform((value): DiscoverySe
     areaTypeStr === 'polygon'
       ? areaTypeStr
       : null;
+  const coverageStateValue = readString(coverage.state);
+  const coverageState = (
+    coverageStateValue === 'RUNNING'
+    || coverageStateValue === 'EXHAUSTED'
+    || coverageStateValue === 'PARTIAL'
+    || coverageStateValue === 'CANCELLED'
+  ) ? coverageStateValue : 'PENDING';
 
   return {
     id,
@@ -338,6 +346,7 @@ export const discoverySessionSchema = z.unknown().transform((value): DiscoverySe
       name: readStringOrNull(location.name),
       mode,
       center: toGeoPoint(location.center),
+      placeId: readStringOrNull(location.placeId),
       countryCode: readStringOrNull(location.countryCode),
       country: readStringOrNull(location.country),
       region: readStringOrNull(location.region),
@@ -379,6 +388,8 @@ export const discoverySessionSchema = z.unknown().transform((value): DiscoverySe
       searchesTotal: readNumber(progress.searchesTotal),
       resultsDiscovered: readNumber(progress.resultsDiscovered),
       resultsPersisted: readNumber(progress.resultsPersisted),
+      rawResults: readNumber(progress.rawResults),
+      duplicatesRemoved: readNumber(progress.duplicatesRemoved),
       errors: readNumber(progress.errors),
     },
     counts: {
@@ -394,6 +405,17 @@ export const discoverySessionSchema = z.unknown().transform((value): DiscoverySe
       searchRequests: readNumber(usage.searchRequests),
       detailsRequests: readNumber(usage.detailsRequests),
       geocodeRequests: readNumber(usage.geocodeRequests),
+    },
+    coverage: {
+      strategy: readStringOrNull(coverage.strategy),
+      state: coverageState,
+      providerGuaranteesCompleteness: readBoolean(coverage.providerGuaranteesCompleteness),
+      searchesCompleted: readNumber(coverage.searchesCompleted ?? progress.searchesCompleted),
+      searchesTotal: readNumber(coverage.searchesTotal ?? progress.searchesTotal),
+      saturatedRegions: readNumber(coverage.saturatedRegions),
+      subdividedRegions: readNumber(coverage.subdividedRegions),
+      unresolvedRegions: readNumber(coverage.unresolvedRegions),
+      reasonCodes: readStringArray(coverage.reasonCodes),
     },
     cancelRequested: readBoolean(raw.cancelRequested),
     error,

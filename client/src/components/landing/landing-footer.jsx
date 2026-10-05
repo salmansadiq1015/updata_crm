@@ -1,87 +1,41 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
-import { Zap } from 'lucide-react';
+import { Mail, ShieldCheck } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/language-context';
-import { APP_NAME, SUPPORT_EMAIL } from '@/shared/constants/application';
+import { SUPPORT_EMAIL } from '@/shared/constants/application';
 
 export function LandingFooter() {
   const { t } = useLanguage();
-
-  const footerLinks = [
+  const groups = [
     {
-      title: t('footer.product'),
+      title: 'product',
       links: [
-        { label: t('footer.product.features'), href: '#features' },
-        { label: t('footer.product.modules'), href: '#modules' },
-        { label: t('footer.product.docs'), href: '#' },
+        ['dashboard', '/dashboard'], ['leadgen', '/lead-generation'], ['crm', '/crm/customers'], ['projects', '/projects'], ['ai', '/ai'],
       ],
     },
     {
-      title: t('footer.support'),
-      links: [
-        { label: t('footer.support.help'), href: '#' },
-        { label: t('footer.support.it'), href: `mailto:${SUPPORT_EMAIL}` },
-        { label: t('footer.support.status'), href: '#' },
-        { label: t('footer.support.training'), href: '#' },
-      ],
-    },
-    {
-      title: t('footer.legal'),
-      links: [
-        { label: t('footer.legal.imprint'), href: '#' },
-        { label: t('footer.legal.privacy'), href: '#' },
-        { label: t('footer.legal.terms'), href: '#' },
-      ],
+      title: 'work',
+      links: [['tasks', '/tasks'], ['calendar', '/scheduling/calendar'], ['customers', '/crm/customers'], ['quotes', '/quotes']],
     },
   ];
-
   return (
-    <footer className="border-t border-border/40 bg-card/50">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 gap-8 py-14 sm:py-16 lg:grid-cols-4">
-          <div className="col-span-2 lg:col-span-1 lg:pr-4">
-            <Link href="/" className="inline-flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br bg-primary-gradient shadow-md shadow-primary/20">
-                <Zap className="h-4 w-4 text-white" />
-              </div>
-              <span className="text-lg font-bold tracking-tight">
-                {APP_NAME} <span className="text-gradient">ERP</span>
-              </span>
-            </Link>
-            <p className="mt-4 text-sm text-muted-foreground leading-relaxed">
-              {t('footer.description')}
-            </p>
+    <footer className="border-t border-white/[0.07] bg-[#050a13]">
+      <div className="mx-auto max-w-[1440px] px-4 pb-8 pt-14 sm:px-6 lg:px-10 lg:pt-16">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_.72fr_.72fr_.72fr_.72fr]">
+          <div className="max-w-sm">
+            <Image src="/updata-logo-dark.svg" alt="Updata ERP" width={220} height={56} className="h-9 w-auto" />
+            <p className="mt-5 text-sm leading-6 text-slate-500">{t('landing.footer.description')}</p>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="mt-5 inline-flex items-center gap-2 text-xs font-medium text-slate-400 transition-colors hover:text-white"><Mail className="size-3.5" />{SUPPORT_EMAIL}</a>
           </div>
 
-          {footerLinks.map((section) => (
-            <div key={section.title}>
-              <h3 className="text-sm font-semibold mb-4">{section.title}</h3>
-              <ul className="space-y-3">
-                {section.links.map((link) => (
-                  <li key={link.label}>
-                    <a
-                      href={link.href}
-                      className="text-sm text-muted-foreground transition-colors duration-200 hover:text-foreground"
-                    >
-                      {link.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+          {groups.map((group) => <div key={group.title}><h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t(`landing.footer.${group.title}`)}</h3><ul className="mt-4 space-y-3">{group.links.map(([label, href]) => <li key={label}><Link href={href} className="text-xs text-slate-400 transition-colors hover:text-white">{t(`landing.footer.${label}`)}</Link></li>)}</ul></div>)}
 
-        <div className="flex flex-col items-center justify-between gap-4 border-t border-border/40 py-6 sm:flex-row">
-          <p className="text-xs text-muted-foreground">
-            &copy; {new Date().getFullYear()} {t('footer.copyright')}
-          </p>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="inline-block w-4 text-center">&#127464;&#127469;</span>
-            {t('footer.madeIn')}
-          </div>
+          <div><h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t('landing.footer.company')}</h3><ul className="mt-4 space-y-3"><li><a href="#product" className="text-xs text-slate-400 transition-colors hover:text-white">{t('landing.footer.about')}</a></li><li><a href={`mailto:${SUPPORT_EMAIL}`} className="text-xs text-slate-400 transition-colors hover:text-white">{t('landing.footer.contact')}</a></li><li><a href={`mailto:${SUPPORT_EMAIL}?subject=Updata%20Support`} className="text-xs text-slate-400 transition-colors hover:text-white">{t('landing.footer.support')}</a></li></ul></div>
+          <div><h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">{t('landing.footer.legal')}</h3><ul className="mt-4 space-y-3"><li><span title={t('landing.footer.unavailable')} className="text-xs text-slate-600">{t('landing.footer.privacy')}</span></li><li><span title={t('landing.footer.unavailable')} className="text-xs text-slate-600">{t('landing.footer.terms')}</span></li><li><a href={`mailto:${SUPPORT_EMAIL}?subject=Security`} className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-white"><ShieldCheck className="size-3" />{t('landing.footer.security')}</a></li></ul></div>
         </div>
+        <div className="mt-12 flex flex-col gap-3 border-t border-white/[0.07] pt-6 text-[11px] text-slate-600 sm:flex-row sm:items-center sm:justify-between"><p>© {new Date().getFullYear()} {t('landing.footer.copyright')}</p><p>CRM · Lead Generation · Operations · AI</p></div>
       </div>
     </footer>
   );

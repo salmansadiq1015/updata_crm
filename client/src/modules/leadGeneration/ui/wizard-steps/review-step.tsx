@@ -82,7 +82,7 @@ export function ReviewStep() {
         <p className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5 text-xs text-warning">
           {t(
             'leadgen.area.coverageNote',
-            'Large areas are split into multiple searches and may not be fully covered.',
+            'The full area is searched in adaptive regions; any provider limitation is reported as partial.',
           )}
         </p>
       )}

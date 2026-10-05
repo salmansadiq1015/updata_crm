@@ -1,13 +1,18 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Building2, User } from 'lucide-react';
+import { Building2, MapPin, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatPhone } from '@/lib/formatters';
 import type { Lead } from '../types/lead-types';
 import { useLanguage } from './lead-ui-kit';
 import type { ShellColumn } from './lead-ui-kit';
-import { LEAD_SOURCE_ICON, getLeadDiscoveredAt, getLeadSourceLabel } from './lead-ui-constants';
+import {
+  LEAD_SOURCE_ICON,
+  getLeadDiscoveredAt,
+  getLeadSourceLabel,
+  getLeadTypeLabel,
+} from './lead-ui-constants';
 import {
   findUser,
   formatLeadDate,
@@ -58,7 +63,7 @@ type UseLeadColumnsArgs = {
 
 /**
  * Column set for the leads table:
- * lead number · name · status · source · city · phone · assignee · creator · discovered.
+ * lead number · name · type · status · source · area · phone · assignee · creator · discovered.
  *
  * Only name, status and the date column sort — those are the fields the API
  * accepts for `sortBy`.
@@ -133,6 +138,40 @@ export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArg
         Cell: ({ row }) => <LeadStatusBadge status={row.original.status} />,
       },
       {
+        id: 'type',
+        accessorKey: 'type',
+        header: t('leads.col.type', 'Type'),
+        size: 145,
+        enableSorting: false,
+        Cell: ({ row }) => {
+          const lead = row.original;
+          const Icon = lead.type === 'business' ? Building2 : User;
+          const businessType = lead.sourceMetadata.businessType
+            ?.replace(/[_-]+/g, ' ')
+            .replace(/\b\w/g, (letter) => letter.toUpperCase());
+          return (
+            <div className="flex min-w-0 flex-col items-start gap-1 whitespace-normal">
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-semibold',
+                  lead.type === 'business'
+                    ? 'border-primary/20 bg-primary/10 text-primary'
+                    : 'border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-400',
+                )}
+              >
+                <Icon className="h-3 w-3" aria-hidden="true" />
+                {getLeadTypeLabel(t, lead.type)}
+              </span>
+              {businessType && (
+                <span className="line-clamp-1 max-w-[135px] text-[10px] font-medium text-muted-foreground" title={businessType}>
+                  {businessType}
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
         id: 'source',
         header: t('leads.col.source', 'Source'),
         size: 140,
@@ -147,15 +186,41 @@ export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArg
         },
       },
       {
-        id: 'city',
-        header: t('leads.col.city', 'City'),
-        size: 120,
-        Cell: ({ row }) =>
-          row.original.address.city ? (
-            <span className="whitespace-normal text-[13px] text-foreground">{row.original.address.city}</span>
-          ) : (
-            <Dash />
-          ),
+        id: 'area',
+        header: t('leads.col.area', 'Area'),
+        size: 145,
+        enableSorting: false,
+        Cell: ({ row }) => {
+          const { city, canton, country } = row.original.address;
+          const selectedLocation = row.original.sourceMetadata.discoveryLocation;
+          const areaName = selectedLocation?.city
+            ?? selectedLocation?.name
+            ?? selectedLocation?.formattedAddress
+            ?? city
+            ?? canton;
+          const areaRegion = selectedLocation
+            ? selectedLocation.region ?? canton
+            : canton;
+          const areaCountry = selectedLocation
+            ? selectedLocation.countryCode ?? selectedLocation.country ?? country
+            : country;
+          if (!areaName) return <Dash />;
+          return (
+            <span className="inline-flex min-w-0 items-center gap-2 whitespace-normal">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/15 dark:text-emerald-400">
+                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-medium text-foreground" title={areaName}>{areaName}</span>
+                {(areaRegion || areaCountry) && (
+                  <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {[areaRegion, areaCountry].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+              </span>
+            </span>
+          );
+        },
       },
       {
         id: 'phone',

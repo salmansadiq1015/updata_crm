@@ -2,11 +2,14 @@
 
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
-import type { LeadSource, LeadStatus } from '../types/lead-types';
+import type { LeadSource, LeadStatus, LeadType } from '../types/lead-types';
 
 export type LeadsFilters = {
   status: LeadStatus | 'ALL';
   source: LeadSource | 'ALL';
+  type: LeadType | 'ALL';
+  /** A city returned by the database-backed lead filter-options endpoint. */
+  place: string;
   // 'ALL' = everyone, 'ME' = current user, or a specific user id.
   assignedTo: string;
   search: string;
@@ -20,6 +23,8 @@ export type LeadsSort = {
 const INITIAL_FILTERS: LeadsFilters = {
   status: 'ALL',
   source: 'ALL',
+  type: 'ALL',
+  place: 'ALL',
   assignedTo: 'ALL',
   search: '',
 };

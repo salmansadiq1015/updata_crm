@@ -76,19 +76,28 @@ export function registerDiscoverySocket(io) {
 /** Emit a live progress update to a session's room. */
 export function emitDiscoveryProgress(sessionId, payload = {}) {
   if (!sessionId) return;
-  global.io?.to(discoveryRoom(sessionId)).emit('discovery:progress', payload);
+  global.io?.to(discoveryRoom(sessionId)).emit('discovery:progress', {
+    ...payload,
+    updatedAt: payload.updatedAt || new Date().toISOString(),
+  });
 }
 
 /** Emit a batch-of-results signal to a session's room. */
 export function emitDiscoveryResult(sessionId, payload = {}) {
   if (!sessionId) return;
-  global.io?.to(discoveryRoom(sessionId)).emit('discovery:result', payload);
+  global.io?.to(discoveryRoom(sessionId)).emit('discovery:result', {
+    ...payload,
+    updatedAt: payload.updatedAt || new Date().toISOString(),
+  });
 }
 
 /** Emit the terminal (completed / partial / cancelled / failed) event to a session's room. */
 export function emitDiscoveryCompleted(sessionId, payload = {}) {
   if (!sessionId) return;
-  global.io?.to(discoveryRoom(sessionId)).emit('discovery:completed', payload);
+  global.io?.to(discoveryRoom(sessionId)).emit('discovery:completed', {
+    ...payload,
+    updatedAt: payload.updatedAt || new Date().toISOString(),
+  });
 }
 
 export default {

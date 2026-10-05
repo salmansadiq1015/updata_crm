@@ -1,12 +1,12 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement } from 'react';
 import { http, HttpResponse } from 'msw';
 import type { AxiosResponse } from 'axios';
 import { server } from './mocks/server';
 import { BASE } from './mocks/handlers';
-import { ok } from './mocks/data';
+import { ok, okPage } from './mocks/data';
 
 vi.mock('@/lib/api/client', async () => {
   const axios = await import('axios');
@@ -33,11 +33,13 @@ vi.mock('@/lib/toast', () => ({
 import {
   useBusinessTypes,
   useDiscoveryResults,
+  useDiscoveryMarkers,
   useDiscoverySession,
   useDiscoverySessions,
   useCreateDiscovery,
   useImport,
   useFlattenedResults,
+  shouldRetryDiscoveryQuery,
 } from '../hooks/use-discovery';
 
 const D = `${BASE}/business-discovery`;
@@ -56,6 +58,15 @@ function makeWrapper() {
 }
 
 describe('use-discovery hooks', () => {
+  it('does not automatically retry rate-limit or permanent discovery failures', () => {
+    expect(shouldRetryDiscoveryQuery(0, { statusCode: 429 })).toBe(false);
+    expect(shouldRetryDiscoveryQuery(0, { response: { status: 429 } })).toBe(false);
+    expect(shouldRetryDiscoveryQuery(0, { statusCode: 403 })).toBe(false);
+    expect(shouldRetryDiscoveryQuery(0, { isCanceled: true })).toBe(false);
+    expect(shouldRetryDiscoveryQuery(0, new Error('temporary'))).toBe(true);
+    expect(shouldRetryDiscoveryQuery(1, new Error('temporary'))).toBe(false);
+  });
+
   it('useBusinessTypes loads the catalog', async () => {
     const { result } = renderHook(() => useBusinessTypes(), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -90,6 +101,72 @@ describe('use-discovery hooks', () => {
     await waitFor(() => expect(result.current.query.isSuccess).toBe(true));
     expect(result.current.flat).toHaveLength(2);
     expect(result.current.flat[0].crmStatus).toBe('NEW');
+  });
+
+  it('does not fetch another result page until pagination requests it', async () => {
+    let requests = 0;
+    server.use(
+      http.get(`${D}/sessions/:id/results`, ({ request }) => {
+        requests += 1;
+        const cursor = new URL(request.url).searchParams.get('cursor');
+        return HttpResponse.json(okPage(
+          [],
+          cursor
+            ? { hasNext: false, nextCursor: null, limit: 50 }
+            : { hasNext: true, nextCursor: 'results-cursor-2', limit: 50 },
+        ));
+      }),
+    );
+
+    const { result, rerender } = renderHook(() => useDiscoveryResults('sess-1'), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const initialRequests = requests;
+
+    rerender();
+    expect(requests).toBe(initialRequests);
+
+    await act(async () => {
+      await result.current.fetchNextPage({ cancelRefetch: false });
+    });
+    expect(requests).toBeGreaterThan(initialRequests);
+  });
+
+  it('loads each marker cursor once and pauses after a 429 until manual retry', async () => {
+    const requestedCursors: Array<string | null> = [];
+    server.use(
+      http.get(`${D}/sessions/:id/markers`, ({ request }) => {
+        const cursor = new URL(request.url).searchParams.get('cursor');
+        requestedCursors.push(cursor);
+        if (!cursor) {
+          return HttpResponse.json(okPage(
+            [{ id: 'marker-1', lat: 47.37, lng: 8.54, status: 'NEW' }],
+            { hasNext: true, nextCursor: 'cursor-2', limit: 1000 },
+          ));
+        }
+        return HttpResponse.json({ success: false, error: { message: 'Too many requests' } }, { status: 429 });
+      }),
+    );
+
+    const { result, rerender } = renderHook(
+      () => useDiscoveryMarkers('sess-1', { enabled: true }),
+      { wrapper: makeWrapper() },
+    );
+
+    await waitFor(() => expect(result.current.isFetchNextPageError).toBe(true));
+    expect(requestedCursors.filter((cursor) => cursor === null).length).toBeGreaterThan(0);
+    expect(requestedCursors.filter((cursor) => cursor === 'cursor-2').length).toBeGreaterThan(0);
+
+    const requestsAfterFailure = requestedCursors.length;
+    rerender();
+    expect(requestedCursors).toHaveLength(requestsAfterFailure);
+
+    await act(async () => {
+      await result.current.retryFailedPage();
+    });
+    expect(requestedCursors.length).toBeGreaterThan(requestsAfterFailure);
+    expect(requestedCursors.slice(requestsAfterFailure).every((cursor) => cursor === 'cursor-2')).toBe(true);
   });
 
   it('useCreateDiscovery returns a sessionId on success', async () => {

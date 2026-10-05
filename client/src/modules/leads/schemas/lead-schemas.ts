@@ -207,6 +207,22 @@ export const leadSchema = z.unknown().transform((value): Lead => {
   if (!id) throw new Error('Lead response is missing an id');
   const providerMeta = readRecord(raw.providerMeta);
   const sourceMetadata = readRecord(raw.sourceMetadata);
+  const discoveryLocation = readRecord(sourceMetadata.discoveryLocation);
+  const discoveryArea = readRecord(sourceMetadata.discoveryArea);
+  const discoveryBounds = readRecord(discoveryArea.bounds);
+  const discoverySearch = readRecord(sourceMetadata.discoverySearchCoordinates);
+  const discoverySearchBounds = readRecord(discoverySearch.bounds);
+  const readBounds = (record: UnknownRecord) => (
+    [record.north, record.south, record.east, record.west].every((item) => typeof item === 'number')
+      ? {
+          north: record.north as number,
+          south: record.south as number,
+          east: record.east as number,
+          west: record.west as number,
+        }
+      : null
+  );
+  const geometry = readRecord(discoveryArea.geometry);
   return {
     id,
     leadNumber: readStringOrNull(raw.leadNumber),
@@ -234,6 +250,41 @@ export const leadSchema = z.unknown().transform((value): Lead => {
       discoveryResultId: readIdOrNull(sourceMetadata.discoveryResultId),
       businessType: readStringOrNull(sourceMetadata.businessType),
       keyword: readStringOrNull(sourceMetadata.keyword),
+      discoveryLocation: Object.keys(discoveryLocation).length ? {
+        name: readStringOrNull(discoveryLocation.name),
+        placeId: readStringOrNull(discoveryLocation.placeId),
+        city: readStringOrNull(discoveryLocation.city),
+        region: readStringOrNull(discoveryLocation.region),
+        country: readStringOrNull(discoveryLocation.country),
+        countryCode: readStringOrNull(discoveryLocation.countryCode),
+        formattedAddress: readStringOrNull(discoveryLocation.formattedAddress),
+        center: toGeoPoint(discoveryLocation.center),
+      } : null,
+      discoveryArea: Object.keys(discoveryArea).length ? {
+        type: readStringOrNull(discoveryArea.type),
+        radiusMeters: readNumberOrNull(discoveryArea.radiusMeters),
+        areaSqKm: readNumberOrNull(discoveryArea.areaSqKm),
+        bounds: readBounds(discoveryBounds),
+        geometry: geometry.type === 'Polygon' && Array.isArray(geometry.coordinates)
+          ? { type: 'Polygon', coordinates: geometry.coordinates as number[][][] }
+          : null,
+      } : null,
+      discoverySearchCoordinates: Object.keys(discoverySearch).length ? {
+        cellId: readStringOrNull(discoverySearch.cellId),
+        depth: readNumberOrNull(discoverySearch.depth),
+        center: toGeoPoint(discoverySearch.center),
+        radiusMeters: readNumberOrNull(discoverySearch.radiusMeters),
+        bounds: readBounds(discoverySearchBounds),
+      } : null,
+      discoveryBusinessTypes: (Array.isArray(sourceMetadata.discoveryBusinessTypes)
+        ? sourceMetadata.discoveryBusinessTypes
+        : []).map((item) => {
+        const businessType = readRecord(item);
+        return {
+          id: readString(businessType.id ?? item),
+          name: readStringOrNull(businessType.name),
+        };
+      }).filter((item) => item.id.length > 0),
       discoveredAt: readIsoOrNull(sourceMetadata.discoveredAt),
     },
     assignedTo: readIdOrNull(raw.assignedTo),

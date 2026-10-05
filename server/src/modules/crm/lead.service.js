@@ -122,6 +122,11 @@ class LeadService {
     });
   }
 
+  /** Distinct, live values used by the leads list filter controls. */
+  async getFilterOptions() {
+    return leadRepository.getFilterOptions();
+  }
+
   /** Company-wide get (shared). Throws when the lead does not exist. */
   async getById(id) {
     const lead = await leadRepository.getById(id);

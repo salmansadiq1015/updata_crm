@@ -107,11 +107,12 @@ class DiscoveryRepository {
    * fields (dot-path $set). Returns the updated doc, or null when there is
    * nothing to set / the scoped session does not exist.
    */
-  async updateSessionProgress(id, { progress, counts, usage } = {}, { createdBy } = {}) {
+  async updateSessionProgress(id, { progress, counts, usage, coverage } = {}, { createdBy } = {}) {
     const set = {};
     if (progress) for (const [key, value] of Object.entries(progress)) set[`progress.${key}`] = value;
     if (counts) for (const [key, value] of Object.entries(counts)) set[`counts.${key}`] = value;
     if (usage) for (const [key, value] of Object.entries(usage)) set[`usage.${key}`] = value;
+    if (coverage) for (const [key, value] of Object.entries(coverage)) set[`coverage.${key}`] = value;
     if (Object.keys(set).length === 0) return null;
 
     const filter = { _id: id };
@@ -210,6 +211,7 @@ class DiscoveryRepository {
     sortBy = RESULT_DEFAULT_SORT,
     sortOrder = 'desc',
     filters = {},
+    search,
     createdBy,
   } = {}) {
     const safeSortBy = RESULT_SORT_MAP[sortBy] || RESULT_SORT_MAP[RESULT_DEFAULT_SORT];
@@ -232,16 +234,32 @@ class DiscoveryRepository {
       baseFilter['business.rating'] = { $gte: Number(minRating) };
     }
 
+    let searchFilter = {};
+    if (search) {
+      const escaped = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = { $regex: escaped, $options: 'i' };
+      searchFilter = {
+        $or: [{ 'business.name': regex }, { 'business.address.formatted': regex }],
+      };
+    }
+
+    // Count the complete filtered dataset independently of the cursor. The
+    // client keeps cursor pagination for stable/scalable reads, while this
+    // total powers an honest "page X of Y" UI without loading every row.
+    const datasetFilter = combineFilters(baseFilter, searchFilter);
     const filter = combineFilters(
-      baseFilter,
+      datasetFilter,
       buildCursorQuery(cursor, safeSortBy, sortOrder),
     );
 
-    const docs = await DiscoveryResult.find(filter)
-      .sort(buildCursorSort(safeSortBy, sortOrder))
-      .limit(limit + 1)
-      .select('-__v')
-      .lean();
+    const [docs, total] = await Promise.all([
+      DiscoveryResult.find(filter)
+        .sort(buildCursorSort(safeSortBy, sortOrder))
+        .limit(limit + 1)
+        .select('-__v')
+        .lean(),
+      DiscoveryResult.countDocuments(datasetFilter),
+    ]);
 
     // Nested sort paths (e.g. business.rating) are not reachable via the shared
     // buildCursorResponse (it reads doc[sortField]); encode the cursor from the
@@ -257,13 +275,31 @@ class DiscoveryRepository {
       );
     }
 
-    return { data, pagination: { hasNext, nextCursor, limit } };
+    return { data, pagination: { hasNext, nextCursor, limit, total } };
   }
 
   async getResultById(id, { createdBy } = {}) {
     const filter = { _id: id };
     if (createdBy) filter.createdBy = createdBy;
     return DiscoveryResult.findOne(filter).lean();
+  }
+
+  /** Lightweight, independently paginated marker stream for the complete map. */
+  async listResultMarkers(sessionId, { cursor, limit = 500, createdBy } = {}) {
+    const baseFilter = { discoverySessionId: sessionId, 'business.location.coordinates.1': { $exists: true } };
+    if (createdBy) baseFilter.createdBy = createdBy;
+    const filter = combineFilters(baseFilter, buildCursorQuery(cursor, '_id', 'asc'));
+    const docs = await DiscoveryResult.find(filter)
+      .sort(buildCursorSort('_id', 'asc'))
+      .limit(limit + 1)
+      .select('_id business.location matching.status')
+      .lean();
+    const hasNext = docs.length > limit;
+    const data = hasNext ? docs.slice(0, limit) : docs;
+    const nextCursor = hasNext && data.length
+      ? encodeCursor({ _id: data[data.length - 1]._id }, '_id')
+      : null;
+    return { data, pagination: { hasNext, nextCursor, limit } };
   }
 
   /**

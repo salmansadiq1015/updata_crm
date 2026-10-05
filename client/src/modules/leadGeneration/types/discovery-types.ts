@@ -66,6 +66,8 @@ export type CursorPagination = {
   hasNext: boolean;
   nextCursor: string | null;
   limit: number;
+  /** Total rows matching the filter, when the endpoint can calculate it. */
+  total?: number;
 };
 
 export type CursorPage<T> = {
@@ -94,6 +96,7 @@ export type DiscoveryLocation = {
   name: string | null;
   mode: LocationMode | null;
   center: GeoPoint | null;
+  placeId: string | null;
   countryCode: string | null;
   country: string | null;
   region: string | null;
@@ -123,6 +126,8 @@ export type DiscoveryProgress = {
   searchesTotal: number;
   resultsDiscovered: number;
   resultsPersisted: number;
+  rawResults: number;
+  duplicatesRemoved: number;
   errors: number;
 };
 
@@ -166,6 +171,17 @@ export type DiscoverySession = {
   progress: DiscoveryProgress;
   counts: DiscoveryCounts;
   usage: DiscoveryUsage;
+  coverage: {
+    strategy: string | null;
+    state: 'PENDING' | 'RUNNING' | 'EXHAUSTED' | 'PARTIAL' | 'CANCELLED';
+    providerGuaranteesCompleteness: boolean;
+    searchesCompleted: number;
+    searchesTotal: number;
+    saturatedRegions: number;
+    subdividedRegions: number;
+    unresolvedRegions: number;
+    reasonCodes: string[];
+  };
   cancelRequested: boolean;
   error: DiscoveryError;
   createdBy: string | null;
@@ -229,6 +245,13 @@ export type DiscoveryResult = {
   discoveredAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type DiscoveryMarker = {
+  id: string;
+  lat: number;
+  lng: number;
+  status: MatchingStatus | null;
 };
 
 // ── Import ──────────────────────────────────────────────────────────────────
@@ -334,7 +357,11 @@ export type CreateDiscoveryInput = {
     name?: string;
     mode?: LocationMode;
     center?: GeoPoint;
+    placeId?: string;
     countryCode?: string;
+    country?: string;
+    region?: string;
+    city?: string;
     formattedAddress?: string;
   };
   area: {
@@ -401,6 +428,7 @@ export type DiscoveryCompletedEvent = {
   status: DiscoverySessionStatus;
   counts?: Partial<DiscoveryCounts>;
   progress?: Partial<DiscoveryProgress>;
+  coverage?: Partial<DiscoverySession['coverage']>;
   updatedAt: string;
 };
 

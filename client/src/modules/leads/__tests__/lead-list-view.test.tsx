@@ -164,6 +164,16 @@ beforeEach(() => {
   useLeadsStore.getState().reset();
   server.use(
     http.get(L, () => HttpResponse.json(okPage(LEADS))),
+    http.get(`${L}/filter-options`, () => HttpResponse.json(ok({
+      places: [
+        { city: 'Basel', cantons: ['BS'], count: 1 },
+        { city: 'Zürich', cantons: ['ZH'], count: 1 },
+      ],
+      types: [
+        { value: 'business', count: 3 },
+        { value: 'private', count: 0 },
+      ],
+    }))),
     http.get(`${BASE}/users/directory`, () => HttpResponse.json(ok(USERS))),
     // The detail drawer's Communication section loads these when it opens.
     http.get(`${L}/:id/contact-log`, () => HttpResponse.json(ok([]))),
@@ -204,9 +214,12 @@ describe('LeadListView', () => {
     expect(within(table).getByText('Basel Dental GmbH')).toBeInTheDocument();
     expect(within(table).getByText('Chur Yoga Studio')).toBeInTheDocument();
 
-    for (const header of ['Lead #', 'Name', 'Status', 'Source', 'City', 'Phone', 'Assigned to', 'Discovered']) {
+    for (const header of ['Lead #', 'Name', 'Status', 'Type', 'Source', 'Area', 'Phone', 'Assigned to', 'Discovered']) {
       expect(within(table).getByRole('columnheader', { name: new RegExp(header, 'i') })).toBeInTheDocument();
     }
+
+    expect(within(await findRow('Alpine Bakery AG')).getByText('Bakery')).toBeInTheDocument();
+    expect(within(await findRow('Alpine Bakery AG')).getByText('Zürich')).toBeInTheDocument();
 
     // Status is a labelled badge, never colour alone.
     expect(within(table).getByText('New')).toBeInTheDocument();
@@ -250,6 +263,33 @@ describe('LeadListView', () => {
     await user.type(screen.getByRole('searchbox', { name: 'Search leads' }), 'bakery');
 
     await waitFor(() => expect(requests[requests.length - 1].searchParams.get('q')).toBe('bakery'));
+  });
+
+  it('uses database-backed place options and sends area and type filters to the API', async () => {
+    const requests: URL[] = [];
+    server.use(
+      http.get(L, ({ request }) => {
+        requests.push(new URL(request.url));
+        return HttpResponse.json(okPage(LEADS));
+      }),
+    );
+    const { user } = renderLeadList();
+    await screen.findByText('Alpine Bakery AG');
+
+    await user.click(screen.getByRole('combobox', { name: 'Lead type' }));
+    await user.click(await screen.findByRole('option', { name: /Private/ }));
+    await waitFor(() => expect(requests[requests.length - 1].searchParams.get('type')).toBe('private'));
+
+    await user.click(screen.getByRole('combobox', { name: 'Place' }));
+    expect(await screen.findByRole('option', { name: /Zürich · ZH/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Lugano/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Zürich · ZH/ }));
+
+    await waitFor(() => {
+      const last = requests[requests.length - 1];
+      expect(last.searchParams.get('type')).toBe('private');
+      expect(last.searchParams.get('city')).toBe('Zürich');
+    });
   });
 
   it('pages forward with the cursor the API returned', async () => {

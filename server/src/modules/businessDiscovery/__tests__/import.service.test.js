@@ -7,11 +7,13 @@ import {
 const mockFindResultsForImport = jest.fn();
 const mockUpdateResultImportStatus = jest.fn();
 const mockGetResultById = jest.fn();
+const mockGetSessionById = jest.fn();
 jest.unstable_mockModule('../discovery.repository.js', () => ({
   default: {
     findResultsForImport: mockFindResultsForImport,
     updateResultImportStatus: mockUpdateResultImportStatus,
     getResultById: mockGetResultById,
+    getSessionById: mockGetSessionById,
   },
 }));
 
@@ -79,6 +81,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockUpdateResultImportStatus.mockResolvedValue({ claimed: true });
   mockFindByPlaceIds.mockResolvedValue([]);
+  mockGetSessionById.mockResolvedValue(null);
   mockLeadServiceCreate.mockResolvedValue({ _id: 'lead-created' });
   mockLeadServiceUpdate.mockResolvedValue({ _id: 'lead-updated' });
 });
@@ -103,7 +106,22 @@ function makeResult(overrides = {}) {
     },
     matching: { status: overrides.matching || 'NEW', matchedLeadId: overrides.matchedLeadId || null },
     import: { status: overrides.import || 'NOT_IMPORTED' },
-    discoveryContext: { businessTypeIds: ['restaurant'], keyword: 'pizza' },
+    discoveryContext: {
+      businessTypeIds: ['restaurant'],
+      businessTypes: [{ id: 'restaurant', name: 'Restaurant' }],
+      keyword: 'pizza',
+      location: {
+        name: 'Paris', city: 'Paris', countryCode: 'FR', formattedAddress: 'Paris, France',
+        center: { type: 'Point', coordinates: [2.3522, 48.8566] },
+      },
+      area: {
+        type: 'radius', radiusMeters: 5000,
+        bounds: { north: 48.9, south: 48.81, east: 2.42, west: 2.28 },
+      },
+      searchCoordinates: {
+        cellId: '1.2', depth: 2, center: { lat: 48.86, lng: 2.35 }, radiusMeters: 900,
+      },
+    },
     discoveredAt: new Date('2026-10-01T00:00:00Z'),
   };
 }
@@ -166,6 +184,10 @@ describe('processBatch — sync import flips result status + maps the DTO', () =
         discoverySessionId: 'sess-1',
         keyword: 'pizza',
         businessType: 'restaurant',
+        discoveryLocation: expect.objectContaining({ city: 'Paris', countryCode: 'FR' }),
+        discoveryArea: expect.objectContaining({ type: 'radius', radiusMeters: 5000 }),
+        discoverySearchCoordinates: expect.objectContaining({ cellId: '1.2', depth: 2 }),
+        discoveryBusinessTypes: [{ id: 'restaurant', name: 'Restaurant' }],
       }),
     });
     expect(dto.location).toEqual({ type: 'Point', coordinates: [8.54, 47.37] });
@@ -180,6 +202,38 @@ describe('processBatch — sync import flips result status + maps the DTO', () =
 
     // Bulk "Add All New" of a never-opened result still enriches contact fields.
     expect(mockEnrich).toHaveBeenCalledWith(r, { fieldProfile: 'DETAILS_IMPORT', createdBy: 'user-1' });
+  });
+
+  it('falls back to the linked session when importing a legacy result without provenance snapshots', async () => {
+    const r = makeResult({ _id: 'legacy-result', matching: 'NEW', import: 'NOT_IMPORTED' });
+    r.discoveryContext = { businessTypeIds: ['restaurant'], keyword: 'late night' };
+    mockGetSessionById.mockResolvedValue({
+      location: {
+        name: 'Paris', city: 'Paris', countryCode: 'FR', formattedAddress: 'Paris, France',
+        center: { type: 'Point', coordinates: [2.3522, 48.8566] },
+      },
+      area: {
+        type: 'radius', radiusMeters: 5000,
+        bounds: { north: 48.9, south: 48.81, east: 2.42, west: 2.28 },
+      },
+      businessTypes: [{ id: 'restaurant', name: 'Restaurant' }],
+      keyword: 'late night',
+    });
+
+    await importService.processBatch([r], { mode: 'new' }, 'user-1');
+
+    expect(mockGetSessionById).toHaveBeenCalledWith('sess-1', { createdBy: 'user-1' });
+    expect(mockLeadServiceCreate).toHaveBeenCalledWith(expect.objectContaining({
+      sourceMetadata: expect.objectContaining({
+        discoveryLocation: expect.objectContaining({ city: 'Paris' }),
+        discoveryArea: expect.objectContaining({ type: 'radius', radiusMeters: 5000 }),
+        discoverySearchCoordinates: expect.objectContaining({
+          center: { lng: 2.3522, lat: 48.8566 },
+          bounds: { north: 48.9, south: 48.81, east: 2.42, west: 2.28 },
+        }),
+        discoveryBusinessTypes: [expect.objectContaining({ id: 'restaurant' })],
+      }),
+    }), 'user-1');
   });
 });
 
@@ -237,6 +291,13 @@ describe('processBatch — mode new vs skip vs update', () => {
 
     expect(summary).toMatchObject({ imported: 1, existing: 0 });
     expect(mockLeadServiceUpdate).toHaveBeenCalledWith('lead-existing', expect.objectContaining({ name: 'Pizzeria Bella' }), expect.any(Object));
+    expect(mockLeadServiceUpdate).toHaveBeenCalledWith('lead-existing', expect.objectContaining({
+      source: 'google_places',
+      sourceMetadata: expect.objectContaining({
+        discoveryLocation: expect.objectContaining({ city: 'Paris' }),
+        discoveryArea: expect.objectContaining({ radiusMeters: 5000 }),
+      }),
+    }), expect.any(Object));
     expect(mockLeadServiceCreate).not.toHaveBeenCalled();
     expect(mockUpdateResultImportStatus).toHaveBeenLastCalledWith('res-1', 'IMPORTED', expect.objectContaining({
       set: expect.objectContaining({ 'import.leadId': 'lead-existing' }),

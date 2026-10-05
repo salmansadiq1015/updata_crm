@@ -81,6 +81,7 @@ const discoverySessionSchema = new mongoose.Schema(
       name: { type: String, trim: true, maxlength: 255, default: null },
       mode: { type: String, enum: Object.values(DISCOVERY_LOCATION_MODE), default: DISCOVERY_LOCATION_MODE.SEARCH },
       center: { type: pointSchema, default: undefined },
+      placeId: { type: String, trim: true, maxlength: 255, default: null },
       countryCode: { type: String, trim: true, maxlength: 2, default: null },
       country: { type: String, trim: true, maxlength: 100, default: null },
       region: { type: String, trim: true, maxlength: 120, default: null },
@@ -106,9 +107,13 @@ const discoverySessionSchema = new mongoose.Schema(
       version: { type: String, trim: true, maxlength: 60, default: null },
     },
     config: {
-      maxResults: { type: Number, default: 200 },
-      maxSearchRequests: { type: Number, default: 50 },
-      maxCoverageCells: { type: Number, default: 25 },
+      // Deprecated: retained so old sessions still deserialize. The worker does
+      // not use a result-count ceiling.
+      maxResults: { type: Number, default: null },
+      // Deprecated for new sessions. A finite value is still understood by the
+      // worker so old sessions can resume with their original behavior.
+      maxSearchRequests: { type: Number, default: null },
+      maxCoverageCells: { type: Number, default: 100 },
       concurrency: { type: Number, default: 3 },
       detailsOnImport: { type: Boolean, default: true },
     },
@@ -119,6 +124,8 @@ const discoverySessionSchema = new mongoose.Schema(
       searchesTotal: { type: Number, default: 0 },
       resultsDiscovered: { type: Number, default: 0 },
       resultsPersisted: { type: Number, default: 0 },
+      rawResults: { type: Number, default: 0 },
+      duplicatesRemoved: { type: Number, default: 0 },
       errors: { type: Number, default: 0 },
     },
     counts: {
@@ -134,6 +141,21 @@ const discoverySessionSchema = new mongoose.Schema(
       searchRequests: { type: Number, default: 0 },
       detailsRequests: { type: Number, default: 0 },
       geocodeRequests: { type: Number, default: 0 },
+    },
+    coverage: {
+      strategy: { type: String, trim: true, maxlength: 40, default: null },
+      state: {
+        type: String,
+        enum: ['PENDING', 'RUNNING', 'EXHAUSTED', 'PARTIAL', 'CANCELLED'],
+        default: 'PENDING',
+      },
+      providerGuaranteesCompleteness: { type: Boolean, default: false },
+      searchesCompleted: { type: Number, default: 0 },
+      searchesTotal: { type: Number, default: 0 },
+      saturatedRegions: { type: Number, default: 0 },
+      subdividedRegions: { type: Number, default: 0 },
+      unresolvedRegions: { type: Number, default: 0 },
+      reasonCodes: { type: [String], default: [] },
     },
     cancelRequested: { type: Boolean, default: false },
     error: {

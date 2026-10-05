@@ -24,6 +24,7 @@ export const exportLeads = {
     source: Joi.string().valid(...LEAD_SOURCES),
     assignedTo: objectId,
     type: Joi.string().valid(...LEAD_TYPES),
+    city: Joi.string().trim().max(120),
     q: Joi.string().trim().max(100).allow(''),
   }),
 };

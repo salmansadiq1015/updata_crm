@@ -1,4 +1,10 @@
-const DEFAULT_LOCALE = 'de-CH';
+import { intlLocaleFor } from '@/lib/i18n/locale-config';
+
+const DEFAULT_LOCALE = intlLocaleFor('de');
+
+function toIntlLocale(locale) {
+  return typeof locale === 'string' && locale.includes('-') ? locale : intlLocaleFor(locale);
+}
 
 function toDate(value) {
   if (!value) return null;
@@ -10,13 +16,13 @@ function toDate(value) {
 export function formatDate(value, { locale = DEFAULT_LOCALE, fallback = '—' } = {}) {
   const d = toDate(value);
   if (!d) return fallback;
-  return d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return d.toLocaleDateString(toIntlLocale(locale), { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 export function formatDateTime(value, { locale = DEFAULT_LOCALE, fallback = '—' } = {}) {
   const d = toDate(value);
   if (!d) return fallback;
-  return d.toLocaleString(locale, {
+  return d.toLocaleString(toIntlLocale(locale), {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   });
@@ -44,7 +50,7 @@ export function formatDateRelative(value, { locale = DEFAULT_LOCALE, fallback = 
     if (abs >= ms) {
       const value = Math.round(diffMs / ms);
       try {
-        return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(value, unit);
+        return new Intl.RelativeTimeFormat(toIntlLocale(locale), { numeric: 'auto' }).format(value, unit);
       } catch {
         return formatDate(d, { locale, fallback });
       }
@@ -52,7 +58,7 @@ export function formatDateRelative(value, { locale = DEFAULT_LOCALE, fallback = 
   }
 
   try {
-    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(0, 'second');
+    return new Intl.RelativeTimeFormat(toIntlLocale(locale), { numeric: 'auto' }).format(0, 'second');
   } catch {
     return formatDate(d, { locale, fallback });
   }

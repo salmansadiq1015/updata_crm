@@ -215,8 +215,6 @@ const config = Object.freeze({
 
   // Business Discovery / Lead Generation: per-session cost and load guards.
   discovery: {
-    maxResults: envVars.DISCOVERY_MAX_RESULTS,
-    maxSearchRequests: envVars.DISCOVERY_MAX_SEARCH_REQUESTS,
     maxCoverageCells: envVars.DISCOVERY_MAX_COVERAGE_CELLS,
     concurrency: envVars.DISCOVERY_CONCURRENCY,
     resultTtlDays: envVars.DISCOVERY_RESULT_TTL_DAYS,

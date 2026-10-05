@@ -83,10 +83,24 @@ class LeadRepository {
   } = {}) {
     const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
 
+    // `city` is a friendly API filter name, while the stored field is nested.
+    // Pull it out before buildFilter so an arbitrary client key can never be
+    // forwarded to MongoDB. Values originate from the validated query (or the
+    // server-generated filter-options response) and are matched exactly.
+    const { city, ...flatFilters } = filters;
+
     const baseFilter = {
       ...(createdBy ? { createdBy } : {}),
-      ...buildFilter(filters, ALLOWED_FILTERS),
+      ...buildFilter(flatFilters, ALLOWED_FILTERS),
     };
+    const placeFilter = city ? {
+      $or: [
+        { 'address.city': city },
+        { 'sourceMetadata.discoveryLocation.city': city },
+        { 'sourceMetadata.discoveryLocation.name': city },
+        { 'sourceMetadata.discoveryLocation.formattedAddress': city },
+      ],
+    } : {};
 
     let searchFilter = {};
     if (search) {
@@ -99,12 +113,16 @@ class LeadRepository {
           { email: regex },
           { phone: regex },
           { 'address.city': regex },
+          { 'sourceMetadata.discoveryLocation.name': regex },
+          { 'sourceMetadata.discoveryLocation.city': regex },
+          { 'sourceMetadata.discoveryLocation.formattedAddress': regex },
         ],
       };
     }
 
     const filter = combineFilters(
       baseFilter,
+      placeFilter,
       searchFilter,
       buildCursorQuery(cursor, safeSortBy, sortOrder),
     );
@@ -117,6 +135,75 @@ class LeadRepository {
       .lean();
 
     return buildCursorResponse(docs, limit, safeSortBy);
+  }
+
+  /**
+   * Database-backed values for list filters. Aggregation middleware does not
+   * run Mongoose's soft-delete `find` hook, so `isDeleted:false` is explicit.
+   * Places are grouped by city (the actual list filter) and include all canton
+   * codes found for that city plus a lead count for a useful, honest menu.
+   */
+  async getFilterOptions() {
+    const [facets] = await Lead.aggregate([
+      { $match: { isDeleted: false } },
+      {
+        $facet: {
+          places: [
+            {
+              $project: {
+                place: {
+                  $switch: {
+                    branches: [
+                      {
+                        case: { $gt: [{ $strLenCP: { $ifNull: ['$sourceMetadata.discoveryLocation.city', ''] } }, 0] },
+                        then: '$sourceMetadata.discoveryLocation.city',
+                      },
+                      {
+                        case: { $gt: [{ $strLenCP: { $ifNull: ['$sourceMetadata.discoveryLocation.name', ''] } }, 0] },
+                        then: '$sourceMetadata.discoveryLocation.name',
+                      },
+                      {
+                        case: { $gt: [{ $strLenCP: { $ifNull: ['$sourceMetadata.discoveryLocation.formattedAddress', ''] } }, 0] },
+                        then: '$sourceMetadata.discoveryLocation.formattedAddress',
+                      },
+                      {
+                        case: { $gt: [{ $strLenCP: { $ifNull: ['$address.city', ''] } }, 0] },
+                        then: '$address.city',
+                      },
+                    ],
+                    default: null,
+                  },
+                },
+                canton: '$address.canton',
+              },
+            },
+            { $match: { place: { $type: 'string', $ne: '' } } },
+            {
+              $group: {
+                _id: '$place',
+                count: { $sum: 1 },
+                cantons: { $addToSet: '$canton' },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ],
+          types: [
+            { $match: { type: { $in: ['business', 'private'] } } },
+            { $group: { _id: '$type', count: { $sum: 1 } } },
+            { $sort: { _id: 1 } },
+          ],
+        },
+      },
+    ]);
+
+    return {
+      places: (facets?.places ?? []).map((place) => ({
+        city: place._id,
+        cantons: (place.cantons ?? []).filter(Boolean).sort(),
+        count: place.count,
+      })),
+      types: (facets?.types ?? []).map((type) => ({ value: type._id, count: type.count })),
+    };
   }
 
   async update(id, data, { createdBy } = {}) {

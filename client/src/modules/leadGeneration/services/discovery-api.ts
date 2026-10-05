@@ -19,6 +19,7 @@ import type {
   CreateDiscoveryResult,
   CursorPage,
   DiscoveryResult,
+  DiscoveryMarker,
   DiscoveryResultListParams,
   DiscoverySession,
   DiscoverySessionListParams,
@@ -140,13 +141,34 @@ export const discoveryApi = {
     sessionId: string,
     params: DiscoveryResultListParams = {},
   ): Promise<CursorPage<DiscoveryResult>> {
+    const { crmStatus, ...rest } = params;
+    const queryParams = crmStatus ? { ...rest, matchingStatus: crmStatus } : rest;
     const response = toApiResponse<unknown>(
-      await apiClient.get(ENDPOINTS.DISCOVERY.SESSION_RESULTS(sessionId), { params }),
+      await apiClient.get(ENDPOINTS.DISCOVERY.SESSION_RESULTS(sessionId), { params: queryParams }),
     );
     return {
       data: extractList(response.data).map((item) => discoveryResultSchema.parse(item)),
       pagination: response.pagination ?? defaultPagination(params.limit),
     };
+  },
+
+  async listMarkers(
+    sessionId: string,
+    params: { cursor?: string | null; limit?: number } = {},
+  ): Promise<CursorPage<DiscoveryMarker>> {
+    const response = toApiResponse<unknown>(
+      await apiClient.get(ENDPOINTS.DISCOVERY.SESSION_MARKERS(sessionId), { params }),
+    );
+    const data = extractList(response.data)
+      .filter(isRecord)
+      .map((item) => ({
+        id: String(item.id ?? item._id ?? ''),
+        lat: readNumber(item.lat, Number.NaN),
+        lng: readNumber(item.lng, Number.NaN),
+        status: (item.status ?? null) as DiscoveryMarker['status'],
+      }))
+      .filter((item) => item.id && Number.isFinite(item.lat) && Number.isFinite(item.lng));
+    return { data, pagination: response.pagination ?? defaultPagination(params.limit) };
   },
 
   async getResult(sessionId: string, resultId: string): Promise<DiscoveryResult> {

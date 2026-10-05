@@ -42,15 +42,25 @@ function toLocationDto(result) {
   const viewport = result.geometry?.viewport ?? result.geometry?.bounds ?? null;
   const lat = Number.isFinite(location.lat) ? location.lat : null;
   const lng = Number.isFinite(location.lng) ? location.lng : null;
+  const components = Array.isArray(result.address_components) ? result.address_components : [];
+  const component = (...types) => components.find((entry) =>
+    types.some((type) => Array.isArray(entry?.types) && entry.types.includes(type)));
+  const country = component('country');
+  const region = component('administrative_area_level_1');
+  const city = component('locality', 'postal_town', 'administrative_area_level_2');
   return {
     name: result.formatted_address ?? null,
     center: { lat, lng },
     bounds: viewport
       ? { northeast: viewport.northeast ?? null, southwest: viewport.southwest ?? null }
       : null,
-    components: Array.isArray(result.address_components) ? result.address_components : [],
+    components,
     formattedAddress: result.formatted_address ?? null,
     placeId: result.place_id ?? null,
+    countryCode: country?.short_name ?? null,
+    country: country?.long_name ?? null,
+    region: region?.long_name ?? null,
+    city: city?.long_name ?? null,
   };
 }
 

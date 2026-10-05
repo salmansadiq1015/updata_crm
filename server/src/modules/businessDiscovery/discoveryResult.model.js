@@ -115,18 +115,22 @@ const discoveryResultSchema = new mongoose.Schema(
         message: { type: String, default: null },
       },
     },
-    // When Place Details (contact / hours / price) was last fetched + persisted
-    // for this result. The discovery sweep stores only minimal fields to control
-    // cost (design §6/§14); details are fetched lazily on drawer-open or import
-    // and cached here so the same place is never re-billed.
+    // When contact/hour fields were fetched (either directly by the search
+    // field mask or by a later Place Details request).
     details: {
       fetchedAt: { type: Date, default: null },
       source: { type: String, trim: true, maxlength: 40, default: null },
     },
     discoveryContext: {
       businessTypeIds: { type: [String], default: [] },
+      businessTypes: { type: mongoose.Schema.Types.Mixed, default: [] },
+      matchedBusinessTypeId: { type: String, trim: true, maxlength: 120, default: null },
       keyword: { type: String, trim: true, maxlength: 120, default: null },
       areaType: { type: String, trim: true, maxlength: 40, default: null },
+      location: { type: mongoose.Schema.Types.Mixed, default: null },
+      area: { type: mongoose.Schema.Types.Mixed, default: null },
+      providerQuery: { type: mongoose.Schema.Types.Mixed, default: null },
+      searchCoordinates: { type: mongoose.Schema.Types.Mixed, default: null },
     },
     discoveredAt: { type: Date, default: Date.now },
     isDeleted: { type: Boolean, default: false },
@@ -141,6 +145,7 @@ const discoveryResultSchema = new mongoose.Schema(
 
 // --- Indexes (§5) ---
 discoveryResultSchema.index({ createdBy: 1, discoverySessionId: 1, createdAt: -1 }); // results list per session
+discoveryResultSchema.index({ discoverySessionId: 1, _id: 1 }); // complete lightweight marker stream
 discoveryResultSchema.index(
   { discoverySessionId: 1, 'provider.placeId': 1 },
   { unique: true },

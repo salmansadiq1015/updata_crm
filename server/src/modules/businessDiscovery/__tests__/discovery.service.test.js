@@ -90,7 +90,17 @@ describe('discoveryService.createDiscovery', () => {
     mockCreateSession.mockResolvedValue({ _id: 'sess-1' });
 
     const input = {
-      location: { name: 'Zurich', mode: 'search', center: { lat: 47.3769, lng: 8.5417 } },
+      location: {
+        name: 'Zurich',
+        mode: 'search',
+        center: { lat: 47.3769, lng: 8.5417 },
+        placeId: 'zurich-place',
+        countryCode: 'CH',
+        country: 'Switzerland',
+        region: 'Zurich',
+        city: 'Zurich',
+        formattedAddress: 'Zurich, Switzerland',
+      },
       area: { type: 'radius', radiusMeters: 1000 },
       businessTypes: [{ id: 'restaurant', name: 'Restaurant' }],
       keyword: null,
@@ -105,9 +115,18 @@ describe('discoveryService.createDiscovery', () => {
     const doc = mockCreateSession.mock.calls[0][0];
     expect(doc.status).toBe(DISCOVERY_SESSION_STATUS.QUEUED);
     expect(doc.createdBy).toBe(USER);
-    expect(doc.provider).toEqual({ name: 'google_places' });
+    expect(doc.provider).toEqual({ name: 'google_places', version: 'adaptive-v2' });
     // Center stored as GeoJSON [lng, lat]
     expect(doc.location.center).toEqual({ type: 'Point', coordinates: [8.5417, 47.3769] });
+    expect(doc.location).toMatchObject({
+      placeId: 'zurich-place',
+      countryCode: 'CH',
+      country: 'Switzerland',
+      region: 'Zurich',
+      city: 'Zurich',
+      formattedAddress: 'Zurich, Switzerland',
+    });
+    expect(doc.config.maxSearchRequests).toBeNull();
     // Area normalized to a polygon for coverage / filtering
     expect(doc.area.type).toBe('radius');
     expect(doc.area.radiusMeters).toBe(1000);
@@ -126,8 +145,8 @@ describe('discoveryService.createDiscovery', () => {
     // Enqueue
     expect(mockAddJob).toHaveBeenCalledTimes(1);
     const [queueName, jobName, payload] = mockAddJob.mock.calls[0];
-    expect(queueName).toBe('discovery-run');
-    expect(jobName).toContain('discovery-run-sess-1');
+    expect(queueName).toBe('discovery-run-v2');
+    expect(jobName).toContain('discovery-run-v2-sess-1');
     expect(payload).toEqual({ sessionId: 'sess-1', createdBy: 'user-1' });
 
     // Audit + event
@@ -242,7 +261,39 @@ describe('discoveryService DTOs', () => {
     expect(dto.id).toBe('sess-9');
     expect(dto.status).toBe('PARTIAL');
     expect(dto.location.center).toEqual({ lat: 47.3769, lng: 8.5417 });
-    expect(dto.coverage).toEqual({ truncated: true, searchesCompleted: 3, searchesTotal: 5 });
+    expect(dto.coverage).toEqual(expect.objectContaining({
+      state: 'PARTIAL',
+      providerGuaranteesCompleteness: false,
+      searchesCompleted: 3,
+      searchesTotal: 5,
+    }));
+  });
+
+  test('never presents a completed legacy single-query session as exhausted coverage', () => {
+    const dto = discoveryService.toSessionDTO({
+      _id: 'legacy-session',
+      status: DISCOVERY_SESSION_STATUS.COMPLETED,
+      provider: { name: 'google_places', version: null },
+      progress: { searchesCompleted: 1, searchesTotal: 1 },
+      counts: { discovered: 20 },
+      usage: { searchRequests: 1 },
+      coverage: { state: 'EXHAUSTED', reasonCodes: [] },
+    });
+
+    expect(dto.coverage.state).toBe('PARTIAL');
+    expect(dto.coverage.reasonCodes).toContain('LEGACY_SINGLE_QUERY_NOT_EXHAUSTIVE');
+  });
+
+  test('preserves explicit exhausted coverage from the adaptive provider strategy', () => {
+    const dto = discoveryService.toSessionDTO({
+      _id: 'adaptive-session',
+      status: DISCOVERY_SESSION_STATUS.COMPLETED,
+      provider: { name: 'google_places', version: 'adaptive-v2' },
+      coverage: { state: 'EXHAUSTED', reasonCodes: ['PROVIDER_CATALOG_NOT_GUARANTEED'] },
+    });
+
+    expect(dto.coverage.state).toBe('EXHAUSTED');
+    expect(dto.coverage.reasonCodes).not.toContain('LEGACY_SINGLE_QUERY_NOT_EXHAUSTIVE');
   });
 });
 

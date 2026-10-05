@@ -5,6 +5,7 @@ import {
   isValidType,
   resolveProviderQuery,
   sanitizeCustomType,
+  matchesProviderType,
 } from '../businessTypeCatalog.js';
 
 describe('CATALOG integrity', () => {
@@ -110,6 +111,19 @@ describe('resolveProviderQuery', () => {
     }
     expect(caught).toBeInstanceOf(Error);
     expect(caught.code).toBe('INVALID_BUSINESS_TYPE');
+  });
+});
+
+describe('matchesProviderType', () => {
+  test('accepts restaurant subtypes but rejects unrelated primary businesses', () => {
+    expect(matchesProviderType({ primaryType: 'italian_restaurant', types: ['italian_restaurant', 'restaurant'] }, 'restaurant')).toBe(true);
+    expect(matchesProviderType({ primaryType: 'shopping_mall', types: ['shopping_mall', 'restaurant'] }, 'restaurant')).toBe(false);
+    expect(matchesProviderType({ primaryType: 'hostel', types: ['hostel', 'restaurant'] }, 'restaurant')).toBe(false);
+  });
+
+  test('preserves secondary matching for non-hierarchical types', () => {
+    expect(matchesProviderType({ primaryType: 'drugstore', types: ['drugstore', 'pharmacy'] }, 'pharmacy')).toBe(true);
+    expect(matchesProviderType({ primaryType: 'store', types: ['store'] }, 'pharmacy')).toBe(false);
   });
 });
 

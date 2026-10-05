@@ -125,6 +125,9 @@ export function LocationSearch() {
   const debouncedQuery = useDebounce(query, 300);
 
   useEffect(() => {
+    // Browser-only history must hydrate after mount so the server/client first
+    // render stays identical.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRecent(readRecent());
   }, []);
 
@@ -143,7 +146,15 @@ export function LocationSearch() {
   });
 
   const applyCenter = useCallback(
-    (center: GeoPoint, meta: { name?: string | null; formattedAddress?: string | null; placeId?: string | null; countryCode?: string | null }) => {
+    (center: GeoPoint, meta: {
+      name?: string | null;
+      formattedAddress?: string | null;
+      placeId?: string | null;
+      countryCode?: string | null;
+      country?: string | null;
+      region?: string | null;
+      city?: string | null;
+    }) => {
       setLocationDraft({
         name: meta.name ?? '',
         mode: 'search',
@@ -151,6 +162,9 @@ export function LocationSearch() {
         formattedAddress: meta.formattedAddress ?? null,
         placeId: meta.placeId ?? null,
         ...(meta.countryCode ? { countryCode: meta.countryCode } : {}),
+        country: meta.country ?? null,
+        region: meta.region ?? null,
+        city: meta.city ?? null,
       });
       // Seed / re-anchor a sensible default radius so the next step is reachable.
       if (!areaDraft.type || areaDraft.type === 'radius') {
@@ -179,6 +193,9 @@ export function LocationSearch() {
           formattedAddress: geo.formattedAddress,
           placeId: geo.placeId,
           countryCode: geo.countryCode,
+          country: geo.country,
+          region: geo.region,
+          city: geo.city,
         });
         const next = [label, ...recent.filter((item) => item !== label)];
         setRecent(next);
@@ -211,7 +228,17 @@ export function LocationSearch() {
       }
       setAreaDraft(area);
       const center = areaCenter(area);
-      setLocationDraft({ name: file.name.replace(/\.[^.]+$/, ''), mode: 'upload', center, placeId: null, formattedAddress: null });
+      setLocationDraft({
+        name: file.name.replace(/\.[^.]+$/, ''),
+        mode: 'upload',
+        center,
+        placeId: null,
+        countryCode: null,
+        country: null,
+        region: null,
+        city: null,
+        formattedAddress: null,
+      });
       if (center) setMapViewport({ center, zoom: 12 });
     } catch {
       showError(t('leadgen.location.upload.error', 'The boundary file could not be read.'));

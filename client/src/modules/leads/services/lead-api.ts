@@ -17,6 +17,7 @@ import type {
   LeadEnrichJobStatus,
   LeadEnrichResult,
   LeadEnrichSummary,
+  LeadFilterOptions,
   LeadPage,
   LeadListParams,
   LeadPatch,
@@ -67,6 +68,7 @@ export type LeadExportFilters = {
   source?: string;
   assignedTo?: string;
   type?: string;
+  city?: string;
   q?: string;
 };
 
@@ -263,6 +265,27 @@ export const leadApi = {
         nextCursor: null,
         limit: params.limit ?? 50,
       },
+    };
+  },
+
+  async getFilterOptions(): Promise<LeadFilterOptions> {
+    const response = toApiResponse<unknown>(await apiClient.get(ENDPOINTS.LEADS.FILTER_OPTIONS));
+    const data = isRecord(response.data) ? response.data : {};
+    const places = Array.isArray(data.places) ? data.places : [];
+    const types = Array.isArray(data.types) ? data.types : [];
+    return {
+      places: places.flatMap((value) => {
+        if (!isRecord(value) || typeof value.city !== 'string' || !value.city.trim()) return [];
+        return [{
+          city: value.city,
+          cantons: toStringArray(value.cantons),
+          count: toNumber(value.count),
+        }];
+      }),
+      types: types.flatMap((value) => {
+        if (!isRecord(value) || (value.value !== 'business' && value.value !== 'private')) return [];
+        return [{ value: value.value, count: toNumber(value.count) }];
+      }),
     };
   },
 

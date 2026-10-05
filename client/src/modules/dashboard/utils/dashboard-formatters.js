@@ -1,9 +1,11 @@
+import { intlLocaleFor } from '@/lib/i18n/locale-config';
+
 export function formatDashboardNumber(value, locale = 'en') {
-  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(Number(value) || 0);
+  return new Intl.NumberFormat(getLocaleCode(locale), { maximumFractionDigits: 0 }).format(Number(value) || 0);
 }
 
 export function formatDashboardCurrency(value, locale = 'en', currency = 'CHF') {
-  return new Intl.NumberFormat(locale, {
+  return new Intl.NumberFormat(getLocaleCode(locale), {
     style: 'currency',
     currency,
     maximumFractionDigits: 0,
@@ -29,8 +31,5 @@ export function hasSeriesData(series, metrics) {
 }
 
 export function getLocaleCode(locale) {
-  if (locale === 'de') return 'de-CH';
-  if (locale === 'fr') return 'fr-CH';
-  if (locale === 'it') return 'it-CH';
-  return 'en-GB';
+  return intlLocaleFor(locale);
 }

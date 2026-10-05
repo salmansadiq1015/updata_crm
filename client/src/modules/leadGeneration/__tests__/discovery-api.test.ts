@@ -134,6 +134,15 @@ describe('discoveryApi', () => {
     expect(result.business.reviewCount).toBe(55); // from userRatingCount
   });
 
+  it('listMarkers returns the independently paginated complete-map stream', async () => {
+    const page = await discoveryApi.listMarkers('sess-1', { limit: 500 });
+    expect(page.data).toEqual([
+      { id: 'result-1', lat: 47.3769, lng: 8.5417, status: 'NEW' },
+      { id: 'result-2', lat: 47.38, lng: 8.55, status: 'EXISTING' },
+    ]);
+    expect(page.pagination.hasNext).toBe(false);
+  });
+
   it('importPreview parses server-computed counts', async () => {
     const preview = await discoveryApi.importPreview('sess-1', 'new', { kind: 'ALL_NEW' });
     expect(preview).toEqual({ new: 12, existing: 4, possibleDuplicates: 2, willImport: 12 });

@@ -48,6 +48,7 @@ export const leadKeys = {
   detail: (id: string | null) => [...leadKeys.root, 'detail', id] as const,
   duplicates: (params: LeadDuplicateParams) => [...leadKeys.root, 'duplicates', params] as const,
   contactLog: (id: string | null) => [...leadKeys.root, 'contact-log', id] as const,
+  filterOptions: () => [...leadKeys.root, 'filter-options'] as const,
   enrichJob: (jobId: string | null) => [...leadKeys.root, 'enrich-job', jobId] as const,
 };
 
@@ -87,6 +88,14 @@ export function useLeads(baseParams: Omit<LeadListParams, 'cursor'> = {}) {
       lastPage.pagination.hasNext ? lastPage.pagination.nextCursor : undefined,
     staleTime: 20_000,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useLeadFilterOptions() {
+  return useQuery({
+    queryKey: leadKeys.filterOptions(),
+    queryFn: () => leadApi.getFilterOptions(),
+    staleTime: 60_000,
   });
 }
 
@@ -159,6 +168,7 @@ export function useCreateLead() {
     mutationFn: (input: LeadCreateInput) => leadApi.createLead(input),
     onSuccess: (lead) => {
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.filterOptions() });
       queryClient.setQueryData(leadKeys.detail(lead.id), lead);
       showSuccess(t('leads.toast.created', 'Lead created'));
     },
@@ -196,6 +206,7 @@ export function useUpdateLead() {
         updateLeadInPages(oldData, lead.id, () => lead),
       );
       queryClient.setQueryData(leadKeys.detail(lead.id), lead);
+      queryClient.invalidateQueries({ queryKey: leadKeys.filterOptions() });
     },
   });
 }
@@ -302,6 +313,7 @@ export function useDeleteLead() {
     onSuccess: (_result, id) => {
       queryClient.removeQueries({ queryKey: leadKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.filterOptions() });
       showSuccess(t('leads.toast.deleted', 'Lead deleted'));
     },
   });
@@ -328,6 +340,7 @@ export function useImportLeads() {
       leadApi.importLeads(file, mode),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.filterOptions() });
       showSuccess(
         t('leads.import.success', '{created} created, {failed} failed', {
           created: result.summary.created,

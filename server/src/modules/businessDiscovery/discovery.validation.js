@@ -24,9 +24,6 @@ const SELECTION_KINDS = Object.values(LEAD_IMPORT_SELECTION_KIND);
 const MAX_RADIUS_METERS = 50000; // Google searchNearby radius cap
 const MAX_RING_POINTS = 1000; // bounded polygon ring
 const MAX_RINGS = 20; // outer ring + holes
-const MAX_RESULTS = 5000;
-const MAX_SEARCH_REQUESTS = 500;
-
 const latitude = Joi.number().min(-90).max(90);
 const longitude = Joi.number().min(-180).max(180);
 
@@ -60,6 +57,12 @@ const locationSchema = Joi.object({
   name: Joi.string().trim().max(255).allow('', null),
   mode: Joi.string().valid(...LOCATION_MODES).required(),
   center: centerSchema.required(),
+  placeId: Joi.string().trim().max(255).allow('', null),
+  countryCode: Joi.string().trim().uppercase().length(2).allow('', null),
+  country: Joi.string().trim().max(100).allow('', null),
+  region: Joi.string().trim().max(120).allow('', null),
+  city: Joi.string().trim().max(120).allow('', null),
+  formattedAddress: Joi.string().trim().max(500).allow('', null),
 });
 
 const areaSchema = Joi.object({
@@ -92,8 +95,13 @@ const businessTypeItem = Joi.alternatives().try(
 );
 
 const optionsSchema = Joi.object({
-  maxResults: Joi.number().integer().min(1).max(MAX_RESULTS),
-  maxSearchRequests: Joi.number().integer().min(1).max(MAX_SEARCH_REQUESTS),
+  // Accepted and stripped for backward compatibility. Result-count truncation
+  // is intentionally unsupported.
+  maxResults: Joi.any().strip(),
+  // Accepted and stripped for old clients. New discovery runs do not stop at
+  // an application-defined request count; provider failures are surfaced as
+  // partial coverage instead.
+  maxSearchRequests: Joi.any().strip(),
 }).default({});
 
 export const createSession = {
@@ -116,12 +124,20 @@ export const listSessions = {
 
 export const listResults = {
   query: cursorPagination.keys({
+    search: Joi.string().trim().max(120).allow(''),
     matchingStatus: Joi.string().valid(...Object.values(RESULT_MATCHING_STATUS)),
     importStatus: Joi.string().valid(...Object.values(RESULT_IMPORT_STATUS)),
     hasPhone: Joi.boolean(),
     hasWebsite: Joi.boolean(),
     minRating: Joi.number().min(0).max(5),
     sortBy: Joi.string().valid('discoveredAt', 'rating', 'reviewCount', 'business.name').default('discoveredAt'),
+  }),
+};
+
+export const listMarkers = {
+  query: Joi.object({
+    cursor: Joi.string().allow('', null),
+    limit: Joi.number().integer().min(1).max(1000).default(500),
   }),
 };
 

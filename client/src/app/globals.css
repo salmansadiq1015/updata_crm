@@ -318,7 +318,7 @@
      • padding / margin : ps-/pe-/ms-/me-      (not pl-/pr-/ml-/mr-)
      • position         : start-/end-          (not left-/right-)
      • text align       : text-start/text-end  (not text-left/text-right)
-     • border / radius  : border-s/border-e, rounded-s-*/rounded-e-*
+     • border / radius  : border-s/border-e and logical start/end radius utilities
    Reach for the built-in `rtl:` / `ltr:` variants only when a logical utility
    can't express it (e.g. flipping an inherently-directional glyph).
 
@@ -525,6 +525,94 @@
     linear-gradient(-45deg, #374151 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, #374151 75%),
     linear-gradient(-45deg, transparent 75%, #374151 75%);
+}
+
+/* Public landing page ------------------------------------------------------- */
+.landing-page {
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+  color-scheme: dark;
+  background:
+    radial-gradient(1200px 700px at 50% -18%, rgb(29 78 216 / 0.08), transparent 68%),
+    #060b16;
+}
+
+.landing-page ::selection {
+  background: rgb(96 165 250 / 0.34);
+  color: #fff;
+}
+
+.landing-page section[id] {
+  scroll-margin-top: 5.25rem;
+}
+
+.landing-gradient-text {
+  background: linear-gradient(105deg, #a5e7ff 4%, #38bdf8 42%, #2563eb 88%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.landing-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #93c5fd;
+  font-size: 0.675rem;
+  font-weight: 700;
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+}
+
+.landing-kicker::before {
+  content: "";
+  width: 1.7rem;
+  height: 1px;
+  background: linear-gradient(90deg, #38bdf8, #2563eb);
+}
+
+.landing-grid-mask {
+  background-image:
+    linear-gradient(rgb(148 163 184 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(148 163 184 / 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.92), transparent 94%);
+}
+
+.landing-diagonal-wash {
+  background:
+    linear-gradient(115deg, transparent 10%, rgb(59 130 246 / 0.035) 44%, transparent 72%),
+    radial-gradient(700px 360px at 82% 44%, rgb(14 165 233 / 0.07), transparent 70%);
+}
+
+.landing-cta-mesh {
+  opacity: 0.55;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at 58% 44%, #000 12%, transparent 72%);
+}
+
+@keyframes landing-marker-enter {
+  0%, 12% { opacity: 0; transform: translate(-50%, -70%) scale(0.35); }
+  28%, 100% { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+}
+
+.landing-map-marker {
+  animation: landing-marker-enter 4.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page *,
+  .landing-page *::before,
+  .landing-page *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @keyframes accounting-aurora-drift {

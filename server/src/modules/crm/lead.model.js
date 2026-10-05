@@ -132,7 +132,10 @@ const leadSchema = new mongoose.Schema(
       discoveryResultId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscoveryResult', default: null },
       businessType: { type: String, trim: true, maxlength: 120, default: null },
       keyword: { type: String, trim: true, maxlength: 120, default: null },
+      discoveryLocation: { type: mongoose.Schema.Types.Mixed, default: null },
       discoveryArea: { type: mongoose.Schema.Types.Mixed, default: null },
+      discoverySearchCoordinates: { type: mongoose.Schema.Types.Mixed, default: null },
+      discoveryBusinessTypes: { type: mongoose.Schema.Types.Mixed, default: [] },
       discoveredAt: { type: Date, default: null },
     },
     assignedTo: {

@@ -10,7 +10,10 @@ import {
 // Only the peripheral services (audit, metrics, notifications, logger) are mocked.
 jest.unstable_mockModule('../../auth/audit.service.js', () => ({ default: { logEvent: jest.fn() } }));
 jest.unstable_mockModule('../../notifications/notification.service.js', () => ({ default: { create: jest.fn() } }));
-jest.unstable_mockModule('../../../metrics/index.js', () => ({ leadImportsTotal: { inc: jest.fn() } }));
+jest.unstable_mockModule('../../../metrics/index.js', () => ({
+  leadImportsTotal: { inc: jest.fn() },
+  discoveryPlacesApiCallsTotal: { inc: jest.fn() },
+}));
 jest.unstable_mockModule('../../../shared/logger/index.js', () => ({
   default: {
     info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn(),
@@ -196,6 +199,57 @@ describe('leadRepository — createdBy is populated', () => {
     const accentInsensitive = await leadRepository.list({ search: 'muller' });
     expect(accentInsensitive.data.map((lead) => lead.name)).toEqual(['Müller AG']);
     expect(accentInsensitive.data[0].createdBy).toMatchObject({ email: author.email });
+  });
+
+  it('filters by lead type and database-backed place, and exposes only live filter options', async () => {
+    const author = await makeUser();
+    const deleted = await Lead.create(leadDoc(author._id, {
+      name: 'Deleted Lugano Lead',
+      type: 'private',
+      address: { city: 'Lugano', canton: 'TI', country: 'CH' },
+    }));
+    await Lead.updateOne({ _id: deleted._id }, { isDeleted: true, deletedAt: new Date() });
+    await Lead.create([
+      leadDoc(author._id, {
+        name: 'Zürich Business',
+        type: 'business',
+        address: { city: 'Zürich', canton: 'ZH', country: 'CH' },
+      }),
+      leadDoc(author._id, {
+        name: 'Zürich Private',
+        type: 'private',
+        address: { city: 'Zürich', canton: 'ZH', country: 'CH' },
+      }),
+      leadDoc(author._id, {
+        name: 'Basel Business',
+        type: 'business',
+        address: { city: 'Basel', canton: 'BS', country: 'CH' },
+      }),
+      leadDoc(author._id, {
+        name: 'Paris Discovery Business',
+        type: 'business',
+        address: { city: 'Boulogne-Billancourt', country: 'FR' },
+        sourceMetadata: {
+          discoveryLocation: { name: 'Paris', city: 'Paris', countryCode: 'FR' },
+        },
+      }),
+    ]);
+
+    const filtered = await leadRepository.list({ filters: { city: 'Zürich', type: 'private' } });
+    expect(filtered.data.map((lead) => lead.name)).toEqual(['Zürich Private']);
+    const discoveryPlaceFiltered = await leadRepository.list({ filters: { city: 'Paris' } });
+    expect(discoveryPlaceFiltered.data.map((lead) => lead.name)).toEqual(['Paris Discovery Business']);
+
+    const options = await leadRepository.getFilterOptions();
+    expect(options.places).toEqual([
+      { city: 'Basel', cantons: ['BS'], count: 1 },
+      { city: 'Paris', cantons: [], count: 1 },
+      { city: 'Zürich', cantons: ['ZH'], count: 2 },
+    ]);
+    expect(options.types).toEqual([
+      { value: 'business', count: 3 },
+      { value: 'private', count: 1 },
+    ]);
   });
 
   it('update returns the saved lead with the creator populated', async () => {

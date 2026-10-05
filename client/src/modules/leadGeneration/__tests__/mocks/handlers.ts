@@ -40,6 +40,13 @@ export const handlers = [
     HttpResponse.json(okPage([makeResultDTO(), makeResultDTO()])),
   ),
 
+  http.get(`${D}/sessions/:id/markers`, () =>
+    HttpResponse.json(okPage([
+      { id: 'result-1', lat: 47.3769, lng: 8.5417, status: 'NEW' },
+      { id: 'result-2', lat: 47.38, lng: 8.55, status: 'EXISTING' },
+    ])),
+  ),
+
   http.get(`${D}/sessions/:id/results/:resultId`, ({ params }) =>
     HttpResponse.json(ok(makeResultDTO({ id: params.resultId as string }))),
   ),

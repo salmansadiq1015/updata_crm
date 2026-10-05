@@ -1,9 +1,11 @@
+import { SUPPORTED_LOCALES, intlLocaleFor } from '@/lib/i18n/locale-config';
+
 export const NOTIFICATION_ADMIN_CHANNELS = ['PUSH', 'EMAIL', 'WHATSAPP', 'SMS', 'IN_APP'];
 export const NOTIFICATION_ADMIN_STATUSES = ['QUEUED', 'PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'BOUNCED', 'CANCELLED'];
 export const NOTIFICATION_ADMIN_SCHEDULE_STATUSES = ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
 export const NOTIFICATION_ADMIN_CATEGORIES = ['TASK', 'ORDER', 'CHAT', 'SYSTEM', 'FINANCE', 'MAINTENANCE', 'DOCUMENT', 'CRM', 'PROJECT', 'SCHEDULING'];
 export const NOTIFICATION_ADMIN_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'];
-export const NOTIFICATION_ADMIN_LANGUAGES = ['de', 'fr', 'it', 'en'];
+export const NOTIFICATION_ADMIN_LANGUAGES = SUPPORTED_LOCALES;
 export const NOTIFICATION_ADMIN_PERIODS = ['24h', '7d', '30d'];
 export const NOTIFICATION_ADMIN_HISTORY_LIMIT = 50;
 export const NOTIFICATION_ADMIN_SCHEDULE_LIMIT = 50;
@@ -40,13 +42,6 @@ export const DEFAULT_SCHEDULE_FORM = Object.freeze({
   deepLink: '',
   payloadJson: '{}',
 });
-
-const DATE_LOCALE_MAP = {
-  de: 'de-CH',
-  fr: 'fr-CH',
-  it: 'it-CH',
-  en: 'en-US',
-};
 
 export function localDateTimeValue(date = new Date(Date.now() + 60 * 60 * 1000)) {
   const offsetMs = date.getTimezoneOffset() * 60 * 1000;
@@ -276,7 +271,7 @@ export function buildNotificationAdminOverview({ metrics, templates, schedules }
 
 export function formatDateTime(value, locale = 'de') {
   if (!value) return '-';
-  return new Intl.DateTimeFormat(DATE_LOCALE_MAP[locale] || DATE_LOCALE_MAP.de, {
+  return new Intl.DateTimeFormat(intlLocaleFor(locale), {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));

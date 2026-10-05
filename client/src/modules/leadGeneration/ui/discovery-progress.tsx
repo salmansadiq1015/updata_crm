@@ -167,6 +167,15 @@ export function DiscoveryProgress({
         <CountTile value={counts.possibleDuplicates} label={t('leadgen.badge.possibleDuplicate', 'Possible duplicate')} tone="text-warning" />
       </div>
 
+      <p className="text-center text-xs text-muted-foreground">
+        {t('leadgen.analyze.duplicatesRemoved', '{count} overlapping results removed', {
+          count: progress.duplicatesRemoved,
+        })}
+        {progress.errors > 0
+          ? ` · ${t('leadgen.analyze.incompleteRegions', '{count} search errors', { count: progress.errors })}`
+          : ''}
+      </p>
+
       <div className="flex justify-center">
         <Button variant="outline" onClick={onCancel} disabled={canceling} className="gap-1.5">
           {canceling ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <X className="h-3.5 w-3.5" aria-hidden="true" />}

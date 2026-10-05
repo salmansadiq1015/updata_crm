@@ -2,9 +2,10 @@
  * Google Places API (New) field masks for Business Discovery (Module 15).
  *
  * Field masks are the primary cost control (design §6, §14): Places (New) bills
- * by the most expensive field category requested, so discovery fetches only
- * identity/location/filter fields and defers contact/atmosphere fields until a
- * place is actually opened or imported.
+ * by the most expensive field category requested. The adaptive discovery sweep
+ * deliberately uses DETAILS_IMPORT so phone, website and structured address are
+ * available for display and strong deduplication; low-cost callers may still use
+ * DISCOVERY_MINIMAL explicitly.
  *
  * Paths use the `places.` prefix required by the search endpoints
  * (`places:searchNearby`, `places:searchText`). NOTE: the Place Details endpoint
@@ -20,8 +21,8 @@
  *  - Atmosphere: rating, userRatingCount
  */
 
-// Discovery sweep: enough to identify, place on the map and apply result filters
-// (rating / review count), nothing contact-related.
+// Minimal profile retained for low-cost callers. Business discovery currently
+// uses DETAILS_IMPORT so phone/domain/address deduplication is accurate immediately.
 const DISCOVERY_MINIMAL = Object.freeze([
   'places.id',
   'places.displayName',

@@ -18,6 +18,13 @@ class LeadController {
     } catch (err) { next(err); }
   }
 
+  async filterOptions(_req, res, next) {
+    try {
+      const data = await leadService.getFilterOptions();
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
   async create(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

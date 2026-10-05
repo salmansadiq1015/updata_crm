@@ -1,6 +1,8 @@
 // Sentry must be imported first so it can instrument Node.js modules
 import Sentry from './config/sentry.js';
+import { execFileSync } from 'child_process';
 import http from 'http';
+import net from 'net';
 import { initializeSocketServer } from './shared/socket/socketServer.js';
 import { createApp } from './app.js';
 import config from './config/index.js';
@@ -52,8 +54,65 @@ import logger from './shared/logger/index.js';
 
 let server;
 
+function checkPortAvailable(port, host) {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+
+    probe.once('error', reject);
+    probe.once('listening', () => {
+      probe.close(resolve);
+    });
+
+    probe.listen(port, host);
+  });
+}
+
+function getPortOwnerDetails(port) {
+  if (!config.isDevelopment) return null;
+
+  try {
+    const output = execFileSync(
+      'lsof',
+      ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    ).trim();
+
+    return output || null;
+  } catch {
+    return null;
+  }
+}
+
+function handleServerError(err) {
+  if (err.code === 'EADDRINUSE') {
+    const portOwner = getPortOwnerDetails(config.server.port);
+
+    logger.error(`Port ${config.server.port} is already in use`, {
+      module: 'server',
+      action: 'listen',
+      host: config.server.host,
+      port: config.server.port,
+      error: { message: err.message, code: err.code },
+      ...(portOwner ? { portOwner } : {}),
+      hint: `Stop the existing process on port ${config.server.port}, or start this API with PORT=<free-port>.`,
+    });
+    process.exit(1);
+  }
+
+  logger.error('Server error', {
+    module: 'server',
+    action: 'error',
+    error: { message: err.message, code: err.code },
+  });
+  process.exit(1);
+}
+
 async function start() {
   try {
+    // Fail before database/cache/job initialization if another API instance is
+    // already bound to the configured port.
+    await checkPortAvailable(config.server.port, config.server.host);
+
     // 1. Connect MongoDB
     await connectDatabase(logger);
 
@@ -141,6 +200,8 @@ async function start() {
     // Discovery realtime: subscribe/unsubscribe handlers + progress emit bridge (uses global.io)
     registerDiscoverySocket(global.io);
 
+    server.on('error', handleServerError);
+
     server.listen(config.server.port, config.server.host, () => {
       logger.info(`Server started on ${config.server.host}:${config.server.port}`, {
         module: 'server',
@@ -156,16 +217,12 @@ async function start() {
         port: config.server.port,
       });
     });
-
-    server.on('error', (err) => {
-      logger.error('Server error', {
-        module: 'server',
-        action: 'error',
-        error: { message: err.message, code: err.code },
-      });
-      process.exit(1);
-    });
   } catch (err) {
+    if (err.code === 'EADDRINUSE') {
+      handleServerError(err);
+      return;
+    }
+
     logger.error('Failed to start server', {
       module: 'server',
       action: 'startup',

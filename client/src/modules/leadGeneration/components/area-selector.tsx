@@ -137,7 +137,7 @@ export function AreaSelector() {
             <p className="text-warning">
               {t(
                 'leadgen.area.coverageNote',
-                'Large areas are split into multiple searches and may not be fully covered.',
+                'The full area is searched in adaptive regions; any provider limitation is reported as partial.',
               )}
             </p>
           )}

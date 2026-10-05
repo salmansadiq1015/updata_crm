@@ -18,9 +18,9 @@ const withinBounds = (cell, bounds) =>
   cell.center.lat >= bounds.south && cell.center.lat <= bounds.north &&
   cell.center.lng >= bounds.west && cell.center.lng <= bounds.east;
 
-describe('planCoverage — small area → single cell', () => {
-  test('small radius → one circle at the centre', () => {
-    const plan = planCoverage({ type: 'radius', center: ZURICH, radiusMeters: 2000 });
+describe('planCoverage — complete initial partition', () => {
+  test('1 km radius fits one complete initial cell', () => {
+    const plan = planCoverage({ type: 'radius', center: ZURICH, radiusMeters: 1000 });
     expect(plan.strategy).toBe('single');
     expect(plan.cells).toHaveLength(1);
     expect(plan.estimatedSearches).toBe(1);
@@ -29,15 +29,48 @@ describe('planCoverage — small area → single cell', () => {
     expect(cell.center.lat).toBeCloseTo(ZURICH.lat, 5);
     expect(cell.center.lng).toBeCloseTo(ZURICH.lng, 5);
     // radius covers the requested area and never exceeds the provider cap.
-    expect(cell.radiusMeters).toBeGreaterThanOrEqual(1990);
+    expect(cell.radiusMeters).toBeGreaterThanOrEqual(1400);
     expect(cell.radiusMeters).toBeLessThanOrEqual(50000);
     expect(plan.polygon.type).toBe('Polygon');
   });
 
-  test('a moderate radius (~10 km) is still a single search', () => {
-    const plan = planCoverage({ type: 'radius', center: ZURICH, radiusMeters: 10000 });
-    expect(plan.strategy).toBe('single');
-    expect(plan.cells).toHaveLength(1);
+  test('a 5 km radius is split instead of being collapsed to one 20-result query', () => {
+    const plan = planCoverage({ type: 'radius', center: ZURICH, radiusMeters: 5000 });
+    expect(plan.strategy).toBe('grid');
+    expect(plan.cells.length).toBeGreaterThan(1);
+    expect(plan.cells.every((cell) => cell.bounds)).toBe(true);
+  });
+
+  test.each([1000, 5000, 10000, 50000])(
+    'covers the complete supported %i metre radius without provider-oversized cells',
+    (radiusMeters) => {
+      const plan = planCoverage({ type: 'radius', center: ZURICH, radiusMeters });
+      expect(plan.cells.length).toBeGreaterThan(0);
+      expect(plan.truncated).toBe(false);
+      expect(plan.cells.every((cell) => cell.radiusMeters <= 50000)).toBe(true);
+
+      const minWest = Math.min(...plan.cells.map((cell) => cell.bounds.west));
+      const maxEast = Math.max(...plan.cells.map((cell) => cell.bounds.east));
+      const minSouth = Math.min(...plan.cells.map((cell) => cell.bounds.south));
+      const maxNorth = Math.max(...plan.cells.map((cell) => cell.bounds.north));
+      expect(minWest).toBeCloseTo(plan.bounds.west, 10);
+      expect(maxEast).toBeCloseTo(plan.bounds.east, 10);
+      expect(minSouth).toBeCloseTo(plan.bounds.south, 10);
+      expect(maxNorth).toBeCloseTo(plan.bounds.north, 10);
+    },
+  );
+
+  test.each([
+    { north: 47.39, south: 47.37, east: 8.9, west: 8.0 },
+    { north: 47.8, south: 47.0, east: 8.57, west: 8.52 },
+  ])('covers a wide or long rectangle without dropping a strip', (bounds) => {
+    const plan = planCoverage({ type: 'rectangle', bounds }, { maxCoverageCells: 3 });
+    expect(plan.cells.length).toBeGreaterThan(0);
+    expect(plan.truncated).toBe(false);
+    expect(Math.min(...plan.cells.map((cell) => cell.bounds.west))).toBeCloseTo(bounds.west, 10);
+    expect(Math.max(...plan.cells.map((cell) => cell.bounds.east))).toBeCloseTo(bounds.east, 10);
+    expect(Math.min(...plan.cells.map((cell) => cell.bounds.south))).toBeCloseTo(bounds.south, 10);
+    expect(Math.max(...plan.cells.map((cell) => cell.bounds.north))).toBeCloseTo(bounds.north, 10);
   });
 });
 
@@ -67,12 +100,13 @@ describe('planCoverage — large area → grid', () => {
     expect(insideCount).toBeGreaterThan(0);
   });
 
-  test('truncated:true when the full grid exceeds the cap', () => {
+  test('a low preferred cap never slices away geographic regions', () => {
     const plan = planCoverage(LARGE_POLYGON, { maxCoverageCells: 3, maxSearchRequests: 40 });
     expect(plan.strategy).toBe('grid');
-    expect(plan.cells.length).toBeLessThanOrEqual(3);
+    // Four cells are required to stay below Google's 50 km radius cap.
+    expect(plan.cells.length).toBe(4);
     expect(plan.cells.length).toBeGreaterThanOrEqual(1);
-    expect(plan.truncated).toBe(true);
+    expect(plan.truncated).toBe(false);
     for (const cell of plan.cells) {
       expect(withinBounds(cell, plan.bounds)).toBe(true);
     }

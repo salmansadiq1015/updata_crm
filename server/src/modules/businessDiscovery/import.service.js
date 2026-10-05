@@ -171,6 +171,26 @@ class ImportService {
 
     const { default: leadService } = await import('../crm/lead.service.js');
     const { default: leadRepository } = await import('../crm/lead.repository.js');
+    const sessionCache = new Map();
+
+    const getProvenanceSession = async (result) => {
+      const context = result?.discoveryContext || {};
+      const hasSnapshot = context.location
+        && context.area
+        && Array.isArray(context.businessTypes)
+        && context.businessTypes.length > 0;
+      if (hasSnapshot || !result?.discoverySessionId) return null;
+
+      const key = String(result.discoverySessionId);
+      if (!sessionCache.has(key)) {
+        const session = await discoveryRepository.getSessionById(
+          result.discoverySessionId,
+          { createdBy },
+        );
+        sessionCache.set(key, session || null);
+      }
+      return sessionCache.get(key);
+    };
 
     for (const result of results) {
       // 1. Atomic claim.
@@ -213,11 +233,16 @@ class ImportService {
       const matchedLeadId = working.matching?.matchedLeadId;
 
       try {
+        const provenanceSession = await getProvenanceSession(working);
         if (mode === LEAD_IMPORT_MODE.UPDATE
           && matchingStatus === RESULT_MATCHING_STATUS.EXISTING
           && matchedLeadId) {
           // 2. Refresh an already-linked lead.
-          await leadService.update(matchedLeadId, this._mapResultToLeadUpdate(working), { userId: createdBy });
+          await leadService.update(
+            matchedLeadId,
+            this._mapResultToLeadUpdate(working, provenanceSession),
+            { userId: createdBy },
+          );
           await discoveryRepository.updateResultImportStatus(result._id, RESULT_IMPORT_STATUS.IMPORTED, {
             createdBy,
             set: { 'import.leadId': matchedLeadId, 'import.importedAt': new Date() },
@@ -235,7 +260,10 @@ class ImportService {
           leadImportsTotal.inc({ result: 'skipped' });
         } else {
           // 4. Create a new lead.
-          const lead = await leadService.create(this.mapResultToLead(working), createdBy);
+          const lead = await leadService.create(
+            this.mapResultToLead(working, provenanceSession),
+            createdBy,
+          );
           await discoveryRepository.updateResultImportStatus(result._id, RESULT_IMPORT_STATUS.IMPORTED, {
             createdBy,
             set: { 'import.leadId': lead._id, 'import.importedAt': new Date() },
@@ -308,12 +336,9 @@ class ImportService {
    * Map a discovery result → a lead creation DTO (§72). Preserves source/geo
    * provenance; never fabricates contact fields that the provider did not give.
    */
-  mapResultToLead(result) {
+  mapResultToLead(result, session = null) {
     const business = result.business || {};
-    const context = result.discoveryContext || {};
-    const businessType = Array.isArray(context.businessTypeIds) && context.businessTypeIds.length
-      ? context.businessTypeIds.join(',').slice(0, 120)
-      : null;
+    const context = this._resolvedDiscoveryContext(result, session);
 
     return {
       name: business.name,
@@ -323,7 +348,7 @@ class ImportService {
         city: business.address?.city ?? null,
         postalCode: business.address?.postalCode ?? null,
         canton: business.address?.canton ?? null,
-        country: business.address?.country || 'CH',
+        country: business.address?.country || context.location?.countryCode || 'CH',
       },
       phone: business.phone ?? null,
       mobile: null,
@@ -336,20 +361,14 @@ class ImportService {
         priceLevel: business.priceLevel ?? null,
       },
       source: 'google_places',
-      sourceMetadata: {
-        googlePlaceId: result.provider?.placeId ?? null,
-        discoverySessionId: result.discoverySessionId ?? null,
-        discoveryResultId: result._id ?? null,
-        businessType,
-        keyword: context.keyword ?? null,
-        discoveredAt: result.discoveredAt ?? null,
-      },
+      sourceMetadata: this._sourceMetadataFromResult(result, session),
     };
   }
 
   /** Subset of the mapped fields used to refresh an existing lead (update mode). */
-  _mapResultToLeadUpdate(result) {
+  _mapResultToLeadUpdate(result, session = null) {
     const business = result.business || {};
+    const context = this._resolvedDiscoveryContext(result, session);
     return {
       name: business.name,
       phone: business.phone ?? null,
@@ -360,7 +379,7 @@ class ImportService {
         city: business.address?.city ?? null,
         postalCode: business.address?.postalCode ?? null,
         canton: business.address?.canton ?? null,
-        country: business.address?.country || 'CH',
+        country: business.address?.country || context.location?.countryCode || 'CH',
       },
       location: business.location ?? null,
       providerMeta: {
@@ -368,6 +387,69 @@ class ImportService {
         reviewCount: business.reviewCount ?? null,
         priceLevel: business.priceLevel ?? null,
       },
+      source: 'google_places',
+      sourceMetadata: this._sourceMetadataFromResult(result, session),
+    };
+  }
+
+  /** Immutable discovery snapshot copied to every created/refreshed lead. */
+  _sourceMetadataFromResult(result, session = null) {
+    const context = this._resolvedDiscoveryContext(result, session);
+    const businessType = Array.isArray(context.businessTypeIds) && context.businessTypeIds.length
+      ? context.businessTypeIds.join(',').slice(0, 120)
+      : null;
+    return {
+      googlePlaceId: result.provider?.placeId ?? null,
+      discoverySessionId: result.discoverySessionId ?? null,
+      discoveryResultId: result._id ?? null,
+      businessType,
+      keyword: context.keyword ?? null,
+      discoveryLocation: context.location ?? null,
+      discoveryArea: context.area ?? null,
+      discoverySearchCoordinates: context.searchCoordinates ?? null,
+      discoveryBusinessTypes: context.businessTypes ?? context.businessTypeIds ?? [],
+      discoveredAt: result.discoveredAt ?? null,
+    };
+  }
+
+  /**
+   * New results carry an immutable per-result discovery snapshot. Results made
+   * before that schema existed fall back to their linked session, so importing
+   * historical searches does not lose the selected place/area/category.
+   */
+  _resolvedDiscoveryContext(result, session = null) {
+    const context = result.discoveryContext || {};
+    const sessionTypes = Array.isArray(session?.businessTypes) ? session.businessTypes : [];
+    const businessTypes = Array.isArray(context.businessTypes) && context.businessTypes.length
+      ? context.businessTypes
+      : sessionTypes.map((businessType) => ({
+        id: businessType.id,
+        name: businessType.name ?? null,
+        providerIncludedType: businessType.providerIncludedType ?? null,
+        providerTextQuery: businessType.providerTextQuery ?? null,
+      }));
+    const businessTypeIds = Array.isArray(context.businessTypeIds) && context.businessTypeIds.length
+      ? context.businessTypeIds
+      : businessTypes.map((businessType) => businessType.id).filter(Boolean);
+    const centerCoordinates = session?.location?.center?.coordinates;
+    const fallbackSearchCoordinates = session ? {
+      cellId: null,
+      depth: null,
+      center: Array.isArray(centerCoordinates)
+        ? { lng: centerCoordinates[0], lat: centerCoordinates[1] }
+        : null,
+      radiusMeters: session.area?.radiusMeters ?? null,
+      bounds: session.area?.bounds ?? null,
+    } : null;
+
+    return {
+      ...context,
+      businessTypeIds,
+      businessTypes,
+      keyword: context.keyword ?? session?.keyword ?? null,
+      location: context.location ?? session?.location ?? null,
+      area: context.area ?? session?.area ?? null,
+      searchCoordinates: context.searchCoordinates ?? fallbackSearchCoordinates,
     };
   }
 

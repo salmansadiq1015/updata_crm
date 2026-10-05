@@ -135,10 +135,7 @@ const configSchema = Joi.object({
   GOOGLE_MAPS_BROWSER_KEY: Joi.string().trim().allow('').default(''),
   // Optional dedicated Geocoding key — falls back to GOOGLE_PLACES_API_KEY when empty.
   GOOGLE_GEOCODING_API_KEY: Joi.string().trim().allow('').default(''),
-  // Per-session cost and load guards: every run is bounded, never an open-ended loop.
-  DISCOVERY_MAX_RESULTS: Joi.number().integer().min(1).max(5000).default(500),
-  DISCOVERY_MAX_SEARCH_REQUESTS: Joi.number().integer().min(1).max(500).default(40),
-  DISCOVERY_MAX_COVERAGE_CELLS: Joi.number().integer().min(1).max(500).default(50),
+  DISCOVERY_MAX_COVERAGE_CELLS: Joi.number().integer().min(1).max(5000).default(100),
   DISCOVERY_CONCURRENCY: Joi.number().integer().min(1).max(10).default(3),
   // Retention of discovery sessions and their results (TTL on expiresAt).
   DISCOVERY_RESULT_TTL_DAYS: Joi.number().integer().min(1).max(365).default(60),

@@ -58,6 +58,17 @@ function getRing(polygon) {
   return null;
 }
 
+/** Return every polygon ring (outer first, followed by holes). */
+function getRings(polygon) {
+  if (!polygon) return [];
+  if (Array.isArray(polygon)) {
+    if (Array.isArray(polygon[0]) && typeof polygon[0][0] === 'number') return [polygon];
+    if (Array.isArray(polygon[0]) && Array.isArray(polygon[0][0])) return polygon;
+    return [];
+  }
+  return Array.isArray(polygon.coordinates) ? polygon.coordinates : [];
+}
+
 /** True when a ring's first and last vertices coincide. */
 function isClosedRing(ring) {
   if (!Array.isArray(ring) || ring.length < 2) return false;
@@ -122,29 +133,79 @@ export function boundingBox(polygon) {
 
 /**
  * Ray-casting point-in-polygon test. `point` is `[lng, lat]`; `polygon` is a
- * GeoJSON Polygon (uses `coordinates[0]`), a coordinates array or a ring.
- * Points exactly on an edge are not guaranteed either way (standard caveat).
+ * GeoJSON Polygon, a coordinates array or a ring. Outer and hole boundaries are
+ * included; hole interiors are excluded.
  */
-export function pointInPolygon(point, polygon) {
-  if (!Array.isArray(point) || !isFiniteNumber(point[0]) || !isFiniteNumber(point[1])) {
-    return false;
-  }
-  const ring = getRing(polygon);
-  if (!ring || ring.length < 3) return false;
-  const x = point[0];
-  const y = point[1];
+const POINT_EPSILON = 1e-10;
+
+function pointOnSegment([x, y], [x1, y1], [x2, y2]) {
+  const cross = (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1);
+  if (Math.abs(cross) > POINT_EPSILON) return false;
+  return (
+    x >= Math.min(x1, x2) - POINT_EPSILON
+    && x <= Math.max(x1, x2) + POINT_EPSILON
+    && y >= Math.min(y1, y2) - POINT_EPSILON
+    && y <= Math.max(y1, y2) + POINT_EPSILON
+  );
+}
+
+function pointInRing(point, ring) {
+  const [x, y] = point;
   let inside = false;
   const n = ring.length;
   for (let i = 0, j = n - 1; i < n; j = i++) {
+    if (pointOnSegment(point, ring[j], ring[i])) return { inside: true, boundary: true };
     const xi = ring[i][0];
     const yi = ring[i][1];
     const xj = ring[j][0];
     const yj = ring[j][1];
-    const intersect =
-      yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    const intersect = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
     if (intersect) inside = !inside;
   }
-  return inside;
+  return { inside, boundary: false };
+}
+
+export function pointInPolygon(point, polygon) {
+  if (!Array.isArray(point) || !isFiniteNumber(point[0]) || !isFiniteNumber(point[1])) {
+    return false;
+  }
+  const rings = getRings(polygon);
+  if (!rings[0] || rings[0].length < 3) return false;
+
+  const outer = pointInRing(point, rings[0]);
+  if (!outer.inside) return false;
+  if (outer.boundary) return true;
+
+  // GeoJSON holes remove their interiors, but their edges remain part of the
+  // polygon boundary and are therefore included.
+  for (let i = 1; i < rings.length; i += 1) {
+    if (!rings[i] || rings[i].length < 3) continue;
+    const hole = pointInRing(point, rings[i]);
+    if (hole.boundary) return true;
+    if (hole.inside) return false;
+  }
+  return true;
+}
+
+/** Exact membership for each supported selection mode (boundary-inclusive). */
+export function pointInArea(point, area) {
+  if (!Array.isArray(point) || !area) return false;
+  if (area.type === 'radius' || area.type === 'circle') {
+    const rawCenter = area.center?.coordinates || area.center;
+    const center = Array.isArray(rawCenter)
+      ? rawCenter
+      : [rawCenter?.lng, rawCenter?.lat];
+    if (!center.every(isFiniteNumber) || !isFiniteNumber(area.radiusMeters)) return false;
+    return haversineMeters(point, center) <= area.radiusMeters + 0.01;
+  }
+  if (area.type === 'rectangle' && area.bounds) {
+    const [lng, lat] = point;
+    return lat >= area.bounds.south - POINT_EPSILON
+      && lat <= area.bounds.north + POINT_EPSILON
+      && lng >= area.bounds.west - POINT_EPSILON
+      && lng <= area.bounds.east + POINT_EPSILON;
+  }
+  return pointInPolygon(point, area.geometry || area.polygon || area);
 }
 
 /**
@@ -156,17 +217,19 @@ export function pointInPolygon(point, polygon) {
  * matter.
  */
 export function areaSqKm(polygon) {
-  const ring = getRing(polygon);
-  if (!ring || ring.length < 3) return 0;
-  const closed = closeRing(ring);
-  let total = 0;
-  for (let i = 0; i < closed.length - 1; i++) {
-    const [lng1, lat1] = closed[i];
-    const [lng2, lat2] = closed[i + 1];
-    total += (toRad(lng2) - toRad(lng1)) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
-  }
-  const areaM2 = Math.abs((total * EARTH_RADIUS_M * EARTH_RADIUS_M) / 2);
-  return areaM2 / 1_000_000;
+  const rings = getRings(polygon);
+  if (!rings[0] || rings[0].length < 3) return 0;
+  const ringArea = (ring) => {
+    const closed = closeRing(ring);
+    let total = 0;
+    for (let i = 0; i < closed.length - 1; i++) {
+      const [lng1, lat1] = closed[i];
+      const [lng2, lat2] = closed[i + 1];
+      total += (toRad(lng2) - toRad(lng1)) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
+    }
+    return Math.abs((total * EARTH_RADIUS_M * EARTH_RADIUS_M) / 2) / 1_000_000;
+  };
+  return Math.max(0, ringArea(rings[0]) - rings.slice(1).reduce((sum, ring) => sum + ringArea(ring), 0));
 }
 
 // --- self-intersection (basic, for simple polygons) ---
@@ -257,22 +320,29 @@ export function validateGeometry(area) {
       }
     }
   } else if (type === 'polygon') {
-    const ring = getRing(area.geometry);
-    if (!ring || !Array.isArray(ring)) {
+    const rings = getRings(area.geometry);
+    if (!rings[0] || !Array.isArray(rings[0])) {
       errors.push('geometry.coordinates[0] ring is required');
     } else {
-      if (ring.length < 4) {
-        errors.push('polygon ring must have at least 4 positions (closed triangle)');
-      }
-      const badCoord = ring.some(
-        (p) => !Array.isArray(p) || !lngInRange(p[0]) || !latInRange(p[1]),
-      );
-      if (badCoord) errors.push('polygon contains out-of-range coordinates');
-      if (!badCoord && ring.length >= 2 && !isClosedRing(ring)) {
-        errors.push('polygon ring must be closed (first point === last point)');
-      }
-      if (!badCoord && ring.length >= 4 && isSelfIntersecting(ring)) {
-        errors.push('polygon ring is self-intersecting');
+      rings.forEach((ring, index) => {
+        const label = index === 0 ? 'polygon ring' : `polygon hole ${index}`;
+        if (!Array.isArray(ring) || ring.length < 4) {
+          errors.push(`${label} must have at least 4 positions (closed triangle)`);
+          return;
+        }
+        const badCoord = ring.some(
+          (p) => !Array.isArray(p) || !lngInRange(p[0]) || !latInRange(p[1]),
+        );
+        if (badCoord) errors.push(`${label} contains out-of-range coordinates`);
+        if (!badCoord && !isClosedRing(ring)) errors.push(`${label} must be closed (first point === last point)`);
+        if (!badCoord && isSelfIntersecting(ring)) errors.push(`${label} is self-intersecting`);
+      });
+      // Every hole must actually be inside the outer ring. A boundary point is
+      // accepted; provider results on that boundary remain included.
+      for (let i = 1; i < rings.length; i += 1) {
+        if (rings[i]?.[0] && !pointInRing(rings[i][0], rings[0]).inside) {
+          errors.push(`polygon hole ${i} must be inside the outer ring`);
+        }
       }
     }
   }
@@ -346,17 +416,24 @@ export function normalizeArea(area) {
     ];
     center = { lat: (north + south) / 2, lng: (east + west) / 2 };
   } else if (type === 'polygon') {
-    const rawRing = getRing(area.geometry);
-    if (!rawRing || !Array.isArray(rawRing)) {
+    const rawRings = getRings(area.geometry);
+    if (!rawRings[0] || !Array.isArray(rawRings[0])) {
       throw geometryError('geometry.coordinates[0] ring is required');
     }
-    // Close the ring before validating so a lenient (unclosed) input is accepted
-    // while still rejecting genuinely malformed polygons.
-    ring = closeRing(rawRing);
-    const check = validateGeometry({ type: 'polygon', geometry: { type: 'Polygon', coordinates: [ring] } });
+    // Close every ring before validating so lenient input remains accepted.
+    const rings = rawRings.map(closeRing);
+    ring = rings[0];
+    const check = validateGeometry({ type: 'polygon', geometry: { type: 'Polygon', coordinates: rings } });
     if (!check.valid) throw geometryError(check.errors.join('; '));
-    const bbox = boundingBox({ type: 'Polygon', coordinates: [ring] });
+    const bbox = boundingBox({ type: 'Polygon', coordinates: rings });
     center = { lat: (bbox.north + bbox.south) / 2, lng: (bbox.east + bbox.west) / 2 };
+    const polygon = { type: 'Polygon', coordinates: rings };
+    return {
+      polygon,
+      bounds: bbox,
+      areaSqKm: areaSqKm(polygon),
+      center,
+    };
   } else {
     throw geometryError(`unsupported area type: ${String(type)}`);
   }
@@ -379,6 +456,7 @@ export default {
   normalizeArea,
   boundingBox,
   pointInPolygon,
+  pointInArea,
   haversineMeters,
   validateGeometry,
   areaSqKm,

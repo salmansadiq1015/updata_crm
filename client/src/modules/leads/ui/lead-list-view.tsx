@@ -27,7 +27,14 @@ import { useDrawer } from '@/shared/hooks/use-drawer';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { useWorkspaceUsers } from '@/modules/tasks/hooks/use-workspace-users';
-import { leadKeys, useDeleteLead, useEnrichJob, useFlattenedLeads, useLeads } from '../hooks/use-leads';
+import {
+  leadKeys,
+  useDeleteLead,
+  useEnrichJob,
+  useFlattenedLeads,
+  useLeadFilterOptions,
+  useLeads,
+} from '../hooks/use-leads';
 import { leadApi } from '../services/lead-api';
 import {
   useLeadsFilters,
@@ -107,6 +114,7 @@ export function LeadListView() {
   const currentUserId = useAuthStore((state: AuthSlice) => state.user?._id ?? state.user?.id ?? null);
   const usersQuery = useWorkspaceUsers();
   const users: LeadUser[] = usersQuery.data ?? NO_USERS;
+  const filterOptionsQuery = useLeadFilterOptions();
 
   // ── Store: filters, sort, selection ────────────────────────────────────────
   const { filters, sort, setFilters, clearFilters, setSort } = useLeadsFilters();
@@ -150,10 +158,22 @@ export function LeadListView() {
       sortOrder: sort.sortOrder,
       ...(filters.status !== 'ALL' ? { status: filters.status } : {}),
       ...(filters.source !== 'ALL' ? { source: filters.source } : {}),
+      ...(filters.type !== 'ALL' ? { type: filters.type } : {}),
+      ...(filters.place !== FILTER_ALL ? { city: filters.place } : {}),
       ...(assignedToParam ? { assignedTo: assignedToParam } : {}),
       ...(searchTerm ? { q: searchTerm } : {}),
     }),
-    [pageSize, sort.sortBy, sort.sortOrder, filters.status, filters.source, assignedToParam, searchTerm],
+    [
+      pageSize,
+      sort.sortBy,
+      sort.sortOrder,
+      filters.status,
+      filters.source,
+      filters.type,
+      filters.place,
+      assignedToParam,
+      searchTerm,
+    ],
   );
   const paramsKey = JSON.stringify(params);
 
@@ -407,6 +427,8 @@ export function LeadListView() {
     filters.search.trim().length > 0 ||
     filters.status !== 'ALL' ||
     filters.source !== 'ALL' ||
+    filters.type !== 'ALL' ||
+    filters.place !== FILTER_ALL ||
     filters.assignedTo !== FILTER_ALL;
 
   const emptyState = hasActiveFilters ? (
@@ -545,6 +567,12 @@ export function LeadListView() {
             onStatusChange={(status) => setFilters({ status })}
             source={filters.source}
             onSourceChange={(source) => setFilters({ source })}
+            type={filters.type}
+            onTypeChange={(type) => setFilters({ type })}
+            place={filters.place}
+            onPlaceChange={(place) => setFilters({ place })}
+            filterOptions={filterOptionsQuery.data}
+            filterOptionsLoading={filterOptionsQuery.isLoading}
             assignedTo={filters.assignedTo}
             onAssignedToChange={(assignedTo) => setFilters({ assignedTo })}
             users={users}

@@ -9,6 +9,7 @@ import {
   createSession,
   listSessions,
   listResults,
+  listMarkers,
   sessionIdParam,
 } from './discovery.validation.js';
 import {
@@ -124,6 +125,14 @@ router.post(
   requirePermission('discovery:create'),
   validate(sessionIdParam),
   (req, res, next) => discoveryController.cancelSession(req, res, next),
+);
+router.get(
+  '/sessions/:id/markers',
+  authenticate,
+  requirePermission('discovery:read'),
+  validate(sessionIdParam),
+  validate(listMarkers),
+  (req, res, next) => discoveryController.listMarkers(req, res, next),
 );
 router.get(
   '/sessions/:id/results/:resultId',

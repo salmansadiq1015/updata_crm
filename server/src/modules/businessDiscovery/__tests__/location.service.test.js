@@ -60,7 +60,11 @@ describe('locationService.resolveLocation', () => {
             southwest: { lat: 47.32, lng: 8.45 },
           },
         },
-        address_components: [{ long_name: 'Zürich', short_name: 'ZH', types: ['locality'] }],
+        address_components: [
+          { long_name: 'Zürich', short_name: 'Zürich', types: ['locality'] },
+          { long_name: 'Canton of Zürich', short_name: 'ZH', types: ['administrative_area_level_1'] },
+          { long_name: 'Switzerland', short_name: 'CH', types: ['country'] },
+        ],
         place_id: 'ChIJ-zurich',
       },
       results: [],
@@ -73,9 +77,13 @@ describe('locationService.resolveLocation', () => {
       center: { lat: 47.3769, lng: 8.5417 },
       formattedAddress: 'Zürich, Switzerland',
       placeId: 'ChIJ-zurich',
+      countryCode: 'CH',
+      country: 'Switzerland',
+      region: 'Canton of Zürich',
+      city: 'Zürich',
     });
     expect(dto.bounds.northeast).toEqual({ lat: 47.43, lng: 8.63 });
-    expect(dto.components).toHaveLength(1);
+    expect(dto.components).toHaveLength(3);
     expect(geocodeMock).toHaveBeenCalledWith('Zürich');
   });
 

@@ -280,19 +280,18 @@ export function normalizeBusiness(raw) {
       raw.name,
     ) ?? null;
 
+  const address = Array.isArray(raw.addressComponents)
+    ? parseGoogleAddress(raw.addressComponents, pick(raw.formattedAddress, raw.address?.formatted))
+    : parseGenericAddress(raw.address ?? { formatted: raw.formattedAddress });
   const phone = pick(raw.nationalPhoneNumber, raw.phone) ?? null;
   const internationalPhone = pick(raw.internationalPhoneNumber, raw.internationalPhone) ?? null;
   const phoneSource = internationalPhone || phone;
-  const normalizedPhone = phoneSource ? normalizePhone(phoneSource).e164 : null;
+  const normalizedPhone = phoneSource ? normalizePhone(phoneSource, address.country || 'CH').e164 : null;
 
   const website = pick(raw.websiteUri, raw.website) ?? null;
 
   const coordinates = extractCoordinates(raw);
   const placeId = pick(raw.id, raw.placeId, raw.provider?.placeId) ?? null;
-
-  const address = Array.isArray(raw.addressComponents)
-    ? parseGoogleAddress(raw.addressComponents, pick(raw.formattedAddress, raw.address?.formatted))
-    : parseGenericAddress(raw.address ?? { formatted: raw.formattedAddress });
 
   const mapsUrl =
     coordinates || placeId

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import { getSocket, onSocketConnect } from '@/lib/socket/client';
@@ -74,6 +74,7 @@ const upsertResultInPages = (
  */
 export function useDiscoveryRealtime(sessionId: string | null) {
   const queryClient = useQueryClient();
+  const [isConnected, setIsConnected] = useState(() => Boolean(getSocket()?.connected));
 
   useEffect(() => {
     if (!sessionId) return;
@@ -88,6 +89,7 @@ export function useDiscoveryRealtime(sessionId: string | null) {
           counts: patch.counts ? { ...current.counts, ...patch.counts } : current.counts,
           progress: patch.progress ? { ...current.progress, ...patch.progress } : current.progress,
           usage: patch.usage ? { ...current.usage, ...patch.usage } : current.usage,
+          coverage: patch.coverage ? { ...current.coverage, ...patch.coverage } : current.coverage,
           updatedAt: updatedAt ?? current.updatedAt,
         };
       });
@@ -133,15 +135,12 @@ export function useDiscoveryRealtime(sessionId: string | null) {
           for (const result of incoming) next = upsertResultInPages(next, result);
           return next;
         });
-      } else {
-        // The backend emits a lightweight "results persisted" signal (no inline
-        // rows) per bulk-write batch. Refetch this session's results list so newly
-        // discovered businesses appear live during the run.
-        queryClient.invalidateQueries({
-          queryKey: discoveryKeys.results(),
-          predicate: (q) => q.queryKey[3] === sessionId,
-        });
       }
+      // Lightweight batch signals can arrive many times per second while dense
+      // cells are being subdivided. Progress/count events already keep the UI
+      // current; refetching result + marker pages for every batch caused a
+      // request storm and 429 loop. Inline rows are merged above, and the final
+      // persisted datasets are fetched exactly once on completion.
       if (payload.counts) {
         patchSession({ counts: payload.counts as DiscoverySession['counts'] }, payload.updatedAt);
       }
@@ -154,11 +153,27 @@ export function useDiscoveryRealtime(sessionId: string | null) {
           status: payload.status,
           ...(payload.counts ? { counts: payload.counts as DiscoverySession['counts'] } : {}),
           ...(payload.progress ? { progress: payload.progress as DiscoverySession['progress'] } : {}),
+          ...(payload.coverage ? { coverage: payload.coverage as DiscoverySession['coverage'] } : {}),
         },
         payload.updatedAt,
       );
-      queryClient.invalidateQueries({ queryKey: discoveryKeys.results() });
+      // Reset infinite queries to their first page instead of invalidating and
+      // refetching every cached page. Results then wait for an explicit page
+      // action; markers perform one fresh sequential pass from the beginning.
+      void queryClient.resetQueries(
+        {
+          queryKey: discoveryKeys.results(),
+          predicate: (query) => query.queryKey[3] === sessionId,
+        },
+        { cancelRefetch: true },
+      );
+      void queryClient.resetQueries(
+        { queryKey: discoveryKeys.markers(sessionId), exact: true },
+        { cancelRefetch: true },
+      );
     };
+
+    const handleDisconnect = () => setIsConnected(false);
 
     const bind = (socket: Socket | null) => {
       if (!socket) return;
@@ -168,10 +183,13 @@ export function useDiscoveryRealtime(sessionId: string | null) {
       socket.on(DISCOVERY_EVENTS.PROGRESS, handleProgress);
       socket.on(DISCOVERY_EVENTS.RESULT, handleResult);
       socket.on(DISCOVERY_EVENTS.COMPLETED, handleCompleted);
+      socket.off('disconnect', handleDisconnect);
+      socket.on('disconnect', handleDisconnect);
     };
 
     bind(getSocket() as Socket | null);
     const offConnect = onSocketConnect((socket: Socket) => {
+      setIsConnected(true);
       socket.emit(DISCOVERY_SUBSCRIBE, { sessionId });
       bind(socket);
     });
@@ -182,7 +200,10 @@ export function useDiscoveryRealtime(sessionId: string | null) {
       socket?.off(DISCOVERY_EVENTS.PROGRESS, handleProgress);
       socket?.off(DISCOVERY_EVENTS.RESULT, handleResult);
       socket?.off(DISCOVERY_EVENTS.COMPLETED, handleCompleted);
+      socket?.off('disconnect', handleDisconnect);
       socket?.emit(DISCOVERY_UNSUBSCRIBE, { sessionId });
     };
   }, [queryClient, sessionId]);
+
+  return isConnected;
 }

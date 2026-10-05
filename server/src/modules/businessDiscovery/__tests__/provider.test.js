@@ -135,6 +135,27 @@ describe('GooglePlacesProvider — searchText (pagination)', () => {
     const res = await provider.searchText({ textQuery: 'x' });
     expect(res.nextPageToken).toBeUndefined();
   });
+
+  test('uses a hard rectangle restriction, strict type filtering and pageSize', async () => {
+    const http = okHttp({ places: [] });
+    const provider = makeProvider(http);
+    await provider.searchText({
+      textQuery: 'medical clinic',
+      includedType: 'doctor',
+      center: { lat: 1, lng: 2 },
+      radiusMeters: 5000,
+      bounds: { north: 2, south: 1, east: 3, west: 2 },
+      maxResultCount: 50,
+    });
+    const body = http.request.mock.calls[0][0].data;
+    expect(body.pageSize).toBe(20);
+    expect(body.strictTypeFiltering).toBe(true);
+    expect(body.locationBias).toBeUndefined();
+    expect(body.locationRestriction.rectangle).toEqual({
+      low: { latitude: 1, longitude: 2 },
+      high: { latitude: 2, longitude: 3 },
+    });
+  });
 });
 
 describe('GooglePlacesProvider — placeDetails', () => {

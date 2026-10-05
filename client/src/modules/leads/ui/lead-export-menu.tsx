@@ -31,6 +31,8 @@ function buildExportFilters(filters: LeadsFilters, currentUserId: string | null)
   return {
     ...(filters.status !== 'ALL' ? { status: filters.status } : {}),
     ...(filters.source !== 'ALL' ? { source: filters.source } : {}),
+    ...(filters.type !== 'ALL' ? { type: filters.type } : {}),
+    ...(filters.place !== 'ALL' ? { city: filters.place } : {}),
     ...(assignedTo ? { assignedTo } : {}),
     ...(q ? { q } : {}),
   };

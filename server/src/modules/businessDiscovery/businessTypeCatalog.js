@@ -238,10 +238,28 @@ export function resolveProviderQuery(typeOrCustom, keyword) {
   throw err;
 }
 
+/**
+ * Guard broad Google secondary-type matches for hierarchical picker categories.
+ * For example, a shopping mall may expose `restaurant` as a secondary type; it
+ * should not be presented as a restaurant. Restaurant/hotel/school subtypes are
+ * accepted through their primary-type suffixes.
+ */
+export function matchesProviderType(business, includedType) {
+  if (!includedType) return true;
+  const primary = business?.primaryType || null;
+  const types = Array.isArray(business?.types) ? business.types : [];
+  if (!types.includes(includedType) && primary !== includedType) return false;
+  if (includedType === 'restaurant') return primary === 'restaurant' || primary?.endsWith('_restaurant');
+  if (includedType === 'hotel') return primary === 'hotel' || primary?.endsWith('_hotel');
+  if (includedType === 'school') return primary === 'school' || primary?.endsWith('_school');
+  return true;
+}
+
 export default {
   CATALOG,
   getType,
   isValidType,
   resolveProviderQuery,
+  matchesProviderType,
   sanitizeCustomType,
 };

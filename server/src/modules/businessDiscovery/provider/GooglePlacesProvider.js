@@ -130,6 +130,7 @@ export class GooglePlacesProvider extends PlacesProvider {
     includedType,
     center,
     radiusMeters,
+    bounds,
     maxResultCount,
     pageToken,
     fieldProfile,
@@ -141,10 +142,22 @@ export class GooglePlacesProvider extends PlacesProvider {
     const mask = `nextPageToken,${fieldMask(fieldProfile || 'DISCOVERY_MINIMAL')}`;
     const body = {
       textQuery,
-      maxResultCount: clampResultCount(maxResultCount),
+      pageSize: clampResultCount(maxResultCount),
     };
-    if (includedType) body.includedType = includedType;
-    if (hasFiniteCenter(center)) {
+    if (includedType) {
+      body.includedType = includedType;
+      body.strictTypeFiltering = true;
+    }
+    const hasBounds = bounds
+      && [bounds.north, bounds.south, bounds.east, bounds.west].every(Number.isFinite);
+    if (hasBounds) {
+      body.locationRestriction = {
+        rectangle: {
+          low: { latitude: bounds.south, longitude: bounds.west },
+          high: { latitude: bounds.north, longitude: bounds.east },
+        },
+      };
+    } else if (hasFiniteCenter(center)) {
       body.locationBias = {
         circle: {
           center: { latitude: center.lat, longitude: center.lng },

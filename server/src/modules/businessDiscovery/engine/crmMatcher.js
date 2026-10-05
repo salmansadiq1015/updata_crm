@@ -162,7 +162,6 @@ class CrmMatcher {
       $or: [{ phone: { $in: list } }, { mobile: { $in: list } }],
     })
       .select('_id customerNumber name phone mobile postalCode')
-      .limit(100)
       .lean();
 
     // Confirm by re-normalizing each candidate's stored number to E.164.

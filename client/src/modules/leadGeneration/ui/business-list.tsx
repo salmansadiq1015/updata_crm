@@ -1,11 +1,11 @@
 'use client';
 
 // Virtualised result cards. Mirrors tasks' `task-list-view` virtualisation
-// (useVirtualizer + measureElement + fetch-next-near-end). Pure presentational:
+// (useVirtualizer + measureElement). Pure presentational:
 // selection, hover and open are driven by the parent through callbacks so the
 // same list is trivially testable.
 
-import { memo, useEffect, useRef } from 'react';
+import { memo, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { AlertTriangle, Loader2, MapPin, Plus, SearchX, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -149,10 +149,8 @@ export type BusinessListProps = {
   addingId?: string | null;
   isLoading?: boolean;
   isError?: boolean;
+  errorStatusCode?: number;
   onRetry?: () => void;
-  hasNextPage?: boolean;
-  isFetchingNextPage?: boolean;
-  onFetchNextPage?: () => void;
   emptyVariant?: 'noResults' | 'allInCrm' | 'noBusinesses';
 };
 
@@ -168,10 +166,8 @@ export function BusinessList({
   addingId,
   isLoading,
   isError,
+  errorStatusCode,
   onRetry,
-  hasNextPage,
-  isFetchingNextPage,
-  onFetchNextPage,
   emptyVariant = 'noResults',
 }: BusinessListProps) {
   const { t } = useLanguage();
@@ -185,18 +181,6 @@ export function BusinessList({
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
-  const lastItem = virtualItems[virtualItems.length - 1];
-  useEffect(() => {
-    if (
-      lastItem &&
-      hasNextPage &&
-      !isFetchingNextPage &&
-      onFetchNextPage &&
-      lastItem.index >= results.length - 6
-    ) {
-      onFetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, lastItem, onFetchNextPage, results.length]);
 
   if (isLoading) {
     return (
@@ -219,7 +203,14 @@ export function BusinessList({
       <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 px-6 py-12 text-center">
         <AlertTriangle className="h-6 w-6 text-warning" aria-hidden="true" />
         <p className="text-sm font-semibold text-foreground">{t('leadgen.error.generic.title', 'Something went wrong')}</p>
-        <p className="max-w-xs text-xs text-muted-foreground">{t('leadgen.error.generic.body', 'Please try again.')}</p>
+        <p className="max-w-xs text-xs text-muted-foreground">
+          {errorStatusCode === 429
+            ? t(
+                'leadgen.error.rateLimited',
+                'Automatic requests were paused to protect the API. Wait a moment, then retry once.',
+              )
+            : t('leadgen.error.generic.body', 'Please try again.')}
+        </p>
         {onRetry && (
           <Button variant="outline" size="sm" onClick={onRetry}>
             {t('leadgen.error.retry', 'Retry')}
@@ -279,12 +270,6 @@ export function BusinessList({
           );
         })}
       </div>
-      {isFetchingNextPage && (
-        <div className="flex items-center justify-center gap-2 px-4 py-3 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-          {t('leadgen.results.loadingMore', 'Loading more…')}
-        </div>
-      )}
     </div>
   );
 }

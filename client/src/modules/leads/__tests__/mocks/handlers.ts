@@ -7,6 +7,17 @@ const L = `${BASE}/crm/leads`;
 export const handlers = [
   http.get(L, () => HttpResponse.json(okPage([makeLeadDTO(), makeLeadDTO()]))),
 
+  http.get(`${L}/filter-options`, () => HttpResponse.json(ok({
+    places: [
+      { city: 'Basel', cantons: ['BS'], count: 1 },
+      { city: 'Zürich', cantons: ['ZH'], count: 2 },
+    ],
+    types: [
+      { value: 'business', count: 2 },
+      { value: 'private', count: 1 },
+    ],
+  }))),
+
   http.post(L, async ({ request }) => {
     const body = (await request.json()) as Record<string, unknown>;
     return HttpResponse.json(ok(makeLeadDTO({ name: (body.name as string) ?? 'New Lead' })));

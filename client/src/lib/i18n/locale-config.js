@@ -9,7 +9,14 @@
 export const LOCALE_COOKIE = 'updata-locale';
 
 export const SUPPORTED_LOCALES = ['de', 'en', 'fr', 'ar'];
-export const DEFAULT_LOCALE = 'de';
+export const DEFAULT_LOCALE = 'en';
+
+const INTL_LOCALE_MAP = {
+  de: 'de-CH',
+  en: 'en-GB',
+  fr: 'fr-CH',
+  ar: 'ar',
+};
 
 /** Locales that render right-to-left. */
 const RTL_LOCALES = ['ar'];
@@ -21,5 +28,15 @@ export function directionFor(locale) {
 
 /** Coerce any value to a supported locale, falling back to the default. */
 export function normalizeLocale(value) {
-  return SUPPORTED_LOCALES.includes(value) ? value : DEFAULT_LOCALE;
+  if (SUPPORTED_LOCALES.includes(value)) return value;
+  if (typeof value === 'string') {
+    const base = value.split('-')[0];
+    if (SUPPORTED_LOCALES.includes(base)) return base;
+  }
+  return DEFAULT_LOCALE;
+}
+
+/** Map app locale identifiers to regional Intl locale tags. */
+export function intlLocaleFor(locale) {
+  return INTL_LOCALE_MAP[normalizeLocale(locale)] || INTL_LOCALE_MAP[DEFAULT_LOCALE];
 }

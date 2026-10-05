@@ -205,7 +205,13 @@ describe('LeadExportMenu', () => {
         }),
       );
       // Seed the live filters the menu must forward.
-      useLeadsStore.getState().setFilters({ status: 'qualified', source: 'manual', search: 'bakery' });
+      useLeadsStore.getState().setFilters({
+        status: 'qualified',
+        source: 'manual',
+        type: 'business',
+        place: 'Zürich',
+        search: 'bakery',
+      });
 
       const { user } = renderUi(<LeadExportMenu />);
       await user.click(screen.getByRole('button', { name: /export/i }));
@@ -216,6 +222,8 @@ describe('LeadExportMenu', () => {
       expect(url.searchParams.get('format')).toBe(format);
       expect(url.searchParams.get('status')).toBe('qualified');
       expect(url.searchParams.get('source')).toBe('manual');
+      expect(url.searchParams.get('type')).toBe('business');
+      expect(url.searchParams.get('city')).toBe('Zürich');
       expect(url.searchParams.get('q')).toBe('bakery');
 
       // The fetched blob is handed to the browser as a download.
@@ -246,6 +254,8 @@ describe('LeadExportMenu', () => {
     expect(url.searchParams.get('format')).toBe('csv');
     expect(url.searchParams.has('status')).toBe(false);
     expect(url.searchParams.has('source')).toBe(false);
+    expect(url.searchParams.has('type')).toBe(false);
+    expect(url.searchParams.has('city')).toBe(false);
     expect(url.searchParams.has('q')).toBe(false);
   });
 });

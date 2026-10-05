@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { Bug, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSidebarStore } from '@/stores/sidebar-store';
 import SupportFormSheet from './support-form-sheet';
 import { useCreateTicketMutation } from '../hooks/use-create-ticket-mutation';
 
@@ -41,6 +42,7 @@ export default function FeedbackFab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [capturedFile, setCapturedFile] = useState(null);
   const [capturedOrigin, setCapturedOrigin] = useState(null);
+  const isSidebarCollapsed = useSidebarStore((state) => state.isCollapsed);
 
   const createMutation = useCreateTicketMutation({
     onSuccess: () => setSheetOpen(false),
@@ -109,7 +111,8 @@ export default function FeedbackFab() {
           // outside body like the Sheet/Dialog content is. Without this
           // override, clicks on the FAB never fire at all while a
           // Sheet/Dialog is open — z-[60] alone does nothing to fix that.
-          'fixed bottom-6 right-6 z-[60] pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full',
+          'fixed bottom-6 left-6 z-[60] pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full',
+          isSidebarCollapsed ? 'md:left-[92px]' : 'md:left-[280px]',
           'bg-primary text-primary-foreground shadow-lg shadow-primary/30',
           'hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/40 hover:scale-105',
           'active:scale-95 transition-all duration-150 ease-out',

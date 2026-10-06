@@ -16,6 +16,7 @@ import {
   enrichLead,
   enrichBulk,
   enrichJobIdParam,
+  bulkImport,
 } from './lead.validation.js';
 import { exportLeads, importTemplate } from './leadImportExport.validation.js';
 
@@ -35,6 +36,7 @@ router.get('/filter-options', authenticate, requirePermission('lead:read'), (req
 
 // Import / export (named routes, BEFORE /:id)
 router.post('/import', authenticate, requirePermission('lead:import'), uploadLimiter, upload.single('file'), (req, res, next) => leadController.importLeads(req, res, next));
+router.post('/bulk-import', authenticate, requirePermission('lead:import'), uploadLimiter, validate(bulkImport), (req, res, next) => leadController.bulkImport(req, res, next));
 router.get('/import/template', authenticate, requirePermission('lead:import'), validate(importTemplate), (req, res, next) => leadController.downloadTemplate(req, res, next));
 router.get('/export', authenticate, requirePermission('lead:read'), validate(exportLeads), (req, res, next) => leadController.exportLeads(req, res, next));
 

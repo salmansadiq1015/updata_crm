@@ -541,6 +541,89 @@ class LeadImportExportService {
     };
   }
 
+  /**
+   * Import normalized Google Maps records from the extension. This endpoint is
+   * intentionally separate from file import: the stable place identifier is
+   * preserved for idempotency, and every createdBy value comes from the
+   * authenticated controller argument rather than the browser payload.
+   */
+  async importExtensionLeads(records = [], createdBy, meta = {}) {
+    const summary = { total: records.length, created: 0, existing: 0, failed: 0 };
+    const results = [];
+    for (const record of records) {
+      const clientId = String(record.clientId ?? '');
+      try {
+        const placeId = cleanString(record.placeIdentifier);
+        const name = cleanString(record.businessName);
+        if (!name) throw new Error('Business name is required');
+        const phoneValue = cleanString(record.phone);
+        const websiteValue = cleanString(record.website);
+        const postalCode = cleanString(record.postalCode);
+        const country = cleanString(record.country);
+        const address = {
+          street: cleanString(record.street) || cleanString(record.address),
+          addressSupplement: null,
+          postalCode: postalCode || null,
+          city: cleanString(record.city) || null,
+          canton: cleanString(record.state)?.slice(0, 2).toUpperCase() || null,
+          country: country && country.length === 2 ? country.toUpperCase() : null,
+        };
+        const matches = await leadService.findDuplicates({
+          name,
+          postalCode: address.postalCode,
+          phone: phoneValue,
+          website: websiteValue,
+          placeId,
+        });
+        if (matches.length) {
+          const existing = matches[0].lead;
+          summary.existing += 1;
+          results.push({ clientId, status: 'existing', leadId: String(existing._id), leadNumber: existing.leadNumber });
+          continue;
+        }
+        const latitude = Number.isFinite(record.latitude) ? record.latitude : null;
+        const longitude = Number.isFinite(record.longitude) ? record.longitude : null;
+        const lead = await leadService.create({
+          name,
+          type: LEAD_TYPE.BUSINESS,
+          status: LEAD_STATUS.NEW,
+          address,
+          phone: phoneValue || null,
+          email: cleanString(record.emails?.[0]) || null,
+          website: websiteValue || null,
+          location: latitude !== null && longitude !== null ? { type: 'Point', coordinates: [longitude, latitude] } : null,
+          providerMeta: { rating: record.rating ?? null, reviewCount: record.reviewCount ?? null, priceLevel: cleanString(record.priceLevel) || null },
+          source: placeId ? LEAD_SOURCE.GOOGLE_PLACES : LEAD_SOURCE.IMPORT,
+          sourceMetadata: { googlePlaceId: placeId || null, businessType: cleanString(record.category) || null, discoveredAt: record.discoveredAt || null },
+          tags: Array.isArray(record.categories) ? record.categories.slice(0, 50) : [],
+          notes: cleanString(record.address) ? `Google Maps address: ${record.address}` : null,
+        }, createdBy, meta);
+        summary.created += 1;
+        results.push({ clientId, status: 'created', leadId: String(lead._id), leadNumber: lead.leadNumber });
+      } catch (error) {
+        // A concurrent request can win the unique place-id race. Report it as
+        // existing when possible; never turn the remaining batch into failure.
+        if (error?.code === 11000 && record.placeIdentifier) {
+          const matches = await leadService.findDuplicates({ placeId: record.placeIdentifier }).catch(() => []);
+          if (matches.length) {
+            summary.existing += 1;
+            results.push({ clientId, status: 'existing', leadId: String(matches[0].lead._id), leadNumber: matches[0].lead.leadNumber });
+            continue;
+          }
+        }
+        summary.failed += 1;
+        results.push({ clientId, status: 'failed', message: error instanceof Error ? error.message : 'Lead could not be imported' });
+      }
+    }
+    this._recordMetrics({ ...summary, skipped: summary.existing, duplicates: summary.existing });
+    auditService.logEvent({
+      eventType: 'lead.extension_import', userId: createdBy,
+      ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent,
+      result: summary.failed ? 'partial' : 'success', details: summary, module: 'lead',
+    });
+    return { ...summary, results };
+  }
+
   /** Global dedup ladder (name+postal / phone / website). Non-blocking: a lookup
    * failure never aborts the import — the row is simply treated as non-duplicate. */
   async _isDuplicate(dto) {

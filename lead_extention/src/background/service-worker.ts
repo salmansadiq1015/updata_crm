@@ -1,0 +1,458 @@
+import { DISCOVERY_SCROLL_DELAY_MS, MAX_SAFE_ITERATIONS } from '../shared/constants';
+import { makeLead, dedupeKey, isSameLead, mergeLead } from '../shared/normalize';
+import type {
+  CrmImportProgress,
+  DiscoveryConfig,
+  DiscoveryPhase,
+  DiscoveryProgress,
+  ExtensionMessage,
+  Lead,
+  MapsContext,
+  RawBusinessRecord,
+  SearchRecord,
+} from '../shared/types';
+import { haversineDistanceMeters, nowIso, parseCoordinates } from '../shared/utils';
+import { discoverPublicEmails } from '../enrichment/website-discovery';
+import { clearAllLocalData, LeadRepository, SearchRepository, SettingsRepository } from '../storage/repositories';
+import { clearAuth, getAuthState, importLeads as importLeadsToCrm, login, logout } from '../integration/crm-api';
+
+const DISCOVERY_ALARM = 'lead-finder-discovery-recovery';
+const CRM_IMPORT_SETTING = 'crm-import-state';
+const MAX_RESULT_WAIT_RETRIES = 6;
+const ACTIVE_STATUSES = new Set(['starting', 'discovering', 'paused', 'processing', 'enriching']);
+
+type Job = {
+  search: SearchRecord;
+  config: DiscoveryConfig;
+  tabId: number;
+  paused: boolean;
+  stopped: boolean;
+  resumeResolvers: Array<() => void>;
+  leads: Map<string, Lead>;
+  originCoordinates: { latitude: number; longitude: number } | null;
+  queryIndex: number;
+  expectedQuery: string;
+  detailTabId: number | null;
+  detailCache: Map<string, RawBusinessRecord | null>;
+};
+
+let activeJob: Job | null = null;
+let activeCrmImport: CrmImportProgress | null = null;
+
+chrome.runtime.onInstalled.addListener(() => {
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+});
+
+chrome.runtime.onStartup.addListener(() => { void recoverDiscovery(); });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === DISCOVERY_ALARM) void recoverDiscovery();
+});
+chrome.commands.onCommand.addListener((command) => {
+  if (command === 'open-lead-finder') void chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
+});
+
+chrome.runtime.onMessage.addListener((message: ExtensionMessage | { type: string; [key: string]: unknown }, _sender, sendResponse) => {
+  switch (message.type) {
+    case 'GET_MAPS_CONTEXT':
+      void getActiveMapsContext().then((context) => sendResponse({ ok: Boolean(context), context })).catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+      return true;
+    case 'GET_AUTH_STATE':
+      void getAuthState().then((auth) => sendResponse({ ok: true, auth })).catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+      return true;
+    case 'LOGIN': {
+      const value = message as Extract<ExtensionMessage, { type: 'LOGIN' }>;
+      void login(value.apiBaseUrl, value.email, value.password).then((auth) => sendResponse({ ok: true, auth })).catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+      return true;
+    }
+    case 'LOGOUT':
+      void logout().then(() => sendResponse({ ok: true })).catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+      return true;
+    case 'START_DISCOVERY':
+      void startDiscovery((message as Extract<ExtensionMessage, { type: 'START_DISCOVERY' }>).config).then(sendResponse);
+      return true;
+    case 'RETRY_DISCOVERY':
+      void retryDiscovery().then(sendResponse);
+      return true;
+    case 'PAUSE_DISCOVERY':
+      if (activeJob) { activeJob.paused = true; activeJob.search.status = 'paused'; activeJob.search.lastActivityAt = nowIso(); void persistJob(activeJob); }
+      void publishProgress('Discovery paused.').then(() => sendResponse({ ok: true }));
+      return true;
+    case 'RESUME_DISCOVERY':
+      void resumeDiscovery().then((response) => sendResponse(response));
+      return true;
+    case 'STOP_DISCOVERY':
+      if (activeJob) { activeJob.stopped = true; activeJob.search.stopRequested = true; activeJob.resumeResolvers.splice(0).forEach((resolve) => resolve()); void persistJob(activeJob); }
+      void publishProgress('Stopping discovery…').then(() => sendResponse({ ok: true }));
+      return true;
+    case 'GET_PROGRESS':
+      void getProgressResponse().then((progress) => sendResponse({ ok: true, progress }));
+      return true;
+    case 'MARK_EXPORTED': {
+      const value = message as Extract<ExtensionMessage, { type: 'MARK_EXPORTED' }>;
+      void markExported(value.searchId, value.count).then(() => sendResponse({ ok: true }));
+      return true;
+    }
+    case 'ENRICH_LEAD': {
+      const value = message as Extract<ExtensionMessage, { type: 'ENRICH_LEAD' }>;
+      void enrichLead(value.leadId, value.maxPages).then(sendResponse);
+      return true;
+    }
+    case 'IMPORT_TO_CRM': {
+      const value = message as Extract<ExtensionMessage, { type: 'IMPORT_TO_CRM' }>;
+      void startCrmImport(value.leadIds).then((response) => sendResponse(response));
+      return true;
+    }
+    case 'RETRY_CRM_IMPORT': {
+      const value = message as Extract<ExtensionMessage, { type: 'RETRY_CRM_IMPORT' }>;
+      void startCrmImport(value.leadIds).then((response) => sendResponse(response));
+      return true;
+    }
+    case 'GET_CRM_IMPORT':
+      void getCrmImportState().then((state) => sendResponse({ ok: true, state }));
+      return true;
+    case 'MAPS_STATE_CHANGED':
+      if (activeJob) void persistJob(activeJob);
+      return false;
+    case 'CLEAR_ALL_DATA':
+      activeJob = null;
+      void chrome.alarms.clear(DISCOVERY_ALARM);
+      void clearAuth().then(clearAllLocalData).then(() => sendResponse({ ok: true }));
+      return true;
+    default:
+      return false;
+  }
+});
+
+async function startDiscovery(config: DiscoveryConfig): Promise<{ ok: boolean; error?: string; searchId?: string }> {
+  if (!(await getAuthState()).authenticated) return { ok: false, error: 'Log in to the CRM before starting discovery.' };
+  if (activeJob) return { ok: false, error: 'A discovery session is already running.' };
+  const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const tab = tabs[0];
+  if (!tab?.id || !isMapsUrl(tab.url)) return { ok: false, error: 'Open Google Maps in the active tab before starting discovery.' };
+  await ensureMapsContentScript(tab.id);
+  const context = await sendToMaps(tab.id, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
+  const effectiveLocation = config.location.trim() || context?.context?.query?.trim() || '';
+  if (!config.businessType.trim()) return { ok: false, error: 'Enter a business type before starting discovery.' };
+  const searchId = crypto.randomUUID();
+  const query = buildQueries({ ...config, location: effectiveLocation }, context?.context)[0];
+  const search: SearchRecord = {
+    id: searchId, businessType: config.businessType, location: effectiveLocation || 'Current Maps context',
+    radiusKm: config.radiusKm, query, startedAt: nowIso(), completedAt: null, status: 'starting',
+    discoveredCount: 0, uniqueCount: 0, exportedCount: 0, tabId: tab.id, lastActivityAt: nowIso(),
+    currentPhase: 'SEARCH_INITIALIZED', currentQuery: query, currentPage: 0, currentStateKey: tab.url,
+    processedResultKeys: [], stopRequested: false, error: null, config: { ...config, location: effectiveLocation },
+  };
+  await SearchRepository.save(search);
+  activeJob = makeJob(search, tab.id, { ...config, location: effectiveLocation }, [], context?.context?.centerCoordinates ?? parseCoordinates(tab.url ?? ''));
+  await chrome.alarms.create(DISCOVERY_ALARM, { periodInMinutes: 0.5 });
+  void runDiscovery(activeJob);
+  return { ok: true, searchId };
+}
+
+async function retryDiscovery(): Promise<{ ok: boolean; error?: string; searchId?: string }> {
+  if (activeJob) return { ok: false, error: 'A discovery session is already running.' };
+  const previous = (await SearchRepository.list()).find((search) => search.status === 'failed' || search.status === 'cancelled');
+  if (!previous?.tabId || !previous.config) return { ok: false, error: 'There is no recoverable discovery session.' };
+  const tab = await chrome.tabs.get(previous.tabId).catch(() => null);
+  if (!tab?.id || !isMapsUrl(tab.url)) return { ok: false, error: 'Re-open Google Maps in the tab used for this search, then retry.' };
+  previous.status = 'starting'; previous.completedAt = null; previous.error = null; previous.stopRequested = false; previous.lastActivityAt = nowIso();
+  await SearchRepository.save(previous);
+  activeJob = makeJob(previous, tab.id, previous.config, await LeadRepository.listBySearch(previous.id), parseCoordinates(tab.url ?? ''));
+  void runDiscovery(activeJob);
+  return { ok: true, searchId: previous.id };
+}
+
+async function resumeDiscovery(): Promise<{ ok: boolean; error?: string }> {
+  if (activeJob) {
+    activeJob.paused = false; activeJob.search.status = 'discovering'; activeJob.resumeResolvers.splice(0).forEach((resolve) => resolve());
+    await persistJob(activeJob); await publishProgress('Discovery resumed.');
+    return { ok: true };
+  }
+  const recovered = await recoverDiscovery(true);
+  return recovered ? { ok: true } : { ok: false, error: 'There is no paused discovery session to resume.' };
+}
+
+async function recoverDiscovery(forceResume = false): Promise<boolean> {
+  if (activeJob) return true;
+  const search = (await SearchRepository.list()).find((item) => ACTIVE_STATUSES.has(item.status));
+  if (!search?.tabId || !search.config) return false;
+  const tab = await chrome.tabs.get(search.tabId).catch(() => null);
+  if (!tab?.id || !isMapsUrl(tab.url)) return false;
+  const leads = await LeadRepository.listBySearch(search.id);
+  activeJob = makeJob(search, tab.id, search.config, leads, parseCoordinates(tab.url ?? ''));
+  if (search.status === 'paused' && !forceResume) return true;
+  activeJob.paused = false;
+  void runDiscovery(activeJob);
+  return true;
+}
+
+function makeJob(search: SearchRecord, tabId: number, config: DiscoveryConfig, records: Lead[], originCoordinates: { latitude: number; longitude: number } | null): Job {
+  const queries = buildQueries(config);
+  const queryIndex = Math.max(0, queries.findIndex((query) => query === search.currentQuery));
+  return { search, config, tabId, paused: search.status === 'paused', stopped: Boolean(search.stopRequested), resumeResolvers: [], leads: new Map(records.map((lead) => [dedupeKey(lead), lead])), originCoordinates, queryIndex, expectedQuery: search.currentQuery || queries[queryIndex] || queries[0], detailTabId: null, detailCache: new Map() };
+}
+
+async function runDiscovery(job: Job): Promise<void> {
+  try {
+    await setPhase(job, 'SEARCH_INITIALIZED', 'Starting controlled discovery…');
+    const queries = buildQueries(job.config);
+    if (job.queryIndex >= queries.length) job.queryIndex = 0;
+    for (; job.queryIndex < queries.length && !job.stopped; job.queryIndex += 1) {
+      job.expectedQuery = queries[job.queryIndex];
+      job.search.currentQuery = job.expectedQuery;
+      await setPhase(job, job.queryIndex === 0 ? 'SEARCH_INITIALIZED' : 'NEXT_RESULTS', job.queryIndex === 0 ? 'Preparing Google Maps results…' : 'Continuing with the next Maps result state.');
+      await navigateIfNeeded(job);
+      const exhausted = await processCurrentMapsState(job);
+      if (!exhausted) break;
+    }
+    if (job.config.enableEnrichment && !job.stopped) await enrichJob(job);
+    job.search.status = job.stopped ? 'cancelled' : 'completed';
+    job.search.currentPhase = job.stopped ? 'FAILED' : 'COMPLETED';
+    job.search.completedAt = nowIso(); job.search.lastActivityAt = nowIso(); job.search.error = null;
+    await SearchRepository.save(job.search);
+    await publishProgress(job.stopped ? 'Discovery stopped by the user.' : 'Discovery completed. No additional available results were detected.');
+  } catch (error) {
+    job.search.status = 'failed'; job.search.currentPhase = 'FAILED'; job.search.completedAt = nowIso(); job.search.lastActivityAt = nowIso(); job.search.error = errorMessage(error);
+    await SearchRepository.save(job.search);
+    await publishProgress(job.search.error);
+  } finally {
+    await closeDetailTab(job);
+    if (activeJob === job) activeJob = null;
+    if (!(await hasActiveSearch())) void chrome.alarms.clear(DISCOVERY_ALARM);
+  }
+}
+
+async function processCurrentMapsState(job: Job): Promise<boolean> {
+  let stableRounds = 0;
+  const safetyLimit = Math.max(20, job.config.safetyLimit ?? MAX_SAFE_ITERATIONS);
+  const startPage = job.search.currentPage ?? 0;
+  for (let page = startPage; page < safetyLimit && job.leads.size < job.config.maxResults; page += 1) {
+    await waitIfPaused(job); if (job.stopped) return true;
+    job.search.currentPage = page; await setPhase(job, 'WAITING_FOR_RESULTS', 'Waiting for Google Maps results…');
+    await waitForResults(job);
+    await setPhase(job, 'EXTRACTING', 'Extracting visible businesses…');
+    const first = await sendToMaps(job.tabId, { type: 'COLLECT_VISIBLE' }) as { records?: RawBusinessRecord[]; context?: MapsContext };
+    const result = await processRecords(job, first.records ?? []);
+    await setPhase(job, 'CHECKING_FOR_MORE', `${job.leads.size} unique leads saved locally.`);
+    const scroll = await sendToMaps(job.tabId, { type: 'SCROLL_RESULTS' }) as { changed?: boolean; atEnd?: boolean };
+    if (scroll.changed) { stableRounds = 0; await delay(DISCOVERY_SCROLL_DELAY_MS); continue; }
+    await delay(1_000);
+    const settled = await sendToMaps(job.tabId, { type: 'COLLECT_VISIBLE' }) as { records?: RawBusinessRecord[] };
+    const settledResult = await processRecords(job, settled.records ?? []);
+    if (result.added + settledResult.added === 0) stableRounds += 1; else stableRounds = 0;
+    if ((scroll.atEnd || !scroll.changed) && stableRounds >= 2) { await setPhase(job, 'NO_MORE_RESULTS', 'No additional results are available in this Maps result state.'); return true; }
+    await delay(DISCOVERY_SCROLL_DELAY_MS);
+  }
+  if (job.leads.size >= job.config.maxResults) return true;
+  throw new Error(`Discovery reached its safety limit of ${safetyLimit} result states. Review the saved leads and retry if needed.`);
+}
+
+async function waitForResults(job: Job): Promise<void> {
+  let lastContext: MapsContext | null = null;
+  for (let attempt = 0; attempt < MAX_RESULT_WAIT_RETRIES; attempt += 1) {
+    await waitIfPaused(job); if (job.stopped) return;
+    let response: { context?: MapsContext };
+    try { response = await sendToMaps(job.tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext }; }
+    catch (error) { if (attempt === MAX_RESULT_WAIT_RETRIES - 1) throw new Error(`Results could not be loaded: ${errorMessage(error)}`); await delay(Math.min(8_000, 1_000 * (2 ** attempt))); continue; }
+    lastContext = response.context ?? null;
+    if (lastContext && isUnexpectedSearchContext(lastContext, job.expectedQuery)) throw new Error('The Google Maps search context changed. Discovery was stopped to protect your saved results.');
+    if (lastContext && !isSearchRoute(lastContext.url) && !lastContext.hasResults) {
+      await navigateToQuery(job.tabId, job.expectedQuery);
+      await ensureMapsContentScript(job.tabId);
+      await delay(500);
+      continue;
+    }
+    if (lastContext?.hasResults || (lastContext?.visibleResultCount ?? 0) > 0 || lastContext?.isListing) return;
+    await delay(Math.min(8_000, 1_000 * (2 ** attempt)));
+  }
+  throw new Error('Results could not be loaded. Retry the discovery job or stop it.');
+}
+
+async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{ added: number; duplicates: number }> {
+  await setPhase(job, 'PROCESSING', `Processing ${records.length} visible results…`);
+  const processed = new Set(job.search.processedResultKeys ?? []); let added = 0; let duplicates = 0;
+  for (const record of records) {
+    if (!record.businessName || !record.googleMapsUrl) continue;
+    const resultKey = record.placeIdentifier || record.googleMapsUrl || `${record.businessName}|${record.address ?? ''}`;
+    if (processed.has(resultKey)) { duplicates += 1; continue; }
+    processed.add(resultKey);
+    const hydratedRecord = await hydrateMapsRecord(job, record);
+    const lead = makeLead(hydratedRecord, job.search.id);
+    if (job.originCoordinates && lead.latitude !== null && lead.longitude !== null) {
+      lead.distanceMeters = haversineDistanceMeters(job.originCoordinates, { latitude: lead.latitude, longitude: lead.longitude });
+      lead.distanceKm = lead.distanceMeters / 1_000;
+      if (job.config.radiusKm !== null && lead.distanceKm > job.config.radiusKm) continue;
+    }
+    const exactKey = dedupeKey(lead); const proximityKey = [...job.leads.entries()].find(([, existing]) => isSameLead(existing, lead))?.[0]; const key = proximityKey ?? exactKey;
+    const existing = job.leads.get(key);
+    if (existing) { job.leads.set(key, mergeLead(existing, lead)); duplicates += 1; }
+    else { job.leads.set(key, lead); added += 1; }
+    await LeadRepository.save(job.leads.get(key)!);
+    if (job.leads.size >= job.config.maxResults) break;
+  }
+  job.search.discoveredCount += records.length; job.search.uniqueCount = job.leads.size; job.search.processedResultKeys = [...processed].slice(-20_000); job.search.lastActivityAt = nowIso();
+  await SearchRepository.save(job.search); await publishProgress(`${job.leads.size} unique leads saved locally.`);
+  return { added, duplicates };
+}
+
+async function navigateIfNeeded(job: Job): Promise<void> {
+  const tab = await chrome.tabs.get(job.tabId); await ensureMapsContentScript(job.tabId);
+  const contextResponse = await sendToMaps(job.tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
+  const current = contextResponse.context;
+  // A normal Maps canvas URL (`/maps/@lat,lng`) is not a result state. The
+  // previous implementation treated that context as acceptable because it
+  // was technically a Maps page, then waited until timeout forever. Explicitly
+  // enter the search route whenever the active page has no result feed/listing.
+  const needsSearchNavigation = !current || !current.hasResults || current.isListing || isUnexpectedSearchContext(current, job.expectedQuery);
+  if (needsSearchNavigation) {
+    await navigateToQuery(job.tabId, job.expectedQuery);
+    job.search.currentPage = 0; job.search.currentStateKey = `query:${job.expectedQuery}`; await persistJob(job);
+    await waitForTabNavigation(job.tabId); await ensureMapsContentScript(job.tabId);
+  } else if (tab.url) {
+    job.search.currentStateKey = `${tab.url}|${current.visibleResultCount}`; await persistJob(job);
+  }
+}
+
+async function hydrateMapsRecord(job: Job, record: RawBusinessRecord): Promise<RawBusinessRecord> {
+  const key = record.placeIdentifier || record.googleMapsUrl;
+  const cached = job.detailCache.get(key);
+  if (cached !== undefined) return cached ? mergeRawRecord(record, cached) : record;
+  // Search cards often do not render phone, website, address, or review
+  // metadata. Visit the stable Maps place URL in one background tab and read
+  // the detail view, then return to the result feed without losing the job.
+  const needsDetails = !record.phone || !record.website || !record.address || record.reviewCount === null || record.reviewCount === undefined;
+  if (!needsDetails) { job.detailCache.set(key, record); return record; }
+  try {
+    if (!job.detailTabId) {
+      const detailTab = await chrome.tabs.create({ url: record.googleMapsUrl, active: false });
+      if (!detailTab.id) throw new Error('Could not open a Maps detail tab.');
+      job.detailTabId = detailTab.id;
+    } else {
+      await chrome.tabs.update(job.detailTabId, { url: record.googleMapsUrl, active: false });
+    }
+    const detail = await waitForMapsDetails(job.detailTabId);
+    job.detailCache.set(key, detail);
+    return detail ? mergeRawRecord(record, detail) : record;
+  } catch {
+    job.detailCache.set(key, null);
+    return record;
+  }
+}
+
+async function waitForMapsDetails(tabId: number): Promise<RawBusinessRecord | null> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      const contextResponse = await sendToMaps(tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
+      if (contextResponse.context?.isListing || /\/maps\/place\//.test(contextResponse.context?.url ?? '')) {
+        const details = await sendToMaps(tabId, { type: 'COLLECT_DETAILS' }) as { record?: RawBusinessRecord | null };
+        if (details.record) return details.record;
+      }
+    } catch {
+      // The tab may still be navigating; the next bounded attempt retries it.
+    }
+    await delay(Math.min(4_000, 500 * (2 ** attempt)));
+  }
+  return null;
+}
+
+function mergeRawRecord(base: RawBusinessRecord, detail: RawBusinessRecord): RawBusinessRecord {
+  return {
+    ...base,
+    category: detail.category || base.category,
+    phone: detail.phone || base.phone,
+    website: detail.website || base.website,
+    address: detail.address || base.address,
+    street: detail.street || base.street,
+    area: detail.area || base.area,
+    city: detail.city || base.city,
+    state: detail.state || base.state,
+    postalCode: detail.postalCode || base.postalCode,
+    country: detail.country || base.country,
+    rating: detail.rating ?? base.rating,
+    reviewCount: detail.reviewCount ?? base.reviewCount,
+    businessStatus: detail.businessStatus || base.businessStatus,
+    openingHours: detail.openingHours?.length ? detail.openingHours : base.openingHours,
+    priceLevel: detail.priceLevel || base.priceLevel,
+    placeIdentifier: detail.placeIdentifier || base.placeIdentifier,
+    latitude: detail.latitude ?? base.latitude,
+    longitude: detail.longitude ?? base.longitude,
+  };
+}
+
+async function closeDetailTab(job: Job): Promise<void> {
+  if (!job.detailTabId) return;
+  const tabId = job.detailTabId;
+  job.detailTabId = null;
+  await chrome.tabs.remove(tabId).catch(() => undefined);
+}
+
+async function waitForTabNavigation(tabId: number): Promise<void> {
+  for (let attempt = 0; attempt < MAX_RESULT_WAIT_RETRIES; attempt += 1) {
+    const tab = await chrome.tabs.get(tabId).catch(() => null); if (tab && isMapsUrl(tab.url)) return;
+    await delay(Math.min(8_000, 1_000 * (2 ** attempt)));
+  }
+}
+
+async function enrichJob(job: Job): Promise<void> {
+  job.search.status = 'enriching'; await persistJob(job);
+  for (const lead of job.leads.values()) {
+    if (job.stopped) break; if (!lead.website) continue;
+    try { const result = await discoverPublicEmails(lead.website, job.config.maxPagesPerWebsite); lead.emails = result.emails; lead.emailSource = result.emailSource; lead.emailConfidence = result.emailConfidence; lead.enrichmentStatus = 'complete'; }
+    catch { lead.enrichmentStatus = 'failed'; }
+    lead.updatedAt = nowIso(); await LeadRepository.save(lead); await publishProgress('Checking publicly listed website contact pages…');
+  }
+}
+
+async function enrichLead(leadId: string, maxPages: number): Promise<{ ok: boolean; lead?: Lead; error?: string }> {
+  const lead = await LeadRepository.get(leadId); if (!lead) return { ok: false, error: 'Lead not found.' }; if (!lead.website) return { ok: false, error: 'This lead does not expose a website.' };
+  try { const result = await discoverPublicEmails(lead.website, maxPages); lead.emails = result.emails; lead.emailSource = result.emailSource; lead.emailConfidence = result.emailConfidence; lead.enrichmentStatus = 'complete'; lead.updatedAt = nowIso(); await LeadRepository.save(lead); return { ok: true, lead }; }
+  catch (error) { lead.enrichmentStatus = 'failed'; await LeadRepository.save(lead); return { ok: false, error: errorMessage(error) }; }
+}
+
+async function startCrmImport(leadIds: string[] = []): Promise<{ ok: boolean; error?: string; state?: CrmImportProgress }> {
+  if (!(await getAuthState()).authenticated) return { ok: false, error: 'Your CRM session has expired. Log in again.' };
+  if (activeCrmImport?.status === 'running') return { ok: false, error: 'A CRM import is already running.' };
+  const stored = await getCrmImportState();
+  const ids = leadIds.length ? leadIds : (stored?.status === 'partial' || stored?.status === 'failed' ? stored.failedLeadIds : []);
+  if (!ids.length) return { ok: false, error: 'Select at least one lead to add to the CRM.' };
+  activeCrmImport = { id: crypto.randomUUID(), status: 'running', total: ids.length, processed: 0, created: 0, existing: 0, failed: 0, failedLeadIds: [], leadIds: ids, startedAt: nowIso(), completedAt: null, error: null };
+  await saveCrmImport(); void runCrmImport(activeCrmImport); return { ok: true, state: activeCrmImport };
+}
+
+async function runCrmImport(state: CrmImportProgress): Promise<void> {
+  for (let index = 0; index < state.leadIds.length; index += 50) {
+    const batchIds = state.leadIds.slice(index, index + 50); const leads = (await Promise.all(batchIds.map((id) => LeadRepository.get(id)))).filter((lead): lead is Lead => Boolean(lead));
+    await Promise.all(leads.map(async (lead) => { lead.crmStatus = 'importing'; lead.crmError = null; await LeadRepository.save(lead); }));
+    try {
+      const response = await importLeadsToCrm(leads); const byId = new Map(response.results.map((result) => [result.clientId, result]));
+      for (const lead of leads) { const item = byId.get(lead.id); const status = item?.status ?? 'failed'; lead.crmStatus = status === 'created' ? 'imported' : status === 'existing' ? 'existing' : 'failed'; lead.crmLeadId = item?.leadId ?? lead.crmLeadId; lead.crmLeadNumber = item?.leadNumber ?? lead.crmLeadNumber; lead.crmError = item?.message ?? null; await LeadRepository.save(lead); if (lead.crmStatus === 'imported') state.created += 1; else if (lead.crmStatus === 'existing') state.existing += 1; else { state.failed += 1; state.failedLeadIds.push(lead.id); } }
+    } catch (error) { state.failed += leads.length; state.error = errorMessage(error); state.failedLeadIds.push(...leads.map((lead) => lead.id)); for (const lead of leads) { lead.crmStatus = 'failed'; lead.crmError = errorMessage(error); await LeadRepository.save(lead); } }
+    state.processed += batchIds.length; await saveCrmImport(); await publishCrmImport();
+  }
+  state.status = state.failed ? 'partial' : 'completed'; state.completedAt = nowIso(); await saveCrmImport(); await publishCrmImport(); activeCrmImport = null;
+}
+
+async function getCrmImportState(): Promise<CrmImportProgress | null> { return activeCrmImport ?? (await SettingsRepository.get<CrmImportProgress>(CRM_IMPORT_SETTING))?.value ?? null; }
+async function saveCrmImport(): Promise<void> { if (activeCrmImport) await SettingsRepository.save(CRM_IMPORT_SETTING, activeCrmImport); }
+async function publishCrmImport(): Promise<void> { try { await chrome.runtime.sendMessage({ type: 'CRM_IMPORT_PROGRESS', progress: activeCrmImport }); } catch { /* side panel can be closed */ } }
+
+async function markExported(searchId: string, count: number): Promise<void> { const search = await SearchRepository.get(searchId); if (!search) return; search.exportedCount += Math.max(0, count); await SearchRepository.save(search); }
+
+async function setPhase(job: Job, phase: DiscoveryPhase, message?: string): Promise<void> { job.search.currentPhase = phase; job.search.lastActivityAt = nowIso(); if (phase === 'PROCESSING') job.search.status = 'processing'; else if (phase === 'EXTRACTING' || phase === 'WAITING_FOR_RESULTS' || phase === 'CHECKING_FOR_MORE' || phase === 'NEXT_RESULTS' || phase === 'SEARCH_INITIALIZED') job.search.status = 'discovering'; await persistJob(job); await publishProgress(message); }
+async function persistJob(job: Job): Promise<void> { const tab = await chrome.tabs.get(job.tabId).catch(() => null); job.search.currentStateKey = tab?.url ?? job.search.currentStateKey; job.search.currentQuery = job.expectedQuery; job.search.lastActivityAt = nowIso(); await SearchRepository.save(job.search); }
+async function getProgressResponse(): Promise<DiscoveryProgress> { await recoverDiscovery(); if (activeJob) return progressFor(activeJob); const search = (await SearchRepository.list())[0]; return progressForStored(search); }
+async function publishProgress(message?: string): Promise<void> { try { await chrome.runtime.sendMessage({ type: 'DISCOVERY_PROGRESS', progress: activeJob ? progressFor(activeJob, message) : await getProgressResponse(), message }); } catch { /* side panel can be closed */ } }
+function progressFor(job: Job, message?: string): DiscoveryProgress { const leads = [...job.leads.values()]; return { searchId: job.search.id, status: job.paused ? 'paused' : job.search.status, query: job.search.query, discovered: job.search.discoveredCount, duplicates: Math.max(0, job.search.discoveredCount - leads.length), unique: leads.length, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: job.search.currentPage ?? 0, maxIterations: job.config.safetyLimit ?? MAX_SAFE_ITERATIONS, message, phase: job.search.currentPhase, processed: job.search.processedResultKeys?.length ?? 0, currentQuery: job.search.currentQuery, error: job.search.error }; }
+function progressForStored(search?: SearchRecord): DiscoveryProgress { return { searchId: search?.id ?? '', status: search?.status ?? 'idle', query: search?.query ?? '', discovered: search?.discoveredCount ?? 0, duplicates: Math.max(0, (search?.discoveredCount ?? 0) - (search?.uniqueCount ?? 0)), unique: search?.uniqueCount ?? 0, withPhone: 0, withWebsite: 0, withEmail: 0, iteration: search?.currentPage ?? 0, maxIterations: search?.config?.safetyLimit ?? MAX_SAFE_ITERATIONS, phase: search?.currentPhase, processed: search?.processedResultKeys?.length ?? 0, currentQuery: search?.currentQuery, error: search?.error }; }
+async function waitIfPaused(job: Job): Promise<void> { if (!job.paused) return; await new Promise<void>((resolve) => job.resumeResolvers.push(resolve)); }
+async function sendToMaps(tabId: number, message: { type: string }): Promise<unknown> { try { return await chrome.tabs.sendMessage(tabId, message); } catch (error) { await ensureMapsContentScript(tabId); try { return await chrome.tabs.sendMessage(tabId, message); } catch { throw error; } } }
+async function ensureMapsContentScript(tabId: number): Promise<void> { try { await chrome.tabs.sendMessage(tabId, { type: 'GET_MAPS_CONTEXT' }); } catch { await chrome.scripting.executeScript({ target: { tabId }, files: ['content/maps.js'] }); await delay(250); } }
+async function getActiveMapsContext(): Promise<MapsContext | null> { const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); const tab = tabs[0]; if (!tab?.id || !isMapsUrl(tab.url)) return null; await ensureMapsContentScript(tab.id); const response = await sendToMaps(tab.id, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext }; return response.context ?? null; }
+async function navigateToQuery(tabId: number, query: string): Promise<void> { await chrome.tabs.update(tabId, { url: `https://www.google.com/maps/search/${encodeURIComponent(query)}` }); }
+function buildQueries(config: DiscoveryConfig, context?: { query?: string | null }): string[] { const business = config.businessType.trim(); const location = config.location.trim() || context?.query?.trim() || ''; const first = location ? `${business} near ${location}` : business; return config.queryExpansion ? [...new Set([first, `${business} in ${location}`, `${business} ${location}`].filter(Boolean))] : [first]; }
+function isUnexpectedSearchContext(context: MapsContext, expected: string): boolean { if (!context.isMaps) return true; if (!context.query || !expected) return false; const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim(); const expectedParts = normalize(expected).split(' near '); return !normalize(context.query).includes(normalize(expectedParts[0])); }
+function isMapsUrl(url?: string): boolean { if (!url) return false; try { const parsed = new URL(url); return /(^|\.)google\.[^/]+$/.test(parsed.hostname) && parsed.pathname.startsWith('/maps'); } catch { return false; } }
+function isSearchRoute(url?: string): boolean { return Boolean(url && /\/maps\/search\//.test(url)); }
+async function hasActiveSearch(): Promise<boolean> { return (await SearchRepository.list()).some((search) => ACTIVE_STATUSES.has(search.status)); }
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : typeof error === 'string' ? error : 'An unexpected error occurred.'; }
+function delay(ms: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, ms)); }

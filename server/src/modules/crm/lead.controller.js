@@ -164,6 +164,15 @@ class LeadController {
     } catch (err) { next(err); }
   }
 
+  /** Import structured batches from the local-first browser extension. */
+  async bulkImport(req, res, next) {
+    try {
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const data = await leadImportExportService.importExtensionLeads(req.body.leads, req.user._id, meta);
+      return res.success({ data, message: 'Lead import processed' });
+    } catch (err) { next(err); }
+  }
+
   /** Export matching leads as CSV / Excel / PDF (streamed as an attachment). */
   async exportLeads(req, res, next) {
     try {

@@ -213,6 +213,36 @@ export const enrichJobIdParam = {
   params: Joi.object({ jobId: objectId.required() }),
 };
 
+// Authenticated extension batches. The server deliberately accepts the
+// client correlation id only for reporting; ownership is always req.user._id.
+export const bulkImport = {
+  body: Joi.object({
+    leads: Joi.array().items(Joi.object({
+      clientId: Joi.string().trim().max(128).required(),
+      businessName: Joi.string().trim().max(255).required(),
+      category: Joi.string().trim().max(120).allow('', null),
+      categories: Joi.array().items(Joi.string().trim().max(80)).max(50).default([]),
+      placeIdentifier: Joi.string().trim().max(255).allow('', null),
+      phone: Joi.string().trim().max(50).allow('', null),
+      website: Joi.string().uri({ scheme: ['http', 'https'] }).max(500).allow('', null),
+      emails: Joi.array().items(Joi.string().email()).max(20).default([]),
+      address: Joi.string().trim().max(500).allow('', null),
+      street: Joi.string().trim().max(255).allow('', null),
+      city: Joi.string().trim().max(120).allow('', null),
+      state: Joi.string().trim().max(80).allow('', null),
+      postalCode: Joi.string().trim().max(20).allow('', null),
+      country: Joi.string().trim().max(100).allow('', null),
+      latitude: Joi.number().min(-90).max(90).allow(null),
+      longitude: Joi.number().min(-180).max(180).allow(null),
+      rating: Joi.number().min(0).max(5).allow(null),
+      reviewCount: Joi.number().integer().min(0).allow(null),
+      priceLevel: Joi.string().trim().max(40).allow('', null),
+      discoveredAt: Joi.date().iso().allow(null),
+      searchId: Joi.string().max(128).allow('', null),
+    }).unknown(false)).min(1).max(500).required(),
+  }),
+};
+
 export const duplicates = {
   query: Joi.object({
     name: Joi.string().trim().max(255),

@@ -9,11 +9,11 @@
 // normalized AreaDraft (GeoJSON [lng,lat], closed rings) using the shared pure
 // helpers in map-geometry.ts — so the two maps are interchangeable upstream.
 //
-// PRODUCTION NOTE: OpenStreetMap's public tile endpoint is fine for
-// development/demo but its usage policy forbids heavy production traffic.
-// For production, set NEXT_PUBLIC_OSM_TILE_URL to a dedicated tile provider or a
-// self-hosted OSM tile server. Discovery search is controlled separately by the
-// server-side discovery provider mode.
+// PRODUCTION NOTE: public tile endpoints are fine for development/demo but
+// their usage policies forbid heavy production traffic. For production, set
+// NEXT_PUBLIC_OSM_TILE_URL / NEXT_PUBLIC_SATELLITE_TILE_URL to a dedicated tile
+// provider or self-hosted tiles. Discovery search is controlled separately by
+// the server-side discovery provider mode.
 //
 // SSR: Leaflet needs `window`. This module (and `leaflet/dist/leaflet.css`) is
 // loaded ONLY on the client — `discovery-map.tsx` imports it through
@@ -44,7 +44,6 @@ import {
   useMapEvents,
 } from 'react-leaflet';
 import { Map as MapIcon, Satellite } from 'lucide-react';
-import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/language-context';
 import type { AreaDraft } from '../../state/lead-gen-store';
@@ -62,6 +61,8 @@ import {
   rectangleToAreaDraft,
 } from './map-geometry';
 
+type LeafletMapType = 'roadmap' | 'satellite';
+
 // ── Keyless raster tile sources (no API key, attribution REQUIRED) ───────────
 const LIGHT_TILES = {
   url: process.env.NEXT_PUBLIC_OSM_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -69,13 +70,18 @@ const LIGHT_TILES = {
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   subdomains: '',
 };
-const DARK_TILES = {
-  // Default dark mode intentionally reuses keyless OpenStreetMap tiles and
-  // applies a local CSS filter below. Some third-party "free" dark tile hosts
-  // now return API-key watermarks, which made the map appear broken.
-  url: process.env.NEXT_PUBLIC_OSM_DARK_TILE_URL || process.env.NEXT_PUBLIC_OSM_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+const SATELLITE_TILES = {
+  // OSM does not provide satellite imagery. This public imagery layer gives the
+  // Leaflet fallback a Google-like satellite mode without a browser API key.
+  url: process.env.NEXT_PUBLIC_SATELLITE_TILE_URL
+    || 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  attribution: 'Tiles &copy; Esri',
+  subdomains: '',
+};
+const SATELLITE_LABEL_TILES = {
+  url: process.env.NEXT_PUBLIC_SATELLITE_LABEL_TILE_URL
+    || 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  attribution: 'Labels &copy; Esri',
   subdomains: '',
 };
 
@@ -489,32 +495,45 @@ function CenterController({ center, zoom }: { center: GeoPoint; zoom?: number })
   return null;
 }
 
-// ── Minimal, honest map-type control. OSM has no free satellite imagery, so the
-//    Satellite option is shown but disabled with an explanatory tooltip. ───────
-function LeafletMapTypeControl({ isRTL }: { isRTL: boolean }) {
+// ── Map-type control. Roadmap stays OSM; satellite uses public imagery tiles. ─
+function LeafletMapTypeControl({
+  isRTL,
+  mapType,
+  onMapTypeChange,
+}: {
+  isRTL: boolean;
+  mapType: LeafletMapType;
+  onMapTypeChange: (mapType: LeafletMapType) => void;
+}) {
   const { t } = useLanguage();
+  const buttonClass = (active: boolean) => cn(
+    'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+    active
+      ? 'bg-primary text-primary-foreground shadow-theme-sm'
+      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+    isRTL && 'flex-row-reverse',
+  );
+
   return (
     <div
       role="group"
       aria-label={t('leadgen.map.mapType', 'Map type')}
       className="pointer-events-auto absolute top-3 end-3 z-[1000] flex gap-0.5 rounded-lg border border-border bg-card/95 p-0.5 shadow-theme-md backdrop-blur"
     >
-      <span
-        aria-pressed="true"
-        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground shadow-theme-sm"
+      <button
+        type="button"
+        aria-pressed={mapType === 'roadmap'}
+        onClick={() => onMapTypeChange('roadmap')}
+        className={buttonClass(mapType === 'roadmap')}
       >
         <MapIcon className="h-3.5 w-3.5" aria-hidden="true" />
         <span>{t('leadgen.map.roadmap', 'Map')}</span>
-      </span>
+      </button>
       <button
         type="button"
-        disabled
-        aria-disabled="true"
-        title={t('leadgen.map.satelliteUnavailable', 'Satellite view requires a Google Maps key')}
-        className={cn(
-          'inline-flex cursor-not-allowed items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-muted-foreground/60',
-          isRTL && 'flex-row-reverse',
-        )}
+        aria-pressed={mapType === 'satellite'}
+        onClick={() => onMapTypeChange('satellite')}
+        className={buttonClass(mapType === 'satellite')}
       >
         <Satellite className="h-3.5 w-3.5" aria-hidden="true" />
         <span>{t('leadgen.map.satellite', 'Satellite')}</span>
@@ -538,11 +557,11 @@ function LeafletMapInner({
   onViewportChange,
   className,
 }: DiscoveryMapProps) {
-  const { resolvedTheme } = useTheme();
   const { isRTL } = useLanguage();
   const colors = useMapTokenColors();
-  const dark = resolvedTheme === 'dark';
-  const tiles = dark ? DARK_TILES : LIGHT_TILES;
+  const [mapType, setMapType] = useState<LeafletMapType>('roadmap');
+  const isSatellite = mapType === 'satellite';
+  const tiles = isSatellite ? SATELLITE_TILES : LIGHT_TILES;
 
   const onAreaChangeRef = useRef(onAreaChange);
   useEffect(() => {
@@ -584,17 +603,26 @@ function LeafletMapInner({
         className="h-full w-full"
         // Leaflet's container needs a concrete background so partially-loaded
         // tiles don't flash white in dark mode.
-        style={{ background: dark ? '#0b0f19' : '#e5e7eb' }}
+        style={{ background: isSatellite ? '#0b0f19' : '#e5e7eb' }}
       >
-        {/* `key` forces a fresh TileLayer when the theme flips so tiles reload. */}
         <TileLayer
-          key={dark ? 'dark' : 'light'}
+          key={mapType}
           url={tiles.url}
           attribution={tiles.attribution}
           subdomains={tiles.subdomains}
           maxZoom={19}
-          className={dark ? 'leadgen-osm-dark-tiles' : undefined}
         />
+        {isSatellite ? (
+          <TileLayer
+            key="satellite-labels"
+            url={SATELLITE_LABEL_TILES.url}
+            attribution={SATELLITE_LABEL_TILES.attribution}
+            subdomains={SATELLITE_LABEL_TILES.subdomains}
+            maxZoom={19}
+            opacity={0.95}
+            zIndex={2}
+          />
+        ) : null}
         <ZoomControl position={isRTL ? 'topright' : 'topleft'} />
         <AreaOverlay area={area} center={center} colors={colors} />
         <DrawController
@@ -616,7 +644,7 @@ function LeafletMapInner({
         <CenterController center={center} zoom={zoom} />
       </MapContainer>
 
-      <LeafletMapTypeControl isRTL={isRTL} />
+      <LeafletMapTypeControl isRTL={isRTL} mapType={mapType} onMapTypeChange={setMapType} />
       {drawingMode === 'radius' ? (
         <RadiusSlider radiusMeters={area?.radiusMeters ?? DEFAULT_RADIUS_METERS} onChange={handleRadiusChange} />
       ) : null}

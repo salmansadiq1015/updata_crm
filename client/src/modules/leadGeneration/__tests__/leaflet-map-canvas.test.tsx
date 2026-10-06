@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
 import { LanguageProvider } from '@/lib/i18n/language-context';
 
@@ -57,10 +57,19 @@ vi.mock('react-leaflet', async () => {
   return {
     MapContainer: ({ children }: { children?: ReactNode }) =>
       React.createElement('div', { 'data-testid': 'leaflet-map-container' }, children),
-    TileLayer: ({ url, className }: { url?: string; className?: string }) =>
+    TileLayer: ({
+      url,
+      attribution,
+      className,
+    }: {
+      url?: string;
+      attribution?: string;
+      className?: string;
+    }) =>
       React.createElement('div', {
         'data-testid': 'leaflet-tile-layer',
         'data-url': url,
+        'data-attribution': attribution,
         className,
       }),
     Circle: () => null,
@@ -100,10 +109,6 @@ vi.mock('@googlemaps/markerclusterer', () => ({
   },
 }));
 
-vi.mock('next-themes', () => ({
-  useTheme: () => ({ resolvedTheme: 'dark' }),
-}));
-
 // Imported AFTER the mocks are registered.
 import { DiscoveryMap } from '../ui/discovery-map';
 import { LeafletMapCanvas } from '../ui/map/leaflet-map-canvas';
@@ -139,7 +144,10 @@ describe('LeafletMapCanvas (mocked Leaflet)', () => {
       'data-url',
       'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     );
-    expect(screen.getByTestId('leaflet-tile-layer')).toHaveClass('leadgen-osm-dark-tiles');
+    expect(screen.getByTestId('leaflet-tile-layer')).toHaveAttribute(
+      'data-attribution',
+      expect.stringContaining('OpenStreetMap'),
+    );
     // Degraded error placeholder must NOT appear on a normal render.
     expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
     await waitFor(() => expect(leafletHarness.invalidateSize).toHaveBeenCalled());
@@ -170,9 +178,25 @@ describe('LeafletMapCanvas (mocked Leaflet)', () => {
 
     // Radius slider (from map-controls) renders in radius drawing mode.
     expect(screen.getByLabelText('Radius')).toBeInTheDocument();
-    // A keyless map still shows a map-type control (Satellite disabled).
+    // A keyless map still shows a working map-type control.
     const satellite = screen.getByRole('button', { name: /satellite/i });
-    expect(satellite).toBeDisabled();
+    expect(satellite).toBeEnabled();
+  });
+
+  it('switches to satellite imagery with a places/labels overlay', () => {
+    renderWithProviders(<LeafletMapCanvas center={CENTER} zoom={12} results={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /satellite/i }));
+
+    const layers = screen.getAllByTestId('leaflet-tile-layer');
+    expect(layers[0]).toHaveAttribute(
+      'data-url',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    );
+    expect(layers[1]).toHaveAttribute(
+      'data-url',
+      'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    );
   });
 });
 

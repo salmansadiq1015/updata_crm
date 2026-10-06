@@ -5,13 +5,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Leaflet fallback map: keep dark mode keyless by styling standard OSM tiles
-   locally instead of requesting a third-party dark tile service. */
-.leadgen-osm-dark-tiles,
-.leadgen-osm-dark-tiles img {
-  filter: invert(0.9) hue-rotate(180deg) saturate(0.75) brightness(0.65) contrast(1.15);
-}
-
 /* ═══════════════════════════════════════════
    Tailwind Theme Mappings
    ═══════════════════════════════════════════ */

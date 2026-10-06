@@ -27,13 +27,23 @@ export function normalizeMapsPlaceUrl(value: string | null | undefined): string 
   if (!value) return '';
   try {
     const url = new URL(value, 'https://www.google.com');
+    const parameter = ['query_place_id', 'place_id', 'ftid', 'cid']
+      .map((name) => url.searchParams.get(name))
+      .find(Boolean);
+    if (parameter) return `id:${normalizeText(parameter)}`;
     const placeMatch = url.pathname.match(/\/maps\/place\/([^/]+)/i);
-    const placeToken = value.match(/!1s([^!]+)/)?.[1];
-    if (placeToken) return `id:${normalizeText(decodeURIComponent(placeToken))}`;
+    const placeToken = value.match(/!(?:1s|16s)([^!]+)/)?.[1];
+    if (placeToken) {
+      let decoded = placeToken;
+      try { decoded = decodeURIComponent(placeToken); } catch { /* retain the stable raw token */ }
+      return `id:${normalizeText(decoded)}`;
+    }
     if (placeMatch) {
       const coordinates = value.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
       const geo = coordinates ? `|${Number(coordinates[1]).toFixed(5)},${Number(coordinates[2]).toFixed(5)}` : '';
-      return `name:${normalizeText(decodeURIComponent(placeMatch[1].replace(/\+/g, ' ')))}${geo}`;
+      let decodedPlace = placeMatch[1].replace(/\+/g, ' ');
+      try { decodedPlace = decodeURIComponent(decodedPlace); } catch { /* retain the URL-safe name */ }
+      return `name:${normalizeText(decodedPlace)}${geo}`;
     }
     return normalizeUrl(value);
   } catch {

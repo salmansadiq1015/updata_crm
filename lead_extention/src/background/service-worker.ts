@@ -266,23 +266,20 @@ async function processCurrentMapsState(job: Job): Promise<boolean> {
     const scroll = await sendToMaps(job.tabId, { type: 'SCROLL_RESULTS' }) as MapsScrollState;
     applyScrollCheckpoint(job.search, scroll);
     job.search.currentPage = (job.search.currentPage ?? 0) + 1;
-    if (scroll.changed) {
-      stableRounds = 0; job.search.stableRounds = 0; await persistJob(job);
-      await delay(DISCOVERY_SCROLL_DELAY_MS);
-      continue;
-    }
-
-    // The Maps list is virtualized and may render after scrollTop settles. A
-    // bounded second read prevents one stale 25-card DOM window from being
-    // mistaken for the end of the complete discovery job.
-    await delay(1_000);
+    // Always inspect the settled DOM after scrolling. Maps virtual lists can
+    // move their scroll offset while recycling the same cards; treating that
+    // movement as progress caused an endless scroll with no new leads.
+    await persistJob(job);
+    await delay(Math.max(1_000, DISCOVERY_SCROLL_DELAY_MS));
     const settled = await sendToMaps(job.tabId, { type: 'COLLECT_VISIBLE' }) as { records?: RawBusinessRecord[] };
     const settledResult = await processRecords(job, settled.records ?? []);
+    const settledScroll = await sendToMaps(job.tabId, { type: 'GET_SCROLL_STATE' }) as MapsScrollState;
+    applyScrollCheckpoint(job.search, settledScroll);
     const newlyProcessed = result.newlyProcessed + settledResult.newlyProcessed;
     stableRounds = newlyProcessed === 0 ? stableRounds + 1 : 0;
     job.search.stableRounds = stableRounds;
     await persistJob(job);
-    if (shouldCompleteResultState({ newlyProcessed, scrollChanged: scroll.changed, atEnd: scroll.atEnd, endConfirmed: scroll.endConfirmed, stableRounds })) {
+    if (shouldCompleteResultState({ newlyProcessed, scrollChanged: settledScroll.changed, atEnd: settledScroll.atEnd, endConfirmed: settledScroll.endConfirmed, stableRounds })) {
       await setPhase(job, 'NO_MORE_RESULTS', 'The Maps result feed reached its confirmed end with no unprocessed businesses remaining.');
       return true;
     }
@@ -314,47 +311,53 @@ async function waitForResults(job: Job): Promise<void> {
 }
 
 async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{ added: number; duplicates: number; newlyProcessed: number; repeated: number }> {
-  await setPhase(job, 'PROCESSING', `Processing ${records.length} visible results…`);
+  await setPhase(job, 'PROCESSING', `Processing ${Math.min(records.length, DISCOVERY_BATCH_SIZE)} of ${records.length} visible results…`);
   const processed = new Set(job.search.processedResultKeys ?? []);
   let added = 0; let duplicates = 0; let newlyProcessed = 0; let repeated = 0; let sinceCheckpoint = 0;
-  job.search.currentBatchSize = records.length;
-  for (const record of records) {
-    await waitIfPaused(job);
-    if (job.stopped) break;
-    if (!record.businessName || !record.googleMapsUrl) continue;
-    const visibleResultKey = resultKeyForRecord(record);
-    const legacyKey = [record.placeIdentifier, record.googleMapsUrl, `${record.businessName}|${record.address ?? ''}`].find((key) => Boolean(key) && processed.has(key!));
-    if (processed.has(visibleResultKey) || legacyKey) {
-      if (legacyKey && legacyKey !== visibleResultKey) { processed.delete(legacyKey); processed.add(visibleResultKey); }
-      repeated += 1;
-      continue;
-    }
-    const hydratedRecord = await hydrateMapsRecord(job, record);
-    const resultKey = resultKeyForRecord(hydratedRecord);
-    if (processed.has(resultKey)) { repeated += 1; continue; }
-    const lead = makeLead(hydratedRecord, job.search.id);
-    if (job.originCoordinates && lead.latitude !== null && lead.longitude !== null) {
-      lead.distanceMeters = haversineDistanceMeters(job.originCoordinates, { latitude: lead.latitude, longitude: lead.longitude });
-      lead.distanceKm = lead.distanceMeters / 1_000;
-      if (job.config.radiusKm !== null && lead.distanceKm > job.config.radiusKm) {
-        processed.add(resultKey); newlyProcessed += 1; sinceCheckpoint += 1;
-        await checkpointProcessedRecord(job, processed, resultKey, record.googleMapsUrl, sinceCheckpoint >= DISCOVERY_BATCH_SIZE);
-        if (sinceCheckpoint >= DISCOVERY_BATCH_SIZE) sinceCheckpoint = 0;
+  for (const batch of splitIntoBatches(records, DISCOVERY_BATCH_SIZE)) {
+    job.search.currentBatchSize = batch.length;
+    for (const record of batch) {
+      await waitIfPaused(job);
+      if (job.stopped) break;
+      if (!record.businessName || !record.googleMapsUrl) continue;
+      const visibleResultKey = resultKeyForRecord(record);
+      const legacyKey = [record.placeIdentifier, record.googleMapsUrl, `${record.businessName}|${record.address ?? ''}`].find((key) => Boolean(key) && processed.has(key!));
+      if (processed.has(visibleResultKey) || legacyKey) {
+        if (legacyKey && legacyKey !== visibleResultKey) { processed.delete(legacyKey); processed.add(visibleResultKey); }
+        repeated += 1;
         continue;
       }
+      const hydratedRecord = await hydrateMapsRecord(job, record);
+      const resultKey = resultKeyForRecord(hydratedRecord);
+      if (processed.has(resultKey)) { repeated += 1; continue; }
+      const lead = makeLead(hydratedRecord, job.search.id);
+      if (job.originCoordinates && lead.latitude !== null && lead.longitude !== null) {
+        lead.distanceMeters = haversineDistanceMeters(job.originCoordinates, { latitude: lead.latitude, longitude: lead.longitude });
+        lead.distanceKm = lead.distanceMeters / 1_000;
+        if (job.config.radiusKm !== null && lead.distanceKm > job.config.radiusKm) {
+          processed.add(resultKey); newlyProcessed += 1; sinceCheckpoint += 1;
+          await checkpointProcessedRecord(job, processed, resultKey, record.googleMapsUrl, sinceCheckpoint >= DISCOVERY_BATCH_SIZE);
+          if (sinceCheckpoint >= DISCOVERY_BATCH_SIZE) sinceCheckpoint = 0;
+          continue;
+        }
+      }
+      const exactKey = dedupeKey(lead); const proximityKey = [...job.leads.entries()].find(([, existing]) => isSameLead(existing, lead))?.[0]; const key = proximityKey ?? exactKey;
+      const existing = job.leads.get(key);
+      if (existing) { job.leads.set(key, mergeLead(existing, lead)); duplicates += 1; job.search.duplicateCount = (job.search.duplicateCount ?? 0) + 1; }
+      else { job.leads.set(key, lead); added += 1; }
+      // Commit lead data before marking its Maps result as processed. A service
+      // worker suspension between these operations can therefore only retry and
+      // merge the lead; it cannot silently lose it.
+      await LeadRepository.save(job.leads.get(key)!);
+      processed.add(resultKey); newlyProcessed += 1; sinceCheckpoint += 1;
+      await checkpointProcessedRecord(job, processed, resultKey, record.googleMapsUrl, sinceCheckpoint >= DISCOVERY_BATCH_SIZE);
+      if (sinceCheckpoint >= DISCOVERY_BATCH_SIZE) sinceCheckpoint = 0;
+      if (job.leads.size >= job.config.maxResults) break;
     }
-    const exactKey = dedupeKey(lead); const proximityKey = [...job.leads.entries()].find(([, existing]) => isSameLead(existing, lead))?.[0]; const key = proximityKey ?? exactKey;
-    const existing = job.leads.get(key);
-    if (existing) { job.leads.set(key, mergeLead(existing, lead)); duplicates += 1; job.search.duplicateCount = (job.search.duplicateCount ?? 0) + 1; }
-    else { job.leads.set(key, lead); added += 1; }
-    // Commit lead data before marking its Maps result as processed. A service
-    // worker suspension between these operations can therefore only retry and
-    // merge the lead; it cannot silently lose it.
-    await LeadRepository.save(job.leads.get(key)!);
-    processed.add(resultKey); newlyProcessed += 1; sinceCheckpoint += 1;
-    await checkpointProcessedRecord(job, processed, resultKey, record.googleMapsUrl, sinceCheckpoint >= DISCOVERY_BATCH_SIZE);
-    if (sinceCheckpoint >= DISCOVERY_BATCH_SIZE) sinceCheckpoint = 0;
-    if (job.leads.size >= job.config.maxResults) break;
+    job.search.discoveredCount = processed.size; job.search.processedCount = processed.size; job.search.currentResultIndex = processed.size;
+    job.search.uniqueCount = job.leads.size; job.search.processedResultKeys = [...processed]; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso();
+    await SearchRepository.save(job.search); await publishProgress(`${job.search.processedCount} processed · ${job.leads.size} unique leads saved locally.`);
+    if (job.stopped || job.leads.size >= job.config.maxResults) break;
   }
   job.search.discoveredCount = processed.size; job.search.processedCount = processed.size; job.search.currentResultIndex = processed.size;
   job.search.uniqueCount = job.leads.size; job.search.processedResultKeys = [...processed]; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso();
@@ -587,7 +590,24 @@ async function publishProgress(message?: string): Promise<void> { try { await ch
 function progressFor(job: Job, message?: string): DiscoveryProgress { const leads = [...job.leads.values()]; return { searchId: job.search.id, status: job.paused ? 'paused' : job.search.status, query: job.search.query, discovered: job.search.discoveredCount, duplicates: job.search.duplicateCount ?? 0, unique: leads.length, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: job.search.currentPage ?? 0, maxIterations: job.config.safetyLimit ?? MAX_SAFE_ITERATIONS, message, phase: job.search.currentPhase, processed: job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0, currentQuery: job.search.currentQuery, currentBatch: job.search.currentBatchSize ?? 0, configuredMaximum: job.config.maxResults, error: job.search.error }; }
 function progressForStored(search?: SearchRecord): DiscoveryProgress { return { searchId: search?.id ?? '', status: search?.status ?? 'idle', query: search?.query ?? '', discovered: search?.discoveredCount ?? 0, duplicates: search?.duplicateCount ?? 0, unique: search?.uniqueCount ?? 0, withPhone: 0, withWebsite: 0, withEmail: 0, iteration: search?.currentPage ?? 0, maxIterations: search?.config?.safetyLimit ?? MAX_SAFE_ITERATIONS, phase: search?.currentPhase, processed: search?.processedCount ?? search?.processedResultKeys?.length ?? 0, currentQuery: search?.currentQuery, currentBatch: search?.currentBatchSize ?? 0, configuredMaximum: search?.config?.maxResults, error: search?.error }; }
 async function waitIfPaused(job: Job): Promise<void> { if (!job.paused) return; await new Promise<void>((resolve) => job.resumeResolvers.push(resolve)); }
-async function sendToMaps(tabId: number, message: { type: string; [key: string]: unknown }): Promise<unknown> { try { return await chrome.tabs.sendMessage(tabId, message); } catch (error) { await ensureMapsContentScript(tabId); try { return await chrome.tabs.sendMessage(tabId, message); } catch { throw error; } } }
+async function sendToMaps(tabId: number, message: { type: string; [key: string]: unknown }): Promise<unknown> {
+  let response: unknown;
+  try {
+    response = await chrome.tabs.sendMessage(tabId, message);
+  } catch (transportError) {
+    await ensureMapsContentScript(tabId);
+    try {
+      response = await chrome.tabs.sendMessage(tabId, message);
+    } catch {
+      throw transportError;
+    }
+  }
+  if (response && typeof response === 'object' && 'ok' in response && (response as { ok?: boolean }).ok === false) {
+    const extractionError = (response as { error?: unknown }).error;
+    throw new Error(typeof extractionError === 'string' && extractionError ? extractionError : 'Google Maps extraction failed.');
+  }
+  return response;
+}
 async function ensureMapsContentScript(tabId: number): Promise<void> {
   try {
     await chrome.tabs.sendMessage(tabId, { type: 'GET_MAPS_CONTEXT' });

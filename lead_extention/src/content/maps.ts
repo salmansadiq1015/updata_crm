@@ -1,7 +1,7 @@
 import { MapsAdapter } from './maps-adapter';
 import type { ExtensionMessage } from '../shared/types';
 
-const CONTENT_RUNTIME_KEY = '__leadFinderMapsContentV3__';
+const CONTENT_RUNTIME_KEY = '__leadFinderMapsContentV4__';
 const runtimeGlobal = globalThis as typeof globalThis & Record<string, unknown>;
 
 if (!runtimeGlobal[CONTENT_RUNTIME_KEY]) {
@@ -9,39 +9,47 @@ if (!runtimeGlobal[CONTENT_RUNTIME_KEY]) {
   const adapter = new MapsAdapter();
 
   chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-    if (message.type === 'GET_MAPS_CONTEXT') {
-      sendResponse({ ok: true, context: adapter.context() });
+    try {
+      if (message.type === 'GET_MAPS_CONTEXT') {
+        sendResponse({ ok: true, context: adapter.context() });
+        return false;
+      }
+      if (message.type === 'START_DISCOVERY') {
+        sendResponse({ ok: true, context: adapter.context() });
+        return false;
+      }
+      if (message.type === 'GET_PROGRESS' || message.type === 'PAUSE_DISCOVERY' || message.type === 'RESUME_DISCOVERY' || message.type === 'STOP_DISCOVERY' || message.type === 'ENRICH_LEAD' || message.type === 'CLEAR_ALL_DATA') {
+        return false;
+      }
+      if ((message as { type: string }).type === 'COLLECT_VISIBLE') {
+        sendResponse({ ok: true, records: adapter.collectVisible(), context: adapter.context() });
+        return false;
+      }
+      if ((message as { type: string }).type === 'COLLECT_DETAILS') {
+        sendResponse({ ok: true, record: adapter.extractBusinessDetails(), context: adapter.context() });
+        return false;
+      }
+      if ((message as { type: string }).type === 'SCROLL_RESULTS') {
+        sendResponse({ ok: true, ...adapter.scrollResults(), context: adapter.context() });
+        return false;
+      }
+      if ((message as { type: string }).type === 'GET_SCROLL_STATE') {
+        sendResponse({ ok: true, ...adapter.getScrollState(), context: adapter.context() });
+        return false;
+      }
+      if ((message as { type: string }).type === 'RESTORE_SCROLL') {
+        const checkpoint = message as unknown as { scrollTop?: number; lastVisibleResultKey?: string | null };
+        sendResponse({ ok: true, ...adapter.restoreScroll(checkpoint), context: adapter.context() });
+        return false;
+      }
+      return false;
+    } catch (error) {
+      sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : 'Google Maps extraction failed.'
+      });
       return false;
     }
-    if (message.type === 'START_DISCOVERY') {
-      sendResponse({ ok: true, context: adapter.context() });
-      return false;
-    }
-    if (message.type === 'GET_PROGRESS' || message.type === 'PAUSE_DISCOVERY' || message.type === 'RESUME_DISCOVERY' || message.type === 'STOP_DISCOVERY' || message.type === 'ENRICH_LEAD' || message.type === 'CLEAR_ALL_DATA') {
-      return false;
-    }
-    if ((message as { type: string }).type === 'COLLECT_VISIBLE') {
-      sendResponse({ ok: true, records: adapter.collectVisible(), context: adapter.context() });
-      return false;
-    }
-    if ((message as { type: string }).type === 'COLLECT_DETAILS') {
-      sendResponse({ ok: true, record: adapter.extractBusinessDetails(), context: adapter.context() });
-      return false;
-    }
-    if ((message as { type: string }).type === 'SCROLL_RESULTS') {
-      sendResponse({ ok: true, ...adapter.scrollResults(), context: adapter.context() });
-      return false;
-    }
-    if ((message as { type: string }).type === 'GET_SCROLL_STATE') {
-      sendResponse({ ok: true, ...adapter.getScrollState(), context: adapter.context() });
-      return false;
-    }
-    if ((message as { type: string }).type === 'RESTORE_SCROLL') {
-      const checkpoint = message as unknown as { scrollTop?: number; lastVisibleResultKey?: string | null };
-      sendResponse({ ok: true, ...adapter.restoreScroll(checkpoint), context: adapter.context() });
-      return false;
-    }
-    return false;
   });
 
   let lastSignature = '';

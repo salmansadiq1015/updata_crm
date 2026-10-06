@@ -1,5 +1,11 @@
 import cors from 'cors';
 import config from '../../config/index.js';
+import { AuthorizationError } from '../errors/AppError.js';
+
+// The manifest public key pins this ID for unpacked and packaged builds. Keep
+// the allowlist exact: authentication tokens must never be exposed to arbitrary
+// extensions installed in the same browser.
+export const LEAD_FINDER_EXTENSION_ORIGIN = 'chrome-extension://bnmjibohjdkkibimeknikhnolhlbgmnk';
 
 /**
  * CORS configuration.
@@ -20,11 +26,11 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    if (config.client.allowedOrigins.includes(origin)) {
+    if (isCorsOriginAllowed(origin)) {
       return callback(null, true);
     }
 
-    callback(new Error(`Origin ${origin} not allowed by CORS`));
+    callback(new AuthorizationError('Origin not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -32,6 +38,12 @@ const corsOptions = {
   exposedHeaders: ['X-Request-Id', 'X-Response-Time', 'Retry-After'],
   maxAge: 86400, // Preflight cache: 24 hours
 };
+
+export function isCorsOriginAllowed(origin) {
+  return origin === LEAD_FINDER_EXTENSION_ORIGIN
+    || config.client.allowedOrigins.includes(origin)
+    || (config.isDevelopment && isLoopbackOrigin(origin));
+}
 
 function isLoopbackOrigin(origin) {
   try {

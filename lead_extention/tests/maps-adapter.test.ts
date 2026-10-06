@@ -1,0 +1,54 @@
+import { describe, expect, it } from 'vitest';
+import { MapsAdapter } from '../src/content/maps-adapter';
+
+type AdapterInternals = {
+  parseRating(value: string): number | null;
+  parseReviewCount(value: string): number | null;
+  extractPlaceIdentifier(value: string): string | null;
+  coordinatesFromUrl(value: string): { latitude: number; longitude: number } | null;
+  looksLikeDomain(value: string): boolean;
+  addressParts(value: string | null): {
+    street: string | null;
+    area: string | null;
+    city: string | null;
+    postalCode: string | null;
+    country: string | null;
+  };
+};
+
+const adapter = new MapsAdapter() as unknown as AdapterInternals;
+
+describe('Google Maps extraction parsing', () => {
+  it('parses localized ratings and compact or localized review counts', () => {
+    expect(adapter.parseRating('4,7 étoiles')).toBe(4.7);
+    expect(adapter.parseReviewCount('1.2K reviews')).toBe(1_200);
+    expect(adapter.parseReviewCount('4.9 (1.2K)')).toBe(1_200);
+    expect(adapter.parseReviewCount('(1,234)')).toBe(1_234);
+    expect(adapter.parseReviewCount('1 234 avis')).toBe(1_234);
+  });
+
+  it('uses stable place identifiers from parameters and Maps data tokens', () => {
+    expect(adapter.extractPlaceIdentifier('https://www.google.com/maps/place/Acme?query_place_id=ChIJ123')).toBe('ChIJ123');
+    expect(adapter.extractPlaceIdentifier('https://www.google.com/maps/place/Acme/data=!4m2!3m1!16s%2Fg%2Fabc')).toBe('/g/abc');
+  });
+
+  it('extracts coordinates from both Maps URL formats', () => {
+    expect(adapter.coordinatesFromUrl('https://www.google.com/maps/place/Acme/@48.8566,2.3522,17z')).toEqual({ latitude: 48.8566, longitude: 2.3522 });
+    expect(adapter.coordinatesFromUrl('https://www.google.com/maps/data=!3d31.5204!4d74.3587')).toEqual({ latitude: 31.5204, longitude: 74.3587 });
+  });
+
+  it('accepts valid multi-level domains and rejects Google navigation links', () => {
+    expect(adapter.looksLikeDomain('hotel.example.co.uk/contact')).toBe(true);
+    expect(adapter.looksLikeDomain('https://www.google.com/maps/place/Acme')).toBe(false);
+  });
+
+  it('maps a postal address into CRM-compatible location fields', () => {
+    expect(adapter.addressParts('1 Rue Exemple, 75001 Paris, France')).toEqual({
+      street: '1 Rue Exemple',
+      area: null,
+      city: 'Paris',
+      postalCode: '75001',
+      country: 'France'
+    });
+  });
+});

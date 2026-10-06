@@ -146,6 +146,11 @@ describe('continuous discovery regression coverage', () => {
     expect(state.uniqueCount).toBe(25);
   });
 
+  it('terminates a recycled virtual list after settled no-progress rounds', () => {
+    expect(shouldCompleteResultState({ newlyProcessed: 0, scrollChanged: false, atEnd: true, endConfirmed: true, stableRounds: REQUIRED_STABLE_END_ROUNDS })).toBe(true);
+    expect(shouldCompleteResultState({ newlyProcessed: 1, scrollChanged: false, atEnd: true, endConfirmed: true, stableRounds: REQUIRED_STABLE_END_ROUNDS })).toBe(false);
+  });
+
   it('migrates an old inflated 4,906/25 checkpoint to its 25 persisted result keys', () => {
     const legacy = search();
     legacy.discoveredCount = 4_906;

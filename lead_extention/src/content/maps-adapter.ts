@@ -1,6 +1,11 @@
 import type { MapsContext, MapsScrollState, RawBusinessRecord } from '../shared/types';
 
 const PLACE_LINK = 'a[href*="/maps/place/"]';
+const PHONE_LABEL = /\b(phone|telephone|tel|call|téléphone|telefon|teléfono|telefono|telefone)\b|هاتف|الهاتف/i;
+const WEBSITE_LABEL = /\b(website|web site|official site|site internet|webseite|sitio web|sito web)\b|موقع الويب/i;
+const ADDRESS_LABEL = /\b(address|location|adresse|dirección|direccion|indirizzo|endereço|endereco)\b|العنوان|адрес/i;
+const RATING_LABEL = /\b(rating|stars?|out of 5|note|étoiles?|sterne|estrellas?|stelle)\b|نجوم/i;
+const REVIEWS_LABEL = /\b(reviews?|ratings?|avis|bewertungen|reseñas?|recensioni|avaliações|avaliacoes)\b|مراجعات?|تقييمات?/i;
 
 export class MapsAdapter {
   detectMapsPage(): boolean {
@@ -31,28 +36,21 @@ export class MapsAdapter {
 
   extractBusinessSummary(anchor: HTMLAnchorElement): RawBusinessRecord | null {
     const card = this.findResultCard(anchor);
-    const lines = this.visibleLines(card);
+    const lines = this.visibleLines(card, 50);
     const labelled = this.labelledValues(card);
     const businessName = this.cleanName(anchor.getAttribute('aria-label') || lines[0] || anchor.textContent || '');
     if (!businessName) return null;
     const href = anchor.href;
-    const ratingLine = labelled.rating || lines.find((line) => /\b\d(?:\.\d)?\b/.test(line) && /\(?\d[\d,.]*\)?/.test(line)) || '';
+    const ratingLine = labelled.rating || lines.find((line) => /\b\d(?:[.,]\d)?\b/.test(line) && /\(?\d[\d,.]*\)?/.test(line)) || '';
     const rating = this.parseRating(ratingLine);
     const reviewCount = this.parseReviewCount(labelled.reviews || ratingLine);
-    const phone = labelled.phone || lines.find((line) => /(?:\+?\d[\d ()\-().]{6,}\d)/.test(line)) || null;
-    const websiteAnchor = [...card.querySelectorAll<HTMLAnchorElement>('a[href]')].find((item) => {
-      try {
-        const label = `${item.textContent || ''} ${item.getAttribute('aria-label') || ''}`;
-        return (/website|web site|site|official/i.test(label) || /^https?:/i.test(item.href)) && !/google\./i.test(new URL(item.href).hostname);
-      } catch {
-        return false;
-      }
-    });
-    const website = websiteAnchor?.href ?? labelled.website ?? this.websiteFromText(lines);
+    const phone = this.phoneFromElement(card) || labelled.phone || lines.find((line) => /(?:\+?\d[\d ()\-().]{6,}\d)/.test(line)) || null;
+    const website = this.websiteFromElement(card) ?? labelled.website ?? this.websiteFromText(lines);
     const address = labelled.address || lines.find((line) => line.length > 12 && line !== businessName && !/^\d(?:\.\d)?$/.test(line) && !/reviews?|rating|stars?/i.test(line) && !/(open|closed|website|directions|call|sponsored|free parking|free breakfast|free wi.?fi|air.conditioned)/i.test(line) && !this.looksLikeDomain(line)) || null;
+    const coordinates = this.coordinatesFromUrl(href);
     return {
       businessName,
-      category: lines.find((line) => line !== businessName && !/^(sponsored|visit site)$/i.test(line) && line.length < 80 && /[a-z]/i.test(line)) ?? null,
+      category: this.categoryFromElement(card) ?? lines.find((line) => line !== businessName && !/^(sponsored|visit site)$/i.test(line) && line.length < 80 && /[a-z]/i.test(line)) ?? null,
       phone,
       website,
       address,
@@ -61,38 +59,37 @@ export class MapsAdapter {
       reviewCount,
       googleMapsUrl: href,
       placeIdentifier: this.extractPlaceIdentifier(href),
-      latitude: null,
-      longitude: null
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null
     };
   }
 
   extractBusinessDetails(): RawBusinessRecord | null {
-    const title = document.querySelector<HTMLElement>('h1')?.textContent?.trim() ?? '';
+    const detailRoot = document.querySelector<HTMLElement>('[role="main"]') ?? document.body;
+    const title = detailRoot.querySelector<HTMLElement>('h1')?.textContent?.trim()
+      ?? document.querySelector<HTMLElement>('h1')?.textContent?.trim()
+      ?? '';
     if (!title) return null;
-    const lines = this.visibleLines(document.body);
-    const labelled = this.labelledValues(document.body);
-    const websiteAnchor = [...document.querySelectorAll<HTMLAnchorElement>('a[href]')].find((item) => {
-      try {
-        return /^https?:/i.test(item.href) && !/google\./i.test(new URL(item.href).hostname) && /website|web/i.test(`${item.textContent} ${item.getAttribute('aria-label')}`);
-      } catch {
-        return false;
-      }
-    });
-    const ratingLine = labelled.rating || lines.find((line) => /\d(?:\.\d)?\s*\(/.test(line)) || '';
+    const lines = this.visibleLines(detailRoot, 160);
+    const labelled = this.labelledValues(detailRoot);
+    const ratingLine = labelled.rating || lines.find((line) => /\d(?:[.,]\d)?\s*\(/.test(line)) || '';
+    const address = this.dataItemValue(detailRoot, 'address') || labelled.address || this.findDetailByLabel(['address', 'adresse', 'dirección', 'indirizzo', 'العنوان']);
+    const coordinates = this.coordinatesFromUrl(location.href);
     return {
       businessName: title,
-      category: lines.find((line) => line !== title && line.length < 80 && /[a-z]/i.test(line)) ?? null,
-      phone: labelled.phone || lines.find((line) => /(?:\+?\d[\d ()\-().]{6,}\d)/.test(line)) || null,
-      website: websiteAnchor?.href ?? labelled.website ?? null,
-      address: labelled.address || this.findDetailByLabel(['address', 'adresse', 'العنوان']),
+      category: this.categoryFromElement(detailRoot) ?? lines.find((line) => line !== title && line.length < 80 && /[a-z]/i.test(line)) ?? null,
+      phone: this.phoneFromElement(detailRoot) || labelled.phone || lines.find((line) => /(?:\+?\d[\d ()\-().]{6,}\d)/.test(line)) || null,
+      website: this.websiteFromElement(detailRoot) ?? labelled.website ?? null,
+      address,
+      ...this.addressParts(address),
       rating: this.parseRating(ratingLine),
       reviewCount: this.parseReviewCount(labelled.reviews || ratingLine),
       businessStatus: lines.find((line) => /open|closed|temporarily/i.test(line)) ?? null,
       openingHours: lines.filter((line) => /(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)/i.test(line)).slice(0, 14),
       googleMapsUrl: location.href,
       placeIdentifier: this.extractPlaceIdentifier(location.href),
-      latitude: null,
-      longitude: null
+      latitude: coordinates?.latitude ?? null,
+      longitude: coordinates?.longitude ?? null
     };
   }
 
@@ -155,7 +152,7 @@ export class MapsAdapter {
     return detail ? [detail, ...summaries] : summaries;
   }
 
-  private visibleLines(element: Element): string[] {
+  private visibleLines(element: Element, limit = 50): string[] {
     return [...element.querySelectorAll<HTMLElement>('*')]
       .filter((node) => {
         const rect = node.getBoundingClientRect();
@@ -164,7 +161,7 @@ export class MapsAdapter {
       .map((node) => node.textContent?.replace(/\s+/g, ' ').trim() ?? '')
       .filter(Boolean)
       .filter((line, index, lines) => lines.indexOf(line) === index)
-      .slice(0, 30);
+      .slice(0, limit);
   }
 
   private cleanName(value: string): string {
@@ -189,11 +186,11 @@ export class MapsAdapter {
       .map((node) => node.getAttribute('aria-label')?.replace(/\s+/g, ' ').trim() || '')
       .filter(Boolean);
     const by = (pattern: RegExp): string | null => labels.find((label) => pattern.test(label)) ?? null;
-    const phoneLabel = by(/\b(phone|telephone|tel|call)\b/i);
-    const websiteLabel = by(/\b(website|web site|official site)\b/i);
-    const addressLabel = by(/\b(address|location|adresse)\b/i);
-    const ratingLabel = by(/\b(rating|stars?|out of 5)\b/i);
-    const reviewsLabel = by(/\b(reviews?|ratings?)\b/i);
+    const phoneLabel = by(PHONE_LABEL);
+    const websiteLabel = by(WEBSITE_LABEL);
+    const addressLabel = by(ADDRESS_LABEL);
+    const ratingLabel = by(RATING_LABEL);
+    const reviewsLabel = by(REVIEWS_LABEL);
     return {
       phone: phoneLabel ? this.valueFromLabel(phoneLabel) : null,
       website: websiteLabel && this.looksLikeDomain(this.valueFromLabel(websiteLabel)) ? this.normalizeWebsite(this.valueFromLabel(websiteLabel)) : null,
@@ -204,27 +201,35 @@ export class MapsAdapter {
   }
 
   private valueFromLabel(value: string): string {
-    const cleaned = value.replace(/^[^:]+:\s*/, '').replace(/^\s*(?:website|web site|official site)\s*/i, '').trim();
-    return /^(phone|telephone|tel|call|website|web site|official site|address|location|adresse|rating|stars?)$/i.test(cleaned) ? '' : cleaned;
+    const cleaned = value.replace(/^[^:：]+[:：]\s*/, '').replace(/^\s*(?:website|web site|official site|site internet|webseite|sitio web|sito web)\s*/i, '').trim();
+    return /^(?:phone|telephone|tel|call|téléphone|telefon|teléfono|telefono|telefone|website|web site|official site|site internet|webseite|sitio web|sito web|address|location|adresse|dirección|direccion|indirizzo|endereço|endereco|rating|stars?|out of 5|note|étoiles?|sterne|estrellas?|stelle|هاتف|الهاتف|موقع الويب|العنوان|نجوم|адрес)$/i.test(cleaned) ? '' : cleaned;
   }
 
   private normalizeWebsite(value: string): string {
     return /^https?:\/\//i.test(value) ? value : `https://${value}`;
   }
 
-  private addressParts(address: string | null): Pick<RawBusinessRecord, 'street' | 'area' | 'city' | 'postalCode'> {
-    if (!address) return { street: null, area: null, city: null, postalCode: null };
+  private addressParts(address: string | null): Pick<RawBusinessRecord, 'street' | 'area' | 'city' | 'postalCode' | 'country'> {
+    if (!address) return { street: null, area: null, city: null, postalCode: null, country: null };
     const parts = address.split(',').map((part) => part.trim()).filter(Boolean);
+    const postalCode = address.match(/\b\d{4,6}\b/)?.[0] ?? null;
+    const postalPart = postalCode ? parts.find((part) => part.includes(postalCode)) : null;
+    const country = parts.length >= 3 && !/\d/.test(parts.at(-1) ?? '') ? parts.at(-1) ?? null : null;
+    const city = postalPart?.replace(postalCode ?? '', '').trim()
+      || (parts.length >= 3 ? parts.at(-2) : parts[1])
+      || null;
     return {
       street: parts[0] ?? null,
-      area: parts[1] ?? null,
-      city: parts[2] ?? null,
-      postalCode: address.match(/\b\d{4,6}\b/)?.[0] ?? null
+      area: parts.length > 3 ? parts[1] ?? null : null,
+      city,
+      postalCode,
+      country
     };
   }
 
   private coordinatesFromUrl(value: string): { latitude: number; longitude: number } | null {
-    const match = value.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    const match = value.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/)
+      ?? value.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
     if (!match) return null;
     const latitude = Number(match[1]);
     const longitude = Number(match[2]);
@@ -232,23 +237,45 @@ export class MapsAdapter {
   }
 
   private parseRating(value: string): number | null {
-    const match = value.match(/\b([1-5](?:\.\d)?)\b/);
-    return match ? Number(match[1]) : null;
+    const match = value.match(/\b([1-5](?:[.,]\d)?)\b/);
+    return match ? Number(match[1].replace(',', '.')) : null;
   }
 
   private parseReviewCount(value: string): number | null {
-    const match = value.match(/\(\s*([\d,.]+)\s*\)|\b([\d,.]+)\s*(?:reviews?|ratings?|مراجعة)/i);
-    const raw = match?.[1] ?? match?.[2];
-    return raw ? Number(raw.replace(/,/g, '')) : null;
+    const parenthetical = value.match(/\(\s*([\d\s.,]+)\s*([kmb])?\s*\)/i);
+    const labelled = value.match(/\b([\d\s.,]+)\s*([kmb])?\s*(?:reviews?|ratings?|avis|bewertungen|reseñas?|recensioni|avaliações|مراجعات?|تقييمات?)/i);
+    const raw = (parenthetical?.[1] ?? labelled?.[1])?.trim();
+    if (!raw) return null;
+    const suffix = (parenthetical?.[2] ?? labelled?.[2])?.toLowerCase();
+    if (suffix) {
+      const compact = Number(raw.replace(/\s/g, '').replace(',', '.'));
+      const multiplier = suffix === 'k' ? 1_000 : suffix === 'm' ? 1_000_000 : 1_000_000_000;
+      return Number.isFinite(compact) ? Math.round(compact * multiplier) : null;
+    }
+    const count = Number(raw.replace(/\D/g, ''));
+    return Number.isFinite(count) ? count : null;
   }
 
   private extractPlaceIdentifier(url: string): string | null {
-    const match = url.match(/!1s([^!]+)/);
-    return match?.[1] ?? null;
+    try {
+      const baseUrl = typeof location === 'undefined' ? 'https://www.google.com/maps' : location.href;
+      const parsed = new URL(url, baseUrl);
+      const parameter = ['query_place_id', 'place_id', 'ftid', 'cid']
+        .map((name) => parsed.searchParams.get(name))
+        .find(Boolean);
+      if (parameter) return parameter;
+    } catch { /* data token fallback below */ }
+    const token = url.match(/!(?:1s|16s)([^!]+)/)?.[1];
+    if (!token) return null;
+    try { return decodeURIComponent(token); } catch { return token; }
   }
 
   private looksLikeDomain(value: string): boolean {
-    return /^(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+\.[a-z]{2,}(?:\/[^\s]*)?$/i.test(value.trim());
+    try {
+      if (/\s/.test(value.trim())) return false;
+      const parsed = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+      return parsed.hostname.includes('.') && !/google\./i.test(parsed.hostname);
+    } catch { return false; }
   }
 
   private websiteFromText(lines: string[]): string | null {
@@ -266,6 +293,50 @@ export class MapsAdapter {
     const nodes = [...document.querySelectorAll<HTMLElement>('[aria-label], button, div')];
     const node = nodes.find((item) => labels.some((label) => item.getAttribute('aria-label')?.toLowerCase().includes(label)));
     return node?.getAttribute('aria-label')?.replace(/^.*?:\s*/, '').trim() || null;
+  }
+
+  private dataItemValue(root: Element, itemId: string): string | null {
+    const node = root.querySelector<HTMLElement>(`[data-item-id="${itemId}"], [data-item-id^="${itemId}:"]`);
+    if (!node) return null;
+    const dataId = node.getAttribute('data-item-id') || '';
+    if (itemId === 'phone' && dataId.startsWith('phone:tel:')) return this.decodeValue(dataId.slice('phone:tel:'.length)) || null;
+    const label = node.getAttribute('aria-label') || node.getAttribute('title') || node.textContent || '';
+    return this.valueFromLabel(label) || null;
+  }
+
+  private phoneFromElement(root: Element): string | null {
+    const tel = root.querySelector<HTMLAnchorElement>('a[href^="tel:"]')?.getAttribute('href')?.slice(4);
+    if (tel) return this.decodeValue(tel);
+    return this.dataItemValue(root, 'phone');
+  }
+
+  private decodeValue(value: string): string {
+    try { return decodeURIComponent(value).trim(); } catch { return value.trim(); }
+  }
+
+  private websiteFromElement(root: Element): string | null {
+    const candidates = [...root.querySelectorAll<HTMLAnchorElement>('a[data-item-id="authority"], a[href]')];
+    for (const anchor of candidates) {
+      const label = `${anchor.textContent || ''} ${anchor.getAttribute('aria-label') || ''} ${anchor.getAttribute('data-item-id') || ''}`;
+      if (anchor.getAttribute('data-item-id') !== 'authority' && !WEBSITE_LABEL.test(label)) continue;
+      try {
+        const parsed = new URL(anchor.href, location.href);
+        if (/(^|\.)google\./i.test(parsed.hostname)) {
+          const target = parsed.searchParams.get('q') || parsed.searchParams.get('url');
+          if (!target) continue;
+          const targetUrl = new URL(target);
+          if (/^https?:$/.test(targetUrl.protocol)) return targetUrl.href;
+          continue;
+        }
+        if (/^https?:$/.test(parsed.protocol)) return parsed.href;
+      } catch { /* inspect the next candidate */ }
+    }
+    return null;
+  }
+
+  private categoryFromElement(root: Element): string | null {
+    const node = root.querySelector<HTMLElement>('.DkEaL, button[jsaction*="category"], [data-item-id="category"]');
+    return node?.textContent?.replace(/\s+/g, ' ').trim() || null;
   }
 
   private findScrollableResultsContainer(): HTMLElement | null {
@@ -342,15 +413,25 @@ function resultKeyForMapRecord(record: RawBusinessRecord): string {
     .normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
   if (record.placeIdentifier) return `place:${normalizeText(record.placeIdentifier)}`;
   if (record.googleMapsUrl) {
-    const token = record.googleMapsUrl.match(/!1s([^!]+)/)?.[1];
-    if (token) return `maps:id:${normalizeText(decodeURIComponent(token))}`;
     try {
       const url = new URL(record.googleMapsUrl, 'https://www.google.com');
+      const parameter = ['query_place_id', 'place_id', 'ftid', 'cid']
+        .map((name) => url.searchParams.get(name))
+        .find(Boolean);
+      if (parameter) return `maps:id:${normalizeText(parameter)}`;
+      const token = record.googleMapsUrl.match(/!(?:1s|16s)([^!]+)/)?.[1];
+      if (token) {
+        let decoded = token;
+        try { decoded = decodeURIComponent(token); } catch { /* retain the stable raw token */ }
+        return `maps:id:${normalizeText(decoded)}`;
+      }
       const place = url.pathname.match(/\/maps\/place\/([^/]+)/i)?.[1];
       if (place) {
         const coordinates = record.googleMapsUrl.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
         const geo = coordinates ? `|${Number(coordinates[1]).toFixed(5)},${Number(coordinates[2]).toFixed(5)}` : '';
-        return `maps:name:${normalizeText(decodeURIComponent(place.replace(/\+/g, ' ')))}${geo}`;
+        let decodedPlace = place.replace(/\+/g, ' ');
+        try { decodedPlace = decodeURIComponent(decodedPlace); } catch { /* retain the URL-safe name */ }
+        return `maps:name:${normalizeText(decodedPlace)}${geo}`;
       }
     } catch { /* field-based fallback below */ }
   }

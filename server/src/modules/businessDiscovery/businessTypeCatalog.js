@@ -262,7 +262,7 @@ export function sanitizeCustomType(str) {
  *
  * @param {string} typeOrCustom - a catalog id or a custom business-type string.
  * @param {string} [keyword] - optional refinement (sanitized, bounded).
- * @returns {{ includedType?: string, textQuery?: string }}
+ * @returns {{ includedType?: string, textQuery?: string, typeId: string|null, osmTags: Array<{key: string, value: string}> }}
  * @throws {Error} with `.code === 'INVALID_BUSINESS_TYPE'` when nothing usable
  *   can be derived.
  */

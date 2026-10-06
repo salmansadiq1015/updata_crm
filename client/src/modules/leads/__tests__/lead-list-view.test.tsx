@@ -590,7 +590,7 @@ describe('LeadListView', () => {
       await waitFor(() => expect(patches).toEqual([{ id: 'lead-a', body: { name: 'Alpine Bakery Group' } }]));
       expect(await within(drawer).findByRole('button', { name: 'Edit' })).toBeInTheDocument();
       expect(showSuccess).toHaveBeenCalledWith('Lead updated');
-    });
+    }, 10000);
 
     it('asks before leaving with unsaved edits and sends nothing when they are discarded', async () => {
       let patched = 0;

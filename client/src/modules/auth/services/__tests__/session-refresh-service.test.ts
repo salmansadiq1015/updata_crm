@@ -83,6 +83,7 @@ describe('session-refresh-service', () => {
     expect(postMock).toHaveBeenCalledWith(
       'http://localhost:9097/api/v1/auth/refresh',
       { refreshToken: 'refresh-old' },
+      { timeout: 10000 },
     );
 
     resolveRefresh?.({

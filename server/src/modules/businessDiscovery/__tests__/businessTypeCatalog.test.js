@@ -70,36 +70,71 @@ describe('getType / isValidType', () => {
 
 describe('resolveProviderQuery', () => {
   test('catalog type with structured type → includedType, no textQuery', () => {
-    expect(resolveProviderQuery('restaurant')).toEqual({ includedType: 'restaurant' });
+    expect(resolveProviderQuery('restaurant')).toEqual({
+      includedType: 'restaurant',
+      typeId: 'restaurant',
+      osmTags: [{ key: 'amenity', value: 'restaurant' }],
+    });
   });
 
   test('design mapping: medical-store → pharmacy', () => {
-    expect(resolveProviderQuery('medical-store')).toEqual({ includedType: 'pharmacy' });
+    expect(resolveProviderQuery('medical-store')).toEqual({
+      includedType: 'pharmacy',
+      typeId: 'medical-store',
+      osmTags: [
+        { key: 'amenity', value: 'pharmacy' },
+        { key: 'shop', value: 'chemist' },
+      ],
+    });
   });
 
   test('includedType + keyword → both (so searchText can honor the keyword)', () => {
     expect(resolveProviderQuery('restaurant', 'Italian')).toEqual({
       includedType: 'restaurant',
       textQuery: 'Restaurant Italian',
+      typeId: 'restaurant',
+      osmTags: [{ key: 'amenity', value: 'restaurant' }],
     });
   });
 
   test('catalog type without a structured mapping → textQuery', () => {
-    expect(resolveProviderQuery('marketing-agency')).toEqual({ textQuery: 'marketing agency' });
+    expect(resolveProviderQuery('marketing-agency')).toEqual({
+      textQuery: 'marketing agency',
+      typeId: 'marketing-agency',
+      osmTags: [
+        { key: 'office', value: 'advertising_agency' },
+        { key: 'office', value: 'marketing' },
+      ],
+    });
     expect(resolveProviderQuery('marketing-agency', 'b2b')).toEqual({
       textQuery: 'marketing agency b2b',
+      typeId: 'marketing-agency',
+      osmTags: [
+        { key: 'office', value: 'advertising_agency' },
+        { key: 'office', value: 'marketing' },
+      ],
     });
   });
 
   test('custom / unsupported type → sanitized textQuery', () => {
     expect(resolveProviderQuery('Underwater Basket Weaving Studio')).toEqual({
       textQuery: 'Underwater Basket Weaving Studio',
+      typeId: null,
+      osmTags: [],
     });
-    expect(resolveProviderQuery('yoga studio', 'hot')).toEqual({ textQuery: 'yoga studio hot' });
+    expect(resolveProviderQuery('yoga studio', 'hot')).toEqual({
+      textQuery: 'yoga studio hot',
+      typeId: null,
+      osmTags: [],
+    });
   });
 
   test('keyword alone still drives a text search', () => {
-    expect(resolveProviderQuery('', 'vegan')).toEqual({ textQuery: 'vegan' });
+    expect(resolveProviderQuery('', 'vegan')).toEqual({
+      textQuery: 'vegan',
+      typeId: null,
+      osmTags: [],
+    });
   });
 
   test('nothing usable → throws INVALID_BUSINESS_TYPE', () => {

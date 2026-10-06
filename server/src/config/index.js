@@ -227,6 +227,10 @@ const config = Object.freeze({
     },
     endpoints: {
       overpassUrl: envVars.OVERPASS_API_URL,
+      overpassUrls: (envVars.OVERPASS_API_URLS || '')
+        .split(',')
+        .map((url) => url.trim())
+        .filter(Boolean),
       nominatimUrl: envVars.NOMINATIM_API_URL,
       photonUrl: envVars.PHOTON_API_URL,
     },

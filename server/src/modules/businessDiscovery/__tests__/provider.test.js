@@ -4,6 +4,7 @@ import {
   googlePlacesProvider,
   getPlacesProvider,
 } from '../provider/GooglePlacesProvider.js';
+import { OverpassProvider } from '../provider/OverpassProvider.js';
 import { PlacesProvider } from '../provider/PlacesProvider.js';
 import { FIELD_PROFILES } from '../provider/fieldProfiles.js';
 import { discoveryPlacesApiCallsTotal } from '../../../metrics/index.js';
@@ -407,5 +408,75 @@ describe('GooglePlacesProvider — key secrecy', () => {
       .join(' || ');
 
     expect(allLogArgs).not.toContain(API_KEY);
+  });
+});
+
+describe('OverpassProvider', () => {
+  test('requests body+center output and normalizes node/way coordinates', async () => {
+    const http = okHttp({
+      elements: [
+        { type: 'node', id: 101, lat: 48.8566, lon: 2.3522, tags: { name: 'Paris Cafe', amenity: 'restaurant' } },
+        { type: 'way', id: 202, center: { lat: 48.857, lon: 2.353 }, tags: { name: 'Paris Hotel', tourism: 'hotel' } },
+      ],
+    });
+    const provider = new OverpassProvider({
+      enabled: true,
+      apiUrls: ['https://overpass.test/api/interpreter'],
+      httpClient: http,
+    });
+
+    const response = await provider.searchNearby({
+      center: { lat: 48.8566, lng: 2.3522 },
+      radiusMeters: 1000,
+      osmTags: [{ key: 'amenity', value: 'restaurant' }],
+      businessTypeId: 'restaurant',
+      maxResultCount: 20,
+    });
+
+    const cfg = http.request.mock.calls[0][0];
+    const query = new URLSearchParams(cfg.data).get('data');
+    expect(query).toContain('out body center qt 20');
+    expect(response.places).toHaveLength(2);
+    expect(response.places[0]).toMatchObject({
+      id: 'osm:node/101',
+      name: 'Paris Cafe',
+      location: { lat: 48.8566, lng: 2.3522 },
+    });
+    expect(response.places[1]).toMatchObject({
+      id: 'osm:way/202',
+      name: 'Paris Hotel',
+      location: { lat: 48.857, lng: 2.353 },
+    });
+  });
+
+  test('tries the next Overpass endpoint after a retryable endpoint failure', async () => {
+    const networkError = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
+    const http = {
+      request: jest.fn()
+        .mockRejectedValueOnce(networkError)
+        .mockResolvedValueOnce({
+          data: {
+            elements: [
+              { type: 'node', id: 1, lat: 48.8566, lon: 2.3522, tags: { name: 'Fallback Restaurant', amenity: 'restaurant' } },
+            ],
+          },
+        }),
+    };
+    const provider = new OverpassProvider({
+      enabled: true,
+      apiUrls: ['https://primary-overpass.test/api/interpreter', 'https://backup-overpass.test/api/interpreter'],
+      httpClient: http,
+    });
+
+    const response = await provider.searchNearby({
+      center: { lat: 48.8566, lng: 2.3522 },
+      radiusMeters: 1000,
+      osmTags: [{ key: 'amenity', value: 'restaurant' }],
+    });
+
+    expect(http.request).toHaveBeenCalledTimes(2);
+    expect(http.request.mock.calls[0][0].url).toBe('https://primary-overpass.test/api/interpreter');
+    expect(http.request.mock.calls[1][0].url).toBe('https://backup-overpass.test/api/interpreter');
+    expect(response.places).toHaveLength(1);
   });
 });

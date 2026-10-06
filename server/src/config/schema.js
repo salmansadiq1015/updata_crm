@@ -140,6 +140,7 @@ const configSchema = Joi.object({
   MAPBOX_ENABLED: Joi.boolean().default(false),
   GOOGLE_FALLBACK_ENABLED: Joi.boolean().default(false),
   OVERPASS_API_URL: Joi.string().uri().allow('').default('https://overpass-api.de/api/interpreter'),
+  OVERPASS_API_URLS: Joi.string().allow('').default(''),
   NOMINATIM_API_URL: Joi.string().uri().allow('').default('https://nominatim.openstreetmap.org'),
   PHOTON_API_URL: Joi.string().uri().allow('').default(''),
   MAPBOX_ACCESS_TOKEN: Joi.string().trim().allow('').default(''),

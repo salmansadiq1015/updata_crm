@@ -7,6 +7,22 @@ import { ExternalServiceError, ERROR_CODES } from '../../../shared/errors/errors
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_LIMIT = 20;
 const DEFAULT_OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+const FALLBACK_OVERPASS_URLS = Object.freeze([
+  'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+]);
+
+function uniqueUrls(urls = []) {
+  const seen = new Set();
+  return urls
+    .map((url) => String(url || '').trim())
+    .filter((url) => {
+      if (!url || seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    });
+}
 
 function clampLimit(value) {
   const n = Number.isFinite(value) ? Math.trunc(value) : DEFAULT_LIMIT;
@@ -116,12 +132,20 @@ function normalizeOsmElement(element, { typeId, textQuery } = {}) {
 }
 
 export class OverpassProvider extends PlacesProvider {
-  constructor({ apiUrl, httpClient, timeoutMs, userAgent, enabled } = {}) {
+  constructor({ apiUrl, apiUrls, httpClient, timeoutMs, userAgent, enabled } = {}) {
     super();
     this.name = DISCOVERY_PROVIDER_NAME.OPENSTREETMAP;
-    this.apiUrl = apiUrl !== undefined
-      ? apiUrl
-      : (config.discovery?.endpoints?.overpassUrl || DEFAULT_OVERPASS_URL);
+    this.apiUrls = uniqueUrls(
+      apiUrls
+      ?? [
+        apiUrl !== undefined
+          ? apiUrl
+          : (config.discovery?.endpoints?.overpassUrl || DEFAULT_OVERPASS_URL),
+        ...(config.discovery?.endpoints?.overpassUrls || []),
+        ...FALLBACK_OVERPASS_URLS,
+      ],
+    );
+    this.apiUrl = this.apiUrls[0] || '';
     this.enabled = enabled !== undefined
       ? enabled
       : Boolean(config.discovery?.providers?.openStreetMapEnabled && config.discovery?.providers?.overpassEnabled);
@@ -130,7 +154,7 @@ export class OverpassProvider extends PlacesProvider {
   }
 
   isConfigured() {
-    return Boolean(this.enabled && this.apiUrl);
+    return Boolean(this.enabled && this.apiUrls.length > 0);
   }
 
   async searchNearby({ center, radiusMeters, osmTags, businessTypeId, keyword, maxResultCount } = {}) {
@@ -183,7 +207,7 @@ export class OverpassProvider extends PlacesProvider {
 
     if (!selectors.length) return { places: [], raw: { elements: [] } };
 
-    const query = `[out:json][timeout:${Math.ceil((config.discovery?.requestTimeoutMs || DEFAULT_TIMEOUT_MS) / 1000)}];(${selectors.join('')});out tags center qt ${limit};`;
+    const query = `[out:json][timeout:${Math.ceil((config.discovery?.requestTimeoutMs || DEFAULT_TIMEOUT_MS) / 1000)}];(${selectors.join('')});out body center qt ${limit};`;
     const raw = await this._execute(query);
     const elements = Array.isArray(raw?.elements) ? raw.elements : [];
     const places = elements
@@ -193,20 +217,26 @@ export class OverpassProvider extends PlacesProvider {
   }
 
   async _execute(query) {
-    try {
-      const response = await this.http.request({
-        method: 'POST',
-        url: this.apiUrl,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': this.userAgent,
-        },
-        data: new URLSearchParams({ data: query }).toString(),
-      });
-      return response?.data;
-    } catch (err) {
-      throw this._mapError(err);
+    let lastError = null;
+    for (const url of this.apiUrls) {
+      try {
+        const response = await this.http.request({
+          method: 'POST',
+          url,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': this.userAgent,
+          },
+          data: new URLSearchParams({ data: query }).toString(),
+        });
+        return response?.data;
+      } catch (err) {
+        const mapped = this._mapError(err, url);
+        lastError = mapped;
+        if (!mapped.retryable) break;
+      }
     }
+    throw lastError || this._mapError(new Error('Overpass request failed'));
   }
 
   _assertConfigured() {
@@ -220,7 +250,7 @@ export class OverpassProvider extends PlacesProvider {
     throw error;
   }
 
-  _mapError(err) {
+  _mapError(err, endpoint = null) {
     const status = err?.response?.status ?? null;
     const isQuota = status === 429 || status === 509;
     const isServer = typeof status === 'number' && status >= 500;
@@ -231,6 +261,7 @@ export class OverpassProvider extends PlacesProvider {
     );
     error.retryable = isQuota || isServer || !err?.response;
     error._httpStatus = status;
+    error.endpoint = endpoint;
     return error;
   }
 }

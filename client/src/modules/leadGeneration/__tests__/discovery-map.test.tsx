@@ -87,7 +87,9 @@ describe('DiscoveryMap', () => {
       // A missing Google key is no longer an "unavailable" state: the map still
       // works via OpenStreetMap, with a dismissible note explaining the fallback.
       expect(screen.getByTestId('discovery-map-osm-fallback')).toBeInTheDocument();
+      expect(screen.getByTestId('discovery-map-osm-fallback')).toHaveClass('isolate', 'z-0');
       expect(screen.getByTestId('discovery-map-osm-note')).toBeInTheDocument();
+      expect(screen.getByTestId('discovery-map-osm-note')).toHaveClass('z-20');
       expect(screen.getByText(/OpenStreetMap/i)).toBeInTheDocument();
       expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
     });

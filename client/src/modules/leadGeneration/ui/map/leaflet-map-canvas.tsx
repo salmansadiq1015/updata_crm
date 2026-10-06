@@ -516,9 +516,10 @@ function LeafletMapTypeControl({
 
   return (
     <div
+      data-testid="leaflet-map-type-control"
       role="group"
       aria-label={t('leadgen.map.mapType', 'Map type')}
-      className="pointer-events-auto absolute top-3 end-3 z-[1000] flex gap-0.5 rounded-lg border border-border bg-card/95 p-0.5 shadow-theme-md backdrop-blur"
+      className="pointer-events-auto absolute top-3 end-3 z-20 flex gap-0.5 rounded-lg border border-border bg-card/95 p-0.5 shadow-theme-md backdrop-blur"
     >
       <button
         type="button"
@@ -590,7 +591,7 @@ function LeafletMapInner({
       dir={isRTL ? 'rtl' : 'ltr'}
       data-testid="leaflet-map-canvas"
       className={cn(
-        'relative h-full min-h-[320px] w-full overflow-hidden rounded-xl border border-border bg-muted',
+        'relative isolate z-0 h-full min-h-[320px] w-full overflow-hidden rounded-xl border border-border bg-muted',
         className,
       )}
     >

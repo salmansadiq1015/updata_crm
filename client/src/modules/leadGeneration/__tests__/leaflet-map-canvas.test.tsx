@@ -139,6 +139,8 @@ describe('LeafletMapCanvas (mocked Leaflet)', () => {
     ).not.toThrow();
 
     expect(screen.getByTestId('leaflet-map-canvas')).toBeInTheDocument();
+    expect(screen.getByTestId('leaflet-map-canvas')).toHaveClass('isolate', 'z-0');
+    expect(screen.getByTestId('leaflet-map-type-control')).toHaveClass('z-20');
     expect(screen.getByTestId('leaflet-map-container')).toBeInTheDocument();
     expect(screen.getByTestId('leaflet-tile-layer')).toHaveAttribute(
       'data-url',

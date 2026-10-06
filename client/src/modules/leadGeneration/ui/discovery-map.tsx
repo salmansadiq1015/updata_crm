@@ -72,14 +72,14 @@ function LeafletFallbackMap(props: DiscoveryMapProps) {
   return (
     <div
       data-testid="discovery-map-osm-fallback"
-      className={cn('relative h-full min-h-[320px] w-full', className)}
+      className={cn('relative isolate z-0 h-full min-h-[320px] w-full', className)}
     >
       <LeafletMapCanvas {...rest} className="h-full w-full" />
 
       {!dismissed ? (
         <div
           data-testid="discovery-map-osm-note"
-          className="pointer-events-auto absolute bottom-3 left-1/2 z-[1100] flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-theme-md backdrop-blur"
+          className="pointer-events-auto absolute bottom-3 left-1/2 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-theme-md backdrop-blur"
         >
           <Info className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
           <span>

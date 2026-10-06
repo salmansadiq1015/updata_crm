@@ -13,7 +13,10 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, Postman, server-to-server)
     if (!origin) return callback(null, true);
 
-    if (config.isDevelopment) {
+    // Development convenience is restricted to loopback web origins. Allowing
+    // every origin here also trusts every unpacked Chrome extension whenever a
+    // server is accidentally deployed with NODE_ENV=development.
+    if (config.isDevelopment && isLoopbackOrigin(origin)) {
       return callback(null, true);
     }
 
@@ -29,6 +32,16 @@ const corsOptions = {
   exposedHeaders: ['X-Request-Id', 'X-Response-Time', 'Retry-After'],
   maxAge: 86400, // Preflight cache: 24 hours
 };
+
+function isLoopbackOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    return ['http:', 'https:'].includes(url.protocol)
+      && ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
 
 export const corsMiddleware = cors(corsOptions);
 export default corsMiddleware;

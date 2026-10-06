@@ -1,4 +1,4 @@
-# Lead Finder v0.2.1 — production implementation report
+# Lead Finder v0.2.2 — production implementation report
 
 ## Root cause
 
@@ -12,6 +12,7 @@ The extension did not contain a literal 25-lead total cap. The failure was archi
 6. CRM requests were batched, but interrupted import batches had no persisted processed-ID cursor.
 7. A refactor briefly produced an ESM import in the classic Manifest V3 content-script bundle. Real Chrome testing caught this; the content script is now self-contained.
 8. The Maps adapter queried every visible place link in the document, mixing canvas markers with left-panel cards. At the list end, `scrollIntoView` could also jump backward, so the job kept scrolling while the unique count stayed fixed.
+9. Recovery could dynamically inject the classic Maps content script more than once. Its top-level lexical declarations then collided, while successful duplicate executions could register extra message listeners, history wrappers, and DOM observers.
 
 ## Implemented fix
 
@@ -28,6 +29,7 @@ The extension did not contain a literal 25-lead total cap. The failure was archi
 - CRM imports persist processed lead IDs and resume only pending IDs after service-worker recovery. Missing local records and partial failures are isolated.
 - CSV/XLSX read the full local dataset, independent of the virtualized table.
 - The CRM bulk endpoint derives ownership from the authenticated request user, rejects client-controlled ownership, deduplicates stable place IDs, and returns per-row results.
+- The Maps content runtime now has a page-world singleton guard, the service worker coalesces concurrent recovery injections per tab, and the production bundle is wrapped in an IIFE. Concurrent reinjection is safe: no top-level redeclaration, duplicate listener, duplicate observer, or repeated history wrapping.
 
 ## Verification
 
@@ -57,7 +59,7 @@ Production CORS rejects arbitrary extension IDs: FAIL (hardened source change re
 5,000-record checkpoint test: PASS (200 batches)
 Extension security checks: PASS
 Deployed server CORS hardening: PENDING DEPLOYMENT
-Automated Chrome E2E smoke: PASS (34 checks; Hotel near Paris advanced from 6 visible cards to 95 unique list businesses across 40 bounded scroll steps with zero terminal stagnation)
+Automated Chrome E2E smoke: PASS (35/35 checks; deliberate concurrent content-script reinjection remained responsive; Hotel near Paris advanced from 6 visible cards to 83 unique list businesses across 40 bounded scroll steps with zero terminal stagnation)
 Extension tests: PASS (20/20)
 Focused CRM server tests: PASS (31/31 across the final focused runs)
 Production build: PASS
@@ -66,9 +68,9 @@ ZIP integrity: PASS
 
 ## Build artifact
 
-- Version: `0.2.1`
+- Version: `0.2.2`
 - File: `lead-finder-extension.zip`
-- SHA-256: `cd0017c9951bb7faf2c59f8a19b05a45ae3e32aadb5656e2fc75011843bc6fa8`
+- SHA-256: `4648e7eb74714bb5cf304e59a5c98f2f78de6335b434e39bbf8879216b6d0255`
 
 ## Remaining production acceptance
 

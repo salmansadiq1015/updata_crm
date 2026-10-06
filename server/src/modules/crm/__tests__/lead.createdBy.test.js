@@ -326,6 +326,44 @@ describe('createdBy is stamped on every lead-creation path', () => {
     }
   });
 
+  it('extension import: derives ownership, deduplicates place ids, and keeps partial failures isolated', async () => {
+    const importer = await makeUser({ firstName: 'Katherine', lastName: 'Johnson' });
+    const attacker = await makeUser({ firstName: 'Wrong', lastName: 'Owner' });
+    const base = {
+      businessName: 'Checkpoint Hotel',
+      category: 'Hotel',
+      categories: ['Hotel'],
+      placeIdentifier: 'EXTENSION-PLACE-1',
+      phone: '+41 44 555 01 01',
+      website: 'https://checkpoint.example',
+      emails: ['hello@checkpoint.example'],
+      address: 'Main Street 1, Zürich',
+      street: 'Main Street 1',
+      city: 'Zürich',
+      state: 'ZH',
+      postalCode: '8001',
+      country: 'CH',
+      latitude: 47.3769,
+      longitude: 8.5417,
+      rating: 4.7,
+      reviewCount: 321,
+      createdBy: attacker._id,
+    };
+    const result = await leadImportExportService.importExtensionLeads([
+      { ...base, clientId: 'local-1' },
+      { ...base, clientId: 'local-2' },
+      { clientId: 'local-invalid', businessName: '' },
+    ], importer._id, {});
+
+    expect(result).toMatchObject({ total: 3, created: 1, existing: 1, failed: 1 });
+    expect(result.results.map((item) => item.status)).toEqual(['created', 'existing', 'failed']);
+    const stored = await Lead.findOne({ 'sourceMetadata.googlePlaceId': 'EXTENSION-PLACE-1' }).lean();
+    expect(stored).not.toBeNull();
+    expect(String(stored.createdBy)).toBe(String(importer._id));
+    expect(String(stored.createdBy)).not.toBe(String(attacker._id));
+    expect(stored.providerMeta).toMatchObject({ rating: 4.7, reviewCount: 321 });
+  });
+
   it('discovery import (inline): the lead belongs to the importing user', async () => {
     const importer = await makeUser({ firstName: 'Alan', lastName: 'Turing' });
     const result = await DiscoveryResult.create(

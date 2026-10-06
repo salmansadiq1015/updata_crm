@@ -150,6 +150,26 @@ try {
   assert(mapsResult?.context?.isMaps === true, `Maps content script and service worker messaging are connected (${JSON.stringify(mapsResult)})`);
   assert(typeof mapsResult.context.visibleResultCount === 'number', 'Maps result-state counters are returned');
 
+  const reinjection = await evaluate(extensionSession, `(async () => {
+    const tab = (await chrome.tabs.query({})).find((item) => { try { const url = new URL(item.url || ''); return url.hostname.includes('google.') && url.pathname.startsWith('/maps'); } catch { return false; } });
+    if (!tab?.id) return { ok: false, error: 'Maps tab not found' };
+    try {
+      await Promise.all([
+        chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/maps.js'] }),
+        chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/maps.js'] })
+      ]);
+      const marker = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => globalThis.__leadFinderMapsContentV3__ === true
+      });
+      const context = await chrome.tabs.sendMessage(tab.id, { type: 'GET_MAPS_CONTEXT' });
+      return { ok: Boolean(context?.ok), marker: marker[0]?.result === true, context };
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
+  })()`);
+  assert(reinjection?.ok === true && reinjection.marker === true, `Concurrent content-script reinjection is idempotent and remains responsive (${JSON.stringify(reinjection)})`);
+
   const extracted = await evaluate(extensionSession, `(async () => {
     const tab = (await chrome.tabs.query({})).find((item) => { try { const url = new URL(item.url || ''); return url.hostname.includes('google.') && url.pathname.startsWith('/maps'); } catch { return false; } });
     if (!tab?.id) return { ok: false, records: [], error: 'No active Maps tab' };

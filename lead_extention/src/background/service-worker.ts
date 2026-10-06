@@ -49,6 +49,7 @@ type Job = {
 
 let activeJob: Job | null = null;
 let activeCrmImport: CrmImportProgress | null = null;
+const contentScriptInjectionByTab = new Map<number, Promise<void>>();
 
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -587,7 +588,25 @@ function progressFor(job: Job, message?: string): DiscoveryProgress { const lead
 function progressForStored(search?: SearchRecord): DiscoveryProgress { return { searchId: search?.id ?? '', status: search?.status ?? 'idle', query: search?.query ?? '', discovered: search?.discoveredCount ?? 0, duplicates: search?.duplicateCount ?? 0, unique: search?.uniqueCount ?? 0, withPhone: 0, withWebsite: 0, withEmail: 0, iteration: search?.currentPage ?? 0, maxIterations: search?.config?.safetyLimit ?? MAX_SAFE_ITERATIONS, phase: search?.currentPhase, processed: search?.processedCount ?? search?.processedResultKeys?.length ?? 0, currentQuery: search?.currentQuery, currentBatch: search?.currentBatchSize ?? 0, configuredMaximum: search?.config?.maxResults, error: search?.error }; }
 async function waitIfPaused(job: Job): Promise<void> { if (!job.paused) return; await new Promise<void>((resolve) => job.resumeResolvers.push(resolve)); }
 async function sendToMaps(tabId: number, message: { type: string; [key: string]: unknown }): Promise<unknown> { try { return await chrome.tabs.sendMessage(tabId, message); } catch (error) { await ensureMapsContentScript(tabId); try { return await chrome.tabs.sendMessage(tabId, message); } catch { throw error; } } }
-async function ensureMapsContentScript(tabId: number): Promise<void> { try { await chrome.tabs.sendMessage(tabId, { type: 'GET_MAPS_CONTEXT' }); } catch { await chrome.scripting.executeScript({ target: { tabId }, files: ['content/maps.js'] }); await delay(250); } }
+async function ensureMapsContentScript(tabId: number): Promise<void> {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'GET_MAPS_CONTEXT' });
+    return;
+  } catch { /* the Maps runtime is absent or the document just navigated */ }
+
+  const existing = contentScriptInjectionByTab.get(tabId);
+  if (existing) return existing;
+  const injection = (async () => {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content/maps.js'] });
+    await delay(250);
+  })();
+  contentScriptInjectionByTab.set(tabId, injection);
+  try {
+    await injection;
+  } finally {
+    if (contentScriptInjectionByTab.get(tabId) === injection) contentScriptInjectionByTab.delete(tabId);
+  }
+}
 async function getActiveMapsContext(): Promise<MapsContext | null> { const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true }); const tab = tabs[0]; if (!tab?.id || !isMapsUrl(tab.url)) return null; await ensureMapsContentScript(tab.id); const response = await sendToMaps(tab.id, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext }; return response.context ?? null; }
 async function navigateToQuery(tabId: number, query: string): Promise<void> { await chrome.tabs.update(tabId, { url: `https://www.google.com/maps/search/${encodeURIComponent(query)}` }); }
 function buildQueries(config: DiscoveryConfig, context?: { query?: string | null }): string[] { const business = config.businessType.trim(); const location = config.location.trim() || context?.query?.trim() || ''; const first = location ? `${business} near ${location}` : business; return config.queryExpansion ? [...new Set([first, `${business} in ${location}`, `${business} ${location}`].filter(Boolean))] : [first]; }

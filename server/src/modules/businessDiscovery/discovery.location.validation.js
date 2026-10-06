@@ -20,12 +20,14 @@ const centerSchema = Joi.object({
 export const geocode = {
   body: Joi.object({
     query: Joi.string().trim().min(1).max(255).required(),
+    countryCode: Joi.string().trim().uppercase().length(2).allow('', null),
   }),
 };
 
 export const autocomplete = {
   body: Joi.object({
     input: Joi.string().trim().min(1).max(255).required(),
+    countryCode: Joi.string().trim().uppercase().length(2).allow('', null),
     sessionToken: Joi.string().trim().max(255).allow('', null),
     center: centerSchema.optional(),
   }),

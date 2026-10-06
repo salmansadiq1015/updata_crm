@@ -57,6 +57,11 @@ import { SavedSearches } from './saved-searches';
 
 const DEFAULT_CENTER = { lat: 47.3769, lng: 8.5417 };
 
+function toIsoCountryCode(value: string | null | undefined): string | null {
+  const code = String(value || '').trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : null;
+}
+
 const STEP_LABELS: Array<{ key: string; fallback: string }> = [
   { key: 'leadgen.wizard.step.location', fallback: 'Location' },
   { key: 'leadgen.wizard.step.businessType', fallback: 'Business type' },
@@ -66,13 +71,14 @@ const STEP_LABELS: Array<{ key: string; fallback: string }> = [
 
 function buildCreateInput(session: DiscoverySession): CreateDiscoveryInput | null {
   if (!session.area.type) return null;
+  const countryCode = toIsoCountryCode(session.location.countryCode);
   return {
     location: {
       ...(session.location.name ? { name: session.location.name } : {}),
       ...(session.location.mode ? { mode: session.location.mode } : {}),
       ...(session.location.center ? { center: session.location.center } : {}),
       ...(session.location.placeId ? { placeId: session.location.placeId } : {}),
-      ...(session.location.countryCode ? { countryCode: session.location.countryCode } : {}),
+      ...(countryCode ? { countryCode } : {}),
       ...(session.location.country ? { country: session.location.country } : {}),
       ...(session.location.region ? { region: session.location.region } : {}),
       ...(session.location.city ? { city: session.location.city } : {}),
@@ -237,13 +243,14 @@ export function LeadGenWorkspace() {
   // ── Actions ──────────────────────────────────────────────────────────────────
   const startAnalysis = () => {
     if (!areaDraft.type || !canProceed) return;
+    const countryCode = toIsoCountryCode(locationDraft.countryCode);
     const input: CreateDiscoveryInput = {
       location: {
         ...(locationDraft.name ? { name: locationDraft.name } : {}),
         mode: locationDraft.mode,
         ...(locationDraft.center ? { center: locationDraft.center } : {}),
         ...(locationDraft.placeId ? { placeId: locationDraft.placeId } : {}),
-        ...(locationDraft.countryCode ? { countryCode: locationDraft.countryCode } : {}),
+        ...(countryCode ? { countryCode } : {}),
         ...(locationDraft.country ? { country: locationDraft.country } : {}),
         ...(locationDraft.region ? { region: locationDraft.region } : {}),
         ...(locationDraft.city ? { city: locationDraft.city } : {}),

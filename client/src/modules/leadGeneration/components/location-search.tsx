@@ -32,6 +32,11 @@ const RECENT_KEY = 'updata-leadgen-recent-searches';
 const MAX_RECENT = 5;
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
+function toIsoCountryCode(value: string | null | undefined): string | null {
+  const code = String(value || '').trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : null;
+}
+
 function readRecent(): string[] {
   try {
     const raw = window.localStorage.getItem(RECENT_KEY);
@@ -161,7 +166,7 @@ export function LocationSearch() {
         center,
         formattedAddress: meta.formattedAddress ?? null,
         placeId: meta.placeId ?? null,
-        ...(meta.countryCode ? { countryCode: meta.countryCode } : {}),
+        countryCode: toIsoCountryCode(meta.countryCode),
         country: meta.country ?? null,
         region: meta.region ?? null,
         city: meta.city ?? null,

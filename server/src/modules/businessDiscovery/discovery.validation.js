@@ -27,6 +27,12 @@ const MAX_RINGS = 20; // outer ring + holes
 const latitude = Joi.number().min(-90).max(90);
 const longitude = Joi.number().min(-180).max(180);
 
+const isoCountryCode = Joi.string().trim().custom((value) => {
+  const code = String(value || '').trim().toUpperCase();
+  if (!code) return null;
+  return /^[A-Z]{2}$/.test(code) ? code : undefined;
+}, 'ISO-2 country code sanitizer').allow('', null);
+
 const centerSchema = Joi.object({
   lat: latitude.required(),
   lng: longitude.required(),
@@ -58,7 +64,7 @@ const locationSchema = Joi.object({
   mode: Joi.string().valid(...LOCATION_MODES).required(),
   center: centerSchema.required(),
   placeId: Joi.string().trim().max(255).allow('', null),
-  countryCode: Joi.string().trim().uppercase().length(2).allow('', null),
+  countryCode: isoCountryCode,
   country: Joi.string().trim().max(100).allow('', null),
   region: Joi.string().trim().max(120).allow('', null),
   city: Joi.string().trim().max(120).allow('', null),

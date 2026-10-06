@@ -5,6 +5,7 @@ import {
   getPlacesProvider,
 } from '../provider/GooglePlacesProvider.js';
 import { OverpassProvider } from '../provider/OverpassProvider.js';
+import { NominatimProvider } from '../provider/NominatimProvider.js';
 import { PlacesProvider } from '../provider/PlacesProvider.js';
 import { FIELD_PROFILES } from '../provider/fieldProfiles.js';
 import { discoveryPlacesApiCallsTotal } from '../../../metrics/index.js';
@@ -478,5 +479,38 @@ describe('OverpassProvider', () => {
     expect(http.request.mock.calls[0][0].url).toBe('https://primary-overpass.test/api/interpreter');
     expect(http.request.mock.calls[1][0].url).toBe('https://backup-overpass.test/api/interpreter');
     expect(response.places).toHaveLength(1);
+  });
+});
+
+describe('NominatimProvider', () => {
+  test('maps Nominatim country_code to an ISO-2 country component', async () => {
+    const http = okHttp([
+      {
+        lat: '48.8566',
+        lon: '2.3522',
+        display_name: 'Paris, Île-de-France, France métropolitaine, France',
+        place_id: 123,
+        address: {
+          city: 'Paris',
+          state: 'Île-de-France',
+          country: 'France',
+          country_code: 'fr',
+        },
+      },
+    ]);
+    const provider = new NominatimProvider({
+      enabled: true,
+      apiUrl: 'https://nominatim.test',
+      httpClient: http,
+    });
+
+    const response = await provider.geocode('Paris');
+    const country = response.result.address_components.find((component) => component.types.includes('country'));
+
+    expect(country).toMatchObject({
+      long_name: 'France',
+      short_name: 'FR',
+      types: ['country'],
+    });
   });
 });

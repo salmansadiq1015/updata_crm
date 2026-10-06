@@ -22,13 +22,25 @@ function bboxToViewport(bbox) {
 }
 
 function addressComponents(address = {}) {
-  return Object.entries(address)
+  const entries = Object.entries(address)
+    .filter(([key]) => key !== 'country' && key !== 'country_code')
     .filter(([, value]) => value !== undefined && value !== null && value !== '')
     .map(([key, value]) => ({
       long_name: String(value),
       short_name: String(value),
       types: [key],
     }));
+  const countryCode = typeof address.country_code === 'string'
+    ? address.country_code.trim().toUpperCase()
+    : '';
+  if (address.country && /^[A-Z]{2}$/.test(countryCode)) {
+    entries.push({
+      long_name: String(address.country),
+      short_name: countryCode,
+      types: ['country'],
+    });
+  }
+  return entries;
 }
 
 function toGoogleLikeResult(row) {

@@ -8,8 +8,9 @@ import ExcelJS from 'exceljs';
 
 const mockBulkCreate = jest.fn();
 const mockFindDuplicates = jest.fn();
+const mockCreate = jest.fn();
 jest.unstable_mockModule('../lead.service.js', () => ({
-  default: { bulkCreate: mockBulkCreate, findDuplicates: mockFindDuplicates },
+  default: { bulkCreate: mockBulkCreate, findDuplicates: mockFindDuplicates, create: mockCreate },
 }));
 
 const mockList = jest.fn();
@@ -224,6 +225,45 @@ describe('leadImportExportService.importLeads (CSV)', () => {
 
     expect(result.summary.created).toBe(1);
     expect(result.warnings.join(' ')).toMatch(/update mode is not supported/i);
+  });
+});
+
+describe('leadImportExportService.importExtensionLeads', () => {
+  it('imports non-Swiss Maps addresses without inventing an invalid Swiss canton', async () => {
+    mockFindDuplicates.mockResolvedValue([]);
+    mockCreate.mockImplementation(async (doc) => ({
+      ...doc, _id: '507f1f77bcf86cd799439011', leadNumber: 'L-00042',
+    }));
+
+    const result = await service.importExtensionLeads([{
+      clientId: 'local-paris-1',
+      businessName: 'Paris Example Hotel',
+      category: 'Hotel',
+      country: 'France',
+      state: 'Île-de-France',
+      city: 'Paris',
+      address: '1 Rue Exemple, Paris, France',
+      phone: '+33 1 23 45 67 89',
+      website: 'https://example.fr',
+      emails: ['bonjour@example.fr'],
+    }], 'user-1', { requestId: 'request-paris' });
+
+    expect(result).toMatchObject({ total: 1, created: 1, existing: 0, failed: 0 });
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      address: expect.objectContaining({ city: 'Paris', country: 'FR', canton: null }),
+    }), 'user-1', expect.objectContaining({ requestId: 'request-paris' }));
+  });
+
+  it('returns row outcomes even when metrics collection throws', async () => {
+    mockFindDuplicates.mockResolvedValue([]);
+    mockCreate.mockResolvedValue({ _id: '507f1f77bcf86cd799439012', leadNumber: 'L-00043' });
+    mockMetricInc.mockImplementationOnce(() => { throw new Error('metrics unavailable'); });
+
+    await expect(service.importExtensionLeads([{
+      clientId: 'local-1', businessName: 'Resilient Lead',
+    }], 'user-1', { requestId: 'request-metrics' })).resolves.toMatchObject({
+      total: 1, created: 1, existing: 0, failed: 0,
+    });
   });
 });
 

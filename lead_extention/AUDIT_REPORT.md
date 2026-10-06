@@ -1,4 +1,4 @@
-# Lead Finder v0.2.2 — production implementation report
+# Lead Finder v0.2.3 — production implementation report
 
 ## Root cause
 
@@ -30,6 +30,7 @@ The extension did not contain a literal 25-lead total cap. The failure was archi
 - CSV/XLSX read the full local dataset, independent of the virtualized table.
 - The CRM bulk endpoint derives ownership from the authenticated request user, rejects client-controlled ownership, deduplicates stable place IDs, and returns per-row results.
 - The Maps content runtime now has a page-world singleton guard, the service worker coalesces concurrent recovery injections per tab, and the production bundle is wrapped in an IIFE. Concurrent reinjection is safe: no top-level redeclaration, duplicate listener, duplicate observer, or repeated history wrapping.
+- CRM bulk import no longer routes structured JSON through the multipart upload limiter. Non-Swiss locations are normalized without inventing invalid Swiss canton codes, telemetry cannot turn completed row results into a 500, and the extension falls back to the authenticated CSV import route when the structured endpoint returns a rollout-time 5xx.
 
 ## Verification
 
@@ -59,18 +60,18 @@ Production CORS rejects arbitrary extension IDs: FAIL (hardened source change re
 5,000-record checkpoint test: PASS (200 batches)
 Extension security checks: PASS
 Deployed server CORS hardening: PENDING DEPLOYMENT
-Automated Chrome E2E smoke: PASS (35/35 checks; deliberate concurrent content-script reinjection remained responsive; Hotel near Paris advanced from 6 visible cards to 83 unique list businesses across 40 bounded scroll steps with zero terminal stagnation)
+Automated Chrome E2E smoke: PASS (35/35 checks; deliberate concurrent content-script reinjection remained responsive; Hotel near Paris advanced from 6 visible cards to 89 unique list businesses across 40 bounded scroll steps with zero terminal stagnation)
 Extension tests: PASS (20/20)
-Focused CRM server tests: PASS (31/31 across the final focused runs)
+Focused CRM server tests: PASS (33/33 across the final focused runs)
 Production build: PASS
 ZIP integrity: PASS
 ```
 
 ## Build artifact
 
-- Version: `0.2.2`
+- Version: `0.2.3`
 - File: `lead-finder-extension.zip`
-- SHA-256: `4648e7eb74714bb5cf304e59a5c98f2f78de6335b434e39bbf8879216b6d0255`
+- SHA-256: `a6a9ece70d67cccf919357095e73df8e0b7b607698d2d3c289cb4cf4c9612e1b`
 
 ## Remaining production acceptance
 

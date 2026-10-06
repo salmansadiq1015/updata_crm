@@ -12,6 +12,7 @@ import logger from '../../shared/logger/index.js';
 import {
   LEAD_TYPE, LEAD_STATUS, LEAD_SOURCE,
 } from './lead.model.js';
+import { SWISS_CANTONS } from './crm.constants.js';
 
 /**
  * Lead import / export service (§33-34 import-mapping, §83 bulkWrite of
@@ -156,6 +157,28 @@ function cleanString(value) {
   if (value === null || value === undefined) return undefined;
   const str = String(value).trim();
   return str === '' ? undefined : str;
+}
+
+const COUNTRY_NAME_TO_CODE = new Map([
+  ['switzerland', 'CH'], ['schweiz', 'CH'], ['suisse', 'CH'], ['svizzera', 'CH'],
+  ['france', 'FR'], ['germany', 'DE'], ['deutschland', 'DE'], ['austria', 'AT'],
+  ['österreich', 'AT'], ['italy', 'IT'], ['italia', 'IT'], ['pakistan', 'PK'],
+  ['india', 'IN'], ['united kingdom', 'GB'], ['uk', 'GB'], ['united states', 'US'],
+  ['united states of america', 'US'], ['usa', 'US'], ['canada', 'CA'],
+  ['australia', 'AU'], ['united arab emirates', 'AE'], ['uae', 'AE'],
+]);
+
+function normalizeCountryCode(value) {
+  const country = cleanString(value);
+  if (!country) return null;
+  if (/^[a-z]{2}$/i.test(country)) return country.toUpperCase();
+  return COUNTRY_NAME_TO_CODE.get(country.toLocaleLowerCase('en')) || null;
+}
+
+function normalizeSwissCanton(value, countryCode) {
+  if (countryCode && countryCode !== 'CH') return null;
+  const canton = cleanString(value)?.toUpperCase();
+  return canton && SWISS_CANTONS.includes(canton) ? canton : null;
 }
 
 function isoOrEmpty(date) {
@@ -559,14 +582,14 @@ class LeadImportExportService {
         const phoneValue = cleanString(record.phone);
         const websiteValue = cleanString(record.website);
         const postalCode = cleanString(record.postalCode);
-        const country = cleanString(record.country);
+        const country = normalizeCountryCode(record.country);
         const address = {
           street: cleanString(record.street) || cleanString(record.address),
           addressSupplement: null,
           postalCode: postalCode || null,
           city: cleanString(record.city) || null,
-          canton: cleanString(record.state)?.slice(0, 2).toUpperCase() || null,
-          country: country && country.length === 2 ? country.toUpperCase() : null,
+          canton: normalizeSwissCanton(record.state, country),
+          country,
         };
         const matches = await leadService.findDuplicates({
           name,
@@ -615,12 +638,18 @@ class LeadImportExportService {
         results.push({ clientId, status: 'failed', message: error instanceof Error ? error.message : 'Lead could not be imported' });
       }
     }
-    this._recordMetrics({ ...summary, skipped: summary.existing, duplicates: summary.existing });
-    auditService.logEvent({
+    // Observability is never allowed to change a completed import into a 500.
+    // The caller needs the per-row result even if metrics/audit infrastructure
+    // is temporarily unavailable.
+    this._recordMetrics({ ...summary, skipped: 0, duplicates: summary.existing });
+    void Promise.resolve().then(() => auditService.logEvent({
       eventType: 'lead.extension_import', userId: createdBy,
       ipAddress: meta.ipAddress || 'internal', userAgent: meta.userAgent,
-      result: summary.failed ? 'partial' : 'success', details: summary, module: 'lead',
-    });
+      result: summary.failed ? 'partial' : 'success', details: { ...summary, requestId: meta.requestId }, module: 'lead',
+    })).catch((error) => logger.warn('Lead extension-import audit failed (non-blocking)', {
+      module: 'crm', action: 'lead.extension_import', requestId: meta.requestId,
+      error: { message: error.message },
+    }));
     return { ...summary, results };
   }
 
@@ -644,10 +673,16 @@ class LeadImportExportService {
   }
 
   _recordMetrics(summary) {
-    if (summary.created > 0) leadImportsTotal.inc({ result: 'imported' }, summary.created);
-    const skipped = summary.skipped + summary.duplicates;
-    if (skipped > 0) leadImportsTotal.inc({ result: 'skipped' }, skipped);
-    if (summary.failed > 0) leadImportsTotal.inc({ result: 'failed' }, summary.failed);
+    try {
+      if (summary.created > 0) leadImportsTotal.inc({ result: 'imported' }, summary.created);
+      const skipped = Number(summary.skipped || 0) + Number(summary.duplicates || 0);
+      if (skipped > 0) leadImportsTotal.inc({ result: 'skipped' }, skipped);
+      if (summary.failed > 0) leadImportsTotal.inc({ result: 'failed' }, summary.failed);
+    } catch (error) {
+      logger.warn('Lead import metrics failed (non-blocking)', {
+        module: 'crm', action: 'lead.import.metrics', error: { message: error.message },
+      });
+    }
   }
 
   /**

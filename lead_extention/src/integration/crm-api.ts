@@ -157,7 +157,8 @@ export async function importLeads(leads: Lead[]): Promise<{ total: number; creat
     // Fall back to its existing authenticated CSV import contract so users do
     // not receive an opaque all-record failure while the API is being rolled
     // out. Both routes derive ownership from the bearer session server-side.
-    if ((error as { status?: number }).status !== 404) throw error;
+    const status = (error as { status?: number }).status;
+    if (status !== 404 && !(status && status >= 500 && status <= 599)) throw error;
     return importViaExistingFileRoute(leads);
   }
 }

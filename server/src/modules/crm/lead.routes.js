@@ -36,7 +36,12 @@ router.get('/filter-options', authenticate, requirePermission('lead:read'), (req
 
 // Import / export (named routes, BEFORE /:id)
 router.post('/import', authenticate, requirePermission('lead:import'), uploadLimiter, upload.single('file'), (req, res, next) => leadController.importLeads(req, res, next));
-router.post('/bulk-import', authenticate, requirePermission('lead:import'), uploadLimiter, validate(bulkImport), (req, res, next) => leadController.bulkImport(req, res, next));
+// Structured JSON batches are already bounded by validation (500 records) and
+// the global API limiter. Do not pass them through the file-upload limiter:
+// that limiter has a separate Redis store/keyspace and is only for multipart
+// uploads, so a limiter/storage fault must not turn a valid JSON import into a
+// 500 after authentication.
+router.post('/bulk-import', authenticate, requirePermission('lead:import'), validate(bulkImport), (req, res, next) => leadController.bulkImport(req, res, next));
 router.get('/import/template', authenticate, requirePermission('lead:import'), validate(importTemplate), (req, res, next) => leadController.downloadTemplate(req, res, next));
 router.get('/export', authenticate, requirePermission('lead:read'), validate(exportLeads), (req, res, next) => leadController.exportLeads(req, res, next));
 

@@ -167,7 +167,7 @@ class LeadController {
   /** Import structured batches from the local-first browser extension. */
   async bulkImport(req, res, next) {
     try {
-      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const meta = { ipAddress: req.ip, userAgent: req.get('user-agent'), requestId: req.requestId };
       const data = await leadImportExportService.importExtensionLeads(req.body.leads, req.user._id, meta);
       return res.success({ data, message: 'Lead import processed' });
     } catch (err) { next(err); }

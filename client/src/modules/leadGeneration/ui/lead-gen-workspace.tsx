@@ -11,7 +11,7 @@
 // progress/results into the cache, with `useDiscoverySession({poll:true})` as a
 // server-truth heartbeat.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ArrowRight, History, Loader2, Radar, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,9 +28,11 @@ import {
   isActiveSession,
   useCancelDiscovery,
   useCreateDiscovery,
+  useDiscoveryMarkers,
   useDiscoveryResults,
   useDiscoverySession,
   useFlattenedResults,
+  useFlattenedMarkers,
   useImportResult,
   useLoadMoreDiscovery,
 } from '../hooks/use-discovery';
@@ -157,7 +159,24 @@ export function LeadGenWorkspace() {
     ?? results.length;
 
   const inResults = step === 3 && Boolean(sessionId);
-  const hasResults = (session?.counts.discovered ?? 0) > 0 || results.length > 0;
+  const discoveredCount = session?.counts.discovered ?? 0;
+  const hasResults = discoveredCount > 0 || results.length > 0;
+  const markersQuery = useDiscoveryMarkers(sessionId, { enabled: Boolean(sessionId && hasResults) });
+  const markers = useFlattenedMarkers(markersQuery.data);
+  const {
+    isFetching: resultsIsFetching,
+    isLoading: resultsIsLoading,
+    refetch: refetchResults,
+  } = resultsQuery;
+  const {
+    isLoading: markersIsLoading,
+    isFetchingNextPage: markersIsFetchingNextPage,
+    isError: markersIsError,
+    isFetchNextPageError: markersIsFetchNextPageError,
+    refetch: refetchMarkers,
+    retryFailedPage: retryFailedMarkersPage,
+  } = markersQuery;
+  const lastEmptyResultsRecoveryRef = useRef<string | null>(null);
   const canDiscoverMore = Boolean(
     session
     && !isActiveSession(session.status)
@@ -165,6 +184,31 @@ export function LeadGenWorkspace() {
   );
   const showProgress = inResults && (!session || (isActiveSession(session.status) && !hasResults));
   const showResults = inResults && Boolean(session) && (hasResults || !isActiveSession(session!.status));
+
+  useEffect(() => {
+    if (!sessionId || discoveredCount <= 0 || results.length > 0) return undefined;
+    if (resultsIsFetching || resultsIsLoading) return undefined;
+
+    const key = `${sessionId}:${discoveredCount}:${JSON.stringify(resultParams)}`;
+    if (lastEmptyResultsRecoveryRef.current === key) return undefined;
+
+    const timer = window.setTimeout(() => {
+      lastEmptyResultsRecoveryRef.current = key;
+      void refetchResults({ cancelRefetch: false });
+      void refetchMarkers({ cancelRefetch: false });
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    sessionId,
+    discoveredCount,
+    results.length,
+    resultParams,
+    resultsIsFetching,
+    resultsIsLoading,
+    refetchResults,
+    refetchMarkers,
+  ]);
 
   // ── Map drawing-mode translation (store → map contract) ──────────────────────
   const mapDrawingMode: DiscoveryDrawingMode | null =
@@ -364,7 +408,7 @@ export function LeadGenWorkspace() {
             sessionId={sessionId!}
             session={session}
             results={results}
-            markers={[]}
+            markers={markers}
             isLoading={resultsQuery.isLoading}
             isError={resultsQuery.isError}
             errorStatusCode={(resultsQuery.error as { statusCode?: number } | null)?.statusCode}
@@ -377,6 +421,9 @@ export function LeadGenWorkspace() {
             isFetchNextPageError={resultsQuery.isFetchNextPageError}
             onLoadMore={() => void handleNextResultPage()}
             onPageSizeChange={setPageSize}
+            markersLoading={markersIsLoading || markersIsFetchingNextPage}
+            markersError={markersIsError || markersIsFetchNextPageError}
+            onRetryMarkers={() => void retryFailedMarkersPage()}
             onOpenResult={openResult}
             onOpenResultId={openResultId}
             onAddLead={addLead}

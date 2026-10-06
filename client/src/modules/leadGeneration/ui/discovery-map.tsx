@@ -83,7 +83,7 @@ function LeafletFallbackMap(props: DiscoveryMapProps) {
         >
           <Info className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
           <span>
-            {t('leadgen.map.osmFallback', 'Using OpenStreetMap — add a Google Maps key for Google tiles')}
+            {t('leadgen.map.osmFallback', 'Using free OpenStreetMap tiles')}
           </span>
           <button
             type="button"

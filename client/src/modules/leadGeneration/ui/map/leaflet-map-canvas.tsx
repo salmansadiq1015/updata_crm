@@ -9,8 +9,8 @@
 // normalized AreaDraft (GeoJSON [lng,lat], closed rings) using the shared pure
 // helpers in map-geometry.ts — so the two maps are interchangeable upstream.
 //
-// PRODUCTION NOTE: OpenStreetMap's and CARTO's public tile endpoints are fine
-// for development/demo but their usage policies forbid heavy production traffic.
+// PRODUCTION NOTE: OpenStreetMap's public tile endpoint is fine for
+// development/demo but its usage policy forbids heavy production traffic.
 // For production, set NEXT_PUBLIC_OSM_TILE_URL to a dedicated tile provider or a
 // self-hosted OSM tile server. Discovery search is controlled separately by the
 // server-side discovery provider mode.
@@ -70,11 +70,13 @@ const LIGHT_TILES = {
   subdomains: '',
 };
 const DARK_TILES = {
-  // CartoDB dark_all — keyless raster, retina-aware ({r}); OSM data, Carto style.
-  url: process.env.NEXT_PUBLIC_OSM_DARK_TILE_URL || 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  // Default dark mode intentionally reuses keyless OpenStreetMap tiles and
+  // applies a local CSS filter below. Some third-party "free" dark tile hosts
+  // now return API-key watermarks, which made the map appear broken.
+  url: process.env.NEXT_PUBLIC_OSM_DARK_TILE_URL || process.env.NEXT_PUBLIC_OSM_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  subdomains: 'abcd',
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  subdomains: '',
 };
 
 // Leaflet derives its default marker-icon URLs from its own <script> path, which
@@ -546,6 +548,7 @@ function LeafletMapInner({
           attribution={tiles.attribution}
           subdomains={tiles.subdomains}
           maxZoom={19}
+          className={dark ? 'leadgen-osm-dark-tiles' : undefined}
         />
         <ZoomControl position={isRTL ? 'topright' : 'topleft'} />
         <AreaOverlay area={area} center={center} colors={colors} />

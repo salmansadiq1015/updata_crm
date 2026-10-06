@@ -51,7 +51,12 @@ vi.mock('react-leaflet', async () => {
   return {
     MapContainer: ({ children }: { children?: ReactNode }) =>
       React.createElement('div', { 'data-testid': 'leaflet-map-container' }, children),
-    TileLayer: () => null,
+    TileLayer: ({ url, className }: { url?: string; className?: string }) =>
+      React.createElement('div', {
+        'data-testid': 'leaflet-tile-layer',
+        'data-url': url,
+        className,
+      }),
     Circle: () => null,
     Rectangle: () => null,
     Polygon: () => null,
@@ -89,6 +94,10 @@ vi.mock('@googlemaps/markerclusterer', () => ({
   },
 }));
 
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ resolvedTheme: 'dark' }),
+}));
+
 // Imported AFTER the mocks are registered.
 import { DiscoveryMap } from '../ui/discovery-map';
 import { LeafletMapCanvas } from '../ui/map/leaflet-map-canvas';
@@ -120,6 +129,11 @@ describe('LeafletMapCanvas (mocked Leaflet)', () => {
 
     expect(screen.getByTestId('leaflet-map-canvas')).toBeInTheDocument();
     expect(screen.getByTestId('leaflet-map-container')).toBeInTheDocument();
+    expect(screen.getByTestId('leaflet-tile-layer')).toHaveAttribute(
+      'data-url',
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    );
+    expect(screen.getByTestId('leaflet-tile-layer')).toHaveClass('leadgen-osm-dark-tiles');
     // Degraded error placeholder must NOT appear on a normal render.
     expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
   });
@@ -163,7 +177,7 @@ describe('DiscoveryMap map-provider selection', () => {
 
     expect(screen.getByTestId('discovery-map-osm-fallback')).toBeInTheDocument();
     expect(screen.getByTestId('discovery-map-osm-note')).toBeInTheDocument();
-    expect(screen.getByText(/OpenStreetMap/i)).toBeInTheDocument();
+    expect(screen.getByText(/free OpenStreetMap tiles/i)).toBeInTheDocument();
     // Missing key is no longer an "unavailable" state — the map works.
     expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
   });

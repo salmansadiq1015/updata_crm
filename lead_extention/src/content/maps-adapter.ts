@@ -8,7 +8,7 @@ export class MapsAdapter {
   }
 
   detectSearchResults(): boolean {
-    return this.getResultLinks().length > 0 || Boolean(document.querySelector('[role="feed"]'));
+    return this.getResultLinks().length > 0 || Boolean(this.resultListRoot());
   }
 
   detectBusinessListing(): boolean {
@@ -16,9 +16,16 @@ export class MapsAdapter {
   }
 
   getResultLinks(): HTMLAnchorElement[] {
-    return [...document.querySelectorAll<HTMLAnchorElement>(PLACE_LINK)].filter((anchor) => {
+    const feed = this.resultListRoot();
+    if (!feed) return [];
+    const seenCards = new Set<HTMLElement>();
+    return [...feed.querySelectorAll<HTMLAnchorElement>(PLACE_LINK)].filter((anchor) => {
       const rect = anchor.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
+      if (rect.width <= 0 || rect.height <= 0) return false;
+      const card = this.findResultCard(anchor);
+      if (!feed.contains(card) || seenCards.has(card)) return false;
+      seenCards.add(card);
+      return true;
     });
   }
 
@@ -105,15 +112,20 @@ export class MapsAdapter {
     const feed = this.resultsContainer();
     if (!feed) return this.scrollState(null, false);
     const before = feed.scrollTop;
+    const wasAtEnd = before + feed.clientHeight >= feed.scrollHeight - 8;
     const target = Math.min(feed.scrollTop + Math.max(feed.clientHeight * 0.85, 650), Math.max(0, feed.scrollHeight - feed.clientHeight));
-    feed.scrollTo({ top: target, behavior: 'auto' });
-    feed.dispatchEvent(new Event('scroll', { bubbles: true }));
-    if (feed.scrollTop === before) {
+    if (!wasAtEnd && target > before) {
+      feed.scrollTo({ top: target, behavior: 'auto' });
+      feed.dispatchEvent(new Event('scroll', { bubbles: true }));
+    }
+    if (!wasAtEnd && feed.scrollTop <= before) {
       const last = this.getResultLinks().at(-1);
       last?.scrollIntoView({ block: 'end', behavior: 'auto' });
       feed.dispatchEvent(new WheelEvent('wheel', { deltaY: Math.max(feed.clientHeight, 650), bubbles: true }));
     }
-    const changed = feed.scrollTop !== before;
+    // Only forward movement is continuation. A virtual list jumping back to
+    // "Back to top" must not reset the no-progress completion counter.
+    const changed = feed.scrollTop > before + 1;
     return this.scrollState(feed, changed);
   }
 
@@ -270,8 +282,8 @@ export class MapsAdapter {
   }
 
   private resultsContainer(): HTMLElement | null {
-    const feeds = [...document.querySelectorAll<HTMLElement>('[role="feed"]')]
-      .filter((node) => node.querySelector(PLACE_LINK) && node.clientHeight > 100);
+    const root = this.resultListRoot();
+    const feeds = root ? [root] : [];
     const feedContainers = feeds.flatMap((feed) => {
       const candidates: HTMLElement[] = [];
       let node: HTMLElement | null = feed;
@@ -281,6 +293,21 @@ export class MapsAdapter {
       return candidates;
     }).sort((a, b) => b.querySelectorAll(PLACE_LINK).length - a.querySelectorAll(PLACE_LINK).length);
     return feedContainers[0] ?? this.findScrollableResultsContainer() ?? feeds[0] ?? null;
+  }
+
+  private resultFeedRoot(): HTMLElement | null {
+    return [...document.querySelectorAll<HTMLElement>('[role="feed"]')]
+      .filter((node) => node.querySelector(PLACE_LINK) && node.clientHeight > 100)
+      .sort((a, b) => {
+        const visibleLinks = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>(PLACE_LINK)]
+          .filter((link) => { const rect = link.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; }).length;
+        return visibleLinks(b) - visibleLinks(a);
+      })[0] ?? null;
+  }
+
+  private resultListRoot(): HTMLElement | null {
+    return this.resultFeedRoot()
+      ?? (/\/maps\/search\//.test(location.pathname) ? this.findScrollableResultsContainer() : null);
   }
 
   private scrollState(feed: HTMLElement | null, changed: boolean): MapsScrollState {

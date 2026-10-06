@@ -114,6 +114,7 @@ export interface SearchRecord {
   currentQuery?: string;
   currentPage?: number;
   currentResultIndex?: number;
+  checkpointVersion?: number;
   queryIndex?: number;
   currentStateKey?: string;
   processedResultKeys?: string[];

@@ -4,6 +4,7 @@ import { normalizePhone, normalizeText, normalizeUrl } from './utils';
 export const DISCOVERY_BATCH_SIZE = 25;
 export const CRM_BATCH_SIZE = 25;
 export const REQUIRED_STABLE_END_ROUNDS = 3;
+export const CHECKPOINT_VERSION = 2;
 
 /**
  * A deterministic key that survives Maps virtual-list reordering and SPA
@@ -64,6 +65,24 @@ export function normalizeLegacyCheckpoint(search: SearchRecord, timestamp = new 
   search.discoveredCount = processed;
   search.currentResultIndex = processed;
   search.duplicateCount ??= 0;
+  search.updatedAt = timestamp;
+  return true;
+}
+
+export function upgradeCheckpoint(search: SearchRecord, canonicalLeadKeys: string[], timestamp = new Date().toISOString()): boolean {
+  const normalized = normalizeLegacyCheckpoint(search, timestamp);
+  if ((search.checkpointVersion ?? 0) >= CHECKPOINT_VERSION) return normalized;
+  const canonical = [...new Set(canonicalLeadKeys.filter(Boolean))];
+  if (canonical.length) {
+    search.processedResultKeys = canonical;
+    search.processedCount = canonical.length;
+    search.discoveredCount = canonical.length;
+    search.currentResultIndex = canonical.length;
+    search.uniqueCount = canonical.length;
+  }
+  search.currentBatchSize = 0;
+  search.stableRounds = 0;
+  search.checkpointVersion = CHECKPOINT_VERSION;
   search.updatedAt = timestamp;
   return true;
 }

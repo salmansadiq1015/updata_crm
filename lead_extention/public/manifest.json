@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lead Finder — Local Maps Discovery",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A local-first assistant for collecting business details exposed in your Google Maps research session.",
   "minimum_chrome_version": "114",
   "permissions": ["storage", "downloads", "sidePanel", "activeTab", "scripting", "alarms"],

@@ -140,7 +140,7 @@ try {
   const authState = await evaluate(extensionSession, `chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' })`);
   assert(authState?.ok && authState.auth?.authenticated === false, 'Failed login does not create an authenticated session');
 
-  const mapsTarget = await createTarget(cdp, 'https://www.google.com/maps/search/hotels+near+Gulberg+Lahore');
+  const mapsTarget = await createTarget(cdp, 'https://www.google.com/maps/search/Hotel+near+paris');
   await cdp.send('Target.activateTarget', { targetId: mapsTarget });
   const mapsSession = await attach(cdp, mapsTarget);
   await cdp.send('Runtime.enable', {}, mapsSession);
@@ -163,6 +163,16 @@ try {
     results.push({ status: 'WARN', name: 'Google Maps returned no visible business cards in automated Chrome; extraction command itself completed' });
   }
 
+  const linkScope = await evaluate(mapsSession, `(() => {
+    const visible = (node) => { const rect = node.getBoundingClientRect(); return rect.width > 0 && rect.height > 0; };
+    const feeds = [...document.querySelectorAll('[role="feed"]')].filter((feed) => feed.querySelector('a[href*="/maps/place/"]'));
+    return {
+      global: [...document.querySelectorAll('a[href*="/maps/place/"]')].filter(visible).length,
+      feed: feeds.reduce((max, feed) => Math.max(max, [...feed.querySelectorAll('a[href*="/maps/place/"]')].filter(visible).length), 0)
+    };
+  })()`);
+  assert(extracted.records.length <= Math.max(1, linkScope.feed), `Extraction is scoped to the results feed, not ${linkScope.global} visible canvas/list links`);
+
   const scrollCheckpoint = await evaluate(extensionSession, `(async () => {
     const tab = (await chrome.tabs.query({})).find((item) => { try { const url = new URL(item.url || ''); return url.hostname.includes('google.') && url.pathname.startsWith('/maps'); } catch { return false; } });
     if (!tab?.id) return null;
@@ -180,6 +190,30 @@ try {
   if (scrollAttempt.scrollHeight > scrollAttempt.clientHeight + 20 && !scrollAttempt.atEnd) {
     assert(scrollAttempt.changed === true, 'Scrollable Maps feed advances instead of reprocessing the same visible batch');
   }
+
+  const continuation = await evaluate(extensionSession, `(async () => {
+    const tab = (await chrome.tabs.query({})).find((item) => { try { const url = new URL(item.url || ''); return url.hostname.includes('google.') && url.pathname.startsWith('/maps'); } catch { return false; } });
+    if (!tab?.id) return null;
+    const keys = new Set();
+    let firstBatch = 0;
+    let stableEnd = 0;
+    let stagnantSteps = 0;
+    let completed = false;
+    for (let step = 0; step < 40; step += 1) {
+      const visible = await chrome.tabs.sendMessage(tab.id, { type: 'COLLECT_VISIBLE' });
+      if (step === 0) firstBatch = visible.records?.length || 0;
+      const before = keys.size;
+      for (const record of visible.records || []) keys.add(record.placeIdentifier || record.googleMapsUrl);
+      stagnantSteps = keys.size > before ? 0 : stagnantSteps + 1;
+      const scroll = await chrome.tabs.sendMessage(tab.id, { type: 'SCROLL_RESULTS' });
+      if (!scroll.changed && (scroll.atEnd || scroll.endConfirmed)) stableEnd += 1;
+      else stableEnd = 0;
+      if (stableEnd >= 3) { completed = true; break; }
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+    return { completed, firstBatch, uniqueVisible: keys.size, stagnantSteps };
+  })()`);
+  assert(continuation?.completed || continuation?.stagnantSteps < 5, `Continuation does not scroll indefinitely without new businesses (${JSON.stringify(continuation)})`);
 
   if (extracted.records.length) {
     const detailResult = await evaluate(extensionSession, `(async () => {

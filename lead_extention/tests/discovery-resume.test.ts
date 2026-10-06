@@ -8,6 +8,7 @@ import {
   resumeQueryIndex,
   shouldCompleteResultState,
   splitIntoBatches,
+  upgradeCheckpoint,
 } from '../src/shared/discovery-checkpoint';
 import { createXlsx, toCsv } from '../src/export/exporters';
 import { makeLead } from '../src/shared/normalize';
@@ -155,6 +156,23 @@ describe('continuous discovery regression coverage', () => {
     expect(legacy.discoveredCount).toBe(25);
     expect(legacy.processedCount).toBe(25);
     expect(legacy.currentResultIndex).toBe(25);
+  });
+
+  it('repairs a polluted 114-marker checkpoint to 24 canonical stored businesses', () => {
+    const polluted = search();
+    polluted.checkpointVersion = 1;
+    polluted.discoveredCount = 114;
+    polluted.processedCount = 114;
+    polluted.uniqueCount = 24;
+    polluted.currentBatchSize = 124;
+    polluted.processedResultKeys = records(114).map((record) => `marker:${record.placeIdentifier}`);
+    const canonical = records(24).map(resultKeyForRecord);
+    expect(upgradeCheckpoint(polluted, canonical, '2026-10-06T12:00:00.000Z')).toBe(true);
+    expect(polluted.processedCount).toBe(24);
+    expect(polluted.discoveredCount).toBe(24);
+    expect(polluted.processedResultKeys).toEqual(canonical);
+    expect(polluted.currentBatchSize).toBe(0);
+    expect(polluted.checkpointVersion).toBe(2);
   });
 
   it('keeps a 5,000-record job incremental and bounded to 200 processing batches', () => {

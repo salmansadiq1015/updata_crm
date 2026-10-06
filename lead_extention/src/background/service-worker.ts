@@ -1,12 +1,13 @@
 import { DISCOVERY_SCROLL_DELAY_MS, MAX_SAFE_ITERATIONS } from '../shared/constants';
 import {
   CRM_BATCH_SIZE,
+  CHECKPOINT_VERSION,
   DISCOVERY_BATCH_SIZE,
-  normalizeLegacyCheckpoint,
   resultKeyForRecord,
   resumeQueryIndex,
   shouldCompleteResultState,
   splitIntoBatches,
+  upgradeCheckpoint,
 } from '../shared/discovery-checkpoint';
 import { makeLead, dedupeKey, isSameLead, mergeLead } from '../shared/normalize';
 import type {
@@ -149,7 +150,7 @@ async function startDiscovery(config: DiscoveryConfig): Promise<{ ok: boolean; e
     radiusKm: config.radiusKm, query, startedAt: nowIso(), completedAt: null, status: 'starting',
     discoveredCount: 0, uniqueCount: 0, duplicateCount: 0, exportedCount: 0, tabId: tab.id, lastActivityAt: nowIso(),
     currentPhase: 'SEARCH_INITIALIZED', currentQuery: query, currentPage: 0, currentStateKey: tab.url,
-    currentResultIndex: 0, queryIndex: 0, processedResultKeys: [], processedCount: 0, currentBatchSize: 0,
+    currentResultIndex: 0, checkpointVersion: CHECKPOINT_VERSION, queryIndex: 0, processedResultKeys: [], processedCount: 0, currentBatchSize: 0,
     retryCount: 0, stableRounds: 0, scrollTop: 0, scrollHeight: 0, firstVisibleResultKey: null,
     lastVisibleResultKey: null, lastSuccessfulResultKey: null, lastSuccessfulUrl: null,
     lastSuccessfulTimestamp: null, updatedAt: nowIso(), stopRequested: false, error: null,
@@ -202,7 +203,7 @@ async function recoverDiscovery(forceResume = false): Promise<boolean> {
 }
 
 function makeJob(search: SearchRecord, tabId: number, config: DiscoveryConfig, records: Lead[], originCoordinates: { latitude: number; longitude: number } | null): Job {
-  normalizeLegacyCheckpoint(search);
+  upgradeCheckpoint(search, records.map((lead) => resultKeyForRecord(lead)));
   const queries = buildQueries(config);
   const matchingIndex = queries.findIndex((query) => query === search.currentQuery);
   const queryIndex = matchingIndex >= 0 ? matchingIndex : resumeQueryIndex(search, queries.length);
@@ -320,14 +321,16 @@ async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{
     await waitIfPaused(job);
     if (job.stopped) break;
     if (!record.businessName || !record.googleMapsUrl) continue;
-    const resultKey = resultKeyForRecord(record);
+    const visibleResultKey = resultKeyForRecord(record);
     const legacyKey = [record.placeIdentifier, record.googleMapsUrl, `${record.businessName}|${record.address ?? ''}`].find((key) => Boolean(key) && processed.has(key!));
-    if (processed.has(resultKey) || legacyKey) {
-      if (legacyKey && legacyKey !== resultKey) { processed.delete(legacyKey); processed.add(resultKey); }
+    if (processed.has(visibleResultKey) || legacyKey) {
+      if (legacyKey && legacyKey !== visibleResultKey) { processed.delete(legacyKey); processed.add(visibleResultKey); }
       repeated += 1;
       continue;
     }
     const hydratedRecord = await hydrateMapsRecord(job, record);
+    const resultKey = resultKeyForRecord(hydratedRecord);
+    if (processed.has(resultKey)) { repeated += 1; continue; }
     const lead = makeLead(hydratedRecord, job.search.id);
     if (job.originCoordinates && lead.latitude !== null && lead.longitude !== null) {
       lead.distanceMeters = haversineDistanceMeters(job.originCoordinates, { latitude: lead.latitude, longitude: lead.longitude });
@@ -578,7 +581,7 @@ async function pauseDiscovery(): Promise<void> {
 
 async function setPhase(job: Job, phase: DiscoveryPhase, message?: string): Promise<void> { job.search.currentPhase = phase; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso(); if (phase === 'PROCESSING') job.search.status = 'processing'; else if (phase === 'EXTRACTING' || phase === 'WAITING_FOR_RESULTS' || phase === 'CHECKING_FOR_MORE' || phase === 'NEXT_RESULTS' || phase === 'SEARCH_INITIALIZED') job.search.status = job.search.status === 'resuming' || job.search.status === 'retrying' ? job.search.status : 'discovering'; await persistJob(job); await publishProgress(message); }
 async function persistJob(job: Job): Promise<void> { const tab = await chrome.tabs.get(job.tabId).catch(() => null); job.search.currentStateKey = tab?.url ?? job.search.currentStateKey; job.search.currentQuery = job.expectedQuery; job.search.queryIndex = job.queryIndex; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso(); await SearchRepository.save(job.search); }
-async function getProgressResponse(): Promise<DiscoveryProgress> { await recoverDiscovery(); if (activeJob) return progressFor(activeJob); const search = (await SearchRepository.list())[0]; if (search && normalizeLegacyCheckpoint(search)) await SearchRepository.save(search); return progressForStored(search); }
+async function getProgressResponse(): Promise<DiscoveryProgress> { await recoverDiscovery(); if (activeJob) return progressFor(activeJob); const search = (await SearchRepository.list())[0]; if (search) { const leads = await LeadRepository.listBySearch(search.id); if (upgradeCheckpoint(search, leads.map((lead) => resultKeyForRecord(lead)))) await SearchRepository.save(search); } return progressForStored(search); }
 async function publishProgress(message?: string): Promise<void> { try { await chrome.runtime.sendMessage({ type: 'DISCOVERY_PROGRESS', progress: activeJob ? progressFor(activeJob, message) : await getProgressResponse(), message }); } catch { /* side panel can be closed */ } }
 function progressFor(job: Job, message?: string): DiscoveryProgress { const leads = [...job.leads.values()]; return { searchId: job.search.id, status: job.paused ? 'paused' : job.search.status, query: job.search.query, discovered: job.search.discoveredCount, duplicates: job.search.duplicateCount ?? 0, unique: leads.length, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: job.search.currentPage ?? 0, maxIterations: job.config.safetyLimit ?? MAX_SAFE_ITERATIONS, message, phase: job.search.currentPhase, processed: job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0, currentQuery: job.search.currentQuery, currentBatch: job.search.currentBatchSize ?? 0, configuredMaximum: job.config.maxResults, error: job.search.error }; }
 function progressForStored(search?: SearchRecord): DiscoveryProgress { return { searchId: search?.id ?? '', status: search?.status ?? 'idle', query: search?.query ?? '', discovered: search?.discoveredCount ?? 0, duplicates: search?.duplicateCount ?? 0, unique: search?.uniqueCount ?? 0, withPhone: 0, withWebsite: 0, withEmail: 0, iteration: search?.currentPage ?? 0, maxIterations: search?.config?.safetyLimit ?? MAX_SAFE_ITERATIONS, phase: search?.currentPhase, processed: search?.processedCount ?? search?.processedResultKeys?.length ?? 0, currentQuery: search?.currentQuery, currentBatch: search?.currentBatchSize ?? 0, configuredMaximum: search?.config?.maxResults, error: search?.error }; }

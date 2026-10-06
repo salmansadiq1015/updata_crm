@@ -1,4 +1,4 @@
-# Lead Finder v0.2.0 — production implementation report
+# Lead Finder v0.2.1 — production implementation report
 
 ## Root cause
 
@@ -11,6 +11,7 @@ The extension did not contain a literal 25-lead total cap. The failure was archi
 5. Maps navigation reset `currentPage` to zero, while scroll position, query index, last successful result, and batch cursor were not fully checkpointed.
 6. CRM requests were batched, but interrupted import batches had no persisted processed-ID cursor.
 7. A refactor briefly produced an ESM import in the classic Manifest V3 content-script bundle. Real Chrome testing caught this; the content script is now self-contained.
+8. The Maps adapter queried every visible place link in the document, mixing canvas markers with left-panel cards. At the list end, `scrollIntoView` could also jump backward, so the job kept scrolling while the unique count stayed fixed.
 
 ## Implemented fix
 
@@ -19,8 +20,10 @@ The extension did not contain a literal 25-lead total cap. The failure was archi
 - Every lead is written before its result key is checkpointed, preventing data loss across worker suspension.
 - IndexedDB search checkpoints now persist processed count/keys, query index, result index, scroll position/height, visible anchors, retry count, stable rounds, last successful key/URL/time, phase, and timestamps.
 - Maps result scrolling selects the feed/ancestor containing the most place links and persists stable first/last visible anchors.
+- Extraction is scoped to one business card per actual results-feed card; canvas marker links are excluded. Only forward `scrollTop` movement counts as continuation, and “Back to top” cannot reset completion checks.
 - Completion requires three no-progress checks at an actual/confirmed end of the feed. A repeated 25-card DOM window no longer inflates counters or completes the job.
 - Navigation, retry, side-panel reopening, content-script reinjection, and service-worker recovery restore the same search session and skip processed businesses.
+- Checkpoint v2 automatically repairs already polluted sessions (for example, 114 marker observations / 24 businesses) to canonical stored business identities.
 - Pause, Resume, Stop, Retry, resuming, retrying, stopped, and error states preserve stored leads and deterministic button state.
 - CRM imports persist processed lead IDs and resume only pending IDs after service-worker recovery. Missing local records and partial failures are isolated.
 - CSV/XLSX read the full local dataset, independent of the virtualized table.
@@ -54,8 +57,8 @@ Production CORS rejects arbitrary extension IDs: FAIL (hardened source change re
 5,000-record checkpoint test: PASS (200 batches)
 Extension security checks: PASS
 Deployed server CORS hardening: PENDING DEPLOYMENT
-Automated Chrome E2E smoke: PASS (32 checks)
-Extension tests: PASS (19/19)
+Automated Chrome E2E smoke: PASS (34 checks; Hotel near Paris advanced from 6 visible cards to 95 unique list businesses across 40 bounded scroll steps with zero terminal stagnation)
+Extension tests: PASS (20/20)
 Focused CRM server tests: PASS (31/31 across the final focused runs)
 Production build: PASS
 ZIP integrity: PASS
@@ -63,9 +66,9 @@ ZIP integrity: PASS
 
 ## Build artifact
 
-- Version: `0.2.0`
+- Version: `0.2.1`
 - File: `lead-finder-extension.zip`
-- SHA-256: `23454db9ee57d9348e8f3082d4e25ab6846a8ddb72edb762a7d89e3ff5d6e00f`
+- SHA-256: `cd0017c9951bb7faf2c59f8a19b05a45ae3e32aadb5656e2fc75011843bc6fa8`
 
 ## Remaining production acceptance
 

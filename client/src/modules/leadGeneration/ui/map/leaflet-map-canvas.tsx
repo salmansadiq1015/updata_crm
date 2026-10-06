@@ -431,6 +431,51 @@ function ViewportEmitter({ onViewportChange }: { onViewportChange?: DiscoveryMap
   return null;
 }
 
+// Leaflet measures its container only once at mount. In this app the map lives
+// inside a split workflow layout that can finish sizing after the canvas mounts,
+// so without invalidation Leaflet may paint only a small block of tiles.
+function MapSizeInvalidator({ center, zoom }: { center: GeoPoint; zoom?: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return undefined;
+
+    const invalidate = () => {
+      map.invalidateSize({ pan: false });
+    };
+
+    let frameTwo = 0;
+    const frameOne = window.requestAnimationFrame(() => {
+      invalidate();
+      frameTwo = window.requestAnimationFrame(invalidate);
+    });
+    const timers = [
+      window.setTimeout(invalidate, 120),
+      window.setTimeout(invalidate, 360),
+      window.setTimeout(invalidate, 900),
+    ];
+
+    const container = map.getContainer();
+    const parent = container.parentElement;
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => invalidate());
+    observer?.observe(container);
+    if (parent) observer?.observe(parent);
+    window.addEventListener('resize', invalidate);
+
+    return () => {
+      window.cancelAnimationFrame(frameOne);
+      if (frameTwo) window.cancelAnimationFrame(frameTwo);
+      timers.forEach((timer) => window.clearTimeout(timer));
+      observer?.disconnect();
+      window.removeEventListener('resize', invalidate);
+    };
+  }, [map, center.lat, center.lng, zoom]);
+
+  return null;
+}
+
 // ── Pan/zoom to follow the `center` prop (e.g. after a location search). ──────
 function CenterController({ center, zoom }: { center: GeoPoint; zoom?: number }) {
   const map = useMap();
@@ -567,6 +612,7 @@ function LeafletMapInner({
           onMarkerHover={onMarkerHover}
         />
         <ViewportEmitter onViewportChange={onViewportChange} />
+        <MapSizeInvalidator center={center} zoom={zoom} />
         <CenterController center={center} zoom={zoom} />
       </MapContainer>
 

@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement, ReactNode } from 'react';
 import { LanguageProvider } from '@/lib/i18n/language-context';
+
+const leafletHarness = vi.hoisted(() => ({
+  invalidateSize: vi.fn(),
+}));
 
 // ── Mock Leaflet so no real DOM map / SVG / canvas renderer is ever created. ──
 vi.mock('leaflet', () => {
@@ -44,6 +48,8 @@ vi.mock('react-leaflet', async () => {
     getZoom: () => 12,
     getCenter: () => ({ lat: 0, lng: 0 }),
     getBounds: () => ({ getNorth: () => 1, getSouth: () => 0, getEast: () => 1, getWest: () => 0 }),
+    getContainer: () => document.createElement('div'),
+    invalidateSize: leafletHarness.invalidateSize,
     distance: () => 1000,
     dragging: { enable: vi.fn(), disable: vi.fn() },
     doubleClickZoom: { enable: vi.fn(), disable: vi.fn() },
@@ -122,7 +128,7 @@ afterEach(() => {
 });
 
 describe('LeafletMapCanvas (mocked Leaflet)', () => {
-  it('renders the keyless map canvas without throwing', () => {
+  it('renders the keyless map canvas without throwing', async () => {
     expect(() =>
       renderWithProviders(<LeafletMapCanvas center={CENTER} zoom={12} results={[]} />),
     ).not.toThrow();
@@ -136,6 +142,7 @@ describe('LeafletMapCanvas (mocked Leaflet)', () => {
     expect(screen.getByTestId('leaflet-tile-layer')).toHaveClass('leadgen-osm-dark-tiles');
     // Degraded error placeholder must NOT appear on a normal render.
     expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
+    await waitFor(() => expect(leafletHarness.invalidateSize).toHaveBeenCalled());
   });
 
   it('renders markers + radius controls without touching a real map', () => {

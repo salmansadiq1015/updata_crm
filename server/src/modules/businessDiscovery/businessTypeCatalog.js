@@ -151,6 +151,66 @@ const TYPE_INDEX = (() => {
   return index;
 })();
 
+const OSM_TAGS_BY_TYPE = Object.freeze({
+  restaurant: [{ key: 'amenity', value: 'restaurant' }],
+  cafe: [{ key: 'amenity', value: 'cafe' }],
+  'coffee-shop': [{ key: 'amenity', value: 'cafe' }, { key: 'shop', value: 'coffee' }],
+  bakery: [{ key: 'shop', value: 'bakery' }],
+  'fast-food': [{ key: 'amenity', value: 'fast_food' }],
+  hotel: [{ key: 'tourism', value: 'hotel' }],
+  motel: [{ key: 'tourism', value: 'motel' }],
+  resort: [{ key: 'tourism', value: 'resort' }],
+  catering: [{ key: 'craft', value: 'caterer' }, { key: 'amenity', value: 'catering' }],
+  hospital: [{ key: 'amenity', value: 'hospital' }, { key: 'healthcare', value: 'hospital' }],
+  clinic: [{ key: 'amenity', value: 'clinic' }, { key: 'healthcare', value: 'clinic' }],
+  'medical-store': [{ key: 'amenity', value: 'pharmacy' }, { key: 'shop', value: 'chemist' }],
+  pharmacy: [{ key: 'amenity', value: 'pharmacy' }],
+  dentist: [{ key: 'amenity', value: 'dentist' }, { key: 'healthcare', value: 'dentist' }],
+  'dental-clinic': [{ key: 'amenity', value: 'dentist' }, { key: 'healthcare', value: 'dentist' }],
+  'diagnostic-center': [{ key: 'healthcare', value: 'diagnostic_centre' }, { key: 'healthcare', value: 'laboratory' }],
+  laboratory: [{ key: 'healthcare', value: 'laboratory' }, { key: 'amenity', value: 'laboratory' }],
+  'physiotherapy-center': [{ key: 'healthcare', value: 'physiotherapist' }],
+  'medical-center': [{ key: 'amenity', value: 'clinic' }, { key: 'healthcare', value: 'centre' }],
+  'veterinary-clinic': [{ key: 'amenity', value: 'veterinary' }],
+  'law-firm': [{ key: 'office', value: 'lawyer' }],
+  accountant: [{ key: 'office', value: 'accountant' }],
+  'accounting-firm': [{ key: 'office', value: 'accountant' }],
+  'real-estate-agency': [{ key: 'office', value: 'estate_agent' }, { key: 'shop', value: 'estate_agent' }],
+  'insurance-agency': [{ key: 'office', value: 'insurance' }],
+  'consulting-firm': [{ key: 'office', value: 'consulting' }, { key: 'office', value: 'consultant' }],
+  'marketing-agency': [{ key: 'office', value: 'advertising_agency' }, { key: 'office', value: 'marketing' }],
+  'software-company': [{ key: 'office', value: 'it' }, { key: 'office', value: 'software' }],
+  'it-company': [{ key: 'office', value: 'it' }],
+  supermarket: [{ key: 'shop', value: 'supermarket' }],
+  'grocery-store': [{ key: 'shop', value: 'convenience' }, { key: 'shop', value: 'greengrocer' }],
+  'clothing-store': [{ key: 'shop', value: 'clothes' }],
+  'electronics-store': [{ key: 'shop', value: 'electronics' }],
+  'furniture-store': [{ key: 'shop', value: 'furniture' }],
+  'jewelry-store': [{ key: 'shop', value: 'jewelry' }, { key: 'shop', value: 'jewellery' }],
+  'automobile-dealer': [{ key: 'shop', value: 'car' }, { key: 'shop', value: 'car_repair' }],
+  'mobile-phone-store': [{ key: 'shop', value: 'mobile_phone' }],
+  gym: [{ key: 'leisure', value: 'fitness_centre' }],
+  'fitness-center': [{ key: 'leisure', value: 'fitness_centre' }],
+  salon: [{ key: 'shop', value: 'hairdresser' }],
+  barber: [{ key: 'shop', value: 'hairdresser' }],
+  spa: [{ key: 'leisure', value: 'spa' }, { key: 'shop', value: 'beauty' }],
+  'beauty-center': [{ key: 'shop', value: 'beauty' }],
+  'car-wash': [{ key: 'amenity', value: 'car_wash' }],
+  school: [{ key: 'amenity', value: 'school' }],
+  college: [{ key: 'amenity', value: 'college' }],
+  university: [{ key: 'amenity', value: 'university' }],
+  'training-center': [{ key: 'amenity', value: 'training' }, { key: 'office', value: 'educational_institution' }],
+  'language-school': [{ key: 'amenity', value: 'language_school' }, { key: 'amenity', value: 'school' }],
+  'tutoring-center': [{ key: 'amenity', value: 'school' }, { key: 'office', value: 'educational_institution' }],
+  'construction-company': [{ key: 'office', value: 'construction_company' }, { key: 'craft', value: 'builder' }],
+  contractor: [{ key: 'craft', value: 'builder' }, { key: 'office', value: 'construction_company' }],
+  'architecture-firm': [{ key: 'office', value: 'architect' }],
+  'engineering-company': [{ key: 'office', value: 'engineer' }],
+  manufacturer: [{ key: 'man_made', value: 'works' }, { key: 'industrial', value: 'factory' }],
+  factory: [{ key: 'man_made', value: 'works' }, { key: 'industrial', value: 'factory' }],
+  'hardware-store': [{ key: 'shop', value: 'hardware' }, { key: 'shop', value: 'doityourself' }],
+});
+
 /**
  * @param {string} id
  * @returns {object|undefined} the enriched catalog type (with `group`, `i18nKey`)
@@ -211,8 +271,9 @@ export function resolveProviderQuery(typeOrCustom, keyword) {
   const catalogType = getType(typeOrCustom);
 
   if (catalogType) {
+    const osmTags = OSM_TAGS_BY_TYPE[catalogType.id] || [];
     if (catalogType.includedType) {
-      const result = { includedType: catalogType.includedType };
+      const result = { includedType: catalogType.includedType, typeId: catalogType.id, osmTags };
       if (cleanKeyword) {
         result.textQuery = `${catalogType.name} ${cleanKeyword}`;
       }
@@ -220,17 +281,17 @@ export function resolveProviderQuery(typeOrCustom, keyword) {
     }
     // Catalog type without a structured mapping → text search.
     const base = catalogType.textQuery || catalogType.name;
-    return { textQuery: cleanKeyword ? `${base} ${cleanKeyword}` : base };
+    return { textQuery: cleanKeyword ? `${base} ${cleanKeyword}` : base, typeId: catalogType.id, osmTags };
   }
 
   // Custom / unsupported type → sanitized text query.
   const cleanCustom = sanitizeCustomType(typeOrCustom);
   if (cleanCustom) {
-    return { textQuery: cleanKeyword ? `${cleanCustom} ${cleanKeyword}` : cleanCustom };
+    return { textQuery: cleanKeyword ? `${cleanCustom} ${cleanKeyword}` : cleanCustom, typeId: null, osmTags: [] };
   }
   // Nothing from the type, but a keyword alone can still drive a text search.
   if (cleanKeyword) {
-    return { textQuery: cleanKeyword };
+    return { textQuery: cleanKeyword, typeId: null, osmTags: [] };
   }
 
   const err = new Error('A valid business type, custom type or keyword is required');
@@ -246,6 +307,7 @@ export function resolveProviderQuery(typeOrCustom, keyword) {
  */
 export function matchesProviderType(business, includedType) {
   if (!includedType) return true;
+  if (business?.source === 'OPENSTREETMAP' || business?.providerName === 'openstreetmap') return true;
   const primary = business?.primaryType || null;
   const types = Array.isArray(business?.types) ? business.types : [];
   if (!types.includes(includedType) && primary !== includedType) return false;
@@ -255,11 +317,17 @@ export function matchesProviderType(business, includedType) {
   return true;
 }
 
+export function resolveOsmTags(typeOrCustom) {
+  const catalogType = getType(typeOrCustom);
+  return catalogType ? [...(OSM_TAGS_BY_TYPE[catalogType.id] || [])] : [];
+}
+
 export default {
   CATALOG,
   getType,
   isValidType,
   resolveProviderQuery,
+  resolveOsmTags,
   matchesProviderType,
   sanitizeCustomType,
 };

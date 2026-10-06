@@ -94,15 +94,24 @@ describe('DiscoveryMap', () => {
   });
 
   describe('with a browser key present', () => {
-    it('does not render the no-key placeholder and does not throw', () => {
+    it('still defaults to the Leaflet/OpenStreetMap path', () => {
       vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY', 'test-fake-key');
 
       expect(() =>
         renderWithProviders(<DiscoveryMap center={CENTER} zoom={12} />),
       ).not.toThrow();
 
-      // Key accepted -> the no-key placeholder must be gone (the lazy canvas or
-      // its loading fallback is rendered instead).
+      expect(screen.getByTestId('discovery-map-osm-fallback')).toBeInTheDocument();
+      expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
+    });
+
+    it('uses Google only when the map provider is explicitly set to google', () => {
+      vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY', 'test-fake-key');
+      vi.stubEnv('NEXT_PUBLIC_LEADGEN_MAP_PROVIDER', 'google');
+
+      renderWithProviders(<DiscoveryMap center={CENTER} zoom={12} />);
+
+      expect(screen.queryByTestId('discovery-map-osm-fallback')).toBeNull();
       expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
     });
   });

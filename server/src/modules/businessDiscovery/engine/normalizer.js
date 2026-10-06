@@ -293,16 +293,29 @@ export function normalizeBusiness(raw) {
   const coordinates = extractCoordinates(raw);
   const placeId = pick(raw.id, raw.placeId, raw.provider?.placeId) ?? null;
 
-  const mapsUrl =
-    coordinates || placeId
-      ? buildMapsUrl({
-          lat: coordinates ? coordinates[1] : undefined,
-          lng: coordinates ? coordinates[0] : undefined,
-          placeId: placeId ?? undefined,
-        })
-      : pick(raw.googleMapsUri, raw.mapsUrl) ?? null;
+  const isOsm = raw.source === 'OPENSTREETMAP'
+    || raw.providerName === 'openstreetmap'
+    || raw.provider?.name === 'openstreetmap'
+    || String(placeId || '').startsWith('osm:');
+  const mapsUrl = isOsm
+    ? pick(raw.mapsUrl, raw.googleMapsUri) ?? null
+    : (
+        coordinates || placeId
+          ? buildMapsUrl({
+              lat: coordinates ? coordinates[1] : undefined,
+              lng: coordinates ? coordinates[0] : undefined,
+              placeId: placeId ?? undefined,
+            })
+          : pick(raw.googleMapsUri, raw.mapsUrl) ?? null
+      );
 
   return {
+    providerName: raw.providerName || raw.provider?.name || null,
+    source: raw.source || null,
+    provider: raw.provider || null,
+    osmType: raw.osmType || null,
+    osmId: raw.osmId || null,
+    osmTags: raw.osmTags || null,
     name,
     normalizedName: name ? normalizeName(name) : null,
     primaryType: pick(raw.primaryType) ?? null,

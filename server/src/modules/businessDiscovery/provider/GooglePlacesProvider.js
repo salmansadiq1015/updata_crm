@@ -24,6 +24,7 @@
 import axios from 'axios';
 import { PlacesProvider } from './PlacesProvider.js';
 import { fieldMask } from './fieldProfiles.js';
+import { DISCOVERY_PROVIDER_NAME, GEOCODING_PROVIDER_NAME } from './providerNames.js';
 import config from '../../../config/index.js';
 import { ExternalServiceError, ERROR_CODES } from '../../../shared/errors/errors.js';
 import { discoveryPlacesApiCallsTotal } from '../../../metrics/index.js';
@@ -77,6 +78,8 @@ export class GooglePlacesProvider extends PlacesProvider {
    */
   constructor({ apiKey, geocodingApiKey, httpClient } = {}) {
     super();
+    this.name = DISCOVERY_PROVIDER_NAME.GOOGLE_PLACES;
+    this.geocodingName = GEOCODING_PROVIDER_NAME.GOOGLE;
     // Null-safe config reads: the singleton is constructed at import time and must
     // NOT throw when `config.maps` is absent (e.g. unit tests that mock config, or
     // a deploy without Maps keys). It simply reports isConfigured() === false then.

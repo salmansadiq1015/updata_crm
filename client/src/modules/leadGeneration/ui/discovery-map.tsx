@@ -36,28 +36,27 @@ const LeafletMapCanvas = dynamic(
 
 /** Browser key env var the deployment can provide to use Google tiles. */
 export const GOOGLE_MAPS_BROWSER_KEY_ENV = 'NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY';
+export const LEADGEN_MAP_PROVIDER_ENV = 'NEXT_PUBLIC_LEADGEN_MAP_PROVIDER';
 
 /**
  * Interactive map for Lead Generation / Business Discovery.
  *
- * - With a Google Maps browser key → the Google canvas (vector map, Advanced
- *   Markers, Map/Satellite, cloud styling).
- * - Without a key → a KEYLESS OpenStreetMap fallback rendered with Leaflet, so
- *   the map still works for free (OSM/Carto raster tiles). A small, dismissible
- *   note points out how to switch to Google tiles.
+ * - Default → keyless OpenStreetMap-compatible Leaflet canvas.
+ * - `NEXT_PUBLIC_LEADGEN_MAP_PROVIDER=google` + browser key → Google canvas.
  *
  * Both canvases share the exact same `DiscoveryMapProps` contract and emit
  * identical AreaDraft values. The "map unavailable" placeholder now only appears
  * on an ACTUAL load/render error (handled inside each canvas), never merely
  * because a Google key is missing.
  *
- * NOTE: discovery SEARCH always needs the server-side GOOGLE_PLACES_API_KEY,
- * independent of which map renders — map tiles and Places data are separate.
+ * NOTE: map rendering and business discovery are separate. Lead discovery uses
+ * the server-side provider mode (OpenStreetMap/Overpass by default).
  */
 export function DiscoveryMap(props: DiscoveryMapProps) {
   const apiKey = (process.env.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY ?? '').trim();
+  const mapProvider = (process.env.NEXT_PUBLIC_LEADGEN_MAP_PROVIDER ?? 'leaflet').trim().toLowerCase();
 
-  if (apiKey) {
+  if (mapProvider === 'google' && apiKey) {
     return <GoogleMapCanvas {...props} apiKey={apiKey} />;
   }
 

@@ -54,9 +54,9 @@ const repo = {
 };
 jest.unstable_mockModule('../discovery.repository.js', () => ({ default: repo }));
 
-const mockProvider = { searchNearby: jest.fn(), searchText: jest.fn() };
-jest.unstable_mockModule('../provider/GooglePlacesProvider.js', () => ({
-  getPlacesProvider: () => mockProvider,
+const mockProvider = { name: 'google_places', searchNearby: jest.fn(), searchText: jest.fn() };
+jest.unstable_mockModule('../provider/providerFactory.js', () => ({
+  getBusinessDiscoveryProvider: () => mockProvider,
 }));
 
 const mockPlanCoverage = jest.fn();

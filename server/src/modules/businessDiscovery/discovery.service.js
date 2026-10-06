@@ -30,6 +30,7 @@ import {
 import { AppError } from '../../shared/errors/errors.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import { enrichResultWithDetails } from './engine/detailsEnricher.js';
+import { getBusinessDiscoveryProvider } from './provider/providerFactory.js';
 import {
   DISCOVERY_JOB_NAME,
   DISCOVERY_PROVIDER_VERSION,
@@ -164,6 +165,7 @@ class DiscoveryService {
 
     const expiresAt = new Date(Date.now() + config.discovery.resultTtlDays * 24 * 60 * 60 * 1000);
 
+    const provider = getBusinessDiscoveryProvider();
     const session = await discoveryRepository.createSession({
       createdBy,
       status: DISCOVERY_SESSION_STATUS.QUEUED,
@@ -171,7 +173,7 @@ class DiscoveryService {
       area,
       businessTypes,
       keyword: input.keyword ? String(input.keyword).trim() || null : null,
-      provider: { name: 'google_places', version: DISCOVERY_PROVIDER_VERSION },
+      provider: { name: provider.name || 'business_discovery', version: DISCOVERY_PROVIDER_VERSION },
       config: sessionConfig,
       expiresAt,
     });

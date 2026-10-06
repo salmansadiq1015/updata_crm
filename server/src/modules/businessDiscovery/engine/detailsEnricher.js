@@ -13,7 +13,7 @@
  * opening a drawer / importing never fails because details could not be fetched).
  */
 
-import { getPlacesProvider } from '../provider/GooglePlacesProvider.js';
+import { getDetailsProvider } from '../provider/providerFactory.js';
 import { normalizeBusiness } from './normalizer.js';
 import discoveryRepository from '../discovery.repository.js';
 import logger from '../../../shared/logger/index.js';
@@ -27,7 +27,7 @@ const LOG_MODULE = 'businessDiscovery';
  * thinner one. rating / reviewCount / businessStatus / email are refreshed only
  * when the details response actually carried a value.
  */
-function buildDetailSet(nb) {
+function buildDetailSet(nb, source = 'provider_details') {
   const set = {
     'business.phone': nb.phone ?? null,
     'business.internationalPhone': nb.internationalPhone ?? null,
@@ -37,7 +37,7 @@ function buildDetailSet(nb) {
     'business.openingHours': nb.openingHours ?? null,
     'business.priceLevel': nb.priceLevel ?? null,
     'details.fetchedAt': new Date(),
-    'details.source': 'google_places',
+    'details.source': source,
   };
   if (nb.email) set['business.email'] = nb.email;
   if (nb.rating != null) set['business.rating'] = nb.rating;
@@ -63,15 +63,17 @@ export async function enrichResultWithDetails(result, { fieldProfile = 'DETAILS_
   if (result.details?.fetchedAt) return { result, fetched: false }; // already cached
 
   const placeId = result.provider?.placeId;
-  const provider = getPlacesProvider();
+  const providerName = result.provider?.name;
+  const provider = getDetailsProvider(providerName);
   if (!placeId || !provider.isConfigured()) return { result, fetched: false };
 
   const owner = createdBy ?? result.createdBy;
   try {
     const { place } = await provider.placeDetails(placeId, { fieldProfile });
+    if (!place) return { result, fetched: false };
     const nb = normalizeBusiness(place);
     const updated = await discoveryRepository.updateResultDetails(result._id, {
-      set: buildDetailSet(nb),
+      set: buildDetailSet(nb, `${providerName || provider.name || 'provider'}_details`),
       createdBy: owner,
     });
     // Best-effort cost accounting — never let a usage write fail the enrichment.

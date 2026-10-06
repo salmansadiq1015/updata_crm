@@ -11,12 +11,9 @@
 //
 // PRODUCTION NOTE: OpenStreetMap's and CARTO's public tile endpoints are fine
 // for development/demo but their usage policies forbid heavy production traffic.
-// For production, point the TileLayer `url` below at a dedicated tile provider
-// (MapTiler, Stadia Maps, Thunderforest, or a self-hosted OSM tile server) — or
-// supply a Google Maps browser key, which switches this whole component out for
-// the Google canvas. Discovery SEARCH is unaffected either way: it always uses
-// the server-side GOOGLE_PLACES_API_KEY; map rendering and Places data are
-// independent concerns.
+// For production, set NEXT_PUBLIC_OSM_TILE_URL to a dedicated tile provider or a
+// self-hosted OSM tile server. Discovery search is controlled separately by the
+// server-side discovery provider mode.
 //
 // SSR: Leaflet needs `window`. This module (and `leaflet/dist/leaflet.css`) is
 // loaded ONLY on the client — `discovery-map.tsx` imports it through
@@ -67,14 +64,14 @@ import {
 
 // ── Keyless raster tile sources (no API key, attribution REQUIRED) ───────────
 const LIGHT_TILES = {
-  url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  url: process.env.NEXT_PUBLIC_OSM_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   attribution:
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  subdomains: 'abc',
+  subdomains: '',
 };
 const DARK_TILES = {
   // CartoDB dark_all — keyless raster, retina-aware ({r}); OSM data, Carto style.
-  url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  url: process.env.NEXT_PUBLIC_OSM_DARK_TILE_URL || 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
   attribution:
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
   subdomains: 'abcd',

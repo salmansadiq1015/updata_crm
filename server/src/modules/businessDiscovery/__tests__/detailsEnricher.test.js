@@ -5,10 +5,8 @@ import {
 // ── Mocks MUST precede importing the module under test ──
 const mockIsConfigured = jest.fn();
 const mockPlaceDetails = jest.fn();
-jest.unstable_mockModule('../provider/GooglePlacesProvider.js', () => ({
-  getPlacesProvider: () => ({ isConfigured: mockIsConfigured, placeDetails: mockPlaceDetails }),
-  googlePlacesProvider: { isConfigured: mockIsConfigured, placeDetails: mockPlaceDetails },
-  default: { isConfigured: mockIsConfigured, placeDetails: mockPlaceDetails },
+jest.unstable_mockModule('../provider/providerFactory.js', () => ({
+  getDetailsProvider: () => ({ name: 'google_places', isConfigured: mockIsConfigured, placeDetails: mockPlaceDetails }),
 }));
 
 const mockUpdateResultDetails = jest.fn();

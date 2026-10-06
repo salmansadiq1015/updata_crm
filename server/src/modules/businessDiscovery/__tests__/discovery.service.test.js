@@ -65,6 +65,10 @@ jest.unstable_mockModule('../../../config/index.js', () => ({
   },
 }));
 
+jest.unstable_mockModule('../provider/providerFactory.js', () => ({
+  getBusinessDiscoveryProvider: () => ({ name: 'openstreetmap' }),
+}));
+
 jest.unstable_mockModule('../engine/detailsEnricher.js', () => ({
   enrichResultWithDetails: mockEnrich,
   default: { enrichResultWithDetails: mockEnrich },
@@ -117,7 +121,7 @@ describe('discoveryService.createDiscovery', () => {
     const doc = mockCreateSession.mock.calls[0][0];
     expect(doc.status).toBe(DISCOVERY_SESSION_STATUS.QUEUED);
     expect(doc.createdBy).toBe(USER);
-    expect(doc.provider).toEqual({ name: 'google_places', version: 'adaptive-v2' });
+    expect(doc.provider).toEqual({ name: 'openstreetmap', version: 'adaptive-v2' });
     // Center stored as GeoJSON [lng, lat]
     expect(doc.location.center).toEqual({ type: 'Point', coordinates: [8.5417, 47.3769] });
     expect(doc.location).toMatchObject({

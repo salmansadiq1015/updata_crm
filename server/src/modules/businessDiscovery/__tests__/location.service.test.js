@@ -33,10 +33,8 @@ async function loadService() {
   };
 
   jest.unstable_mockModule('../../../shared/cache/CacheManager.js', () => ({ default: cacheManager }));
-  jest.unstable_mockModule('../provider/GooglePlacesProvider.js', () => ({
-    getPlacesProvider: () => provider,
-    googlePlacesProvider: provider,
-    default: provider,
+  jest.unstable_mockModule('../provider/providerFactory.js', () => ({
+    getGeocodingProvider: () => provider,
   }));
 
   const mod = await import('../location.service.js');

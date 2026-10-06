@@ -168,13 +168,23 @@ describe('DiscoveryMap map-provider selection', () => {
     expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
   });
 
-  it('uses the Google path (no OSM note) when a browser key is set', () => {
+  it('keeps Leaflet as the default even when a browser key is set', () => {
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY', 'test-fake-key');
 
     renderWithProviders(<DiscoveryMap center={CENTER} zoom={12} />);
 
+    expect(screen.getByTestId('discovery-map-osm-fallback')).toBeInTheDocument();
+    expect(screen.getByTestId('discovery-map-osm-note')).toBeInTheDocument();
+    expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
+  });
+
+  it('uses the Google path only when explicitly requested', () => {
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_KEY', 'test-fake-key');
+    vi.stubEnv('NEXT_PUBLIC_LEADGEN_MAP_PROVIDER', 'google');
+
+    renderWithProviders(<DiscoveryMap center={CENTER} zoom={12} />);
+
     expect(screen.queryByTestId('discovery-map-osm-fallback')).toBeNull();
-    expect(screen.queryByTestId('discovery-map-osm-note')).toBeNull();
     expect(screen.queryByTestId('discovery-map-unavailable')).toBeNull();
   });
 });

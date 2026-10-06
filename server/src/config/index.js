@@ -215,11 +215,34 @@ const config = Object.freeze({
 
   // Business Discovery / Lead Generation: per-session cost and load guards.
   discovery: {
-    maxCoverageCells: envVars.DISCOVERY_MAX_COVERAGE_CELLS,
-    concurrency: envVars.DISCOVERY_CONCURRENCY,
+    providerMode: envVars.DISCOVERY_PROVIDER_MODE,
+    providers: {
+      openStreetMapEnabled: envVars.OPENSTREETMAP_ENABLED,
+      overpassEnabled: envVars.OVERPASS_ENABLED,
+      nominatimEnabled: envVars.NOMINATIM_ENABLED,
+      photonEnabled: envVars.PHOTON_ENABLED,
+      geoapifyEnabled: envVars.GEOAPIFY_ENABLED,
+      mapboxEnabled: envVars.MAPBOX_ENABLED,
+      googleFallbackEnabled: envVars.GOOGLE_FALLBACK_ENABLED,
+    },
+    endpoints: {
+      overpassUrl: envVars.OVERPASS_API_URL,
+      nominatimUrl: envVars.NOMINATIM_API_URL,
+      photonUrl: envVars.PHOTON_API_URL,
+    },
+    credentials: {
+      mapboxAccessToken: envVars.MAPBOX_ACCESS_TOKEN,
+      geoapifyApiKey: envVars.GEOAPIFY_API_KEY,
+    },
+    maxCoverageCells: envVars.DISCOVERY_MAX_CELLS || envVars.DISCOVERY_MAX_COVERAGE_CELLS,
+    concurrency: envVars.DISCOVERY_MAX_CONCURRENT_REQUESTS || envVars.DISCOVERY_CONCURRENCY,
     initialResultLimit: envVars.DISCOVERY_INITIAL_RESULT_LIMIT,
     staleTimeoutMs: envVars.DISCOVERY_STALE_TIMEOUT_MS,
     resultTtlDays: envVars.DISCOVERY_RESULT_TTL_DAYS,
+    requestTimeoutMs: envVars.DISCOVERY_REQUEST_TIMEOUT_MS,
+    retryCount: envVars.DISCOVERY_RETRY_COUNT,
+    googleFallbackMaxRequests: envVars.GOOGLE_FALLBACK_MAX_REQUESTS,
+    userAgent: envVars.DISCOVERY_USER_AGENT,
   },
 
   // Website enrichment — responsible-scraping guards for the lead contact-fill

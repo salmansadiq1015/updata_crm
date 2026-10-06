@@ -14,7 +14,7 @@
  */
 
 import cacheManager from '../../shared/cache/CacheManager.js';
-import { getPlacesProvider } from './provider/GooglePlacesProvider.js';
+import { getGeocodingProvider } from './provider/providerFactory.js';
 import { ValidationError } from '../../shared/errors/errors.js';
 
 // Geocoding is stable → cache for hours. Autocomplete is cheap/volatile → short.
@@ -91,7 +91,7 @@ class LocationService {
     return cacheManager.getOrSet(
       cacheKey,
       async () => {
-        const { result } = await getPlacesProvider().geocode(q);
+        const { result } = await getGeocodingProvider().geocode(q);
         return toLocationDto(result);
       },
       GEOCODE_TTL,
@@ -115,7 +115,7 @@ class LocationService {
     return cacheManager.getOrSet(
       cacheKey,
       async () => {
-        const { predictions } = await getPlacesProvider().autocomplete({
+        const { predictions } = await getGeocodingProvider().autocomplete({
           input: q,
           sessionToken,
           center,
@@ -139,7 +139,7 @@ class LocationService {
     return cacheManager.getOrSet(
       cacheKey,
       async () => {
-        const { result } = await getPlacesProvider().reverseGeocode({ lat, lng });
+        const { result } = await getGeocodingProvider().reverseGeocode({ lat, lng });
         return toLocationDto(result);
       },
       GEOCODE_TTL,

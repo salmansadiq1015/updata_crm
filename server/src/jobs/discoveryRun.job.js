@@ -54,7 +54,7 @@ export class DiscoveryRunWorker extends BaseWorker {
 
     // ── Lazy imports (avoid circular deps) ──
     const { default: discoveryRepository } = await import('../modules/businessDiscovery/discovery.repository.js');
-    const { getPlacesProvider } = await import('../modules/businessDiscovery/provider/GooglePlacesProvider.js');
+    const { getBusinessDiscoveryProvider } = await import('../modules/businessDiscovery/provider/providerFactory.js');
     const { planCoverage } = await import('../modules/businessDiscovery/engine/coveragePlanner.js');
     const { runAdaptiveSearch } = await import('../modules/businessDiscovery/engine/adaptiveSearch.js');
     const { normalizeBusiness } = await import('../modules/businessDiscovery/engine/normalizer.js');
@@ -104,7 +104,8 @@ export class DiscoveryRunWorker extends BaseWorker {
         }
       }
 
-      const provider = getPlacesProvider();
+      const provider = getBusinessDiscoveryProvider();
+      const providerName = provider.name || session.provider?.name || 'business_discovery';
       const keyword = session.keyword && String(session.keyword).trim() ? String(session.keyword).trim() : null;
       // New sessions deliberately store null: result coverage must not stop at
       // an application-defined request count. Only honor a finite value carried
@@ -221,7 +222,7 @@ export class DiscoveryRunWorker extends BaseWorker {
             resultLimitReached = true;
             break;
           }
-          const rawPlaceId = raw?.id ?? raw?.placeId ?? null;
+          const rawPlaceId = raw?.id ?? raw?.placeId ?? raw?.provider?.placeId ?? null;
           if (rawPlaceId && seenPlaceIds.has(String(rawPlaceId))) {
             duplicatesRemoved += 1;
             continue;
@@ -261,7 +262,7 @@ export class DiscoveryRunWorker extends BaseWorker {
           return {
             createdBy,
             discoverySessionId: sessionId,
-            provider: { name: 'google_places', placeId: entry.placeId },
+            provider: { name: entry.business.providerName || providerName, placeId: entry.placeId },
             business: entry.business,
             matching: {
               status: match.status || RESULT_MATCHING_STATUS.NEW,
@@ -270,7 +271,7 @@ export class DiscoveryRunWorker extends BaseWorker {
               matchedBy: match.matchedBy ?? [],
             },
             import: { status: RESULT_IMPORT_STATUS.NOT_IMPORTED },
-            details: { fetchedAt: discoveredAt, source: 'google_places_search' },
+            details: { fetchedAt: discoveredAt, source: `${entry.business.providerName || providerName}_search` },
             discoveryContext: {
               businessTypeIds,
               businessTypes: selectedBusinessTypes,
@@ -281,6 +282,7 @@ export class DiscoveryRunWorker extends BaseWorker {
               area: selectedArea,
               providerQuery: {
                 includedType: context.query?.includedType ?? null,
+                businessTypeId: context.query?.typeId ?? null,
                 textQuery: context.query?.textQuery ?? null,
               },
               searchCoordinates: context.cell ? {

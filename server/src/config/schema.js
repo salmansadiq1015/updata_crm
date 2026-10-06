@@ -126,9 +126,32 @@ const configSchema = Joi.object({
   // Comma-separated extra recipients CC'd on every project status-change email.
   PROJECT_STATUS_NOTIFICATION_CC: Joi.string().allow('').default(''),
 
-  // Business Discovery / Lead Generation (Google Maps Platform).
-  // Every key is optional so the API still boots without them; the discovery
-  // module reports "not configured" until GOOGLE_PLACES_API_KEY is set.
+  // Business Discovery / Lead Generation providers.
+  // Default to open-source data paths. Google remains available only when the
+  // provider mode/fallback flags explicitly select it.
+  DISCOVERY_PROVIDER_MODE: Joi.string()
+    .valid('OPEN_SOURCE_ONLY', 'OPEN_SOURCE_PRIMARY_WITH_COMMERCIAL_FALLBACK', 'PRIMARY_WITH_FALLBACK', 'COMMERCIAL_PRIMARY', 'GOOGLE_ONLY')
+    .default('OPEN_SOURCE_ONLY'),
+  OPENSTREETMAP_ENABLED: Joi.boolean().default(true),
+  OVERPASS_ENABLED: Joi.boolean().default(true),
+  NOMINATIM_ENABLED: Joi.boolean().default(true),
+  PHOTON_ENABLED: Joi.boolean().default(false),
+  GEOAPIFY_ENABLED: Joi.boolean().default(false),
+  MAPBOX_ENABLED: Joi.boolean().default(false),
+  GOOGLE_FALLBACK_ENABLED: Joi.boolean().default(false),
+  OVERPASS_API_URL: Joi.string().uri().allow('').default('https://overpass-api.de/api/interpreter'),
+  NOMINATIM_API_URL: Joi.string().uri().allow('').default('https://nominatim.openstreetmap.org'),
+  PHOTON_API_URL: Joi.string().uri().allow('').default(''),
+  MAPBOX_ACCESS_TOKEN: Joi.string().trim().allow('').default(''),
+  GEOAPIFY_API_KEY: Joi.string().trim().allow('').default(''),
+  DISCOVERY_MAX_CELLS: Joi.number().integer().min(1).max(5000).optional(),
+  DISCOVERY_MAX_CONCURRENT_REQUESTS: Joi.number().integer().min(1).max(10).optional(),
+  DISCOVERY_REQUEST_TIMEOUT_MS: Joi.number().integer().min(1000).max(120000).default(30000),
+  DISCOVERY_RETRY_COUNT: Joi.number().integer().min(0).max(10).default(3),
+  GOOGLE_FALLBACK_MAX_REQUESTS: Joi.number().integer().min(0).max(1000).default(0),
+  DISCOVERY_USER_AGENT: Joi.string().trim().default('UpdataCRM-Discovery/1.0 (+https://updata.local)'),
+
+  // Google Maps Platform.
   // Server key (secret, IP/API-restricted): Places API (New) + Geocoding API.
   GOOGLE_PLACES_API_KEY: Joi.string().trim().allow('').default(''),
   // Browser key (public, HTTP-referrer-restricted): Maps JavaScript API only.

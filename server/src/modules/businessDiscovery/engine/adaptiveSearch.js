@@ -138,6 +138,9 @@ export async function runAdaptiveSearch({
           center: cell.center,
           radiusMeters: cell.radiusMeters,
           includedTypes: [query.includedType],
+          businessTypeId: query.typeId ?? businessType.id,
+          osmTags: query.osmTags,
+          keyword,
           maxResultCount: PROVIDER_PAGE_SIZE,
           rankPreference: 'DISTANCE',
           // Contact fields are included in the search response so discovery
@@ -164,6 +167,9 @@ export async function runAdaptiveSearch({
           const response = await callWithRetry(() => provider.searchText({
             textQuery: query.textQuery,
             includedType: query.includedType,
+            businessTypeId: query.typeId ?? businessType.id,
+            osmTags: query.osmTags,
+            keyword,
             center: cell.center,
             radiusMeters: cell.radiusMeters,
             bounds: cell.bounds,

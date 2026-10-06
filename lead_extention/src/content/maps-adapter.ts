@@ -109,16 +109,25 @@ export class MapsAdapter {
     const feed = this.resultsContainer();
     if (!feed) return this.scrollState(null, false);
     const before = feed.scrollTop;
-    const wasAtEnd = before + feed.clientHeight >= feed.scrollHeight - 8;
-    const target = Math.min(feed.scrollTop + Math.max(feed.clientHeight * 0.85, 650), Math.max(0, feed.scrollHeight - feed.clientHeight));
-    if (!wasAtEnd && target > before) {
+    const maxTop = Math.max(0, feed.scrollHeight - feed.clientHeight);
+    const atBottom = before + feed.clientHeight >= feed.scrollHeight - 8;
+    const target = Math.min(before + Math.max(feed.clientHeight * 0.85, 650), maxTop);
+    if (target > before) {
       feed.scrollTo({ top: target, behavior: 'auto' });
       feed.dispatchEvent(new Event('scroll', { bubbles: true }));
     }
-    if (!wasAtEnd && feed.scrollTop <= before) {
+    // Google Maps appends the next page of results only once the feed is pushed
+    // against its current bottom. Always nudge the last card into view and emit a
+    // wheel event — even when the feed already appears to be at the bottom — so a
+    // not-yet-extended feed keeps lazy-loading instead of being mistaken for the
+    // end after only the first ~20 cards. Genuine completion is still gated on the
+    // "end of the list" marker plus settled no-progress rounds in the background
+    // loop, never on scroll position alone, so this cannot spin forever.
+    if (atBottom || feed.scrollTop <= before + 1) {
       const last = this.getResultLinks().at(-1);
       last?.scrollIntoView({ block: 'end', behavior: 'auto' });
       feed.dispatchEvent(new WheelEvent('wheel', { deltaY: Math.max(feed.clientHeight, 650), bubbles: true }));
+      feed.dispatchEvent(new Event('scroll', { bubbles: true }));
     }
     // Only forward movement is continuation. A virtual list jumping back to
     // "Back to top" must not reset the no-progress completion counter.

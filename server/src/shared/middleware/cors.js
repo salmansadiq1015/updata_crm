@@ -5,7 +5,8 @@ import { AuthorizationError } from '../errors/AppError.js';
 // The manifest public key pins this ID for unpacked and packaged builds. Keep
 // the allowlist exact: authentication tokens must never be exposed to arbitrary
 // extensions installed in the same browser.
-export const LEAD_FINDER_EXTENSION_ORIGIN = 'chrome-extension://bnmjibohjdkkibimeknikhnolhlbgmnk';
+export const LEAD_FINDER_EXTENSION_ID = 'bnmjibohjdkkibimeknikhnolhlbgmnk';
+export const LEAD_FINDER_EXTENSION_ORIGIN = `chrome-extension://${LEAD_FINDER_EXTENSION_ID}`;
 
 /**
  * CORS configuration.

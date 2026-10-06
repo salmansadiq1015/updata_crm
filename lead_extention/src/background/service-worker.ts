@@ -25,7 +25,8 @@ import type {
 import { haversineDistanceMeters, nowIso, parseCoordinates } from '../shared/utils';
 import { discoverPublicEmails } from '../enrichment/website-discovery';
 import { clearAllLocalData, LeadRepository, SearchRepository, SettingsRepository } from '../storage/repositories';
-import { clearAuth, getAuthState, importLeads as importLeadsToCrm, login, logout } from '../integration/crm-api';
+import { clearAuth, connectWithGrant, getAuthState, heartbeat, importLeads as importLeadsToCrm, login, logout } from '../integration/crm-api';
+import { CRM_WEB_ORIGIN, crmApiBaseForOrigin, isTrustedCrmOrigin } from '../shared/crm-connect';
 
 const DISCOVERY_ALARM = 'lead-finder-discovery-recovery';
 const CRM_IMPORT_SETTING = 'crm-import-state';
@@ -55,13 +56,54 @@ chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 });
 
-chrome.runtime.onStartup.addListener(() => { void recoverDiscovery(); void recoverCrmImport(); });
+chrome.runtime.onStartup.addListener(() => { void recoverDiscovery(); void recoverCrmImport(); void heartbeat(); });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === DISCOVERY_ALARM) void recoverDiscovery();
 });
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'open-lead-finder') void chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
 });
+
+// --- Secure connect handoff from the CRM Lead page ---------------------------
+// The CRM website links the extension with a one-time pairing grant via
+// chrome.runtime.sendMessage(EXTENSION_ID, …). externally_connectable already
+// restricts callers to the CRM origin; we re-check the sender defensively so a
+// future manifest change can never silently widen who may mint a session.
+chrome.runtime.onMessageExternal.addListener((message: { type?: string; grant?: unknown; apiBaseUrl?: unknown }, sender, sendResponse) => {
+  if (!isTrustedCrmSender(sender)) { sendResponse({ ok: false, error: 'Untrusted origin.' }); return false; }
+  switch (message?.type) {
+    case 'CRM_PING':
+      // Lets the Lead page detect "installed" and whether this browser is
+      // already connected — without the page ever seeing a token.
+      void getAuthState()
+        .then((auth) => sendResponse({ ok: true, installed: true, connected: auth.authenticated, version: manifestVersion(), user: auth.user ? { id: auth.user.id, email: auth.user.email } : null }))
+        .catch((error) => sendResponse({ ok: false, installed: true, error: errorMessage(error) }));
+      return true;
+    case 'CRM_CONNECT': {
+      const apiBaseUrl = typeof message.apiBaseUrl === 'string' && message.apiBaseUrl ? message.apiBaseUrl : crmApiBaseForOrigin(CRM_WEB_ORIGIN);
+      void connectWithGrant(apiBaseUrl, String(message.grant ?? ''))
+        .then((auth) => { broadcastAuthChanged(); sendResponse({ ok: true, auth }); })
+        .catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+      return true;
+    }
+    case 'CRM_DISCONNECT':
+      void clearAuth()
+        .then(() => { broadcastAuthChanged(); sendResponse({ ok: true }); })
+        .catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+      return true;
+    default:
+      sendResponse({ ok: false, error: 'Unsupported message.' });
+      return false;
+  }
+});
+
+function isTrustedCrmSender(sender: chrome.runtime.MessageSender): boolean {
+  const origin = sender.origin ?? (sender.url ? safeOrigin(sender.url) : null);
+  return isTrustedCrmOrigin(origin);
+}
+function safeOrigin(url: string): string | null { try { return new URL(url).origin; } catch { return null; } }
+function manifestVersion(): string { try { return chrome.runtime.getManifest().version; } catch { return 'unknown'; } }
+function broadcastAuthChanged(): void { void chrome.runtime.sendMessage({ type: 'CRM_AUTH_CHANGED' }).catch(() => undefined); }
 
 chrome.runtime.onMessage.addListener((message: ExtensionMessage | { type: string; [key: string]: unknown }, _sender, sendResponse) => {
   switch (message.type) {
@@ -334,13 +376,13 @@ async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{
       if (job.originCoordinates && lead.latitude !== null && lead.longitude !== null) {
         lead.distanceMeters = haversineDistanceMeters(job.originCoordinates, { latitude: lead.latitude, longitude: lead.longitude });
         lead.distanceKm = lead.distanceMeters / 1_000;
-        if (job.config.radiusKm !== null && lead.distanceKm > job.config.radiusKm) {
-          processed.add(resultKey); newlyProcessed += 1; sinceCheckpoint += 1;
-          await checkpointProcessedRecord(job, processed, resultKey, record.googleMapsUrl, sinceCheckpoint >= DISCOVERY_BATCH_SIZE);
-          if (sinceCheckpoint >= DISCOVERY_BATCH_SIZE) sinceCheckpoint = 0;
-          continue;
-        }
       }
+      // The configured radius is kept as distance metadata that drives the Leads
+      // view distance filter and sort — it no longer discards businesses Google
+      // actually surfaced. A metro search (e.g. "Hotel near Paris") spreads
+      // results tens of kilometres from the map centre, so a hard straight-line
+      // cutoff silently dropped most of them while the processed counter kept
+      // climbing, which looked like discovery was stuck at a handful of leads.
       const exactKey = dedupeKey(lead); const proximityKey = [...job.leads.entries()].find(([, existing]) => isSameLead(existing, lead))?.[0]; const key = proximityKey ?? exactKey;
       const existing = job.leads.get(key);
       if (existing) { job.leads.set(key, mergeLead(existing, lead)); duplicates += 1; job.search.duplicateCount = (job.search.duplicateCount ?? 0) + 1; }
@@ -551,6 +593,7 @@ async function runCrmImport(state: CrmImportProgress): Promise<void> {
     await saveCrmImport(); await publishCrmImport();
   }
   state.status = state.failed ? 'partial' : 'completed'; state.completedAt = nowIso(); await saveCrmImport(); await publishCrmImport(); activeCrmImport = null;
+  void heartbeat();
 }
 
 async function recoverCrmImport(): Promise<boolean> {

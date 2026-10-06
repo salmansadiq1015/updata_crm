@@ -63,6 +63,7 @@ import migrationRoutes from './modules/migration/migration.routes.js';
 import apkRoutes from './modules/apk/apk.routes.js';
 import discoveryRoutes from './modules/businessDiscovery/discovery.routes.js';
 import businessDiscoveryImportRoutes from './modules/businessDiscovery/import.routes.js';
+import extensionRoutes from './modules/extension/extension.routes.js';
 
 // Metrics
 import { metricsMiddleware, metricsEndpoint } from './metrics/index.js';
@@ -151,6 +152,9 @@ export function createApp() {
   // Two routers share the prefix (disjoint paths/methods): discovery first, then import.
   app.use("/api/v1/business-discovery", discoveryRoutes);
   app.use("/api/v1/business-discovery", businessDiscoveryImportRoutes);
+  // Chrome Extension (Lead Finder) secure connect: pairing grant, status,
+  // heartbeat, disconnect. Reuses auth/session/RBAC; see extension.service.js.
+  app.use("/api/v1/extension", extensionRoutes);
   app.use("/api/v1/pm", pmRoutes);
   app.use("/api/v1/scheduling", deployRoutes);
   app.use("/api/v1/mobile", mobileRoutes);

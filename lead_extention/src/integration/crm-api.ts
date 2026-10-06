@@ -5,6 +5,9 @@ import { SettingsRepository } from '../storage/repositories';
 export const DEFAULT_CRM_API_BASE_URL = 'https://updata.behjja.com/api/v1';
 const AUTH_SETTING = 'crm-auth';
 const ACCESS_SETTING = 'crm-access-token';
+// A stable per-install id so the CRM keeps one connection record for this
+// browser across reconnects. It is not a secret — just a correlation handle.
+const INSTANCE_SETTING = 'crm-instance-id';
 
 type StoredAuth = { apiBaseUrl: string; refreshToken: string; user: CrmAuthUser };
 type AuthResponse = { accessToken: string; refreshToken?: string; user?: CrmAuthUser };
@@ -147,6 +150,59 @@ export async function logout(): Promise<void> {
     // Local credentials are cleared even if the server is unavailable.
   }
   await clearAuth();
+}
+
+async function getInstanceId(): Promise<string> {
+  const existing = await SettingsRepository.get<string>(INSTANCE_SETTING);
+  if (existing?.value) return existing.value;
+  const generated = globalThis.crypto?.randomUUID?.()
+    ?? `inst-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+  await SettingsRepository.save(INSTANCE_SETTING, generated);
+  return generated;
+}
+
+function extensionVersion(): string {
+  try {
+    return chrome.runtime.getManifest().version;
+  } catch {
+    return 'unknown';
+  }
+}
+
+/**
+ * Secure connect handoff: redeem a one-time pairing grant that the CRM Lead
+ * page minted for the signed-in user. No password is ever handled here — the
+ * CRM returns a normal rotating access/refresh pair tied to a dedicated
+ * extension session. This is the primary way the extension authenticates.
+ */
+export async function connectWithGrant(apiBaseUrl: string, grant: string): Promise<CrmAuthState> {
+  if (!grant) throw new Error('Missing connect code from the CRM.');
+  const base = normalizeApiBaseUrl(apiBaseUrl || DEFAULT_CRM_API_BASE_URL);
+  const instanceId = await getInstanceId();
+  const response = await fetch(`${base}/extension/pairing/redeem`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant, instanceId, extensionVersion: extensionVersion() }),
+  });
+  const data = await parseResponse(response) as AuthResponse;
+  await saveAuth(base, data);
+  void heartbeat().catch(() => undefined);
+  return getAuthState();
+}
+
+/**
+ * Tell the CRM this install is alive (updates the connection's lastSeenAt so
+ * the Lead-page status card stays accurate). Best-effort; never throws.
+ */
+export async function heartbeat(): Promise<void> {
+  try {
+    await request('/extension/heartbeat', {
+      method: 'POST',
+      body: JSON.stringify({ extensionVersion: extensionVersion() }),
+    });
+  } catch {
+    // The CRM also refreshes lastSeen on connect/import; a missed beat is fine.
+  }
 }
 
 export async function importLeads(leads: Lead[]): Promise<{ total: number; created: number; existing: number; failed: number; results: Array<{ clientId: string; status: string; leadId?: string; leadNumber?: string; message?: string }> }> {

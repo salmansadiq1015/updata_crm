@@ -1,4 +1,4 @@
-import type { MapsContext, RawBusinessRecord } from '../shared/types';
+import type { MapsContext, MapsScrollState, RawBusinessRecord } from '../shared/types';
 
 const PLACE_LINK = 'a[href*="/maps/place/"]';
 
@@ -101,14 +101,40 @@ export class MapsAdapter {
     };
   }
 
-  scrollResults(): { changed: boolean; atEnd: boolean } {
-    const feed = document.querySelector<HTMLElement>('[role="feed"]') ?? this.findScrollableResultsContainer();
-    if (!feed) return { changed: false, atEnd: true };
+  scrollResults(): MapsScrollState {
+    const feed = this.resultsContainer();
+    if (!feed) return this.scrollState(null, false);
     const before = feed.scrollTop;
-    feed.scrollTop = Math.min(feed.scrollTop + Math.max(feed.clientHeight * 0.85, 650), feed.scrollHeight);
+    const target = Math.min(feed.scrollTop + Math.max(feed.clientHeight * 0.85, 650), Math.max(0, feed.scrollHeight - feed.clientHeight));
+    feed.scrollTo({ top: target, behavior: 'auto' });
+    feed.dispatchEvent(new Event('scroll', { bubbles: true }));
+    if (feed.scrollTop === before) {
+      const last = this.getResultLinks().at(-1);
+      last?.scrollIntoView({ block: 'end', behavior: 'auto' });
+      feed.dispatchEvent(new WheelEvent('wheel', { deltaY: Math.max(feed.clientHeight, 650), bubbles: true }));
+    }
     const changed = feed.scrollTop !== before;
-    const atEnd = feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 8;
-    return { changed, atEnd };
+    return this.scrollState(feed, changed);
+  }
+
+  getScrollState(): MapsScrollState {
+    return this.scrollState(this.resultsContainer(), false);
+  }
+
+  restoreScroll(checkpoint: { scrollTop?: number; lastVisibleResultKey?: string | null }): MapsScrollState {
+    const feed = this.resultsContainer();
+    if (!feed) return this.scrollState(null, false);
+    const before = feed.scrollTop;
+    const anchor = checkpoint.lastVisibleResultKey
+      ? this.getResultLinks().find((link) => {
+        const record = this.extractBusinessSummary(link);
+        return record ? resultKeyForMapRecord(record) === checkpoint.lastVisibleResultKey : false;
+      })
+      : null;
+    if (anchor) anchor.scrollIntoView({ block: 'end', behavior: 'auto' });
+    else if (Number.isFinite(checkpoint.scrollTop)) feed.scrollTo({ top: Math.max(0, checkpoint.scrollTop ?? 0), behavior: 'auto' });
+    feed.dispatchEvent(new Event('scroll', { bubbles: true }));
+    return this.scrollState(feed, feed.scrollTop !== before);
   }
 
   collectVisible(): RawBusinessRecord[] {
@@ -231,8 +257,82 @@ export class MapsAdapter {
   }
 
   private findScrollableResultsContainer(): HTMLElement | null {
-    return [...document.querySelectorAll<HTMLElement>('div')]
-      .filter((node) => node.scrollHeight > node.clientHeight + 100)
-      .sort((a, b) => a.clientWidth * a.clientHeight - b.clientWidth * b.clientHeight)[0] ?? null;
+    const candidates = [...document.querySelectorAll<HTMLElement>('div')]
+      .filter((node) => node.scrollHeight > node.clientHeight + 100 && node.clientHeight > 200 && node.clientWidth > 220)
+      .map((node) => ({
+        node,
+        placeLinks: node.querySelectorAll(PLACE_LINK).length,
+        visibleArea: node.clientWidth * node.clientHeight
+      }))
+      .filter((item) => item.placeLinks > 0)
+      .sort((a, b) => (b.placeLinks * 1_000_000 + b.visibleArea) - (a.placeLinks * 1_000_000 + a.visibleArea));
+    return candidates[0]?.node ?? null;
   }
+
+  private resultsContainer(): HTMLElement | null {
+    const feeds = [...document.querySelectorAll<HTMLElement>('[role="feed"]')]
+      .filter((node) => node.querySelector(PLACE_LINK) && node.clientHeight > 100);
+    const feedContainers = feeds.flatMap((feed) => {
+      const candidates: HTMLElement[] = [];
+      let node: HTMLElement | null = feed;
+      for (let depth = 0; node && depth < 6; depth += 1, node = node.parentElement) {
+        if (node.scrollHeight > node.clientHeight + 20 && node.clientHeight > 200 && node.querySelector(PLACE_LINK)) candidates.push(node);
+      }
+      return candidates;
+    }).sort((a, b) => b.querySelectorAll(PLACE_LINK).length - a.querySelectorAll(PLACE_LINK).length);
+    return feedContainers[0] ?? this.findScrollableResultsContainer() ?? feeds[0] ?? null;
+  }
+
+  private scrollState(feed: HTMLElement | null, changed: boolean): MapsScrollState {
+    const records = this.getResultLinks()
+      .map((anchor) => this.extractBusinessSummary(anchor))
+      .filter((record): record is RawBusinessRecord => Boolean(record));
+    const visibleKeys = records.map(resultKeyForMapRecord);
+    const text = feed?.textContent ?? document.body.textContent ?? '';
+    const endConfirmed = /you(?:'|’)?ve reached the end|end of (?:the )?(?:list|results)|no more results|no additional results/i.test(text);
+    const scrollTop = feed?.scrollTop ?? 0;
+    const scrollHeight = feed?.scrollHeight ?? 0;
+    const clientHeight = feed?.clientHeight ?? 0;
+    return {
+      changed,
+      atEnd: Boolean(feed) && scrollTop + clientHeight >= scrollHeight - 8,
+      endConfirmed,
+      scrollTop,
+      scrollHeight,
+      clientHeight,
+      visibleResultCount: records.length,
+      firstVisibleResultKey: visibleKeys[0] ?? null,
+      lastVisibleResultKey: visibleKeys.at(-1) ?? null
+    };
+  }
+}
+
+// Keep the content-script entry self-contained. Chrome loads manifest content
+// scripts as classic scripts, so this identity helper intentionally mirrors the
+// background implementation without introducing a static ESM import/chunk.
+function resultKeyForMapRecord(record: RawBusinessRecord): string {
+  const normalizeText = (value: string | null | undefined) => (value ?? '')
+    .normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+  if (record.placeIdentifier) return `place:${normalizeText(record.placeIdentifier)}`;
+  if (record.googleMapsUrl) {
+    const token = record.googleMapsUrl.match(/!1s([^!]+)/)?.[1];
+    if (token) return `maps:id:${normalizeText(decodeURIComponent(token))}`;
+    try {
+      const url = new URL(record.googleMapsUrl, 'https://www.google.com');
+      const place = url.pathname.match(/\/maps\/place\/([^/]+)/i)?.[1];
+      if (place) {
+        const coordinates = record.googleMapsUrl.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+        const geo = coordinates ? `|${Number(coordinates[1]).toFixed(5)},${Number(coordinates[2]).toFixed(5)}` : '';
+        return `maps:name:${normalizeText(decodeURIComponent(place.replace(/\+/g, ' ')))}${geo}`;
+      }
+    } catch { /* field-based fallback below */ }
+  }
+  const name = normalizeText(record.businessName);
+  const phone = (record.phone ?? '').replace(/[^\d+]/g, '').replace(/^00/, '+');
+  const address = normalizeText(record.address);
+  if (name && (phone || address)) return `contact:${name}|${phone}|${address}`;
+  let domain = '';
+  try { if (record.website) domain = new URL(record.website.startsWith('http') ? record.website : `https://${record.website}`).hostname.replace(/^www\./i, '').toLowerCase(); } catch { /* coordinate fallback */ }
+  if (name && domain) return `domain:${name}|${domain}`;
+  return `fallback:${name}|${record.latitude?.toFixed(5) ?? ''}|${record.longitude?.toFixed(5) ?? ''}`;
 }

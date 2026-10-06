@@ -70,7 +70,14 @@ async function clearSessionTokens(): Promise<void> {
 async function parseResponse(response: Response): Promise<any> {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    const message = body?.error?.message || body?.message || `CRM request failed (${response.status}).`;
+    const details = Array.isArray(body?.error?.details) ? body.error.details : [];
+    const detailMessage = details
+      .map((detail: { field?: string; message?: string }) => detail?.field && detail?.message ? `${detail.field}: ${detail.message}` : detail?.message)
+      .filter(Boolean)
+      .join(' · ');
+    const message = [body?.error?.message || body?.message || `CRM request failed (${response.status}).`, detailMessage]
+      .filter(Boolean)
+      .join(': ');
     const error = new Error(message) as Error & { status: number; code?: string };
     error.status = response.status;
     error.code = body?.error?.code;
@@ -181,7 +188,7 @@ async function importViaExistingFileRoute(leads: Lead[]): Promise<{ total: numbe
     if (message) return { clientId: lead.id, status: 'failed', message };
     // The legacy endpoint returns aggregate duplicate counts only. Preserve
     // accurate totals and use the count to label successful rows best-effort.
-    return { clientId: lead.id, status: index < created ? 'created' : index < created + existing ? 'existing' : 'created' };
+    return { clientId: lead.id, status: index < created ? 'created' : index < created + existing ? 'existing' : 'failed', ...(index >= created + existing ? { message: 'The CRM did not confirm this row as created or existing.' } : {}) };
   });
   return { total: Number(summary.total ?? leads.length), created, existing, failed: Number(summary.failed ?? failedRows.size), results };
 }

@@ -27,6 +27,15 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
     sendResponse({ ok: true, ...adapter.scrollResults(), context: adapter.context() });
     return false;
   }
+  if ((message as { type: string }).type === 'GET_SCROLL_STATE') {
+    sendResponse({ ok: true, ...adapter.getScrollState(), context: adapter.context() });
+    return false;
+  }
+  if ((message as { type: string }).type === 'RESTORE_SCROLL') {
+    const checkpoint = message as unknown as { scrollTop?: number; lastVisibleResultKey?: string | null };
+    sendResponse({ ok: true, ...adapter.restoreScroll(checkpoint), context: adapter.context() });
+    return false;
+  }
   return false;
 });
 

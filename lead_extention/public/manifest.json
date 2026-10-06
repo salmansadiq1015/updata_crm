@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Lead Finder — Local Maps Discovery",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A local-first assistant for collecting business details exposed in your Google Maps research session.",
   "minimum_chrome_version": "114",
   "permissions": ["storage", "downloads", "sidePanel", "activeTab", "scripting", "alarms"],
   "host_permissions": [
+    "https://updata.behjja.com/*",
     "https://www.google.com/maps/*",
     "https://maps.google.com/*",
     "https://*.google.com/maps/*"

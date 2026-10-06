@@ -4,8 +4,13 @@ export type DiscoveryStatus =
   | 'discovering'
   | 'paused'
   | 'processing'
+  | 'resuming'
+  | 'retrying'
   | 'enriching'
   | 'completed'
+  | 'stopped'
+  | 'error'
+  // Kept for persisted jobs created by earlier extension builds.
   | 'cancelled'
   | 'failed';
 
@@ -18,6 +23,7 @@ export type DiscoveryPhase =
   | 'NEXT_RESULTS'
   | 'NO_MORE_RESULTS'
   | 'COMPLETED'
+  | 'STOPPED'
   | 'FAILED';
 
 export type CrmLeadStatus = 'not-imported' | 'importing' | 'imported' | 'existing' | 'failed';
@@ -100,14 +106,29 @@ export interface SearchRecord {
   status: DiscoveryStatus;
   discoveredCount: number;
   uniqueCount: number;
+  duplicateCount?: number;
   exportedCount: number;
   tabId?: number;
   lastActivityAt?: string;
   currentPhase?: DiscoveryPhase;
   currentQuery?: string;
   currentPage?: number;
+  currentResultIndex?: number;
+  queryIndex?: number;
   currentStateKey?: string;
   processedResultKeys?: string[];
+  processedCount?: number;
+  currentBatchSize?: number;
+  retryCount?: number;
+  stableRounds?: number;
+  scrollTop?: number;
+  scrollHeight?: number;
+  firstVisibleResultKey?: string | null;
+  lastVisibleResultKey?: string | null;
+  lastSuccessfulResultKey?: string | null;
+  lastSuccessfulUrl?: string | null;
+  lastSuccessfulTimestamp?: string | null;
+  updatedAt?: string;
   stopRequested?: boolean;
   error?: string | null;
   config?: DiscoveryConfig;
@@ -140,7 +161,21 @@ export interface DiscoveryProgress {
   phase?: DiscoveryPhase;
   processed?: number;
   currentQuery?: string;
+  currentBatch?: number;
+  configuredMaximum?: number;
   error?: string | null;
+}
+
+export interface MapsScrollState {
+  changed: boolean;
+  atEnd: boolean;
+  endConfirmed: boolean;
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+  visibleResultCount: number;
+  firstVisibleResultKey: string | null;
+  lastVisibleResultKey: string | null;
 }
 
 export interface CrmAuthUser {
@@ -170,6 +205,8 @@ export interface CrmImportProgress {
   failed: number;
   failedLeadIds: string[];
   leadIds: string[];
+  processedLeadIds?: string[];
+  nextIndex?: number;
   error?: string | null;
   startedAt?: string;
   completedAt?: string | null;

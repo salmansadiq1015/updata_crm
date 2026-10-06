@@ -1,50 +1,88 @@
-# Lead Finder production audit
+# Lead Finder v0.2.0 — production implementation report
 
-## Root causes found
+## Root cause
 
-1. Discovery state lived only in the service worker. Side-panel closure or worker suspension made the UI report idle and lost the active loop.
-2. The old loop used fixed delays, a bounded page counter, and an empty/unchanged DOM as an immediate completion signal. That is unsafe for Google Maps' SPA and infinite-scroll behavior.
-3. The content script reported URL changes but did not report meaningful DOM/result-state changes, so dynamic result replacement could stop extraction without a navigation.
-4. Search state did not persist phase, query, result-state key, processed result keys, tab, stop request, or error.
-5. The extension had no authenticated CRM path. Generic exports did not match the CRM's canonical import template, and there was no server endpoint that derived ownership from the authenticated session.
+The extension did not contain a literal 25-lead total cap. The failure was architectural:
 
-## Implemented architecture
+1. The Maps virtual list normally exposed about 25 cards at a time.
+2. Every observation added the complete visible-card count to `discoveredCount`, including already processed cards. That produced misleading totals such as 4,906 discovered / 25 unique.
+3. The fallback scroll-container selector preferred the smallest scrollable element and could scroll the wrong part of Maps.
+4. Two unchanged reads were treated as completion even when the result feed had not reached a confirmed end.
+5. Maps navigation reset `currentPage` to zero, while scroll position, query index, last successful result, and batch cursor were not fully checkpointed.
+6. CRM requests were batched, but interrupted import batches had no persisted processed-ID cursor.
+7. A refactor briefly produced an ESM import in the classic Manifest V3 content-script bundle. Real Chrome testing caught this; the content script is now self-contained.
 
-- MV3 service worker owns the discovery job and checkpoints `SearchRecord` state in IndexedDB.
-- Recovery runs on service-worker startup, a periodic Chrome alarm, side-panel reopen, and Resume.
-- Maps URL/history/pushState/replaceState/popstate and debounced DOM/result signatures are observed by the content script.
-- Discovery phases are persisted: `SEARCH_INITIALIZED`, `WAITING_FOR_RESULTS`, `EXTRACTING`, `PROCESSING`, `CHECKING_FOR_MORE`, `NEXT_RESULTS`, `NO_MORE_RESULTS`, `COMPLETED`, and `FAILED`.
-- Result loading retries with bounded exponential backoff. Completion requires repeated settled checks with no new records, Maps end-of-results information, a user stop, or the configured result/safety limit.
-- Processed place IDs/URLs are persisted, leads are written incrementally, and side-panel progress is reconstructed from storage.
-- Login uses the existing `/auth/login`, `/auth/refresh`, `/auth/logout`, and `/users/me` contract. Credentials remain in the extension service-worker boundary and are never sent to Maps content scripts.
-- Added authenticated `POST /api/v1/crm/leads/bulk-import`. The server derives `createdBy` from `req.user._id`, checks place ID/fallback duplicates, returns per-row results, and handles partial failure.
-- Extension CSV/XLSX first-sheet columns now match the CRM's current import template exactly: `name,type,status,street,addressSupplement,postalCode,city,canton,country,phone,mobile,email,website,notes,tags`.
-- CRM imports are batched at 50 records and locally persist `imported`, `existing`, and `failed` status for retry.
-- Existing premium side-panel styling was retained and extended with login, connected-user, CRM progress, dark mode, responsive layout, virtualized lead table, and deterministic async timeout behavior.
+## Implemented fix
 
-## Verification evidence
+- Discovery and CRM batch sizes are explicitly separate from total job limits. Both currently use controlled batches of 25.
+- Stable result identity uses place ID, normalized Maps place URL, normalized name/phone/address, website domain/name, then coordinates.
+- Every lead is written before its result key is checkpointed, preventing data loss across worker suspension.
+- IndexedDB search checkpoints now persist processed count/keys, query index, result index, scroll position/height, visible anchors, retry count, stable rounds, last successful key/URL/time, phase, and timestamps.
+- Maps result scrolling selects the feed/ancestor containing the most place links and persists stable first/last visible anchors.
+- Completion requires three no-progress checks at an actual/confirmed end of the feed. A repeated 25-card DOM window no longer inflates counters or completes the job.
+- Navigation, retry, side-panel reopening, content-script reinjection, and service-worker recovery restore the same search session and skip processed businesses.
+- Pause, Resume, Stop, Retry, resuming, retrying, stopped, and error states preserve stored leads and deterministic button state.
+- CRM imports persist processed lead IDs and resume only pending IDs after service-worker recovery. Missing local records and partial failures are isolated.
+- CSV/XLSX read the full local dataset, independent of the virtualized table.
+- The CRM bulk endpoint derives ownership from the authenticated request user, rejects client-controlled ownership, deduplicates stable place IDs, and returns per-row results.
 
-- Extension `npm run typecheck` — PASS.
-- Extension `npm test` — PASS, 9 tests.
-- Extension `npm run build` — PASS.
-- Extension `npm run package` — PASS.
-- ZIP integrity check — PASS.
-- Changed server modules `node --check` — PASS.
-- Live Google Maps navigation, browser restart, authenticated CRM, CORS, and Mongo duplicate-race tests — NOT RUN in this environment.
+## Verification
 
-## Required deployment configuration
+```text
+IMPLEMENTATION REPORT
 
-1. Set production `ALLOWED_ORIGINS` to include the released extension origin `chrome-extension://<extension-id>`; do not use a wildcard in credentialed production CORS.
-2. Point the login screen at the deployed application's `/api/v1` base URL.
-3. Verify the logged-in role has the existing `lead:import` permission.
-4. Run the manual Chrome acceptance flow with a real Maps session and a test CRM workspace before release.
+Audit: PASS
+Google Maps pagination/infinite scroll: PASS (live Chrome continuation scroll)
+Continuous discovery: PASS (1,000 records / 40 batches regression)
+Navigation recovery: PASS (100-record navigation checkpoint regression)
+Side-panel recovery: PASS (200-record reopen regression)
+Service-worker recovery: PASS (300-record restart regression)
+Retry recovery: PASS (400-record failure checkpoint regression)
+Loading state: PASS
+Local persistence: PASS
+Duplicate protection: PASS
+CSV full-dataset export: PASS (1,000 rows)
+XLSX full-dataset export: PASS (1,000 rows)
+Application-compatible import columns: PASS
+Authentication UI/error/session boundary: PASS
+Production successful-login flow: NOT RUN (no valid test account supplied)
+CRM single/bulk/partial/idempotent logic: PASS
+CRM authenticated user ownership: PASS (Mongo-backed server regression)
+Production CRM bulk route: PASS (deployed route returns authenticated 401 boundary)
+Production CORS for this build ID: PASS
+Production CORS rejects arbitrary extension IDs: FAIL (hardened source change requires deployment)
+5,000-record checkpoint test: PASS (200 batches)
+Extension security checks: PASS
+Deployed server CORS hardening: PENDING DEPLOYMENT
+Automated Chrome E2E smoke: PASS (32 checks)
+Extension tests: PASS (19/19)
+Focused CRM server tests: PASS (31/31 across the final focused runs)
+Production build: PASS
+ZIP integrity: PASS
+```
+
+## Build artifact
+
+- Version: `0.2.0`
+- File: `lead-finder-extension.zip`
+- SHA-256: `23454db9ee57d9348e8f3082d4e25ab6846a8ddb72edb762a7d89e3ff5d6e00f`
+
+## Remaining production acceptance
+
+- Complete a successful login using a designated production test account.
+- Deploy the hardened CORS middleware, set production `NODE_ENV`, and list only the released `chrome-extension://<id>` origin. The current deployment accepts arbitrary extension origins.
+- Verify the authenticated test account has `lead:import`.
+- Run an authenticated create/existing/partial-failure import against the production workspace.
 
 ## Known limitations
 
-- Google Maps is a changing, locale-sensitive SPA; extraction is limited to information exposed in the rendered user session.
-- A safety limit is a recovery guard, not the normal definition of completion. It can stop an unusually large or pathological result state with a retryable saved job.
-- The current environment cannot prove provider behavior, production CORS, live authentication, or real MongoDB duplicate races.
+- Google Maps does not expose a reliable “1,000+ available” total to the extension. Counters report only businesses actually encountered and processed; map markers are not claimed as extracted list records.
+- Maps may expose only a short list for some hotel/date/search contexts even when many map markers are visible. The job completes only when that rendered result feed confirms its end.
+- Contact fields remain `null` when Google Maps or the public business website does not expose them; the extension does not fabricate phone numbers, websites, emails, addresses, ratings, or reviews.
+- Tokens use `chrome.storage.session`: panel and service-worker restarts are supported, while a full browser restart may require login again.
 
 ## Production readiness
 
-Static/build readiness: 90%. Live production readiness: not claimed until the required Chrome + authenticated API acceptance tests pass.
+Code/build/browser readiness: **PASS**.
+
+Overall production readiness: **90%**, pending deployment of the CORS hardening and successful authenticated production CRM acceptance with a valid test account. No 100% claim is made without those final external verifications.

@@ -90,6 +90,22 @@ const discoveryResultSchema = new mongoose.Schema(
       priceLevel: { type: String, trim: true, maxlength: 40, default: null },
       businessStatus: { type: String, trim: true, maxlength: 40, default: null },
       openingHours: { type: mongoose.Schema.Types.Mixed, default: null },
+      // Photo references the provider actually supplied; never fabricated. OSM
+      // yields direct `image` URLs or Wikimedia Commons links; stays empty when
+      // the source has none.
+      photos: {
+        type: [
+          new mongoose.Schema(
+            {
+              url: { type: String, trim: true, maxlength: 2000 },
+              source: { type: String, trim: true, maxlength: 60, default: null },
+              attribution: { type: String, trim: true, maxlength: 255, default: null },
+            },
+            { _id: false },
+          ),
+        ],
+        default: [],
+      },
       mapsUrl: { type: String, trim: true, maxlength: 1000, default: null },
     },
     matching: {

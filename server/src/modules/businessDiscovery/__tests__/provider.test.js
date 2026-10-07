@@ -450,6 +450,39 @@ describe('OverpassProvider', () => {
     });
   });
 
+  test('extracts photos from OSM image/wikimedia_commons tags and never fabricates them', async () => {
+    const http = okHttp({
+      elements: [
+        {
+          type: 'node', id: 11, lat: 48.85, lon: 2.35,
+          tags: { name: 'Photo Cafe', amenity: 'cafe', image: 'https://example.com/a.jpg', wikimedia_commons: 'File:Cafe.jpg' },
+        },
+        { type: 'node', id: 12, lat: 48.86, lon: 2.36, tags: { name: 'No Photo Cafe', amenity: 'cafe' } },
+        { type: 'node', id: 13, lat: 48.87, lon: 2.37, tags: { name: 'Bad Image', amenity: 'cafe', image: 'not-a-url' } },
+      ],
+    });
+    const provider = new OverpassProvider({
+      enabled: true,
+      apiUrls: ['https://overpass.test/api/interpreter'],
+      httpClient: http,
+    });
+
+    const response = await provider.searchNearby({
+      center: { lat: 48.85, lng: 2.35 },
+      radiusMeters: 1000,
+      maxResultCount: 20,
+    });
+
+    const withPhotos = response.places.find((place) => place.id === 'osm:node/11');
+    expect(withPhotos.photos).toEqual([
+      { url: 'https://example.com/a.jpg', source: 'image', attribution: 'OpenStreetMap' },
+      { url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Cafe.jpg?width=800', source: 'wikimedia_commons', attribution: 'Wikimedia Commons' },
+    ]);
+    // No image tags → empty (never fabricated); an invalid image URL is ignored.
+    expect(response.places.find((place) => place.id === 'osm:node/12').photos).toEqual([]);
+    expect(response.places.find((place) => place.id === 'osm:node/13').photos).toEqual([]);
+  });
+
   test('tries the next Overpass endpoint after a retryable endpoint failure', async () => {
     const networkError = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
     const http = {

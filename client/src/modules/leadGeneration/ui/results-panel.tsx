@@ -128,6 +128,7 @@ export function ResultsPanel({
   const existingCount = counts?.existing ?? results.filter((r) => r.crmStatus === 'EXISTING').length;
   const possibleDuplicateCount = counts?.possibleDuplicates
     ?? results.filter((r) => r.crmStatus === 'POSSIBLE_DUPLICATE').length;
+  const failedCount = counts?.failed ?? results.filter((r) => r.importStatus === 'FAILED').length;
 
   const mapResults = useMemo(
     () =>
@@ -223,6 +224,18 @@ export function ResultsPanel({
                     : coverageExhausted
                       ? t('leadgen.results.complete', 'Provider search exhausted')
                       : t('leadgen.results.searching', 'Search still running')}
+            </p>
+            <p className="mt-1 text-[11px] tabular-nums text-muted-foreground" aria-live="polite">
+              {t(
+                'leadgen.results.countsLine',
+                'Discovered: {discovered} · Loaded: {loaded} · Duplicates: {duplicates} · Failed: {failed}',
+                {
+                  discovered: total,
+                  loaded: Math.min(loadedCount, total || loadedCount),
+                  duplicates: possibleDuplicateCount,
+                  failed: failedCount,
+                },
+              )}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {locationLabel && (

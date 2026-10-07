@@ -74,6 +74,13 @@ export async function runAdaptiveSearch({
     stoppedEarly: false,
   };
 
+  // Each provider decides its own page size: Google caps a page at 20, while
+  // OSM/Overpass returns a whole cell at once and advertises a much larger size
+  // so a dense area is surfaced without being throttled to Google's limit.
+  const pageSize = Number.isFinite(provider?.searchPageSize) && provider.searchPageSize > 0
+    ? Math.floor(provider.searchPageSize)
+    : PROVIDER_PAGE_SIZE;
+
   const types = (businessTypes || []).map((businessType) => {
     const query = resolveProviderQuery(businessType.id, keyword);
     return { businessType, query };
@@ -141,7 +148,7 @@ export async function runAdaptiveSearch({
           businessTypeId: query.typeId ?? businessType.id,
           osmTags: query.osmTags,
           keyword,
-          maxResultCount: PROVIDER_PAGE_SIZE,
+          maxResultCount: pageSize,
           rankPreference: 'DISTANCE',
           // Contact fields are included in the search response so discovery
           // classification can use phone/domain and the result drawer does not
@@ -150,7 +157,7 @@ export async function runAdaptiveSearch({
         }));
         const places = Array.isArray(response?.places) ? response.places : [];
         state.rawResults += places.length;
-        saturated = places.length >= PROVIDER_PAGE_SIZE;
+        saturated = places.length >= pageSize;
         if (places.length) await onBatch(places, { cell, businessType, query });
         await stopRequested();
       } else {
@@ -173,7 +180,7 @@ export async function runAdaptiveSearch({
             center: cell.center,
             radiusMeters: cell.radiusMeters,
             bounds: cell.bounds,
-            maxResultCount: PROVIDER_PAGE_SIZE,
+            maxResultCount: pageSize,
             fieldProfile: 'DETAILS_IMPORT',
             pageToken,
           }));
@@ -201,7 +208,7 @@ export async function runAdaptiveSearch({
             pageToken = next;
           }
         } while (pageToken && !state.cancelled && !state.budgetExhausted && !state.stoppedEarly);
-        saturated = lastPageSize >= PROVIDER_PAGE_SIZE;
+        saturated = lastPageSize >= pageSize;
       }
     } catch (error) {
       if (error?.code === 'DISCOVERY_NOT_CONFIGURED') throw error;

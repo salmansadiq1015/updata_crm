@@ -236,6 +236,7 @@ class DiscoveryService {
       throw new AppError('Discovery session not found', 404, ERROR_CODES.DISCOVERY_SESSION_NOT_FOUND);
     }
     session = await this._markStaleActiveSession(session, createdBy);
+    session = await this._reconcileCounts(session, createdBy);
     return this.toSessionDTO(session);
   }
 
@@ -503,12 +504,18 @@ class DiscoveryService {
         location: coords ? { lat: coords[1], lng: coords[0] } : null,
         mapsUrl: business.mapsUrl ?? null,
         openingHours: business.openingHours ?? null,
+        photos: Array.isArray(business.photos)
+          ? business.photos
+            .filter((photo) => photo && typeof photo.url === 'string')
+            .map((photo) => ({ url: photo.url, source: photo.source ?? null, attribution: photo.attribution ?? null }))
+          : [],
         priceLevel: business.priceLevel ?? null,
         businessStatus: business.businessStatus ?? null,
       },
       crmStatus: result.matching?.status ?? null,
       importStatus: result.import?.status ?? null,
       matchedLeadId: result.matching?.matchedLeadId ? String(result.matching.matchedLeadId) : null,
+      importedLeadId: result.import?.leadId ? String(result.import.leadId) : null,
       discoveredAt: result.discoveredAt ?? null,
     };
   }
@@ -629,6 +636,52 @@ class DiscoveryService {
       }
     }
     return out;
+  }
+
+  /**
+   * For a terminal session, make the stored `counts` match the actually-stored
+   * results. Live counters written during the run are per-run deltas and can be
+   * deflated (e.g. a "load more" re-run, or a run that stalled before its final
+   * aggregate write), which previously surfaced as "0 new · 0 in CRM" even though
+   * every result was badged NEW — and hid the "Add all new" button. The authoritative
+   * aggregate (`countsForSession`) is cheap and only runs for terminal sessions
+   * (so it never fires on the active-polling path). Drift is self-healed by
+   * persisting the corrected counts.
+   */
+  async _reconcileCounts(session, createdBy) {
+    if (!session || NON_TERMINAL_STATUSES.includes(session.status)) return session;
+
+    let aggregate;
+    try {
+      aggregate = await discoveryRepository.countsForSession(session._id, { createdBy });
+    } catch (err) {
+      logger.warn('Discovery counts reconciliation failed; using stored counts', {
+        module: LOG_MODULE, action: 'reconcileCounts', sessionId: String(session._id), error: { message: err.message },
+      });
+      return session;
+    }
+    if (!aggregate || typeof aggregate !== 'object') return session;
+
+    const next = {
+      discovered: aggregate.discovered,
+      new: aggregate.new,
+      existing: aggregate.existing,
+      possibleDuplicates: aggregate.possibleDuplicates,
+      imported: aggregate.imported,
+      skipped: aggregate.skipped,
+      failed: aggregate.failed,
+    };
+
+    const current = session.counts || {};
+    const drifted = Object.entries(next).some(([key, value]) => (current[key] ?? 0) !== value);
+    if (!drifted) return session;
+
+    const updated = await discoveryRepository.updateSessionProgress(
+      session._id,
+      { counts: next },
+      { createdBy },
+    );
+    return updated || { ...session, counts: { ...current, ...next } };
   }
 
   async _markStaleActiveSession(session, createdBy) {

@@ -82,9 +82,20 @@ const BusinessCard = memo(function BusinessCard({
         />
       </div>
 
-      {/* Thumbnail / initials */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary ring-1 ring-primary/15">
+      {/* Thumbnail / initials (photo overlays the initials; initials show if it fails) */}
+      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10 text-xs font-semibold text-primary ring-1 ring-primary/15">
         {businessInitials(business.name)}
+        {business.photos?.[0]?.url && (
+          // eslint-disable-next-line @next/next/no-img-element -- provider-hosted external image URL, not a local asset
+          <img
+            src={business.photos[0].url}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 h-full w-full object-cover"
+            onError={(event) => { (event.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          />
+        )}
       </div>
 
       {/* Main */}

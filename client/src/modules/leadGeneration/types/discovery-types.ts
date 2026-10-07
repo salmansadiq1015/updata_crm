@@ -223,8 +223,26 @@ export type DiscoveryBusiness = {
   reviewCount: number | null;
   priceLevel: number | null;
   businessStatus: string | null;
+  openingHours?: DiscoveryOpeningHours;
+  photos?: DiscoveryPhoto[];
   mapsUrl: string | null;
 };
+
+export type DiscoveryPhoto = { url: string; source: string | null; attribution: string | null };
+
+/**
+ * Provider opening hours: OSM supplies a raw `opening_hours` string; Google
+ * supplies a structured object (weekday descriptions + openNow). Either may be
+ * absent.
+ */
+export type DiscoveryOpeningHours =
+  | string
+  | {
+      openNow?: boolean;
+      weekdayDescriptions?: string[];
+      [key: string]: unknown;
+    }
+  | null;
 
 export type MatchedBy = { method: MatchMethod; confidence: number };
 

@@ -134,7 +134,41 @@ describe('use-discovery hooks', () => {
     expect(requests).toBeGreaterThan(initialRequests);
   });
 
-  it('loads one marker cursor and waits for an explicit next-page request', async () => {
+  it('auto-drains every marker page so the map mirrors the full result set', async () => {
+    const requestedCursors: Array<string | null> = [];
+    server.use(
+      http.get(`${D}/sessions/:id/markers`, ({ request }) => {
+        const cursor = new URL(request.url).searchParams.get('cursor');
+        requestedCursors.push(cursor);
+        if (!cursor) {
+          return HttpResponse.json(okPage(
+            [{ id: 'marker-1', lat: 47.37, lng: 8.54, status: 'NEW' }],
+            { hasNext: true, nextCursor: 'cursor-2', limit: 300 },
+          ));
+        }
+        if (cursor === 'cursor-2') {
+          return HttpResponse.json(okPage(
+            [{ id: 'marker-2', lat: 47.38, lng: 8.55, status: 'NEW' }],
+            { hasNext: false, nextCursor: null, limit: 300 },
+          ));
+        }
+        return HttpResponse.json(okPage([], { hasNext: false, nextCursor: null, limit: 300 }));
+      }),
+    );
+
+    const { result } = renderHook(
+      () => useDiscoveryMarkers('sess-1', { enabled: true }),
+      { wrapper: makeWrapper() },
+    );
+
+    // Drains without any explicit fetchNextPage call until the cursor is exhausted.
+    await waitFor(() => expect(result.current.data?.pages.length).toBe(2));
+    expect(requestedCursors).toContain('cursor-2');
+    expect(result.current.hasNextPage).toBe(false);
+    expect(result.current.data?.pages.flatMap((page) => page.data)).toHaveLength(2);
+  });
+
+  it('stops auto-draining markers when a page errors (no retry storm)', async () => {
     const requestedCursors: Array<string | null> = [];
     server.use(
       http.get(`${D}/sessions/:id/markers`, ({ request }) => {
@@ -150,24 +184,18 @@ describe('use-discovery hooks', () => {
       }),
     );
 
-    const { result, rerender } = renderHook(
+    const { result } = renderHook(
       () => useDiscoveryMarkers('sess-1', { enabled: true }),
       { wrapper: makeWrapper() },
     );
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(requestedCursors.filter((cursor) => cursor === null).length).toBeGreaterThan(0);
-    expect(requestedCursors.filter((cursor) => cursor === 'cursor-2')).toHaveLength(0);
+    await waitFor(() => expect(requestedCursors).toContain('cursor-2'));
+    await waitFor(() => expect(result.current.isFetchNextPageError).toBe(true));
 
-    const requestsAfterFirstPage = requestedCursors.length;
-    rerender();
-    expect(requestedCursors).toHaveLength(requestsAfterFirstPage);
-
-    await act(async () => {
-      await result.current.fetchNextPage({ cancelRefetch: false });
-    });
-    expect(requestedCursors.length).toBeGreaterThan(requestsAfterFirstPage);
-    expect(requestedCursors.slice(requestsAfterFirstPage).every((cursor) => cursor === 'cursor-2')).toBe(true);
+    const cursor2Count = requestedCursors.filter((cursor) => cursor === 'cursor-2').length;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    // The errored page is not auto-retried in a loop; it waits for retryFailedPage().
+    expect(requestedCursors.filter((cursor) => cursor === 'cursor-2').length).toBe(cursor2Count);
   });
 
   it('useCreateDiscovery returns a sessionId on success', async () => {

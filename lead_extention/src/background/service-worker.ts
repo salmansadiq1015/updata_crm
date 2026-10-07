@@ -46,6 +46,9 @@ import { clearAuth, connectWithGrant, getAuthState, heartbeat, importLeads as im
 import { CRM_WEB_ORIGIN, crmApiBaseForOrigin, isTrustedCrmOrigin } from '../shared/crm-connect';
 
 const DISCOVERY_ALARM = 'lead-finder-discovery-recovery';
+// Keeps the MV3 service worker alive / wakes it during a CRM import so a large
+// multi-batch run can't silently stall if the worker is recycled between batches.
+const CRM_IMPORT_ALARM = 'lead-finder-crm-import';
 const CRM_IMPORT_SETTING = 'crm-import-state';
 const MAX_RESULT_WAIT_RETRIES = 6;
 // Consecutive failed detail-page reads before per-business hydration is paused
@@ -83,6 +86,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => { void recoverDiscovery(); void recoverCrmImport(); void heartbeat(); });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === DISCOVERY_ALARM) void recoverDiscovery();
+  if (alarm.name === CRM_IMPORT_ALARM) void recoverCrmImport();
 });
 chrome.commands.onCommand.addListener((command) => {
   if (command === 'open-lead-finder') void chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
@@ -758,7 +762,7 @@ async function startCrmImport(leadIds: string[] = []): Promise<{ ok: boolean; er
   const ids = leadIds.length ? leadIds : (stored?.status === 'partial' || stored?.status === 'failed' ? stored.failedLeadIds : []);
   if (!ids.length) return { ok: false, error: 'Select at least one lead to add to the CRM.' };
   activeCrmImport = { id: crypto.randomUUID(), status: 'running', total: ids.length, processed: 0, created: 0, existing: 0, failed: 0, failedLeadIds: [], leadIds: ids, processedLeadIds: [], nextIndex: 0, startedAt: nowIso(), completedAt: null, error: null };
-  await saveCrmImport(); void runCrmImport(activeCrmImport); return { ok: true, state: activeCrmImport };
+  await saveCrmImport(); await chrome.alarms.create(CRM_IMPORT_ALARM, { periodInMinutes: 0.5 }); void runCrmImport(activeCrmImport); return { ok: true, state: activeCrmImport };
 }
 
 async function runCrmImport(state: CrmImportProgress): Promise<void> {
@@ -787,6 +791,7 @@ async function runCrmImport(state: CrmImportProgress): Promise<void> {
     await saveCrmImport(); await publishCrmImport();
   }
   state.status = state.failed ? 'partial' : 'completed'; state.completedAt = nowIso(); await saveCrmImport(); await publishCrmImport(); activeCrmImport = null;
+  void chrome.alarms.clear(CRM_IMPORT_ALARM);
   void heartbeat();
 }
 

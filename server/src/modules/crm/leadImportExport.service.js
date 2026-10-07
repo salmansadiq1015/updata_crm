@@ -37,6 +37,10 @@ const MAX_ROWS = 10000;
 const EXPORT_CAP = 50000; // mirrors customer/sparePart exportCsv
 const EXPORT_PAGE_SIZE = 1000;
 const ERROR_CAP = 100; // per-row errors returned to the caller
+// Bulk import dedup runs the per-row ladder concurrently (bounded) so a large
+// file does not serialize hundreds of lookups into a request timeout. Kept well
+// under the Mongo connection pool since each lookup fans out to a few queries.
+const DEDUP_CONCURRENCY = 12;
 
 const CSV_MIME = 'text/csv; charset=utf-8';
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -548,13 +552,14 @@ class LeadImportExportService {
       total: rows.length, created: 0, skipped: 0, duplicates: 0, failed: 0,
     };
     const errors = [];
-    const validDocs = [];
-    const validRowNumbers = [];
 
     const pushError = (row, message) => {
       if (errors.length < ERROR_CAP) errors.push({ row, message });
     };
 
+    // Phase 1 — map + validate (pure, fast). Rows that map to nothing are
+    // skipped; rows without a name fail; the rest become dedup candidates.
+    const candidates = [];
     for (let i = 0; i < rows.length; i += 1) {
       const rowNumber = i + 2; // +1 for the header row, +1 for 1-based indexing
       const dto = this.mapRowToLead(rows[i]);
@@ -572,30 +577,38 @@ class LeadImportExportService {
         continue;
       }
 
-      if (await this._isDuplicate(dto)) {
-        summary.duplicates += 1;
-        continue;
-      }
-
-      validDocs.push(dto);
-      validRowNumbers.push(rowNumber);
+      candidates.push({ dto, rowNumber, isDuplicate: false });
     }
 
-    if (validDocs.length) {
-      // bulkCreate does not number leads; reserve one L-##### per valid row.
-      // Reserve numbers serially: all target the one shared counter doc, so
-      // concurrent $inc would contend on the same document.
-      const numbered = [];
-      for (const doc of validDocs) {
-        const leadNumber = await counterService.getNextLeadNumber();
-        numbered.push({ ...doc, leadNumber, createdBy });
-      }
+    // Phase 2 — dedup with bounded concurrency. The ladder (name+postal / phone /
+    // website) is unchanged per row; only the scheduling changes: a 300+ row file
+    // previously ran these lookups strictly one-after-another and timed out.
+    await this._runBounded(candidates, DEDUP_CONCURRENCY, async (candidate) => {
+      candidate.isDuplicate = await this._isDuplicate(candidate.dto);
+    });
+
+    const toCreate = [];
+    for (const candidate of candidates) {
+      if (candidate.isDuplicate) summary.duplicates += 1;
+      else toCreate.push(candidate);
+    }
+
+    if (toCreate.length) {
+      // bulkCreate does not number leads; reserve the whole L-##### block in ONE
+      // atomic $inc instead of one round-trip per row (the old per-row loop
+      // contended on the single counter doc and dominated the import time).
+      const numbers = await counterService.getNextLeadNumberBlock(toCreate.length);
+      const numbered = toCreate.map((candidate, index) => ({
+        ...candidate.dto,
+        leadNumber: numbers[index],
+        createdBy,
+      }));
 
       const result = await leadService.bulkCreate(numbered);
       summary.created = result.insertedCount || 0;
       for (const writeError of result.errors || []) {
         summary.failed += 1;
-        const rowNumber = validRowNumbers[writeError.index] ?? null;
+        const rowNumber = toCreate[writeError.index]?.rowNumber ?? null;
         pushError(rowNumber, writeError.message || 'Insert failed');
       }
     }
@@ -712,6 +725,25 @@ class LeadImportExportService {
       error: { message: error.message },
     }));
     return { ...summary, results };
+  }
+
+  /**
+   * Run `worker(item, index)` over `items` with at most `limit` in flight,
+   * resolving once all have completed. `worker` must be non-throwing (ours
+   * swallow lookup errors), so one bad row never rejects the whole run.
+   */
+  async _runBounded(items, limit, worker) {
+    if (!items.length) return;
+    const size = Math.max(1, Math.min(Math.trunc(limit) || 1, items.length));
+    let next = 0;
+    const runNext = async () => {
+      while (next < items.length) {
+        const index = next;
+        next += 1;
+        await worker(items[index], index);
+      }
+    };
+    await Promise.all(Array.from({ length: size }, () => runNext()));
   }
 
   /** Global dedup ladder (name+postal / phone / website). Non-blocking: a lookup

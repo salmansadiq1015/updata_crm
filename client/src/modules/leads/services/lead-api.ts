@@ -371,6 +371,11 @@ export const leadApi = {
     const response = toApiResponse<unknown>(
       await apiClient.post(ENDPOINTS.LEADS.IMPORT, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        // A bulk file import does far more work than a normal request (parse +
+        // dedup + bulk insert of up to 10k rows), so it gets a longer ceiling
+        // than the client's default 30s. The server-side batching keeps a few
+        // hundred rows well under a second; this only covers large files.
+        timeout: 120000,
       }),
     );
     return normalizeImportResult(response.data);

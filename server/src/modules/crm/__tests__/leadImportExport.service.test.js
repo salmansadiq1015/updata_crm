@@ -19,8 +19,18 @@ jest.unstable_mockModule('../lead.repository.js', () => ({
 }));
 
 const mockGetNextLeadNumber = jest.fn();
+// The bulk import now reserves a block of numbers in one call; delegate to the
+// per-number mock so each test's numbering setup still drives the result.
+const mockGetNextLeadNumberBlock = jest.fn(async (count) => {
+  const out = [];
+  for (let i = 0; i < Number(count || 0); i += 1) out.push(await mockGetNextLeadNumber());
+  return out;
+});
 jest.unstable_mockModule('../counter.service.js', () => ({
-  default: { getNextLeadNumber: mockGetNextLeadNumber },
+  default: {
+    getNextLeadNumber: mockGetNextLeadNumber,
+    getNextLeadNumberBlock: mockGetNextLeadNumberBlock,
+  },
 }));
 
 const mockLogEvent = jest.fn();
@@ -161,6 +171,42 @@ describe('leadImportExportService.importLeads (CSV)', () => {
     expect(mockLogEvent).toHaveBeenCalledWith(expect.objectContaining({
       eventType: 'lead.file_import', module: 'lead',
     }));
+  });
+
+  it('reserves all lead numbers in a single block call and preserves row order (no per-row round-trip)', async () => {
+    const header = 'name;city;postalCode';
+    const dataRows = Array.from({ length: 50 }, (_, i) => `Biz ${i};Zürich;800${i % 10}`);
+    const csv = [header, ...dataRows].join('\n');
+
+    mockFindDuplicates.mockResolvedValue([]); // none are duplicates
+    let seq = 0;
+    mockGetNextLeadNumber.mockImplementation(async () => {
+      seq += 1;
+      return `L-${String(seq).padStart(5, '0')}`;
+    });
+    mockBulkCreate.mockImplementation(async (docs) => ({
+      created: docs, errors: [], insertedCount: docs.length, failedCount: 0,
+    }));
+
+    const result = await service.importLeads(
+      {
+        buffer: Buffer.from(csv, 'utf8'), mimetype: 'text/csv', originalname: 'leads.csv', mode: 'new',
+      },
+      'user-1',
+      {},
+    );
+
+    expect(result.summary).toEqual({
+      total: 50, created: 50, skipped: 0, duplicates: 0, failed: 0,
+    });
+    // The whole block is reserved in ONE call — not one counter $inc per row.
+    expect(mockGetNextLeadNumberBlock).toHaveBeenCalledTimes(1);
+    expect(mockGetNextLeadNumberBlock).toHaveBeenCalledWith(50);
+    // Dedup runs concurrently but input order is preserved for numbering.
+    const docs = mockBulkCreate.mock.calls[0][0];
+    expect(docs).toHaveLength(50);
+    expect(docs[0].name).toBe('Biz 0');
+    expect(docs[49].name).toBe('Biz 49');
   });
 
   it('stamps the importing user as createdBy on every row sent to bulkCreate', async () => {

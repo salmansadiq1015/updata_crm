@@ -182,6 +182,14 @@ export function LeadListView() {
   const hasPrev = pageIndex > 0;
   const hasNext = pageIndex < loadedPages - 1 || Boolean(query.hasNextPage);
 
+  // Total matching leads (server-counted) → an honest "page X of Y". The total
+  // is the same on every page; read it from whichever loaded page carries it.
+  const totalLeads = pages?.find((page) => typeof page.pagination.total === 'number')?.pagination.total;
+  const totalPages = typeof totalLeads === 'number' && pageSize > 0
+    ? Math.max(1, Math.ceil(totalLeads / pageSize))
+    : undefined;
+  const currentPage = pageIndex + 1;
+
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   const goNext = useCallback(async () => {
     if (pageIndex < loadedPages - 1) {
@@ -623,6 +631,8 @@ export function LeadListView() {
                 isFetching: query.isFetching,
                 onNext: () => void goNext(),
                 onPrev: goPrev,
+                currentPage,
+                totalPages,
               }}
               renderRowActions={renderRowActions}
             />
@@ -651,8 +661,13 @@ export function LeadListView() {
                     ))}
                   </div>
                   <div className="flex items-center justify-between px-2 py-2.5 text-xs">
-                    <div className="text-muted-foreground">
-                      {t('leads.count', '{count} leads on this page', { count: leads.length })}
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <span>{t('leads.count', '{count} leads on this page', { count: leads.length })}</span>
+                      {totalPages != null && (
+                        <span className="tabular-nums">
+                          · {t('common.pageOf', 'Page {page} of {total}', { page: currentPage, total: totalPages })}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Button

@@ -102,6 +102,26 @@ async function refreshAccess(auth: StoredAuth): Promise<string> {
   return data.accessToken;
 }
 
+// Every CRM call is bounded. Without this a slow, unreachable, or not-yet-deployed
+// endpoint leaves a fetch pending forever — which froze the import card at
+// "0 / N processed" with no error. A timeout turns that into a clear, retryable
+// failure the per-batch loop surfaces (added/existing/failed counts update).
+const CRM_REQUEST_TIMEOUT_MS = 20_000;
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = CRM_REQUEST_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('The CRM did not respond in time. Check your connection and try again.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function request(path: string, init: RequestInit = {}, retry = true): Promise<any> {
   let auth = await getStoredAuth();
   if (!auth) throw new Error('Log in to the CRM before continuing.');
@@ -111,7 +131,7 @@ async function request(path: string, init: RequestInit = {}, retry = true): Prom
   headers.set('Authorization', `Bearer ${token}`);
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   try {
-    return await parseResponse(await fetch(`${auth.apiBaseUrl}${path}`, { ...init, headers }));
+    return await parseResponse(await fetchWithTimeout(`${auth.apiBaseUrl}${path}`, { ...init, headers }));
   } catch (error) {
     if (retry && (error as { status?: number }).status === 401) {
       auth = (await getStoredAuth())!;
@@ -119,7 +139,7 @@ async function request(path: string, init: RequestInit = {}, retry = true): Prom
       const retryHeaders = new Headers(init.headers);
       retryHeaders.set('Authorization', `Bearer ${refreshed}`);
       if (init.body && !(init.body instanceof FormData)) retryHeaders.set('Content-Type', 'application/json');
-      return parseResponse(await fetch(`${auth.apiBaseUrl}${path}`, { ...init, headers: retryHeaders }));
+      return parseResponse(await fetchWithTimeout(`${auth.apiBaseUrl}${path}`, { ...init, headers: retryHeaders }));
     }
     if ((error as { status?: number }).status === 401) await clearAuth();
     throw error;
@@ -218,12 +238,15 @@ export async function importLeads(leads: Lead[], opts: { importId?: string; impo
     }
     return await request('/crm/leads/bulk-import', { method: 'POST', body: JSON.stringify(body) });
   } catch (error) {
-    // The current deployed CRM may predate the structured extension endpoint.
-    // Fall back to its existing authenticated CSV import contract so users do
-    // not receive an opaque all-record failure while the API is being rolled
-    // out. Both routes derive ownership from the bearer session server-side.
+    // The current deployed CRM may predate the structured extension endpoint,
+    // or that endpoint may hang/time out while the older CSV import route still
+    // works. Fall back to the existing authenticated CSV contract whenever the
+    // structured call is missing (404), erroring (5xx), or unreachable/timed out
+    // (no HTTP status) — but let genuine 400/401/403 responses surface so the
+    // user sees a real validation/auth problem instead of a silent retry.
     const status = (error as { status?: number }).status;
-    if (status !== 404 && !(status && status >= 500 && status <= 599)) throw error;
+    const shouldFallback = status === 404 || status == null || (status >= 500 && status <= 599);
+    if (!shouldFallback) throw error;
     return importViaExistingFileRoute(leads);
   }
 }

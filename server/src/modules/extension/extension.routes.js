@@ -5,7 +5,7 @@ import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
 import { createLimiter } from '../../shared/middleware/rateLimiter.js';
 import config from '../../config/index.js';
-import { redeemPairing, heartbeat, disconnect } from './extension.validation.js';
+import { redeemPairing, heartbeat, disconnect, listImports } from './extension.validation.js';
 
 /**
  * Chrome Extension connect routes — mounted at /api/v1/extension by app.js.
@@ -59,6 +59,15 @@ router.get(
   authenticate,
   requirePermission('lead:read'),
   (req, res, next) => extensionController.getStatus(req, res, next),
+);
+
+// Recent extension import runs (for the Lead page's live/historical view).
+router.get(
+  '/imports',
+  authenticate,
+  requirePermission('lead:read'),
+  validate(listImports),
+  (req, res, next) => extensionController.listImports(req, res, next),
 );
 
 // Heartbeat from the extension's own authenticated session (no extra perm —

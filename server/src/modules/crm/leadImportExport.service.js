@@ -159,6 +159,63 @@ function cleanString(value) {
   return str === '' ? undefined : str;
 }
 
+// --- Extension-import field normalisers ------------------------------------
+// Maps-sourced rows are messy. These never throw: they return a clean value or
+// null, so a junk field degrades the single row to a usable lead (or drops the
+// field) instead of failing. The Lead model caps phone/email/website lengths;
+// returning model-safe values keeps good rows importable. Never trust the
+// client for data quality.
+
+/** A plausible phone, trimmed to the model's 50-char cap, or null. Rejects
+ *  non-phone text such as "Café X · Visited link" (letters dominate). */
+function normalizeLeadPhone(value) {
+  const raw = cleanString(value);
+  if (!raw) return null;
+  const digits = (raw.match(/\d/g) || []).length;
+  const letters = (raw.match(/\p{L}/gu) || []).length;
+  // A real phone is mostly dialling characters: enough digits, few letters.
+  if (digits < 5 || letters > 3) return null;
+  const cleaned = raw.replace(/[^\d+()\-.\s/]/g, '').replace(/\s+/g, ' ').trim();
+  if (cleaned.replace(/\D/g, '').length < 5) return null;
+  return cleaned.slice(0, 50);
+}
+
+/** An absolute http(s) URL (scheme added if missing), capped, or null. */
+function normalizeLeadWebsite(value) {
+  let raw = cleanString(value);
+  if (!raw) return null;
+  if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+  try {
+    const url = new URL(raw);
+    if (!/^https?:$/.test(url.protocol) || !url.hostname.includes('.')) return null;
+    return url.toString().slice(0, 500);
+  } catch {
+    return null;
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** A valid, lower-cased email within the model's cap, or null. */
+function normalizeLeadEmail(value) {
+  const raw = cleanString(value)?.toLowerCase();
+  if (!raw || raw.length > 255 || !EMAIL_RE.test(raw)) return null;
+  return raw;
+}
+
+/** Finite number within [min, max], else null. Out-of-range values are dropped
+ *  (not clamped) so we never fabricate a location/rating from bad input. */
+function inRangeOrNull(value, min, max) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= min && n <= max ? n : null;
+}
+
+/** Non-negative integer review count, or null. */
+function normalizeReviewCount(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.trunc(n));
+}
+
 const COUNTRY_NAME_TO_CODE = new Map([
   ['switzerland', 'CH'], ['schweiz', 'CH'], ['suisse', 'CH'], ['svizzera', 'CH'],
   ['france', 'FR'], ['germany', 'DE'], ['deutschland', 'DE'], ['austria', 'AT'],
@@ -577,10 +634,11 @@ class LeadImportExportService {
       const clientId = String(record.clientId ?? '');
       try {
         const placeId = cleanString(record.placeIdentifier);
-        const name = cleanString(record.businessName);
+        const name = cleanString(record.businessName)?.slice(0, 255);
         if (!name) throw new Error('Business name is required');
-        const phoneValue = cleanString(record.phone);
-        const websiteValue = cleanString(record.website);
+        // Normalise messy Maps fields; junk degrades to null, not a failed row.
+        const phoneValue = normalizeLeadPhone(record.phone);
+        const websiteValue = normalizeLeadWebsite(record.website);
         const postalCode = cleanString(record.postalCode);
         const country = normalizeCountryCode(record.country);
         const address = {
@@ -604,18 +662,21 @@ class LeadImportExportService {
           results.push({ clientId, status: 'existing', leadId: String(existing._id), leadNumber: existing.leadNumber });
           continue;
         }
-        const latitude = Number.isFinite(record.latitude) ? record.latitude : null;
-        const longitude = Number.isFinite(record.longitude) ? record.longitude : null;
+        const latitude = inRangeOrNull(record.latitude, -90, 90);
+        const longitude = inRangeOrNull(record.longitude, -180, 180);
+        const email = Array.isArray(record.emails)
+          ? (record.emails.map(normalizeLeadEmail).find(Boolean) || null)
+          : normalizeLeadEmail(record.emails);
         const lead = await leadService.create({
           name,
           type: LEAD_TYPE.BUSINESS,
           status: LEAD_STATUS.NEW,
           address,
-          phone: phoneValue || null,
-          email: cleanString(record.emails?.[0]) || null,
-          website: websiteValue || null,
+          phone: phoneValue,
+          email,
+          website: websiteValue,
           location: latitude !== null && longitude !== null ? { type: 'Point', coordinates: [longitude, latitude] } : null,
-          providerMeta: { rating: record.rating ?? null, reviewCount: record.reviewCount ?? null, priceLevel: cleanString(record.priceLevel) || null },
+          providerMeta: { rating: inRangeOrNull(record.rating, 0, 5), reviewCount: normalizeReviewCount(record.reviewCount), priceLevel: cleanString(record.priceLevel) || null },
           source: placeId ? LEAD_SOURCE.GOOGLE_PLACES : LEAD_SOURCE.IMPORT,
           sourceMetadata: { googlePlaceId: placeId || null, businessType: cleanString(record.category) || null, discoveredAt: record.discoveredAt || null },
           tags: Array.isArray(record.categories) ? record.categories.slice(0, 50) : [],

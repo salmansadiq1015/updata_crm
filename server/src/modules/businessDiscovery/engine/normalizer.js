@@ -221,6 +221,31 @@ function parseGenericAddress(address) {
   };
 }
 
+/**
+ * Normalize provider photo references to `[{ url, source, attribution }]`.
+ * Accepts either already-shaped objects (OSM provider) or bare URL strings.
+ * Only http(s) URLs are kept; never fabricated — an empty/invalid input yields
+ * an empty array.
+ */
+function normalizePhotos(photos) {
+  if (!Array.isArray(photos)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const photo of photos) {
+    const url = typeof photo === 'string' ? photo : photo?.url;
+    const trimmed = typeof url === 'string' ? url.trim() : '';
+    if (!/^https?:\/\/\S+$/i.test(trimmed) || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    out.push({
+      url: trimmed,
+      source: (typeof photo === 'object' && photo?.source) ? String(photo.source).slice(0, 60) : null,
+      attribution: (typeof photo === 'object' && photo?.attribution) ? String(photo.attribution).slice(0, 255) : null,
+    });
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
 /** Extract `[lng, lat]` coordinates from the many location shapes we may see. */
 function extractCoordinates(raw) {
   const loc = raw?.location;
@@ -269,6 +294,7 @@ export function normalizeBusiness(raw) {
       priceLevel: null,
       businessStatus: null,
       openingHours: null,
+      photos: [],
       mapsUrl: null,
     };
   }
@@ -333,6 +359,7 @@ export function normalizeBusiness(raw) {
     priceLevel: pick(raw.priceLevel) ?? null,
     businessStatus: pick(raw.businessStatus) ?? null,
     openingHours: pick(raw.regularOpeningHours, raw.currentOpeningHours, raw.openingHours) ?? null,
+    photos: normalizePhotos(raw.photos),
     mapsUrl,
   };
 }

@@ -161,7 +161,11 @@ const configSchema = Joi.object({
   GOOGLE_GEOCODING_API_KEY: Joi.string().trim().allow('').default(''),
   DISCOVERY_MAX_COVERAGE_CELLS: Joi.number().integer().min(1).max(5000).default(100),
   DISCOVERY_CONCURRENCY: Joi.number().integer().min(1).max(10).default(3),
-  DISCOVERY_INITIAL_RESULT_LIMIT: Joi.number().integer().min(1).max(1000).default(300),
+  // Safety ceiling on how many unique businesses a single sweep will surface.
+  // The adaptive sweep subdivides saturated cells, so this is not an "arbitrary
+  // 300"; it only bounds memory/runtime. Default is high enough to be effectively
+  // exhaustive for normal areas; "Load more" extends it by another increment.
+  DISCOVERY_INITIAL_RESULT_LIMIT: Joi.number().integer().min(1).max(50000).default(5000),
   DISCOVERY_STALE_TIMEOUT_MS: Joi.number().integer().min(60000).max(3600000).default(600000),
   // Retention of discovery sessions and their results (TTL on expiresAt).
   DISCOVERY_RESULT_TTL_DAYS: Joi.number().integer().min(1).max(365).default(60),

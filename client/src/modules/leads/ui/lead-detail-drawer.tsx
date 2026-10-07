@@ -39,6 +39,7 @@ import { PERMISSIONS } from '@/shared/constants/permissions';
 import { usePermissions } from '@/shared/hooks/use-permissions';
 import { DetailDrawer } from '@/shared/components/detail-drawer';
 import type { DrawerMode } from '@/shared/components/detail-drawer';
+import { RatingStars } from './rating-stars';
 import { EmailComposeModal as EmailComposeModalImpl } from '@/modules/doctpl/components/EmailComposeModal';
 import { EmailHistoryPanel as EmailHistoryPanelImpl } from '@/modules/doctpl/components/email-history-panel';
 import { useDeleteLead, useEnrichLead, useLead, useLeadContactLog, useUpdateLead } from '../hooks/use-leads';
@@ -1011,16 +1012,23 @@ function LeadDetailBody({
           )}
           {rating !== null && (
             <InfoRow icon={Star} label={t('leads.drawer.rating', 'Google rating')}>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="font-medium">{rating.toFixed(1)}</span>
-                <span className="text-amber-500" aria-hidden="true">★</span>
-                {reviewCount !== null && (
-                  <span className="text-xs text-muted-foreground">
-                    {reviewCount === 1
-                      ? t('leads.drawer.reviewOne', '1 review')
-                      : t('leads.drawer.reviewMany', '{count} reviews', { count: reviewCount })}
-                  </span>
-                )}
+              <span className="flex flex-col gap-0.5">
+                <span className="inline-flex items-center gap-2">
+                  <span className="font-semibold">{rating.toFixed(1)}</span>
+                  <RatingStars rating={rating} />
+                  {reviewCount !== null && (
+                    <span className="text-xs text-muted-foreground">
+                      {reviewCount === 1
+                        ? t('leads.drawer.reviewOne', '1 review')
+                        : t('leads.drawer.reviewMany', '{count} reviews', { count: reviewCount })}
+                    </span>
+                  )}
+                </span>
+                {/* The provider exposes an overall rating only — be honest that the
+                    per-star breakdown is not available rather than fabricating it. */}
+                <span className="text-[11px] text-muted-foreground">
+                  {t('leads.drawer.ratingNoBreakdown', 'Detailed rating breakdown is not available from the source.')}
+                </span>
               </span>
             </InfoRow>
           )}

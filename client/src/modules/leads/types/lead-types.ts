@@ -182,6 +182,39 @@ export type CursorPage<T> = {
 
 export type LeadPage = CursorPage<Lead>;
 
+/** Filters the map view accepts — the list filters minus cursor pagination. */
+export type LeadMapParams = Pick<LeadFilters, 'status' | 'assignedTo' | 'source' | 'type' | 'city' | 'q'> & {
+  limit?: number;
+};
+
+/**
+ * Response of `GET /crm/leads/map`: the whole filtered lead set (located leads
+ * first), with honest located/unlocated counts for the map stats panel.
+ * `limited` is true when the set was truncated at the server's hard cap.
+ */
+export type LeadMapResponse = {
+  leads: Lead[];
+  total: number;
+  withLocation: number;
+  withoutLocation: number;
+  limited: boolean;
+};
+
+/** Why a geocode attempt did not place the lead (null when it succeeded). */
+export type LeadGeocodeReason = 'no_address' | 'not_found' | 'provider_error';
+
+/**
+ * Result of `POST /crm/leads/:id/geocode`. Honest + non-destructive: `geocoded`
+ * is false (with a `reason`) when the address could not be placed, and the lead
+ * is returned unchanged — a location is never invented.
+ */
+export type LeadGeocodeResult = {
+  lead: Lead;
+  geocoded: boolean;
+  reason: LeadGeocodeReason | null;
+  formattedAddress: string | null;
+};
+
 export type LeadCreateInput = {
   name: string;
   type?: LeadType;

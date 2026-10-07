@@ -184,7 +184,19 @@ export class DiscoveryRunWorker extends BaseWorker {
       const seenDomains = new Set();
       const seenNamesAndAddresses = new Set();
       const locationsByName = new Map();
+      // Seed the live match counters from what is already persisted so a "load
+      // more" re-run reports cumulative new/existing/duplicate totals, not just
+      // this run's deltas (seeded rows are skipped below, so they are never
+      // double-counted). Fresh runs start at zero.
       const liveCounts = { new: 0, existing: 0, possibleDuplicates: 0 };
+      if (seededPlaceIds.length > 0) {
+        try {
+          const seeded = await discoveryRepository.countsForSession(sessionId, { createdBy });
+          liveCounts.new = seeded.new || 0;
+          liveCounts.existing = seeded.existing || 0;
+          liveCounts.possibleDuplicates = seeded.possibleDuplicates || 0;
+        } catch { /* best-effort; finalize still writes authoritative counts */ }
+      }
       let persisted = 0;
       let duplicatesRemoved = 0;
       let resultLimitReached = false;

@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   List,
   MapPin,
+  MapPinned,
   Pencil,
   Plus,
   Radar,
@@ -60,8 +61,8 @@ import {
   COLUMN_TO_SORT_FIELD,
   DEFAULT_LEAD_PAGE_SIZE,
   FILTER_ALL,
-  FILTER_ME,
   SORT_FIELD_TO_COLUMN,
+  buildLeadFilterParams,
 } from './lead-ui-constants';
 import { buildGoogleMapsUrl, copyText } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
@@ -74,12 +75,15 @@ import { LeadCard } from './lead-card';
 import { LeadDetailDrawer } from './lead-detail-drawer';
 import { LeadExportMenu } from './lead-export-menu';
 import { ExtensionConnectCard } from './extension-connect-card';
+import { ExtensionImportBanner } from './extension-import-banner';
+import { useExtensionImportProgress } from '../hooks/use-extension-import-progress';
 import { LeadFilterBar } from './lead-filter-bar';
 import { LeadFormDialog } from './lead-form-dialog';
 import { LeadImportDialog } from './lead-import-dialog';
 import { useLeadColumns } from './lead-table-columns';
 import { useLeadBulkActions } from './use-lead-bulk-actions';
 import type { BulkLeadResult } from './use-lead-bulk-actions';
+import { LeadMapView } from './map/lead-map-view';
 
 type ViewMode = 'table' | 'grid';
 type AuthSlice = { user?: { _id?: string; id?: string } | null };
@@ -111,6 +115,8 @@ export function LeadListView() {
   const canEmail = hasPermission(PERMISSIONS.CRM_WRITE);
   const canWhatsApp = hasPermission(PERMISSIONS.LEAD_WHATSAPP);
   const canEnrich = hasPermission(PERMISSIONS.LEAD_ENRICH);
+  // Live progress of imports coming from the Chrome extension (Socket.IO).
+  const { progress: extImportProgress, dismiss: dismissExtImport } = useExtensionImportProgress(canExport);
 
   const currentUserId = useAuthStore((state: AuthSlice) => state.user?._id ?? state.user?.id ?? null);
   const usersQuery = useWorkspaceUsers();
@@ -129,6 +135,7 @@ export function LeadListView() {
 
   // ── Local view state ───────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [mapOpen, setMapOpen] = useState(false);
   const [pageSize, setPageSize] = useState(DEFAULT_LEAD_PAGE_SIZE);
   const [formState, setFormState] = useState<{ open: boolean; lead: Lead | null }>({ open: false, lead: null });
   const [convertTarget, setConvertTarget] = useState<Lead | null>(null);
@@ -145,36 +152,15 @@ export function LeadListView() {
   // ── Query ──────────────────────────────────────────────────────────────────
   const debouncedSearch = useDebounce(filters.search, 300);
   const searchTerm = debouncedSearch.trim().slice(0, 100);
-  const assignedToParam =
-    filters.assignedTo === FILTER_ALL
-      ? undefined
-      : filters.assignedTo === FILTER_ME
-        ? (currentUserId ?? undefined)
-        : filters.assignedTo;
 
   const params = useMemo<Omit<LeadListParams, 'cursor'>>(
     () => ({
       limit: pageSize,
       sortBy: sort.sortBy,
       sortOrder: sort.sortOrder,
-      ...(filters.status !== 'ALL' ? { status: filters.status } : {}),
-      ...(filters.source !== 'ALL' ? { source: filters.source } : {}),
-      ...(filters.type !== 'ALL' ? { type: filters.type } : {}),
-      ...(filters.place !== FILTER_ALL ? { city: filters.place } : {}),
-      ...(assignedToParam ? { assignedTo: assignedToParam } : {}),
-      ...(searchTerm ? { q: searchTerm } : {}),
+      ...buildLeadFilterParams(filters, currentUserId, searchTerm),
     }),
-    [
-      pageSize,
-      sort.sortBy,
-      sort.sortOrder,
-      filters.status,
-      filters.source,
-      filters.type,
-      filters.place,
-      assignedToParam,
-      searchTerm,
-    ],
+    [pageSize, sort.sortBy, sort.sortOrder, filters, currentUserId, searchTerm],
   );
   const paramsKey = JSON.stringify(params);
 
@@ -485,6 +471,9 @@ export function LeadListView() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <div className="space-y-6 p-4 pb-28 sm:p-6 sm:pb-28">
+          {extImportProgress && (
+            <ExtensionImportBanner progress={extImportProgress} onDismiss={dismissExtImport} />
+          )}
           {/* Page header */}
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -529,6 +518,11 @@ export function LeadListView() {
                   </button>
                 ))}
               </div>
+
+              <Button variant="outline" className="h-9 gap-2" onClick={() => setMapOpen(true)}>
+                <MapPinned className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">{t('leads.map.open', 'View on map')}</span>
+              </Button>
 
               {canDiscover && (
                 <Button asChild variant="outline" className="h-9 gap-2">
@@ -749,6 +743,13 @@ export function LeadListView() {
       />
 
       {canImport && <LeadImportDialog open={importOpen} onOpenChange={setImportOpen} />}
+
+      <LeadMapView
+        open={mapOpen}
+        onClose={() => setMapOpen(false)}
+        users={users}
+        currentUserId={currentUserId}
+      />
 
       <ConvertDialog
         lead={convertTarget}

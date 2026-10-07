@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   type InfiniteData,
   keepPreviousData,
@@ -26,7 +26,12 @@ import type {
 
 export const DISCOVERY_PAGE_SIZE = 300;
 export const DISCOVERY_PAGE_SIZE_OPTIONS = [100, 200, 300] as const;
-export const DISCOVERY_MARKER_PAGE_SIZE = 300;
+// Markers are lightweight points and are drained fully (see useDiscoveryMarkers)
+// so the map always mirrors the complete result set. 1000 is the server cap, so
+// a full sweep loads in as few round-trips as possible.
+export const DISCOVERY_MARKER_PAGE_SIZE = 1000;
+// Safety ceiling on auto-drained marker pages (~ MARKER_PAGE_SIZE * this).
+const DISCOVERY_MARKER_MAX_PAGES = 60;
 
 const ACTIVE_SESSION_STATUSES = new Set<DiscoverySessionStatus>([
   'DRAFT',
@@ -207,6 +212,18 @@ export function useDiscoveryMarkers(
     }
     return query.refetch({ cancelRefetch: false });
   }, [nextCursor, query]);
+
+  // Auto-drain every marker page so the map represents the COMPLETE result set
+  // (the result list and map must show the same dataset). Cursor pagination
+  // terminates on its own; the page ceiling is a belt-and-braces runaway guard.
+  const pageCount = query.data?.pages.length ?? 0;
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = query;
+  useEffect(() => {
+    if (!enabled || pageCount >= DISCOVERY_MARKER_MAX_PAGES) return;
+    if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
+      void fetchNextPage({ cancelRefetch: false });
+    }
+  }, [enabled, pageCount, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
 
   return { ...query, retryFailedPage };
 }

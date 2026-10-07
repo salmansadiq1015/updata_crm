@@ -27,6 +27,7 @@ import type {
   LeadCreateInput,
   LeadDuplicateParams,
   LeadListParams,
+  LeadMapParams,
   LeadPage,
   LeadPatch,
 } from '../types/lead-types';
@@ -45,6 +46,8 @@ export const leadKeys = {
   root: ['leads', 'workspace'] as const,
   lists: () => [...leadKeys.root, 'lists'] as const,
   list: (params: Omit<LeadListParams, 'cursor'>) => [...leadKeys.lists(), params] as const,
+  maps: () => [...leadKeys.root, 'map'] as const,
+  map: (params: LeadMapParams) => [...leadKeys.maps(), params] as const,
   detail: (id: string | null) => [...leadKeys.root, 'detail', id] as const,
   duplicates: (params: LeadDuplicateParams) => [...leadKeys.root, 'duplicates', params] as const,
   contactLog: (id: string | null) => [...leadKeys.root, 'contact-log', id] as const,
@@ -86,6 +89,22 @@ export function useLeads(baseParams: Omit<LeadListParams, 'cursor'> = {}) {
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) =>
       lastPage.pagination.hasNext ? lastPage.pagination.nextCursor : undefined,
+    staleTime: 20_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * All leads matching the current filters, for the map view. One request returns
+ * the whole filtered set (located-first) plus located/unlocated counts — the map
+ * fits bounds, clusters and syncs the sidebar over it. `enabled` lets the caller
+ * defer the fetch until the map is actually opened.
+ */
+export function useLeadMap(params: LeadMapParams, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: leadKeys.map(params),
+    queryFn: () => leadApi.mapLeads(params),
+    enabled: options.enabled ?? true,
     staleTime: 20_000,
     placeholderData: keepPreviousData,
   });
@@ -168,6 +187,7 @@ export function useCreateLead() {
     mutationFn: (input: LeadCreateInput) => leadApi.createLead(input),
     onSuccess: (lead) => {
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.maps() });
       queryClient.invalidateQueries({ queryKey: leadKeys.filterOptions() });
       queryClient.setQueryData(leadKeys.detail(lead.id), lead);
       showSuccess(t('leads.toast.created', 'Lead created'));
@@ -206,6 +226,7 @@ export function useUpdateLead() {
         updateLeadInPages(oldData, lead.id, () => lead),
       );
       queryClient.setQueryData(leadKeys.detail(lead.id), lead);
+      queryClient.invalidateQueries({ queryKey: leadKeys.maps() });
       queryClient.invalidateQueries({ queryKey: leadKeys.filterOptions() });
     },
   });
@@ -238,6 +259,7 @@ export function useConvertLead() {
         );
       }
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.maps() });
       showSuccess(t('leads.toast.converted', 'Lead converted to customer'));
     },
     onError: (error) => showError(error),
@@ -279,6 +301,7 @@ export function useEnrichLead() {
         updateLeadInPages(oldData, lead.id, () => lead),
       );
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.maps() });
       showSuccess(
         t(
           'leads.enrich.foundSummary',
@@ -313,6 +336,7 @@ export function useDeleteLead() {
     onSuccess: (_result, id) => {
       queryClient.removeQueries({ queryKey: leadKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: leadKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: leadKeys.maps() });
       queryClient.invalidateQueries({ queryKey: leadKeys.filterOptions() });
       showSuccess(t('leads.toast.deleted', 'Lead deleted'));
     },

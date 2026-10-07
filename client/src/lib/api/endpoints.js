@@ -850,6 +850,7 @@ export const ENDPOINTS = Object.freeze({
   },
   LEADS: {
     LIST: '/crm/leads',
+    MAP: '/crm/leads/map',
     FILTER_OPTIONS: '/crm/leads/filter-options',
     BY_ID: (id) => `/crm/leads/${id}`,
     CONVERT: (id) => `/crm/leads/${id}/convert`,
@@ -863,5 +864,6 @@ export const ENDPOINTS = Object.freeze({
     ENRICH: (id) => `/crm/leads/${id}/enrich`,
     ENRICH_BULK: '/crm/leads/enrich-bulk',
     ENRICH_JOB: (jobId) => `/crm/leads/enrich-jobs/${jobId}`,
+    GEOCODE: (id) => `/crm/leads/${id}/geocode`,
   },
 });

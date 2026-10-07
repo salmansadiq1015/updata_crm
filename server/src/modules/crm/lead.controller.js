@@ -1,8 +1,10 @@
 import leadService from './lead.service.js';
 import leadEnrichmentService from './leadEnrichment.service.js';
 import leadImportExportService from './leadImportExport.service.js';
+import extensionImportService from '../extension/extensionImport.service.js';
 import { IMPORT_MODES } from './leadImportExport.validation.js';
 import { ValidationError } from '../../shared/errors/AppError.js';
+import logger from '../../shared/logger/index.js';
 
 /**
  * Lead controller (§11). Identity is always derived from req.user._id — never
@@ -21,6 +23,19 @@ class LeadController {
   async filterOptions(_req, res, next) {
     try {
       const data = await leadService.getFilterOptions();
+      return res.success({ data });
+    } catch (err) { next(err); }
+  }
+
+  /**
+   * Leads for the map view: the whole filtered set (projected, located-first)
+   * plus located/unlocated counts. Not cursor-paginated — the map fits bounds,
+   * clusters and syncs the sidebar list over the complete set at once.
+   */
+  async mapLeads(req, res, next) {
+    try {
+      const query = req._validatedQuery || req.query;
+      const data = await leadService.listForMap(query);
       return res.success({ data });
     } catch (err) { next(err); }
   }
@@ -87,6 +102,22 @@ class LeadController {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };
       const result = await leadService.logWhatsApp(req.params.id, req.body, req.user._id, meta);
       return res.success({ data: result, message: 'WhatsApp contact logged' });
+    } catch (err) { next(err); }
+  }
+
+  /**
+   * Geocode a lead from its address and store the coordinates on success. The
+   * response always carries the lead plus { geocoded, reason? }, so the client
+   * can report honestly whether a real location was found (never invents one).
+   */
+  async geocode(req, res, next) {
+    try {
+      const meta = { userId: req.user._id, ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await leadService.geocodeLead(req.params.id, meta);
+      return res.success({
+        data: result,
+        message: result.geocoded ? 'Lead geocoded' : 'Lead could not be geocoded from its address',
+      });
     } catch (err) { next(err); }
   }
 
@@ -169,7 +200,33 @@ class LeadController {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent'), requestId: req.requestId };
       const data = await leadImportExportService.importExtensionLeads(req.body.leads, req.user._id, meta);
-      return res.success({ data, message: 'Lead import processed' });
+
+      // Record run-level progress + stream it to the user (best-effort: tracking
+      // must never break the import the user already completed).
+      let job = null;
+      const { importId, importTotal, importFinal } = req.body;
+      if (importId) {
+        try {
+          job = await extensionImportService.recordBatch(req.user._id, {
+            importId,
+            importTotal,
+            importFinal: Boolean(importFinal),
+            batch: {
+              processed: data.total,
+              created: data.created,
+              existing: data.existing,
+              failed: data.failed,
+            },
+          });
+        } catch (trackErr) {
+          logger.warn('Extension import tracking failed (non-blocking)', {
+            module: 'crm', action: 'lead.bulkImport.track', requestId: req.requestId,
+            error: { message: trackErr.message },
+          });
+        }
+      }
+
+      return res.success({ data: { ...data, job }, message: 'Lead import processed' });
     } catch (err) { next(err); }
   }
 

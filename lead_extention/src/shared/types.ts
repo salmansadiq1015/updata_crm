@@ -69,6 +69,10 @@ export interface Lead {
   crmLeadId?: string | null;
   crmLeadNumber?: string | null;
   crmError?: string | null;
+  // "Clear" archives a lead into History (ACTIVE → HISTORY) instead of deleting
+  // it, so cleared businesses remain downloadable / importable later.
+  archived?: boolean;
+  archivedAt?: string | null;
 }
 
 export interface RawBusinessRecord {

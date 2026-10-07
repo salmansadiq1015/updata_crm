@@ -3,11 +3,12 @@ import multer from 'multer';
 import leadController from './lead.controller.js';
 import { validate } from '../../shared/validation/validate.js';
 import { authenticate, requirePermission } from '../../shared/middleware/authenticate.js';
-import { uploadLimiter, enrichLimiter } from '../../shared/middleware/rateLimiter.js';
+import { uploadLimiter, enrichLimiter, geocodeLimiter } from '../../shared/middleware/rateLimiter.js';
 import {
   createLead,
   updateLead,
   listLeads,
+  mapLeads,
   leadIdParam,
   convertLead,
   duplicates,
@@ -16,6 +17,7 @@ import {
   enrichLead,
   enrichBulk,
   enrichJobIdParam,
+  geocodeLead,
   bulkImport,
 } from './lead.validation.js';
 import { exportLeads, importTemplate } from './leadImportExport.validation.js';
@@ -33,6 +35,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 // Named routes BEFORE /:id
 router.get('/duplicates', authenticate, requirePermission('lead:read'), validate(duplicates), (req, res, next) => leadController.duplicates(req, res, next));
 router.get('/filter-options', authenticate, requirePermission('lead:read'), (req, res, next) => leadController.filterOptions(req, res, next));
+// Map view: all filtered leads (projected, located-first) + located/unlocated counts.
+router.get('/map', authenticate, requirePermission('lead:read'), validate(mapLeads), (req, res, next) => leadController.mapLeads(req, res, next));
 
 // Import / export (named routes, BEFORE /:id)
 router.post('/import', authenticate, requirePermission('lead:import'), uploadLimiter, upload.single('file'), (req, res, next) => leadController.importLeads(req, res, next));
@@ -62,6 +66,10 @@ router.post('/:id/convert', authenticate, requirePermission('lead:convert'), val
 
 // Enrich a single lead from its website (synchronous, outbound → rate-limited)
 router.post('/:id/enrich', authenticate, requirePermission('lead:enrich'), enrichLimiter, validate(enrichLead), (req, res, next) => leadController.enrich(req, res, next));
+
+// Geocode a lead from its address (keyless OSM/Nominatim by default; outbound →
+// rate-limited). Writes coordinates only when a real location is found.
+router.post('/:id/geocode', authenticate, requirePermission('lead:write'), geocodeLimiter, validate(geocodeLead), (req, res, next) => leadController.geocode(req, res, next));
 
 // Lead communication: log a WhatsApp contact (server records only; the client
 // opens the wa.me link) and read a lead's logged communications.

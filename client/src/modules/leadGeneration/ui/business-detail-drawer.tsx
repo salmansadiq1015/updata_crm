@@ -11,6 +11,7 @@ import {
   Building2,
   CalendarClock,
   CheckCircle2,
+  Clock,
   Compass,
   ExternalLink,
   Globe,
@@ -43,6 +44,31 @@ import {
 
 const linkClass =
   'rounded-sm text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+/**
+ * Human-readable opening-hours lines from whatever the provider supplied: a raw
+ * OSM `opening_hours` string (split on ';') or a Google structured object
+ * (`weekdayDescriptions`). Returns [] when nothing usable is present — never
+ * fabricated.
+ */
+function openingHoursLines(hours: unknown): string[] {
+  if (!hours) return [];
+  if (typeof hours === 'string') {
+    return hours.split(';').map((line) => line.trim()).filter(Boolean);
+  }
+  if (typeof hours === 'object') {
+    const descriptions = (hours as { weekdayDescriptions?: unknown }).weekdayDescriptions;
+    if (Array.isArray(descriptions)) return descriptions.filter((line): line is string => typeof line === 'string');
+  }
+  return [];
+}
+
+function openNowState(hours: unknown): boolean | null {
+  if (hours && typeof hours === 'object' && typeof (hours as { openNow?: unknown }).openNow === 'boolean') {
+    return (hours as { openNow: boolean }).openNow;
+  }
+  return null;
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -145,8 +171,30 @@ export function BusinessDetailDrawer({
     if (webHref) quickActions.push({ key: 'web', label: t('leadgen.action.website', 'Website'), icon: Globe, href: webHref, external: true });
     if (mapsHref) quickActions.push({ key: 'dir', label: t('leadgen.action.directions', 'Directions'), icon: Navigation, href: mapsHref, external: true });
 
+    const photos = (business.photos ?? []).filter((photo) => photo && typeof photo.url === 'string');
+    const hoursLines = openingHoursLines(business.openingHours);
+    const openNow = openNowState(business.openingHours);
+
     body = (
       <div className="space-y-5">
+        {/* Photos (only when the provider actually supplied imagery) */}
+        {photos.length > 0 && (
+          <div className="-mx-1 flex gap-2 overflow-x-auto scrollbar-thin pb-1" aria-label={t('leadgen.detail.photos', 'Photos')}>
+            {photos.map((photo, index) => (
+              // eslint-disable-next-line @next/next/no-img-element -- provider-hosted external image URLs, not local assets
+              <img
+                key={`${photo.url}-${index}`}
+                src={photo.url}
+                alt={business.name ? `${business.name} ${index + 1}` : t('leadgen.detail.photos', 'Photos')}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                className="h-28 w-40 shrink-0 rounded-lg border border-border/60 object-cover"
+                onError={(event) => { (event.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            ))}
+          </div>
+        )}
+
         {/* Status row */}
         <div className="flex flex-wrap items-center gap-2">
           <CrmStatusBadge status={result.crmStatus} t={t} size="md" />
@@ -229,6 +277,29 @@ export function BusinessDetailDrawer({
             )}
           </InfoList>
         </Section>
+
+        {/* Opening hours (only when the provider supplied them) */}
+        {hoursLines.length > 0 && (
+          <Section title={t('leadgen.detail.hours', 'Opening hours')}>
+            <div className="rounded-xl border border-border/60 bg-background/40 px-3 py-2.5">
+              <div className="flex items-start gap-3">
+                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  {openNow != null && (
+                    <p className={cn('mb-1 text-xs font-medium', openNow ? 'text-success' : 'text-muted-foreground')}>
+                      {openNow ? t('leadgen.detail.openNow', 'Open now') : t('leadgen.detail.closedNow', 'Closed now')}
+                    </p>
+                  )}
+                  <ul className="space-y-0.5 text-sm text-foreground">
+                    {hoursLines.map((line, index) => (
+                      <li key={`${line}-${index}`} className="break-words">{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </Section>
+        )}
 
         {/* Discovery provenance */}
         <Section title={t('leadgen.detail.discovery', 'Discovery')}>

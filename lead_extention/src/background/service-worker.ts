@@ -760,7 +760,10 @@ async function startCrmImport(leadIds: string[] = []): Promise<{ ok: boolean; er
 async function runCrmImport(state: CrmImportProgress): Promise<void> {
   const processedIds = new Set(state.processedLeadIds ?? []);
   const pendingIds = state.leadIds.filter((id) => !processedIds.has(id));
-  for (const batchIds of splitIntoBatches(pendingIds, CRM_BATCH_SIZE)) {
+  const batches = splitIntoBatches(pendingIds, CRM_BATCH_SIZE);
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+    const batchIds = batches[batchIndex];
+    const isLastBatch = batchIndex === batches.length - 1;
     const leads = (await Promise.all(batchIds.map((id) => LeadRepository.get(id)))).filter((lead): lead is Lead => Boolean(lead));
     const foundIds = new Set(leads.map((lead) => lead.id));
     const missingIds = batchIds.filter((id) => !foundIds.has(id));
@@ -772,7 +775,7 @@ async function runCrmImport(state: CrmImportProgress): Promise<void> {
     await Promise.all(leads.map(async (lead) => { lead.crmStatus = 'importing'; lead.crmError = null; await LeadRepository.save(lead); }));
     try {
       if (!leads.length) throw new Error('No selected lead records were found in local storage.');
-      const response = await importLeadsToCrm(leads); const byId = new Map(response.results.map((result) => [result.clientId, result]));
+      const response = await importLeadsToCrm(leads, { importId: state.id, importTotal: state.total, importFinal: isLastBatch }); const byId = new Map(response.results.map((result) => [result.clientId, result]));
       for (const lead of leads) { const item = byId.get(lead.id); const status = item?.status ?? 'failed'; lead.crmStatus = status === 'created' ? 'imported' : status === 'existing' ? 'existing' : 'failed'; lead.crmLeadId = item?.leadId ?? lead.crmLeadId; lead.crmLeadNumber = item?.leadNumber ?? lead.crmLeadNumber; lead.crmError = item?.message ?? null; await LeadRepository.save(lead); if (lead.crmStatus === 'imported') state.created += 1; else if (lead.crmStatus === 'existing') state.existing += 1; else { state.failed += 1; state.failedLeadIds.push(lead.id); } }
     } catch (error) { state.failed += leads.length; state.error = errorMessage(error); state.failedLeadIds.push(...leads.map((lead) => lead.id)); for (const lead of leads) { lead.crmStatus = 'failed'; lead.crmError = errorMessage(error); await LeadRepository.save(lead); } }
     for (const id of batchIds) processedIds.add(id);

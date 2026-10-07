@@ -54,6 +54,61 @@ describe('leadApi', () => {
     expect(page.pagination).toEqual({ hasNext: false, nextCursor: null, limit: 15 });
   });
 
+  it('mapLeads parses the located-first leads and the located/unlocated counts', async () => {
+    server.use(
+      http.get(`${L}/map`, () =>
+        HttpResponse.json(
+          ok({
+            leads: [makeLeadDTO({ id: 'm1' }), makeLeadDTO({ id: 'm2', location: null })],
+            total: 5,
+            withLocation: 3,
+            withoutLocation: 2,
+            limited: true,
+          }),
+        ),
+      ),
+    );
+    const result = await leadApi.mapLeads({ status: 'new' });
+    expect(result.leads).toHaveLength(2);
+    expect(result.leads[0].id).toBe('m1');
+    expect(result.leads[0].location).toEqual({ lat: 47.3769, lng: 8.5417 });
+    expect(result.leads[1].location).toBeNull();
+    expect(result).toMatchObject({ total: 5, withLocation: 3, withoutLocation: 2, limited: true });
+  });
+
+  it('mapLeads tolerates an empty / missing payload', async () => {
+    server.use(http.get(`${L}/map`, () => HttpResponse.json(ok({}))));
+    const result = await leadApi.mapLeads();
+    expect(result).toEqual({ leads: [], total: 0, withLocation: 0, withoutLocation: 0, limited: false });
+  });
+
+  it('geocodeLead returns the updated lead + geocoded:true on success', async () => {
+    server.use(
+      http.post(`${L}/lead-x/geocode`, () =>
+        HttpResponse.json(
+          ok({ lead: makeLeadDTO({ id: 'lead-x' }), geocoded: true, reason: null, formattedAddress: 'Bahnhofstrasse 1, 8001 Zürich' }),
+        ),
+      ),
+    );
+    const r = await leadApi.geocodeLead('lead-x');
+    expect(r.geocoded).toBe(true);
+    expect(r.lead.id).toBe('lead-x');
+    expect(r.reason).toBeNull();
+    expect(r.formattedAddress).toContain('Zürich');
+  });
+
+  it('geocodeLead reports an honest not-found result without a location', async () => {
+    server.use(
+      http.post(`${L}/lead-y/geocode`, () =>
+        HttpResponse.json(ok({ lead: makeLeadDTO({ id: 'lead-y', location: null }), geocoded: false, reason: 'not_found', formattedAddress: null })),
+      ),
+    );
+    const r = await leadApi.geocodeLead('lead-y');
+    expect(r.geocoded).toBe(false);
+    expect(r.reason).toBe('not_found');
+    expect(r.lead.location).toBeNull();
+  });
+
   it('getLead normalizes the lead DTO', async () => {
     const lead = await leadApi.getLead('lead-x');
     expect(lead.id).toBe('lead-x');

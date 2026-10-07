@@ -18,6 +18,10 @@ import type {
   LeadEnrichResult,
   LeadEnrichSummary,
   LeadFilterOptions,
+  LeadGeocodeReason,
+  LeadGeocodeResult,
+  LeadMapParams,
+  LeadMapResponse,
   LeadPage,
   LeadListParams,
   LeadPatch,
@@ -268,6 +272,24 @@ export const leadApi = {
     };
   },
 
+  /**
+   * All leads matching the given filters, for the map view. The server returns a
+   * projected, located-first set plus located/unlocated counts; we parse each
+   * lead with the shared `leadSchema` so the map works with the full `Lead` type
+   * (and every existing lead helper) exactly like the list.
+   */
+  async mapLeads(params: LeadMapParams = {}): Promise<LeadMapResponse> {
+    const response = toApiResponse<unknown>(await apiClient.get(ENDPOINTS.LEADS.MAP, { params }));
+    const data = isRecord(response.data) ? response.data : {};
+    return {
+      leads: extractList(data.leads).map((item) => leadSchema.parse(item)),
+      total: toNumber(data.total),
+      withLocation: toNumber(data.withLocation),
+      withoutLocation: toNumber(data.withoutLocation),
+      limited: data.limited === true,
+    };
+  },
+
   async getFilterOptions(): Promise<LeadFilterOptions> {
     const response = toApiResponse<unknown>(await apiClient.get(ENDPOINTS.LEADS.FILTER_OPTIONS));
     const data = isRecord(response.data) ? response.data : {};
@@ -416,6 +438,25 @@ export const leadApi = {
       found,
       applied,
       summary: summarizeEnrich(found, applied),
+    };
+  },
+
+  /**
+   * Geocode a lead from its address (keyless OSM/Nominatim by default). The
+   * server only stores coordinates when a real location is found; `geocoded`
+   * false + a `reason` means nothing was changed (never a fake location).
+   */
+  async geocodeLead(id: string): Promise<LeadGeocodeResult> {
+    const response = toApiResponse<unknown>(await apiClient.post(ENDPOINTS.LEADS.GEOCODE(id), {}));
+    const data = isRecord(response.data) ? response.data : {};
+    const reasons: readonly string[] = ['no_address', 'not_found', 'provider_error'];
+    return {
+      lead: leadSchema.parse(data.lead),
+      geocoded: data.geocoded === true,
+      reason: typeof data.reason === 'string' && reasons.includes(data.reason)
+        ? (data.reason as LeadGeocodeReason)
+        : null,
+      formattedAddress: typeof data.formattedAddress === 'string' ? data.formattedAddress : null,
     };
   },
 

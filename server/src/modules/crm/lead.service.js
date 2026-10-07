@@ -37,6 +37,25 @@ function toPlain(doc) {
 }
 
 /**
+ * Build a free-text geocoding query from a lead's address. Returns null when
+ * there is nothing locatable (a bare country is not enough to place a pin), so
+ * the caller can skip the geocoder entirely for address-less leads.
+ */
+function buildGeocodeQuery(address = {}) {
+  const parts = [
+    address.street,
+    [address.postalCode, address.city].filter(Boolean).join(' '),
+    address.canton,
+    address.country,
+  ]
+    .map((part) => (typeof part === 'string' ? part.trim() : ''))
+    .filter(Boolean);
+  // Need at least a street, postcode or city — a lone canton/country can't place a pin.
+  const hasLocatable = Boolean(address.street || address.postalCode || address.city);
+  return hasLocatable && parts.length ? parts.join(', ') : null;
+}
+
+/**
  * Normalize an incoming location to the GeoJSON Point the model stores. The
  * manual form sends a flat { lat, lng }; imports / discovery already send
  * GeoJSON ({ type: 'Point', coordinates: [lng, lat] }). Anything else (already
@@ -119,6 +138,24 @@ class LeadService {
       sortOrder,
       search: search ?? q,
       filters,
+    });
+  }
+
+  /**
+   * All leads matching the list filters, projected for the map view. Company-wide
+   * (shared), same filter semantics as `list` — just no cursor pagination. Returns
+   * { leads, total, withLocation, withoutLocation, limited }.
+   */
+  async listForMap(queryParams = {}) {
+    // Strip the pagination/sort controls the map does not use, so they are never
+    // mistaken for lead filters; `limit` is kept (it caps the returned set).
+    const {
+      cursor, sortBy, sortOrder, limit, q, search, ...filters
+    } = queryParams;
+    return leadRepository.listForMap({
+      filters,
+      search: search ?? q,
+      limit,
     });
   }
 
@@ -340,6 +377,63 @@ class LeadService {
     });
 
     return { waNumber, logged: true };
+  }
+
+  /**
+   * Geocode a lead FROM ITS ADDRESS and, on success, store the resulting
+   * coordinates on the lead (§ map view). Uses the shared, provider-abstracted
+   * location service (keyless OpenStreetMap/Nominatim by default — no API key,
+   * no cost), so a lead that was imported without coordinates can be placed on
+   * the map from its street/postcode/city.
+   *
+   * Honest + non-destructive: never invents a location. When the lead has no
+   * usable address, or the geocoder finds nothing / is unavailable, the lead is
+   * returned UNCHANGED with `geocoded:false` and a `reason` (not an error), so
+   * the UI can report truthfully. Only writes `location` when a real point is
+   * found.
+   */
+  async geocodeLead(leadId, meta = {}) {
+    const lead = await leadRepository.getById(leadId);
+    if (!lead) throw new NotFoundError('Lead', leadId);
+
+    const query = buildGeocodeQuery(lead.address);
+    if (!query) return { lead, geocoded: false, reason: 'no_address' };
+
+    let dto = null;
+    try {
+      const { default: locationService } = await import('../businessDiscovery/location.service.js');
+      dto = await locationService.resolveLocation(query);
+    } catch (err) {
+      logger.warn('Lead geocoding failed (non-blocking)', {
+        module: 'crm', action: 'lead.geocode', leadId, error: { message: err.message },
+      });
+      return { lead, geocoded: false, reason: 'provider_error' };
+    }
+
+    const center = dto?.center;
+    if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) {
+      return { lead, geocoded: false, reason: 'not_found' };
+    }
+
+    const updated = await leadRepository.update(leadId, {
+      location: { type: 'Point', coordinates: [center.lng, center.lat] },
+    });
+
+    auditService.logEvent({
+      eventType: 'lead.geocoded',
+      userId: meta.userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: 'success',
+      details: { leadId, coordinates: [center.lng, center.lat] },
+      module: 'lead',
+    });
+
+    logger.info('Lead geocoded from address', {
+      module: 'crm', action: 'lead.geocode', leadId,
+    });
+
+    return { lead: updated, geocoded: true, formattedAddress: dto.formattedAddress ?? null };
   }
 
   /**

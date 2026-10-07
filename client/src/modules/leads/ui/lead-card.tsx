@@ -11,6 +11,7 @@ import type { LeadUser } from './lead-ui-utils';
 import { LeadStatusBadge } from './status-badge';
 import { AssigneeLabel } from './lead-table-columns';
 import { LtrText } from './ltr-text';
+import { RatingStars } from './rating-stars';
 
 type LeadCardProps = {
   lead: Lead;
@@ -58,6 +59,15 @@ export function LeadCard({ lead, users, selected, onToggleSelect, onOpen }: Lead
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <LeadStatusBadge status={lead.status} />
             {lead.leadNumber && <span className="font-mono text-[11px] text-muted-foreground">{lead.leadNumber}</span>}
+            {lead.providerMeta?.rating != null && (
+              <span className="inline-flex items-center gap-1" title={t('leads.card.ratingTitle', 'Google rating (overall only)')}>
+                <RatingStars rating={lead.providerMeta.rating} size={12} />
+                <span className="text-[11px] font-medium text-foreground">{lead.providerMeta.rating.toFixed(1)}</span>
+                {lead.providerMeta.reviewCount != null && (
+                  <span className="text-[11px] text-muted-foreground">({lead.providerMeta.reviewCount.toLocaleString(locale)})</span>
+                )}
+              </span>
+            )}
           </div>
         </div>
       </div>

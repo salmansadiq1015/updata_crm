@@ -91,7 +91,19 @@ export const enrichLimiter = createLimiter({
   message: 'Too many enrichment requests, please try again later',
 });
 
+// Lead geocoding hits a third-party geocoder (keyless Nominatim/OSM by default,
+// whose usage policy asks for light, well-behaved traffic). Results are cached,
+// and the UI geocodes sequentially, but we still throttle per user so a "geocode
+// all" over a large pipeline stays a good citizen. Generous in development.
+export const geocodeLimiter = createLimiter({
+  windowMs: config.rateLimit.windowMs,
+  keyGenerator: (req, res) =>
+    (req.user?._id ? `geocode:user:${req.user._id}` : `geocode:ip:${ipKeyGenerator(req, res)}`),
+  max: config.isDevelopment ? 10_000 : 120,
+  message: 'Too many geocoding requests, please try again later',
+});
+
 export { createLimiter };
 export default {
-  globalLimiter, authLimiter, uploadLimiter, enrichLimiter, createLimiter,
+  globalLimiter, authLimiter, uploadLimiter, enrichLimiter, geocodeLimiter, createLimiter,
 };

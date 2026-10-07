@@ -172,6 +172,20 @@ export const listLeads = {
   }),
 };
 
+// Map view: same filter surface as the list, but no cursor pagination. `limit`
+// caps the returned set (the repository also enforces a hard ceiling).
+export const mapLeads = {
+  query: Joi.object({
+    status: Joi.string().valid(...LEAD_STATUSES),
+    assignedTo: objectId,
+    source: Joi.string().valid(...LEAD_SOURCES),
+    type: Joi.string().valid(...LEAD_TYPES),
+    city: Joi.string().trim().max(120),
+    q: Joi.string().trim().max(100).allow(''),
+    limit: Joi.number().integer().min(1).max(5000),
+  }),
+};
+
 export const leadIdParam = {
   params: Joi.object({ id: objectId.required() }),
 };
@@ -201,6 +215,10 @@ export const enrichLead = {
   params: Joi.object({ id: objectId.required() }),
 };
 
+export const geocodeLead = {
+  params: Joi.object({ id: objectId.required() }),
+};
+
 export const enrichBulk = {
   body: Joi.object({
     leadIds: Joi.array().items(objectId).min(1).max(500)
@@ -215,31 +233,46 @@ export const enrichJobIdParam = {
 
 // Authenticated extension batches. The server deliberately accepts the
 // client correlation id only for reporting; ownership is always req.user._id.
+//
+// This gate is intentionally LENIENT per field: Maps-sourced rows are messy
+// (a phone can hold "Café X · Visited link", a website can lack a scheme, a
+// rating can be absent). Over-long strings are `.truncate()`d and unparseable
+// numbers/dates `.failover(null)` rather than rejected, so ONE bad row can
+// never 400 the whole batch. The real per-field validation + normalisation
+// happens per record in `leadImportExport.service.importExtensionLeads`, which
+// isolates failures to the individual row (spec: partial failures must not
+// fail the whole import). Caps remain for payload safety.
 export const bulkImport = {
   body: Joi.object({
     leads: Joi.array().items(Joi.object({
-      clientId: Joi.string().trim().max(128).required(),
-      businessName: Joi.string().trim().max(255).required(),
-      category: Joi.string().trim().max(120).allow('', null),
-      categories: Joi.array().items(Joi.string().trim().max(80)).max(50).default([]),
-      placeIdentifier: Joi.string().trim().max(255).allow('', null),
-      phone: Joi.string().trim().max(50).allow('', null),
-      website: Joi.string().uri({ scheme: ['http', 'https'] }).max(500).allow('', null),
-      emails: Joi.array().items(Joi.string().email()).max(20).default([]),
-      address: Joi.string().trim().max(500).allow('', null),
-      street: Joi.string().trim().max(255).allow('', null),
-      city: Joi.string().trim().max(120).allow('', null),
-      state: Joi.string().trim().max(80).allow('', null),
-      postalCode: Joi.string().trim().max(20).allow('', null),
-      country: Joi.string().trim().max(100).allow('', null),
-      latitude: Joi.number().min(-90).max(90).allow(null),
-      longitude: Joi.number().min(-180).max(180).allow(null),
-      rating: Joi.number().min(0).max(5).allow(null),
-      reviewCount: Joi.number().integer().min(0).allow(null),
-      priceLevel: Joi.string().trim().max(40).allow('', null),
-      discoveredAt: Joi.date().iso().allow(null),
-      searchId: Joi.string().max(128).allow('', null),
-    }).unknown(false)).min(1).max(500).required(),
+      clientId: Joi.string().trim().max(128).truncate(true).allow('', null),
+      businessName: Joi.string().trim().max(300).truncate(true).allow('', null),
+      category: Joi.string().trim().max(200).truncate(true).allow('', null),
+      categories: Joi.array().items(Joi.string().trim().max(120).truncate(true)).max(50).default([]),
+      placeIdentifier: Joi.string().trim().max(300).truncate(true).allow('', null),
+      phone: Joi.string().trim().max(120).truncate(true).allow('', null),
+      website: Joi.string().trim().max(600).truncate(true).allow('', null),
+      emails: Joi.array().items(Joi.string().trim().max(254).truncate(true)).max(30).default([]),
+      address: Joi.string().trim().max(600).truncate(true).allow('', null),
+      street: Joi.string().trim().max(300).truncate(true).allow('', null),
+      city: Joi.string().trim().max(200).truncate(true).allow('', null),
+      state: Joi.string().trim().max(160).truncate(true).allow('', null),
+      postalCode: Joi.string().trim().max(40).truncate(true).allow('', null),
+      country: Joi.string().trim().max(120).truncate(true).allow('', null),
+      latitude: Joi.number().allow(null).failover(null),
+      longitude: Joi.number().allow(null).failover(null),
+      rating: Joi.number().allow(null).failover(null),
+      reviewCount: Joi.number().allow(null).failover(null),
+      priceLevel: Joi.string().trim().max(60).truncate(true).allow('', null),
+      discoveredAt: Joi.date().iso().allow('', null).failover(null),
+      searchId: Joi.string().trim().max(128).truncate(true).allow('', null),
+    }).unknown(true)).min(1).max(500).required(),
+    // Optional import-run tracking (reporting only; ownership is always the
+    // authenticated user). Batches of one run share `importId`; `importTotal`
+    // is the run's expected row count and `importFinal` marks its last batch.
+    importId: Joi.string().trim().max(128).truncate(true).allow('', null),
+    importTotal: Joi.number().integer().min(0).allow(null).failover(null),
+    importFinal: Joi.boolean().allow(null).failover(null),
   }),
 };
 

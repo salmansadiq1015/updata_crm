@@ -265,6 +265,44 @@ describe('leadImportExportService.importExtensionLeads', () => {
       total: 1, created: 1, existing: 0, failed: 0,
     });
   });
+
+  it('normalises messy Maps fields and never fails a row on junk data', async () => {
+    mockFindDuplicates.mockResolvedValue([]);
+    mockCreate.mockImplementation(async (doc) => ({ ...doc, _id: '507f1f77bcf86cd799439099', leadNumber: 'L-00099' }));
+
+    const longName = 'A'.repeat(400);
+    const result = await service.importExtensionLeads([
+      {
+        clientId: 'junk-phone',
+        businessName: longName,
+        // The extension sometimes stuffs non-phone text here. Must NOT fail the
+        // row (the real regression: one bad phone 400'd the whole batch).
+        phone: 'Hôtel Clarisse · Visited link in your Google Maps session',
+        website: 'example.fr', // no scheme → normalised
+        emails: ['not-an-email', 'ok@example.fr'],
+        rating: '4.6', // string → coerced
+        reviewCount: 1284.9, // → 1284
+        latitude: 999, // out of range → dropped (no fabricated geo)
+        longitude: 2.35,
+      },
+      { clientId: 'good-phone', businessName: 'Valid Business', phone: '+33 1 23 45 67 89' },
+    ], 'user-1', { requestId: 'r-normalise' });
+
+    // Both rows import; the junk phone never fails the batch.
+    expect(result).toMatchObject({ total: 2, created: 2, existing: 0, failed: 0 });
+
+    const junk = mockCreate.mock.calls.find((c) => c[0].name.startsWith('A'))[0];
+    expect(junk.phone).toBeNull(); // junk text dropped, row still created
+    expect(junk.name).toHaveLength(255); // over-long name truncated
+    expect(junk.website).toBe('https://example.fr/'); // scheme added
+    expect(junk.email).toBe('ok@example.fr'); // invalid email skipped, valid kept
+    expect(junk.providerMeta.rating).toBe(4.6);
+    expect(junk.providerMeta.reviewCount).toBe(1284);
+    expect(junk.location).toBeNull(); // out-of-range latitude → no geo point
+
+    const good = mockCreate.mock.calls.find((c) => c[0].name === 'Valid Business')[0];
+    expect(good.phone).toBe('+33 1 23 45 67 89'); // valid phone preserved
+  });
 });
 
 // ── Import: XLSX round-trip ───────────────────────────────────────────────────

@@ -18,6 +18,8 @@ const mockGetResultById = jest.fn();
 const mockAddJob = jest.fn();
 const mockLogEvent = jest.fn();
 const mockPublish = jest.fn();
+const mockUpdateSessionProgress = jest.fn();
+const mockCountsForSession = jest.fn();
 // Deferred Place-details enrichment (its own suite: detailsEnricher.test.js). Here
 // it returns the result unchanged so getResult DTO behaviour is tested in isolation.
 const mockEnrich = jest.fn(async (result) => ({ result, fetched: false }));
@@ -30,8 +32,8 @@ jest.unstable_mockModule('../discovery.repository.js', () => ({
     listSessions: mockListSessions,
     listResults: mockListResults,
     getResultById: mockGetResultById,
-    updateSessionProgress: jest.fn(),
-    countsForSession: jest.fn(),
+    updateSessionProgress: mockUpdateSessionProgress,
+    countsForSession: mockCountsForSession,
   },
 }));
 
@@ -353,6 +355,50 @@ describe('discoveryService.getSession', () => {
 
     expect(mockSetSessionStatus).not.toHaveBeenCalled();
     expect(dto.status).toBe(DISCOVERY_SESSION_STATUS.FETCHING);
+  });
+
+  test('reconciles deflated counts for a terminal session from the stored results', async () => {
+    // Stored counts were left deflated (live per-run deltas / a stalled run):
+    // "0 new" even though 248 results are actually NEW.
+    const terminalSession = {
+      _id: 'sess-partial',
+      status: DISCOVERY_SESSION_STATUS.PARTIAL,
+      updatedAt: new Date(),
+      counts: { discovered: 300, new: 0, existing: 0, possibleDuplicates: 52, imported: 0, skipped: 0, failed: 0 },
+    };
+    mockGetSessionById.mockResolvedValue(terminalSession);
+    mockCountsForSession.mockResolvedValue({
+      discovered: 300, new: 248, existing: 0, possibleDuplicates: 52,
+      imported: 0, skipped: 0, failed: 0, queued: 0, notImported: 300,
+    });
+    mockUpdateSessionProgress.mockImplementation(async (_id, { counts }) => ({
+      ...terminalSession, counts: { ...terminalSession.counts, ...counts },
+    }));
+
+    const dto = await discoveryService.getSession('sess-partial', USER);
+
+    expect(mockCountsForSession).toHaveBeenCalledWith('sess-partial', { createdBy: USER });
+    expect(mockUpdateSessionProgress).toHaveBeenCalledWith(
+      'sess-partial',
+      { counts: expect.objectContaining({ new: 248, discovered: 300 }) },
+      { createdBy: USER },
+    );
+    expect(dto.counts.new).toBe(248);
+    expect(dto.counts.possibleDuplicates).toBe(52);
+  });
+
+  test('does not reconcile counts while a session is still active', async () => {
+    mockGetSessionById.mockResolvedValue({
+      _id: 'sess-running',
+      status: DISCOVERY_SESSION_STATUS.FETCHING,
+      updatedAt: new Date(),
+      counts: { discovered: 120, new: 100, existing: 0, possibleDuplicates: 20, imported: 0, skipped: 0, failed: 0 },
+    });
+
+    await discoveryService.getSession('sess-running', USER);
+
+    expect(mockCountsForSession).not.toHaveBeenCalled();
+    expect(mockUpdateSessionProgress).not.toHaveBeenCalled();
   });
 });
 

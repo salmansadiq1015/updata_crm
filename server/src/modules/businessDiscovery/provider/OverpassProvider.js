@@ -5,7 +5,15 @@ import config from '../../../config/index.js';
 import { ExternalServiceError, ERROR_CODES } from '../../../shared/errors/errors.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_LIMIT = 20;
+// OSM/Overpass returns every matching element in one response (it is not a
+// paged API like Google). A generous per-request page size lets a cell surface
+// everything OSM has instead of being throttled to a Google-sized 20; the
+// adaptive sweep still subdivides any cell that saturates this limit.
+const DEFAULT_LIMIT = 500;
+const MAX_LIMIT = 2000;
+// Advertised to the adaptive search so it requests a full OSM page per cell
+// (and only subdivides when a cell truly saturates this size).
+export const OVERPASS_SEARCH_PAGE_SIZE = DEFAULT_LIMIT;
 const DEFAULT_OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 const FALLBACK_OVERPASS_URLS = Object.freeze([
   'https://overpass.private.coffee/api/interpreter',
@@ -26,7 +34,7 @@ function uniqueUrls(urls = []) {
 
 function clampLimit(value) {
   const n = Number.isFinite(value) ? Math.trunc(value) : DEFAULT_LIMIT;
-  return Math.max(1, Math.min(n, 100));
+  return Math.max(1, Math.min(n, MAX_LIMIT));
 }
 
 function escapeOverpassString(value) {
@@ -65,6 +73,41 @@ function firstTag(tags = {}, keys = []) {
     if (value !== undefined && value !== null && value !== '') return value;
   }
   return null;
+}
+
+const HTTP_URL_RE = /^https?:\/\/\S+$/i;
+
+/**
+ * Build photo references from the OSM tags that actually carry imagery
+ * (`image` / `image:N` direct URLs and `wikimedia_commons` File: entries).
+ * Never fabricated — returns an empty array when the element has no image tags.
+ * Wikimedia Commons files resolve through Special:FilePath, which redirects to
+ * the real image and accepts a `width` hint for a thumbnail.
+ */
+function extractOsmPhotos(tags = {}) {
+  const photos = [];
+  const seen = new Set();
+  const push = (url, source) => {
+    if (!url || seen.has(url) || photos.length >= 10) return;
+    seen.add(url);
+    photos.push({ url, source, attribution: source === 'wikimedia_commons' ? 'Wikimedia Commons' : 'OpenStreetMap' });
+  };
+
+  for (const [key, value] of Object.entries(tags)) {
+    if ((key === 'image' || /^image:\d+$/.test(key)) && HTTP_URL_RE.test(String(value))) {
+      push(String(value).trim(), 'image');
+    }
+  }
+
+  const commons = tags.wikimedia_commons;
+  if (typeof commons === 'string' && /^File:/i.test(commons.trim())) {
+    const fileName = commons.trim().replace(/^File:/i, '');
+    if (fileName) {
+      push(`https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fileName)}?width=800`, 'wikimedia_commons');
+    }
+  }
+
+  return photos;
 }
 
 function formatAddress(tags = {}) {
@@ -127,6 +170,7 @@ function normalizeOsmElement(element, { typeId, textQuery } = {}) {
     address,
     location: { lat, lng },
     openingHours: tags.opening_hours || null,
+    photos: extractOsmPhotos(tags),
     mapsUrl: `https://www.openstreetmap.org/${osmType}/${osmId}`,
   };
 }
@@ -135,6 +179,10 @@ export class OverpassProvider extends PlacesProvider {
   constructor({ apiUrl, apiUrls, httpClient, timeoutMs, userAgent, enabled } = {}) {
     super();
     this.name = DISCOVERY_PROVIDER_NAME.OPENSTREETMAP;
+    // OSM is not paged — one request returns the whole cell. Tell the adaptive
+    // search to request a full page per cell (vs Google's 20) so a dense area is
+    // surfaced in far fewer requests, with subdivision only on real saturation.
+    this.searchPageSize = OVERPASS_SEARCH_PAGE_SIZE;
     this.apiUrls = uniqueUrls(
       apiUrls
       ?? [

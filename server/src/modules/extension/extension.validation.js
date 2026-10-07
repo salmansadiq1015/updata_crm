@@ -29,3 +29,9 @@ export const disconnect = {
     connectionId: objectId.allow(null),
   }),
 };
+
+export const listImports = {
+  query: Joi.object({
+    limit: Joi.number().integer().min(1).max(50).default(10),
+  }),
+};

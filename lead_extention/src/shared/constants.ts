@@ -6,6 +6,19 @@ export const DISCOVERY_SCROLL_DELAY_MS = 850;
 export const MAX_PAGE_BYTES = 800_000;
 export const MAX_RADIUS_KM = 500;
 
+// Adaptive area-sweep tuning.
+// A single Maps feed tops out near ~120 cards; a tile that reaches this many
+// distinct cards is treated as "capped" and split into four smaller tiles.
+export const TILE_SPLIT_THRESHOLD = 100;
+// Never subdivide below this tile size — at street scale a residual cap is
+// accepted rather than spawning an unbounded number of tiles.
+export const MIN_TILE_SPAN_KM = 0.35;
+// Safety ceiling on quadtree depth and total tiles scanned per sweep.
+export const MAX_TILE_DEPTH = 6;
+export const DEFAULT_MAX_AREA_TILES = 400;
+// Area radius used when the user leaves the radius filter unset.
+export const DEFAULT_SWEEP_RADIUS_KM = 5;
+
 export const RADIUS_OPTIONS = [0.5, 1, 2, 5, 10, 20, 30, 50] as const;
 
 export const BUSINESS_TYPE_PRESETS = [

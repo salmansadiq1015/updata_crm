@@ -22,6 +22,29 @@ Install `dist/` through `chrome://extensions` → Developer mode → Load unpack
 - Closing and reopening the side panel or service-worker restart recovers the active job through storage and a Chrome alarm.
 - The safety result-state limit is configurable in Settings. It protects against pathological loops; it is not the normal completion condition.
 
+## Secure CRM connect (no password in the extension)
+
+The primary way to link the extension is a one-time pairing grant initiated from
+the CRM. The extension never handles a CRM password:
+
+1. In the CRM, open **Leads → Chrome Extension → Connect**. The CRM (already
+   authenticated) mints a single-use, 5-minute pairing grant bound to that user.
+2. The CRM page hands the grant to the extension via
+   `chrome.runtime.sendMessage(EXTENSION_ID, { type: 'CRM_CONNECT', grant })`.
+   This channel is restricted by `externally_connectable` to the CRM origin, and
+   the service worker re-validates the sender origin.
+3. The extension redeems the grant at `POST /api/v1/extension/pairing/redeem` and
+   receives a normal rotating access/refresh pair tied to a dedicated extension
+   session — the same session machinery as a browser login. Tokens live in
+   `chrome.storage.session`.
+
+The Lead page shows live status (Not installed / Installed-not-connected /
+Connected / Connection error) by combining an in-browser `CRM_PING` with the
+server-side connection record, and can disconnect (revoking the session).
+
+A manual email/password sign-in remains available in the side panel as a
+fallback, but the connect-from-CRM flow is preferred.
+
 ## CRM behavior
 
 The extension uses the existing application's auth endpoints and does not create a second user database. CRM ownership is server-derived from the authenticated bearer token. Imports are authenticated, batched, idempotent by Google place ID where available, and return created/existing/failed row outcomes. Local leads remain available if CRM is unavailable.
@@ -46,6 +69,21 @@ name,type,status,street,addressSupplement,postalCode,city,canton,country,phone,m
 
 ## Permission and privacy model
 
-Maps host access is limited to Google Maps. Public website access is requested only when enrichment is enabled. The service worker is the only extension component that contacts the CRM API; access tokens and refresh tokens are not sent to Maps pages. No API keys, backend secrets, or passwords are bundled.
+The extension requests only what each feature needs. Every permission is
+justified below; broad host access is **optional** and requested at runtime.
+
+| Permission | Why it is needed |
+| --- | --- |
+| `storage` | Persist the active search checkpoint and settings (session storage holds the short-lived tokens). |
+| `downloads` | Save CSV / XLSX exports the user explicitly requests. |
+| `sidePanel` | The whole UI is a side panel. |
+| `activeTab` + `scripting` | Read the business cards visible in the user's current Google Maps tab (content script). |
+| `alarms` | Resume an interrupted discovery/import after the service worker is suspended. |
+| host `https://updata.behjja.com/*` | Talk to the CRM API (auth, connect, lead import). |
+| host `https://*.google.com/maps/*` | Read the Maps results the user is viewing. |
+| `optional_host_permissions` `https://*/*` | Requested **only** if the user turns on optional website-contact enrichment. |
+| `externally_connectable` `https://updata.behjja.com/*` | Lets the CRM Lead page send the one-time connect grant and status pings — the CRM origin only. |
+
+Maps host access is limited to Google Maps. The service worker is the only extension component that contacts the CRM API; access tokens and refresh tokens are not sent to Maps pages. No API keys, backend secrets, or passwords are bundled.
 
 See [AUDIT_REPORT.md](./AUDIT_REPORT.md) for root causes, implementation details, evidence, and the live-test boundary.

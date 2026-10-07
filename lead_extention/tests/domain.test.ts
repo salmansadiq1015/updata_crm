@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dedupeKey, isSameLead, makeLead } from '../src/shared/normalize';
-import { haversineDistanceMeters, normalizeEmail, normalizePhone, normalizeText } from '../src/shared/utils';
+import { cleanPhone, haversineDistanceMeters, normalizeEmail, normalizePhone, normalizeText } from '../src/shared/utils';
 import { createXlsx, escapeCsv, summaryFor, toCsv } from '../src/export/exporters';
 import { extractEmails } from '../src/enrichment/website-discovery';
 import type { Lead } from '../src/shared/types';
@@ -18,6 +18,20 @@ describe('normalization and distance', () => {
 
   it('calculates a geographic distance with Haversine', () => {
     expect(haversineDistanceMeters({ latitude: 0, longitude: 0 }, { latitude: 0, longitude: 1 })).toBeCloseTo(111_195, -2);
+  });
+
+  it('cleans phones to the CRM 50-char limit so one noisy cell cannot fail a batch', () => {
+    // Trailing text (hours/labels) and over-length junk must be dropped.
+    expect(cleanPhone('+33 1 42 60 30 82 · Open ⋅ Closes 11 PM')).toBe('+33 1 42 60 30 82');
+    const noisy = cleanPhone('+1 (555) 123-4567 ' + 'x'.repeat(80));
+    expect(noisy && noisy.length).toBeLessThanOrEqual(50);
+    expect(cleanPhone('   ')).toBeNull();
+    expect(cleanPhone(null)).toBeNull();
+  });
+
+  it('stores a phone within the CRM import limit on the lead itself', () => {
+    const polluted = makeLead({ businessName: 'Long Phone Co', googleMapsUrl: 'https://www.google.com/maps/place/Long', phone: '+33 1 42 60 30 82 appointments only, call reception after 9am daily' }, 'search');
+    expect(polluted.phone && polluted.phone.length).toBeLessThanOrEqual(50);
   });
 
   it('deduplicates by stable place identifier before fallback fields', () => {

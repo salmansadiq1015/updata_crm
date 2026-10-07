@@ -12,6 +12,22 @@ export function normalizePhone(value: string | null | undefined): string {
   return (value ?? '').replace(/[^\d+]/g, '').replace(/^00/, '+');
 }
 
+/**
+ * Produce a display-ready phone string that is safe to store and import.
+ * Maps occasionally concatenates a number with trailing text (opening hours,
+ * "Call", a second number), which can exceed the CRM's 50-character phone
+ * limit and reject an entire import batch. Keep the first phone-like run and
+ * hard-cap the length so one noisy cell can never fail the batch.
+ */
+export function cleanPhone(value: string | null | undefined, maxLength = 50): string | null {
+  if (!value) return null;
+  const collapsed = value.replace(/\s+/g, ' ').trim();
+  if (!collapsed) return null;
+  const match = collapsed.match(/\+?\d[\d\s().\-/]{4,}\d/);
+  const candidate = (match ? match[0] : collapsed).replace(/\s+/g, ' ').trim();
+  return candidate ? candidate.slice(0, maxLength).trim() || null : null;
+}
+
 export function normalizeUrl(value: string | null | undefined): string {
   if (!value) return '';
   try {

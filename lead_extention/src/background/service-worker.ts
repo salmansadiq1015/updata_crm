@@ -1,4 +1,21 @@
-import { DISCOVERY_SCROLL_DELAY_MS, MAX_SAFE_ITERATIONS } from '../shared/constants';
+import {
+  DEFAULT_MAX_AREA_TILES,
+  DEFAULT_SWEEP_RADIUS_KM,
+  DISCOVERY_SCROLL_DELAY_MS,
+  MAX_SAFE_ITERATIONS,
+  MAX_TILE_DEPTH,
+  MIN_TILE_SPAN_KM,
+  TILE_SPLIT_THRESHOLD,
+} from '../shared/constants';
+import {
+  type GeoPoint,
+  type Tile,
+  splitTile,
+  tileCenter,
+  tileFromCenterRadius,
+  tileSpanKm,
+  zoomForTile,
+} from '../shared/geo-tiling';
 import {
   CRM_BATCH_SIZE,
   CHECKPOINT_VERSION,
@@ -31,6 +48,9 @@ import { CRM_WEB_ORIGIN, crmApiBaseForOrigin, isTrustedCrmOrigin } from '../shar
 const DISCOVERY_ALARM = 'lead-finder-discovery-recovery';
 const CRM_IMPORT_SETTING = 'crm-import-state';
 const MAX_RESULT_WAIT_RETRIES = 6;
+// Consecutive failed detail-page reads before per-business hydration is paused
+// for the rest of the run (keeps a broken-detail run fast and complete).
+const DETAIL_FAILURE_LIMIT = 6;
 const ACTIVE_STATUSES = new Set(['starting', 'discovering', 'paused', 'processing', 'resuming', 'retrying', 'enriching']);
 
 type Job = {
@@ -46,6 +66,10 @@ type Job = {
   expectedQuery: string;
   detailTabId: number | null;
   detailCache: Map<string, RawBusinessRecord | null>;
+  detailFailureStreak: number;
+  detailHydrationDisabled: boolean;
+  tilesScanned: number;
+  tilesPlanned: number;
 };
 
 let activeJob: Job | null = null;
@@ -250,28 +274,18 @@ function makeJob(search: SearchRecord, tabId: number, config: DiscoveryConfig, r
   const queries = buildQueries(config);
   const matchingIndex = queries.findIndex((query) => query === search.currentQuery);
   const queryIndex = matchingIndex >= 0 ? matchingIndex : resumeQueryIndex(search, queries.length);
-  return { search, config, tabId, paused: search.status === 'paused', stopped: Boolean(search.stopRequested), resumeResolvers: [], leads: new Map(records.map((lead) => [dedupeKey(lead), lead])), originCoordinates, queryIndex, expectedQuery: search.currentQuery || queries[queryIndex] || queries[0], detailTabId: null, detailCache: new Map() };
+  return { search, config, tabId, paused: search.status === 'paused', stopped: Boolean(search.stopRequested), resumeResolvers: [], leads: new Map(records.map((lead) => [dedupeKey(lead), lead])), originCoordinates, queryIndex, expectedQuery: search.currentQuery || queries[queryIndex] || queries[0], detailTabId: null, detailCache: new Map(), detailFailureStreak: 0, detailHydrationDisabled: false, tilesScanned: 0, tilesPlanned: 0 };
 }
 
 async function runDiscovery(job: Job): Promise<void> {
   try {
     const isResume = (job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0) > 0;
     await setPhase(job, isResume ? 'WAITING_FOR_RESULTS' : 'SEARCH_INITIALIZED', isResume ? `Resuming from ${job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0} processed businesses…` : 'Starting controlled discovery…');
-    const queries = buildQueries(job.config);
-    if (job.queryIndex >= queries.length) job.queryIndex = 0;
-    for (; job.queryIndex < queries.length && !job.stopped && job.leads.size < job.config.maxResults; job.queryIndex += 1) {
-      job.expectedQuery = queries[job.queryIndex];
-      const changedQuery = job.search.currentQuery !== job.expectedQuery;
-      job.search.currentQuery = job.expectedQuery; job.search.queryIndex = job.queryIndex;
-      if (changedQuery) {
-        job.search.currentPage = 0; job.search.currentResultIndex = 0; job.search.stableRounds = 0;
-        job.search.scrollTop = 0; job.search.scrollHeight = 0; job.search.firstVisibleResultKey = null; job.search.lastVisibleResultKey = null;
-      }
-      await setPhase(job, job.queryIndex === 0 && !isResume ? 'SEARCH_INITIALIZED' : 'NEXT_RESULTS', changedQuery ? 'Continuing with the next Maps search variation.' : 'Restoring the saved Maps result checkpoint…');
-      await navigateIfNeeded(job);
-      await restoreMapsCheckpoint(job);
-      const exhausted = await processCurrentMapsState(job);
-      if (!exhausted) break;
+    const area = job.config.areaSweep === false ? null : await resolveSweepArea(job);
+    if (area) {
+      await runAreaSweep(job, area);
+    } else {
+      await runQueryVariations(job, isResume);
     }
     if (job.config.enableEnrichment && !job.stopped) await enrichJob(job);
     job.search.status = job.stopped ? 'stopped' : 'completed';
@@ -280,7 +294,9 @@ async function runDiscovery(job: Job): Promise<void> {
     await SearchRepository.save(job.search);
     const completionMessage = job.leads.size >= job.config.maxResults
       ? `Discovery completed at the configured maximum of ${job.config.maxResults.toLocaleString()} unique leads.`
-      : 'Discovery completed. The available Maps result feeds were exhausted.';
+      : job.tilesScanned > 0
+        ? `Area sweep complete. Scanned ${job.tilesScanned.toLocaleString()} map areas and found ${job.leads.size.toLocaleString()} businesses.`
+        : 'Discovery completed. The available Maps result feeds were exhausted.';
     await publishProgress(job.stopped ? 'Discovery stopped by the user. Saved leads were preserved.' : completionMessage);
   } catch (error) {
     job.search.status = 'error'; job.search.currentPhase = 'FAILED'; job.search.completedAt = nowIso(); job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso(); job.search.error = errorMessage(error);
@@ -293,8 +309,152 @@ async function runDiscovery(job: Job): Promise<void> {
   }
 }
 
+// The original single-feed flow: run the configured query (optionally a few
+// location variations) and scroll each feed to its end. Retained as a fallback
+// for when no geographic centre can be resolved for an adaptive area sweep.
+async function runQueryVariations(job: Job, isResume: boolean): Promise<void> {
+  const queries = buildQueries(job.config);
+  if (job.queryIndex >= queries.length) job.queryIndex = 0;
+  for (; job.queryIndex < queries.length && !job.stopped && job.leads.size < job.config.maxResults; job.queryIndex += 1) {
+    job.expectedQuery = queries[job.queryIndex];
+    const changedQuery = job.search.currentQuery !== job.expectedQuery;
+    job.search.currentQuery = job.expectedQuery; job.search.queryIndex = job.queryIndex;
+    if (changedQuery) resetFeedCheckpoint(job);
+    await setPhase(job, job.queryIndex === 0 && !isResume ? 'SEARCH_INITIALIZED' : 'NEXT_RESULTS', changedQuery ? 'Continuing with the next Maps search variation.' : 'Restoring the saved Maps result checkpoint…');
+    await navigateIfNeeded(job);
+    await restoreMapsCheckpoint(job);
+    const exhausted = await processCurrentMapsState(job);
+    if (!exhausted) break;
+  }
+}
+
+function resetFeedCheckpoint(job: Job): void {
+  job.search.currentPage = 0; job.search.currentResultIndex = 0; job.search.stableRounds = 0;
+  job.search.scrollTop = 0; job.search.scrollHeight = 0; job.search.firstVisibleResultKey = null; job.search.lastVisibleResultKey = null;
+}
+
+// Resolve the centre to sweep around. When a location was typed we let Google
+// geocode it first (so "Hotel near Paris" centres on Paris even if the user's
+// map is elsewhere); otherwise we sweep around the current map centre.
+async function resolveSweepArea(job: Job): Promise<Tile | null> {
+  let center: GeoPoint | null = null;
+  const location = job.config.location.trim();
+  if (location) {
+    try {
+      await navigateToQuery(job.tabId, buildQueries(job.config)[0]);
+      await waitForTabNavigation(job.tabId);
+      await ensureMapsContentScript(job.tabId);
+      center = await waitForMapCenter(job.tabId);
+    } catch { center = null; }
+  }
+  if (!center) {
+    try {
+      const response = await sendToMaps(job.tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
+      center = response.context?.centerCoordinates ?? null;
+    } catch { center = null; }
+  }
+  center ??= job.originCoordinates;
+  if (!center) return null;
+  job.originCoordinates ??= center;
+  const radiusKm = job.config.radiusKm && job.config.radiusKm > 0 ? job.config.radiusKm : DEFAULT_SWEEP_RADIUS_KM;
+  return tileFromCenterRadius(center, radiusKm);
+}
+
+async function waitForMapCenter(tabId: number): Promise<GeoPoint | null> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      const response = await sendToMaps(tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
+      const center = response.context?.centerCoordinates;
+      if (center) return center;
+    } catch { /* still navigating */ }
+    await delay(Math.min(4_000, 600 * (2 ** attempt)));
+  }
+  return null;
+}
+
+// Breadth-first adaptive quadtree sweep. Each tile is scanned to the end of its
+// feed; a tile that reaches Google's per-search ceiling is split into four and
+// re-scanned, so dense areas are covered completely while sparse ones stay cheap.
+async function runAreaSweep(job: Job, rootTile: Tile): Promise<void> {
+  job.expectedQuery = job.config.businessType.trim();
+  const maxTiles = Math.max(1, job.config.maxAreaTiles ?? DEFAULT_MAX_AREA_TILES);
+  const queue: Tile[] = [rootTile];
+  job.tilesPlanned = 1;
+  while (queue.length && !job.stopped && job.leads.size < job.config.maxResults && job.tilesScanned < maxTiles) {
+    await waitIfPaused(job); if (job.stopped) return;
+    const tile = queue.shift()!;
+    const before = job.leads.size;
+    let tileCardCount = 0;
+    try {
+      tileCardCount = await sweepTile(job, tile);
+    } catch (error) {
+      // A single unreachable/empty tile must never fail the whole sweep.
+      tileCardCount = 0;
+      job.search.error = null;
+      await publishProgress(`Skipped one map area (${errorMessage(error)}). Continuing the sweep…`);
+    }
+    job.tilesScanned += 1;
+    const capped = tileCardCount >= TILE_SPLIT_THRESHOLD;
+    const canSplit = tile.depth < MAX_TILE_DEPTH && tileSpanKm(tile) / 2 >= MIN_TILE_SPAN_KM;
+    if (capped && canSplit && job.tilesScanned + queue.length < maxTiles) {
+      queue.push(...splitTile(tile));
+      job.tilesPlanned += 4;
+    }
+    await persistJob(job);
+    await publishProgress(`Area sweep: ${job.tilesScanned} of ~${job.tilesPlanned} map areas scanned · ${job.leads.size.toLocaleString()} businesses found · ${job.leads.size - before} new here.`);
+  }
+}
+
+// Scan one tile: point Maps at the tile viewport, confirm it has results, sweep
+// its feed to the end, then report how many cards the feed held (the signal used
+// to decide whether the tile hit the cap and must be subdivided).
+async function sweepTile(job: Job, tile: Tile): Promise<number> {
+  resetFeedCheckpoint(job);
+  await setPhase(job, 'NEXT_RESULTS', `Scanning map area ${job.tilesScanned + 1}…`);
+  await navigateToTile(job, tile);
+  const probe = await probeTileResultCount(job);
+  if (probe === 0) return 0;
+  await processCurrentMapsState(job);
+  try {
+    const finalState = await sendToMaps(job.tabId, { type: 'GET_SCROLL_STATE' }) as MapsScrollState;
+    return Math.max(probe, finalState.visibleResultCount ?? 0);
+  } catch {
+    return probe;
+  }
+}
+
+async function navigateToTile(job: Job, tile: Tile): Promise<void> {
+  const center = tileCenter(tile);
+  const zoom = zoomForTile(tile);
+  const query = encodeURIComponent(job.config.businessType.trim() || job.expectedQuery);
+  const url = `https://www.google.com/maps/search/${query}/@${center.latitude.toFixed(6)},${center.longitude.toFixed(6)},${zoom}z`;
+  job.search.currentStateKey = `tile:${tile.depth}:${center.latitude.toFixed(4)},${center.longitude.toFixed(4)}`;
+  await chrome.tabs.update(job.tabId, { url });
+  await waitForTabNavigation(job.tabId);
+  await ensureMapsContentScript(job.tabId);
+}
+
+// Quick bounded check so an empty tile is dismissed in a few seconds instead of
+// falling through to the long "results could not load" retry path.
+async function probeTileResultCount(job: Job): Promise<number> {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await waitIfPaused(job); if (job.stopped) return 0;
+    try {
+      const response = await sendToMaps(job.tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
+      const context = response.context;
+      if (context?.isListing) return 1;
+      const count = context?.visibleResultCount ?? 0;
+      if (count > 0) return count;
+      if (context && !context.hasResults && isSearchRoute(context.url) && attempt >= 1) return 0;
+    } catch { /* still navigating */ }
+    await delay(Math.min(2_500, 700 * (2 ** attempt)));
+  }
+  return 0;
+}
+
 async function processCurrentMapsState(job: Job): Promise<boolean> {
   let stableRounds = job.search.stableRounds ?? 0;
+  let emptyRounds = 0;
   const safetyLimit = Math.max(20, job.config.safetyLimit ?? MAX_SAFE_ITERATIONS);
   while ((job.search.currentPage ?? 0) < safetyLimit && job.leads.size < job.config.maxResults) {
     await waitIfPaused(job); if (job.stopped) return true;
@@ -321,6 +481,12 @@ async function processCurrentMapsState(job: Job): Promise<boolean> {
     stableRounds = newlyProcessed === 0 ? stableRounds + 1 : 0;
     job.search.stableRounds = stableRounds;
     await persistJob(job);
+    // No feed and nothing rendered: this result state is empty (an empty grid
+    // tile, or a page that never produced a list). Bail after a few quiet rounds
+    // instead of scrolling an absent feed all the way to the safety limit.
+    const nothingVisible = (settledScroll.visibleResultCount ?? 0) === 0 && (settledScroll.scrollHeight ?? 0) === 0 && (first.records?.length ?? 0) === 0 && (settled.records?.length ?? 0) === 0;
+    emptyRounds = nothingVisible ? emptyRounds + 1 : 0;
+    if (emptyRounds >= 3) return true;
     if (shouldCompleteResultState({ newlyProcessed, scrollChanged: settledScroll.changed, atEnd: settledScroll.atEnd, endConfirmed: settledScroll.endConfirmed, stableRounds })) {
       await setPhase(job, 'NO_MORE_RESULTS', 'The Maps result feed reached its confirmed end with no unprocessed businesses remaining.');
       return true;
@@ -471,8 +637,19 @@ async function hydrateMapsRecord(job: Job, record: RawBusinessRecord): Promise<R
   // Search cards often do not render phone, website, address, or review
   // metadata. Visit the stable Maps place URL in one background tab and read
   // the detail view, then return to the result feed without losing the job.
+  // Fast sweep: skip the per-business place-page read entirely unless the user
+  // asked for thorough contacts. Card-level phone/website/address are still used
+  // when Maps renders them, so a large area sweep is not throttled by one tab
+  // navigation per business.
+  if (!job.config.thoroughContacts) { job.detailCache.set(key, record); return record; }
   const needsDetails = !record.phone || !record.website || !record.address || record.reviewCount === null || record.reviewCount === undefined;
   if (!needsDetails) { job.detailCache.set(key, record); return record; }
+  // Circuit breaker: if opening the place page keeps yielding nothing (a cookie
+  // consent wall, a signed-out redirect, or persistently slow background tabs),
+  // stop paying ~20s per business for a detail read that never succeeds. Once
+  // tripped, discovery sweeps the rest of the feed fast on card data alone so a
+  // run completes with every business instead of appearing stuck after a few.
+  if (job.detailHydrationDisabled) { job.detailCache.set(key, record); return record; }
   try {
     if (!job.detailTabId) {
       const detailTab = await chrome.tabs.create({ url: record.googleMapsUrl, active: false });
@@ -483,15 +660,25 @@ async function hydrateMapsRecord(job: Job, record: RawBusinessRecord): Promise<R
     }
     const detail = await waitForMapsDetails(job.detailTabId);
     job.detailCache.set(key, detail);
-    return detail ? mergeRawRecord(record, detail) : record;
+    if (detail) {
+      job.detailFailureStreak = 0;
+      return mergeRawRecord(record, detail);
+    }
+    job.detailFailureStreak += 1;
+    if (job.detailFailureStreak >= DETAIL_FAILURE_LIMIT) job.detailHydrationDisabled = true;
+    return record;
   } catch {
     job.detailCache.set(key, null);
+    job.detailFailureStreak += 1;
+    if (job.detailFailureStreak >= DETAIL_FAILURE_LIMIT) job.detailHydrationDisabled = true;
     return record;
   }
 }
 
 async function waitForMapsDetails(tabId: number): Promise<RawBusinessRecord | null> {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  // Bounded so a page that never renders a detail view costs ~6s, not ~24s. A
+  // page that does load returns on the first or second attempt anyway.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       const contextResponse = await sendToMaps(tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
       if (contextResponse.context?.isListing || /\/maps\/place\//.test(contextResponse.context?.url ?? '')) {
@@ -501,7 +688,7 @@ async function waitForMapsDetails(tabId: number): Promise<RawBusinessRecord | nu
     } catch {
       // The tab may still be navigating; the next bounded attempt retries it.
     }
-    await delay(Math.min(4_000, 500 * (2 ** attempt)));
+    await delay(Math.min(2_000, 500 * (2 ** attempt)));
   }
   return null;
 }
@@ -630,7 +817,7 @@ async function setPhase(job: Job, phase: DiscoveryPhase, message?: string): Prom
 async function persistJob(job: Job): Promise<void> { const tab = await chrome.tabs.get(job.tabId).catch(() => null); job.search.currentStateKey = tab?.url ?? job.search.currentStateKey; job.search.currentQuery = job.expectedQuery; job.search.queryIndex = job.queryIndex; job.search.lastActivityAt = nowIso(); job.search.updatedAt = nowIso(); await SearchRepository.save(job.search); }
 async function getProgressResponse(): Promise<DiscoveryProgress> { await recoverDiscovery(); if (activeJob) return progressFor(activeJob); const search = (await SearchRepository.list())[0]; if (search) { const leads = await LeadRepository.listBySearch(search.id); if (upgradeCheckpoint(search, leads.map((lead) => resultKeyForRecord(lead)))) await SearchRepository.save(search); } return progressForStored(search); }
 async function publishProgress(message?: string): Promise<void> { try { await chrome.runtime.sendMessage({ type: 'DISCOVERY_PROGRESS', progress: activeJob ? progressFor(activeJob, message) : await getProgressResponse(), message }); } catch { /* side panel can be closed */ } }
-function progressFor(job: Job, message?: string): DiscoveryProgress { const leads = [...job.leads.values()]; return { searchId: job.search.id, status: job.paused ? 'paused' : job.search.status, query: job.search.query, discovered: job.search.discoveredCount, duplicates: job.search.duplicateCount ?? 0, unique: leads.length, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: job.search.currentPage ?? 0, maxIterations: job.config.safetyLimit ?? MAX_SAFE_ITERATIONS, message, phase: job.search.currentPhase, processed: job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0, currentQuery: job.search.currentQuery, currentBatch: job.search.currentBatchSize ?? 0, configuredMaximum: job.config.maxResults, error: job.search.error }; }
+function progressFor(job: Job, message?: string): DiscoveryProgress { const leads = [...job.leads.values()]; return { searchId: job.search.id, status: job.paused ? 'paused' : job.search.status, query: job.search.query, discovered: job.search.discoveredCount, duplicates: job.search.duplicateCount ?? 0, unique: leads.length, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: job.search.currentPage ?? 0, maxIterations: job.config.safetyLimit ?? MAX_SAFE_ITERATIONS, message, phase: job.search.currentPhase, processed: job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0, currentQuery: job.search.currentQuery, currentBatch: job.search.currentBatchSize ?? 0, configuredMaximum: job.config.maxResults, error: job.search.error, tilesScanned: job.tilesScanned, tilesPlanned: job.tilesPlanned }; }
 function progressForStored(search?: SearchRecord): DiscoveryProgress { return { searchId: search?.id ?? '', status: search?.status ?? 'idle', query: search?.query ?? '', discovered: search?.discoveredCount ?? 0, duplicates: search?.duplicateCount ?? 0, unique: search?.uniqueCount ?? 0, withPhone: 0, withWebsite: 0, withEmail: 0, iteration: search?.currentPage ?? 0, maxIterations: search?.config?.safetyLimit ?? MAX_SAFE_ITERATIONS, phase: search?.currentPhase, processed: search?.processedCount ?? search?.processedResultKeys?.length ?? 0, currentQuery: search?.currentQuery, currentBatch: search?.currentBatchSize ?? 0, configuredMaximum: search?.config?.maxResults, error: search?.error }; }
 async function waitIfPaused(job: Job): Promise<void> { if (!job.paused) return; await new Promise<void>((resolve) => job.resumeResolvers.push(resolve)); }
 async function sendToMaps(tabId: number, message: { type: string; [key: string]: unknown }): Promise<unknown> {

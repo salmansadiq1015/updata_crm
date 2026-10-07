@@ -73,6 +73,7 @@ import type { BulkWhatsAppSummary } from './lead-bulk-whatsapp-dialog';
 import { LeadCard } from './lead-card';
 import { LeadDetailDrawer } from './lead-detail-drawer';
 import { LeadExportMenu } from './lead-export-menu';
+import { ExtensionConnectCard } from './extension-connect-card';
 import { LeadFilterBar } from './lead-filter-bar';
 import { LeadFormDialog } from './lead-form-dialog';
 import { LeadImportDialog } from './lead-import-dialog';
@@ -539,6 +540,10 @@ export function LeadListView() {
               )}
 
               {canExport && <LeadExportMenu />}
+
+              {/* Chrome Extension connect/status — gated by lead:read (same as
+                  the page itself). Does not interfere with existing actions. */}
+              {canExport && <ExtensionConnectCard />}
 
               {canImport && (
                 <Button

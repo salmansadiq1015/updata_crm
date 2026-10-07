@@ -144,6 +144,15 @@ export interface DiscoveryConfig {
   enableEnrichment: boolean;
   maxPagesPerWebsite: number;
   safetyLimit?: number;
+  // Sweep the whole selected area as an adaptive grid so Google's ~120-per-search
+  // ceiling cannot hide businesses. On by default; the single-feed flow is kept
+  // as a fallback when no area/centre can be resolved.
+  areaSweep?: boolean;
+  // Open each business's place page for phone/website/opening hours. Off by
+  // default so a large area sweep stays fast; card-level data is still captured.
+  thoroughContacts?: boolean;
+  // Hard cap on the number of grid tiles a single sweep will scan.
+  maxAreaTiles?: number;
 }
 
 export interface DiscoveryProgress {
@@ -165,6 +174,8 @@ export interface DiscoveryProgress {
   currentBatch?: number;
   configuredMaximum?: number;
   error?: string | null;
+  tilesScanned?: number;
+  tilesPlanned?: number;
 }
 
 export interface MapsScrollState {

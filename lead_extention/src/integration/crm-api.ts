@@ -1,6 +1,7 @@
 import { CRM_IMPORT_HEADERS } from '../shared/constants';
 import type { CrmAuthState, CrmAuthUser, Lead } from '../shared/types';
 import { SettingsRepository } from '../storage/repositories';
+import { cleanPhone } from '../shared/utils';
 
 export const DEFAULT_CRM_API_BASE_URL = 'https://updata.behjja.com/api/v1';
 const AUTH_SETTING = 'crm-auth';
@@ -219,15 +220,60 @@ export async function importLeads(leads: Lead[]): Promise<{ total: number; creat
   }
 }
 
+// Clamp every field to the CRM bulk-import schema limits BEFORE sending. The
+// server validates the whole array and rejects the entire batch if a single
+// cell violates a constraint (e.g. a phone longer than 50 chars), so one noisy
+// Maps value must never be allowed to fail an otherwise-valid import.
+function clampText(value: unknown, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.replace(/\s+/g, ' ').trim();
+  return trimmed ? trimmed.slice(0, max) : null;
+}
+
+function safeWebsite(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    return /^https?:$/.test(url.protocol) && url.href.length <= 500 ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeEmails(emails: string[] | undefined): string[] {
+  const valid = (emails ?? [])
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) && email.length <= 255);
+  return [...new Set(valid)].slice(0, 20);
+}
+
+function inRange(value: unknown, min: number, max: number): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : null;
+}
+
 function toExtensionRecord(lead: Lead): Record<string, unknown> {
   return {
-    clientId: lead.id, businessName: lead.businessName, category: lead.category,
-    categories: lead.categories, placeIdentifier: lead.placeIdentifier, phone: lead.phone,
-    website: lead.website, emails: lead.emails, address: lead.address, street: lead.street,
-    city: lead.city, state: lead.state, postalCode: lead.postalCode, country: lead.country,
-    latitude: lead.latitude, longitude: lead.longitude, rating: lead.rating,
-    reviewCount: lead.reviewCount, priceLevel: lead.priceLevel, discoveredAt: lead.discoveredAt,
-    searchId: lead.searchId,
+    clientId: (lead.id ?? '').slice(0, 128),
+    businessName: clampText(lead.businessName, 255) ?? 'Unnamed business',
+    category: clampText(lead.category, 120),
+    categories: [...new Set((lead.categories ?? []).map((item) => clampText(item, 80)).filter((item): item is string => Boolean(item)))].slice(0, 50),
+    placeIdentifier: clampText(lead.placeIdentifier, 255),
+    phone: cleanPhone(lead.phone, 50),
+    website: safeWebsite(lead.website),
+    emails: safeEmails(lead.emails),
+    address: clampText(lead.address, 500),
+    street: clampText(lead.street, 255),
+    city: clampText(lead.city, 120),
+    state: clampText(lead.state, 80),
+    postalCode: clampText(lead.postalCode, 20),
+    country: clampText(lead.country, 100),
+    latitude: inRange(lead.latitude, -90, 90),
+    longitude: inRange(lead.longitude, -180, 180),
+    rating: inRange(lead.rating, 0, 5),
+    reviewCount: typeof lead.reviewCount === 'number' && lead.reviewCount >= 0 ? Math.round(lead.reviewCount) : null,
+    priceLevel: clampText(lead.priceLevel, 40),
+    discoveredAt: lead.discoveredAt,
+    searchId: (lead.searchId ?? '').slice(0, 128),
   };
 }
 
@@ -256,8 +302,8 @@ function toCrmImportCsv(leads: Lead[]): string {
     const values: Record<string, unknown> = {
       name: lead.businessName, type: 'business', status: 'new', street: lead.street ?? lead.address,
       addressSupplement: '', postalCode: lead.postalCode, city: lead.city, canton: lead.state,
-      country: lead.country?.length === 2 ? lead.country.toUpperCase() : '', phone: lead.phone,
-      mobile: '', email: lead.emails[0] ?? '', website: lead.website,
+      country: lead.country?.length === 2 ? lead.country.toUpperCase() : '', phone: cleanPhone(lead.phone, 50) ?? '',
+      mobile: '', email: safeEmails(lead.emails)[0] ?? '', website: safeWebsite(lead.website) ?? '',
       notes: lead.googleMapsUrl ? `Google Maps: ${lead.googleMapsUrl}` : '', tags: lead.categories.join(', '),
     };
     rows.push(CRM_IMPORT_HEADERS.map((header) => escapeCsv(values[header])).join(','));

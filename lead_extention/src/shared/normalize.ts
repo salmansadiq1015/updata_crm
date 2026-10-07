@@ -1,12 +1,12 @@
 import type { Lead, RawBusinessRecord } from './types';
-import { haversineDistanceMeters, normalizePhone, normalizeText, normalizeUrl, nowIso, parseCoordinates } from './utils';
+import { cleanPhone, haversineDistanceMeters, normalizePhone, normalizeText, normalizeUrl, nowIso, parseCoordinates } from './utils';
 
 export function makeLead(raw: RawBusinessRecord, searchId: string): Lead {
   const timestamp = nowIso();
   const coordinates = raw.latitude !== null && raw.latitude !== undefined && raw.longitude !== null && raw.longitude !== undefined
     ? { latitude: raw.latitude, longitude: raw.longitude }
     : parseCoordinates(raw.googleMapsUrl);
-  const phone = raw.phone?.trim() || null;
+  const phone = cleanPhone(raw.phone);
   const website = raw.website?.trim() || null;
 
   return {

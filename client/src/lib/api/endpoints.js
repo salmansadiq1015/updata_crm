@@ -23,6 +23,14 @@ export const ENDPOINTS = Object.freeze({
     AUDIT: '/auth/audit',
     AUDIT_EXPORT: '/auth/audit/export',
   },
+  // Chrome Extension (Lead Finder) secure connect handoff + status.
+  EXTENSION: {
+    PAIRING: '/extension/pairing',
+    STATUS: '/extension/status',
+    DISCONNECT: '/extension/disconnect',
+    // /extension/pairing/redeem + /extension/heartbeat are called by the
+    // extension itself, not the web client, so they are not listed here.
+  },
   USERS: {
     LIST: '/users',
     DIRECTORY: '/users/directory',

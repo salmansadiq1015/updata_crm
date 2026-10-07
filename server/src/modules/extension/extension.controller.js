@@ -1,5 +1,6 @@
 import { UAParser } from 'ua-parser-js';
 import extensionService from './extension.service.js';
+import extensionImportService from './extensionImport.service.js';
 
 /**
  * Extension controller — HTTP layer only. Parses the request, derives device
@@ -62,6 +63,17 @@ class ExtensionController {
       const { extensionVersion } = req.body || {};
       await extensionService.heartbeat(req.user._id, req.sessionId, { extensionVersion });
       return res.success({ message: 'ok' });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  // GET /extension/imports — recent extension import runs for this user.
+  async listImports(req, res, next) {
+    try {
+      const limit = Number(req._validatedQuery?.limit) || 10;
+      const data = await extensionImportService.listRecent(req.user._id, limit);
+      return res.success({ data });
     } catch (err) {
       next(err);
     }

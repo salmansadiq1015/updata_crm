@@ -99,3 +99,50 @@ export const SORT_FIELD_TO_COLUMN: Record<string, string> = {
 /** The date a lead entered the pipeline: discovery time when known, else creation time. */
 export const getLeadDiscoveredAt = (lead: Pick<Lead, 'sourceMetadata' | 'createdAt'>): string =>
   lead.sourceMetadata.discoveredAt ?? lead.createdAt;
+
+/** The store filter shape, as both the list and the map read it. */
+export type LeadFilterState = {
+  status: string;
+  source: string;
+  type: string;
+  place: string;
+  assignedTo: string;
+  search: string;
+};
+
+/** The server filter params a lead query accepts (shared by the list + map). */
+export type LeadQueryFilterParams = {
+  status?: LeadStatus;
+  source?: LeadSource;
+  type?: LeadType;
+  city?: string;
+  assignedTo?: string;
+  q?: string;
+};
+
+/**
+ * Map the leads filter store onto the server query params, resolving the
+ * sentinels (`ALL` → omit, `ME` → the current user). Shared by the list and the
+ * map so they always request exactly the same filtered set. `searchTerm` is the
+ * already-debounced, trimmed query the caller wants to send.
+ */
+export function buildLeadFilterParams(
+  filters: LeadFilterState,
+  currentUserId: string | null,
+  searchTerm: string,
+): LeadQueryFilterParams {
+  const assignedTo =
+    filters.assignedTo === FILTER_ALL
+      ? undefined
+      : filters.assignedTo === FILTER_ME
+        ? (currentUserId ?? undefined)
+        : filters.assignedTo;
+  return {
+    ...(filters.status !== FILTER_ALL ? { status: filters.status as LeadStatus } : {}),
+    ...(filters.source !== FILTER_ALL ? { source: filters.source as LeadSource } : {}),
+    ...(filters.type !== FILTER_ALL ? { type: filters.type as LeadType } : {}),
+    ...(filters.place !== FILTER_ALL ? { city: filters.place } : {}),
+    ...(assignedTo ? { assignedTo } : {}),
+    ...(searchTerm ? { q: searchTerm } : {}),
+  };
+}

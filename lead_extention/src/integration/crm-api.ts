@@ -206,9 +206,17 @@ export async function heartbeat(): Promise<void> {
   }
 }
 
-export async function importLeads(leads: Lead[]): Promise<{ total: number; created: number; existing: number; failed: number; results: Array<{ clientId: string; status: string; leadId?: string; leadNumber?: string; message?: string }> }> {
+export async function importLeads(leads: Lead[], opts: { importId?: string; importTotal?: number; importFinal?: boolean } = {}): Promise<{ total: number; created: number; existing: number; failed: number; results: Array<{ clientId: string; status: string; leadId?: string; leadNumber?: string; message?: string }> }> {
   try {
-    return await request('/crm/leads/bulk-import', { method: 'POST', body: JSON.stringify({ leads: leads.map(toExtensionRecord) }) });
+    const body: Record<string, unknown> = { leads: leads.map(toExtensionRecord) };
+    // Run-level tracking so the CRM can show live import progress on the web
+    // page. Reporting only — the server still derives ownership from the token.
+    if (opts.importId) {
+      body.importId = opts.importId;
+      if (typeof opts.importTotal === 'number') body.importTotal = opts.importTotal;
+      if (opts.importFinal) body.importFinal = true;
+    }
+    return await request('/crm/leads/bulk-import', { method: 'POST', body: JSON.stringify(body) });
   } catch (error) {
     // The current deployed CRM may predate the structured extension endpoint.
     // Fall back to its existing authenticated CSV import contract so users do

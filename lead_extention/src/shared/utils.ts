@@ -23,9 +23,18 @@ export function cleanPhone(value: string | null | undefined, maxLength = 50): st
   if (!value) return null;
   const collapsed = value.replace(/\s+/g, ' ').trim();
   if (!collapsed) return null;
+  const digits = (collapsed.match(/\d/g) || []).length;
+  const letters = (collapsed.match(/\p{L}/gu) || []).length;
   const match = collapsed.match(/\+?\d[\d\s().\-/]{4,}\d/);
-  const candidate = (match ? match[0] : collapsed).replace(/\s+/g, ' ').trim();
-  return candidate ? candidate.slice(0, maxLength).trim() || null : null;
+  if (match) {
+    const candidate = match[0].replace(/\s+/g, ' ').trim();
+    return candidate ? candidate.slice(0, maxLength).trim() || null : null;
+  }
+  // No dialling-pattern match: accept only if the value is clearly numeric
+  // (short codes), otherwise reject. This stops Maps text such as
+  // "Café X · Visited link" from being stored as a phone number.
+  if (digits >= 5 && letters <= 1) return collapsed.slice(0, maxLength).trim() || null;
+  return null;
 }
 
 export function normalizeUrl(value: string | null | undefined): string {

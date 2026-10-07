@@ -40,6 +40,27 @@ const ALLOWED_SORT_FIELDS = ['createdAt', 'name', 'status', '_id'];
 
 const DUPLICATE_SELECT = '_id leadNumber name status source normalizedPhone websiteDomain address sourceMetadata';
 
+// Lightweight projection for the map: everything the map markers / sidebar list /
+// preview popover and their quick actions need, and nothing heavy (no notes,
+// enrichment arrays, discovery geometry or __v). The detail drawer still fetches
+// the full lead by id when a lead is opened.
+const MAP_SELECT = [
+  '_id', 'leadNumber', 'name', 'type', 'status', 'source',
+  'address', 'phone', 'mobile', 'email', 'website', 'websiteDomain',
+  'location', 'providerMeta', 'assignedTo', 'sourceMetadata.googlePlaceId',
+  'tags', 'createdAt', 'convertedCustomerId', 'convertedAt',
+].join(' ');
+
+// Hard ceiling on how many leads one map request returns. Clustering keeps the
+// canvas responsive well beyond this; the ceiling only bounds payload + memory.
+const MAP_HARD_CAP = 5000;
+
+// A lead counts as "mapped" when its GeoJSON Point actually has coordinates.
+// location defaults to undefined (the sub-document is absent until a point is
+// set), so testing coordinates[0] cleanly splits located from unlocated leads.
+const HAS_COORDINATES = { 'location.coordinates.0': { $exists: true } };
+const NO_COORDINATES = { 'location.coordinates.0': { $exists: false } };
+
 // Referenced users come back display-only: enough to name a person (the e-mail
 // is the fallback), never the whole user document.
 const USER_REF_SELECT = 'firstName lastName email';
@@ -72,17 +93,14 @@ class LeadRepository {
     return Lead.findOne(filter).populate(POPULATE).lean();
   }
 
-  async list({
-    cursor,
-    limit = 25,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
-    filters = {},
-    search,
-    createdBy,
-  } = {}) {
-    const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
-
+  /**
+   * Build the shared lead query from the list/map filters: createdBy scope (when
+   * given — leads are company-wide so the service passes none), the whitelisted
+   * exact filters, the friendly `city` → nested place match, and the accent-safe
+   * search. Returned as a single combined filter, WITHOUT any cursor clause, so
+   * both the cursor list and the (cursorless) map query can reuse it.
+   */
+  buildListFilter({ filters = {}, search, createdBy } = {}) {
     // `city` is a friendly API filter name, while the stored field is nested.
     // Pull it out before buildFilter so an arbitrary client key can never be
     // forwarded to MongoDB. Values originate from the validated query (or the
@@ -120,10 +138,22 @@ class LeadRepository {
       };
     }
 
+    return combineFilters(baseFilter, placeFilter, searchFilter);
+  }
+
+  async list({
+    cursor,
+    limit = 25,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+    filters = {},
+    search,
+    createdBy,
+  } = {}) {
+    const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
+
     const filter = combineFilters(
-      baseFilter,
-      placeFilter,
-      searchFilter,
+      this.buildListFilter({ filters, search, createdBy }),
       buildCursorQuery(cursor, safeSortBy, sortOrder),
     );
 
@@ -135,6 +165,54 @@ class LeadRepository {
       .lean();
 
     return buildCursorResponse(docs, limit, safeSortBy);
+  }
+
+  /**
+   * All leads matching the list filters, for the map view. Returns lightweight
+   * projected docs (MAP_SELECT) with located leads first so the markers survive
+   * the cap even when there are also many unlocated leads, plus honest counts so
+   * the UI can show "X mapped / Y missing location". Not cursor-paginated: the
+   * map needs the whole filtered set at once to fit bounds + cluster + sync the
+   * list. `limited` tells the UI the set was truncated at the hard cap.
+   */
+  async listForMap({ filters = {}, search, limit = MAP_HARD_CAP } = {}) {
+    const cap = Math.min(Math.max(1, Number(limit) || MAP_HARD_CAP), MAP_HARD_CAP);
+    // `isDeleted:false` is explicit: countDocuments does NOT run Mongoose's
+    // soft-delete `pre(/^find/)` hook, so without it the counts would include
+    // soft-deleted leads while the find()s (which do run the hook) exclude them —
+    // leaving total/withLocation inconsistent with the returned leads.
+    const filter = combineFilters({ isDeleted: false }, this.buildListFilter({ filters, search }));
+    const locatedFilter = combineFilters(filter, HAS_COORDINATES);
+
+    const [total, withLocation, locatedDocs] = await Promise.all([
+      Lead.countDocuments(filter),
+      Lead.countDocuments(locatedFilter),
+      Lead.find(locatedFilter)
+        .sort({ createdAt: -1 })
+        .limit(cap)
+        .select(MAP_SELECT)
+        .lean(),
+    ]);
+
+    // Fill any remaining budget with unlocated leads so the sidebar's "Location
+    // unavailable" section can list them without a second round-trip.
+    const remaining = cap - locatedDocs.length;
+    const unlocatedDocs = remaining > 0
+      ? await Lead.find(combineFilters(filter, NO_COORDINATES))
+        .sort({ createdAt: -1 })
+        .limit(remaining)
+        .select(MAP_SELECT)
+        .lean()
+      : [];
+
+    const leads = [...locatedDocs, ...unlocatedDocs];
+    return {
+      leads,
+      total,
+      withLocation,
+      withoutLocation: Math.max(total - withLocation, 0),
+      limited: total > leads.length,
+    };
   }
 
   /**

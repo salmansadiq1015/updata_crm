@@ -5,7 +5,7 @@ import { createXlsx, downloadBlob, filenameFor, toCsv } from '../export/exporter
 import { BUSINESS_TYPE_PRESETS, DEFAULT_MAX_RESULTS, MAX_RADIUS_KM, RADIUS_OPTIONS } from '../shared/constants';
 import { DEFAULT_CRM_API_BASE_URL } from '../integration/crm-api';
 import type { CrmAuthState, CrmImportProgress, DiscoveryConfig, DiscoveryProgress, Lead, MapsContext, SearchRecord } from '../shared/types';
-import { formatDistance } from '../shared/utils';
+import { formatDistance, nowIso } from '../shared/utils';
 import './styles.css';
 
 type Page = 'discover' | 'leads' | 'history' | 'settings';
@@ -44,6 +44,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [crmImport, setCrmImport] = useState<CrmImportProgress | null>(null);
   const [starting, setStarting] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const refresh = async () => {
     const [storedLeads, storedSearches, settings, themeSetting, authResponse, crmResponse] = await Promise.all([
@@ -74,9 +75,12 @@ function App() {
   }, []);
 
   const refreshDataOnly = async () => { const [storedLeads, storedSearches] = await Promise.all([LeadRepository.list(), SearchRepository.list()]); setLeads(storedLeads); setSearches(storedSearches); };
+  // Current workspace vs. archived (History). "Clear" flips active → archived.
+  const activeLeads = useMemo(() => leads.filter((lead) => !lead.archived), [leads]);
+  const archivedLeads = useMemo(() => leads.filter((lead) => lead.archived), [leads]);
   const filteredLeads = useMemo(() => {
     const query = searchFilter.trim().toLowerCase();
-    let result = query ? leads.filter((lead) => `${lead.businessName} ${lead.category ?? ''} ${lead.city ?? ''} ${lead.address ?? ''}`.toLowerCase().includes(query)) : [...leads];
+    let result = query ? activeLeads.filter((lead) => `${lead.businessName} ${lead.category ?? ''} ${lead.city ?? ''} ${lead.address ?? ''}`.toLowerCase().includes(query)) : [...activeLeads];
     if (leadFilter === 'has-phone') result = result.filter((lead) => Boolean(lead.phone));
     if (leadFilter === 'has-website') result = result.filter((lead) => Boolean(lead.website));
     if (leadFilter === 'has-email') result = result.filter((lead) => lead.emails.length > 0);
@@ -84,7 +88,7 @@ function App() {
     if (leadFilter === 'distance-10') result = result.filter((lead) => lead.distanceKm !== null && lead.distanceKm <= 10);
     result.sort((a, b) => sortBy === 'name' ? a.businessName.localeCompare(b.businessName) : sortBy === 'rating' ? (b.rating ?? -1) - (a.rating ?? -1) : sortBy === 'distance' ? (a.distanceKm ?? Number.POSITIVE_INFINITY) - (b.distanceKm ?? Number.POSITIVE_INFINITY) : b.discoveredAt.localeCompare(a.discoveredAt));
     return result;
-  }, [leads, searchFilter, leadFilter, sortBy]);
+  }, [activeLeads, searchFilter, leadFilter, sortBy]);
 
   const activeSearch = searches[0] ?? null;
   const running = progress?.status === 'starting' || progress?.status === 'discovering' || progress?.status === 'processing' || progress?.status === 'resuming' || progress?.status === 'retrying' || progress?.status === 'enriching' || progress?.status === 'paused';
@@ -126,9 +130,43 @@ function App() {
     setNotice(`Using the active Maps context: ${query}`);
   };
   const logoutUser = async () => { await runtimeMessage({ type: 'LOGOUT' }); setAuth({ authenticated: false, apiBaseUrl: null, user: null }); setNotice('You have been logged out. Local leads remain on this browser.'); };
-  const importSelected = async () => { const ids = [...selected]; if (!ids.length) return setError('Select at least one lead to add to the CRM.'); const response = await runtimeMessage<{ ok: boolean; error?: string; state?: CrmImportProgress }>({ type: 'IMPORT_TO_CRM', leadIds: ids }); if (!response?.ok) setError(response?.error ?? 'CRM import could not start.'); else setCrmImport(response.state ?? null); };
+  const addToCrmByIds = async (ids: string[]) => {
+    if (!ids.length) return setError('Select at least one business to add to the CRM.');
+    const response = await runtimeMessage<{ ok: boolean; error?: string; state?: CrmImportProgress }>({ type: 'IMPORT_TO_CRM', leadIds: ids });
+    if (!response?.ok) setError(response?.error ?? 'CRM import could not start.'); else setCrmImport(response.state ?? null);
+  };
+  const importSelected = () => addToCrmByIds([...selected]);
+  // Clear = archive the current workspace into History (never a hard delete).
+  const clearToHistory = async () => {
+    if (!activeLeads.length) { setConfirmClear(false); return; }
+    const count = activeLeads.length;
+    const stamp = nowIso();
+    await LeadRepository.saveMany(activeLeads.map((lead) => ({ ...lead, archived: true, archivedAt: stamp })));
+    setConfirmClear(false);
+    setSelected(new Set());
+    await refreshDataOnly();
+    setNotice(`${count.toLocaleString()} business${count === 1 ? '' : 'es'} moved to History.`);
+  };
+  const downloadLeads = (list: Lead[], kind: 'csv' | 'xlsx') => {
+    if (!list.length) return setError('There are no businesses to download for the current selection.');
+    const payload = kind === 'csv' ? toCsv(list) : createXlsx(list, activeSearch);
+    downloadBlob(payload, kind === 'csv' ? 'text/csv;charset=utf-8' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', filenameFor(activeSearch, kind));
+    setNotice(`${list.length.toLocaleString()} business${list.length === 1 ? '' : 'es'} downloaded.`);
+  };
+  const removeFromHistory = async (id: string) => {
+    await LeadRepository.remove(id);
+    await refreshDataOnly();
+  };
   const retryFailed = async () => { const response = await runtimeMessage<{ ok: boolean; error?: string; state?: CrmImportProgress }>({ type: 'RETRY_CRM_IMPORT' }); if (!response?.ok) setError(response?.error ?? 'CRM retry could not start.'); else setCrmImport(response.state ?? null); };
-  const navItems: Array<{ key: Page; label: string; icon: IconName; count?: number }> = [{ key: 'discover', label: 'Discover', icon: 'spark' }, { key: 'leads', label: 'Leads', icon: 'users', count: leads.length }, { key: 'history', label: 'History', icon: 'history' }, { key: 'settings', label: 'Settings', icon: 'settings' }];
+  // CRM web origin (for "View lead" deep links) derived from the stored API base.
+  const crmOrigin = useMemo(() => (auth?.apiBaseUrl ? auth.apiBaseUrl.replace(/\/api\/v1\/?$/, '') : null), [auth]);
+  // The leads this import run actually created in the CRM, with their L-numbers.
+  const importedLeads = useMemo(() => {
+    if (!crmImport?.leadIds?.length) return [] as Lead[];
+    const ids = new Set(crmImport.leadIds);
+    return leads.filter((lead) => ids.has(lead.id) && lead.crmStatus === 'imported' && Boolean(lead.crmLeadId));
+  }, [crmImport, leads]);
+  const navItems: Array<{ key: Page; label: string; icon: IconName; count?: number }> = [{ key: 'discover', label: 'Discover', icon: 'spark' }, { key: 'leads', label: 'Leads', icon: 'users', count: activeLeads.length }, { key: 'history', label: 'History', icon: 'history', count: archivedLeads.length }, { key: 'settings', label: 'Settings', icon: 'settings' }];
 
   if (authLoading) return <div className={`app-shell ${theme}`}><div className="auth-screen"><div className="auth-card"><div className="brand-mark"><Icon name="spark" size={17} /></div><p className="eyebrow">LEAD FINDER</p><h2>Loading workspace…</h2><p>Restoring your local discovery state.</p></div></div></div>;
   if (!auth?.authenticated) return <LoginView theme={theme} onAuthenticated={setAuth} onTheme={changeTheme} />;
@@ -137,7 +175,8 @@ function App() {
     <header className="topbar"><div className="brand-lockup"><div className="brand-mark"><Icon name="spark" size={17} /></div><div><p className="eyebrow">LOCAL RESEARCH TOOL</p><h1>Lead Finder</h1><span className="connected-user">Connected as {displayName}</span></div></div><div className="topbar-actions"><button className="text-button" onClick={() => void logoutUser()}>Logout</button><button className="icon-button theme-button" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title="Toggle theme" onClick={() => changeTheme(theme === 'light' ? 'dark' : 'light')}><Icon name={theme === 'light' ? 'moon' : 'sun'} size={16} /></button></div></header>
     <nav className="nav-tabs" aria-label="Primary navigation">{navItems.map((item) => <button key={item.key} className={page === item.key ? 'active' : ''} aria-current={page === item.key ? 'page' : undefined} onClick={() => setPage(item.key)}><Icon name={item.icon} size={14} /><span>{item.label}</span>{item.count ? <b>{item.count > 999 ? '999+' : item.count}</b> : null}</button>)}</nav>
     {(error || notice) && <StatusBanner kind={error ? 'error' : 'notice'} text={error || notice} onClose={() => { setError(''); setNotice(''); }} />}
-    <main className="content">{crmImport && crmImport.status !== 'idle' && <CrmImportCard progress={crmImport} onRetry={retryFailed} />}{page === 'discover' && <DiscoverView config={config} setConfig={setConfig} running={running || starting} progress={progress} onStart={start} onToggleEnrichment={toggleEnrichment} onUseMapsContext={useMapsContext} onViewLeads={() => setPage('leads')} onPause={() => void runtimeMessage({ type: 'PAUSE_DISCOVERY' })} onResume={() => void runtimeMessage({ type: 'RESUME_DISCOVERY' })} onStop={() => void runtimeMessage({ type: 'STOP_DISCOVERY' })} onRetry={() => void runtimeMessage({ type: 'RETRY_DISCOVERY' })} />}{page === 'leads' && <LeadsView leads={filteredLeads} allLeads={leads} filter={searchFilter} setFilter={setSearchFilter} leadFilter={leadFilter} setLeadFilter={setLeadFilter} sortBy={sortBy} setSortBy={setSortBy} selected={selected} setSelected={setSelected} onExport={exportLeads} onImport={importSelected} />}{page === 'history' && <HistoryView searches={searches} onOpen={(search) => { setPage('leads'); setNotice(`${search.uniqueCount.toLocaleString()} leads from ${search.businessType} — ${search.location}`); }} />}{page === 'settings' && <SettingsView config={config} setConfig={setConfig} onToggleEnrichment={toggleEnrichment} theme={theme} setTheme={changeTheme} onCleared={async () => { await runtimeMessage({ type: 'CLEAR_ALL_DATA' }); setConfig(defaultConfig); setTheme('light'); setLeads([]); setSearches([]); setSelected(new Set()); setNotice('All local leads, sessions, exports, and settings were deleted.'); }} />}</main>
+    <main className="content">{crmImport && crmImport.status !== 'idle' && <CrmImportCard progress={crmImport} onRetry={retryFailed} importedLeads={importedLeads} crmOrigin={crmOrigin} />}{page === 'discover' && <DiscoverView config={config} setConfig={setConfig} running={running || starting} progress={progress} onStart={start} onToggleEnrichment={toggleEnrichment} onUseMapsContext={useMapsContext} onViewLeads={() => setPage('leads')} onPause={() => void runtimeMessage({ type: 'PAUSE_DISCOVERY' })} onResume={() => void runtimeMessage({ type: 'RESUME_DISCOVERY' })} onStop={() => void runtimeMessage({ type: 'STOP_DISCOVERY' })} onRetry={() => void runtimeMessage({ type: 'RETRY_DISCOVERY' })} />}{page === 'leads' && <LeadsView leads={filteredLeads} allLeads={leads} filter={searchFilter} setFilter={setSearchFilter} leadFilter={leadFilter} setLeadFilter={setLeadFilter} sortBy={sortBy} setSortBy={setSortBy} selected={selected} setSelected={setSelected} onExport={exportLeads} onImport={importSelected} onClear={() => setConfirmClear(true)} canClear={activeLeads.length > 0} />}{page === 'history' && <HistoryView leads={archivedLeads} searches={searches} onAddToCrm={addToCrmByIds} onDownload={downloadLeads} onRemove={removeFromHistory} onDiscover={() => setPage('discover')} />}{page === 'settings' && <SettingsView config={config} setConfig={setConfig} onToggleEnrichment={toggleEnrichment} theme={theme} setTheme={changeTheme} onCleared={async () => { await runtimeMessage({ type: 'CLEAR_ALL_DATA' }); setConfig(defaultConfig); setTheme('light'); setLeads([]); setSearches([]); setSelected(new Set()); setNotice('All local leads, sessions, exports, and settings were deleted.'); }} />}</main>
+    {confirmClear && <ConfirmClearDialog count={activeLeads.length} onCancel={() => setConfirmClear(false)} onConfirm={() => void clearToHistory()} />}
     <footer><span className="privacy-mark"><Icon name="target" size={11} /></span><span>Stored only in this browser</span><i /> <span>Maps data is collected only when exposed in your session</span></footer>
   </div>;
 }
@@ -148,7 +187,32 @@ function LoginView({ theme, onAuthenticated, onTheme }: { theme: Theme; onAuthen
   const submit = async (event: React.FormEvent) => { event.preventDefault(); setError(''); setBusy(true); try { const response = await runtimeMessage<{ ok: boolean; auth?: CrmAuthState; error?: string }>({ type: 'LOGIN', apiBaseUrl: DEFAULT_CRM_API_BASE_URL, email, password }); if (!response?.ok || !response.auth) throw new Error(response?.error ?? 'Login failed.'); onAuthenticated(response.auth); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Login failed.'); } finally { setBusy(false); } };
   return <div className={`app-shell ${theme}`}><div className="auth-screen"><button type="button" className="icon-button auth-theme" onClick={() => onTheme(theme === 'light' ? 'dark' : 'light')} aria-label="Toggle theme" title="Toggle theme"><Icon name={theme === 'light' ? 'moon' : 'sun'} size={16} /></button><form className="auth-card" onSubmit={submit}><div className="brand-mark"><Icon name="spark" size={17} /></div><p className="eyebrow">LOCAL RESEARCH TOOL</p><h2>Connect Lead Finder</h2><p>In your CRM, open <strong>Leads → Chrome Extension → Connect</strong>. This browser links automatically — no password is entered here.</p><p className="auth-divider"><span>or sign in manually</span></p><label className="field" htmlFor="login-email"><span>Email</span><input id="login-email" type="email" required autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" /></label><div className="field"><label htmlFor="login-password">Password</label><div className="password-input"><input id="login-password" type={showPassword ? 'text' : 'password'} required autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" /><button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} title={showPassword ? 'Hide password' : 'Show password'}><Icon name={showPassword ? 'eye-off' : 'eye'} size={17} /></button></div></div>{error && <p className="auth-error" role="alert">{error}</p>}<button className="primary-action" disabled={busy}>{busy ? <><span>Signing in…</span><span className="button-spinner" aria-hidden="true" /></> : <><span>Login</span><Icon name="arrow" size={18} /></>}</button><small className="auth-footnote">Your password is sent only to the configured application API. The extension never sends credentials to Google Maps.</small></form></div></div>;
 }
-function CrmImportCard({ progress, onRetry }: { progress: CrmImportProgress; onRetry: () => void }) { const pct = progress.total ? Math.round((progress.processed / progress.total) * 100) : 0; const active = progress.status === 'running'; return <section className="crm-import-card"><div><p className="eyebrow">CRM IMPORT</p><h3>{active ? 'Adding leads to CRM…' : progress.status === 'completed' ? 'CRM import complete ✓' : progress.status === 'partial' ? 'Import completed with warnings' : 'CRM import failed'}</h3><p>{progress.processed} / {progress.total} processed · {progress.created} added · {progress.existing} already existed · {progress.failed} failed</p>{progress.error && <p className="crm-error-detail">{progress.error}</p>}</div><div className="progress-bar"><span style={{ width: `${pct}%` }} /></div>{!active && progress.failedLeadIds.length > 0 && <button className="secondary-button" onClick={onRetry}>Retry failed</button>}</section>; }
+function CrmImportCard({ progress, onRetry, importedLeads, crmOrigin }: { progress: CrmImportProgress; onRetry: () => void; importedLeads: Lead[]; crmOrigin: string | null }) {
+  const pct = progress.total ? Math.round((progress.processed / progress.total) * 100) : 0;
+  const active = progress.status === 'running';
+  const done = !active;
+  // A single successful add gets a focused confirmation with its CRM lead number.
+  const single = done && progress.created === 1 && importedLeads.length === 1 ? importedLeads[0] : null;
+  const leadHref = (lead: Lead) => (crmOrigin && lead.crmLeadId ? `${crmOrigin}/leads?detail=${encodeURIComponent(lead.crmLeadId)}` : null);
+  const singleHref = single ? leadHref(single) : null;
+  const showActions = done && (progress.failedLeadIds.length > 0 || (progress.created > 0 && Boolean(crmOrigin)));
+  return <section className="crm-import-card">
+    <div>
+      <p className="eyebrow">CRM IMPORT</p>
+      <h3>{active ? 'Adding leads to CRM…' : progress.status === 'completed' ? 'CRM import complete ✓' : progress.status === 'partial' ? 'Import completed with warnings' : 'CRM import failed'}</h3>
+      <p>{progress.processed} / {progress.total} processed · {progress.created} added · {progress.existing} already existed · {progress.failed} failed</p>
+      {single && <p className="crm-import-single">✓ {single.businessName}{single.crmLeadNumber ? ` · ${single.crmLeadNumber}` : ''}</p>}
+      {progress.error && <p className="crm-error-detail">{progress.error}</p>}
+    </div>
+    <div className="progress-bar"><span style={{ width: `${pct}%` }} /></div>
+    {showActions && <div className="crm-import-actions">
+      {progress.created > 0 && crmOrigin && (singleHref
+        ? <a className="secondary-button" href={singleHref} target="_blank" rel="noreferrer">View lead</a>
+        : <a className="secondary-button" href={`${crmOrigin}/leads`} target="_blank" rel="noreferrer">View imported leads</a>)}
+      {progress.failedLeadIds.length > 0 && <button className="secondary-button" onClick={onRetry}>Retry failed ({progress.failedLeadIds.length})</button>}
+    </div>}
+  </section>;
+}
 function SectionHeading({ eyebrow, title, description, index }: { eyebrow: string; title: string; description?: string; index?: string }) { return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h3>{title}</h3>{description && <p>{description}</p>}</div>{index && <span className="step-badge">{index}</span>}</div>; }
 function Field({ id, label, optional, children }: { id: string; label: string; optional?: boolean; children: React.ReactNode }) { return <label className="field" htmlFor={id}><span>{label}{optional && <em>Optional</em>}</span>{children}</label>; }
 
@@ -174,16 +238,73 @@ function ProgressCard({ progress, running, onPause, onResume, onStop, onRetry, o
 }
 function Metric({ label, value }: { label: string; value: number }) { return <div><span>{label}</span><strong>{value.toLocaleString()}</strong></div>; }
 
-function LeadsView({ leads, allLeads, filter, setFilter, leadFilter, setLeadFilter, sortBy, setSortBy, selected, setSelected, onExport, onImport }: { leads: Lead[]; allLeads: Lead[]; filter: string; setFilter: (value: string) => void; leadFilter: string; setLeadFilter: (value: string) => void; sortBy: string; setSortBy: (value: string) => void; selected: Set<string>; setSelected: React.Dispatch<React.SetStateAction<Set<string>>>; onExport: (kind: 'csv' | 'xlsx') => void; onImport: () => void }) {
+function LeadsView({ leads, allLeads, filter, setFilter, leadFilter, setLeadFilter, sortBy, setSortBy, selected, setSelected, onExport, onImport, onClear, canClear }: { leads: Lead[]; allLeads: Lead[]; filter: string; setFilter: (value: string) => void; leadFilter: string; setLeadFilter: (value: string) => void; sortBy: string; setSortBy: (value: string) => void; selected: Set<string>; setSelected: React.Dispatch<React.SetStateAction<Set<string>>>; onExport: (kind: 'csv' | 'xlsx') => void; onImport: () => void; onClear: () => void; canClear: boolean }) {
   const allVisibleSelected = leads.length > 0 && leads.every((lead) => selected.has(lead.id)); const toggleAll = () => setSelected((current) => allVisibleSelected ? new Set([...current].filter((id) => !leads.some((lead) => lead.id === id))) : new Set([...current, ...leads.map((lead) => lead.id)]));
-  return <section className="view stack"><div className="page-heading"><div><p className="eyebrow">YOUR LOCAL PIPELINE</p><h2>Discovered leads</h2><p>{allLeads.length.toLocaleString()} unique businesses stored locally.</p></div><div className="export-buttons"><button className="secondary-button" onClick={() => onExport('csv')}><Icon name="download" size={14} /> CSV</button><button className="dark-button" onClick={() => onExport('xlsx')}><Icon name="download" size={14} /> Excel</button></div></div><div className="toolbar"><div className="search-input"><Icon name="search" size={14} /><input aria-label="Search leads" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search name, category, city…" /></div><div className="toolbar-selects"><select aria-label="Filter leads" value={leadFilter} onChange={(event) => setLeadFilter(event.target.value)}><option value="all">All leads</option><option value="has-phone">Has phone</option><option value="has-website">Has website</option><option value="has-email">Has email</option><option value="rating-4">Rating 4+</option><option value="distance-10">Within 10 km</option></select><select aria-label="Sort leads" value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="newest">Newest</option><option value="name">Business name</option><option value="distance">Distance</option><option value="rating">Rating</option></select></div><button className="secondary-button select-button" onClick={toggleAll}>{allVisibleSelected ? 'Clear visible' : 'Select visible'}</button></div><div className="selection-summary">{selected.size ? `${selected.size} selected` : 'Select leads to export a focused list'}<button className="primary-action compact" disabled={!selected.size} onClick={onImport}>Add {selected.size || ''} to CRM</button><span>{leads.length.toLocaleString()} shown</span></div><VirtualLeadTable leads={leads} selected={selected} setSelected={setSelected} /></section>;
+  return <section className="view stack"><div className="page-heading"><div><p className="eyebrow">YOUR LOCAL PIPELINE</p><h2>Discovered leads</h2><p>{allLeads.length.toLocaleString()} unique businesses stored locally.</p></div><div className="export-buttons"><button className="secondary-button" onClick={() => onExport('csv')}><Icon name="download" size={14} /> CSV</button><button className="dark-button" onClick={() => onExport('xlsx')}><Icon name="download" size={14} /> Excel</button><button className="secondary-button" onClick={onClear} disabled={!canClear} title="Move current results to History"><Icon name="history" size={14} /> Clear</button></div></div><div className="toolbar"><div className="search-input"><Icon name="search" size={14} /><input aria-label="Search leads" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Search name, category, city…" /></div><div className="toolbar-selects"><select aria-label="Filter leads" value={leadFilter} onChange={(event) => setLeadFilter(event.target.value)}><option value="all">All leads</option><option value="has-phone">Has phone</option><option value="has-website">Has website</option><option value="has-email">Has email</option><option value="rating-4">Rating 4+</option><option value="distance-10">Within 10 km</option></select><select aria-label="Sort leads" value={sortBy} onChange={(event) => setSortBy(event.target.value)}><option value="newest">Newest</option><option value="name">Business name</option><option value="distance">Distance</option><option value="rating">Rating</option></select></div><button className="secondary-button select-button" onClick={toggleAll}>{allVisibleSelected ? 'Clear visible' : 'Select visible'}</button></div><div className="selection-summary">{selected.size ? `${selected.size} selected` : 'Select leads to export a focused list'}<button className="primary-action compact" disabled={!selected.size} onClick={onImport}>Add {selected.size || ''} to CRM</button><span>{leads.length.toLocaleString()} shown</span></div><VirtualLeadTable leads={leads} selected={selected} setSelected={setSelected} /></section>;
 }
 function VirtualLeadTable({ leads, selected, setSelected }: { leads: Lead[]; selected: Set<string>; setSelected: React.Dispatch<React.SetStateAction<Set<string>>> }) {
   const [scrollTop, setScrollTop] = useState(0); const rowHeight = 72; const viewportHeight = 520; const start = Math.max(0, Math.floor(scrollTop / rowHeight) - 3); const visible = leads.slice(start, start + Math.ceil(viewportHeight / rowHeight) + 6);
   if (!leads.length) return <div className="empty-state"><div className="empty-icon"><Icon name="users" size={22} /></div><h3>Your lead table is waiting</h3><p>Run a discovery from the Discover tab and your locally stored results will appear here.</p></div>;
   return <div className="table-shell"><div className="table-header"><span>Business</span><span>Contact</span><span>Location</span><span>Signal</span></div><div className="virtual-viewport" style={{ height: viewportHeight }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div style={{ height: leads.length * rowHeight, position: 'relative' }}><div style={{ position: 'absolute', top: start * rowHeight, left: 0, right: 0 }}>{visible.map((lead) => <div className="lead-row" style={{ height: rowHeight }} key={lead.id}><label className="row-check" aria-label={`Select ${lead.businessName}`}><input type="checkbox" checked={selected.has(lead.id)} onChange={() => setSelected((current) => { const next = new Set(current); next.has(lead.id) ? next.delete(lead.id) : next.add(lead.id); return next; })} /><span /></label><div className="business-cell"><strong>{lead.businessName || 'Unnamed business'}</strong><small>{lead.category ?? 'Business'} {lead.rating ? `· ${lead.rating} ★` : ''} {lead.reviewCount !== null && lead.reviewCount !== undefined ? `· ${lead.reviewCount.toLocaleString()} reviews` : ''}</small></div><div className="contact-cell"><span>{lead.phone ?? 'No phone exposed'}</span><small>{lead.emails[0] ?? (lead.website ? lead.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0] : 'No email found')}</small></div><div className="location-cell"><span>{lead.address ?? 'Address not exposed'}</span><small>{formatDistance(lead.distanceKm)}</small></div><div className="signal-cell"><span className={lead.website ? 'signal yes' : 'signal'}>{lead.website ? 'Web' : '—'}</span><span className={lead.emails.length ? 'signal email' : 'signal'}>{lead.emails.length ? 'Email' : '—'}</span></div></div>)}</div></div></div></div>;
 }
-function HistoryView({ searches, onOpen }: { searches: SearchRecord[]; onOpen: (search: SearchRecord) => void }) { return <section className="view stack"><div className="page-heading"><div><p className="eyebrow">LOCAL SESSIONS</p><h2>Search history</h2><p>Reopen previous research without an account or backend.</p></div></div>{searches.length ? <div className="history-list">{searches.map((search) => <button className="history-item" key={search.id} onClick={() => onOpen(search)}><span className="history-icon"><Icon name="history" size={15} /></span><span className="history-copy"><strong>{search.businessType}</strong><span>{search.location || 'Current Maps context'} · {search.radiusKm ? `${search.radiusKm} km` : 'No radius'} · {new Date(search.startedAt).toLocaleDateString()}</span></span><span className="history-count"><b>{search.uniqueCount.toLocaleString()}</b><small>leads</small></span><Icon name="arrow" size={14} /></button>)}</div> : <div className="empty-state"><div className="empty-icon"><Icon name="history" size={22} /></div><h3>No sessions yet</h3><p>Your completed local discovery sessions will be listed here.</p></div>}</section>; }
+function crmStatusMeta(lead: Lead): { label: string; cls: string } {
+  switch (lead.crmStatus) {
+    case 'imported': return { label: 'Added to CRM', cls: 'added' };
+    case 'existing': return { label: 'Already in CRM', cls: 'existing' };
+    case 'failed': return { label: 'Failed', cls: 'failed' };
+    case 'importing': return { label: 'Adding…', cls: 'importing' };
+    default: return { label: 'New', cls: 'new' };
+  }
+}
+
+function ConfirmClearDialog({ count, onCancel, onConfirm }: { count: number; onCancel: () => void; onConfirm: () => void }) {
+  return <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Clear results">
+    <div className="modal-card">
+      <h3>Clear results?</h3>
+      <p>This will move <strong>{count.toLocaleString()}</strong> business{count === 1 ? '' : 'es'} to History and remove them from the current results. Your History stays available.</p>
+      <div className="modal-actions">
+        <button className="secondary-button" onClick={onCancel}>Cancel</button>
+        <button className="primary-action compact" onClick={onConfirm}>Move to History</button>
+      </div>
+    </div>
+  </div>;
+}
+
+function HistoryView({ leads, searches, onAddToCrm, onDownload, onRemove, onDiscover }: { leads: Lead[]; searches: SearchRecord[]; onAddToCrm: (ids: string[]) => void; onDownload: (list: Lead[], kind: 'csv' | 'xlsx') => void; onRemove: (id: string) => void; onDiscover: () => void }) {
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('all');
+  const [sort, setSort] = useState('newest');
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let result = q ? leads.filter((lead) => `${lead.businessName} ${lead.category ?? ''} ${lead.city ?? ''} ${lead.address ?? ''}`.toLowerCase().includes(q)) : [...leads];
+    if (status === 'new') result = result.filter((l) => !l.crmStatus || l.crmStatus === 'not-imported');
+    if (status === 'added') result = result.filter((l) => l.crmStatus === 'imported');
+    if (status === 'existing') result = result.filter((l) => l.crmStatus === 'existing');
+    if (status === 'failed') result = result.filter((l) => l.crmStatus === 'failed');
+    result.sort((a, b) => sort === 'name' ? a.businessName.localeCompare(b.businessName) : sort === 'rating' ? (b.rating ?? -1) - (a.rating ?? -1) : (b.archivedAt ?? b.discoveredAt).localeCompare(a.archivedAt ?? a.discoveredAt));
+    return result;
+  }, [leads, query, status, sort]);
+
+  const allSelected = filtered.length > 0 && filtered.every((l) => sel.has(l.id));
+  const toggleAll = () => setSel((cur) => allSelected ? new Set([...cur].filter((id) => !filtered.some((l) => l.id === id))) : new Set([...cur, ...filtered.map((l) => l.id)]));
+  const toggle = (id: string) => setSel((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const selectedLeads = filtered.filter((l) => sel.has(l.id));
+  const downloadSet = selectedLeads.length ? selectedLeads : filtered;
+
+  if (!leads.length) {
+    return <section className="view stack"><div className="page-heading"><div><p className="eyebrow">ARCHIVED BUSINESSES</p><h2>History</h2><p>Businesses you clear from your results are kept here.</p></div></div><div className="empty-state"><div className="empty-icon"><Icon name="history" size={22} /></div><h3>No history yet</h3><p>Businesses you clear from your discovery results will appear here — still downloadable and importable.</p><button className="primary-action compact" onClick={onDiscover}><span>Discover businesses</span><Icon name="arrow" size={16} /></button></div></section>;
+  }
+
+  return <section className="view stack">
+    <div className="page-heading"><div><p className="eyebrow">ARCHIVED BUSINESSES</p><h2>History</h2><p>{leads.length.toLocaleString()} archived · still downloadable and importable.</p></div><div className="export-buttons"><button className="secondary-button" onClick={() => onDownload(downloadSet, 'csv')}><Icon name="download" size={14} /> CSV</button><button className="dark-button" onClick={() => onDownload(downloadSet, 'xlsx')}><Icon name="download" size={14} /> Excel</button></div></div>
+    <div className="toolbar"><div className="search-input"><Icon name="search" size={14} /><input aria-label="Search history" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, category, city…" /></div><div className="toolbar-selects"><select aria-label="Filter by CRM status" value={status} onChange={(e) => setStatus(e.target.value)}><option value="all">All statuses</option><option value="new">Not added</option><option value="added">Added to CRM</option><option value="existing">Already in CRM</option><option value="failed">Failed</option></select><select aria-label="Sort history" value={sort} onChange={(e) => setSort(e.target.value)}><option value="newest">Newest</option><option value="name">Business name</option><option value="rating">Rating</option></select></div><button className="secondary-button select-button" onClick={toggleAll}>{allSelected ? 'Clear visible' : 'Select visible'}</button></div>
+    <div className="selection-summary">{sel.size ? `${sel.size} selected` : 'Select businesses to import or download'}<button className="primary-action compact" disabled={!sel.size} onClick={() => onAddToCrm([...sel])}>Add {sel.size || ''} to CRM</button><span>{filtered.length.toLocaleString()} shown</span></div>
+    <div className="history-leads">{filtered.map((lead) => { const meta = crmStatusMeta(lead); return <div className="history-lead" key={lead.id}><label className="row-check" aria-label={`Select ${lead.businessName}`}><input type="checkbox" checked={sel.has(lead.id)} onChange={() => toggle(lead.id)} /><span /></label><div className="history-lead-main"><strong>{lead.businessName || 'Unnamed business'}</strong><small>{lead.category ?? 'Business'}{lead.rating ? ` · ${lead.rating} ★` : ''}{lead.reviewCount != null ? ` · ${lead.reviewCount.toLocaleString()} reviews` : ''}</small><small className="muted">{lead.city ?? lead.address ?? 'Location not exposed'}{lead.phone ? ` · ${lead.phone}` : ''}</small></div><span className={`crm-badge ${meta.cls}`}>{meta.label}</span><div className="history-lead-actions">{lead.crmStatus !== 'imported' && lead.crmStatus !== 'existing' && <button className="secondary-button" onClick={() => onAddToCrm([lead.id])}>Add to CRM</button>}<button className="icon-button" title="Download CSV" aria-label="Download CSV" onClick={() => onDownload([lead], 'csv')}><Icon name="download" size={15} /></button><button className="icon-button" title="Remove from history" aria-label="Remove from history" onClick={() => onRemove(lead.id)}><Icon name="close" size={15} /></button></div></div>; })}</div>
+    {searches.length > 0 && <div className="history-sessions"><p className="eyebrow">DISCOVERY SESSIONS</p>{searches.map((search) => <div className="history-session" key={search.id}><span className="history-icon"><Icon name="history" size={14} /></span><span className="history-copy"><strong>{search.businessType}</strong><span>{search.location || 'Current Maps context'} · {new Date(search.startedAt).toLocaleDateString()}</span></span><span className="history-count"><b>{search.uniqueCount.toLocaleString()}</b><small>found</small></span></div>)}</div>}
+  </section>;
+}
 function SettingsView({ config, setConfig, onToggleEnrichment, theme, setTheme, onCleared }: { config: DiscoveryConfig; setConfig: React.Dispatch<React.SetStateAction<DiscoveryConfig>>; onToggleEnrichment: (enabled: boolean) => void; theme: Theme; setTheme: (theme: Theme) => void; onCleared: () => Promise<void> }) { const [confirm, setConfirm] = useState(false); return <section className="view stack"><div className="page-heading"><div><p className="eyebrow">PREFERENCES</p><h2>Settings</h2><p>Simple controls for your local research workspace.</p></div></div><section className="panel settings-panel"><div className="settings-group"><SectionHeading eyebrow="DISCOVERY" title="Research defaults" description="Choose what the next discovery session starts with." /><div className="form-grid split"><label className="field" htmlFor="default-max-results"><span>Default maximum results</span><input id="default-max-results" type="number" value={config.maxResults} onChange={(event) => setConfig((current) => ({ ...current, maxResults: Number(event.target.value) }))} /></label><label className="field" htmlFor="safety-limit"><span>Safety result states</span><input id="safety-limit" type="number" min="20" max="5000" value={config.safetyLimit ?? 400} onChange={(event) => setConfig((current) => ({ ...current, safetyLimit: Number(event.target.value) }))} /></label><label className="field" htmlFor="website-pages"><span>Website pages per business</span><div className="select-wrap"><select id="website-pages" value={config.maxPagesPerWebsite} onChange={(event) => setConfig((current) => ({ ...current, maxPagesPerWebsite: Number(event.target.value) }))}><option value="1">1 page</option><option value="2">2 pages</option><option value="3">3 pages</option><option value="5">5 pages</option></select><Icon name="chevron" size={15} /></div></label></div><label className="check-control"><input type="checkbox" checked={config.enableEnrichment} onChange={(event) => onToggleEnrichment(event.target.checked)} /><span className="custom-check"><Icon name="check" size={13} /></span><span><strong>Allow public website enrichment</strong><small>Optional access is requested only when enabled. No lead data is uploaded.</small></span></label></div><div className="settings-group"><SectionHeading eyebrow="APPEARANCE" title="Make it yours" description="Choose the visual mode that feels right for your workflow." /><div className="theme-switcher"><button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')}><Icon name="sun" size={14} />Light</button><button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}><Icon name="moon" size={14} />Dark</button></div></div><div className="danger-zone"><div><strong>Delete local data</strong><p>Remove every lead and search session from this browser.</p></div>{confirm ? <div className="danger-actions"><button className="text-button" onClick={() => setConfirm(false)}>Cancel</button><button className="danger-button" onClick={() => { void onCleared(); setConfirm(false); }}>Delete all</button></div> : <button className="danger-button" onClick={() => setConfirm(true)}>Clear all data</button>}</div></section><div className="permission-note"><span className="permission-icon"><Icon name="target" size={14} /></span><div><strong>Permission model</strong><p>Maps access is limited to Google Maps pages. Public website access is optional and requested only when enrichment is enabled.</p></div></div></section>; }
 
 async function runtimeMessage<T>(message: Record<string, unknown>): Promise<T | undefined> { return new Promise((resolve) => { let settled = false; const finish = (value: T | undefined) => { if (settled) return; settled = true; resolve(value); }; const timer = window.setTimeout(() => finish(undefined), 30_000); chrome.runtime.sendMessage(message, (response) => { window.clearTimeout(timer); finish(response as T | undefined); }); }); }

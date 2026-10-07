@@ -11,6 +11,7 @@ const mockLeadSoftDelete = jest.fn();
 const mockLeadFindDuplicates = jest.fn();
 const mockLeadBulkCreate = jest.fn();
 const mockLeadList = jest.fn();
+const mockLeadListForMap = jest.fn();
 
 jest.unstable_mockModule('../lead.repository.js', () => ({
   default: {
@@ -21,6 +22,7 @@ jest.unstable_mockModule('../lead.repository.js', () => ({
     findDuplicates: mockLeadFindDuplicates,
     bulkCreate: mockLeadBulkCreate,
     list: mockLeadList,
+    listForMap: mockLeadListForMap,
     findByPlaceIds: jest.fn(),
   },
 }));
@@ -44,6 +46,13 @@ jest.unstable_mockModule('../../../shared/logger/index.js', () => ({
 const mockCustomerCreate = jest.fn();
 jest.unstable_mockModule('../customer.service.js', () => ({
   default: { create: mockCustomerCreate },
+}));
+
+// Dynamically imported inside leadService.geocodeLead — registered here so the
+// dynamic import resolves to this mock.
+const mockResolveLocation = jest.fn();
+jest.unstable_mockModule('../../businessDiscovery/location.service.js', () => ({
+  default: { resolveLocation: mockResolveLocation },
 }));
 
 let leadService;
@@ -207,6 +216,31 @@ describe('leadService reads', () => {
     await expect(leadService.list({ status: 'new', limit: 25 })).resolves.toBe(page);
     expect(mockLeadList).toHaveBeenCalledWith(expect.objectContaining({ limit: 25, filters: { status: 'new' } }));
   });
+
+  it('listForMap forwards only the filters + search/limit, stripping pagination controls', async () => {
+    const mapResult = {
+      leads: [{ _id: 'lead-1', name: 'Foo AG', location: { type: 'Point', coordinates: [8.5, 47.3] } }],
+      total: 3,
+      withLocation: 1,
+      withoutLocation: 2,
+      limited: false,
+    };
+    mockLeadListForMap.mockResolvedValue(mapResult);
+
+    await expect(
+      leadService.listForMap({
+        status: 'new', city: 'Zürich', q: 'foo', limit: 2000,
+        cursor: 'abc', sortBy: 'name', sortOrder: 'asc',
+      }),
+    ).resolves.toBe(mapResult);
+
+    // `q` becomes `search`; cursor/sortBy/sortOrder are not forwarded as filters.
+    expect(mockLeadListForMap).toHaveBeenCalledWith({
+      filters: { status: 'new', city: 'Zürich' },
+      search: 'foo',
+      limit: 2000,
+    });
+  });
 });
 
 describe('leadService.convertToCustomer', () => {
@@ -268,5 +302,64 @@ describe('leadService.convertToCustomer', () => {
     mockLeadGetById.mockResolvedValue(null);
     await expect(leadService.convertToCustomer('missing', {}, 'user-1', {}))
       .rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe('leadService.geocodeLead', () => {
+  const addressed = {
+    _id: 'lead-1',
+    name: 'Foo AG',
+    address: { street: 'Bahnhofstrasse 1', postalCode: '8001', city: 'Zürich', country: 'CH' },
+  };
+
+  it('geocodes the address and stores a GeoJSON Point [lng,lat] on success', async () => {
+    mockLeadGetById.mockResolvedValue(addressed);
+    mockResolveLocation.mockResolvedValue({ center: { lat: 47.3769, lng: 8.5417 }, formattedAddress: 'Bahnhofstrasse 1, 8001 Zürich' });
+    mockLeadUpdate.mockImplementation(async (id, data) => ({ ...addressed, ...data }));
+
+    const result = await leadService.geocodeLead('lead-1', { userId: 'user-1' });
+
+    expect(mockResolveLocation).toHaveBeenCalledWith(expect.stringContaining('Bahnhofstrasse 1'));
+    expect(mockLeadUpdate).toHaveBeenCalledWith('lead-1', {
+      location: { type: 'Point', coordinates: [8.5417, 47.3769] },
+    });
+    expect(result.geocoded).toBe(true);
+    expect(result.formattedAddress).toBe('Bahnhofstrasse 1, 8001 Zürich');
+    expect(mockLogEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'lead.geocoded' }));
+  });
+
+  it('skips the geocoder and reports no_address when the lead has nothing locatable', async () => {
+    mockLeadGetById.mockResolvedValue({ _id: 'lead-2', name: 'No Address AG', address: { country: 'CH' } });
+
+    const result = await leadService.geocodeLead('lead-2', {});
+
+    expect(result).toMatchObject({ geocoded: false, reason: 'no_address' });
+    expect(mockResolveLocation).not.toHaveBeenCalled();
+    expect(mockLeadUpdate).not.toHaveBeenCalled();
+  });
+
+  it('never invents a location: reports not_found when the geocoder returns nothing', async () => {
+    mockLeadGetById.mockResolvedValue(addressed);
+    mockResolveLocation.mockResolvedValue(null);
+
+    const result = await leadService.geocodeLead('lead-1', {});
+
+    expect(result).toMatchObject({ geocoded: false, reason: 'not_found' });
+    expect(mockLeadUpdate).not.toHaveBeenCalled();
+  });
+
+  it('is non-blocking: a provider error reports provider_error instead of throwing', async () => {
+    mockLeadGetById.mockResolvedValue(addressed);
+    mockResolveLocation.mockRejectedValue(new Error('nominatim down'));
+
+    const result = await leadService.geocodeLead('lead-1', {});
+
+    expect(result).toMatchObject({ geocoded: false, reason: 'provider_error' });
+    expect(mockLeadUpdate).not.toHaveBeenCalled();
+  });
+
+  it('throws NotFoundError when the lead does not exist', async () => {
+    mockLeadGetById.mockResolvedValue(null);
+    await expect(leadService.geocodeLead('missing', {})).rejects.toMatchObject({ statusCode: 404 });
   });
 });

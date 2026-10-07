@@ -7,6 +7,7 @@ import {
   canMessageExtension,
   connectExtension,
   disconnectExtension,
+  isChromiumBrowser,
   pingExtension,
 } from './chrome-extension-bridge';
 
@@ -93,7 +94,11 @@ export function useExtensionConnection(enabled: boolean): UseExtensionConnection
     if (!mounted.current) return;
     setError(null);
     if (!canMessageExtension()) {
-      setState('unsupported');
+      // In a Chromium browser the extension simply isn't reachable from this
+      // page — it's not installed, or this origin isn't in its
+      // externally_connectable allowlist. Only a non-Chromium browser is truly
+      // "unsupported".
+      setState(isChromiumBrowser() ? 'not-installed' : 'unsupported');
       return;
     }
     let serverStatus: ExtensionStatus | null = null;

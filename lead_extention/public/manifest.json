@@ -14,7 +14,7 @@
   ],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "externally_connectable": {
-    "matches": ["https://updata.behjja.com/*"]
+    "matches": ["https://updata.behjja.com/*", "http://localhost:3000/*", "http://localhost:9097/*"]
   },
   "action": {
     "default_title": "Open Lead Finder"

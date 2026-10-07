@@ -6,6 +6,7 @@ const getStatus = vi.fn();
 const createPairing = vi.fn();
 const disconnectApi = vi.fn();
 const canMessageExtension = vi.fn();
+const isChromiumBrowser = vi.fn();
 const pingExtension = vi.fn();
 const connectExtension = vi.fn();
 const disconnectExtension = vi.fn();
@@ -20,6 +21,7 @@ vi.mock('../services/extension-api', () => ({
 
 vi.mock('../hooks/chrome-extension-bridge', () => ({
   canMessageExtension: (...args: unknown[]) => canMessageExtension(...args),
+  isChromiumBrowser: (...args: unknown[]) => isChromiumBrowser(...args),
   pingExtension: (...args: unknown[]) => pingExtension(...args),
   connectExtension: (...args: unknown[]) => connectExtension(...args),
   disconnectExtension: (...args: unknown[]) => disconnectExtension(...args),
@@ -42,6 +44,7 @@ const serverStatus = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   canMessageExtension.mockReturnValue(true);
+  isChromiumBrowser.mockReturnValue(false);
   getStatus.mockResolvedValue(serverStatus());
   pingExtension.mockResolvedValue({ installed: false, connected: false });
 });
@@ -49,10 +52,18 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('useExtensionConnection state machine', () => {
-  it('reports "unsupported" when the browser cannot message extensions', async () => {
+  it('reports "unsupported" only in a non-Chromium browser', async () => {
     canMessageExtension.mockReturnValue(false);
+    isChromiumBrowser.mockReturnValue(false);
     const { result } = renderHook(() => useExtensionConnection(true));
     await waitFor(() => expect(result.current.state).toBe('unsupported'));
+  });
+
+  it('reports "not-installed" in a Chromium browser where the extension is not reachable', async () => {
+    canMessageExtension.mockReturnValue(false);
+    isChromiumBrowser.mockReturnValue(true);
+    const { result } = renderHook(() => useExtensionConnection(true));
+    await waitFor(() => expect(result.current.state).toBe('not-installed'));
   });
 
   it('reports "not-installed" when the ping finds no extension', async () => {

@@ -19,6 +19,23 @@ function getRuntime(): ChromeRuntimeLike | null {
   return typeof chrome?.runtime?.sendMessage === 'function' ? chrome.runtime! : null;
 }
 
+/**
+ * True in a Chromium-based browser (Chrome/Edge/Brave), even when no extension
+ * is reachable. Chrome only injects `chrome.runtime` into a page whose origin
+ * is in some installed extension's `externally_connectable`, so the absence of
+ * a runtime here means "extension not installed, or this origin isn't in its
+ * allowlist" — NOT "wrong browser". The UI uses this to avoid the misleading
+ * "runs in Chromium browsers" message when the user already is in one.
+ */
+export function isChromiumBrowser(): boolean {
+  if (typeof window === 'undefined') return false;
+  const w = window as unknown as { chrome?: unknown; navigator?: { userAgentData?: { brands?: Array<{ brand: string }> }; userAgent?: string } };
+  if (typeof w.chrome !== 'undefined') return true;
+  const brands = w.navigator?.userAgentData?.brands;
+  if (Array.isArray(brands) && brands.some((b) => /Chromium|Chrome|Edge|Brave/i.test(b.brand))) return true;
+  return /Chrome\/|Edg\/|OPR\//.test(w.navigator?.userAgent ?? '');
+}
+
 export type ExtensionPingResult = {
   installed: boolean;
   connected: boolean;

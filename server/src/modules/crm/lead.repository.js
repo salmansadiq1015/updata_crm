@@ -152,19 +152,28 @@ class LeadRepository {
   } = {}) {
     const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
 
+    const datasetFilter = this.buildListFilter({ filters, search, createdBy });
     const filter = combineFilters(
-      this.buildListFilter({ filters, search, createdBy }),
+      datasetFilter,
       buildCursorQuery(cursor, safeSortBy, sortOrder),
     );
 
-    const docs = await Lead.find(filter)
-      .sort(buildCursorSort(safeSortBy, sortOrder))
-      .limit(limit + 1)
-      .select('-__v')
-      .populate(POPULATE)
-      .lean();
+    // Total matching rows (independent of the cursor) so the UI can show an
+    // honest "page X of Y". countDocuments does NOT run Mongoose's soft-delete
+    // `find` hook, so isDeleted:false is explicit (mirrors listForMap).
+    const [docs, total] = await Promise.all([
+      Lead.find(filter)
+        .sort(buildCursorSort(safeSortBy, sortOrder))
+        .limit(limit + 1)
+        .select('-__v')
+        .populate(POPULATE)
+        .lean(),
+      Lead.countDocuments(combineFilters({ isDeleted: false }, datasetFilter)),
+    ]);
 
-    return buildCursorResponse(docs, limit, safeSortBy);
+    const response = buildCursorResponse(docs, limit, safeSortBy);
+    response.pagination.total = total;
+    return response;
   }
 
   /**

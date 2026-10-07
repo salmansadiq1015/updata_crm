@@ -170,7 +170,7 @@ describe('leadRepository — createdBy is populated', () => {
     const first = await leadRepository.list({ limit: 2, sortBy: 'name', sortOrder: 'asc' });
     expect(first.data.map((lead) => lead.name)).toEqual(['A Bakery', 'B Bistro']);
     expect(first.data.map((lead) => lead.createdBy.firstName)).toEqual(['Ada', 'Alan']);
-    expect(first.pagination).toMatchObject({ hasNext: true, limit: 2 });
+    expect(first.pagination).toMatchObject({ hasNext: true, limit: 2, total: 3 });
     expect(typeof first.pagination.nextCursor).toBe('string');
 
     const second = await leadRepository.list({
@@ -178,7 +178,7 @@ describe('leadRepository — createdBy is populated', () => {
     });
     expect(second.data.map((lead) => lead.name)).toEqual(['C Cafe']);
     expect(second.data[0].createdBy).toMatchObject({ firstName: 'Ada', lastName: 'Lovelace' });
-    expect(second.pagination).toEqual({ hasNext: false, nextCursor: null, limit: 2 });
+    expect(second.pagination).toEqual({ hasNext: false, nextCursor: null, limit: 2, total: 3 });
   });
 
   it('list filters and searches exactly as before (the filter runs on the raw ids)', async () => {

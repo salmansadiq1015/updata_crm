@@ -60,6 +60,8 @@ export function DataTableShell({
    *   onNext: () => void,
    *   pageSize: number,
    *   onPageSizeChange?: (size: number) => void,
+   *   currentPage?: number,   // 1-based; shown as "page X of Y" when totalPages is set
+   *   totalPages?: number,    // omit when the total is unknown (hides the indicator)
    * }
    */
   cursorPagination,
@@ -284,6 +286,15 @@ export function DataTableShell({
               <span className="ml-2 text-xs text-muted-foreground/60 italic">{t('common.loading', 'Wird geladen...')}</span>
             )}
           </div>
+
+          {Number.isFinite(cursorPagination.totalPages) && (
+            <div className="text-xs text-muted-foreground tabular-nums" aria-live="polite">
+              {t('common.pageOf', 'Page {page} of {total}', {
+                page: cursorPagination.currentPage ?? 1,
+                total: Math.max(1, cursorPagination.totalPages),
+              })}
+            </div>
+          )}
 
           <div className="flex items-center gap-1.5">
             <Button

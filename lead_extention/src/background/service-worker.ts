@@ -452,6 +452,10 @@ async function probeTileResultCount(job: Job): Promise<number> {
   return 0;
 }
 
+function emptyScrollState(): MapsScrollState {
+  return { changed: false, atEnd: false, endConfirmed: false, scrollTop: 0, scrollHeight: 0, clientHeight: 0, visibleResultCount: 0, firstVisibleResultKey: null, lastVisibleResultKey: null };
+}
+
 async function processCurrentMapsState(job: Job): Promise<boolean> {
   let stableRounds = job.search.stableRounds ?? 0;
   let emptyRounds = 0;
@@ -462,10 +466,10 @@ async function processCurrentMapsState(job: Job): Promise<boolean> {
     await waitForResults(job);
     if (job.stopped) return true;
     await setPhase(job, 'EXTRACTING', 'Extracting visible businesses…');
-    const first = await sendToMaps(job.tabId, { type: 'COLLECT_VISIBLE' }) as { records?: RawBusinessRecord[]; context?: MapsContext };
+    const first = await sendToMaps(job.tabId, { type: 'COLLECT_VISIBLE' }).catch(() => ({ records: [] as RawBusinessRecord[] })) as { records?: RawBusinessRecord[]; context?: MapsContext };
     const result = await processRecords(job, first.records ?? []);
     await setPhase(job, 'CHECKING_FOR_MORE', `${job.search.processedCount ?? 0} processed · ${job.leads.size} unique leads saved locally.`);
-    const scroll = await sendToMaps(job.tabId, { type: 'SCROLL_RESULTS' }) as MapsScrollState;
+    const scroll = await sendToMaps(job.tabId, { type: 'SCROLL_RESULTS' }).catch(() => emptyScrollState()) as MapsScrollState;
     applyScrollCheckpoint(job.search, scroll);
     job.search.currentPage = (job.search.currentPage ?? 0) + 1;
     // Always inspect the settled DOM after scrolling. Maps virtual lists can
@@ -473,9 +477,9 @@ async function processCurrentMapsState(job: Job): Promise<boolean> {
     // movement as progress caused an endless scroll with no new leads.
     await persistJob(job);
     await delay(Math.max(1_000, DISCOVERY_SCROLL_DELAY_MS));
-    const settled = await sendToMaps(job.tabId, { type: 'COLLECT_VISIBLE' }) as { records?: RawBusinessRecord[] };
+    const settled = await sendToMaps(job.tabId, { type: 'COLLECT_VISIBLE' }).catch(() => ({ records: [] as RawBusinessRecord[] })) as { records?: RawBusinessRecord[] };
     const settledResult = await processRecords(job, settled.records ?? []);
-    const settledScroll = await sendToMaps(job.tabId, { type: 'GET_SCROLL_STATE' }) as MapsScrollState;
+    const settledScroll = await sendToMaps(job.tabId, { type: 'GET_SCROLL_STATE' }).catch(() => emptyScrollState()) as MapsScrollState;
     applyScrollCheckpoint(job.search, settledScroll);
     const newlyProcessed = result.newlyProcessed + settledResult.newlyProcessed;
     stableRounds = newlyProcessed === 0 ? stableRounds + 1 : 0;
@@ -823,14 +827,31 @@ async function publishProgress(message?: string): Promise<void> { try { await ch
 function progressFor(job: Job, message?: string): DiscoveryProgress { const leads = [...job.leads.values()]; return { searchId: job.search.id, status: job.paused ? 'paused' : job.search.status, query: job.search.query, discovered: job.search.discoveredCount, duplicates: job.search.duplicateCount ?? 0, unique: leads.length, withPhone: leads.filter((lead) => Boolean(lead.phone)).length, withWebsite: leads.filter((lead) => Boolean(lead.website)).length, withEmail: leads.filter((lead) => lead.emails.length > 0).length, iteration: job.search.currentPage ?? 0, maxIterations: job.config.safetyLimit ?? MAX_SAFE_ITERATIONS, message, phase: job.search.currentPhase, processed: job.search.processedCount ?? job.search.processedResultKeys?.length ?? 0, currentQuery: job.search.currentQuery, currentBatch: job.search.currentBatchSize ?? 0, configuredMaximum: job.config.maxResults, error: job.search.error, tilesScanned: job.tilesScanned, tilesPlanned: job.tilesPlanned }; }
 function progressForStored(search?: SearchRecord): DiscoveryProgress { return { searchId: search?.id ?? '', status: search?.status ?? 'idle', query: search?.query ?? '', discovered: search?.discoveredCount ?? 0, duplicates: search?.duplicateCount ?? 0, unique: search?.uniqueCount ?? 0, withPhone: 0, withWebsite: 0, withEmail: 0, iteration: search?.currentPage ?? 0, maxIterations: search?.config?.safetyLimit ?? MAX_SAFE_ITERATIONS, phase: search?.currentPhase, processed: search?.processedCount ?? search?.processedResultKeys?.length ?? 0, currentQuery: search?.currentQuery, currentBatch: search?.currentBatchSize ?? 0, configuredMaximum: search?.config?.maxResults, error: search?.error }; }
 async function waitIfPaused(job: Job): Promise<void> { if (!job.paused) return; await new Promise<void>((resolve) => job.resumeResolvers.push(resolve)); }
+// A single Maps content-script call must answer within this window. Without a
+// timeout, chrome.tabs.sendMessage hangs forever whenever a handler returns true
+// (async) but never calls sendResponse, or the tab is mid-navigation — which
+// froze the entire discovery loop after the first business ("stuck after 1").
+// Racing a timeout turns a non-response into a retryable error instead.
+const MAPS_MESSAGE_TIMEOUT_MS = 15_000;
+function sendTabMessage(tabId: number, message: unknown, timeoutMs = MAPS_MESSAGE_TIMEOUT_MS): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => { if (!settled) { settled = true; clearTimeout(timer); fn(); } };
+    const timer = setTimeout(() => { if (!settled) { settled = true; reject(new Error('Maps content script did not respond in time.')); } }, timeoutMs);
+    chrome.tabs.sendMessage(tabId, message).then(
+      (value) => finish(() => resolve(value)),
+      (error) => finish(() => reject(error instanceof Error ? error : new Error(String(error)))),
+    );
+  });
+}
 async function sendToMaps(tabId: number, message: { type: string; [key: string]: unknown }): Promise<unknown> {
   let response: unknown;
   try {
-    response = await chrome.tabs.sendMessage(tabId, message);
+    response = await sendTabMessage(tabId, message);
   } catch (transportError) {
     await ensureMapsContentScript(tabId);
     try {
-      response = await chrome.tabs.sendMessage(tabId, message);
+      response = await sendTabMessage(tabId, message);
     } catch {
       throw transportError;
     }
@@ -843,7 +864,9 @@ async function sendToMaps(tabId: number, message: { type: string; [key: string]:
 }
 async function ensureMapsContentScript(tabId: number): Promise<void> {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: 'GET_MAPS_CONTEXT' });
+    // Short, bounded probe: a live content script answers instantly; a missing
+    // or hung one must not block injection waiting on a response that never comes.
+    await sendTabMessage(tabId, { type: 'GET_MAPS_CONTEXT' }, 4_000);
     return;
   } catch { /* the Maps runtime is absent or the document just navigated */ }
 

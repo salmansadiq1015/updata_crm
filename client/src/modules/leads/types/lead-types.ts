@@ -177,6 +177,8 @@ export type CursorPage<T> = {
     hasNext: boolean;
     nextCursor: string | null;
     limit: number;
+    /** Total rows matching the current filter (for an honest "page X of Y"). */
+    total?: number;
   };
 };
 

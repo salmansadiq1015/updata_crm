@@ -96,6 +96,23 @@ class UserRepository {
     return buildCursorResponse(docs, limit, resolvedSortBy);
   }
 
+  /**
+   * Ids of users whose first/last name or email matches `search` — used to let a
+   * lead search match by assignee / creator name. Soft-deleted users are excluded
+   * by the model's find hook; `search` is regex-escaped so it is a literal term.
+   */
+  async findIdsByNameOrEmail(search, limit = 50) {
+    const term = typeof search === 'string' ? search.trim() : '';
+    if (!term) return [];
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = { $regex: escaped, $options: 'i' };
+    const docs = await User.find(
+      { $or: [{ firstName: regex }, { lastName: regex }, { email: regex }] },
+      { _id: 1 },
+    ).limit(Math.max(1, Math.min(Number(limit) || 50, 200))).lean();
+    return docs.map((doc) => doc._id);
+  }
+
   async updateById(id, data) {
     return User.findByIdAndUpdate(id, data, {
       returnDocument: 'after',

@@ -1,6 +1,7 @@
 import leadRepository from './lead.repository.js';
 import counterService from './counter.service.js';
 import auditService from '../auth/audit.service.js';
+import userRepository from '../auth/user.repository.js';
 import {
   normalizeName,
   normalizePhone,
@@ -126,17 +127,38 @@ class LeadService {
     return result;
   }
 
+  /**
+   * Resolve the user ids whose name or email matches a search term, so a lead
+   * search can match by assignee / creator (a populated ref the list regex can't
+   * reach). Best-effort: a user-lookup failure never breaks the lead search.
+   */
+  async resolveSearchUserIds(term) {
+    const trimmed = typeof term === 'string' ? term.trim() : '';
+    if (!trimmed) return [];
+    try {
+      return await userRepository.findIdsByNameOrEmail(trimmed, 50);
+    } catch (error) {
+      logger.warn('Lead search user-id resolution failed (non-blocking)', {
+        module: 'crm', action: 'lead.search.users', error: { message: error.message },
+      });
+      return [];
+    }
+  }
+
   /** Company-wide list (leads are shared; no createdBy scoping). */
   async list(queryParams = {}) {
     const {
       cursor, limit, sortBy, sortOrder, q, search, ...filters
     } = queryParams;
+    const term = search ?? q;
+    const searchUserIds = await this.resolveSearchUserIds(term);
     return leadRepository.list({
       cursor,
       limit,
       sortBy,
       sortOrder,
-      search: search ?? q,
+      search: term,
+      searchUserIds,
       filters,
     });
   }
@@ -152,9 +174,12 @@ class LeadService {
     const {
       cursor, sortBy, sortOrder, limit, q, search, ...filters
     } = queryParams;
+    const term = search ?? q;
+    const searchUserIds = await this.resolveSearchUserIds(term);
     return leadRepository.listForMap({
       filters,
-      search: search ?? q,
+      search: term,
+      searchUserIds,
       limit,
     });
   }

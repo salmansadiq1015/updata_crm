@@ -295,6 +295,7 @@ export const leadApi = {
     const data = isRecord(response.data) ? response.data : {};
     const places = Array.isArray(data.places) ? data.places : [];
     const types = Array.isArray(data.types) ? data.types : [];
+    const businessTypes = Array.isArray(data.businessTypes) ? data.businessTypes : [];
     return {
       places: places.flatMap((value) => {
         if (!isRecord(value) || typeof value.city !== 'string' || !value.city.trim()) return [];
@@ -306,6 +307,10 @@ export const leadApi = {
       }),
       types: types.flatMap((value) => {
         if (!isRecord(value) || (value.value !== 'business' && value.value !== 'private')) return [];
+        return [{ value: value.value, count: toNumber(value.count) }];
+      }),
+      businessTypes: businessTypes.flatMap((value) => {
+        if (!isRecord(value) || typeof value.value !== 'string' || !value.value.trim()) return [];
         return [{ value: value.value, count: toNumber(value.count) }];
       }),
     };

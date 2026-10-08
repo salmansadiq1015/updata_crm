@@ -109,12 +109,14 @@ class LeadRepository {
    * search. Returned as a single combined filter, WITHOUT any cursor clause, so
    * both the cursor list and the (cursorless) map query can reuse it.
    */
-  buildListFilter({ filters = {}, search, createdBy } = {}) {
-    // `city` is a friendly API filter name, while the stored field is nested.
-    // Pull it out before buildFilter so an arbitrary client key can never be
-    // forwarded to MongoDB. Values originate from the validated query (or the
-    // server-generated filter-options response) and are matched exactly.
-    const { city, ...flatFilters } = filters;
+  buildListFilter({
+    filters = {}, search, searchUserIds = [], createdBy,
+  } = {}) {
+    // `city` and `businessType` are friendly API filter names, while the stored
+    // fields are nested. Pull them out before buildFilter so an arbitrary client
+    // key can never be forwarded to MongoDB. Values originate from the validated
+    // query (or the server-generated filter-options response), matched exactly.
+    const { city, businessType, ...flatFilters } = filters;
 
     const baseFilter = {
       ...(createdBy ? { createdBy } : {}),
@@ -128,26 +130,46 @@ class LeadRepository {
         { 'sourceMetadata.discoveryLocation.formattedAddress': city },
       ],
     } : {};
+    // Business category (e.g. "Chinese restaurant") lives on sourceMetadata, not
+    // the lead `type` (business/private). Exact match on the stored value the
+    // filter-options facet surfaced.
+    const businessTypeFilter = businessType ? { 'sourceMetadata.businessType': businessType } : {};
 
     let searchFilter = {};
     if (search) {
       const pattern = accentSafeRegex(search);
       const regex = { $regex: pattern, $options: 'i' };
-      searchFilter = {
-        $or: [
-          { name: regex },
-          { leadNumber: regex },
-          { email: regex },
-          { phone: regex },
-          { 'address.city': regex },
-          { 'sourceMetadata.discoveryLocation.name': regex },
-          { 'sourceMetadata.discoveryLocation.city': regex },
-          { 'sourceMetadata.discoveryLocation.formattedAddress': regex },
-        ],
-      };
+      // Match everything a user reasonably expects to search by: the business
+      // name/number, contact fields, the whole address (street/area/city/region/
+      // country), the business category, tags, and the discovery location.
+      const or = [
+        { name: regex },
+        { leadNumber: regex },
+        { email: regex },
+        { phone: regex },
+        { mobile: regex },
+        { 'address.street': regex },
+        { 'address.area': regex },
+        { 'address.city': regex },
+        { 'address.region': regex },
+        { 'address.country': regex },
+        { 'sourceMetadata.businessType': regex },
+        { tags: regex },
+        { 'sourceMetadata.discoveryLocation.name': regex },
+        { 'sourceMetadata.discoveryLocation.city': regex },
+        { 'sourceMetadata.discoveryLocation.formattedAddress': regex },
+      ];
+      // Leads whose assignee / creator name (or email) matches the term — the
+      // service pre-resolves the user ids since the user is a populated ref, not
+      // a field this regex can reach.
+      if (Array.isArray(searchUserIds) && searchUserIds.length) {
+        or.push({ assignedTo: { $in: searchUserIds } });
+        or.push({ createdBy: { $in: searchUserIds } });
+      }
+      searchFilter = { $or: or };
     }
 
-    return combineFilters(baseFilter, placeFilter, searchFilter);
+    return combineFilters(baseFilter, placeFilter, businessTypeFilter, searchFilter);
   }
 
   async list({
@@ -157,11 +179,14 @@ class LeadRepository {
     sortOrder = 'desc',
     filters = {},
     search,
+    searchUserIds = [],
     createdBy,
   } = {}) {
     const safeSortBy = ALLOWED_SORT_FIELDS.includes(sortBy) ? sortBy : 'createdAt';
 
-    const datasetFilter = this.buildListFilter({ filters, search, createdBy });
+    const datasetFilter = this.buildListFilter({
+      filters, search, searchUserIds, createdBy,
+    });
     const filter = combineFilters(
       datasetFilter,
       buildCursorQuery(cursor, safeSortBy, sortOrder),
@@ -193,13 +218,15 @@ class LeadRepository {
    * map needs the whole filtered set at once to fit bounds + cluster + sync the
    * list. `limited` tells the UI the set was truncated at the hard cap.
    */
-  async listForMap({ filters = {}, search, limit = MAP_HARD_CAP } = {}) {
+  async listForMap({
+    filters = {}, search, searchUserIds = [], limit = MAP_HARD_CAP,
+  } = {}) {
     const cap = Math.min(Math.max(1, Number(limit) || MAP_HARD_CAP), MAP_HARD_CAP);
     // `isDeleted:false` is explicit: countDocuments does NOT run Mongoose's
     // soft-delete `pre(/^find/)` hook, so without it the counts would include
     // soft-deleted leads while the find()s (which do run the hook) exclude them —
     // leaving total/withLocation inconsistent with the returned leads.
-    const filter = combineFilters({ isDeleted: false }, this.buildListFilter({ filters, search }));
+    const filter = combineFilters({ isDeleted: false }, this.buildListFilter({ filters, search, searchUserIds }));
     const locatedFilter = combineFilters(filter, HAS_COORDINATES);
 
     const [total, withLocation, locatedDocs] = await Promise.all([
@@ -288,17 +315,39 @@ class LeadRepository {
             { $group: { _id: '$type', count: { $sum: 1 } } },
             { $sort: { _id: 1 } },
           ],
+          businessTypes: [
+            { $match: { 'sourceMetadata.businessType': { $type: 'string', $ne: '' } } },
+            { $group: { _id: '$sourceMetadata.businessType', count: { $sum: 1 } } },
+            { $sort: { count: -1, _id: 1 } },
+          ],
         },
       },
     ]);
 
+    // Collapse near-duplicate places that differ only by case / surrounding
+    // whitespace (the facet groups on the exact stored string, so "Lahore" and
+    // "lahore " would otherwise be two menu rows). Counts and cantons merge; the
+    // first-seen display spelling (facet is already sorted) is kept.
+    const placeByKey = new Map();
+    for (const place of facets?.places ?? []) {
+      const display = String(place._id ?? '').replace(/\s+/g, ' ').trim();
+      if (!display) continue;
+      const key = display.toLocaleLowerCase('en');
+      const existing = placeByKey.get(key);
+      if (existing) {
+        existing.count += place.count;
+        for (const canton of place.cantons ?? []) if (canton) existing.cantons.add(canton);
+      } else {
+        placeByKey.set(key, { city: display, count: place.count, cantons: new Set((place.cantons ?? []).filter(Boolean)) });
+      }
+    }
+
     return {
-      places: (facets?.places ?? []).map((place) => ({
-        city: place._id,
-        cantons: (place.cantons ?? []).filter(Boolean).sort(),
-        count: place.count,
-      })),
+      places: [...placeByKey.values()]
+        .map((place) => ({ city: place.city, cantons: [...place.cantons].sort(), count: place.count }))
+        .sort((a, b) => a.city.localeCompare(b.city)),
       types: (facets?.types ?? []).map((type) => ({ value: type._id, count: type.count })),
+      businessTypes: (facets?.businessTypes ?? []).map((bt) => ({ value: bt._id, count: bt.count })),
     };
   }
 

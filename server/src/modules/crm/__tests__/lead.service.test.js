@@ -27,6 +27,11 @@ jest.unstable_mockModule('../lead.repository.js', () => ({
   },
 }));
 
+const mockFindIdsByNameOrEmail = jest.fn(async () => []);
+jest.unstable_mockModule('../../auth/user.repository.js', () => ({
+  default: { findIdsByNameOrEmail: mockFindIdsByNameOrEmail },
+}));
+
 const mockGetNextLeadNumber = jest.fn();
 jest.unstable_mockModule('../counter.service.js', () => ({
   default: { getNextLeadNumber: mockGetNextLeadNumber },
@@ -238,8 +243,30 @@ describe('leadService reads', () => {
     expect(mockLeadListForMap).toHaveBeenCalledWith({
       filters: { status: 'new', city: 'Zürich' },
       search: 'foo',
+      searchUserIds: [],
       limit: 2000,
     });
+  });
+
+  it('list resolves assignee/creator ids for the search term and forwards them', async () => {
+    mockLeadList.mockResolvedValue({ data: [], pagination: { hasNext: false, nextCursor: null, limit: 25 } });
+    mockFindIdsByNameOrEmail.mockResolvedValueOnce(['user-1', 'user-2']);
+
+    await leadService.list({ q: 'salman', limit: 25 });
+
+    expect(mockFindIdsByNameOrEmail).toHaveBeenCalledWith('salman', 50);
+    expect(mockLeadList).toHaveBeenCalledWith(expect.objectContaining({
+      search: 'salman',
+      searchUserIds: ['user-1', 'user-2'],
+    }));
+  });
+
+  it('list never breaks when the user-id lookup throws (search still runs)', async () => {
+    mockLeadList.mockResolvedValue({ data: [], pagination: { hasNext: false, nextCursor: null, limit: 25 } });
+    mockFindIdsByNameOrEmail.mockRejectedValueOnce(new Error('users down'));
+
+    await expect(leadService.list({ q: 'foo', limit: 25 })).resolves.toBeDefined();
+    expect(mockLeadList).toHaveBeenCalledWith(expect.objectContaining({ search: 'foo', searchUserIds: [] }));
   });
 });
 

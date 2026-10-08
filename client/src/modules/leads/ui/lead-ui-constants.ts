@@ -106,6 +106,7 @@ export type LeadFilterState = {
   source: string;
   type: string;
   place: string;
+  businessType: string;
   assignedTo: string;
   search: string;
 };
@@ -116,6 +117,7 @@ export type LeadQueryFilterParams = {
   source?: LeadSource;
   type?: LeadType;
   city?: string;
+  businessType?: string;
   assignedTo?: string;
   q?: string;
 };
@@ -142,6 +144,7 @@ export function buildLeadFilterParams(
     ...(filters.source !== FILTER_ALL ? { source: filters.source as LeadSource } : {}),
     ...(filters.type !== FILTER_ALL ? { type: filters.type as LeadType } : {}),
     ...(filters.place !== FILTER_ALL ? { city: filters.place } : {}),
+    ...(filters.businessType !== FILTER_ALL ? { businessType: filters.businessType } : {}),
     ...(assignedTo ? { assignedTo } : {}),
     ...(searchTerm ? { q: searchTerm } : {}),
   };

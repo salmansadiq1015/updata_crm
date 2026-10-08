@@ -1,4 +1,5 @@
 import type { MapsContext, MapsScrollState, RatingBreakdown, RawBusinessRecord } from '../shared/types';
+import { plausibleCountry } from '../shared/countries';
 
 const PLACE_LINK = 'a[href*="/maps/place/"]';
 const PHONE_LABEL = /\b(phone|telephone|tel|call|téléphone|telefon|teléfono|telefono|telefone)\b|هاتف|الهاتف/i;
@@ -225,7 +226,14 @@ export class MapsAdapter {
     const parts = address.split(',').map((part) => part.trim()).filter(Boolean);
     const postalCode = address.match(/\b\d{4,6}\b/)?.[0] ?? null;
     const postalPart = postalCode ? parts.find((part) => part.includes(postalCode)) : null;
-    const country = parts.length >= 3 && !/\d/.test(parts.at(-1) ?? '') ? parts.at(-1) ?? null : null;
+    // The last comma segment is the country in a Maps address — but only when it
+    // is actually a country. A stray non-address string (e.g. a "PRESS
+    // CONFERENCE" chip captured as the address) must NOT become the country;
+    // plausibleCountry drops it, and the CRM resolves the real country from the
+    // lead's coordinates on import.
+    const country = parts.length >= 3 && !/\d/.test(parts.at(-1) ?? '')
+      ? plausibleCountry(parts.at(-1))
+      : null;
     const city = postalPart?.replace(postalCode ?? '', '').trim()
       || (parts.length >= 3 ? parts.at(-2) : parts[1])
       || null;

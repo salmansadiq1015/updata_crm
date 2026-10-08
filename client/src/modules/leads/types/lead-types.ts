@@ -181,6 +181,7 @@ export type LeadFilters = {
   source?: LeadSource;
   type?: LeadType;
   city?: string;
+  businessType?: string;
   q?: string;
 };
 
@@ -195,9 +196,18 @@ export type LeadTypeFilterOption = {
   count: number;
 };
 
+// Business category (e.g. "Chinese restaurant") sourced from the leads
+// themselves — distinct from the business/private lead `type`. The value is the
+// raw stored category used for filtering; the UI humanizes it for display.
+export type LeadBusinessTypeFilterOption = {
+  value: string;
+  count: number;
+};
+
 export type LeadFilterOptions = {
   places: LeadPlaceFilterOption[];
   types: LeadTypeFilterOption[];
+  businessTypes: LeadBusinessTypeFilterOption[];
 };
 
 export type LeadListParams = LeadFilters & {

@@ -424,6 +424,7 @@ export function LeadListView() {
     filters.source !== 'ALL' ||
     filters.type !== 'ALL' ||
     filters.place !== FILTER_ALL ||
+    filters.businessType !== FILTER_ALL ||
     filters.assignedTo !== FILTER_ALL;
 
   const emptyState = hasActiveFilters ? (
@@ -578,6 +579,8 @@ export function LeadListView() {
             onTypeChange={(type) => setFilters({ type })}
             place={filters.place}
             onPlaceChange={(place) => setFilters({ place })}
+            businessType={filters.businessType}
+            onBusinessTypeChange={(businessType) => setFilters({ businessType })}
             filterOptions={filterOptionsQuery.data}
             filterOptionsLoading={filterOptionsQuery.isLoading}
             assignedTo={filters.assignedTo}

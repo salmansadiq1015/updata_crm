@@ -70,4 +70,18 @@ describe('Google Maps extraction parsing', () => {
       country: 'France'
     });
   });
+
+  it('keeps a real country (e.g. Pakistan) in the last segment', () => {
+    expect(adapter.addressParts('123 Main Rd, Johar Town, 54000 Lahore, Pakistan')).toMatchObject({
+      city: 'Lahore',
+      postalCode: '54000',
+      country: 'Pakistan',
+    });
+  });
+
+  it('drops a non-country last segment (a stray Maps chip) instead of storing it as the country', () => {
+    // A "PRESS CONFERENCE" section header captured as the address must NOT
+    // become the country — the CRM resolves the real country from coordinates.
+    expect(adapter.addressParts('Singapore Kitchen, 159 new, Garden Town, Lahore, PRESS CONFERENCE').country).toBeNull();
+  });
 });

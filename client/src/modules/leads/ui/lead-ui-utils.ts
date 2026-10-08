@@ -109,8 +109,7 @@ export function formatAddressOneLine(address: LeadAddress): string {
  * The server normalizes this on import; here we only tidy legacy/edge values
  * (take the first of a joined list, humanize machine tokens) and never fabricate.
  */
-export function getLeadBusinessTypeLabel(lead: Pick<Lead, 'sourceMetadata'>): string | null {
-  const raw = lead.sourceMetadata?.businessType;
+export function humanizeBusinessType(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const first = raw.split(/[,|]/)[0]?.replace(/\s+/g, ' ').trim();
   if (!first) return null;
@@ -122,6 +121,10 @@ export function getLeadBusinessTypeLabel(lead: Pick<Lead, 'sourceMetadata'>): st
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase('en'));
+}
+
+export function getLeadBusinessTypeLabel(lead: Pick<Lead, 'sourceMetadata'>): string | null {
+  return humanizeBusinessType(lead.sourceMetadata?.businessType);
 }
 
 /** Neighborhood/area for the list column — the business's area, else its city,

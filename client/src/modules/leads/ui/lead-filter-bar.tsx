@@ -9,6 +9,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  Store,
   User,
   UserRound,
   Users,
@@ -42,7 +43,7 @@ import {
   getLeadTypeLabel,
 } from './lead-ui-constants';
 import { LEAD_STATUS_META } from './status-badge';
-import { getUserDisplayName } from './lead-ui-utils';
+import { getUserDisplayName, humanizeBusinessType } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
 
 type LeadFilterBarProps = {
@@ -57,6 +58,9 @@ type LeadFilterBarProps = {
   /** A city returned by `GET /crm/leads/filter-options`, or `ALL`. */
   place: string;
   onPlaceChange: (value: string) => void;
+  /** A business category returned by `GET /crm/leads/filter-options`, or `ALL`. */
+  businessType: string;
+  onBusinessTypeChange: (value: string) => void;
   filterOptions?: LeadFilterOptions;
   filterOptionsLoading?: boolean;
   /** `ALL`, `ME`, or a user id. */
@@ -107,6 +111,8 @@ export function LeadFilterBar({
   onTypeChange,
   place,
   onPlaceChange,
+  businessType,
+  onBusinessTypeChange,
   filterOptions,
   filterOptionsLoading = false,
   assignedTo,
@@ -123,6 +129,7 @@ export function LeadFilterBar({
     source !== FILTER_ALL,
     type !== FILTER_ALL,
     place !== FILTER_ALL,
+    businessType !== FILTER_ALL,
     assignedTo !== FILTER_ALL,
   ].filter(Boolean).length;
 
@@ -169,7 +176,7 @@ export function LeadFilterBar({
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
               maxLength={100}
-              placeholder={t('leads.search.placeholder', 'Search by name, phone, email or area…')}
+              placeholder={t('leads.search.placeholder', 'Search by name, area, city, business type or owner…')}
               aria-label={t('leads.search.label', 'Search leads')}
               className="h-11 w-full rounded-xl border border-border/70 bg-background/80 pe-10 ps-10 text-[13px] text-foreground shadow-sm transition-all placeholder:text-muted-foreground/60 hover:border-primary/25 focus:border-primary/50 focus:outline-none focus:ring-4 focus:ring-primary/10"
             />
@@ -198,7 +205,7 @@ export function LeadFilterBar({
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <FilterField label={t('leads.filter.status', 'Status')}>
             <Select value={status} onValueChange={(value) => onStatusChange(value as LeadStatus | typeof FILTER_ALL)}>
               <SelectTrigger
@@ -286,6 +293,42 @@ export function LeadFilterBar({
                     </SelectItem>
                   );
                 })}
+              </SelectContent>
+            </Select>
+          </FilterField>
+
+          <FilterField label={t('leads.filter.businessType', 'Business type')}>
+            <Select value={businessType} onValueChange={onBusinessTypeChange}>
+              <SelectTrigger
+                aria-label={t('leads.filter.businessType', 'Business type')}
+                className={cn(TRIGGER, businessType !== FILTER_ALL && ACTIVE_TRIGGER)}
+              >
+                <SelectValue placeholder={t('leads.filter.businessType', 'Business type')} />
+              </SelectTrigger>
+              <SelectContent position="popper" sideOffset={6} className="max-h-80">
+                <SelectItem value={FILTER_ALL} textValue={t('leads.filter.allBusinessTypes', 'All business types')}>
+                  <span className="flex items-center gap-2">
+                    <Store className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
+                    {t('leads.filter.allBusinessTypes', 'All business types')}
+                  </span>
+                </SelectItem>
+                {filterOptions?.businessTypes.map((option) => {
+                  const label = humanizeBusinessType(option.value) ?? option.value;
+                  return (
+                    <SelectItem key={option.value} value={option.value} textValue={label}>
+                      <span className="flex w-full min-w-44 items-center gap-2">
+                        <Store className="h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />
+                        <span className="truncate">{label}</span>
+                        <CountBadge count={option.count} />
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+                {!filterOptionsLoading && (filterOptions?.businessTypes.length ?? 0) === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    {t('leads.filter.noBusinessTypes', 'No business types available yet')}
+                  </div>
+                )}
               </SelectContent>
             </Select>
           </FilterField>

@@ -61,6 +61,16 @@ describe('Google Maps extraction parsing', () => {
     expect(adapter.looksLikeDomain('https://www.google.com/maps/place/Acme')).toBe(false);
   });
 
+  it('rejects a rating/number as a website (the "4.0.0.9" bug) but keeps real domains', () => {
+    // Ratings / IP-like numbers parse as a URL host but are NOT websites.
+    expect(adapter.looksLikeDomain('4.3')).toBe(false);
+    expect(adapter.looksLikeDomain('4.0.0.9')).toBe(false);
+    expect(adapter.looksLikeDomain('1.2.3.4')).toBe(false);
+    // Real business domains (incl. a Moroccan .ma) are still accepted.
+    expect(adapter.looksLikeDomain('dentistetoulout-mohammedamine.ma')).toBe(true);
+    expect(adapter.looksLikeDomain('example.com')).toBe(true);
+  });
+
   it('maps a postal address into CRM-compatible location fields', () => {
     expect(adapter.addressParts('1 Rue Exemple, 75001 Paris, France')).toEqual({
       street: '1 Rue Exemple',

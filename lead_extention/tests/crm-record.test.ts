@@ -40,4 +40,12 @@ describe('toExtensionRecord — the CRM payload no longer drops rich business da
     const record = toExtensionRecord(lead({ ratingBreakdown: null })) as Record<string, unknown>;
     expect(record.ratingDistribution).toBeNull();
   });
+
+  it('drops a rating/number captured as the website instead of sending it to the CRM', () => {
+    expect((toExtensionRecord(lead({ website: '4.0.0.9' })) as Record<string, unknown>).website).toBeNull();
+    expect((toExtensionRecord(lead({ website: '4.3' })) as Record<string, unknown>).website).toBeNull();
+    // A real website is still sent.
+    expect((toExtensionRecord(lead({ website: 'dentistetoulout-mohammedamine.ma' })) as Record<string, unknown>).website)
+      .toBe('https://dentistetoulout-mohammedamine.ma/');
+  });
 });

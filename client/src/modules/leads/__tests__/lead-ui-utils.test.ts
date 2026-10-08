@@ -50,6 +50,14 @@ describe('links are only built from data a lead really has', () => {
     expect(toSafeWebUrl(null)).toBeNull();
   });
 
+  it('never links a rating/number captured as a website (the "4.0.0.9" bug)', () => {
+    expect(toSafeWebUrl('4.0.0.9')).toBeNull();
+    expect(toSafeWebUrl('https://4.0.0.9/')).toBeNull();
+    expect(toSafeWebUrl('4.3')).toBeNull();
+    // A real domain (incl. a Moroccan .ma) is still linked.
+    expect(toSafeWebUrl('dentistetoulout-mohammedamine.ma')).toBe('https://dentistetoulout-mohammedamine.ma/');
+  });
+
   it('builds wa.me links from international-ish numbers, stripping cosmetics', () => {
     expect(toWhatsAppHref('+41 44 123 45 67')).toBe('https://web.whatsapp.com/send?phone=41441234567');
     // A leading 00 international prefix is dropped; + / spaces / dashes are too.

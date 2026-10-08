@@ -191,6 +191,17 @@ describe('HttpCheerioScraper.scrapeSite', () => {
     expect(result.pagesFetched).toBe(1);
     expect(result.emails).toContain('hi@ok.example');
   });
+
+  it('never fetches a garbage website (a rating/number like 4.0.0.9) — invalid_url, zero requests', async () => {
+    const get = jest.fn(async () => htmlResponse('<html></html>'));
+    const scraper = new HttpCheerioScraper({ httpClient: { get }, config: { respectRobots: false } });
+
+    const result = await scraper.scrapeSite('https://4.0.0.9/');
+
+    expect(result.error).toBe('invalid_url');
+    expect(result.pagesFetched).toBe(0);
+    expect(get).not.toHaveBeenCalled(); // no wasted request on a non-domain host
+  });
 });
 
 // ── enrichLead (fill-missing only) ────────────────────────────────────────────

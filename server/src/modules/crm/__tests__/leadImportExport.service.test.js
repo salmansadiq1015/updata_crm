@@ -354,6 +354,23 @@ describe('leadImportExportService.importExtensionLeads', () => {
     expect(good.phone).toBe('+33 1 23 45 67 89'); // valid phone preserved
   });
 
+  it('rejects a rating/number captured as the website (stores null, not "4.0.0.9")', async () => {
+    mockFindDuplicates.mockResolvedValue([]);
+    mockCreate.mockImplementation(async (doc) => ({ ...doc, _id: '507f1f77bcf86cd7994390aa', leadNumber: 'L-00111' }));
+
+    await service.importExtensionLeads([
+      { clientId: 'bad-web', businessName: 'Dentist', website: '4.0.0.9' },
+      { clientId: 'bad-web-2', businessName: 'Rated Shop', website: '4.3' },
+      { clientId: 'good-web', businessName: 'Real Dentist', website: 'dentistetoulout-mohammedamine.ma' },
+    ], 'user-1', { requestId: 'r-web' });
+
+    expect(mockCreate.mock.calls.find((c) => c[0].name === 'Dentist')[0].website).toBeNull();
+    expect(mockCreate.mock.calls.find((c) => c[0].name === 'Rated Shop')[0].website).toBeNull();
+    // A real domain (incl. a Moroccan .ma) is kept and schemed.
+    expect(mockCreate.mock.calls.find((c) => c[0].name === 'Real Dentist')[0].website)
+      .toBe('https://dentistetoulout-mohammedamine.ma/');
+  });
+
   // ── Enrich-on-reimport: backfill an existing lead's empty provider snapshot ──
   it('backfills an existing lead\'s missing rating breakdown on re-import without overwriting', async () => {
     mockFindDuplicates.mockResolvedValue([{ lead: { _id: 'lead-existing-1', leadNumber: 'L-00477' } }]);

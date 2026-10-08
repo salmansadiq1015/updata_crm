@@ -185,14 +185,18 @@ function normalizeLeadPhone(value) {
   return cleaned.slice(0, 50);
 }
 
-/** An absolute http(s) URL (scheme added if missing), capped, or null. */
+/** An absolute http(s) URL (scheme added if missing), capped, or null. The host
+ *  must be a real domain with an alphabetic TLD — a rating / IP-like number such
+ *  as "4.3" or "4.0.0.9" parses as a URL but is NOT a website and is rejected. */
 function normalizeLeadWebsite(value) {
   let raw = cleanString(value);
   if (!raw) return null;
   if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
   try {
     const url = new URL(raw);
-    if (!/^https?:$/.test(url.protocol) || !url.hostname.includes('.')) return null;
+    if (!/^https?:$/.test(url.protocol)) return null;
+    const host = url.hostname.replace(/^www\./i, '');
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) return null;
     return url.toString().slice(0, 500);
   } catch {
     return null;

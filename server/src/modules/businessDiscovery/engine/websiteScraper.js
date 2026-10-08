@@ -371,7 +371,9 @@ export class HttpCheerioScraper extends WebsiteScraper {
     return found;
   }
 
-  /** Coerce a stored website value into an absolute http(s) URL to fetch, or null. */
+  /** Coerce a stored website value into an absolute http(s) URL to fetch, or null.
+   *  A non-domain host (a rating / IP-like number such as "4.0.0.9") is rejected
+   *  so enrichment never wastes a request on, and fails over, garbage data. */
   _toFetchUrl(url) {
     if (typeof url !== 'string' || !url.trim()) return null;
     let candidate = url.trim();
@@ -379,6 +381,8 @@ export class HttpCheerioScraper extends WebsiteScraper {
     try {
       const u = new URL(candidate);
       if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+      const host = u.hostname.replace(/^www\./i, '');
+      if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) return null;
       return u.toString();
     } catch {
       return null;

@@ -215,7 +215,11 @@ export function toSafeWebUrl(value: string | null | undefined): string | null {
   const candidate = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`;
   try {
     const url = new URL(candidate);
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    // Never link a non-domain host: a rating / IP-like number ("4.3",
+    // "4.0.0.9") that older leads stored as a website must not become a href.
+    const host = url.hostname.replace(/^www\./i, '');
+    return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host) ? url.toString() : null;
   } catch {
     return null;
   }

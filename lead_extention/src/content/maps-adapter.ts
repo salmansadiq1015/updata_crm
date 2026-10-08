@@ -371,7 +371,12 @@ export class MapsAdapter {
     try {
       if (/\s/.test(value.trim())) return false;
       const parsed = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
-      return parsed.hostname.includes('.') && !/google\./i.test(parsed.hostname);
+      const host = parsed.hostname.replace(/^www\./i, '');
+      if (/google\./i.test(host)) return false;
+      // Require a real domain with an alphabetic TLD. Without this, a rating or
+      // IP-like number ("4.3", "4.0.0.9") parses as a URL host and is wrongly
+      // taken for a website — the actual bug behind "website = 4.0.0.9".
+      return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host);
     } catch { return false; }
   }
 

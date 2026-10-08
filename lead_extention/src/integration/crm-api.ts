@@ -265,7 +265,11 @@ function safeWebsite(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
     const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
-    return /^https?:$/.test(url.protocol) && url.href.length <= 500 ? url.href : null;
+    if (!/^https?:$/.test(url.protocol) || url.href.length > 500) return null;
+    // Reject hosts without a real alphabetic TLD (a rating / IP-like number such
+    // as "4.3" or "4.0.0.9" is not a website) so garbage never reaches the CRM.
+    const host = url.hostname.replace(/^www\./i, '');
+    return /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host) ? url.href : null;
   } catch {
     return null;
   }

@@ -19,6 +19,8 @@ import {
   enrichJobIdParam,
   geocodeLead,
   bulkImport,
+  bulkDelete,
+  bulkAssign,
 } from './lead.validation.js';
 import { exportLeads, importTemplate } from './leadImportExport.validation.js';
 
@@ -53,6 +55,12 @@ router.get('/export', authenticate, requirePermission('lead:read'), validate(exp
 // routes are rate-limited per user; the job-status poll is not.
 router.post('/enrich-bulk', authenticate, requirePermission('lead:enrich'), enrichLimiter, validate(enrichBulk), (req, res, next) => leadController.enrichBulk(req, res, next));
 router.get('/enrich-jobs/:jobId', authenticate, requirePermission('lead:read'), validate(enrichJobIdParam), (req, res, next) => leadController.getEnrichJob(req, res, next));
+
+// Bulk delete / bulk (re)assign — ONE request for all selected ids. POST (with a
+// JSON body) matches the rest of the app's bulk endpoints (tasks/customers/
+// projects/users) and avoids DELETE/PATCH-body stripping by proxies/CDNs.
+router.post('/bulk-delete', authenticate, requirePermission('lead:delete'), validate(bulkDelete), (req, res, next) => leadController.bulkRemove(req, res, next));
+router.post('/bulk-assign', authenticate, requirePermission('lead:write'), validate(bulkAssign), (req, res, next) => leadController.bulkAssign(req, res, next));
 
 // Standard CRUD
 router.get('/', authenticate, requirePermission('lead:read'), validate(listLeads), (req, res, next) => leadController.list(req, res, next));

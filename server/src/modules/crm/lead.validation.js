@@ -225,6 +225,23 @@ export const leadIdParam = {
   params: Joi.object({ id: objectId.required() }),
 };
 
+// Bulk delete: one request with all selected ids. Duplicates are allowed here
+// (collapsed server-side) so a repeated selection never 400s the whole batch;
+// capped so a single request can't ask to touch an unbounded set.
+export const bulkDelete = {
+  body: Joi.object({
+    leadIds: Joi.array().items(objectId).min(1).max(1000).required(),
+  }),
+};
+
+// Bulk (re)assign the selected leads in one request. `assignedTo: null` unassigns.
+export const bulkAssign = {
+  body: Joi.object({
+    leadIds: Joi.array().items(objectId).min(1).max(1000).required(),
+    assignedTo: objectId.allow(null).default(null),
+  }),
+};
+
 export const convertLead = {
   params: Joi.object({ id: objectId.required() }),
   body: Joi.object({

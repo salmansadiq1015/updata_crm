@@ -67,13 +67,15 @@ export function LeadBulkActionBar({
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={t('leads.bulk.deleteTitle', 'Delete selected leads?')}
+        title={t('leads.bulk.deleteTitle', 'Delete {count} leads?', { count })}
         description={t(
           'leads.bulk.deleteDescription',
           '{count} lead(s) will be removed from your pipeline. This action cannot be undone.',
           { count },
         )}
-        confirmText={t('common.delete', 'Delete')}
+        confirmText={isBusy
+          ? t('leads.bulk.deleting', 'Deleting {count} leads…', { count })
+          : t('leads.bulk.deleteConfirm', 'Delete {count} leads', { count })}
         cancelText={t('common.cancel', 'Cancel')}
         loading={isBusy}
         onConfirm={() => {

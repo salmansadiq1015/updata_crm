@@ -212,6 +212,67 @@ class LeadService {
     return { id, deleted: true };
   }
 
+  /**
+   * Company-wide bulk soft delete (shared) — ONE updateMany, ONE audit event.
+   * Duplicate ids are collapsed; ids that are missing or already deleted come
+   * back in `notDeletedIds` so the caller reports an honest result rather than
+   * falsely claiming every id was removed.
+   */
+  async bulkSoftDelete(ids = [], meta = {}) {
+    const unique = [...new Set((Array.isArray(ids) ? ids : []).map((id) => String(id)))];
+    const requested = unique.length;
+    if (requested === 0) {
+      return { requested: 0, deleted: 0, deletedIds: [], notDeletedIds: [] };
+    }
+
+    const { deletedIds } = await leadRepository.bulkSoftDelete(unique);
+    const deletedSet = new Set(deletedIds);
+    const notDeletedIds = unique.filter((id) => !deletedSet.has(id));
+
+    auditService.logEvent({
+      eventType: 'lead.bulk_deleted',
+      userId: meta.userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: notDeletedIds.length ? 'partial' : 'success',
+      details: { requested, deleted: deletedIds.length, notDeleted: notDeletedIds.length },
+      module: 'lead',
+    });
+
+    return { requested, deleted: deletedIds.length, deletedIds, notDeletedIds };
+  }
+
+  /**
+   * Company-wide bulk (re)assign — ONE updateMany, ONE audit event. `assignedTo`
+   * null unassigns. Duplicate ids collapse; missing/deleted ids come back in
+   * `notUpdatedIds` for an honest result.
+   */
+  async bulkAssign(ids = [], assignedTo = null, meta = {}) {
+    const unique = [...new Set((Array.isArray(ids) ? ids : []).map((id) => String(id)))];
+    const requested = unique.length;
+    if (requested === 0) {
+      return { requested: 0, updated: 0, updatedIds: [], notUpdatedIds: [] };
+    }
+
+    const { updatedIds } = await leadRepository.bulkAssign(unique, assignedTo || null);
+    const updatedSet = new Set(updatedIds);
+    const notUpdatedIds = unique.filter((id) => !updatedSet.has(id));
+
+    auditService.logEvent({
+      eventType: 'lead.bulk_assigned',
+      userId: meta.userId,
+      ipAddress: meta.ipAddress || 'internal',
+      userAgent: meta.userAgent,
+      result: notUpdatedIds.length ? 'partial' : 'success',
+      details: {
+        requested, updated: updatedIds.length, notUpdated: notUpdatedIds.length, assignedTo: assignedTo || null,
+      },
+      module: 'lead',
+    });
+
+    return { requested, updated: updatedIds.length, updatedIds, notUpdatedIds };
+  }
+
   /** GLOBAL dedup ladder lookup (placeId → phone → website → name+postal). */
   async findDuplicates({
     name, postalCode, phone, website, placeId,

@@ -356,11 +356,25 @@ describe('LeadListView', () => {
       expect(screen.queryByRole('region', { name: 'Bulk actions' })).not.toBeInTheDocument();
     });
 
-    it('deletes the selected leads after confirmation and reports once', async () => {
-      const deleted: string[] = [];
+    it('deletes the selected leads in ONE bulk request after confirmation and reports once', async () => {
+      let deletedIds: string[] = [];
+      let bulkCalls = 0;
+      let perIdCalls = 0;
       server.use(
-        http.delete(`${L}/:id`, ({ params }) => {
-          deleted.push(String(params.id));
+        http.post(`${L}/bulk-delete`, async ({ request }) => {
+          bulkCalls += 1;
+          const body = (await request.json()) as { leadIds: string[] };
+          deletedIds = body.leadIds;
+          return HttpResponse.json(ok({
+            requested: body.leadIds.length,
+            deleted: body.leadIds.length,
+            deletedIds: body.leadIds,
+            notDeletedIds: [],
+          }));
+        }),
+        // Guard: the old N+1 path (one DELETE per id) must never be used.
+        http.delete(`${L}/:id`, () => {
+          perIdCalls += 1;
           return HttpResponse.json(ok({ deleted: true }));
         }),
       );
@@ -371,23 +385,39 @@ describe('LeadListView', () => {
       const bar = await screen.findByRole('region', { name: 'Bulk actions' });
       await user.click(within(bar).getByRole('button', { name: 'Delete' }));
 
-      const confirm = await screen.findByRole('dialog', { name: 'Delete selected leads?' });
+      const confirm = await screen.findByRole('dialog', { name: 'Delete 2 leads?' });
       expect(within(confirm).getByText(/2 lead\(s\) will be removed/)).toBeInTheDocument();
-      await user.click(within(confirm).getByRole('button', { name: 'Delete' }));
+      await user.click(within(confirm).getByRole('button', { name: 'Delete 2 leads' }));
 
-      await waitFor(() => expect([...deleted].sort()).toEqual(['lead-a', 'lead-b']));
+      await waitFor(() => expect([...deletedIds].sort()).toEqual(['lead-a', 'lead-b']));
+      // Exactly ONE request for the whole selection — never one-per-id.
+      expect(bulkCalls).toBe(1);
+      expect(perIdCalls).toBe(0);
       // One summary toast, not one per row.
       await waitFor(() => expect(showSuccess).toHaveBeenCalledTimes(1));
       expect(showSuccess).toHaveBeenCalledWith('Leads deleted: 2');
       await waitFor(() => expect(screen.queryByRole('region', { name: 'Bulk actions' })).not.toBeInTheDocument());
     });
 
-    it('assigns the selected leads to a team member', async () => {
-      const patches: Array<{ id: string; body: unknown }> = [];
+    it('assigns the selected leads to a team member in ONE bulk request', async () => {
+      let bulkBody: { leadIds: string[]; assignedTo: string | null } | null = null;
+      let bulkCalls = 0;
+      let perIdCalls = 0;
       server.use(
-        http.patch(`${L}/:id`, async ({ params, request }) => {
-          patches.push({ id: String(params.id), body: await request.json() });
-          return HttpResponse.json(ok(makeLeadDTO({ id: String(params.id) })));
+        http.post(`${L}/bulk-assign`, async ({ request }) => {
+          bulkCalls += 1;
+          bulkBody = (await request.json()) as { leadIds: string[]; assignedTo: string | null };
+          return HttpResponse.json(ok({
+            requested: bulkBody.leadIds.length,
+            updated: bulkBody.leadIds.length,
+            updatedIds: bulkBody.leadIds,
+            notUpdatedIds: [],
+          }));
+        }),
+        // Guard: the old N+1 path (one PATCH per id) must never be used.
+        http.patch(`${L}/:id`, () => {
+          perIdCalls += 1;
+          return HttpResponse.json(ok(makeLeadDTO({ id: 'x' })));
         }),
       );
       const { user } = renderLeadList();
@@ -398,10 +428,11 @@ describe('LeadListView', () => {
       await user.click(within(bar).getByRole('button', { name: 'Assign to' }));
       await user.click(await screen.findByRole('menuitem', { name: 'Noah Frei' }));
 
-      await waitFor(() => expect(patches).toHaveLength(2));
-      expect(patches.map((patch) => patch.id).sort()).toEqual(['lead-a', 'lead-c']);
-      expect(patches.every((patch) => JSON.stringify(patch.body) === JSON.stringify({ assignedTo: 'u-2' }))).toBe(true);
-      expect(showSuccess).toHaveBeenCalledWith('Leads updated: 2');
+      await waitFor(() => expect(bulkCalls).toBe(1));
+      expect(perIdCalls).toBe(0);
+      expect([...(bulkBody?.leadIds ?? [])].sort()).toEqual(['lead-a', 'lead-c']);
+      expect(bulkBody?.assignedTo).toBe('u-2');
+      await waitFor(() => expect(showSuccess).toHaveBeenCalledWith('Leads updated: 2'));
     });
   });
 

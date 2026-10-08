@@ -203,6 +203,9 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage | { type: string
       void startCrmImport(value.leadIds).then((response) => sendResponse(response));
       return true;
     }
+    case 'CANCEL_CRM_IMPORT':
+      void cancelCrmImport().then((state) => sendResponse({ ok: true, state })).catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+      return true;
     case 'GET_CRM_IMPORT':
       void recoverCrmImport().then(() => getCrmImportState()).then((state) => sendResponse({ ok: true, state }));
       return true;
@@ -865,6 +868,10 @@ async function runCrmImport(state: CrmImportProgress): Promise<void> {
   const pendingIds = state.leadIds.filter((id) => !processedIds.has(id));
   const batches = splitIntoBatches(pendingIds, CRM_BATCH_SIZE);
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+    // Cooperative cancel: stop at the batch boundary, preserving everything
+    // already added. Checked before each batch so a cancel never corrupts a
+    // batch that is mid-flight.
+    if (state.cancelRequested) { await finishCrmImport(state, 'cancelled'); activeCrmImport = null; return; }
     const batchIds = batches[batchIndex];
     const isLastBatch = batchIndex === batches.length - 1;
     const leads = (await Promise.all(batchIds.map((id) => LeadRepository.get(id)))).filter((lead): lead is Lead => Boolean(lead));
@@ -885,9 +892,52 @@ async function runCrmImport(state: CrmImportProgress): Promise<void> {
     state.processedLeadIds = [...processedIds]; state.processed = processedIds.size; state.nextIndex = state.processed;
     await saveCrmImport(); await publishCrmImport();
   }
-  state.status = state.failed ? 'partial' : 'completed'; state.completedAt = nowIso(); await saveCrmImport(); await publishCrmImport(); activeCrmImport = null;
+  if (state.cancelRequested) { await finishCrmImport(state, 'cancelled'); activeCrmImport = null; return; }
+  await finishCrmImport(state, state.failed ? 'partial' : 'completed'); activeCrmImport = null;
+}
+
+// Finalize an import run (completed / partial / cancelled): set the terminal
+// status, release any leads still flagged "importing" (so a cancelled or crashed
+// batch never leaves a lead stuck mid-add), persist, notify the panel, and stop
+// the keepalive alarm.
+async function finishCrmImport(state: CrmImportProgress, status: CrmImportProgress['status']): Promise<void> {
+  state.status = status;
+  state.completedAt = nowIso();
+  await resetImportingLeads(state);
+  await saveCrmImport();
+  await publishCrmImport();
   void chrome.alarms.clear(CRM_IMPORT_ALARM);
   void heartbeat();
+}
+
+// Any lead left as "importing" when a run ends (cancel, or a batch interrupted by
+// a worker restart) is reverted to "not-imported" so it is cleanly selectable to
+// add again — never shown stuck on "Adding…".
+async function resetImportingLeads(state: CrmImportProgress): Promise<void> {
+  await Promise.all((state.leadIds ?? []).map(async (id) => {
+    const lead = await LeadRepository.get(id);
+    if (lead && lead.crmStatus === 'importing') { lead.crmStatus = 'not-imported'; lead.crmError = null; await LeadRepository.save(lead); }
+  }));
+}
+
+// Cancel an in-flight CRM import. A live run observes the persisted flag at its
+// next batch boundary and finalizes itself; if no run is live (the worker was
+// recycled and only the stored 'running' state remains), finalize it here so a
+// recovery can't resume it.
+async function cancelCrmImport(): Promise<CrmImportProgress | null> {
+  const live = activeCrmImport;
+  if (live && live.status === 'running') {
+    live.cancelRequested = true;
+    await saveCrmImport();
+    return live;
+  }
+  const stored = (await SettingsRepository.get<CrmImportProgress>(CRM_IMPORT_SETTING))?.value ?? null;
+  if (!stored || stored.status !== 'running') return stored;
+  stored.cancelRequested = true;
+  activeCrmImport = stored;
+  await finishCrmImport(stored, 'cancelled');
+  activeCrmImport = null;
+  return stored;
 }
 
 async function recoverCrmImport(): Promise<boolean> {

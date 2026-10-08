@@ -231,7 +231,7 @@ export interface CrmAuthState {
 
 export interface CrmImportProgress {
   id: string;
-  status: 'idle' | 'running' | 'completed' | 'partial' | 'failed';
+  status: 'idle' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled';
   total: number;
   processed: number;
   created: number;
@@ -241,6 +241,9 @@ export interface CrmImportProgress {
   leadIds: string[];
   processedLeadIds?: string[];
   nextIndex?: number;
+  // Cooperative cancel flag. Persisted so a worker that is recycled mid-import
+  // and resumed via recovery also observes the cancellation and stops.
+  cancelRequested?: boolean;
   error?: string | null;
   startedAt?: string;
   completedAt?: string | null;
@@ -261,6 +264,7 @@ export type ExtensionMessage =
   | { type: 'ENRICH_LEAD'; leadId: string; maxPages: number }
   | { type: 'IMPORT_TO_CRM'; leadIds: string[] }
   | { type: 'RETRY_CRM_IMPORT'; leadIds?: string[] }
+  | { type: 'CANCEL_CRM_IMPORT' }
   | { type: 'GET_CRM_IMPORT' }
   | { type: 'MAPS_STATE_CHANGED'; context: MapsContext }
   | { type: 'COLLECT_DETAILS' }

@@ -71,6 +71,30 @@ class LeadController {
     } catch (err) { next(err); }
   }
 
+  /** Bulk soft-delete — ONE request, ONE updateMany. Returns an accurate count. */
+  async bulkRemove(req, res, next) {
+    try {
+      const meta = { userId: req.user._id, ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await leadService.bulkSoftDelete(req.body.leadIds, meta);
+      return res.success({
+        data: result,
+        message: `${result.deleted} lead(s) deleted`,
+      });
+    } catch (err) { next(err); }
+  }
+
+  /** Bulk (re)assign — ONE request, ONE updateMany. Returns an accurate count. */
+  async bulkAssign(req, res, next) {
+    try {
+      const meta = { userId: req.user._id, ipAddress: req.ip, userAgent: req.get('user-agent') };
+      const result = await leadService.bulkAssign(req.body.leadIds, req.body.assignedTo ?? null, meta);
+      return res.success({
+        data: result,
+        message: `${result.updated} lead(s) updated`,
+      });
+    } catch (err) { next(err); }
+  }
+
   async convert(req, res, next) {
     try {
       const meta = { ipAddress: req.ip, userAgent: req.get('user-agent') };

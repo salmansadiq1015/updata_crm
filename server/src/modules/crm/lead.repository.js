@@ -315,6 +315,56 @@ class LeadRepository {
   }
 
   /**
+   * Soft-delete many leads in a SINGLE updateMany (company-wide, like softDelete).
+   * First resolves which ids are actually deletable (exist + not already deleted)
+   * via one indexed _id lookup, so the result reports per-id truthfully; then one
+   * updateMany flips them. No N+1 — two queries regardless of id count.
+   * (`updateMany` is NOT covered by the soft-delete `pre(/^find/)` hook, so the
+   * `isDeleted:false` guard is explicit.)
+   */
+  async bulkSoftDelete(ids = []) {
+    if (!ids.length) return { deletedIds: [], matchedCount: 0, modifiedCount: 0 };
+    const deletable = await Lead.find(
+      { _id: { $in: ids }, isDeleted: false },
+      { _id: 1 },
+    ).lean();
+    const deletableIds = deletable.map((doc) => String(doc._id));
+    if (!deletableIds.length) return { deletedIds: [], matchedCount: 0, modifiedCount: 0 };
+    const result = await Lead.updateMany(
+      { _id: { $in: deletableIds }, isDeleted: false },
+      { $set: { isDeleted: true, deletedAt: new Date() } },
+    );
+    return {
+      deletedIds: deletableIds,
+      matchedCount: result.matchedCount ?? result.n ?? deletableIds.length,
+      modifiedCount: result.modifiedCount ?? result.nModified ?? deletableIds.length,
+    };
+  }
+
+  /**
+   * Assign (or unassign, with `assignedTo = null`) many leads in ONE updateMany.
+   * Same two-query shape as bulkSoftDelete so the result reports per-id truthfully.
+   */
+  async bulkAssign(ids = [], assignedTo = null) {
+    if (!ids.length) return { updatedIds: [], matchedCount: 0, modifiedCount: 0 };
+    const existing = await Lead.find(
+      { _id: { $in: ids }, isDeleted: false },
+      { _id: 1 },
+    ).lean();
+    const updatableIds = existing.map((doc) => String(doc._id));
+    if (!updatableIds.length) return { updatedIds: [], matchedCount: 0, modifiedCount: 0 };
+    const result = await Lead.updateMany(
+      { _id: { $in: updatableIds }, isDeleted: false },
+      { $set: { assignedTo: assignedTo || null } },
+    );
+    return {
+      updatedIds: updatableIds,
+      matchedCount: result.matchedCount ?? result.n ?? updatableIds.length,
+      modifiedCount: result.modifiedCount ?? result.nModified ?? updatableIds.length,
+    };
+  }
+
+  /**
    * Dedup ladder (highest confidence first): placeId → phone → website →
    * name(+postal). Returns an ordered, de-duplicated list of
    * { method, confidence, lead } candidates. Scoped by createdBy when given.

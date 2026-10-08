@@ -1,10 +1,15 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { emailService } from '@/modules/doctpl/services/EmailService';
 import { leadKeys } from '../hooks/use-leads';
 import { leadApi } from '../services/lead-api';
-import type { Lead } from '../types/lead-types';
+import type { Lead, LeadPage } from '../types/lead-types';
 import { toMailtoHref, toWhatsAppHref } from './lead-ui-utils';
 
 export type BulkLeadResult = {
@@ -37,6 +42,37 @@ async function runBulk(ids: string[], task: (id: string) => Promise<unknown>): P
 
   await Promise.all(Array.from({ length: Math.min(BULK_CONCURRENCY, ids.length) }, worker));
   return result;
+}
+
+/**
+ * Remove deleted leads from the cached list pages in place and decrement the
+ * total, so the UI updates instantly after a bulk delete WITHOUT a list refetch
+ * (the whole point: one request, no N refetches). Safe no-op when the ids are
+ * not in cache.
+ */
+function removeLeadsFromListCache(queryClient: QueryClient, ids: string[]): void {
+  if (!ids.length) return;
+  const deleted = new Set(ids);
+  queryClient.setQueriesData<InfiniteData<LeadPage>>({ queryKey: leadKeys.lists() }, (old) => {
+    if (!old) return old;
+    let removed = 0;
+    const pages = old.pages.map((page) => {
+      const kept = page.data.filter((lead) => {
+        if (!deleted.has(lead.id)) return true;
+        removed += 1;
+        return false;
+      });
+      return kept.length === page.data.length ? page : { ...page, data: kept };
+    });
+    if (removed === 0) return old;
+    // total is the same across pages; decrement each that carries it.
+    const withTotals = pages.map((page) => (
+      typeof page.pagination.total === 'number'
+        ? { ...page, pagination: { ...page.pagination, total: Math.max(0, page.pagination.total - removed) } }
+        : page
+    ));
+    return { ...old, pages: withTotals };
+  });
 }
 
 // ── Eligibility buckets ───────────────────────────────────────────────────────
@@ -113,14 +149,52 @@ export function useLeadBulkActions() {
   const queryClient = useQueryClient();
   const refresh = () => queryClient.invalidateQueries({ queryKey: leadKeys.root });
 
+  // ONE request for the whole selection (not one DELETE per id). Never rejects —
+  // it maps the single-request result onto the shared {succeeded, failed} shape
+  // so the caller reports an honest summary (ids the server could not delete stay
+  // selected for review). On success the list cache is updated in place; only the
+  // map view is invalidated (and that refetches only if it is currently mounted).
   const bulkDelete = useMutation({
-    mutationFn: (ids: string[]) => runBulk(ids, (id) => leadApi.deleteLead(id)),
-    onSettled: refresh,
+    mutationFn: async (ids: string[]): Promise<BulkLeadResult> => {
+      try {
+        const res = await leadApi.bulkDeleteLeads(ids);
+        const deleted = new Set(res.deletedIds);
+        return {
+          succeeded: ids.filter((id) => deleted.has(id)),
+          failed: ids
+            .filter((id) => !deleted.has(id))
+            .map((id) => ({ id, error: new Error('not-deleted') })),
+        };
+      } catch (error) {
+        return { succeeded: [], failed: ids.map((id) => ({ id, error })) };
+      }
+    },
+    onSuccess: (result) => {
+      removeLeadsFromListCache(queryClient, result.succeeded);
+      if (result.succeeded.length) {
+        void queryClient.invalidateQueries({ queryKey: leadKeys.maps() });
+      }
+    },
   });
 
+  // ONE request for the whole selection (not one PATCH per id). Never rejects —
+  // maps the single-request result onto the shared {succeeded, failed} shape.
+  // The list is refreshed once so the (populated) assignee comes back.
   const bulkAssign = useMutation({
-    mutationFn: ({ ids, assignedTo }: { ids: string[]; assignedTo: string | null }) =>
-      runBulk(ids, (id) => leadApi.updateLead(id, { assignedTo })),
+    mutationFn: async ({ ids, assignedTo }: { ids: string[]; assignedTo: string | null }): Promise<BulkLeadResult> => {
+      try {
+        const res = await leadApi.bulkAssignLeads(ids, assignedTo);
+        const updated = new Set(res.updatedIds);
+        return {
+          succeeded: ids.filter((id) => updated.has(id)),
+          failed: ids
+            .filter((id) => !updated.has(id))
+            .map((id) => ({ id, error: new Error('not-updated') })),
+        };
+      } catch (error) {
+        return { succeeded: [], failed: ids.map((id) => ({ id, error })) };
+      }
+    },
     onSettled: refresh,
   });
 

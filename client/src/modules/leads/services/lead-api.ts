@@ -333,6 +333,60 @@ export const leadApi = {
     return { deleted: response.data?.deleted ?? true };
   },
 
+  /**
+   * Delete many leads in ONE request (not one per id). Returns an accurate
+   * breakdown: which ids were actually removed vs. already gone / not found.
+   */
+  async bulkDeleteLeads(ids: string[]): Promise<{
+    requested: number;
+    deleted: number;
+    deletedIds: string[];
+    notDeletedIds: string[];
+  }> {
+    const response = toApiResponse<{
+      requested?: number;
+      deleted?: number;
+      deletedIds?: string[];
+      notDeletedIds?: string[];
+    }>(
+      await apiClient.post(ENDPOINTS.LEADS.BULK_DELETE, { leadIds: ids }),
+    );
+    const data = response.data ?? {};
+    return {
+      requested: data.requested ?? ids.length,
+      deleted: data.deleted ?? 0,
+      deletedIds: Array.isArray(data.deletedIds) ? data.deletedIds : [],
+      notDeletedIds: Array.isArray(data.notDeletedIds) ? data.notDeletedIds : [],
+    };
+  },
+
+  /**
+   * (Re)assign many leads in ONE request (not one PATCH per id). `assignedTo`
+   * null unassigns. Returns which ids were actually updated vs. not found.
+   */
+  async bulkAssignLeads(ids: string[], assignedTo: string | null): Promise<{
+    requested: number;
+    updated: number;
+    updatedIds: string[];
+    notUpdatedIds: string[];
+  }> {
+    const response = toApiResponse<{
+      requested?: number;
+      updated?: number;
+      updatedIds?: string[];
+      notUpdatedIds?: string[];
+    }>(
+      await apiClient.post(ENDPOINTS.LEADS.BULK_ASSIGN, { leadIds: ids, assignedTo }),
+    );
+    const data = response.data ?? {};
+    return {
+      requested: data.requested ?? ids.length,
+      updated: data.updated ?? 0,
+      updatedIds: Array.isArray(data.updatedIds) ? data.updatedIds : [],
+      notUpdatedIds: Array.isArray(data.notUpdatedIds) ? data.notUpdatedIds : [],
+    };
+  },
+
   async convertLead(id: string, input: LeadConvertInput = {}): Promise<LeadConversionResult> {
     const response = toApiResponse<unknown>(
       await apiClient.post(ENDPOINTS.LEADS.CONVERT(id), input),

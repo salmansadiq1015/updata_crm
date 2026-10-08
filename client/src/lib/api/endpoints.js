@@ -853,6 +853,8 @@ export const ENDPOINTS = Object.freeze({
     MAP: '/crm/leads/map',
     FILTER_OPTIONS: '/crm/leads/filter-options',
     BY_ID: (id) => `/crm/leads/${id}`,
+    BULK_DELETE: '/crm/leads/bulk-delete',
+    BULK_ASSIGN: '/crm/leads/bulk-assign',
     CONVERT: (id) => `/crm/leads/${id}/convert`,
     DUPLICATES: '/crm/leads/duplicates',
     BULK_IMPORT: '/crm/leads/bulk-import',

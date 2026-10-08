@@ -335,7 +335,14 @@ function LeadDetailDrawer({ lead, loading, importing, crmOrigin, onClose, onLoad
       </div>
       <footer className="drawer-actions">
         <a className="secondary-button" href={lead.googleMapsUrl} target="_blank" rel="noreferrer"><Icon name="target" size={14} /> Open business</a>
-        {crmHref ? <a className="secondary-button" href={crmHref} target="_blank" rel="noreferrer">View in CRM</a> : <button className="primary-action compact" disabled={importing || alreadyInCrm} onClick={() => onAddToCrm([lead.id])}>{alreadyInCrm ? 'In CRM' : importing ? <><span>Adding…</span><span className="button-spinner" aria-hidden="true" /></> : 'Add to CRM'}</button>}
+        {!alreadyInCrm && <button className="primary-action compact" disabled={importing} onClick={() => onAddToCrm([lead.id])}>{importing ? <><span>Adding…</span><span className="button-spinner" aria-hidden="true" /></> : 'Add to CRM'}</button>}
+        {alreadyInCrm && crmHref && <a className="secondary-button" href={crmHref} target="_blank" rel="noreferrer">View in CRM</a>}
+        {/* The lead is already in the CRM, but "Load full details" has now read the
+            per-star rating breakdown (and any photos/hours) the first add lacked.
+            Re-send it so the CRM backfills those empty fields — the server enriches
+            an existing lead without overwriting what it already has. */}
+        {alreadyInCrm && hasBreakdown && <button className="primary-action compact" title="Push the newly loaded rating breakdown and details to the CRM" disabled={importing} onClick={() => onAddToCrm([lead.id])}>{importing ? <><span>Updating…</span><span className="button-spinner" aria-hidden="true" /></> : 'Update in CRM'}</button>}
+        {alreadyInCrm && !crmHref && !hasBreakdown && <button className="primary-action compact" disabled>In CRM</button>}
         <button className="text-button" disabled={loading} onClick={() => onLoadDetails(lead.id)}>{loading ? 'Loading…' : 'Load full details'}</button>
       </footer>
     </aside>

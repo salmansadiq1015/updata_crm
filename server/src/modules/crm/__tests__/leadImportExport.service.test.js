@@ -9,13 +9,17 @@ import ExcelJS from 'exceljs';
 const mockBulkCreate = jest.fn();
 const mockFindDuplicates = jest.fn();
 const mockCreate = jest.fn();
+const mockUpdate = jest.fn();
 jest.unstable_mockModule('../lead.service.js', () => ({
-  default: { bulkCreate: mockBulkCreate, findDuplicates: mockFindDuplicates, create: mockCreate },
+  default: {
+    bulkCreate: mockBulkCreate, findDuplicates: mockFindDuplicates, create: mockCreate, update: mockUpdate,
+  },
 }));
 
 const mockList = jest.fn();
+const mockGetProviderMeta = jest.fn();
 jest.unstable_mockModule('../lead.repository.js', () => ({
-  default: { list: mockList },
+  default: { list: mockList, getProviderMeta: mockGetProviderMeta },
 }));
 
 const mockGetNextLeadNumber = jest.fn();
@@ -348,6 +352,85 @@ describe('leadImportExportService.importExtensionLeads', () => {
 
     const good = mockCreate.mock.calls.find((c) => c[0].name === 'Valid Business')[0];
     expect(good.phone).toBe('+33 1 23 45 67 89'); // valid phone preserved
+  });
+
+  // ── Enrich-on-reimport: backfill an existing lead's empty provider snapshot ──
+  it('backfills an existing lead\'s missing rating breakdown on re-import without overwriting', async () => {
+    mockFindDuplicates.mockResolvedValue([{ lead: { _id: 'lead-existing-1', leadNumber: 'L-00477' } }]);
+    // The lead was first added from the Maps feed: it has an overall rating but
+    // no per-star breakdown, no photos and no hours.
+    mockGetProviderMeta.mockResolvedValue({
+      _id: 'lead-existing-1',
+      providerMeta: {
+        rating: 4.3, reviewCount: 891, ratingDistribution: null, photos: [], openingHours: null, businessStatus: 'Open', priceLevel: null, mapsUrl: null,
+      },
+    });
+    mockUpdate.mockResolvedValue({ _id: 'lead-existing-1' });
+
+    const result = await service.importExtensionLeads([{
+      clientId: 'reimport-1',
+      businessName: 'Singapore Kitchen',
+      // Re-added from the detail view, which DOES carry the histogram + photos.
+      rating: 4.3,
+      reviewCount: 891,
+      ratingDistribution: {
+        5: 600, 4: 180, 3: 60, 2: 20, 1: 31,
+      },
+      photos: ['https://maps.example/p1.jpg'],
+      openingHours: ['Mon 09:00–18:00'],
+    }], 'user-1', { requestId: 'r-reimport' });
+
+    expect(result).toMatchObject({ total: 1, created: 0, existing: 1, failed: 0 });
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    const [id, set] = mockUpdate.mock.calls[0];
+    expect(id).toBe('lead-existing-1');
+    // Only the empty fields are filled; the already-present rating/reviewCount/
+    // businessStatus are NOT in the update.
+    expect(set).toEqual({
+      'providerMeta.ratingDistribution': {
+        one: 31, two: 20, three: 60, four: 180, five: 600,
+      },
+      'providerMeta.photos': [{ url: 'https://maps.example/p1.jpg', source: 'google_maps' }],
+      'providerMeta.openingHours': ['Mon 09:00–18:00'],
+    });
+    expect(set).not.toHaveProperty('providerMeta.rating');
+    expect(set).not.toHaveProperty('providerMeta.reviewCount');
+    expect(set).not.toHaveProperty('providerMeta.businessStatus');
+  });
+
+  it('does not update an existing lead when the breakdown is already present', async () => {
+    mockFindDuplicates.mockResolvedValue([{ lead: { _id: 'lead-existing-2', leadNumber: 'L-00500' } }]);
+    mockGetProviderMeta.mockResolvedValue({
+      _id: 'lead-existing-2',
+      providerMeta: {
+        rating: 4.2, reviewCount: 518, ratingDistribution: { one: 50, two: 16, three: 43, four: 94, five: 315 }, photos: [{ url: 'https://maps.example/old.jpg', source: 'google_maps' }], openingHours: ['Daily'], businessStatus: 'Open',
+      },
+    });
+
+    const result = await service.importExtensionLeads([{
+      clientId: 'reimport-2',
+      businessName: 'Jawa Restaurant',
+      ratingDistribution: { 5: 999, 4: 1, 3: 1, 2: 1, 1: 1 }, // would overwrite — must be ignored
+      photos: ['https://maps.example/new.jpg'],
+    }], 'user-1', { requestId: 'r-noop' });
+
+    expect(result).toMatchObject({ total: 1, created: 0, existing: 1, failed: 0 });
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('reports an honest "existing" even when the enrichment update fails', async () => {
+    mockFindDuplicates.mockResolvedValue([{ lead: { _id: 'lead-existing-3', leadNumber: 'L-00600' } }]);
+    mockGetProviderMeta.mockResolvedValue({ _id: 'lead-existing-3', providerMeta: { ratingDistribution: null } });
+    mockUpdate.mockRejectedValue(new Error('db unavailable'));
+
+    const result = await service.importExtensionLeads([{
+      clientId: 'reimport-3',
+      businessName: 'Resilient Re-add',
+      ratingDistribution: { 5: 10, 4: 1, 3: 1, 2: 1, 1: 1 },
+    }], 'user-1', { requestId: 'r-enrich-fail' });
+
+    expect(result).toMatchObject({ total: 1, created: 0, existing: 1, failed: 0 });
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
   });
 });
 

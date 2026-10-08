@@ -716,6 +716,17 @@ class LeadImportExportService {
         });
         if (matches.length) {
           const existing = matches[0].lead;
+          // The lead is already in the CRM, but a re-add often carries richer
+          // provider data than the first add did — most importantly the per-star
+          // rating breakdown, which is only scraped from a place's detail view,
+          // not the Maps feed card. Backfill the empty providerMeta fields so the
+          // CRM shows the same rating detail the extension does, without ever
+          // overwriting data the lead already has. Non-blocking: an enrichment
+          // failure still reports the row as an honest "existing".
+          await this._enrichExistingProviderMeta(existing._id, record, meta).catch((error) => logger.warn(
+            'Lead provider-meta enrich on re-import failed (non-blocking)',
+            { module: 'crm', action: 'lead.extension_import.enrich', leadId: String(existing._id), error: { message: error?.message } },
+          ));
           summary.existing += 1;
           results.push({ clientId, status: 'existing', leadId: String(existing._id), leadNumber: existing.leadNumber });
           continue;
@@ -777,6 +788,52 @@ class LeadImportExportService {
       error: { message: error.message },
     }));
     return { ...summary, results };
+  }
+
+  /**
+   * Backfill an already-imported lead's provider snapshot from a fresh extension
+   * record, filling ONLY the providerMeta fields that are currently empty and
+   * never overwriting what the lead already has. This is how a lead first added
+   * from the Maps feed (which has no per-star histogram in its DOM) gains its
+   * rating distribution — and any other provider detail it was missing — once
+   * the user opens its detail view and re-adds it. A targeted dot-notation $set
+   * leaves untouched providerMeta fields (and the rest of the lead) intact.
+   * Returns true when at least one field was filled.
+   */
+  async _enrichExistingProviderMeta(existingId, record, meta = {}) {
+    const current = await leadRepository.getProviderMeta(existingId);
+    if (!current) return false;
+    const have = current.providerMeta ?? {};
+    const isEmpty = (value) => value === null || value === undefined;
+    const set = {};
+
+    const ratingDistribution = normalizeRatingDistribution(record.ratingDistribution);
+    if (ratingDistribution && isEmpty(have.ratingDistribution)) set['providerMeta.ratingDistribution'] = ratingDistribution;
+
+    const rating = inRangeOrNull(record.rating, 0, 5);
+    if (rating !== null && isEmpty(have.rating)) set['providerMeta.rating'] = rating;
+
+    const reviewCount = normalizeReviewCount(record.reviewCount);
+    if (reviewCount !== null && isEmpty(have.reviewCount)) set['providerMeta.reviewCount'] = reviewCount;
+
+    const photos = normalizeLeadPhotos(record.photos);
+    if (photos.length && !(Array.isArray(have.photos) && have.photos.length)) set['providerMeta.photos'] = photos;
+
+    const openingHours = normalizeOpeningHours(record.openingHours);
+    if (openingHours && isEmpty(have.openingHours)) set['providerMeta.openingHours'] = openingHours;
+
+    const businessStatus = cleanString(record.businessStatus)?.slice(0, 60) || null;
+    if (businessStatus && isEmpty(have.businessStatus)) set['providerMeta.businessStatus'] = businessStatus;
+
+    const priceLevel = cleanString(record.priceLevel) || null;
+    if (priceLevel && isEmpty(have.priceLevel)) set['providerMeta.priceLevel'] = priceLevel;
+
+    const mapsUrl = normalizeMapsUrl(record.googleMapsUrl);
+    if (mapsUrl && isEmpty(have.mapsUrl)) set['providerMeta.mapsUrl'] = mapsUrl;
+
+    if (Object.keys(set).length === 0) return false;
+    await leadService.update(String(existingId), set, meta);
+    return true;
   }
 
   /**

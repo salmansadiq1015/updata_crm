@@ -94,6 +94,15 @@ class LeadRepository {
   }
 
   /**
+   * Just the provider snapshot of a single (live) lead — used by the extension
+   * re-import to decide which providerMeta fields are still empty and can be
+   * backfilled. Soft-deleted leads are excluded by the find hook.
+   */
+  async getProviderMeta(id) {
+    return Lead.findById(id).select('_id providerMeta').lean();
+  }
+
+  /**
    * Build the shared lead query from the list/map filters: createdBy scope (when
    * given — leads are company-wide so the service passes none), the whitelisted
    * exact filters, the friendly `city` → nested place match, and the accent-safe

@@ -9,6 +9,7 @@ import {
   ArrowRightLeft,
   Building2,
   CalendarClock,
+  Clock,
   Compass,
   ExternalLink,
   Globe,
@@ -25,6 +26,7 @@ import {
   Sparkles,
   Star,
   StickyNote,
+  Store,
   Tag,
   Trash2,
   User,
@@ -72,20 +74,23 @@ import {
   getLeadTypeLabel,
 } from './lead-ui-constants';
 import {
-  buildGoogleMapsUrl,
   customerHref,
   findUser,
   formatLeadDateTime,
   getAddressLines,
+  getLeadBusinessTypeLabel,
   getLeadCreatorName,
+  getOpeningHoursLines,
   getUserDisplayName,
   getWebsiteLabel,
+  mapsUrlForLead,
   toIntlLocale,
   toMailtoHref,
   toSafeWebUrl,
   toTelHref,
   toWhatsAppHref,
 } from './lead-ui-utils';
+import { RatingDistribution } from './rating-distribution';
 import type { LeadUser } from './lead-ui-utils';
 import { LeadForm } from './lead-form-dialog';
 import { ConvertDialog } from './convert-dialog';
@@ -609,10 +614,13 @@ function LeadDetailBody({
   const callHref = toTelHref(phone ?? mobile);
   const mailHref = toMailtoHref(lead.email);
   const webHref = toSafeWebUrl(lead.website);
-  const mapsHref = buildGoogleMapsUrl(lead);
+  // Prefer the stored provider map link; fall back to a coordinate pin.
+  const mapsHref = mapsUrlForLead(lead);
   // WhatsApp prefers the server-normalised number, then the raw phone/mobile.
   const waHref = toWhatsAppHref(lead.normalizedPhone ?? phone ?? mobile);
   const addressLines = getAddressLines(lead.address);
+  const addr = lead.address;
+  const businessTypeLabel = getLeadBusinessTypeLabel(lead);
   const assignee = findUser(users, lead.assignedTo);
   const creatorName = getLeadCreatorName(lead.createdBy, users);
   const meta = lead.sourceMetadata;
@@ -630,6 +638,10 @@ function LeadDetailBody({
     : null;
   const rating = lead.providerMeta.rating;
   const reviewCount = lead.providerMeta.reviewCount;
+  const ratingDistribution = lead.providerMeta.ratingDistribution;
+  const businessStatus = lead.providerMeta.businessStatus;
+  const openingHoursLines = getOpeningHoursLines(lead.providerMeta.openingHours);
+  const photos = lead.providerMeta.photos ?? [];
   const priceLevelLabel = getPriceLevelLabel(t, lead.providerMeta.priceLevel);
   const SourceIcon = LEAD_SOURCE_ICON[lead.source];
   const TypeIcon = lead.type === 'business' ? Building2 : User;
@@ -923,14 +935,31 @@ function LeadDetailBody({
 
       {/* Address */}
       <Section title={t('leads.drawer.sectionAddress', 'Address')}>
-        {addressLines.length > 0 || lead.location ? (
+        {addressLines.length > 0 || lead.location || addr.formatted ? (
           <InfoList label={t('leads.drawer.sectionAddress', 'Address')}>
-            {addressLines.length > 0 && (
-              <InfoRow icon={MapPin} label={t('leads.drawer.address', 'Address')}>
-                {addressLines.map((line) => (
-                  <span key={line} className="block">{line}</span>
-                ))}
+            {(addr.formatted || addressLines.length > 0) && (
+              <InfoRow icon={MapPin} label={t('leads.drawer.fullAddress', 'Full address')}>
+                {addr.formatted
+                  ? <span className="block">{addr.formatted}</span>
+                  : addressLines.map((line) => (
+                      <span key={line} className="block">{line}</span>
+                    ))}
               </InfoRow>
+            )}
+            {addr.area && (
+              <InfoRow icon={MapPin} label={t('leads.drawer.area', 'Area')}>{addr.area}</InfoRow>
+            )}
+            {addr.city && !/^[\d\s-]{3,}$/.test(addr.city.trim()) && (
+              <InfoRow icon={Building2} label={t('leads.drawer.city', 'City')}>{addr.city}</InfoRow>
+            )}
+            {(addr.canton ?? addr.region) && (
+              <InfoRow icon={Compass} label={t('leads.drawer.region', 'Region')}>{addr.canton ?? addr.region}</InfoRow>
+            )}
+            {addr.postalCode && (
+              <InfoRow icon={Hash} label={t('leads.drawer.postalCode', 'Postal code')}>{addr.postalCode}</InfoRow>
+            )}
+            {addr.country && (
+              <InfoRow icon={Globe} label={t('leads.drawer.country', 'Country')}>{addr.country}</InfoRow>
             )}
             {lead.location && (
               <InfoRow icon={Compass} label={t('leads.drawer.coordinates', 'Coordinates')}>
@@ -952,6 +981,51 @@ function LeadDetailBody({
           <MutedText>{t('leads.drawer.noAddress', 'No address on file.')}</MutedText>
         )}
       </Section>
+
+      {/* Opening hours */}
+      {openingHoursLines.length > 0 && (
+        <Section title={t('leads.drawer.sectionHours', 'Opening hours')}>
+          <ul className="space-y-1.5 rounded-xl border border-border/60 bg-background/40 p-4 text-sm">
+            {openingHoursLines.map((line, index) => (
+              <li key={`${index}-${line}`} className="flex items-start gap-2 text-foreground">
+                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="break-words">{line}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {/* Photos (only ever what the provider actually supplied) */}
+      {photos.length > 0 && (
+        <Section title={t('leads.drawer.sectionPhotos', 'Photos')}>
+          <div className="grid grid-cols-3 gap-2">
+            {photos.slice(0, 9).map((photo) => {
+              const safe = toSafeWebUrl(photo.url);
+              if (!safe) return null;
+              return (
+                <a
+                  key={photo.url}
+                  href={safe}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group block overflow-hidden rounded-lg border border-border/60 bg-muted"
+                >
+                  {/* Provider-hosted thumbnail; no-referrer keeps it from leaking the CRM URL. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={safe}
+                    alt={photo.attribution ?? ''}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    className="aspect-square h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                </a>
+              );
+            })}
+          </div>
+        </Section>
+      )}
 
       {/* Source & provenance */}
       <Section title={t('leads.drawer.sectionSource', 'Source')}>
@@ -980,9 +1054,14 @@ function LeadDetailBody({
               {formatLeadDateTime(meta.discoveredAt, locale)}
             </InfoRow>
           )}
-          {meta.businessType && (
+          {businessTypeLabel && (
             <InfoRow icon={Building2} label={t('leads.drawer.businessType', 'Business type')}>
-              {meta.businessType}
+              {businessTypeLabel}
+            </InfoRow>
+          )}
+          {businessStatus && (
+            <InfoRow icon={Store} label={t('leads.drawer.businessStatus', 'Business status')}>
+              {businessStatus}
             </InfoRow>
           )}
           {meta.keyword && (
@@ -1024,11 +1103,18 @@ function LeadDetailBody({
                     </span>
                   )}
                 </span>
-                {/* The provider exposes an overall rating only — be honest that the
-                    per-star breakdown is not available rather than fabricating it. */}
-                <span className="text-[11px] text-muted-foreground">
-                  {t('leads.drawer.ratingNoBreakdown', 'Detailed rating breakdown is not available from the source.')}
-                </span>
+                {/* Show the real per-star histogram when the provider supplied it;
+                    otherwise be honest that the breakdown is unavailable — never
+                    fabricate counts from the overall rating. */}
+                {ratingDistribution ? (
+                  <span className="mt-1 block max-w-60">
+                    <RatingDistribution distribution={ratingDistribution} locale={locale} />
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">
+                    {t('leads.drawer.ratingNoBreakdown', 'Detailed rating breakdown is not available from the source.')}
+                  </span>
+                )}
               </span>
             </InfoRow>
           )}

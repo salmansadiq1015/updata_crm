@@ -214,12 +214,14 @@ describe('LeadListView', () => {
     expect(within(table).getByText('Basel Dental GmbH')).toBeInTheDocument();
     expect(within(table).getByText('Chur Yoga Studio')).toBeInTheDocument();
 
-    for (const header of ['Lead #', 'Name', 'Status', 'Type', 'Source', 'Area', 'Phone', 'Assigned to', 'Discovered']) {
+    for (const header of ['Lead #', 'Name', 'Status', 'Type', 'Source', 'Area', 'City', 'Country', 'Rating', 'Phone', 'Assigned to', 'Discovered']) {
       expect(within(table).getByRole('columnheader', { name: new RegExp(header, 'i') })).toBeInTheDocument();
     }
 
+    // The real business category is the primary Type value (not the generic kind).
     expect(within(await findRow('Alpine Bakery AG')).getByText('Bakery')).toBeInTheDocument();
-    expect(within(await findRow('Alpine Bakery AG')).getByText('Zürich')).toBeInTheDocument();
+    // "Zürich" shows in both the Area (fallback) and City columns now.
+    expect(within(await findRow('Alpine Bakery AG')).getAllByText('Zürich').length).toBeGreaterThan(0);
 
     // Status is a labelled badge, never colour alone.
     expect(within(table).getByText('New')).toBeInTheDocument();
@@ -424,7 +426,8 @@ describe('LeadListView', () => {
       expect(within(drawer).getByText('Google Places')).toBeInTheDocument();
       expect(within(drawer).getByText('ChIJ-alpine-bakery')).toBeInTheDocument();
       expect(within(drawer).getByText('sess-77')).toBeInTheDocument();
-      expect(within(drawer).getByText('bakery')).toBeInTheDocument();
+      // The business type is humanized consistently ("bakery" → "Bakery").
+      expect(within(drawer).getByText('Bakery')).toBeInTheDocument();
       expect(within(drawer).getByText('sourdough')).toBeInTheDocument();
       expect(within(drawer).getByText('4.5')).toBeInTheDocument();
       expect(within(drawer).getByRole('button', { name: 'Convert to customer' })).toBeInTheDocument();

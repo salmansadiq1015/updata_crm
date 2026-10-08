@@ -6,6 +6,8 @@ import type {
   LeadDuplicate,
   LeadEnrichment,
   LeadEnrichmentStatus,
+  LeadPhoto,
+  LeadRatingDistribution,
   LeadSocial,
   LeadSource,
   LeadStatus,
@@ -184,21 +186,63 @@ const toAddress = (value: unknown): LeadAddress => {
     return {
       street: value || null,
       addressSupplement: null,
+      area: null,
       postalCode: null,
       city: null,
       canton: null,
+      region: null,
       country: 'CH',
+      formatted: value || null,
     };
   }
   const record = readRecord(value);
   return {
     street: readStringOrNull(record.street),
     addressSupplement: readStringOrNull(record.addressSupplement),
+    area: readStringOrNull(record.area),
     postalCode: readStringOrNull(record.postalCode),
     city: readStringOrNull(record.city),
     canton: readStringOrNull(record.canton),
+    region: readStringOrNull(record.region),
     country: readString(record.country, 'CH'),
+    formatted: readStringOrNull(record.formatted),
   };
+};
+
+// Per-star histogram. Accepts the stored word-key shape ({ five: 892 }) or the
+// numeric-key shape ({ "5": 892 }); returns null unless at least one real count
+// is present, so the UI only shows bars for genuine provider data.
+const readRatingDistribution = (value: unknown): LeadRatingDistribution | null => {
+  if (!isRecord(value)) return null;
+  const words = ['one', 'two', 'three', 'four', 'five'] as const;
+  const numeric = ['1', '2', '3', '4', '5'] as const;
+  const out = {} as LeadRatingDistribution;
+  let any = false;
+  words.forEach((word, index) => {
+    const n = readNumberOrNull(value[word] ?? value[numeric[index]] ?? value[index + 1]);
+    out[word] = n != null && n >= 0 ? Math.trunc(n) : 0;
+    if (n != null && n >= 0) any = true;
+  });
+  return any ? out : null;
+};
+
+const readPhotos = (value: unknown): LeadPhoto[] =>
+  (Array.isArray(value) ? value : [])
+    .map((item): LeadPhoto | null => {
+      if (typeof item === 'string') return item ? { url: item, source: null, attribution: null } : null;
+      const record = readRecord(item);
+      const url = readStringOrNull(record.url);
+      return url ? { url, source: readStringOrNull(record.source), attribution: readStringOrNull(record.attribution) } : null;
+    })
+    .filter((item): item is LeadPhoto => item !== null);
+
+// Opening hours arrive as a single string or an array of day lines; keep either.
+const readOpeningHours = (value: unknown): string | string[] | null => {
+  if (Array.isArray(value)) {
+    const lines = readStringArray(value);
+    return lines.length ? lines : null;
+  }
+  return readStringOrNull(value);
 };
 
 export const leadSchema = z.unknown().transform((value): Lead => {
@@ -242,6 +286,11 @@ export const leadSchema = z.unknown().transform((value): Lead => {
       rating: readNumberOrNull(providerMeta.rating),
       reviewCount: readNumberOrNull(providerMeta.reviewCount),
       priceLevel: readNumberOrStringOrNull(providerMeta.priceLevel),
+      ratingDistribution: readRatingDistribution(providerMeta.ratingDistribution),
+      businessStatus: readStringOrNull(providerMeta.businessStatus),
+      openingHours: readOpeningHours(providerMeta.openingHours),
+      photos: readPhotos(providerMeta.photos),
+      mapsUrl: readStringOrNull(providerMeta.mapsUrl),
     },
     source: readSource(raw.source),
     sourceMetadata: {

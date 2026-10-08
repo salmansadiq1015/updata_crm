@@ -80,13 +80,19 @@ export function formatLeadDateTime(value: string | null | undefined, locale: str
   }).format(date);
 }
 
+/** True for a value that is really just a postal code (never a place name). */
+const isBarePostalCode = (value: string | null | undefined): boolean =>
+  typeof value === 'string' && /^[\d\s-]{3,}$/.test(value.trim());
+
 /** Address as display lines, skipping every part that is not set. */
 export function getAddressLines(address: LeadAddress): string[] {
   const lines = [
     [address.street, address.addressSupplement].filter(Boolean).join(', '),
+    address.area ?? '',
     [address.postalCode, address.city].filter(Boolean).join(' '),
-    // Only name the country when it adds information beyond the home market.
-    [address.canton, address.country && address.country !== 'CH' ? address.country : null]
+    // Swiss leads carry a canton; others a region. Only name the country when it
+    // adds information beyond the home market.
+    [address.canton ?? address.region, address.country && address.country !== 'CH' ? address.country : null]
       .filter(Boolean)
       .join(', '),
   ];
@@ -95,6 +101,44 @@ export function getAddressLines(address: LeadAddress): string[] {
 
 export function formatAddressOneLine(address: LeadAddress): string {
   return getAddressLines(address).join(', ');
+}
+
+/**
+ * The lead's clean business category ("Hotel", "Restaurant") — the single source
+ * of truth for the Type shown in the table, card, map preview and drawer.
+ * The server normalizes this on import; here we only tidy legacy/edge values
+ * (take the first of a joined list, humanize machine tokens) and never fabricate.
+ */
+export function getLeadBusinessTypeLabel(lead: Pick<Lead, 'sourceMetadata'>): string | null {
+  const raw = lead.sourceMetadata?.businessType;
+  if (!raw) return null;
+  const first = raw.split(/[,|]/)[0]?.replace(/\s+/g, ' ').trim();
+  if (!first) return null;
+  // Already a cased human label ("IT Company", "Indian restaurant") → keep as-is;
+  // a machine token / all-lowercase label is tidy-cased ("fast_food" → "Fast Food").
+  if (/[A-Z]/.test(first)) return first;
+  return first
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase('en'));
+}
+
+/** Neighborhood/area for the list column — the business's area, else its city,
+ *  never a bare postal code. */
+export function getLeadAreaLabel(address: LeadAddress): string | null {
+  if (address.area && !isBarePostalCode(address.area)) return address.area;
+  if (address.city && !isBarePostalCode(address.city)) return address.city;
+  return null;
+}
+
+/** Compact "Area, City, Country" line for cards and search results. */
+export function getLeadLocationLine(address: LeadAddress): string | null {
+  const area = address.area && !isBarePostalCode(address.area) ? address.area : null;
+  const city = address.city && !isBarePostalCode(address.city) ? address.city : null;
+  const tail = address.country && address.country !== 'CH' ? address.country : address.canton;
+  const parts = [area, city, tail].filter(Boolean);
+  return parts.length ? parts.join(', ') : null;
 }
 
 // ── Links (only ever built from data the lead actually has) ──────────────────
@@ -207,6 +251,27 @@ export function buildGoogleMapsUrl(lead: Pick<Lead, 'location' | 'sourceMetadata
     params.set('query_place_id', lead.sourceMetadata.googlePlaceId);
   }
   return `https://www.google.com/maps/search/?${params.toString()}`;
+}
+
+/**
+ * Best provider map link for a lead: the stored canonical `providerMeta.mapsUrl`
+ * when present (and a safe http(s) URL), otherwise a coordinate-based Google
+ * Maps link. Null when the lead has neither.
+ */
+export function mapsUrlForLead(
+  lead: Pick<Lead, 'providerMeta' | 'location' | 'sourceMetadata'>,
+): string | null {
+  const stored = toSafeWebUrl(lead.providerMeta?.mapsUrl);
+  return stored ?? buildGoogleMapsUrl(lead);
+}
+
+/** Opening hours as display lines, whatever shape the provider sent. */
+export function getOpeningHoursLines(openingHours: string | string[] | null | undefined): string[] {
+  if (Array.isArray(openingHours)) return openingHours.filter((line) => Boolean(line?.trim()));
+  if (typeof openingHours === 'string' && openingHours.trim()) {
+    return openingHours.split(/\n|;/).map((line) => line.trim()).filter(Boolean);
+  }
+  return [];
 }
 
 /** Route of the customer a lead was converted into. */

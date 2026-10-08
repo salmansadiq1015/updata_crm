@@ -16,13 +16,20 @@ import {
 import {
   findUser,
   formatLeadDate,
+  getLeadAreaLabel,
+  getLeadBusinessTypeLabel,
   getLeadCreatorName,
   getUserDisplayName,
   getUserInitials,
 } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
 import { LeadStatusBadge } from './status-badge';
+import { RatingStars } from './rating-stars';
 import { LtrText } from './ltr-text';
+
+/** A value that is really just a postal code is not a place name. */
+const isBarePostal = (value: string | null | undefined): boolean =>
+  typeof value === 'string' && /^[\d\s-]{3,}$/.test(value.trim());
 
 const Dash = () => <span className="text-[13px] text-muted-foreground/60">—</span>;
 
@@ -63,10 +70,12 @@ type UseLeadColumnsArgs = {
 
 /**
  * Column set for the leads table:
- * lead number · name · type · status · source · area · phone · assignee · creator · discovered.
+ * lead number · name · status · type (real category) · source · area · city ·
+ * country · rating (+reviews) · phone · assignee · creator · discovered.
  *
  * Only name, status and the date column sort — those are the fields the API
- * accepts for `sortBy`.
+ * accepts for `sortBy`. The compact grid/card view + the detail drawer are the
+ * responsive layers for the wider business-data columns.
  */
 export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArgs): ShellColumn<Lead>[] {
   const { t, locale } = useLanguage();
@@ -146,25 +155,27 @@ export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArg
         Cell: ({ row }) => {
           const lead = row.original;
           const Icon = lead.type === 'business' ? Building2 : User;
-          const businessType = lead.sourceMetadata.businessType
-            ?.replace(/[_-]+/g, ' ')
-            .replace(/\b\w/g, (letter) => letter.toUpperCase());
+          // Show the REAL business category ("Hotel", "Restaurant") as the primary
+          // value; the generic Business/Private kind becomes the secondary line.
+          const category = getLeadBusinessTypeLabel(lead);
+          const kindLabel = getLeadTypeLabel(t, lead.type);
           return (
             <div className="flex min-w-0 flex-col items-start gap-1 whitespace-normal">
               <span
                 className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-semibold',
+                  'inline-flex max-w-[135px] items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-semibold',
                   lead.type === 'business'
                     ? 'border-primary/20 bg-primary/10 text-primary'
                     : 'border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-400',
                 )}
+                title={category ?? kindLabel}
               >
-                <Icon className="h-3 w-3" aria-hidden="true" />
-                {getLeadTypeLabel(t, lead.type)}
+                <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                <span className="truncate">{category ?? kindLabel}</span>
               </span>
-              {businessType && (
-                <span className="line-clamp-1 max-w-[135px] text-[10px] font-medium text-muted-foreground" title={businessType}>
-                  {businessType}
+              {category && (
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {kindLabel}
                 </span>
               )}
             </div>
@@ -188,22 +199,14 @@ export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArg
       {
         id: 'area',
         header: t('leads.col.area', 'Area'),
-        size: 145,
+        size: 150,
         enableSorting: false,
         Cell: ({ row }) => {
-          const { city, canton, country } = row.original.address;
-          const selectedLocation = row.original.sourceMetadata.discoveryLocation;
-          const areaName = selectedLocation?.city
-            ?? selectedLocation?.name
-            ?? selectedLocation?.formattedAddress
-            ?? city
-            ?? canton;
-          const areaRegion = selectedLocation
-            ? selectedLocation.region ?? canton
-            : canton;
-          const areaCountry = selectedLocation
-            ? selectedLocation.countryCode ?? selectedLocation.country ?? country
-            : country;
+          // The BUSINESS's own neighborhood/area — never the postal code, and never
+          // the (separate) search region the lead was discovered in.
+          const areaName = getLeadAreaLabel(row.original.address);
+          const { canton, region } = row.original.address;
+          const subLine = canton ?? region;
           if (!areaName) return <Dash />;
           return (
             <span className="inline-flex min-w-0 items-center gap-2 whitespace-normal">
@@ -212,12 +215,57 @@ export function useLeadColumns({ users, onOpen, onCopyPhone }: UseLeadColumnsArg
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-[13px] font-medium text-foreground" title={areaName}>{areaName}</span>
-                {(areaRegion || areaCountry) && (
-                  <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {[areaRegion, areaCountry].filter(Boolean).join(' · ')}
+                {subLine && (
+                  <span className="block truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {subLine}
                   </span>
                 )}
               </span>
+            </span>
+          );
+        },
+      },
+      {
+        id: 'city',
+        header: t('leads.col.city', 'City'),
+        size: 130,
+        enableSorting: false,
+        Cell: ({ row }) => {
+          const { city } = row.original.address;
+          if (!city || isBarePostal(city)) return <Dash />;
+          return <span className="block truncate text-[13px] text-foreground" title={city}>{city}</span>;
+        },
+      },
+      {
+        id: 'country',
+        header: t('leads.col.country', 'Country'),
+        size: 110,
+        enableSorting: false,
+        Cell: ({ row }) => {
+          const { country } = row.original.address;
+          if (!country) return <Dash />;
+          return <span className="text-[13px] font-medium uppercase tracking-wide text-foreground">{country}</span>;
+        },
+      },
+      {
+        id: 'rating',
+        header: t('leads.col.rating', 'Rating'),
+        size: 150,
+        enableSorting: false,
+        Cell: ({ row }) => {
+          const { rating, reviewCount } = row.original.providerMeta;
+          if (rating == null) return <Dash />;
+          return (
+            <span className="inline-flex min-w-0 flex-col items-start gap-0.5 whitespace-normal">
+              <span className="inline-flex items-center gap-1.5">
+                <RatingStars rating={rating} size={13} />
+                <span className="text-[13px] font-semibold text-foreground">{rating.toFixed(1)}</span>
+              </span>
+              {reviewCount != null && (
+                <span className="text-[10px] font-medium text-muted-foreground">
+                  {reviewCount.toLocaleString(locale)} {t('leads.col.reviews', 'reviews')}
+                </span>
+              )}
             </span>
           );
         },

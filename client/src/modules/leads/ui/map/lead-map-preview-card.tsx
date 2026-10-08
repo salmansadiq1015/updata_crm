@@ -23,6 +23,7 @@ import {
   buildGoogleMapsUrl,
   findUser,
   getAddressLines,
+  getLeadBusinessTypeLabel,
   getUserDisplayName,
   getWebsiteLabel,
   toMailtoHref,
@@ -61,7 +62,7 @@ export function LeadMapPreviewCard({
   const { t } = useLanguage();
   const assignee = findUser(users, lead.assignedTo);
   const addressLines = getAddressLines(lead.address);
-  const category = lead.sourceMetadata.businessType;
+  const category = getLeadBusinessTypeLabel(lead);
   const rating = lead.providerMeta.rating;
 
   const tel = toTelHref(lead.phone ?? lead.mobile);

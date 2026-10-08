@@ -12,10 +12,33 @@ export type LeadSource = 'google_places' | 'manual' | 'widget' | 'import';
 export type LeadAddress = {
   street: string | null;
   addressSupplement: string | null;
+  /** Neighborhood / district (e.g. "Johar Town"), distinct from the city. */
+  area: string | null;
   postalCode: string | null;
   city: string | null;
+  /** Swiss 2-letter canton (CH only). */
   canton: string | null;
+  /** Non-Swiss state / province (complements `canton`). */
+  region: string | null;
   country: string;
+  /** Full provider-supplied address string, kept for display. */
+  formatted: string | null;
+};
+
+/** Per-star review histogram, only present when the provider supplied it. */
+export type LeadRatingDistribution = {
+  one: number;
+  two: number;
+  three: number;
+  four: number;
+  five: number;
+};
+
+/** A provider photo reference (never fabricated). */
+export type LeadPhoto = {
+  url: string;
+  source: string | null;
+  attribution: string | null;
 };
 
 export type LeadProviderMeta = {
@@ -24,6 +47,19 @@ export type LeadProviderMeta = {
   // Google Places (New) returns a string enum (e.g. 'PRICE_LEVEL_MODERATE');
   // the legacy API / imports may send a 0–4 number. Accept either.
   priceLevel: number | string | null;
+  /**
+   * Per-star review counts, ONLY when the provider exposed them. `null` means
+   * the breakdown is unavailable — never estimated from the overall rating.
+   */
+  ratingDistribution: LeadRatingDistribution | null;
+  /** Operational status the provider reported (e.g. "Open", "Closed"). */
+  businessStatus: string | null;
+  /** Opening hours as the provider supplied them (one string or a list). */
+  openingHours: string | string[] | null;
+  /** Provider photo references (empty when none were supplied). */
+  photos: LeadPhoto[];
+  /** Canonical provider map link (Google Maps / OSM). */
+  mapsUrl: string | null;
 };
 
 export type LeadDiscoveryLocation = {

@@ -3,7 +3,10 @@ import {
   buildGoogleMapsUrl,
   formatAddressOneLine,
   getAddressLines,
+  getLeadAreaLabel,
+  getLeadBusinessTypeLabel,
   getLeadCreatorName,
+  getLeadLocationLine,
   getUserDisplayName,
   resolveLeadVars,
   toMailtoHref,
@@ -11,6 +14,7 @@ import {
   toTelHref,
   toWhatsAppHref,
 } from '../ui/lead-ui-utils';
+import type { LeadAddress } from '../types/lead-types';
 import type { Lead } from '../types/lead-types';
 
 const emptyMeta: Lead['sourceMetadata'] = {
@@ -99,10 +103,10 @@ describe('resolveLeadVars', () => {
 
 describe('display helpers', () => {
   it('skips unset address parts and hides the home country', () => {
-    const address = { street: 'Bahnhofstrasse 1', addressSupplement: null, postalCode: '8001', city: 'Zürich', canton: 'ZH', country: 'CH' };
+    const address = { street: 'Bahnhofstrasse 1', addressSupplement: null, area: null, postalCode: '8001', city: 'Zürich', canton: 'ZH', region: null, country: 'CH', formatted: null };
     expect(getAddressLines(address)).toEqual(['Bahnhofstrasse 1', '8001 Zürich', 'ZH']);
     expect(formatAddressOneLine({ ...address, street: null, country: 'DE' })).toBe('8001 Zürich, ZH, DE');
-    expect(getAddressLines({ street: null, addressSupplement: null, postalCode: null, city: null, canton: null, country: 'CH' })).toEqual([]);
+    expect(getAddressLines({ street: null, addressSupplement: null, area: null, postalCode: null, city: null, canton: null, region: null, country: 'CH', formatted: null })).toEqual([]);
   });
 
   it('names a user, falling back to the e-mail address', () => {
@@ -145,5 +149,38 @@ describe('getLeadCreatorName', () => {
     expect(getLeadCreatorName('u-unknown', directory)).toBe('');
     expect(getLeadCreatorName('u-2')).toBe('');
     expect(getLeadCreatorName({ id: 'u-unknown' }, directory)).toBe('');
+  });
+});
+
+const addr = (over: Partial<LeadAddress> = {}): LeadAddress => ({
+  street: null, addressSupplement: null, area: null, postalCode: null,
+  city: null, canton: null, region: null, country: 'CH', formatted: null, ...over,
+});
+
+describe('business type + location helpers', () => {
+  const withType = (businessType: string | null) =>
+    ({ sourceMetadata: { businessType } } as Pick<Lead, 'sourceMetadata'>);
+
+  it('humanizes machine tokens but keeps cased human labels', () => {
+    expect(getLeadBusinessTypeLabel(withType('fast_food'))).toBe('Fast Food');
+    expect(getLeadBusinessTypeLabel(withType('hotel,restaurant'))).toBe('Hotel');
+    expect(getLeadBusinessTypeLabel(withType('IT Company'))).toBe('IT Company');
+    expect(getLeadBusinessTypeLabel(withType(null))).toBeNull();
+  });
+
+  it('area label prefers the neighborhood, falls back to city, never a postal code', () => {
+    expect(getLeadAreaLabel(addr({ area: 'Johar Town', city: 'Lahore' }))).toBe('Johar Town');
+    expect(getLeadAreaLabel(addr({ area: null, city: 'Lahore' }))).toBe('Lahore');
+    expect(getLeadAreaLabel(addr({ area: '54000', city: '54000' }))).toBeNull();
+  });
+
+  it('builds a compact Area, City, Country line', () => {
+    expect(getLeadLocationLine(addr({ area: 'Johar Town', city: 'Lahore', country: 'PK' }))).toBe('Johar Town, Lahore, PK');
+    expect(getLeadLocationLine(addr({ city: 'Zürich', canton: 'ZH', country: 'CH' }))).toBe('Zürich, ZH');
+  });
+
+  it('getAddressLines includes the neighborhood/area', () => {
+    expect(getAddressLines(addr({ street: 'Main St 1', area: 'Johar Town', postalCode: '54000', city: 'Lahore', region: 'Punjab', country: 'PK' })))
+      .toEqual(['Main St 1', 'Johar Town', '54000 Lahore', 'Punjab, PK']);
   });
 });

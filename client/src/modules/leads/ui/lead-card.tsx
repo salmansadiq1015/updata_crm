@@ -6,7 +6,7 @@ import { formatPhone } from '@/lib/formatters';
 import type { Lead } from '../types/lead-types';
 import { useLanguage } from './lead-ui-kit';
 import { LEAD_SOURCE_ICON, getLeadDiscoveredAt, getLeadSourceLabel } from './lead-ui-constants';
-import { formatAddressOneLine, formatLeadDate } from './lead-ui-utils';
+import { formatAddressOneLine, formatLeadDate, getLeadBusinessTypeLabel } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
 import { LeadStatusBadge } from './status-badge';
 import { AssigneeLabel } from './lead-table-columns';
@@ -25,6 +25,7 @@ type LeadCardProps = {
 export function LeadCard({ lead, users, selected, onToggleSelect, onOpen }: LeadCardProps) {
   const { t, locale } = useLanguage();
   const address = formatAddressOneLine(lead.address);
+  const businessType = getLeadBusinessTypeLabel(lead);
   const phone = lead.phone ?? lead.mobile;
   const TypeIcon = lead.type === 'business' ? Building2 : User;
   const SourceIcon = LEAD_SOURCE_ICON[lead.source];
@@ -56,6 +57,11 @@ export function LeadCard({ lead, users, selected, onToggleSelect, onOpen }: Lead
               <span className="line-clamp-2 break-words">{lead.name || '—'}</span>
             </button>
           </div>
+          {businessType && (
+            <p className="truncate text-[12px] font-medium text-muted-foreground" title={businessType}>
+              {businessType}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <LeadStatusBadge status={lead.status} />
             {lead.leadNumber && <span className="font-mono text-[11px] text-muted-foreground">{lead.leadNumber}</span>}

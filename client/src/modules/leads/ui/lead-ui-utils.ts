@@ -185,13 +185,25 @@ export function getWebsiteLabel(lead: Pick<Lead, 'website' | 'websiteDomain'>): 
   }
 }
 
+/**
+ * A genuine Google Place ID uses the base64url charset only. OSM/Nominatim ids
+ * ("osm:node/123456", "nominatim:98765") contain ':' / '/', so they are rejected:
+ * handing one to Google Maps as `query_place_id` makes Maps ignore the (correct)
+ * coordinate and open an unrelated place. Rejected ids fall back to a coordinate
+ * pin, which always points at the right spot.
+ */
+export function isGooglePlaceId(id: string | null | undefined): id is string {
+  return typeof id === 'string' && /^[A-Za-z0-9_-]{15,}$/.test(id);
+}
+
 /** Google Maps link for a lead that has coordinates; null otherwise. */
 export function buildGoogleMapsUrl(lead: Pick<Lead, 'location' | 'sourceMetadata'>): string | null {
   const { location } = lead;
   if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return null;
   const params = new URLSearchParams({ api: '1', query: `${location.lat},${location.lng}` });
-  // With a place id Maps opens the business itself rather than a bare pin.
-  if (lead.sourceMetadata.googlePlaceId) {
+  // Only a genuine Google place id opens the business itself; anything else (e.g.
+  // an OSM id) would send Maps to the wrong location, so fall back to the pin.
+  if (isGooglePlaceId(lead.sourceMetadata.googlePlaceId)) {
     params.set('query_place_id', lead.sourceMetadata.googlePlaceId);
   }
   return `https://www.google.com/maps/search/?${params.toString()}`;

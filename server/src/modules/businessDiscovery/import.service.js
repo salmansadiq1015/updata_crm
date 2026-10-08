@@ -13,6 +13,7 @@ import queueManager from '../../shared/queue/QueueManager.js';
 import auditService from '../auth/audit.service.js';
 import { leadImportsTotal } from '../../metrics/index.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
+import { resolveLeadAddress } from '../crm/leadLocation.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
 
@@ -240,7 +241,7 @@ class ImportService {
           // 2. Refresh an already-linked lead.
           await leadService.update(
             matchedLeadId,
-            this._mapResultToLeadUpdate(working, provenanceSession),
+            await this._mapResultToLeadUpdate(working, provenanceSession),
             { userId: createdBy },
           );
           await discoveryRepository.updateResultImportStatus(result._id, RESULT_IMPORT_STATUS.IMPORTED, {
@@ -261,7 +262,7 @@ class ImportService {
         } else {
           // 4. Create a new lead.
           const lead = await leadService.create(
-            this.mapResultToLead(working, provenanceSession),
+            await this.mapResultToLead(working, provenanceSession),
             createdBy,
           );
           await discoveryRepository.updateResultImportStatus(result._id, RESULT_IMPORT_STATUS.IMPORTED, {
@@ -336,20 +337,14 @@ class ImportService {
    * Map a discovery result → a lead creation DTO (§72). Preserves source/geo
    * provenance; never fabricates contact fields that the provider did not give.
    */
-  mapResultToLead(result, session = null) {
+  async mapResultToLead(result, session = null) {
     const business = result.business || {};
     const context = this._resolvedDiscoveryContext(result, session);
 
     return {
       name: business.name,
       type: 'business',
-      address: {
-        street: business.address?.street ?? null,
-        city: business.address?.city ?? null,
-        postalCode: business.address?.postalCode ?? null,
-        canton: business.address?.canton ?? null,
-        country: business.address?.country || context.location?.countryCode || 'CH',
-      },
+      address: await this._resolveAddress(business, context),
       phone: business.phone ?? null,
       mobile: null,
       email: business.email ?? null,
@@ -366,7 +361,7 @@ class ImportService {
   }
 
   /** Subset of the mapped fields used to refresh an existing lead (update mode). */
-  _mapResultToLeadUpdate(result, session = null) {
+  async _mapResultToLeadUpdate(result, session = null) {
     const business = result.business || {};
     const context = this._resolvedDiscoveryContext(result, session);
     return {
@@ -374,13 +369,7 @@ class ImportService {
       phone: business.phone ?? null,
       email: business.email ?? null,
       website: business.website ?? null,
-      address: {
-        street: business.address?.street ?? null,
-        city: business.address?.city ?? null,
-        postalCode: business.address?.postalCode ?? null,
-        canton: business.address?.canton ?? null,
-        country: business.address?.country || context.location?.countryCode || 'CH',
-      },
+      address: await this._resolveAddress(business, context),
       location: business.location ?? null,
       providerMeta: {
         rating: business.rating ?? null,
@@ -390,6 +379,25 @@ class ImportService {
       source: 'google_places',
       sourceMetadata: this._sourceMetadataFromResult(result, session),
     };
+  }
+
+  /**
+   * Clean, coordinate-aware lead address. Coordinates (GeoJSON [lng, lat]) are
+   * the reliable signal, so a missing/invalid provider city or country is
+   * filled by reverse-geocoding — and a non-Swiss lead is never forced to CH.
+   */
+  async _resolveAddress(business, context) {
+    const coords = Array.isArray(business.location?.coordinates) ? business.location.coordinates : null;
+    return resolveLeadAddress({
+      street: business.address?.street,
+      city: business.address?.city,
+      postalCode: business.address?.postalCode,
+      canton: business.address?.canton,
+      state: business.address?.region,
+      country: business.address?.country || context.location?.countryCode,
+      latitude: coords ? coords[1] : undefined,
+      longitude: coords ? coords[0] : undefined,
+    });
   }
 
   /** Immutable discovery snapshot copied to every created/refreshed lead. */

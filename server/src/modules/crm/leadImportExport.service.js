@@ -4,6 +4,7 @@ import PDFDocument from 'pdfkit';
 import leadService from './lead.service.js';
 import leadRepository from './lead.repository.js';
 import counterService from './counter.service.js';
+import { resolveLeadAddress } from './leadLocation.js';
 import auditService from '../auth/audit.service.js';
 import { leadImportsTotal } from '../../metrics/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
@@ -652,16 +653,20 @@ class LeadImportExportService {
         // Normalise messy Maps fields; junk degrades to null, not a failed row.
         const phoneValue = normalizeLeadPhone(record.phone);
         const websiteValue = normalizeLeadWebsite(record.website);
-        const postalCode = cleanString(record.postalCode);
-        const country = normalizeCountryCode(record.country);
-        const address = {
+        const latitude = inRangeOrNull(record.latitude, -90, 90);
+        const longitude = inRangeOrNull(record.longitude, -180, 180);
+        // Coordinate-aware address: a postal-code/junk city or missing country is
+        // reverse-geocoded, and a non-Swiss lead is never forced to CH.
+        const address = await resolveLeadAddress({
           street: cleanString(record.street) || cleanString(record.address),
-          addressSupplement: null,
-          postalCode: postalCode || null,
-          city: cleanString(record.city) || null,
-          canton: normalizeSwissCanton(record.state, country),
-          country,
-        };
+          city: record.city,
+          postalCode: record.postalCode,
+          canton: record.state,
+          state: record.state,
+          country: record.country,
+          latitude,
+          longitude,
+        });
         const matches = await leadService.findDuplicates({
           name,
           postalCode: address.postalCode,
@@ -675,8 +680,6 @@ class LeadImportExportService {
           results.push({ clientId, status: 'existing', leadId: String(existing._id), leadNumber: existing.leadNumber });
           continue;
         }
-        const latitude = inRangeOrNull(record.latitude, -90, 90);
-        const longitude = inRangeOrNull(record.longitude, -180, 180);
         const email = Array.isArray(record.emails)
           ? (record.emails.map(normalizeLeadEmail).find(Boolean) || null)
           : normalizeLeadEmail(record.emails);

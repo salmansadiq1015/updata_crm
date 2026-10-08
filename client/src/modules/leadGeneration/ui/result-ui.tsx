@@ -182,7 +182,9 @@ export function resultMapsUrl(
   if (mapsUrl) return mapsUrl;
   if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return null;
   const params = new URLSearchParams({ api: '1', query: `${location.lat},${location.lng}` });
-  if (placeId) params.set('query_place_id', placeId);
+  // Only a genuine Google place id locates the business; an OSM/Nominatim id
+  // ("osm:node/123") would make Maps open a wrong place, so fall back to the pin.
+  if (placeId && /^[A-Za-z0-9_-]{15,}$/.test(placeId)) params.set('query_place_id', placeId);
   return `https://www.google.com/maps/search/?${params.toString()}`;
 }
 

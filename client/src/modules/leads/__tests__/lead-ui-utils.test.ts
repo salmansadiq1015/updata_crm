@@ -63,9 +63,18 @@ describe('links are only built from data a lead really has', () => {
 
     const place = buildGoogleMapsUrl({
       location: { lat: 47.3769, lng: 8.5417 },
-      sourceMetadata: { ...emptyMeta, googlePlaceId: 'ChIJ123' },
+      sourceMetadata: { ...emptyMeta, googlePlaceId: 'ChIJN1t_tDeuEmsRUsoyG83frY4' },
     });
-    expect(place).toContain('query_place_id=ChIJ123');
+    expect(place).toContain('query_place_id=ChIJN1t_tDeuEmsRUsoyG83frY4');
+
+    // An OSM/Nominatim id is NOT a Google place id — it must never reach Maps as
+    // query_place_id (that opened a wrong location), so we fall back to the pin.
+    const osm = buildGoogleMapsUrl({
+      location: { lat: 31.44991, lng: 74.27242 },
+      sourceMetadata: { ...emptyMeta, googlePlaceId: 'osm:node/123456' },
+    });
+    expect(osm).toBe('https://www.google.com/maps/search/?api=1&query=31.44991%2C74.27242');
+    expect(osm).not.toContain('query_place_id');
   });
 });
 

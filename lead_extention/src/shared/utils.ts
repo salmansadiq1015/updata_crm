@@ -97,3 +97,40 @@ export function parseCoordinates(urlOrText: string): { latitude: number; longitu
 export function nowIso(): string {
   return new Date().toISOString();
 }
+
+// ── Adaptive request pacing ──────────────────────────────────────────────────
+// Pure helpers (no DOM / chrome deps) so the pacing logic is unit-testable.
+
+/** Clamp a user-supplied scraping delay to the allowed 5s–5m range. */
+export function clampRequestDelay(
+  ms: number | null | undefined,
+  min = 5_000,
+  max = 300_000,
+  fallback = 10_000,
+): number {
+  if (ms === null || ms === undefined) return fallback;
+  const value = Number(ms);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/**
+ * Grow the backoff multiplier when Google throttles/terminates a feed, or decay
+ * it by one step on a clean request. Bounded to [1, maxBackoff] so a sweep never
+ * stalls indefinitely but still keeps making progress under sustained throttling.
+ */
+export function nextThrottleBackoff(current: number, throttled: boolean, maxBackoff = 6): number {
+  const base = Number.isFinite(current) && current >= 1 ? current : 1;
+  if (throttled) return Math.min(maxBackoff, base * 2);
+  return Math.max(1, base - 1);
+}
+
+/** Effective pause = clamped base delay × backoff, never beyond the max. */
+export function effectiveRequestDelay(
+  baseMs: number,
+  backoff: number,
+  max = 300_000,
+): number {
+  const safeBackoff = Number.isFinite(backoff) && backoff >= 1 ? backoff : 1;
+  return Math.min(max, Math.max(0, Math.round(baseMs)) * safeBackoff);
+}

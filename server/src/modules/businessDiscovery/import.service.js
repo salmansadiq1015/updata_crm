@@ -14,6 +14,7 @@ import auditService from '../auth/audit.service.js';
 import { leadImportsTotal } from '../../metrics/index.js';
 import { NotFoundError } from '../../shared/errors/AppError.js';
 import { resolveLeadAddress } from '../crm/leadLocation.js';
+import { normalizeBusinessType, labelFromCatalogIds } from '../crm/businessTypeLabel.js';
 import ERROR_CODES from '../../shared/errors/errorCodes.js';
 import logger from '../../shared/logger/index.js';
 
@@ -350,11 +351,7 @@ class ImportService {
       email: business.email ?? null,
       website: business.website ?? null,
       location: business.location ?? null, // GeoJSON Point [lng, lat]
-      providerMeta: {
-        rating: business.rating ?? null,
-        reviewCount: business.reviewCount ?? null,
-        priceLevel: business.priceLevel ?? null,
-      },
+      providerMeta: this._providerMetaFromBusiness(business),
       source: 'google_places',
       sourceMetadata: this._sourceMetadataFromResult(result, session),
     };
@@ -371,13 +368,26 @@ class ImportService {
       website: business.website ?? null,
       address: await this._resolveAddress(business, context),
       location: business.location ?? null,
-      providerMeta: {
-        rating: business.rating ?? null,
-        reviewCount: business.reviewCount ?? null,
-        priceLevel: business.priceLevel ?? null,
-      },
+      providerMeta: this._providerMetaFromBusiness(business),
       source: 'google_places',
       sourceMetadata: this._sourceMetadataFromResult(result, session),
+    };
+  }
+
+  /**
+   * Display-only provider snapshot for a lead. OSM supplies photos/hours/status
+   * but no ratings; a rating distribution is never fabricated (stays null).
+   */
+  _providerMetaFromBusiness(business = {}) {
+    return {
+      rating: business.rating ?? null,
+      reviewCount: business.reviewCount ?? null,
+      priceLevel: business.priceLevel ?? null,
+      ratingDistribution: business.ratingDistribution ?? null,
+      businessStatus: business.businessStatus ?? null,
+      openingHours: business.openingHours ?? null,
+      photos: Array.isArray(business.photos) ? business.photos : [],
+      mapsUrl: business.mapsUrl ?? null,
     };
   }
 
@@ -390,11 +400,14 @@ class ImportService {
     const coords = Array.isArray(business.location?.coordinates) ? business.location.coordinates : null;
     return resolveLeadAddress({
       street: business.address?.street,
+      area: business.address?.area,
       city: business.address?.city,
       postalCode: business.address?.postalCode,
       canton: business.address?.canton,
       state: business.address?.region,
+      region: business.address?.region,
       country: business.address?.country || context.location?.countryCode,
+      formatted: business.address?.formatted,
       latitude: coords ? coords[1] : undefined,
       longitude: coords ? coords[0] : undefined,
     });
@@ -403,9 +416,12 @@ class ImportService {
   /** Immutable discovery snapshot copied to every created/refreshed lead. */
   _sourceMetadataFromResult(result, session = null) {
     const context = this._resolvedDiscoveryContext(result, session);
-    const businessType = Array.isArray(context.businessTypeIds) && context.businessTypeIds.length
-      ? context.businessTypeIds.join(',').slice(0, 120)
-      : null;
+    // Prefer the provider's real category (OSM primaryType) → a clean label;
+    // fall back to the selected catalog type when the provider gave none. Never
+    // the raw joined catalog ids that used to surface as "hotel,restaurant".
+    const businessType = normalizeBusinessType(result.business?.primaryType)
+      ?? labelFromCatalogIds(context.businessTypeIds)
+      ?? null;
     return {
       googlePlaceId: result.provider?.placeId ?? null,
       discoverySessionId: result.discoverySessionId ?? null,

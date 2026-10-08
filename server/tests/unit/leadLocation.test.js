@@ -22,6 +22,19 @@ const lahoreReverse = {
   },
 };
 
+// Nominatim's raw `address` object is the reliable source (its address_components
+// use raw OSM keys, not Google types). This one carries a suburb + state.
+const lahoreRichReverse = {
+  result: {
+    address_components: [],
+    address: {
+      suburb: 'Johar Town', neighbourhood: 'Block R3',
+      city: 'Lahore', state: 'Punjab', country: 'Pakistan', country_code: 'pk', postcode: '54600',
+      road: 'Shaukat Khanum Road', house_number: '94',
+    },
+  },
+};
+
 beforeAll(async () => {
   ({ sanitizeCity, normalizeCountryCode, resolveLeadAddress, _resetReverseBudget } =
     await import('../../src/modules/crm/leadLocation.js'));
@@ -61,6 +74,27 @@ describe('resolveLeadAddress', () => {
     });
     expect(addr).toMatchObject({ city: 'Lahore', country: 'PK', canton: null });
     expect(mockReverse).toHaveBeenCalledTimes(1);
+  });
+
+  it('fills area (neighborhood) + region (state) from coordinates, non-Swiss', async () => {
+    mockReverse.mockResolvedValue(lahoreRichReverse);
+    const addr = await resolveLeadAddress({
+      city: '54600', country: null, latitude: 31.47, longitude: 74.28,
+    });
+    expect(addr).toMatchObject({
+      city: 'Lahore',
+      area: 'Johar Town',
+      region: 'Punjab', // non-Swiss region kept; canton stays null
+      canton: null,
+      country: 'PK',
+    });
+  });
+
+  it('never surfaces a bare postal code as the area', async () => {
+    mockReverse.mockResolvedValue({ result: { address: { suburb: '54000', city: 'Lahore', country_code: 'pk' } } });
+    const addr = await resolveLeadAddress({ city: null, latitude: 31.5, longitude: 74.3 });
+    expect(addr.area).toBeNull();
+    expect(addr.city).toBe('Lahore');
   });
 
   it('uses provided valid city + country without geocoding', async () => {

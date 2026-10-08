@@ -1,31 +1,47 @@
-import { CRM_IMPORT_HEADERS } from '../shared/constants';
+import { CSV_HEADERS } from '../shared/constants';
 import type { ExportSummary, Lead, SearchRecord } from '../shared/types';
 import { slugify } from '../shared/utils';
 
+// User-facing "Download" columns \u2014 the full normalized business record (type,
+// area/city/state/country, rating + reviews, hours, status, coordinates, Maps
+// link). This is NOT the CRM import payload: the CRM import contract lives in
+// crm-api (bulk-import JSON, with a separate CSV fallback), so enriching this
+// export cannot break imports.
 const valueFor = (lead: Lead, header: string): string | number => {
+  const num = (value: number | null | undefined): string | number => (typeof value === 'number' && Number.isFinite(value) ? value : '');
   const values: Record<string, string | number | null> = {
-    name: lead.businessName,
-    type: 'business',
-    status: 'new',
-    street: lead.street ?? lead.address,
-    addressSupplement: '',
-    postalCode: lead.postalCode,
-    city: lead.city,
-    canton: lead.state,
-    country: lead.country && lead.country.length === 2 ? lead.country.toUpperCase() : '',
-    phone: lead.phone,
-    mobile: '',
-    email: lead.emails[0] ?? '',
-    website: lead.website,
-    notes: lead.googleMapsUrl ? `Google Maps: ${lead.googleMapsUrl}` : '',
-    tags: lead.categories.join(', ')
+    'Business Name': lead.businessName,
+    Category: lead.category,
+    Phone: lead.phone,
+    'International Phone': lead.internationalPhone,
+    Email: lead.emails.join('; '),
+    Website: lead.website,
+    Address: lead.address,
+    Street: lead.street,
+    Area: lead.area,
+    City: lead.city,
+    State: lead.state,
+    'Postal Code': lead.postalCode,
+    Country: lead.country,
+    Latitude: num(lead.latitude),
+    Longitude: num(lead.longitude),
+    'Distance KM': num(lead.distanceKm),
+    Rating: num(lead.rating),
+    'Review Count': num(lead.reviewCount),
+    'Business Status': lead.businessStatus,
+    'Opening Hours': (lead.openingHours ?? []).join(' | '),
+    'Google Maps URL': lead.googleMapsUrl,
+    Source: lead.source,
+    'Email Source': lead.emailSource,
+    'Email Confidence': lead.emailConfidence,
+    'Discovered At': lead.discoveredAt
   };
   return values[header] ?? '';
 };
 
 export function toCsv(leads: Lead[]): string {
-  const rows = [CRM_IMPORT_HEADERS.join(',')];
-  for (const lead of leads) rows.push(CRM_IMPORT_HEADERS.map((header) => escapeCsv(valueFor(lead, header))).join(','));
+  const rows = [CSV_HEADERS.join(',')];
+  for (const lead of leads) rows.push(CSV_HEADERS.map((header) => escapeCsv(valueFor(lead, header))).join(','));
   return `\uFEFF${rows.join('\r\n')}`;
 }
 
@@ -35,10 +51,10 @@ export function escapeCsv(value: unknown): string {
 }
 
 export function createXlsx(leads: Lead[], search: SearchRecord | null): ArrayBuffer {
-  const rows = leads.map((lead) => CRM_IMPORT_HEADERS.map((header) => valueFor(lead, header)));
+  const rows = leads.map((lead) => CSV_HEADERS.map((header) => valueFor(lead, header)));
   const summary = summaryFor(leads, search);
   const sheets = [
-    { name: 'Leads', rows: [CRM_IMPORT_HEADERS as readonly (string | number)[], ...rows] },
+    { name: 'Leads', rows: [CSV_HEADERS as readonly (string | number)[], ...rows] },
     { name: 'Summary', rows: [['Metric', 'Value'], ['Total discovered', summary.totalDiscovered], ['Unique leads', summary.uniqueLeads], ['Phone available', summary.phoneAvailable], ['Website available', summary.websiteAvailable], ['Email available', summary.emailAvailable], ['Average rating', summary.averageRating ?? '']] },
     { name: 'Search Details', rows: search ? [['Business type', search.businessType], ['Location', search.location], ['Radius', search.radiusKm ? `${search.radiusKm} km` : 'Not specified'], ['Search query', search.query], ['Started', search.startedAt], ['Completed', search.completedAt ?? '']] : [] }
   ];

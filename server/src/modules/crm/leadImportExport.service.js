@@ -5,6 +5,7 @@ import leadService from './lead.service.js';
 import leadRepository from './lead.repository.js';
 import counterService from './counter.service.js';
 import { resolveLeadAddress } from './leadLocation.js';
+import { normalizeBusinessType } from './businessTypeLabel.js';
 import auditService from '../auth/audit.service.js';
 import { leadImportsTotal } from '../../metrics/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
@@ -13,7 +14,6 @@ import logger from '../../shared/logger/index.js';
 import {
   LEAD_TYPE, LEAD_STATUS, LEAD_SOURCE,
 } from './lead.model.js';
-import { SWISS_CANTONS } from './crm.constants.js';
 
 /**
  * Lead import / export service (§33-34 import-mapping, §83 bulkWrite of
@@ -221,27 +221,64 @@ function normalizeReviewCount(value) {
   return Math.max(0, Math.trunc(n));
 }
 
-const COUNTRY_NAME_TO_CODE = new Map([
-  ['switzerland', 'CH'], ['schweiz', 'CH'], ['suisse', 'CH'], ['svizzera', 'CH'],
-  ['france', 'FR'], ['germany', 'DE'], ['deutschland', 'DE'], ['austria', 'AT'],
-  ['österreich', 'AT'], ['italy', 'IT'], ['italia', 'IT'], ['pakistan', 'PK'],
-  ['india', 'IN'], ['united kingdom', 'GB'], ['uk', 'GB'], ['united states', 'US'],
-  ['united states of america', 'US'], ['usa', 'US'], ['canada', 'CA'],
-  ['australia', 'AU'], ['united arab emirates', 'AE'], ['uae', 'AE'],
-]);
-
-function normalizeCountryCode(value) {
-  const country = cleanString(value);
-  if (!country) return null;
-  if (/^[a-z]{2}$/i.test(country)) return country.toUpperCase();
-  return COUNTRY_NAME_TO_CODE.get(country.toLocaleLowerCase('en')) || null;
+/**
+ * A per-star review histogram { one..five } of non-negative integers, ONLY when
+ * the extension actually scraped it from the Google place page. Accepts the
+ * numeric-key shape ({ "5": 892 }) or the word-key shape ({ five: 892 }). Returns
+ * null when nothing usable is present — never fabricated from the total.
+ */
+function normalizeRatingDistribution(value) {
+  if (!value || typeof value !== 'object') return null;
+  const keyByStar = { 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five' };
+  const out = {};
+  let any = false;
+  for (const star of [1, 2, 3, 4, 5]) {
+    const word = keyByStar[star];
+    const raw = value[word] ?? value[star] ?? value[String(star)];
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) { out[word] = Math.trunc(n); any = true; } else { out[word] = 0; }
+  }
+  return any ? out : null;
 }
 
-function normalizeSwissCanton(value, countryCode) {
-  if (countryCode && countryCode !== 'CH') return null;
-  const canton = cleanString(value)?.toUpperCase();
-  return canton && SWISS_CANTONS.includes(canton) ? canton : null;
+/** A valid http(s) provider map link within the model cap, else null (no
+ *  truncation — a cut URL would be broken). */
+function normalizeMapsUrl(value) {
+  const raw = cleanString(value);
+  if (!raw || !/^https?:\/\//i.test(raw) || raw.length > 1000) return null;
+  try {
+    const url = new URL(raw);
+    return /^https?:$/.test(url.protocol) ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
+
+/** Opening hours as the provider gave them (string or array of lines), or null. */
+function normalizeOpeningHours(value) {
+  if (Array.isArray(value)) {
+    const lines = value.map((line) => cleanString(line)).filter(Boolean).slice(0, 14);
+    return lines.length ? lines : null;
+  }
+  return cleanString(value) || null;
+}
+
+/** Provider photo references → [{ url, source }]; only valid http(s) URLs kept. */
+function normalizeLeadPhotos(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((photo) => {
+      const url = typeof photo === 'string' ? photo : cleanString(photo?.url);
+      if (!url || !/^https?:\/\//i.test(url)) return null;
+      return { url: url.slice(0, 2000), source: cleanString(photo?.source) || 'google_maps' };
+    })
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+// Country-code / canton normalization for leads lives in the shared
+// `leadLocation.js` (used via `resolveLeadAddress`); no local copy is kept here
+// so the two never drift apart.
 
 function isoOrEmpty(date) {
   return date ? new Date(date).toISOString() : '';
@@ -659,11 +696,14 @@ class LeadImportExportService {
         // reverse-geocoded, and a non-Swiss lead is never forced to CH.
         const address = await resolveLeadAddress({
           street: cleanString(record.street) || cleanString(record.address),
+          area: record.area,
           city: record.city,
           postalCode: record.postalCode,
           canton: record.state,
           state: record.state,
+          region: record.region ?? record.state,
           country: record.country,
+          formatted: cleanString(record.formattedAddress) || cleanString(record.address),
           latitude,
           longitude,
         });
@@ -692,9 +732,18 @@ class LeadImportExportService {
           email,
           website: websiteValue,
           location: latitude !== null && longitude !== null ? { type: 'Point', coordinates: [longitude, latitude] } : null,
-          providerMeta: { rating: inRangeOrNull(record.rating, 0, 5), reviewCount: normalizeReviewCount(record.reviewCount), priceLevel: cleanString(record.priceLevel) || null },
+          providerMeta: {
+            rating: inRangeOrNull(record.rating, 0, 5),
+            reviewCount: normalizeReviewCount(record.reviewCount),
+            priceLevel: cleanString(record.priceLevel) || null,
+            ratingDistribution: normalizeRatingDistribution(record.ratingDistribution),
+            businessStatus: cleanString(record.businessStatus)?.slice(0, 60) || null,
+            openingHours: normalizeOpeningHours(record.openingHours),
+            photos: normalizeLeadPhotos(record.photos),
+            mapsUrl: normalizeMapsUrl(record.googleMapsUrl),
+          },
           source: placeId ? LEAD_SOURCE.GOOGLE_PLACES : LEAD_SOURCE.IMPORT,
-          sourceMetadata: { googlePlaceId: placeId || null, businessType: cleanString(record.category) || null, discoveredAt: record.discoveredAt || null },
+          sourceMetadata: { googlePlaceId: placeId || null, businessType: normalizeBusinessType(record.category), discoveredAt: record.discoveredAt || null },
           tags: Array.isArray(record.categories) ? record.categories.slice(0, 50) : [],
           notes: cleanString(record.address) ? `Google Maps address: ${record.address}` : null,
         }, createdBy, meta);

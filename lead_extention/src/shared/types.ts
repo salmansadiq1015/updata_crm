@@ -30,6 +30,16 @@ export type CrmLeadStatus = 'not-imported' | 'importing' | 'imported' | 'existin
 
 export type EmailConfidence = 'high' | 'medium' | 'low' | null;
 
+// Review count per star level, read from a business's Google Maps place page.
+// Only populated when the histogram is actually present — never fabricated.
+export interface RatingBreakdown {
+  5: number;
+  4: number;
+  3: number;
+  2: number;
+  1: number;
+}
+
 export interface Lead {
   id: string;
   source: 'google-maps';
@@ -56,6 +66,8 @@ export interface Lead {
   distanceKm: number | null;
   rating: number | null;
   reviewCount: number | null;
+  ratingBreakdown: RatingBreakdown | null;
+  photos: string[];
   businessStatus: string | null;
   openingHours: string[];
   priceLevel: string | null;
@@ -90,6 +102,8 @@ export interface RawBusinessRecord {
   country?: string | null;
   rating?: number | null;
   reviewCount?: number | null;
+  ratingBreakdown?: RatingBreakdown | null;
+  photos?: string[];
   businessStatus?: string | null;
   openingHours?: string[];
   priceLevel?: string | null;
@@ -157,6 +171,10 @@ export interface DiscoveryConfig {
   thoroughContacts?: boolean;
   // Hard cap on the number of grid tiles a single sweep will scan.
   maxAreaTiles?: number;
+  // User-configurable pause (ms, 5s–5m) between throttle-sensitive Maps
+  // navigations (each new area/tile + query variation). Read live each tile so
+  // a change in Settings applies to a running sweep without restarting it.
+  requestDelayMs?: number;
 }
 
 export interface DiscoveryProgress {
@@ -246,6 +264,7 @@ export type ExtensionMessage =
   | { type: 'GET_CRM_IMPORT' }
   | { type: 'MAPS_STATE_CHANGED'; context: MapsContext }
   | { type: 'COLLECT_DETAILS' }
+  | { type: 'COLLECT_LEAD_DETAILS'; leadId: string }
   | { type: 'CLEAR_ALL_DATA' };
 
 export interface MapsContext {

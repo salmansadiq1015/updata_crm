@@ -6,7 +6,7 @@ import { extractEmails } from '../src/enrichment/website-discovery';
 import type { Lead } from '../src/shared/types';
 
 const lead = (overrides: Partial<Lead> = {}): Lead => ({
-  id: '1', source: 'google-maps', sourceUrl: 'https://www.google.com/maps/place/Acme', googleMapsUrl: 'https://www.google.com/maps/place/Acme', placeIdentifier: 'abc', businessName: 'Acme Cafe', category: 'Cafe', categories: ['Cafe'], phone: '+92 300 1234567', internationalPhone: '+923001234567', website: 'https://acme.example', emails: ['hello@acme.example'], address: 'Main Street', street: null, area: null, city: 'Lahore', state: null, postalCode: null, country: 'Pakistan', latitude: 31.5204, longitude: 74.3587, distanceMeters: 1500, distanceKm: 1.5, rating: 4.5, reviewCount: 12, businessStatus: 'Open', openingHours: ['Mon 9 AM'], priceLevel: null, emailSource: 'website/contact', emailConfidence: 'high', enrichmentStatus: 'complete', discoveredAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z', searchId: 'search', ...overrides
+  id: '1', source: 'google-maps', sourceUrl: 'https://www.google.com/maps/place/Acme', googleMapsUrl: 'https://www.google.com/maps/place/Acme', placeIdentifier: 'abc', businessName: 'Acme Cafe', category: 'Cafe', categories: ['Cafe'], phone: '+92 300 1234567', internationalPhone: '+923001234567', website: 'https://acme.example', emails: ['hello@acme.example'], address: 'Main Street', street: null, area: null, city: 'Lahore', state: null, postalCode: null, country: 'Pakistan', latitude: 31.5204, longitude: 74.3587, distanceMeters: 1500, distanceKm: 1.5, rating: 4.5, reviewCount: 12, ratingBreakdown: null, photos: [], businessStatus: 'Open', openingHours: ['Mon 9 AM'], priceLevel: null, emailSource: 'website/contact', emailConfidence: 'high', enrichmentStatus: 'complete', discoveredAt: '2026-10-06T00:00:00.000Z', updatedAt: '2026-10-06T00:00:00.000Z', searchId: 'search', ...overrides
 });
 
 describe('normalization and distance', () => {
@@ -51,7 +51,12 @@ describe('normalization and distance', () => {
 describe('local exports', () => {
   it('escapes CSV commas, quotes, line breaks, and Unicode', () => {
     expect(escapeCsv('A "quoted", café\n')).toBe('"A ""quoted"", café\n"');
-    expect(toCsv([lead()])).toContain('\uFEFFname,type,status,');
+    // The user-facing download is the full normalized record (real category,
+    // location, rating + reviews as columns), not the CRM import shape.
+    const csv = toCsv([lead()]);
+    expect(csv).toContain('\uFEFFBusiness Name,Category,Phone');
+    expect(csv).toContain('Rating,Review Count,Business Status,Opening Hours,Google Maps URL');
+    expect(csv).toContain('Acme Cafe,Cafe,');
   });
 
   it('summarizes selected local leads', () => {

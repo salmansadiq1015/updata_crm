@@ -81,7 +81,10 @@ function withinBudget() {
   return reverseCalls < MAX_REVERSE_CALLS;
 }
 
-/** Best-effort { city, country, postalCode } from coordinates, or null. */
+/**
+ * Best-effort location from coordinates, or null.
+ * @returns {{ city, area, region, postalCode, country, street }|null}
+ */
 export async function resolveFromCoordinates(latitude, longitude) {
   const lat = Number(latitude);
   const lng = Number(longitude);
@@ -96,14 +99,24 @@ export async function resolveFromCoordinates(latitude, longitude) {
     const comps = Array.isArray(result?.address_components) ? result.address_components : [];
     const pick = (type, field = 'long_name') =>
       comps.find((c) => Array.isArray(c.types) && c.types.includes(type))?.[field] ?? null;
+    // Nominatim's address_components carry raw OSM keys (city/suburb/state), not
+    // Google types; the `addr` object is the reliable source for each field.
     const addr = result?.address ?? {};
     const city = sanitizeCity(
-      pick('locality') || pick('postal_town') || pick('administrative_area_level_2')
-        || addr.city || addr.town || addr.village || addr.municipality,
+      addr.city || addr.town || addr.village || addr.municipality || addr.hamlet
+        || pick('locality') || pick('postal_town'),
     );
-    const countryShort = pick('country', 'short_name');
-    const country = countryShort ? countryShort.toUpperCase() : normalizeCountryCode(addr.country);
-    const resolved = { city, country, postalCode: clean(pick('postal_code') || addr.postcode) };
+    // Neighborhood / district — distinct from the city.
+    const area = clean(
+      addr.suburb || addr.neighbourhood || addr.city_district || addr.quarter
+        || addr.residential || addr.borough,
+    );
+    // Sub-national region (state / province), for non-Swiss addresses.
+    const region = clean(addr.state || addr.province || addr.region || addr.state_district || addr.county);
+    const street = clean([addr.house_number, addr.road || addr.pedestrian || addr.footway].filter(Boolean).join(' '));
+    const countryShort = typeof addr.country_code === 'string' ? addr.country_code.toUpperCase() : pick('country', 'short_name');
+    const country = /^[A-Z]{2}$/.test(countryShort || '') ? countryShort : normalizeCountryCode(addr.country);
+    const resolved = { city, area, region, postalCode: clean(addr.postcode || pick('postal_code')), country, street };
     reverseCache.set(key, resolved);
     return resolved;
   } catch (err) {
@@ -115,21 +128,34 @@ export async function resolveFromCoordinates(latitude, longitude) {
 }
 
 /**
- * Resolve a clean { street, addressSupplement, city, postalCode, canton, country }
- * for a lead. Provider fields first, then reverse-geocode to fill gaps.
+ * Resolve a clean, consistent lead address. Provider fields come first; a
+ * missing/invalid city, area, region, postal code or country is then filled by
+ * reverse-geocoding from coordinates (the reliable signal).
+ * @returns {{ street, addressSupplement, area, city, postalCode, canton, region, country, formatted }}
  */
 export async function resolveLeadAddress(input = {}) {
-  const { street, city, postalCode, canton, state, country, latitude, longitude } = input;
+  const { street, city, area, postalCode, canton, state, region, country, formatted, latitude, longitude } = input;
   let outCountry = normalizeCountryCode(country);
   let outCity = sanitizeCity(city);
+  let outArea = clean(area);
+  let outRegion = clean(region) ?? clean(state);
   let outPostal = clean(postalCode);
+  let outStreet = clean(street);
 
-  if ((!outCity || !outCountry) && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))) {
+  // Geocode only when a CORE field (city/country) is missing/invalid — the
+  // cost guarantee for well-formed leads. When it fires, area/region/street are
+  // filled opportunistically from the same call; the rate-limited backfill
+  // migration enriches area/region for leads that already had a good city.
+  if ((!outCity || !outCountry)
+    && Number.isFinite(Number(latitude)) && Number.isFinite(Number(longitude))) {
     const geo = await resolveFromCoordinates(latitude, longitude);
     if (geo) {
       if (!outCity) outCity = geo.city;
+      if (!outArea) outArea = geo.area;
+      if (!outRegion) outRegion = geo.region;
       if (!outCountry) outCountry = geo.country;
       if (!outPostal) outPostal = geo.postalCode;
+      if (!outStreet) outStreet = geo.street;
     }
   }
 
@@ -137,12 +163,20 @@ export async function resolveLeadAddress(input = {}) {
   // blanket default for leads whose country could not be determined.
   if (!outCountry && isInSwitzerland(Number(latitude), Number(longitude))) outCountry = 'CH';
 
+  // `area` must never be a bare postal code (sanitizeCity rejects those too).
+  if (outArea && /^[\d\s-]{3,}$/.test(outArea)) outArea = null;
+
   return {
-    street: clean(street),
+    street: outStreet,
     addressSupplement: null,
+    area: outArea,
     city: outCity,
     postalCode: outPostal,
     canton: normalizeCanton(canton ?? state, outCountry),
+    // Swiss sub-national admin is the canton; `region` carries the non-Swiss
+    // state/province so the two never duplicate.
+    region: outCountry === 'CH' ? null : outRegion,
     country: outCountry,
+    formatted: clean(formatted),
   };
 }

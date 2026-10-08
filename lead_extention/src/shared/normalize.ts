@@ -35,6 +35,8 @@ export function makeLead(raw: RawBusinessRecord, searchId: string): Lead {
     distanceKm: null,
     rating: raw.rating ?? null,
     reviewCount: raw.reviewCount ?? null,
+    ratingBreakdown: raw.ratingBreakdown ?? null,
+    photos: [...new Set((raw.photos ?? []).map((url) => url.trim()).filter(Boolean))],
     businessStatus: raw.businessStatus?.trim() || null,
     openingHours: raw.openingHours ?? [],
     priceLevel: raw.priceLevel ?? null,
@@ -78,15 +80,17 @@ export function isSameLead(a: Pick<Lead, 'placeIdentifier' | 'googleMapsUrl' | '
 
 export function mergeLead(existing: Lead, incoming: Lead): Lead {
   const merged = { ...existing };
-  for (const key of ['category', 'phone', 'internationalPhone', 'website', 'address', 'businessStatus', 'priceLevel'] as const) {
+  for (const key of ['category', 'phone', 'internationalPhone', 'website', 'address', 'street', 'area', 'city', 'state', 'postalCode', 'country', 'businessStatus', 'priceLevel'] as const) {
     if (!merged[key] && incoming[key]) merged[key] = incoming[key];
   }
   if (merged.rating === null && incoming.rating !== null) merged.rating = incoming.rating;
   if (merged.reviewCount === null && incoming.reviewCount !== null) merged.reviewCount = incoming.reviewCount;
+  if (!merged.ratingBreakdown && incoming.ratingBreakdown) merged.ratingBreakdown = incoming.ratingBreakdown;
   if (merged.latitude === null && incoming.latitude !== null) merged.latitude = incoming.latitude;
   if (merged.longitude === null && incoming.longitude !== null) merged.longitude = incoming.longitude;
   merged.categories = [...new Set([...merged.categories, ...incoming.categories])];
   merged.openingHours = [...new Set([...merged.openingHours, ...incoming.openingHours])];
+  merged.photos = [...new Set([...(merged.photos ?? []), ...(incoming.photos ?? [])])];
   merged.updatedAt = nowIso();
   return merged;
 }

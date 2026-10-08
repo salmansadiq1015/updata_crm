@@ -1,9 +1,13 @@
 import {
   DEFAULT_MAX_AREA_TILES,
+  DEFAULT_REQUEST_DELAY_MS,
   DEFAULT_SWEEP_RADIUS_KM,
   DISCOVERY_SCROLL_DELAY_MS,
+  MAX_REQUEST_DELAY_MS,
   MAX_SAFE_ITERATIONS,
+  MAX_THROTTLE_BACKOFF,
   MAX_TILE_DEPTH,
+  MIN_REQUEST_DELAY_MS,
   MIN_TILE_SPAN_KM,
   TILE_SPLIT_THRESHOLD,
 } from '../shared/constants';
@@ -39,7 +43,15 @@ import type {
   RawBusinessRecord,
   SearchRecord,
 } from '../shared/types';
-import { haversineDistanceMeters, nowIso, parseCoordinates } from '../shared/utils';
+import {
+  clampRequestDelay,
+  cleanPhone,
+  effectiveRequestDelay,
+  haversineDistanceMeters,
+  nextThrottleBackoff,
+  nowIso,
+  parseCoordinates,
+} from '../shared/utils';
 import { discoverPublicEmails } from '../enrichment/website-discovery';
 import { clearAllLocalData, LeadRepository, SearchRepository, SettingsRepository } from '../storage/repositories';
 import { clearAuth, connectWithGrant, getAuthState, heartbeat, importLeads as importLeadsToCrm, login, logout } from '../integration/crm-api';
@@ -73,6 +85,9 @@ type Job = {
   detailHydrationDisabled: boolean;
   tilesScanned: number;
   tilesPlanned: number;
+  // Adaptive throttle backoff multiplier (1 = no backoff). Grows when a feed is
+  // throttled/terminated and decays on a clean tile.
+  throttleBackoff: number;
 };
 
 let activeJob: Job | null = null;
@@ -194,6 +209,11 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage | { type: string
     case 'MAPS_STATE_CHANGED':
       if (activeJob) void persistJob(activeJob);
       return false;
+    case 'COLLECT_LEAD_DETAILS': {
+      const value = message as Extract<ExtensionMessage, { type: 'COLLECT_LEAD_DETAILS' }>;
+      void collectLeadDetails(value.leadId).then((response) => sendResponse(response)).catch((error) => sendResponse({ ok: false, error: errorMessage(error) }));
+      return true;
+    }
     case 'CLEAR_ALL_DATA':
       activeJob = null;
       void chrome.alarms.clear(DISCOVERY_ALARM);
@@ -278,7 +298,7 @@ function makeJob(search: SearchRecord, tabId: number, config: DiscoveryConfig, r
   const queries = buildQueries(config);
   const matchingIndex = queries.findIndex((query) => query === search.currentQuery);
   const queryIndex = matchingIndex >= 0 ? matchingIndex : resumeQueryIndex(search, queries.length);
-  return { search, config, tabId, paused: search.status === 'paused', stopped: Boolean(search.stopRequested), resumeResolvers: [], leads: new Map(records.map((lead) => [dedupeKey(lead), lead])), originCoordinates, queryIndex, expectedQuery: search.currentQuery || queries[queryIndex] || queries[0], detailTabId: null, detailCache: new Map(), detailFailureStreak: 0, detailHydrationDisabled: false, tilesScanned: 0, tilesPlanned: 0 };
+  return { search, config, tabId, paused: search.status === 'paused', stopped: Boolean(search.stopRequested), resumeResolvers: [], leads: new Map(records.map((lead) => [dedupeKey(lead), lead])), originCoordinates, queryIndex, expectedQuery: search.currentQuery || queries[queryIndex] || queries[0], detailTabId: null, detailCache: new Map(), detailFailureStreak: 0, detailHydrationDisabled: false, tilesScanned: 0, tilesPlanned: 0, throttleBackoff: 1 };
 }
 
 async function runDiscovery(job: Job): Promise<void> {
@@ -329,6 +349,10 @@ async function runQueryVariations(job: Job, isResume: boolean): Promise<void> {
     await restoreMapsCheckpoint(job);
     const exhausted = await processCurrentMapsState(job);
     if (!exhausted) break;
+    // Pause before moving to the next search variation (a new Maps navigation),
+    // honouring the configured scraping delay.
+    const moreQueries = job.queryIndex + 1 < queries.length && job.leads.size < job.config.maxResults;
+    if (moreQueries && !job.stopped) await pauseBetweenRequests(job, false);
   }
 }
 
@@ -389,13 +413,17 @@ async function runAreaSweep(job: Job, rootTile: Tile): Promise<void> {
     const tile = queue.shift()!;
     const before = job.leads.size;
     let tileCardCount = 0;
+    let throttled = false;
     try {
       tileCardCount = await sweepTile(job, tile);
     } catch (error) {
-      // A single unreachable/empty tile must never fail the whole sweep.
+      // A single unreachable/empty tile must never fail the whole sweep. A
+      // navigation/results failure is treated as a throttle signal so the next
+      // pause backs off before hammering Google again.
       tileCardCount = 0;
+      throttled = true;
       job.search.error = null;
-      await publishProgress(`Skipped one map area (${errorMessage(error)}). Continuing the sweep…`);
+      await publishProgress(`Rate-limited on one map area (${errorMessage(error)}). Backing off and continuing the sweep…`);
     }
     job.tilesScanned += 1;
     const capped = tileCardCount >= TILE_SPLIT_THRESHOLD;
@@ -406,6 +434,13 @@ async function runAreaSweep(job: Job, rootTile: Tile): Promise<void> {
     }
     await persistJob(job);
     await publishProgress(`Area sweep: ${job.tilesScanned} of ~${job.tilesPlanned} map areas scanned · ${job.leads.size.toLocaleString()} businesses found · ${job.leads.size - before} new here.`);
+    // Respect the user's scraping-delay setting (and adaptive backoff) before
+    // the next area, so rapid tile-to-tile navigation doesn't trip rate limits.
+    const moreToScan = queue.length && job.leads.size < job.config.maxResults && job.tilesScanned < maxTiles;
+    if (moreToScan && !job.stopped) {
+      await setPhase(job, 'NEXT_RESULTS', throttled ? 'Backing off before the next map area…' : 'Pausing before the next map area…');
+      await pauseBetweenRequests(job, throttled);
+    }
   }
 }
 
@@ -683,6 +718,64 @@ async function hydrateMapsRecord(job: Job, record: RawBusinessRecord): Promise<R
   }
 }
 
+// On-demand single-lead detail read for the side-panel drawer. Opens the lead's
+// Maps place page in a background tab, reads the full detail view (rating
+// breakdown, photos, hours, contacts), merges it into the stored lead, and
+// always closes the temporary tab. Bounded by waitForMapsDetails so it can never
+// hang; only one runs at a time.
+let detailRequestInFlight = false;
+
+async function collectLeadDetails(leadId: string): Promise<{ ok: boolean; lead?: Lead; error?: string }> {
+  const lead = await LeadRepository.get(leadId);
+  if (!lead) return { ok: false, error: 'That lead is no longer stored locally.' };
+  if (!lead.googleMapsUrl) return { ok: false, error: 'This lead has no Google Maps link to read details from.' };
+  if (detailRequestInFlight) return { ok: false, error: 'Another details request is still running — try again in a moment.' };
+  detailRequestInFlight = true;
+  let tempTabId: number | null = null;
+  try {
+    const tab = await chrome.tabs.create({ url: lead.googleMapsUrl, active: false });
+    if (!tab.id) throw new Error('Could not open a Google Maps tab.');
+    tempTabId = tab.id;
+    await waitForTabNavigation(tempTabId);
+    await ensureMapsContentScript(tempTabId);
+    const detail = await waitForMapsDetails(tempTabId);
+    if (!detail) return { ok: false, error: 'Google Maps did not expose extra details for this business.' };
+    const updated = applyRawDetailToLead(lead, detail);
+    await LeadRepository.save(updated);
+    return { ok: true, lead: updated };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  } finally {
+    if (tempTabId !== null) { try { await chrome.tabs.remove(tempTabId); } catch { /* tab already gone */ } }
+    detailRequestInFlight = false;
+  }
+}
+
+function applyRawDetailToLead(lead: Lead, detail: RawBusinessRecord): Lead {
+  const phone = cleanPhone(detail.phone) ?? lead.phone;
+  return {
+    ...lead,
+    category: lead.category || detail.category?.trim() || null,
+    phone,
+    internationalPhone: phone && phone.startsWith('+') ? phone : lead.internationalPhone,
+    website: lead.website || detail.website?.trim() || null,
+    address: lead.address || detail.address?.trim() || null,
+    street: lead.street || detail.street?.trim() || null,
+    area: lead.area || detail.area?.trim() || null,
+    city: lead.city || detail.city?.trim() || null,
+    state: lead.state || detail.state?.trim() || null,
+    postalCode: lead.postalCode || detail.postalCode?.trim() || null,
+    country: lead.country || detail.country?.trim() || null,
+    rating: detail.rating ?? lead.rating,
+    reviewCount: detail.reviewCount ?? lead.reviewCount,
+    ratingBreakdown: detail.ratingBreakdown ?? lead.ratingBreakdown ?? null,
+    photos: detail.photos?.length ? [...new Set([...(lead.photos ?? []), ...detail.photos])] : (lead.photos ?? []),
+    openingHours: detail.openingHours?.length ? [...new Set([...(lead.openingHours ?? []), ...detail.openingHours])] : (lead.openingHours ?? []),
+    businessStatus: lead.businessStatus || detail.businessStatus?.trim() || null,
+    updatedAt: nowIso(),
+  };
+}
+
 async function waitForMapsDetails(tabId: number): Promise<RawBusinessRecord | null> {
   // Bounded so a page that never renders a detail view costs ~6s, not ~24s. A
   // page that does load returns on the first or second attempt anyway.
@@ -716,6 +809,8 @@ function mergeRawRecord(base: RawBusinessRecord, detail: RawBusinessRecord): Raw
     country: detail.country || base.country,
     rating: detail.rating ?? base.rating,
     reviewCount: detail.reviewCount ?? base.reviewCount,
+    ratingBreakdown: detail.ratingBreakdown ?? base.ratingBreakdown ?? null,
+    photos: detail.photos?.length ? detail.photos : base.photos,
     businessStatus: detail.businessStatus || base.businessStatus,
     openingHours: detail.openingHours?.length ? detail.openingHours : base.openingHours,
     priceLevel: detail.priceLevel || base.priceLevel,
@@ -897,3 +992,32 @@ function isSearchRoute(url?: string): boolean { return Boolean(url && /\/maps\/s
 async function hasActiveSearch(): Promise<boolean> { return (await SearchRepository.list()).some((search) => ACTIVE_STATUSES.has(search.status)); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : typeof error === 'string' ? error : 'An unexpected error occurred.'; }
 function delay(ms: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+// Live scraping-delay read so changing it in Settings applies to a running sweep
+// without restarting. Falls back to the job's own config, then the default.
+async function baseRequestDelayMs(job: Job): Promise<number> {
+  let configured = job.config.requestDelayMs;
+  try {
+    const stored = await SettingsRepository.get<DiscoveryConfig>('config');
+    if (stored?.value && typeof stored.value.requestDelayMs === 'number') {
+      configured = stored.value.requestDelayMs;
+      job.config.requestDelayMs = configured; // keep the job in sync for persistence/UI
+    }
+  } catch { /* storage unavailable — use the job's own config */ }
+  return clampRequestDelay(configured ?? DEFAULT_REQUEST_DELAY_MS, MIN_REQUEST_DELAY_MS, MAX_REQUEST_DELAY_MS, DEFAULT_REQUEST_DELAY_MS);
+}
+
+// Pause between throttle-sensitive Maps navigations (each new area/tile + query
+// variation). `throttled` grows the adaptive backoff; a clean request decays it.
+// The wait is chunked so Stop/Pause stay responsive during a multi-minute delay.
+async function pauseBetweenRequests(job: Job, throttled: boolean): Promise<void> {
+  job.throttleBackoff = nextThrottleBackoff(job.throttleBackoff, throttled, MAX_THROTTLE_BACKOFF);
+  const base = await baseRequestDelayMs(job);
+  const until = Date.now() + effectiveRequestDelay(base, job.throttleBackoff, MAX_REQUEST_DELAY_MS);
+  while (Date.now() < until) {
+    if (job.stopped) return;
+    await waitIfPaused(job);
+    if (job.stopped) return;
+    await delay(Math.min(1_000, until - Date.now()));
+  }
+}

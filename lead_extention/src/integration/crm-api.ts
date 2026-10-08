@@ -282,6 +282,30 @@ function inRange(value: unknown, min: number, max: number): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max ? value : null;
 }
 
+// A valid http(s) map link, capped but never truncated (a cut URL is broken).
+function safeMapsUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return /^https?:$/.test(url.protocol) && url.href.length <= 1000 ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+// The per-star histogram, ONLY when it was actually scraped. Keyed 1..5 → the
+// server accepts this shape directly; nothing is fabricated from the total.
+function toRatingDistribution(breakdown: Lead['ratingBreakdown']): Record<string, number> | null {
+  if (!breakdown) return null;
+  const out: Record<string, number> = {};
+  let any = false;
+  for (const star of [1, 2, 3, 4, 5] as const) {
+    const n = breakdown[star];
+    if (typeof n === 'number' && Number.isFinite(n) && n >= 0) { out[String(star)] = Math.round(n); any = true; } else { out[String(star)] = 0; }
+  }
+  return any ? out : null;
+}
+
 function toExtensionRecord(lead: Lead): Record<string, unknown> {
   return {
     clientId: (lead.id ?? '').slice(0, 128),
@@ -293,16 +317,27 @@ function toExtensionRecord(lead: Lead): Record<string, unknown> {
     website: safeWebsite(lead.website),
     emails: safeEmails(lead.emails),
     address: clampText(lead.address, 500),
+    formattedAddress: clampText(lead.address, 500),
     street: clampText(lead.street, 255),
+    area: clampText(lead.area, 120),
     city: clampText(lead.city, 120),
+    // The extension parses the state/province into `state`; the CRM maps it to a
+    // Swiss canton or a non-Swiss `region` as appropriate.
     state: clampText(lead.state, 80),
+    region: clampText(lead.state, 120),
     postalCode: clampText(lead.postalCode, 20),
     country: clampText(lead.country, 100),
     latitude: inRange(lead.latitude, -90, 90),
     longitude: inRange(lead.longitude, -180, 180),
     rating: inRange(lead.rating, 0, 5),
     reviewCount: typeof lead.reviewCount === 'number' && lead.reviewCount >= 0 ? Math.round(lead.reviewCount) : null,
+    // Real per-star counts scraped from the place page, or null (never estimated).
+    ratingDistribution: toRatingDistribution(lead.ratingBreakdown),
     priceLevel: clampText(lead.priceLevel, 40),
+    businessStatus: clampText(lead.businessStatus, 80),
+    openingHours: (lead.openingHours ?? []).map((line) => clampText(line, 300)).filter((line): line is string => Boolean(line)).slice(0, 14),
+    photos: (lead.photos ?? []).map((url) => safeMapsUrl(url)).filter((url): url is string => Boolean(url)).slice(0, 12),
+    googleMapsUrl: safeMapsUrl(lead.googleMapsUrl),
     discoveredAt: lead.discoveredAt,
     searchId: (lead.searchId ?? '').slice(0, 128),
   };
@@ -347,4 +382,4 @@ function escapeCsv(value: unknown): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-export { normalizeApiBaseUrl };
+export { normalizeApiBaseUrl, toExtensionRecord };

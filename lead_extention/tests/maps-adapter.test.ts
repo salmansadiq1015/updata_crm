@@ -4,6 +4,8 @@ import { MapsAdapter } from '../src/content/maps-adapter';
 type AdapterInternals = {
   parseRating(value: string): number | null;
   parseReviewCount(value: string): number | null;
+  starLevelFromLabel(label: string): 1 | 2 | 3 | 4 | 5 | null;
+  reviewCountFromHistogramLabel(label: string): number | null;
   extractPlaceIdentifier(value: string): string | null;
   coordinatesFromUrl(value: string): { latitude: number; longitude: number } | null;
   looksLikeDomain(value: string): boolean;
@@ -25,6 +27,23 @@ describe('Google Maps extraction parsing', () => {
     expect(adapter.parseReviewCount('4.9 (1.2K)')).toBe(1_200);
     expect(adapter.parseReviewCount('(1,234)')).toBe(1_234);
     expect(adapter.parseReviewCount('1 234 avis')).toBe(1_234);
+  });
+
+  it('reads a rating-histogram star level from localized aria-labels', () => {
+    expect(adapter.starLevelFromLabel('5 stars, 1,234 reviews')).toBe(5);
+    expect(adapter.starLevelFromLabel('1 234 avis, 5 étoiles')).toBe(5);
+    expect(adapter.starLevelFromLabel('3 Sterne')).toBe(3);
+    expect(adapter.starLevelFromLabel('no stars mentioned here')).toBeNull();
+  });
+
+  it('reads a histogram count only when tied to a reviews word (never from a rating or percentage)', () => {
+    expect(adapter.reviewCountFromHistogramLabel('5 stars, 1,234 reviews')).toBe(1_234);
+    expect(adapter.reviewCountFromHistogramLabel('5 étoiles, 1 234 avis')).toBe(1_234);
+    expect(adapter.reviewCountFromHistogramLabel('2 stars, 0 reviews')).toBe(0);
+    // The overall-rating label must NOT be mistaken for a bar count.
+    expect(adapter.reviewCountFromHistogramLabel('Rated 4.5 out of 5 stars')).toBeNull();
+    // A percentage is a proportion, not a count.
+    expect(adapter.reviewCountFromHistogramLabel('5 stars, 73%')).toBeNull();
   });
 
   it('uses stable place identifiers from parameters and Maps data tokens', () => {

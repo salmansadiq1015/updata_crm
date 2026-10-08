@@ -41,10 +41,20 @@ const locationInput = Joi.alternatives().try(geoPoint, latLngPoint);
 const addressSchema = Joi.object({
   street: Joi.string().trim().max(255).allow('', null),
   addressSupplement: Joi.string().trim().max(255).allow('', null),
-  postalCode: swissPostalCode.allow('', null),
+  area: Joi.string().trim().max(120).allow('', null),
   city: Joi.string().trim().max(120).allow('', null),
   canton: canton.allow('', null),
-  country: Joi.string().trim().max(2).default('CH'),
+  // Non-Swiss state/province; the Swiss sub-national admin stays in `canton`.
+  region: Joi.string().trim().max(120).allow('', null),
+  country: Joi.string().trim().uppercase().max(2).default('CH'),
+  // Swiss leads keep the strict 4-digit rule; foreign leads accept any code so a
+  // non-Swiss lead is no longer rejected for a non-Swiss postal format.
+  postalCode: Joi.when('country', {
+    is: Joi.string().valid('CH'),
+    then: swissPostalCode.allow('', null),
+    otherwise: Joi.string().trim().max(20).allow('', null),
+  }),
+  formatted: Joi.string().trim().max(500).allow('', null),
 });
 
 const discoveryBounds = Joi.object({
@@ -115,10 +125,35 @@ const sourceMetadataSchema = Joi.object({
   discoveredAt: Joi.date().iso().allow(null),
 });
 
+const ratingDistributionSchema = Joi.object({
+  one: Joi.number().integer().min(0),
+  two: Joi.number().integer().min(0),
+  three: Joi.number().integer().min(0),
+  four: Joi.number().integer().min(0),
+  five: Joi.number().integer().min(0),
+}).allow(null);
+
+const openingHoursSchema = Joi.alternatives().try(
+  Joi.string().trim().max(2000),
+  Joi.array().items(Joi.string().trim().max(300)).max(20),
+).allow(null);
+
+const leadPhotosSchema = Joi.array().items(Joi.object({
+  url: Joi.string().uri({ scheme: ['http', 'https'] }).max(2000).required(),
+  source: Joi.string().trim().max(60).allow('', null),
+  attribution: Joi.string().trim().max(255).allow('', null),
+}).unknown(true)).max(12);
+
 const providerMetaSchema = Joi.object({
   rating: Joi.number().min(0).max(5).allow(null),
   reviewCount: Joi.number().integer().min(0).allow(null),
   priceLevel: Joi.string().trim().max(40).allow('', null),
+  // Per-star histogram — only when the provider supplied it; never fabricated.
+  ratingDistribution: ratingDistributionSchema,
+  businessStatus: Joi.string().trim().max(60).allow('', null),
+  openingHours: openingHoursSchema,
+  photos: leadPhotosSchema,
+  mapsUrl: Joi.string().uri({ scheme: ['http', 'https'] }).trim().max(1000).allow('', null),
 });
 
 export const createLead = {
@@ -254,16 +289,31 @@ export const bulkImport = {
       website: Joi.string().trim().max(600).truncate(true).allow('', null),
       emails: Joi.array().items(Joi.string().trim().max(254).truncate(true)).max(30).default([]),
       address: Joi.string().trim().max(600).truncate(true).allow('', null),
+      formattedAddress: Joi.string().trim().max(600).truncate(true).allow('', null),
       street: Joi.string().trim().max(300).truncate(true).allow('', null),
+      area: Joi.string().trim().max(200).truncate(true).allow('', null),
       city: Joi.string().trim().max(200).truncate(true).allow('', null),
       state: Joi.string().trim().max(160).truncate(true).allow('', null),
+      region: Joi.string().trim().max(200).truncate(true).allow('', null),
       postalCode: Joi.string().trim().max(40).truncate(true).allow('', null),
       country: Joi.string().trim().max(120).truncate(true).allow('', null),
       latitude: Joi.number().allow(null).failover(null),
       longitude: Joi.number().allow(null).failover(null),
       rating: Joi.number().allow(null).failover(null),
       reviewCount: Joi.number().allow(null).failover(null),
+      // Real per-star counts the extension scraped from the place page, or null.
+      ratingDistribution: Joi.object().unknown(true).allow(null).failover(null),
       priceLevel: Joi.string().trim().max(60).truncate(true).allow('', null),
+      businessStatus: Joi.string().trim().max(80).truncate(true).allow('', null),
+      openingHours: Joi.alternatives().try(
+        Joi.string().trim().max(2000).truncate(true),
+        Joi.array().items(Joi.string().trim().max(300).truncate(true)).max(20),
+      ).allow(null).failover(null),
+      photos: Joi.array().items(Joi.alternatives().try(
+        Joi.string().trim().max(2000).truncate(true),
+        Joi.object().unknown(true),
+      )).max(20).default([]),
+      googleMapsUrl: Joi.string().trim().max(1000).truncate(true).allow('', null),
       discoveredAt: Joi.date().iso().allow('', null).failover(null),
       searchId: Joi.string().trim().max(128).truncate(true).allow('', null),
     }).unknown(true)).min(1).max(500).required(),
@@ -279,7 +329,8 @@ export const bulkImport = {
 export const duplicates = {
   query: Joi.object({
     name: Joi.string().trim().max(255),
-    postalCode: swissPostalCode.allow(''),
+    // Accept any postal format — leads can be non-Swiss.
+    postalCode: Joi.string().trim().max(20).allow(''),
     phone: phone.allow(''),
     website: Joi.string().trim().max(500).allow(''),
     placeId: Joi.string().trim().max(255).allow(''),

@@ -1,4 +1,4 @@
-import type { MapsContext, MapsScrollState, RawBusinessRecord } from '../shared/types';
+import type { MapsContext, MapsScrollState, RatingBreakdown, RawBusinessRecord } from '../shared/types';
 
 const PLACE_LINK = 'a[href*="/maps/place/"]';
 const PHONE_LABEL = /\b(phone|telephone|tel|call|téléphone|telefon|teléfono|telefono|telefone)\b|هاتف|الهاتف/i;
@@ -50,7 +50,7 @@ export class MapsAdapter {
     const coordinates = this.coordinatesFromUrl(href);
     return {
       businessName,
-      category: this.categoryFromElement(card) ?? lines.find((line) => line !== businessName && !/^(sponsored|visit site)$/i.test(line) && line.length < 80 && /[a-z]/i.test(line)) ?? null,
+      category: this.categoryFromElement(card) ?? this.categoryFromLines(lines, businessName),
       phone,
       website,
       address,
@@ -77,13 +77,15 @@ export class MapsAdapter {
     const coordinates = this.coordinatesFromUrl(location.href);
     return {
       businessName: title,
-      category: this.categoryFromElement(detailRoot) ?? lines.find((line) => line !== title && line.length < 80 && /[a-z]/i.test(line)) ?? null,
+      category: this.categoryFromElement(detailRoot) ?? this.categoryFromLines(lines, title),
       phone: this.phoneFromElement(detailRoot) || labelled.phone || lines.find((line) => /(?:\+?\d[\d ()\-().]{6,}\d)/.test(line)) || null,
       website: this.websiteFromElement(detailRoot) ?? labelled.website ?? null,
       address,
       ...this.addressParts(address),
       rating: this.parseRating(ratingLine),
       reviewCount: this.parseReviewCount(labelled.reviews || ratingLine),
+      ratingBreakdown: this.parseRatingBreakdown(detailRoot),
+      photos: this.extractPhotos(detailRoot),
       businessStatus: lines.find((line) => /open|closed|temporarily/i.test(line)) ?? null,
       openingHours: lines.filter((line) => /(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)/i.test(line)).slice(0, 14),
       googleMapsUrl: location.href,
@@ -265,6 +267,84 @@ export class MapsAdapter {
     return Number.isFinite(count) ? count : null;
   }
 
+  // Google renders the reviews histogram as up to five rows, each with an
+  // aria-label pairing a star level (1–5) with its review count — wording and
+  // order vary by locale ("5 stars, 1,234 reviews" / "1 234 avis, 5 étoiles").
+  // We read those labels and NEVER fabricate a level we did not find; if fewer
+  // than two rows are confidently parsed the breakdown is treated as unavailable.
+  private parseRatingBreakdown(root: Element): RatingBreakdown | null {
+    const nodes = [...root.querySelectorAll<HTMLElement>('[aria-label][role="img"], tr[role="row"][aria-label], [role="row"] [aria-label], [aria-label]')]
+      .slice(0, 400);
+    const found: Partial<Record<1 | 2 | 3 | 4 | 5, number>> = {};
+    for (const node of nodes) {
+      const label = node.getAttribute('aria-label');
+      if (!label || !RATING_LABEL.test(label) || !/\b[1-5]\b/.test(label)) continue;
+      const level = this.starLevelFromLabel(label);
+      if (level === null || found[level] !== undefined) continue;
+      const count = this.reviewCountFromHistogramLabel(label);
+      if (count !== null) found[level] = count;
+    }
+    const present = ([5, 4, 3, 2, 1] as const).filter((lvl) => found[lvl] !== undefined);
+    if (present.length < 2) return null;
+    return { 5: found[5] ?? 0, 4: found[4] ?? 0, 3: found[3] ?? 0, 2: found[2] ?? 0, 1: found[1] ?? 0 };
+  }
+
+  private starLevelFromLabel(label: string): 1 | 2 | 3 | 4 | 5 | null {
+    const stars = /(star|stars|étoile|étoiles|estrella|estrellas|stern|sterne|stella|stelle|نجم|نجوم)/i;
+    const match = label.match(new RegExp(`\\b([1-5])\\b[^0-9%]{0,12}${stars.source}`, 'i'))
+      ?? label.match(new RegExp(`${stars.source}[^0-9%]{0,12}\\b([1-5])\\b`, 'i'));
+    const digit = match?.[1] && /^[1-5]$/.test(match[1]) ? match[1] : match?.[2];
+    return digit && /^[1-5]$/.test(digit) ? (Number(digit) as 1 | 2 | 3 | 4 | 5) : null;
+  }
+
+  // A histogram bar's count is the number tied to a "reviews"/"ratings" word
+  // ("5 stars, 1,234 reviews" / "5 étoiles, 1 234 avis"). We deliberately do NOT
+  // guess a count from a bare number or a percentage, so the overall-rating
+  // label ("4.5 out of 5 stars") can never be mistaken for a 5-star row count.
+  private reviewCountFromHistogramLabel(label: string): number | null {
+    const tied = label.match(new RegExp(`([\\d][\\d.,\\s\\u00a0]*)\\s*(?:${REVIEWS_LABEL.source})`, 'i'))?.[1];
+    const digits = tied ? tied.replace(/[^\d]/g, '') : '';
+    if (!digits) return null;
+    const parsed = Number(digits);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  // Place-page photos (hero + gallery) come from googleusercontent/ggpht. We skip
+  // reviewer avatars and tiny icons, and return absolute URLs only. Best-effort —
+  // an empty list simply means the page exposed no usable photo.
+  private extractPhotos(root: Element, max = 8): string[] {
+    const urls = new Set<string>();
+    const isPhotoHost = (value: string) => /(googleusercontent\.com|ggpht\.com)/i.test(value);
+    const isJunk = (value: string) => /\/a[/-]|=s(?:16|24|32|40|48|56|64)\b|avatar|profile_photo|gstatic\.com\/(?:images|maps\/?)/i.test(value);
+    for (const img of [...root.querySelectorAll<HTMLImageElement>('img[src]')]) {
+      const src = img.getAttribute('src') ?? '';
+      if (!isPhotoHost(src) || isJunk(src)) continue;
+      if (img.naturalWidth > 0 && img.naturalWidth < 60) continue;
+      const abs = this.absoluteUrl(src);
+      if (abs) urls.add(abs);
+      if (urls.size >= max) return [...urls];
+    }
+    for (const node of [...root.querySelectorAll<HTMLElement>('[style*="googleusercontent"], [style*="ggpht"]')]) {
+      const match = node.getAttribute('style')?.match(/url\((['"]?)(https?:\/\/[^'")]+)\1\)/i);
+      if (match && isPhotoHost(match[2]) && !isJunk(match[2])) {
+        const abs = this.absoluteUrl(match[2]);
+        if (abs) urls.add(abs);
+        if (urls.size >= max) break;
+      }
+    }
+    return [...urls].slice(0, max);
+  }
+
+  private absoluteUrl(value: string): string | null {
+    try {
+      const base = typeof location === 'undefined' ? 'https://www.google.com/maps' : location.href;
+      const url = new URL(value, base);
+      return /^https?:$/.test(url.protocol) ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
+
   private extractPlaceIdentifier(url: string): string | null {
     try {
       const baseUrl = typeof location === 'undefined' ? 'https://www.google.com/maps' : location.href;
@@ -345,7 +425,35 @@ export class MapsAdapter {
 
   private categoryFromElement(root: Element): string | null {
     const node = root.querySelector<HTMLElement>('.DkEaL, button[jsaction*="category"], [data-item-id="category"]');
-    return node?.textContent?.replace(/\s+/g, ' ').trim() || null;
+    const value = node?.textContent?.replace(/\s+/g, ' ').trim() || null;
+    // Place pages render "Hotel · 3-star hotel · $$" in one node; the category is
+    // the first segment.
+    return value ? value.split('·')[0].trim() || value : null;
+  }
+
+  // Fallback when no category element is present (most search-result cards). Pick
+  // the first line that looks like a business CATEGORY, deliberately rejecting the
+  // address, rating, review count, price, open/closed status, phone and website —
+  // the lines that the old "first text line with a letter" heuristic wrongly grabbed
+  // and surfaced in the CRM as the business "type".
+  private categoryFromLines(lines: string[], name: string): string | null {
+    const STATUS = /^(open|closed|opens?|closes?|temporarily|permanently|open 24 hours|24 hours|directions|website|call|share|save|order online|dine-in|dine in|takeaway|take-?out|delivery|curbside|in-store shopping|visit site|sponsored|ad|results|reviews?|rating)\b/i;
+    for (const raw of lines) {
+      const line = raw.replace(/^·\s*/, '').split('·')[0].replace(/\s+/g, ' ').trim();
+      if (!line || line === name) continue;
+      if (line.length < 2 || line.length > 48) continue;
+      if (!/\p{L}/u.test(line)) continue;
+      if ((line.match(/\d/g) || []).length >= 3) continue; // address / phone / postal
+      if (/^\d(?:[.,]\d)?$/.test(line)) continue; // a bare rating
+      if (/\(\s*[\d.,\s]+\s*\)/.test(line)) continue; // a review count "(1,234)"
+      if (/[$€£₹₨]|^\$+$/.test(line)) continue; // price tier
+      if (/\b\d{4,6}\b/.test(line)) continue; // postal code embedded in an address
+      if (/^\+?\d[\d ()\-.]{5,}/.test(line)) continue; // phone number
+      if (STATUS.test(line)) continue;
+      if (this.looksLikeDomain(line)) continue;
+      return line;
+    }
+    return null;
   }
 
   private findScrollableResultsContainer(): HTMLElement | null {

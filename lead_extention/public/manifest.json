@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lead Finder — Local Maps Discovery",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1Bqq3Rh4Rc+JQyKB9UKAcx3lM+lNzwhFTjhuRLiMsjDpxqjKYv4dMCQzcQCvinHVytFpGBkg9QqGpaXVydyvEomakS8h+n+WD11pOOp3Hmazq1C6AjdYpf/agVlp+rgbKfYF4fNb9DCHzUvwF1+yUVO/nZkPe/WlapG2VPVR8A3rzFS9x4blqFZXxL6IBUfKOfw3/gQoEuXNe+gICSOAzNrdIuzRPmbqQ5ZfLC4p6BP8aDHWCJkO6VWUYsGIqQZjf+7bSf69jtcse76MaW6DfB6aRvIQEcGAzaMbYiBzoxuAXGu+Mv2eFXoz2jd2ZHzzEMYJIFZv88La+I6DX7pXQQIDAQAB",
   "description": "A local-first assistant for collecting business details exposed in your Google Maps research session.",
   "minimum_chrome_version": "114",
@@ -14,7 +14,7 @@
   ],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "externally_connectable": {
-    "matches": ["https://updata.behjja.com/*", "http://localhost:3000/*", "http://localhost:9097/*"]
+    "matches": ["https://updata.behjja.com/*", "https://updata-crm.vercel.app/*", "http://localhost:3000/*", "http://localhost:9097/*"]
   },
   "action": {
     "default_title": "Open Lead Finder"

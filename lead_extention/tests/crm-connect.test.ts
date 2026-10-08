@@ -3,12 +3,15 @@ import { CRM_WEB_ORIGIN, crmApiBaseForOrigin, isTrustedCrmOrigin } from '../src/
 import { normalizeApiBaseUrl } from '../src/integration/crm-api';
 
 describe('CRM connect origin trust gate', () => {
-  it('trusts only the exact CRM web origin', () => {
+  it('trusts only the exact allow-listed CRM web origins', () => {
     expect(isTrustedCrmOrigin(CRM_WEB_ORIGIN)).toBe(true);
+    expect(isTrustedCrmOrigin('https://updata-crm.vercel.app')).toBe(true); // production (Vercel) frontend
     expect(isTrustedCrmOrigin('https://updata.behjja.com/')).toBe(false); // trailing slash is not an origin
     expect(isTrustedCrmOrigin('https://evil.example')).toBe(false);
     expect(isTrustedCrmOrigin('http://updata.behjja.com')).toBe(false); // must be https
     expect(isTrustedCrmOrigin('https://updata.behjja.com.evil.example')).toBe(false);
+    expect(isTrustedCrmOrigin('https://updata-crm.vercel.app.evil.example')).toBe(false);
+    expect(isTrustedCrmOrigin('https://evil.vercel.app')).toBe(false); // not a blanket *.vercel.app
     expect(isTrustedCrmOrigin(null)).toBe(false);
     expect(isTrustedCrmOrigin(undefined)).toBe(false);
   });

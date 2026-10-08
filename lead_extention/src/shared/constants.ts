@@ -6,6 +6,27 @@ export const DISCOVERY_SCROLL_DELAY_MS = 850;
 export const MAX_PAGE_BYTES = 800_000;
 export const MAX_RADIUS_KM = 500;
 
+// User-configurable pause applied between Maps "requests" (each new area/tile
+// and each query variation — the throttle-sensitive navigations), NOT between
+// every in-feed scroll. A larger value trades speed for fewer rate-limit
+// errors, connection resets, and terminated feeds. The pause also grows
+// adaptively when Google throttles a feed and decays back on success.
+export const MIN_REQUEST_DELAY_MS = 5_000; // 5 seconds
+export const MAX_REQUEST_DELAY_MS = 300_000; // 5 minutes
+export const DEFAULT_REQUEST_DELAY_MS = 10_000; // 10 seconds
+// Backoff ceiling: adaptive throttling never multiplies the base delay beyond
+// this, so a sweep keeps making progress even under sustained throttling.
+export const MAX_THROTTLE_BACKOFF = 6;
+export const REQUEST_DELAY_OPTIONS = [
+  { ms: 5_000, label: '5 seconds' },
+  { ms: 10_000, label: '10 seconds' },
+  { ms: 15_000, label: '15 seconds' },
+  { ms: 30_000, label: '30 seconds' },
+  { ms: 60_000, label: '1 minute' },
+  { ms: 120_000, label: '2 minutes' },
+  { ms: 300_000, label: '5 minutes' },
+] as const;
+
 // Adaptive area-sweep tuning.
 // A single Maps feed tops out near ~120 cards; a tile that reaches this many
 // distinct cards is treated as "capped" and split into four smaller tiles.

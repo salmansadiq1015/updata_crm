@@ -77,10 +77,18 @@ const leadSchema = new mongoose.Schema(
     address: {
       street: { type: String, trim: true, maxlength: 255, default: null },
       addressSupplement: { type: String, trim: true, maxlength: 255, default: null },
+      // Neighborhood / district (e.g. "Johar Town", "Champs-Élysées"). Distinct
+      // from the city — never a postal code.
+      area: { type: String, trim: true, maxlength: 120, default: null },
       postalCode: { type: String, trim: true, maxlength: 20, default: null },
       city: { type: String, trim: true, maxlength: 120, default: null },
+      // Swiss sub-national region (2-letter canton). Non-Swiss state/province
+      // lives in `region` (canton stays CH-only for the HVAC home market).
       canton: { type: String, trim: true, maxlength: 2, default: null },
+      region: { type: String, trim: true, maxlength: 120, default: null },
       country: { type: String, trim: true, maxlength: 2, default: 'CH' },
+      // Full provider-supplied address string, kept verbatim for display.
+      formatted: { type: String, trim: true, maxlength: 500, default: null },
     },
     phone: { type: String, trim: true, maxlength: 50, default: null },
     mobile: { type: String, trim: true, maxlength: 50, default: null },
@@ -104,6 +112,30 @@ const leadSchema = new mongoose.Schema(
       rating: { type: Number, default: null },
       reviewCount: { type: Number, default: null },
       priceLevel: { type: String, trim: true, maxlength: 40, default: null },
+      // Per-star review histogram { one, two, three, four, five }, ONLY when the
+      // provider actually supplied it (Google place page). `null` means the
+      // breakdown is unavailable — never fabricated or estimated from the total.
+      ratingDistribution: { type: mongoose.Schema.Types.Mixed, default: null },
+      // Operational status string the provider exposed (e.g. "Open", "Closed").
+      businessStatus: { type: String, trim: true, maxlength: 60, default: null },
+      // Opening hours as the provider supplied them (string or array of lines).
+      openingHours: { type: mongoose.Schema.Types.Mixed, default: null },
+      // Photo references the provider actually supplied; never fabricated.
+      photos: {
+        type: [
+          new mongoose.Schema(
+            {
+              url: { type: String, trim: true, maxlength: 2000 },
+              source: { type: String, trim: true, maxlength: 60, default: null },
+              attribution: { type: String, trim: true, maxlength: 255, default: null },
+            },
+            { _id: false },
+          ),
+        ],
+        default: [],
+      },
+      // Canonical provider map link (Google Maps place / OSM), when known.
+      mapsUrl: { type: String, trim: true, maxlength: 1000, default: null },
     },
     // Website-enrichment state + last-run audit trail (responsible scraper,
     // §lead module). foundEmails / foundPhones hold everything the last run

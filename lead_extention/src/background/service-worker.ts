@@ -378,39 +378,68 @@ function resetFeedCheckpoint(job: Job): void {
   job.search.scrollTop = 0; job.search.scrollHeight = 0; job.search.firstVisibleResultKey = null; job.search.lastVisibleResultKey = null;
 }
 
-// Resolve the centre to sweep around. When a location was typed we let Google
-// geocode it first (so "Hotel near Paris" centres on Paris even if the user's
-// map is elsewhere); otherwise we sweep around the current map centre.
+// Resolve the centre to sweep around.
+//   - A typed location is GEOCODED to its own coordinates (we point Maps at the
+//     location alone, then read the settled camera). The sweep then follows that
+//     centre, so "Restaurant" + "paris" scans Paris even though the user's map
+//     was on Lahore. If the place cannot be located we FAIL LOUDLY — we never
+//     silently fall back to wherever the map happens to be (the reported bug:
+//     typing "paris" but scraping Lahore).
+//   - With no location typed, we sweep around the current map centre.
 async function resolveSweepArea(job: Job): Promise<Tile | null> {
   let center: GeoPoint | null = null;
   const location = job.config.location.trim();
-  if (location) {
-    try {
-      await navigateToQuery(job.tabId, buildQueries(job.config)[0]);
-      await waitForTabNavigation(job.tabId);
-      await ensureMapsContentScript(job.tabId);
-      center = await waitForMapCenter(job.tabId);
-    } catch { center = null; }
-  }
-  if (!center) {
+  const hasTypedLocation = Boolean(location) && location.toLowerCase() !== 'current maps context';
+
+  if (hasTypedLocation) {
+    center = await geocodeLocation(job, location);
+    if (!center) {
+      throw new Error(
+        `Could not find “${location}” on Google Maps. Check the spelling or use a more specific place `
+        + '(e.g. “Paris, France”), or clear the Location field to search the current map.',
+      );
+    }
+  } else {
     try {
       const response = await sendToMaps(job.tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
       center = response.context?.centerCoordinates ?? null;
     } catch { center = null; }
+    center ??= job.originCoordinates;
   }
-  center ??= job.originCoordinates;
+
   if (!center) return null;
-  job.originCoordinates ??= center;
+  // Distance is measured from the centre we actually swept (the searched place
+  // when one was typed), not the user's starting viewport.
+  job.originCoordinates = center;
   const radiusKm = job.config.radiusKm && job.config.radiusKm > 0 ? job.config.radiusKm : DEFAULT_SWEEP_RADIUS_KM;
   return tileFromCenterRadius(center, radiusKm);
 }
 
+// Geocode a typed location by pointing Maps at the place ITSELF (not the
+// business query), then reading the settled camera. Searching the location alone
+// is unambiguous — Google recentres on it — whereas "<business> near <place>"
+// could keep the current viewport. Returns null if no on-location centre settles.
+async function geocodeLocation(job: Job, location: string): Promise<GeoPoint | null> {
+  try {
+    await navigateToQuery(job.tabId, location);
+    await waitForTabNavigation(job.tabId);
+    await ensureMapsContentScript(job.tabId);
+    return await waitForMapCenter(job.tabId);
+  } catch {
+    return null;
+  }
+}
+
+// Poll for the map camera, accepting it only once Maps has actually navigated to
+// the new search (a /maps/search route carrying @coords) — so we never read the
+// previous location's stale camera mid-navigation.
 async function waitForMapCenter(tabId: number): Promise<GeoPoint | null> {
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       const response = await sendToMaps(tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
       const center = response.context?.centerCoordinates;
-      if (center) return center;
+      const settled = isSearchRoute(response.context?.url) || isPlaceRoute(response.context?.url);
+      if (center && settled) return center;
     } catch { /* still navigating */ }
     await delay(Math.min(4_000, 600 * (2 ** attempt)));
   }
@@ -1066,6 +1095,9 @@ function buildQueries(config: DiscoveryConfig, context?: { query?: string | null
 function isUnexpectedSearchContext(context: MapsContext, expected: string): boolean { if (!context.isMaps) return true; if (!context.query || !expected) return false; const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim(); const expectedParts = normalize(expected).split(' near '); return !normalize(context.query).includes(normalize(expectedParts[0])); }
 function isMapsUrl(url?: string): boolean { if (!url) return false; try { const parsed = new URL(url); return /(^|\.)google\.[^/]+$/.test(parsed.hostname) && parsed.pathname.startsWith('/maps'); } catch { return false; } }
 function isSearchRoute(url?: string): boolean { return Boolean(url && /\/maps\/search\//.test(url)); }
+// A single typed location (e.g. "paris") often resolves to a /maps/place/ URL
+// rather than a search feed; both are valid "we have navigated" signals.
+function isPlaceRoute(url?: string): boolean { return Boolean(url && /\/maps\/place\//.test(url)); }
 async function hasActiveSearch(): Promise<boolean> { return (await SearchRepository.list()).some((search) => ACTIVE_STATUSES.has(search.status)); }
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : typeof error === 'string' ? error : 'An unexpected error occurred.'; }
 function delay(ms: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, ms)); }

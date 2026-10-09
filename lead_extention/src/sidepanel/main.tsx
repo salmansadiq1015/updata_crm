@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LeadRepository, SearchRepository, SettingsRepository } from '../storage/repositories';
 import { createXlsx, downloadBlob, filenameFor, toCsv } from '../export/exporters';
@@ -75,6 +75,26 @@ function App() {
     chrome.runtime.onMessage.addListener(onMessage);
     return () => { chrome.runtime.onMessage.removeListener(onMessage); };
   }, []);
+
+  // When a discovery actually FINISHES (not when the panel re-opens on an
+  // already-completed run), auto-clear the search brief — business type +
+  // location — so the next search starts fresh. We fire only on the transition
+  // INTO 'completed' from an in-progress state, and persist the cleared brief so
+  // it does not reappear on the next refresh. Results stay in the workspace.
+  const prevStatusRef = useRef<DiscoveryProgress['status'] | null>(null);
+  useEffect(() => {
+    const status = progress?.status ?? null;
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (status === 'completed' && prev && prev !== 'completed' && prev !== 'idle') {
+      setConfig((current) => {
+        if (!current.businessType && !current.location) return current;
+        const next = { ...current, businessType: '', location: '' };
+        void SettingsRepository.save('config', next);
+        return next;
+      });
+    }
+  }, [progress?.status]);
 
   const refreshDataOnly = async () => { const [storedLeads, storedSearches] = await Promise.all([LeadRepository.list(), SearchRepository.list()]); setLeads(storedLeads); setSearches(storedSearches); };
   // Current workspace vs. archived (History). "Clear" flips active → archived.

@@ -104,7 +104,10 @@ export class MapsAdapter {
       hasResults: this.detectSearchResults(),
       isListing: this.detectBusinessListing(),
       visibleResultCount: this.getResultLinks().length,
-      centerCoordinates: this.coordinatesFromUrl(location.href)
+      // The sweep centre must be the map CAMERA (@lat,lng), not a place pin —
+      // a results page often carries the first result's !3d!4d pin, and using
+      // that as the centre would drift the area sweep off the searched location.
+      centerCoordinates: this.cameraCoordinatesFromUrl(location.href)
     };
   }
 
@@ -254,6 +257,19 @@ export class MapsAdapter {
     // camera only when the URL carries no pin.
     const match = value.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/)
       ?? value.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    if (!match) return null;
+    const latitude = Number(match[1]);
+    const longitude = Number(match[2]);
+    return Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null;
+  }
+
+  // The map CAMERA position (`@lat,lng`), used as the area-sweep centre. This is
+  // the inverse preference of coordinatesFromUrl: the camera is where the user is
+  // looking, which is what the sweep must follow, so `@` wins and the place pin
+  // (`!3d!4d`) is only a fallback when the URL carries no camera yet.
+  private cameraCoordinatesFromUrl(value: string): { latitude: number; longitude: number } | null {
+    const match = value.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/)
+      ?? value.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
     if (!match) return null;
     const latitude = Number(match[1]);
     const longitude = Number(match[2]);

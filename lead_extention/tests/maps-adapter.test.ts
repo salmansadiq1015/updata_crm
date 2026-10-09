@@ -56,6 +56,13 @@ describe('Google Maps extraction parsing', () => {
     expect(adapter.coordinatesFromUrl('https://www.google.com/maps/data=!3d31.5204!4d74.3587')).toEqual({ latitude: 31.5204, longitude: 74.3587 });
   });
 
+  it('prefers the place pin (!3d!4d) over the map camera (@) when both are present', () => {
+    // On a place URL the @ camera is offset from the pin (the details panel
+    // covers part of the map); the lead must land on the pin, not the camera.
+    const url = 'https://www.google.com/maps/place/Clinic/@33.686193,-7.381561,17z/data=!3m1!4b1!4m6!3m5!1s0xda7cd:0xabc!8m2!3d33.682900!4d-7.375400';
+    expect(adapter.coordinatesFromUrl(url)).toEqual({ latitude: 33.6829, longitude: -7.3754 });
+  });
+
   it('accepts valid multi-level domains and rejects Google navigation links', () => {
     expect(adapter.looksLikeDomain('hotel.example.co.uk/contact')).toBe(true);
     expect(adapter.looksLikeDomain('https://www.google.com/maps/place/Acme')).toBe(false);

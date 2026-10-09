@@ -247,8 +247,13 @@ export class MapsAdapter {
   }
 
   private coordinatesFromUrl(value: string): { latitude: number; longitude: number } | null {
-    const match = value.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/)
-      ?? value.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+    // `!3d<lat>!4d<lng>` is the place's authoritative pin; `@<lat>,<lng>` is only
+    // the map CAMERA (on a place page it is shifted off the pin so the details
+    // panel does not cover it). Prefer the pin so the lead lands on the business,
+    // not on whatever the viewport happened to be centred on, falling back to the
+    // camera only when the URL carries no pin.
+    const match = value.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/)
+      ?? value.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
     if (!match) return null;
     const latitude = Number(match[1]);
     const longitude = Number(match[2]);

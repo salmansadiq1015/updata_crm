@@ -20,12 +20,12 @@ import { LeadStatusBadge } from '../status-badge';
 import { Button, useLanguage } from '../lead-ui-kit';
 import { getLeadSourceLabel, getLeadTypeLabel } from '../lead-ui-constants';
 import {
-  buildGoogleMapsUrl,
   findUser,
   getAddressLines,
   getLeadBusinessTypeLabel,
   getUserDisplayName,
   getWebsiteLabel,
+  mapsUrlForLead,
   toMailtoHref,
   toSafeWebUrl,
   toTelHref,
@@ -69,7 +69,10 @@ export function LeadMapPreviewCard({
   const mail = toMailtoHref(lead.email);
   const wa = toWhatsAppHref(lead.phone ?? lead.mobile);
   const web = toSafeWebUrl(lead.website);
-  const directions = buildGoogleMapsUrl(lead);
+  // Prefer the stored provider place link (opens the actual business) over a bare
+  // coordinate pin, matching the detail drawer. A raw coordinate pin can land off
+  // the business — the stored Maps URL resolves to the place itself.
+  const directions = mapsUrlForLead(lead);
 
   // Only actions whose data actually exists are shown — no dead buttons.
   const actions: QuickAction[] = [];

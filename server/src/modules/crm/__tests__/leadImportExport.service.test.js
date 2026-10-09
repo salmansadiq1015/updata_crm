@@ -258,6 +258,30 @@ describe('leadImportExportService.importLeads (CSV)', () => {
     expect(result.errors).toEqual([{ row: 3, message: 'Document failed validation' }]);
   });
 
+  it('fills a missing city/country from a searchLocation column and never defaults to CH', async () => {
+    // Mirrors the extension CSV-fallback route: a non-Swiss row with no city /
+    // country of its own, but a searchLocation hint. The city/country come from
+    // the hint; the country is NOT silently defaulted to Switzerland.
+    const csv = [
+      'name;city;country;searchLocation',
+      'Lahore Dental Studio;;;Lahore, Pakistan',
+    ].join('\n');
+
+    mockFindDuplicates.mockResolvedValue([]);
+    mockGetNextLeadNumber.mockResolvedValue('L-00001');
+    mockBulkCreate.mockImplementation(async (docs) => ({ created: docs, errors: [], insertedCount: docs.length, failedCount: 0 }));
+
+    const result = await service.importLeads(
+      { buffer: Buffer.from(csv, 'utf8'), mimetype: 'text/csv', originalname: 'leads.csv', mode: 'new' },
+      'user-1', {},
+    );
+
+    expect(result.summary).toMatchObject({ total: 1, created: 1, failed: 0 });
+    const doc = mockBulkCreate.mock.calls[0][0][0];
+    expect(doc.address).toMatchObject({ city: 'Lahore', country: 'PK' });
+    expect(doc.address.country).not.toBe('CH');
+  });
+
   it('treats update mode like new and warns it is unsupported for file import', async () => {
     mockFindDuplicates.mockResolvedValue([]);
     mockGetNextLeadNumber.mockResolvedValue('L-00001');
@@ -302,6 +326,42 @@ describe('leadImportExportService.importExtensionLeads', () => {
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
       address: expect.objectContaining({ city: 'Paris', country: 'FR', canton: null }),
     }), 'user-1', expect.objectContaining({ requestId: 'request-paris' }));
+  });
+
+  it('fills a missing city/country from the selected search location and records it', async () => {
+    mockFindDuplicates.mockResolvedValue([]);
+    mockCreate.mockImplementation(async (doc) => ({ ...doc, _id: '507f1f77bcf86cd7994390f1', leadNumber: 'L-00200' }));
+
+    // A scrape with no city/country, no coordinates — the only locating signal is
+    // the "Lahore, Pakistan" the user searched. Both fields come from it, and the
+    // raw search location is stored for provenance.
+    const result = await service.importExtensionLeads([{
+      clientId: 'local-lahore-1',
+      businessName: 'Lahore Dental Studio',
+      searchLocation: 'Lahore, Pakistan',
+    }], 'user-1', { requestId: 'request-lahore' });
+
+    expect(result).toMatchObject({ total: 1, created: 1, failed: 0 });
+    const doc = mockCreate.mock.calls[0][0];
+    expect(doc.address).toMatchObject({ city: 'Lahore', country: 'PK' });
+    expect(doc.sourceMetadata.searchLocation).toBe('Lahore, Pakistan');
+  });
+
+  it('never overwrites a real scraped city with the search-location fallback', async () => {
+    mockFindDuplicates.mockResolvedValue([]);
+    mockCreate.mockImplementation(async (doc) => ({ ...doc, _id: '507f1f77bcf86cd7994390f2', leadNumber: 'L-00201' }));
+
+    // The business is actually in Karachi; the search was run in Lahore. The real
+    // city is preserved; only the missing country is filled from the search.
+    await service.importExtensionLeads([{
+      clientId: 'local-karachi-1',
+      businessName: 'Karachi Clinic',
+      city: 'Karachi',
+      searchLocation: 'Lahore, Pakistan',
+    }], 'user-1', { requestId: 'request-karachi' });
+
+    const doc = mockCreate.mock.calls[0][0];
+    expect(doc.address).toMatchObject({ city: 'Karachi', country: 'PK' });
   });
 
   it('returns row outcomes even when metrics collection throws', async () => {

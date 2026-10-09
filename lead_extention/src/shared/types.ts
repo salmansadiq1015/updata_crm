@@ -77,6 +77,10 @@ export interface Lead {
   discoveredAt: string;
   updatedAt: string;
   searchId: string;
+  // The raw selected search location this lead was discovered under (e.g.
+  // "Lahore" / "Lahore, Pakistan"). Sent to the CRM as the last-resort fallback
+  // for a city/country that could not be scraped from the business itself.
+  searchLocation?: string | null;
   crmStatus?: CrmLeadStatus;
   crmLeadId?: string | null;
   crmLeadNumber?: string | null;

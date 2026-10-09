@@ -344,6 +344,9 @@ function toExtensionRecord(lead: Lead): Record<string, unknown> {
     googleMapsUrl: safeMapsUrl(lead.googleMapsUrl),
     discoveredAt: lead.discoveredAt,
     searchId: (lead.searchId ?? '').slice(0, 128),
+    // The selected search location — the CRM's last-resort fallback for a
+    // city/country the scrape could not provide.
+    searchLocation: clampText(lead.searchLocation, 255),
   };
 }
 
@@ -371,10 +374,15 @@ function toCrmImportCsv(leads: Lead[]): string {
   for (const lead of leads) {
     const values: Record<string, unknown> = {
       name: lead.businessName, type: 'business', status: 'new', street: lead.street ?? lead.address,
-      addressSupplement: '', postalCode: lead.postalCode, city: lead.city, canton: lead.state,
-      country: lead.country?.length === 2 ? lead.country.toUpperCase() : '', phone: cleanPhone(lead.phone, 50) ?? '',
+      addressSupplement: '', area: lead.area ?? '', postalCode: lead.postalCode, city: lead.city, canton: lead.state,
+      // Keep the raw country here (e.g. "Pakistan"); the CRM importer reduces it
+      // to an ISO code and fills a missing one from the coordinates / search
+      // location below, so we no longer drop a non-2-letter country.
+      country: lead.country ?? '', phone: cleanPhone(lead.phone, 50) ?? '',
       mobile: '', email: safeEmails(lead.emails)[0] ?? '', website: safeWebsite(lead.website) ?? '',
       notes: lead.googleMapsUrl ? `Google Maps: ${lead.googleMapsUrl}` : '', tags: lead.categories.join(', '),
+      latitude: inRange(lead.latitude, -90, 90) ?? '', longitude: inRange(lead.longitude, -180, 180) ?? '',
+      searchLocation: lead.searchLocation ?? '',
     };
     rows.push(CRM_IMPORT_HEADERS.map((header) => escapeCsv(values[header])).join(','));
   }

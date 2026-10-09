@@ -296,6 +296,20 @@ async function recoverDiscovery(forceResume = false): Promise<boolean> {
   return true;
 }
 
+// The selected search location to stamp on each discovered lead, used server-side
+// as the last-resort fallback for a city/country the scrape could not provide.
+// Only a real typed location qualifies: the "Current Maps context" placeholder
+// (no location entered) and the case where the location simply mirrors the
+// business type (no location typed → fell back to the Maps search text) are
+// both rejected so a business type is never mistaken for a place.
+function stampSearchLocation(job: Job): string | null {
+  const loc = (job.search.location || job.config.location || '').trim();
+  if (!loc || loc.toLowerCase() === 'current maps context') return null;
+  const businessType = (job.config.businessType || '').trim().toLowerCase();
+  if (businessType && loc.toLowerCase() === businessType) return null;
+  return loc;
+}
+
 function makeJob(search: SearchRecord, tabId: number, config: DiscoveryConfig, records: Lead[], originCoordinates: { latitude: number; longitude: number } | null): Job {
   upgradeCheckpoint(search, records.map((lead) => resultKeyForRecord(lead)));
   const queries = buildQueries(config);
@@ -584,7 +598,7 @@ async function processRecords(job: Job, records: RawBusinessRecord[]): Promise<{
       const hydratedRecord = await hydrateMapsRecord(job, record);
       const resultKey = resultKeyForRecord(hydratedRecord);
       if (processed.has(resultKey)) { repeated += 1; continue; }
-      const lead = makeLead(hydratedRecord, job.search.id);
+      const lead = makeLead(hydratedRecord, job.search.id, stampSearchLocation(job));
       if (job.originCoordinates && lead.latitude !== null && lead.longitude !== null) {
         lead.distanceMeters = haversineDistanceMeters(job.originCoordinates, { latitude: lead.latitude, longitude: lead.longitude });
         lead.distanceKm = lead.distanceMeters / 1_000;
@@ -867,6 +881,19 @@ async function runCrmImport(state: CrmImportProgress): Promise<void> {
   const processedIds = new Set(state.processedLeadIds ?? []);
   const pendingIds = state.leadIds.filter((id) => !processedIds.has(id));
   const batches = splitIntoBatches(pendingIds, CRM_BATCH_SIZE);
+  // Map each search → its selected location so leads scraped before the lead
+  // itself started carrying `searchLocation` still send it as the CRM's
+  // city/country fallback. Best-effort; a missing search just omits the hint.
+  const searchLocationById = new Map<string, string>();
+  try {
+    for (const search of await SearchRepository.list()) {
+      const location = (search.location || search.config?.location || '').trim();
+      const businessType = (search.businessType || search.config?.businessType || '').trim().toLowerCase();
+      if (!location || location.toLowerCase() === 'current maps context') continue;
+      if (businessType && location.toLowerCase() === businessType) continue; // a business type is not a place
+      searchLocationById.set(search.id, location);
+    }
+  } catch { /* fallback hint is optional — proceed without it */ }
   for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
     // Cooperative cancel: stop at the batch boundary, preserving everything
     // already added. Checked before each batch so a cancel never corrupts a
@@ -882,7 +909,7 @@ async function runCrmImport(state: CrmImportProgress): Promise<void> {
       state.failedLeadIds.push(...missingIds);
       state.error = 'Some selected local leads no longer exist. The remaining records were still processed.';
     }
-    await Promise.all(leads.map(async (lead) => { lead.crmStatus = 'importing'; lead.crmError = null; await LeadRepository.save(lead); }));
+    await Promise.all(leads.map(async (lead) => { lead.crmStatus = 'importing'; lead.crmError = null; if (!lead.searchLocation) lead.searchLocation = searchLocationById.get(lead.searchId) ?? null; await LeadRepository.save(lead); }));
     try {
       if (!leads.length) throw new Error('No selected lead records were found in local storage.');
       const response = await importLeadsToCrm(leads, { importId: state.id, importTotal: state.total, importFinal: isLastBatch }); const byId = new Map(response.results.map((result) => [result.clientId, result]));

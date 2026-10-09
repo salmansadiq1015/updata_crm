@@ -183,7 +183,9 @@ describe('processBatch — sync import flips result status + maps the DTO', () =
         discoveryResultId: 'res-1',
         discoverySessionId: 'sess-1',
         keyword: 'pizza',
-        businessType: 'restaurant',
+        // normalizeBusinessType turns the provider's raw primaryType into a clean
+        // human label ("restaurant" → "Restaurant").
+        businessType: 'Restaurant',
         discoveryLocation: expect.objectContaining({ city: 'Paris', countryCode: 'FR' }),
         discoveryArea: expect.objectContaining({ type: 'radius', radiusMeters: 5000 }),
         discoverySearchCoordinates: expect.objectContaining({ cellId: '1.2', depth: 2 }),

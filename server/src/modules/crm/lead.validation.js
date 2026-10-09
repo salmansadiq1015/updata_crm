@@ -335,6 +335,9 @@ export const bulkImport = {
       googleMapsUrl: Joi.string().trim().max(1000).truncate(true).allow('', null),
       discoveredAt: Joi.date().iso().allow('', null).failover(null),
       searchId: Joi.string().trim().max(128).truncate(true).allow('', null),
+      // The selected search location this lead was discovered under, used as the
+      // fallback for a city/country the scrape could not provide.
+      searchLocation: Joi.string().trim().max(255).truncate(true).allow('', null),
     }).unknown(true)).min(1).max(500).required(),
     // Optional import-run tracking (reporting only; ownership is always the
     // authenticated user). Batches of one run share `importId`; `importTotal`

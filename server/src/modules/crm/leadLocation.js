@@ -21,12 +21,21 @@ const COUNTRY_NAME_TO_CODE = new Map([
   ['switzerland', 'CH'], ['schweiz', 'CH'], ['suisse', 'CH'], ['svizzera', 'CH'],
   ['france', 'FR'], ['germany', 'DE'], ['deutschland', 'DE'], ['austria', 'AT'], ['österreich', 'AT'],
   ['italy', 'IT'], ['italia', 'IT'], ['pakistan', 'PK'], ['india', 'IN'],
-  ['united kingdom', 'GB'], ['uk', 'GB'], ['england', 'GB'], ['scotland', 'GB'],
+  ['united kingdom', 'GB'], ['uk', 'GB'], ['england', 'GB'], ['scotland', 'GB'], ['wales', 'GB'],
   ['united states', 'US'], ['united states of america', 'US'], ['usa', 'US'], ['america', 'US'],
   ['canada', 'CA'], ['australia', 'AU'], ['united arab emirates', 'AE'], ['uae', 'AE'],
   ['spain', 'ES'], ['españa', 'ES'], ['portugal', 'PT'], ['netherlands', 'NL'], ['belgium', 'BE'],
   ['ireland', 'IE'], ['turkey', 'TR'], ['türkiye', 'TR'], ['saudi arabia', 'SA'],
   ['china', 'CN'], ['japan', 'JP'], ['bangladesh', 'BD'], ['indonesia', 'ID'],
+  ['morocco', 'MA'], ['maroc', 'MA'], ['المغرب', 'MA'], ['egypt', 'EG'], ['tunisia', 'TN'], ['tunisie', 'TN'],
+  ['algeria', 'DZ'], ['algérie', 'DZ'], ['qatar', 'QA'], ['kuwait', 'KW'], ['oman', 'OM'], ['bahrain', 'BH'],
+  ['jordan', 'JO'], ['lebanon', 'LB'], ['liban', 'LB'], ['poland', 'PL'], ['polska', 'PL'],
+  ['sweden', 'SE'], ['norway', 'NO'], ['denmark', 'DK'], ['finland', 'FI'], ['greece', 'GR'],
+  ['mexico', 'MX'], ['méxico', 'MX'], ['brazil', 'BR'], ['brasil', 'BR'], ['argentina', 'AR'],
+  ['south africa', 'ZA'], ['nigeria', 'NG'], ['kenya', 'KE'], ['new zealand', 'NZ'],
+  ['singapore', 'SG'], ['malaysia', 'MY'], ['thailand', 'TH'], ['philippines', 'PH'], ['vietnam', 'VN'],
+  ['south korea', 'KR'], ['korea', 'KR'], ['russia', 'RU'], ['ukraine', 'UA'], ['czechia', 'CZ'],
+  ['czech republic', 'CZ'], ['hungary', 'HU'], ['romania', 'RO'], ['sri lanka', 'LK'], ['nepal', 'NP'],
 ]);
 
 /** "Pakistan" / "pk" → "PK"; unknown → null (never a wrong guess). */
@@ -35,6 +44,44 @@ export function normalizeCountryCode(value) {
   if (!c) return null;
   if (/^[a-z]{2}$/i.test(c)) return c.toUpperCase();
   return COUNTRY_NAME_TO_CODE.get(c.toLocaleLowerCase('en')) || null;
+}
+
+/**
+ * Parse a free-text selected search location ("Lahore", "Lahore, Pakistan",
+ * "Casablanca, Casablanca-Settat, Morocco") into a best-effort { city, country }.
+ *
+ * This is the shared fallback used by every import path when a business's own
+ * city/country could not be extracted or reverse-geocoded. It is deliberately
+ * conservative — it only returns a value it can identify RELIABLY and never
+ * invents one:
+ *   - country: only when the last comma segment is a known country name/code.
+ *   - city:    only the first segment, and only when it reads like a place name
+ *              (sanitizeCity: letters, not a postal code, not UI junk) and is not
+ *              itself a country. A lone "Pakistan" yields a country, not a city.
+ * @returns {{ city: string|null, country: string|null }}
+ */
+export function parseLocationString(value) {
+  const s = clean(value);
+  if (!s) return { city: null, country: null };
+  const parts = s.split(',').map((part) => clean(part)).filter(Boolean);
+  if (!parts.length) return { city: null, country: null };
+
+  let country = null;
+  let cityParts = parts;
+  // A trailing country segment ("…, Pakistan") names the country; the rest holds
+  // the city. With a single segment, decide whether it is a country or a city.
+  const last = normalizeCountryCode(parts[parts.length - 1]);
+  if (last) {
+    country = last;
+    cityParts = parts.slice(0, -1);
+  }
+
+  let city = null;
+  const first = cityParts[0];
+  // Never treat a country name as the city ("Pakistan" alone → country only).
+  if (first && !normalizeCountryCode(first)) city = sanitizeCity(first);
+
+  return { city, country };
 }
 
 function normalizeCanton(value, countryCode) {
@@ -130,11 +177,22 @@ export async function resolveFromCoordinates(latitude, longitude) {
 /**
  * Resolve a clean, consistent lead address. Provider fields come first; a
  * missing/invalid city, area, region, postal code or country is then filled by
- * reverse-geocoding from coordinates (the reliable signal).
+ * reverse-geocoding from coordinates (the reliable signal); and finally, any
+ * CITY or COUNTRY still unresolved is filled from the user's SELECTED SEARCH
+ * LOCATION (e.g. the "Lahore" typed into the discovery/extension form) — each
+ * field independently, never overwriting a value already resolved and never
+ * inventing one the fallback cannot identify.
+ *
+ * Fallback inputs (all optional): `fallbackCity` / `fallbackCountry` are
+ * structured hints (the discovery session's parsed city / countryCode) and
+ * `fallbackLocation` is the raw free-text location, parsed on demand.
  * @returns {{ street, addressSupplement, area, city, postalCode, canton, region, country, formatted }}
  */
 export async function resolveLeadAddress(input = {}) {
-  const { street, city, area, postalCode, canton, state, region, country, formatted, latitude, longitude } = input;
+  const {
+    street, city, area, postalCode, canton, state, region, country, formatted, latitude, longitude,
+    fallbackLocation, fallbackCity, fallbackCountry,
+  } = input;
   let outCountry = normalizeCountryCode(country);
   let outCity = sanitizeCity(city);
   let outArea = clean(area);
@@ -160,8 +218,20 @@ export async function resolveLeadAddress(input = {}) {
   }
 
   // Only use CH when coordinates genuinely fall in Switzerland — never as a
-  // blanket default for leads whose country could not be determined.
+  // blanket default for leads whose country could not be determined. Coordinate
+  // signals (reverse-geocode + this CH bounding box) always take precedence over
+  // the coarser text fallback below.
   if (!outCountry && isInSwitzerland(Number(latitude), Number(longitude))) outCountry = 'CH';
+
+  // Final fallback: the user's selected search location. Applied ONLY to a city
+  // or country still unresolved — each independently, so an accurate value from
+  // the business's own data or its coordinates is never overwritten. Prefer the
+  // structured hints, then parse the free-text location.
+  if (!outCity || !outCountry) {
+    const parsed = clean(fallbackLocation) ? parseLocationString(fallbackLocation) : { city: null, country: null };
+    if (!outCity) outCity = sanitizeCity(fallbackCity) ?? parsed.city;
+    if (!outCountry) outCountry = normalizeCountryCode(fallbackCountry) ?? parsed.country;
+  }
 
   // `area` must never be a bare postal code (sanitizeCity rejects those too).
   if (outArea && /^[\d\s-]{3,}$/.test(outArea)) outArea = null;

@@ -398,6 +398,7 @@ class ImportService {
    */
   async _resolveAddress(business, context) {
     const coords = Array.isArray(business.location?.coordinates) ? business.location.coordinates : null;
+    const location = context.location || {};
     return resolveLeadAddress({
       street: business.address?.street,
       area: business.address?.area,
@@ -406,10 +407,16 @@ class ImportService {
       canton: business.address?.canton,
       state: business.address?.region,
       region: business.address?.region,
-      country: business.address?.country || context.location?.countryCode,
+      country: business.address?.country || location.countryCode,
       formatted: business.address?.formatted,
       latitude: coords ? coords[1] : undefined,
       longitude: coords ? coords[0] : undefined,
+      // Last-resort fallback: the selected discovery location. A business whose
+      // own address/coordinates could not place it still inherits the city /
+      // country the user searched in (each filled only if still missing).
+      fallbackCity: location.city,
+      fallbackCountry: location.countryCode || location.country,
+      fallbackLocation: location.formattedAddress || location.name,
     });
   }
 
@@ -428,6 +435,7 @@ class ImportService {
       discoveryResultId: result._id ?? null,
       businessType,
       keyword: context.keyword ?? null,
+      searchLocation: context.location?.formattedAddress || context.location?.name || null,
       discoveryLocation: context.location ?? null,
       discoveryArea: context.area ?? null,
       discoverySearchCoordinates: context.searchCoordinates ?? null,

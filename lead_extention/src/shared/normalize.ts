@@ -1,7 +1,7 @@
 import type { Lead, RawBusinessRecord } from './types';
 import { cleanPhone, haversineDistanceMeters, normalizePhone, normalizeText, normalizeUrl, nowIso, parseCoordinates } from './utils';
 
-export function makeLead(raw: RawBusinessRecord, searchId: string): Lead {
+export function makeLead(raw: RawBusinessRecord, searchId: string, searchLocation?: string | null): Lead {
   const timestamp = nowIso();
   const coordinates = raw.latitude !== null && raw.latitude !== undefined && raw.longitude !== null && raw.longitude !== undefined
     ? { latitude: raw.latitude, longitude: raw.longitude }
@@ -46,6 +46,7 @@ export function makeLead(raw: RawBusinessRecord, searchId: string): Lead {
     discoveredAt: timestamp,
     updatedAt: timestamp,
     searchId,
+    searchLocation: searchLocation?.trim() || null,
     crmStatus: 'not-imported',
     crmLeadId: null,
     crmLeadNumber: null,
@@ -80,7 +81,7 @@ export function isSameLead(a: Pick<Lead, 'placeIdentifier' | 'googleMapsUrl' | '
 
 export function mergeLead(existing: Lead, incoming: Lead): Lead {
   const merged = { ...existing };
-  for (const key of ['category', 'phone', 'internationalPhone', 'website', 'address', 'street', 'area', 'city', 'state', 'postalCode', 'country', 'businessStatus', 'priceLevel'] as const) {
+  for (const key of ['category', 'phone', 'internationalPhone', 'website', 'address', 'street', 'area', 'city', 'state', 'postalCode', 'country', 'businessStatus', 'priceLevel', 'searchLocation'] as const) {
     if (!merged[key] && incoming[key]) merged[key] = incoming[key];
   }
   if (merged.rating === null && incoming.rating !== null) merged.rating = incoming.rating;

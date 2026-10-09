@@ -9,7 +9,7 @@ jest.unstable_mockModule('../../src/shared/logger/index.js', () => ({
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
-let sanitizeCity, normalizeCountryCode, resolveLeadAddress, _resetReverseBudget;
+let sanitizeCity, normalizeCountryCode, resolveLeadAddress, parseLocationString, _resetReverseBudget;
 
 const lahoreReverse = {
   result: {
@@ -36,7 +36,7 @@ const lahoreRichReverse = {
 };
 
 beforeAll(async () => {
-  ({ sanitizeCity, normalizeCountryCode, resolveLeadAddress, _resetReverseBudget } =
+  ({ sanitizeCity, normalizeCountryCode, resolveLeadAddress, parseLocationString, _resetReverseBudget } =
     await import('../../src/modules/crm/leadLocation.js'));
 });
 
@@ -63,6 +63,84 @@ describe('normalizeCountryCode', () => {
     expect(normalizeCountryCode('CH')).toBe('CH');
     expect(normalizeCountryCode('PRESS CONFERENCE')).toBeNull();
     expect(normalizeCountryCode(null)).toBeNull();
+  });
+});
+
+describe('parseLocationString (selected search location → city/country)', () => {
+  it('splits "City, Country" into a reliable city + ISO country', () => {
+    expect(parseLocationString('Lahore, Pakistan')).toEqual({ city: 'Lahore', country: 'PK' });
+    expect(parseLocationString('Paris, France')).toEqual({ city: 'Paris', country: 'FR' });
+    expect(parseLocationString('Casablanca, Casablanca-Settat, Morocco'))
+      .toEqual({ city: 'Casablanca', country: 'MA' });
+  });
+
+  it('treats a lone place name as the city (no country invented)', () => {
+    expect(parseLocationString('Lahore')).toEqual({ city: 'Lahore', country: null });
+  });
+
+  it('treats a lone country as the country, never a city', () => {
+    expect(parseLocationString('Pakistan')).toEqual({ city: null, country: 'PK' });
+  });
+
+  it('never returns a postal code or junk as the city', () => {
+    expect(parseLocationString('54000, Pakistan')).toEqual({ city: null, country: 'PK' });
+    expect(parseLocationString('')).toEqual({ city: null, country: null });
+    expect(parseLocationString(null)).toEqual({ city: null, country: null });
+  });
+
+  it('leaves the country null for an unknown place (no wrong guess)', () => {
+    expect(parseLocationString('Smalltown, Neverland')).toEqual({ city: 'Smalltown', country: null });
+  });
+});
+
+describe('resolveLeadAddress — selected-search-location fallback', () => {
+  it('fills a missing CITY from the search location, keeping the provider country', async () => {
+    const addr = await resolveLeadAddress({ city: null, country: 'FR', fallbackLocation: 'Paris, France' });
+    expect(addr).toMatchObject({ city: 'Paris', country: 'FR' });
+    expect(mockReverse).not.toHaveBeenCalled(); // no coords → no geocode
+  });
+
+  it('fills a missing COUNTRY from the search location, keeping the provider city', async () => {
+    const addr = await resolveLeadAddress({ city: 'Lahore', country: null, fallbackLocation: 'Lahore, Pakistan' });
+    expect(addr).toMatchObject({ city: 'Lahore', country: 'PK' });
+  });
+
+  it('fills BOTH city and country from the search location when both are missing', async () => {
+    const addr = await resolveLeadAddress({ city: null, country: null, fallbackLocation: 'Lahore, Pakistan' });
+    expect(addr).toMatchObject({ city: 'Lahore', country: 'PK' });
+  });
+
+  it('NEVER overwrites a valid business-specific city/country with the fallback', async () => {
+    const addr = await resolveLeadAddress({ city: 'Karachi', country: 'PK', fallbackLocation: 'Lahore, India' });
+    expect(addr).toMatchObject({ city: 'Karachi', country: 'PK' });
+  });
+
+  it('accepts structured fallbackCity / fallbackCountry hints', async () => {
+    const addr = await resolveLeadAddress({ city: null, country: null, fallbackCity: 'Lahore', fallbackCountry: 'PK' });
+    expect(addr).toMatchObject({ city: 'Lahore', country: 'PK' });
+  });
+
+  it('leaves an unresolved field empty rather than inventing it (ambiguous location)', async () => {
+    // A search location that is only a country can fill the country but not a city.
+    const addr = await resolveLeadAddress({ city: null, country: null, fallbackLocation: 'Pakistan' });
+    expect(addr.country).toBe('PK');
+    expect(addr.city).toBeNull();
+  });
+
+  it('prefers coordinates over the search location (coordinates are authoritative)', async () => {
+    mockReverse.mockResolvedValue(lahoreReverse); // coords resolve to Lahore / PK
+    const addr = await resolveLeadAddress({
+      city: null, country: null, latitude: 31.5204, longitude: 74.3587, fallbackLocation: 'Paris, France',
+    });
+    expect(addr).toMatchObject({ city: 'Lahore', country: 'PK' });
+  });
+
+  it('falls back to the search location only when coordinates resolve nothing', async () => {
+    mockReverse.mockResolvedValue({ result: null });
+    const addr = await resolveLeadAddress({
+      city: null, country: null, latitude: 31.5204, longitude: 74.3587, fallbackLocation: 'Lahore, Pakistan',
+    });
+    expect(addr).toMatchObject({ city: 'Lahore', country: 'PK' });
   });
 });
 

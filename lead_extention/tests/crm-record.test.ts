@@ -36,6 +36,13 @@ describe('toExtensionRecord — the CRM payload no longer drops rich business da
     expect(record.googleMapsUrl).toContain('google.com/maps/place/Royal');
   });
 
+  it('sends the selected search location as the CRM city/country fallback', () => {
+    const record = toExtensionRecord(lead({ searchLocation: 'Lahore, Pakistan' })) as Record<string, unknown>;
+    expect(record.searchLocation).toBe('Lahore, Pakistan');
+    // Absent when the lead never carried one (older scrapes) — never fabricated.
+    expect((toExtensionRecord(lead({ searchLocation: null })) as Record<string, unknown>).searchLocation).toBeNull();
+  });
+
   it('never fabricates a rating distribution when the histogram was not scraped', () => {
     const record = toExtensionRecord(lead({ ratingBreakdown: null })) as Record<string, unknown>;
     expect(record.ratingDistribution).toBeNull();

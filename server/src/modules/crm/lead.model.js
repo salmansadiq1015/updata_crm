@@ -86,7 +86,12 @@ const leadSchema = new mongoose.Schema(
       // lives in `region` (canton stays CH-only for the HVAC home market).
       canton: { type: String, trim: true, maxlength: 2, default: null },
       region: { type: String, trim: true, maxlength: 120, default: null },
-      country: { type: String, trim: true, maxlength: 2, default: 'CH' },
+      // No blanket CH default — forcing every country-less lead to Switzerland
+      // put foreign leads (e.g. Pakistan, Morocco) in the wrong country. Manual
+      // single-create still defaults to CH via lead.validation (the Swiss home
+      // market); imports/discovery set the country explicitly (null when truly
+      // unknown) so nothing is ever invented here.
+      country: { type: String, trim: true, maxlength: 2, default: null },
       // Full provider-supplied address string, kept verbatim for display.
       formatted: { type: String, trim: true, maxlength: 500, default: null },
     },
@@ -164,6 +169,10 @@ const leadSchema = new mongoose.Schema(
       discoveryResultId: { type: mongoose.Schema.Types.ObjectId, ref: 'DiscoveryResult', default: null },
       businessType: { type: String, trim: true, maxlength: 120, default: null },
       keyword: { type: String, trim: true, maxlength: 120, default: null },
+      // The raw selected search location the lead was discovered under (e.g.
+      // "Lahore" / "Lahore, Pakistan"). Kept so a city/country that had to be
+      // filled from the search location can be audited and re-derived later.
+      searchLocation: { type: String, trim: true, maxlength: 255, default: null },
       discoveryLocation: { type: mongoose.Schema.Types.Mixed, default: null },
       discoveryArea: { type: mongoose.Schema.Types.Mixed, default: null },
       discoverySearchCoordinates: { type: mongoose.Schema.Types.Mixed, default: null },

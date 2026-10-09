@@ -64,7 +64,7 @@ import {
   SORT_FIELD_TO_COLUMN,
   buildLeadFilterParams,
 } from './lead-ui-constants';
-import { buildGoogleMapsUrl, copyText } from './lead-ui-utils';
+import { copyText, mapsUrlForLead } from './lead-ui-utils';
 import type { LeadUser } from './lead-ui-utils';
 import { ConvertDialog } from './convert-dialog';
 import { LeadBulkActionBar } from './lead-bulk-action-bar';
@@ -377,7 +377,9 @@ export function LeadListView() {
   const renderRowActions = useCallback(
     ({ row }: { row: ShellRowRef<Lead> }) => {
       const lead = row.original;
-      const mapsUrl = buildGoogleMapsUrl(lead);
+      // Prefer the stored provider place link (opens the business itself) over a
+      // bare coordinate pin, matching the detail drawer and map preview card.
+      const mapsUrl = mapsUrlForLead(lead);
       return (
         <RowActionsMenu
           items={[

@@ -135,9 +135,17 @@ const FIELD_ALIASES = {
   street: ['street', 'strasse', 'address', 'adresse', 'addressline1', 'streetaddress'],
   addressSupplement: ['addresssupplement', 'supplement', 'addresszusatz', 'zusatz', 'addition', 'addressextra'],
   postalCode: ['postalcode', 'zip', 'zipcode', 'plz', 'postcode', 'postleitzahl'],
+  area: ['area', 'district', 'neighbourhood', 'neighborhood', 'suburb', 'quartier'],
   city: ['city', 'ort', 'town', 'stadt'],
   canton: ['canton', 'kanton', 'state', 'province'],
+  region: ['region', 'stateprovince', 'bundesland'],
   country: ['country', 'land', 'countrycode'],
+  formattedAddress: ['formattedaddress', 'fulladdress', 'completeaddress'],
+  latitude: ['latitude', 'lat'],
+  longitude: ['longitude', 'lng', 'lon', 'long'],
+  // The selected search location (e.g. "Lahore") a lead was discovered under —
+  // the last-resort fallback for a city/country the row itself does not carry.
+  searchLocation: ['searchlocation', 'searcharea', 'searchterm', 'discoverylocation', 'searchquery'],
   phone: ['phone', 'telephone', 'tel', 'phonenumber', 'telefon', 'festnetz'],
   mobile: ['mobile', 'mobilephone', 'cell', 'cellphone', 'handy', 'natel'],
   email: ['email', 'mail', 'emailaddress', 'mailaddress'],
@@ -545,10 +553,26 @@ class LeadImportExportService {
     if (byField.street) address.street = byField.street;
     if (byField.addressSupplement) address.addressSupplement = byField.addressSupplement;
     if (byField.postalCode) address.postalCode = byField.postalCode;
+    if (byField.area) address.area = byField.area;
     if (byField.city) address.city = byField.city;
     if (byField.canton) address.canton = byField.canton.toUpperCase();
-    if (byField.country) address.country = byField.country.toUpperCase();
+    if (byField.region) address.region = byField.region;
+    // Keep the country as given here; importLeads normalises it (name → ISO code)
+    // and fills a missing one via coordinates / the search location.
+    if (byField.country) address.country = byField.country;
+    if (byField.formattedAddress) address.formatted = byField.formattedAddress;
     if (Object.keys(address).length) dto.address = address;
+
+    // Coordinate + search-location hints are consumed by importLeads' address
+    // resolver, then stripped before the lead is created (underscore-prefixed so
+    // they are never mistaken for persisted lead fields).
+    const latitude = Number(byField.latitude);
+    const longitude = Number(byField.longitude);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      dto._latitude = latitude;
+      dto._longitude = longitude;
+    }
+    if (byField.searchLocation) dto._searchLocation = byField.searchLocation;
 
     if (byField.phone) dto.phone = byField.phone;
     if (byField.mobile) dto.mobile = byField.mobile;
@@ -599,15 +623,21 @@ class LeadImportExportService {
       if (errors.length < ERROR_CAP) errors.push({ row, message });
     };
 
-    // Phase 1 — map + validate (pure, fast). Rows that map to nothing are
-    // skipped; rows without a name fail; the rest become dedup candidates.
+    // Phase 1 — map + validate. Rows that map to nothing are skipped; rows
+    // without a name fail; the rest become dedup candidates. Each candidate's
+    // address is then resolved through the SHARED resolver so a file import
+    // follows the exact same city/country rules as discovery / the extension:
+    // the country name is reduced to an ISO code, coordinates (when present)
+    // fill a missing city/country, the selected search location is the final
+    // fallback, and a country-less lead is never silently defaulted to CH.
     const candidates = [];
     for (let i = 0; i < rows.length; i += 1) {
       const rowNumber = i + 2; // +1 for the header row, +1 for 1-based indexing
       const dto = this.mapRowToLead(rows[i]);
 
       // Drop rows that mapped to nothing meaningful (only the default source).
-      const meaningfulKeys = Object.keys(dto).filter((key) => key !== 'source');
+      const meaningfulKeys = Object.keys(dto).filter((key) => key !== 'source'
+        && key !== '_latitude' && key !== '_longitude' && key !== '_searchLocation');
       if (meaningfulKeys.length === 0) {
         summary.skipped += 1;
         continue;
@@ -619,6 +649,7 @@ class LeadImportExportService {
         continue;
       }
 
+      await this._resolveRowAddress(dto);
       candidates.push({ dto, rowNumber, isDuplicate: false });
     }
 
@@ -696,8 +727,12 @@ class LeadImportExportService {
         const websiteValue = normalizeLeadWebsite(record.website);
         const latitude = inRangeOrNull(record.latitude, -90, 90);
         const longitude = inRangeOrNull(record.longitude, -180, 180);
+        // The user's selected search location (e.g. "Lahore") — the last-resort
+        // fallback for a city/country the scrape and coordinates could not give.
+        const searchLocation = cleanString(record.searchLocation)?.slice(0, 255) || null;
         // Coordinate-aware address: a postal-code/junk city or missing country is
-        // reverse-geocoded, and a non-Swiss lead is never forced to CH.
+        // reverse-geocoded; whatever is still missing is filled from the selected
+        // search location; and a non-Swiss lead is never forced to CH.
         const address = await resolveLeadAddress({
           street: cleanString(record.street) || cleanString(record.address),
           area: record.area,
@@ -710,6 +745,7 @@ class LeadImportExportService {
           formatted: cleanString(record.formattedAddress) || cleanString(record.address),
           latitude,
           longitude,
+          fallbackLocation: searchLocation,
         });
         const matches = await leadService.findDuplicates({
           name,
@@ -758,7 +794,12 @@ class LeadImportExportService {
             mapsUrl: normalizeMapsUrl(record.googleMapsUrl),
           },
           source: placeId ? LEAD_SOURCE.GOOGLE_PLACES : LEAD_SOURCE.IMPORT,
-          sourceMetadata: { googlePlaceId: placeId || null, businessType: normalizeBusinessType(record.category), discoveredAt: record.discoveredAt || null },
+          sourceMetadata: {
+            googlePlaceId: placeId || null,
+            businessType: normalizeBusinessType(record.category),
+            searchLocation,
+            discoveredAt: record.discoveredAt || null,
+          },
           tags: Array.isArray(record.categories) ? record.categories.slice(0, 50) : [],
           notes: cleanString(record.address) ? `Google Maps address: ${record.address}` : null,
         }, createdBy, meta);
@@ -857,6 +898,51 @@ class LeadImportExportService {
       }
     };
     await Promise.all(Array.from({ length: size }, () => runNext()));
+  }
+
+  /**
+   * Normalise a mapped file-import row's address through the shared resolver and
+   * strip the transient coordinate / search-location hints. Mutates `dto` in
+   * place: replaces `dto.address` with the resolved block and, when the row
+   * carried coordinates, sets `dto.location` (GeoJSON Point). Best-effort — a
+   * resolver failure leaves the originally mapped address untouched.
+   */
+  async _resolveRowAddress(dto) {
+    const latitude = dto._latitude;
+    const longitude = dto._longitude;
+    const searchLocation = dto._searchLocation;
+    delete dto._latitude; delete dto._longitude; delete dto._searchLocation;
+
+    const src = dto.address || {};
+    // Nothing to normalise AND nothing that could fill a gap → leave as-is.
+    if (!Object.keys(src).length && latitude === undefined && !searchLocation) return;
+
+    try {
+      const resolved = await resolveLeadAddress({
+        street: src.street,
+        area: src.area,
+        city: src.city,
+        postalCode: src.postalCode,
+        canton: src.canton,
+        // A CSV "State" column lands in `canton`; reuse it as the region source
+        // so a non-Swiss province is not lost when it is not a valid canton.
+        state: src.region ?? src.canton,
+        region: src.region,
+        country: src.country,
+        formatted: src.formatted,
+        latitude,
+        longitude,
+        fallbackLocation: searchLocation,
+      });
+      dto.address = { ...src, ...resolved };
+      if (latitude !== undefined && longitude !== undefined) {
+        dto.location = { type: 'Point', coordinates: [longitude, latitude] };
+      }
+    } catch (err) {
+      logger.warn('Lead import address resolution failed (non-blocking)', {
+        module: 'crm', action: 'lead.file_import', error: { message: err.message },
+      });
+    }
   }
 
   /** Global dedup ladder (name+postal / phone / website). Non-blocking: a lookup
@@ -1088,7 +1174,8 @@ class LeadImportExportService {
       `type values: ${LEAD_TYPE_VALUES.join(' | ')} (default: ${LEAD_TYPE.BUSINESS})`,
       `status values: ${LEAD_STATUS_VALUES.join(' | ')} (default: ${LEAD_STATUS.NEW})`,
       'tags: comma-separated, e.g. prospect,heating',
-      'canton: 2-letter Swiss code (e.g. ZH); country: 2-letter code (default CH)',
+      'canton: 2-letter Swiss code (e.g. ZH); country: name or 2-letter code (e.g. Pakistan or PK). Left blank, it is resolved from coordinates / searchLocation when possible, otherwise left empty — it is no longer forced to CH.',
+      'Optional: latitude, longitude (decimal) and searchLocation (e.g. "Lahore, Pakistan") — used to fill a missing city/country without overwriting a value you provide.',
       'Headers are case- and spacing-insensitive (e.g. "Postal Code", "PLZ" and "zip" all map to postalCode).',
       'Delete the example row on the Leads sheet before importing.',
     ];

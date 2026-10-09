@@ -77,9 +77,13 @@ export const CSV_HEADERS = [
   'Discovered At'
 ] as const;
 
-// This is the exact editable column order used by the existing CRM import
-// template. Extension exports can therefore be imported without remapping.
+// The editable column order used by the CRM import template, plus the extra
+// columns (area, coordinates, searchLocation) the CRM's importer recognises by
+// header name. They let the CSV fallback route carry the same coordinate +
+// search-location signals the structured endpoint sends, so a city/country the
+// scrape missed is still reverse-geocoded / filled on the server.
 export const CRM_IMPORT_HEADERS = [
-  'name', 'type', 'status', 'street', 'addressSupplement', 'postalCode',
-  'city', 'canton', 'country', 'phone', 'mobile', 'email', 'website', 'notes', 'tags'
+  'name', 'type', 'status', 'street', 'addressSupplement', 'area', 'postalCode',
+  'city', 'canton', 'country', 'phone', 'mobile', 'email', 'website', 'notes', 'tags',
+  'latitude', 'longitude', 'searchLocation'
 ] as const;

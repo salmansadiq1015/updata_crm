@@ -51,6 +51,8 @@ import {
   nextThrottleBackoff,
   nowIso,
   parseCoordinates,
+  pinCoordinatesFromUrl,
+  sameGeoPoint,
 } from '../shared/utils';
 import { discoverPublicEmails } from '../enrichment/website-discovery';
 import { clearAllLocalData, LeadRepository, SearchRepository, SettingsRepository } from '../storage/repositories';
@@ -392,7 +394,7 @@ async function resolveSweepArea(job: Job): Promise<Tile | null> {
   const hasTypedLocation = Boolean(location) && location.toLowerCase() !== 'current maps context';
 
   if (hasTypedLocation) {
-    center = await geocodeLocation(job, location);
+    center = await geocodeLocation(job, location, job.originCoordinates);
     if (!center) {
       throw new Error(
         `Could not find “${location}” on Google Maps. Check the spelling or use a more specific place `
@@ -416,33 +418,62 @@ async function resolveSweepArea(job: Job): Promise<Tile | null> {
 }
 
 // Geocode a typed location by pointing Maps at the place ITSELF (not the
-// business query), then reading the settled camera. Searching the location alone
-// is unambiguous — Google recentres on it — whereas "<business> near <place>"
-// could keep the current viewport. Returns null if no on-location centre settles.
-async function geocodeLocation(job: Job, location: string): Promise<GeoPoint | null> {
+// business query), then reading its RESOLVED coordinate. Searching the location
+// alone is unambiguous — Google recentres on it. Returns null if nothing settles
+// (the caller then fails loudly instead of scraping the wrong place).
+async function geocodeLocation(job: Job, location: string, originalCenter: GeoPoint | null): Promise<GeoPoint | null> {
   try {
     await navigateToQuery(job.tabId, location);
     await waitForTabNavigation(job.tabId);
     await ensureMapsContentScript(job.tabId);
-    return await waitForMapCenter(job.tabId);
+    return await waitForGeocodedCenter(job, originalCenter);
   } catch {
     return null;
   }
 }
 
-// Poll for the map camera, accepting it only once Maps has actually navigated to
-// the new search (a /maps/search route carrying @coords) — so we never read the
-// previous location's stale camera mid-navigation.
-async function waitForMapCenter(tabId: number): Promise<GeoPoint | null> {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+// Read the coordinate Google RESOLVED a typed location to, robust against the
+// "camera lag" that caused Paris searches to scrape Lahore: right after we point
+// the tab at the location, the URL still carries the PREVIOUS viewport's
+// `@lat,lng` camera for a moment before Maps flies to the real place, so the old
+// code grabbed that stale camera. Here we trust, in order:
+//   1. the place PIN (`!3d!4d`) once Google resolves the query to a /maps/place/
+//      — the authoritative geocode, with no camera-animation lag; then
+//   2. a camera (`@`) that has SETTLED — identical across two reads — and that
+//      has moved away from the starting viewport (an unmoved camera is only
+//      accepted after several polls, in case the place genuinely is nearby).
+// A generous initial delay lets the fly-to begin before the first read.
+async function waitForGeocodedCenter(job: Job, originalCenter: GeoPoint | null): Promise<GeoPoint | null> {
+  let prevCamera: GeoPoint | null = null;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    await delay(attempt === 0 ? 2_500 : 1_500);
+    await waitIfPaused(job); if (job.stopped) return null;
+    let url: string | undefined;
     try {
-      const response = await sendToMaps(tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
-      const center = response.context?.centerCoordinates;
-      const settled = isSearchRoute(response.context?.url) || isPlaceRoute(response.context?.url);
-      if (center && settled) return center;
-    } catch { /* still navigating */ }
-    await delay(Math.min(4_000, 600 * (2 ** attempt)));
+      const response = await sendToMaps(job.tabId, { type: 'GET_MAPS_CONTEXT' }) as { context?: MapsContext };
+      url = response.context?.url;
+    } catch { continue; }
+
+    // 1. Google resolved the location to a place — its pin is the geocode.
+    if (isPlaceRoute(url)) {
+      const pin = url ? pinCoordinatesFromUrl(url) : null;
+      if (pin) return pin;
+    }
+
+    // 2. Otherwise accept the camera once it has stopped moving. Reject the
+    //    stale pre-fly camera: an unmoved reading is only trusted after the map
+    //    has had several seconds to recentre.
+    const camera = url ? parseCoordinates(url) : null;
+    if (camera && (isSearchRoute(url) || isPlaceRoute(url))) {
+      if (sameGeoPoint(camera, prevCamera, 0.01)) {
+        const movedAway = !originalCenter || !sameGeoPoint(camera, originalCenter, 0.05);
+        if (movedAway || attempt >= 5) return camera;
+      }
+      prevCamera = camera;
+    }
   }
+  // Timed out without a confident fix → fail loudly (caller shows an error);
+  // never silently return the starting viewport for a typed location.
   return null;
 }
 

@@ -94,6 +94,29 @@ export function parseCoordinates(urlOrText: string): { latitude: number; longitu
   return Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null;
 }
 
+// The RESOLVED place pin (`!3d<lat>!4d<lng>`) a Maps place URL carries — the
+// authoritative geocode of a searched location, free of the camera-animation lag
+// that `@lat,lng` (parseCoordinates) suffers right after a navigation. Used to
+// geocode a typed discovery location reliably.
+export function pinCoordinatesFromUrl(urlOrText: string): { latitude: number; longitude: number } | null {
+  const match = urlOrText.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+  return Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null;
+}
+
+// Two coordinates are "the same place" within a degrees tolerance (~1.1 km per
+// 0.01°). Used to tell a settled map camera from one still mid-fly, and to tell
+// whether the camera has actually moved off the starting viewport.
+export function sameGeoPoint(
+  a: { latitude: number; longitude: number } | null,
+  b: { latitude: number; longitude: number } | null,
+  tolerance: number,
+): boolean {
+  return Boolean(a && b) && Math.abs(a!.latitude - b!.latitude) < tolerance && Math.abs(a!.longitude - b!.longitude) < tolerance;
+}
+
 export function nowIso(): string {
   return new Date().toISOString();
 }

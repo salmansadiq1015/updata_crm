@@ -24,7 +24,10 @@ export const exportLeads = {
     source: Joi.string().valid(...LEAD_SOURCES),
     assignedTo: objectId,
     type: Joi.string().valid(...LEAD_TYPES),
+    country: Joi.string().trim().length(2).uppercase(),
     city: Joi.string().trim().max(120),
+    area: Joi.string().trim().max(120),
+    businessType: Joi.string().trim().max(120),
     q: Joi.string().trim().max(100).allow(''),
   }),
 };

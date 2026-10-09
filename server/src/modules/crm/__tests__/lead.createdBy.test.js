@@ -201,34 +201,34 @@ describe('leadRepository — createdBy is populated', () => {
     expect(accentInsensitive.data[0].createdBy).toMatchObject({ email: author.email });
   });
 
-  it('filters by lead type and database-backed place, and exposes only live filter options', async () => {
+  it('filters by exact address geography and exposes only live, scoped filter options', async () => {
     const author = await makeUser();
     const deleted = await Lead.create(leadDoc(author._id, {
       name: 'Deleted Lugano Lead',
       type: 'private',
-      address: { city: 'Lugano', canton: 'TI', country: 'CH' },
+      address: { area: 'Cornaredo', city: 'Lugano', canton: 'TI', country: 'CH' },
     }));
     await Lead.updateOne({ _id: deleted._id }, { isDeleted: true, deletedAt: new Date() });
     await Lead.create([
       leadDoc(author._id, {
         name: 'Zürich Business',
         type: 'business',
-        address: { city: 'Zürich', canton: 'ZH', country: 'CH' },
+        address: { area: 'Altstadt', city: 'Zürich', canton: 'ZH', country: 'CH' },
       }),
       leadDoc(author._id, {
         name: 'Zürich Private',
         type: 'private',
-        address: { city: 'Zürich', canton: 'ZH', country: 'CH' },
+        address: { area: 'Altstadt', city: 'Zürich', canton: 'ZH', country: 'CH' },
       }),
       leadDoc(author._id, {
         name: 'Basel Business',
         type: 'business',
-        address: { city: 'Basel', canton: 'BS', country: 'CH' },
+        address: { area: 'Kleinbasel', city: 'Basel', canton: 'BS', country: 'CH' },
       }),
       leadDoc(author._id, {
         name: 'Paris Discovery Business',
         type: 'business',
-        address: { city: 'Boulogne-Billancourt', country: 'FR' },
+        address: { area: 'Billancourt', city: 'Boulogne-Billancourt', country: 'FR' },
         sourceMetadata: {
           discoveryLocation: { name: 'Paris', city: 'Paris', countryCode: 'FR' },
         },
@@ -237,14 +237,29 @@ describe('leadRepository — createdBy is populated', () => {
 
     const filtered = await leadRepository.list({ filters: { city: 'Zürich', type: 'private' } });
     expect(filtered.data.map((lead) => lead.name)).toEqual(['Zürich Private']);
-    const discoveryPlaceFiltered = await leadRepository.list({ filters: { city: 'Paris' } });
-    expect(discoveryPlaceFiltered.data.map((lead) => lead.name)).toEqual(['Paris Discovery Business']);
+    const exactGeography = await leadRepository.list({
+      filters: { country: 'fr', city: ' boulogne-billancourt ', area: 'billancourt' },
+    });
+    expect(exactGeography.data.map((lead) => lead.name)).toEqual(['Paris Discovery Business']);
+    // Discovery metadata describes the search that found a lead, not the lead's
+    // address. It must never make a Paris filter return a business in another city.
+    const discoveryMetadataOnly = await leadRepository.list({ filters: { city: 'Paris' } });
+    expect(discoveryMetadataOnly.data).toEqual([]);
 
     const options = await leadRepository.getFilterOptions();
-    expect(options.places).toEqual([
-      { city: 'Basel', cantons: ['BS'], count: 1 },
-      { city: 'Paris', cantons: [], count: 1 },
-      { city: 'Zürich', cantons: ['ZH'], count: 2 },
+    expect(options.countries).toEqual([
+      { value: 'CH', count: 3 },
+      { value: 'FR', count: 1 },
+    ]);
+    expect(options.cities).toEqual([
+      { value: 'Basel', country: 'CH', count: 1 },
+      { value: 'Boulogne-Billancourt', country: 'FR', count: 1 },
+      { value: 'Zürich', country: 'CH', count: 2 },
+    ]);
+    expect(options.areas).toEqual([
+      { value: 'Altstadt', city: 'Zürich', country: 'CH', count: 2 },
+      { value: 'Billancourt', city: 'Boulogne-Billancourt', country: 'FR', count: 1 },
+      { value: 'Kleinbasel', city: 'Basel', country: 'CH', count: 1 },
     ]);
     expect(options.types).toEqual([
       { value: 'business', count: 3 },

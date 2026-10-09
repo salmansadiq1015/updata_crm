@@ -425,7 +425,9 @@ export function LeadListView() {
     filters.status !== 'ALL' ||
     filters.source !== 'ALL' ||
     filters.type !== 'ALL' ||
-    filters.place !== FILTER_ALL ||
+    filters.country !== FILTER_ALL ||
+    filters.city !== FILTER_ALL ||
+    filters.area !== FILTER_ALL ||
     filters.businessType !== FILTER_ALL ||
     filters.assignedTo !== FILTER_ALL;
 
@@ -579,8 +581,12 @@ export function LeadListView() {
             onSourceChange={(source) => setFilters({ source })}
             type={filters.type}
             onTypeChange={(type) => setFilters({ type })}
-            place={filters.place}
-            onPlaceChange={(place) => setFilters({ place })}
+            country={filters.country}
+            onCountryChange={(country) => setFilters({ country, city: FILTER_ALL, area: FILTER_ALL })}
+            city={filters.city}
+            onCityChange={(city) => setFilters({ city, area: FILTER_ALL })}
+            area={filters.area}
+            onAreaChange={(area) => setFilters({ area })}
             businessType={filters.businessType}
             onBusinessTypeChange={(businessType) => setFilters({ businessType })}
             filterOptions={filterOptionsQuery.data}

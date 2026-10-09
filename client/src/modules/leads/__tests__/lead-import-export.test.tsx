@@ -209,7 +209,10 @@ describe('LeadExportMenu', () => {
         status: 'qualified',
         source: 'manual',
         type: 'business',
-        place: 'Zürich',
+        country: 'CH',
+        city: 'Zürich',
+        area: 'Altstadt',
+        businessType: 'bakery',
         search: 'bakery',
       });
 
@@ -223,7 +226,10 @@ describe('LeadExportMenu', () => {
       expect(url.searchParams.get('status')).toBe('qualified');
       expect(url.searchParams.get('source')).toBe('manual');
       expect(url.searchParams.get('type')).toBe('business');
+      expect(url.searchParams.get('country')).toBe('CH');
       expect(url.searchParams.get('city')).toBe('Zürich');
+      expect(url.searchParams.get('area')).toBe('Altstadt');
+      expect(url.searchParams.get('businessType')).toBe('bakery');
       expect(url.searchParams.get('q')).toBe('bakery');
 
       // The fetched blob is handed to the browser as a download.

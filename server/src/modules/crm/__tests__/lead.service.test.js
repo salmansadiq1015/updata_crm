@@ -234,14 +234,17 @@ describe('leadService reads', () => {
 
     await expect(
       leadService.listForMap({
-        status: 'new', city: 'Zürich', q: 'foo', limit: 2000,
+        status: 'new', country: 'CH', city: 'Zürich', area: 'Altstadt', businessType: 'Bakery',
+        q: 'foo', limit: 2000,
         cursor: 'abc', sortBy: 'name', sortOrder: 'asc',
       }),
     ).resolves.toBe(mapResult);
 
     // `q` becomes `search`; cursor/sortBy/sortOrder are not forwarded as filters.
     expect(mockLeadListForMap).toHaveBeenCalledWith({
-      filters: { status: 'new', city: 'Zürich' },
+      filters: {
+        status: 'new', country: 'CH', city: 'Zürich', area: 'Altstadt', businessType: 'Bakery',
+      },
       search: 'foo',
       searchUserIds: [],
       limit: 2000,

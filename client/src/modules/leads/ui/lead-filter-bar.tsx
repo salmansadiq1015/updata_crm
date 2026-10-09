@@ -5,6 +5,8 @@ import {
   Building2,
   CheckCircle2,
   Circle,
+  Globe2,
+  Map as MapIcon,
   MapPin,
   Search,
   SlidersHorizontal,
@@ -55,9 +57,12 @@ type LeadFilterBarProps = {
   onSourceChange: (value: LeadSource | typeof FILTER_ALL) => void;
   type: LeadType | typeof FILTER_ALL;
   onTypeChange: (value: LeadType | typeof FILTER_ALL) => void;
-  /** A city returned by `GET /crm/leads/filter-options`, or `ALL`. */
-  place: string;
-  onPlaceChange: (value: string) => void;
+  country: string;
+  onCountryChange: (value: string) => void;
+  city: string;
+  onCityChange: (value: string) => void;
+  area: string;
+  onAreaChange: (value: string) => void;
   /** A business category returned by `GET /crm/leads/filter-options`, or `ALL`. */
   businessType: string;
   onBusinessTypeChange: (value: string) => void;
@@ -95,10 +100,26 @@ function CountBadge({ count }: { count: number | undefined }) {
   );
 }
 
+function samePlacePart(left: string | null | undefined, right: string): boolean {
+  return (left ?? '').replace(/\s+/g, ' ').trim().toLocaleLowerCase('en')
+    === right.replace(/\s+/g, ' ').trim().toLocaleLowerCase('en');
+}
+
+function mergeOptions(options: Array<{ value: string; count: number }>): Array<{ value: string; count: number }> {
+  const merged = new Map<string, { value: string; count: number }>();
+  for (const option of options) {
+    const key = option.value.replace(/\s+/g, ' ').trim().toLocaleLowerCase('en');
+    const existing = merged.get(key);
+    if (existing) existing.count += option.count;
+    else merged.set(key, { value: option.value, count: option.count });
+  }
+  return [...merged.values()].sort((a, b) => a.value.localeCompare(b.value));
+}
+
 /**
  * Premium two-tier filter workspace. Every control is server-backed; in
- * particular the Place menu is populated from distinct cities that currently
- * exist on non-deleted leads, never from a hard-coded geography list.
+ * particular Country, City and Area are populated from the corresponding lead
+ * address fields and cascade without using discovery-location approximations.
  */
 export function LeadFilterBar({
   search,
@@ -109,8 +130,12 @@ export function LeadFilterBar({
   onSourceChange,
   type,
   onTypeChange,
-  place,
-  onPlaceChange,
+  country,
+  onCountryChange,
+  city,
+  onCityChange,
+  area,
+  onAreaChange,
   businessType,
   onBusinessTypeChange,
   filterOptions,
@@ -123,12 +148,19 @@ export function LeadFilterBar({
 }: LeadFilterBarProps) {
   const { t } = useLanguage();
   const typeCounts = new Map(filterOptions?.types.map((option) => [option.value, option.count]) ?? []);
+  const cityOptions = mergeOptions((filterOptions?.cities ?? []).filter((option) =>
+    country === FILTER_ALL || samePlacePart(option.country, country)));
+  const areaOptions = mergeOptions((filterOptions?.areas ?? []).filter((option) =>
+    (country === FILTER_ALL || samePlacePart(option.country, country))
+    && (city === FILTER_ALL || samePlacePart(option.city, city))));
   const activeFilterCount = [
     search.trim(),
     status !== FILTER_ALL,
     source !== FILTER_ALL,
     type !== FILTER_ALL,
-    place !== FILTER_ALL,
+    country !== FILTER_ALL,
+    city !== FILTER_ALL,
+    area !== FILTER_ALL,
     businessType !== FILTER_ALL,
     assignedTo !== FILTER_ALL,
   ].filter(Boolean).length;
@@ -205,7 +237,7 @@ export function LeadFilterBar({
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
           <FilterField label={t('leads.filter.status', 'Status')}>
             <Select value={status} onValueChange={(value) => onStatusChange(value as LeadStatus | typeof FILTER_ALL)}>
               <SelectTrigger
@@ -333,38 +365,99 @@ export function LeadFilterBar({
             </Select>
           </FilterField>
 
-          <FilterField label={t('leads.filter.place', 'Place')}>
-            <Select value={place} onValueChange={onPlaceChange}>
+          <FilterField label={t('leads.filter.country', 'Country')}>
+            <Select value={country} onValueChange={onCountryChange}>
               <SelectTrigger
-                aria-label={t('leads.filter.place', 'Place')}
-                className={cn(TRIGGER, place !== FILTER_ALL && ACTIVE_TRIGGER)}
+                aria-label={t('leads.filter.country', 'Country')}
+                className={cn(TRIGGER, country !== FILTER_ALL && ACTIVE_TRIGGER)}
               >
-                <SelectValue placeholder={t('leads.filter.place', 'Place')} />
+                <SelectValue placeholder={t('leads.filter.country', 'Country')} />
               </SelectTrigger>
               <SelectContent position="popper" sideOffset={6} className="max-h-80">
-                <SelectItem value={FILTER_ALL} textValue={t('leads.filter.allPlaces', 'All places')}>
+                <SelectItem value={FILTER_ALL} textValue={t('leads.filter.allCountries', 'All countries')}>
                   <span className="flex items-center gap-2">
-                    <MapPin className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
-                    {t('leads.filter.allPlaces', 'All places')}
+                    <Globe2 className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
+                    {t('leads.filter.allCountries', 'All countries')}
                   </span>
                 </SelectItem>
-                {filterOptions?.places.map((option) => {
-                  const label = option.cantons.length
-                    ? `${option.city} · ${option.cantons.join(', ')}`
-                    : option.city;
-                  return (
-                    <SelectItem key={option.city} value={option.city} textValue={label}>
-                      <span className="flex w-full min-w-44 items-center gap-2">
-                        <MapPin className="h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />
-                        <span className="truncate">{label}</span>
-                        <CountBadge count={option.count} />
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-                {!filterOptionsLoading && (filterOptions?.places.length ?? 0) === 0 && (
+                {filterOptions?.countries.map((option) => (
+                  <SelectItem key={option.value} value={option.value} textValue={option.value}>
+                    <span className="flex w-full min-w-36 items-center gap-2">
+                      <Globe2 className="h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />
+                      <span className="truncate uppercase">{option.value}</span>
+                      <CountBadge count={option.count} />
+                    </span>
+                  </SelectItem>
+                ))}
+                {!filterOptionsLoading && (filterOptions?.countries.length ?? 0) === 0 && (
                   <div className="px-3 py-2 text-xs text-muted-foreground">
-                    {t('leads.filter.noPlaces', 'No lead places available yet')}
+                    {t('leads.filter.noCountries', 'No countries available yet')}
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
+          </FilterField>
+
+          <FilterField label={t('leads.filter.city', 'City')}>
+            <Select value={city} onValueChange={onCityChange}>
+              <SelectTrigger
+                aria-label={t('leads.filter.city', 'City')}
+                className={cn(TRIGGER, city !== FILTER_ALL && ACTIVE_TRIGGER)}
+              >
+                <SelectValue placeholder={t('leads.filter.city', 'City')} />
+              </SelectTrigger>
+              <SelectContent position="popper" sideOffset={6} className="max-h-80">
+                <SelectItem value={FILTER_ALL} textValue={t('leads.filter.allCities', 'All cities')}>
+                  <span className="flex items-center gap-2">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
+                    {t('leads.filter.allCities', 'All cities')}
+                  </span>
+                </SelectItem>
+                {cityOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value} textValue={option.value}>
+                    <span className="flex w-full min-w-40 items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />
+                      <span className="truncate">{option.value}</span>
+                      <CountBadge count={option.count} />
+                    </span>
+                  </SelectItem>
+                ))}
+                {!filterOptionsLoading && cityOptions.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    {t('leads.filter.noCities', 'No cities available for this country')}
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
+          </FilterField>
+
+          <FilterField label={t('leads.filter.area', 'Area')}>
+            <Select value={area} onValueChange={onAreaChange}>
+              <SelectTrigger
+                aria-label={t('leads.filter.area', 'Area')}
+                className={cn(TRIGGER, area !== FILTER_ALL && ACTIVE_TRIGGER)}
+              >
+                <SelectValue placeholder={t('leads.filter.area', 'Area')} />
+              </SelectTrigger>
+              <SelectContent position="popper" sideOffset={6} className="max-h-80">
+                <SelectItem value={FILTER_ALL} textValue={t('leads.filter.allAreas', 'All areas')}>
+                  <span className="flex items-center gap-2">
+                    <MapIcon className="h-3.5 w-3.5 text-muted-foreground/60" aria-hidden="true" />
+                    {t('leads.filter.allAreas', 'All areas')}
+                  </span>
+                </SelectItem>
+                {areaOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value} textValue={option.value}>
+                    <span className="flex w-full min-w-40 items-center gap-2">
+                      <MapIcon className="h-3.5 w-3.5 shrink-0 text-primary/80" aria-hidden="true" />
+                      <span className="truncate">{option.value}</span>
+                      <CountBadge count={option.count} />
+                    </span>
+                  </SelectItem>
+                ))}
+                {!filterOptionsLoading && areaOptions.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    {t('leads.filter.noAreas', 'No areas available for this location')}
                   </div>
                 )}
               </SelectContent>

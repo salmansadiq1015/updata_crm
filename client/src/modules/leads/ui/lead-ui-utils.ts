@@ -127,11 +127,10 @@ export function getLeadBusinessTypeLabel(lead: Pick<Lead, 'sourceMetadata'>): st
   return humanizeBusinessType(lead.sourceMetadata?.businessType);
 }
 
-/** Neighborhood/area for the list column — the business's area, else its city,
- *  never a bare postal code. */
+/** Neighborhood/area for the list column — never substitute the separate city
+ * field, otherwise the Area column and Area filter describe different data. */
 export function getLeadAreaLabel(address: LeadAddress): string | null {
   if (address.area && !isBarePostalCode(address.area)) return address.area;
-  if (address.city && !isBarePostalCode(address.city)) return address.city;
   return null;
 }
 

@@ -29,6 +29,34 @@ function accentSafeRegex(term) {
   return result;
 }
 
+function normalizedExactTextFilter(path, value) {
+  const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return {};
+  const pattern = normalized.split(' ').map(accentSafeRegex).join('\\s+');
+  return { [path]: { $regex: `^\\s*${pattern}\\s*$`, $options: 'i' } };
+}
+
+function cleanFacetText(value) {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+}
+
+function isBarePostal(value) {
+  return /^[\d\s-]{3,}$/.test(cleanFacetText(value));
+}
+
+function displayTextScore(value) {
+  const text = cleanFacetText(value);
+  if (!text || !/\p{L}/u.test(text)) return 0;
+  const lower = text.toLocaleLowerCase('en');
+  const upper = text.toLocaleUpperCase('en');
+  if (text === lower || text === upper) return 1;
+  return 2;
+}
+
+function preferredDisplayText(current, candidate) {
+  return displayTextScore(candidate) > displayTextScore(current) ? candidate : current;
+}
+
 const ALLOWED_FILTERS = {
   status: 'exact',
   assignedTo: 'objectId',
@@ -105,31 +133,28 @@ class LeadRepository {
   /**
    * Build the shared lead query from the list/map filters: createdBy scope (when
    * given — leads are company-wide so the service passes none), the whitelisted
-   * exact filters, the friendly `city` → nested place match, and the accent-safe
-   * search. Returned as a single combined filter, WITHOUT any cursor clause, so
-   * both the cursor list and the (cursorless) map query can reuse it.
+   * exact filters, the address geography matches, and the accent-safe search.
+   * Returned as a single combined filter, WITHOUT any cursor clause, so both the
+   * cursor list and the (cursorless) map query can reuse it.
    */
   buildListFilter({
     filters = {}, search, searchUserIds = [], createdBy,
   } = {}) {
-    // `city` and `businessType` are friendly API filter names, while the stored
-    // fields are nested. Pull them out before buildFilter so an arbitrary client
-    // key can never be forwarded to MongoDB. Values originate from the validated
-    // query (or the server-generated filter-options response), matched exactly.
-    const { city, businessType, ...flatFilters } = filters;
+    // Geography and businessType are friendly API filter names, while the
+    // stored fields are nested. Pull them out before buildFilter so arbitrary
+    // client keys can never reach MongoDB. Geography maps exactly to the three
+    // fields displayed in the Leads table — no discovery-location fallback.
+    const {
+      country, city, area, businessType, ...flatFilters
+    } = filters;
 
     const baseFilter = {
       ...(createdBy ? { createdBy } : {}),
       ...buildFilter(flatFilters, ALLOWED_FILTERS),
     };
-    const placeFilter = city ? {
-      $or: [
-        { 'address.city': city },
-        { 'sourceMetadata.discoveryLocation.city': city },
-        { 'sourceMetadata.discoveryLocation.name': city },
-        { 'sourceMetadata.discoveryLocation.formattedAddress': city },
-      ],
-    } : {};
+    const countryFilter = normalizedExactTextFilter('address.country', country);
+    const cityFilter = normalizedExactTextFilter('address.city', city);
+    const areaFilter = normalizedExactTextFilter('address.area', area);
     // Business category (e.g. "Chinese restaurant") lives on sourceMetadata, not
     // the lead `type` (business/private). Exact match on the stored value the
     // filter-options facet surfaced.
@@ -169,7 +194,14 @@ class LeadRepository {
       searchFilter = { $or: or };
     }
 
-    return combineFilters(baseFilter, placeFilter, businessTypeFilter, searchFilter);
+    return combineFilters(
+      baseFilter,
+      countryFilter,
+      cityFilter,
+      areaFilter,
+      businessTypeFilter,
+      searchFilter,
+    );
   }
 
   async list({
@@ -263,52 +295,40 @@ class LeadRepository {
   /**
    * Database-backed values for list filters. Aggregation middleware does not
    * run Mongoose's soft-delete `find` hook, so `isDeleted:false` is explicit.
-   * Places are grouped by city (the actual list filter) and include all canton
-   * codes found for that city plus a lead count for a useful, honest menu.
+   * Geographic options come only from the same address.country/address.city/
+   * address.area fields rendered in the table. City options retain their
+   * country, and area options retain city+country, so the client can cascade
+   * Country → City → Area without mixing identically named places.
    */
   async getFilterOptions() {
     const [facets] = await Lead.aggregate([
       { $match: { isDeleted: false } },
       {
         $facet: {
-          places: [
+          countries: [
+            { $match: { 'address.country': { $type: 'string', $ne: '' } } },
+            { $group: { _id: '$address.country', count: { $sum: 1 } } },
+          ],
+          cities: [
             {
               $project: {
-                place: {
-                  $switch: {
-                    branches: [
-                      {
-                        case: { $gt: [{ $strLenCP: { $ifNull: ['$sourceMetadata.discoveryLocation.city', ''] } }, 0] },
-                        then: '$sourceMetadata.discoveryLocation.city',
-                      },
-                      {
-                        case: { $gt: [{ $strLenCP: { $ifNull: ['$sourceMetadata.discoveryLocation.name', ''] } }, 0] },
-                        then: '$sourceMetadata.discoveryLocation.name',
-                      },
-                      {
-                        case: { $gt: [{ $strLenCP: { $ifNull: ['$sourceMetadata.discoveryLocation.formattedAddress', ''] } }, 0] },
-                        then: '$sourceMetadata.discoveryLocation.formattedAddress',
-                      },
-                      {
-                        case: { $gt: [{ $strLenCP: { $ifNull: ['$address.city', ''] } }, 0] },
-                        then: '$address.city',
-                      },
-                    ],
-                    default: null,
-                  },
-                },
-                canton: '$address.canton',
+                value: '$address.city',
+                country: '$address.country',
               },
             },
-            { $match: { place: { $type: 'string', $ne: '' } } },
+            { $match: { value: { $type: 'string', $ne: '' } } },
+            { $group: { _id: { value: '$value', country: '$country' }, count: { $sum: 1 } } },
+          ],
+          areas: [
             {
-              $group: {
-                _id: '$place',
-                count: { $sum: 1 },
-                cantons: { $addToSet: '$canton' },
+              $project: {
+                value: '$address.area',
+                city: '$address.city',
+                country: '$address.country',
               },
             },
-            { $sort: { _id: 1 } },
+            { $match: { value: { $type: 'string', $ne: '' } } },
+            { $group: { _id: { value: '$value', city: '$city', country: '$country' }, count: { $sum: 1 } } },
           ],
           types: [
             { $match: { type: { $in: ['business', 'private'] } } },
@@ -324,28 +344,35 @@ class LeadRepository {
       },
     ]);
 
-    // Collapse near-duplicate places that differ only by case / surrounding
-    // whitespace (the facet groups on the exact stored string, so "Lahore" and
-    // "lahore " would otherwise be two menu rows). Counts and cantons merge; the
-    // first-seen display spelling (facet is already sorted) is kept.
-    const placeByKey = new Map();
-    for (const place of facets?.places ?? []) {
-      const display = String(place._id ?? '').replace(/\s+/g, ' ').trim();
-      if (!display) continue;
-      const key = display.toLocaleLowerCase('en');
-      const existing = placeByKey.get(key);
-      if (existing) {
-        existing.count += place.count;
-        for (const canton of place.cantons ?? []) if (canton) existing.cantons.add(canton);
-      } else {
-        placeByKey.set(key, { city: display, count: place.count, cantons: new Set((place.cantons ?? []).filter(Boolean)) });
+    const mergeOptions = (rows, scopeFields = []) => {
+      const byKey = new Map();
+      for (const row of rows ?? []) {
+        const raw = row?._id && typeof row._id === 'object' ? row._id : { value: row?._id };
+        const value = cleanFacetText(raw.value);
+        if (!value || isBarePostal(value)) continue;
+        const scopes = Object.fromEntries(scopeFields.map((field) => [field, cleanFacetText(raw[field]) || null]));
+        const key = [value, ...scopeFields.map((field) => scopes[field] ?? '')]
+          .map((item) => item.toLocaleLowerCase('en'))
+          .join('|');
+        const existing = byKey.get(key);
+        if (existing) {
+          existing.count += row.count;
+          existing.value = preferredDisplayText(existing.value, value);
+          for (const field of scopeFields) {
+            existing[field] = preferredDisplayText(existing[field], scopes[field]) || existing[field];
+          }
+        } else byKey.set(key, { value, ...scopes, count: row.count });
       }
-    }
+      return [...byKey.values()].sort((a, b) => a.value.localeCompare(b.value));
+    };
+
+    const countries = mergeOptions(facets?.countries)
+      .map((option) => ({ ...option, value: option.value.length === 2 ? option.value.toUpperCase() : option.value }));
 
     return {
-      places: [...placeByKey.values()]
-        .map((place) => ({ city: place.city, cantons: [...place.cantons].sort(), count: place.count }))
-        .sort((a, b) => a.city.localeCompare(b.city)),
+      countries,
+      cities: mergeOptions(facets?.cities, ['country']),
+      areas: mergeOptions(facets?.areas, ['city', 'country']),
       types: (facets?.types ?? []).map((type) => ({ value: type._id, count: type.count })),
       businessTypes: (facets?.businessTypes ?? []).map((bt) => ({ value: bt._id, count: bt.count })),
     };

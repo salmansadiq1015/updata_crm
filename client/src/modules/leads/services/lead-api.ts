@@ -72,7 +72,10 @@ export type LeadExportFilters = {
   source?: string;
   assignedTo?: string;
   type?: string;
+  country?: string;
   city?: string;
+  area?: string;
+  businessType?: string;
   q?: string;
 };
 
@@ -293,15 +296,38 @@ export const leadApi = {
   async getFilterOptions(): Promise<LeadFilterOptions> {
     const response = toApiResponse<unknown>(await apiClient.get(ENDPOINTS.LEADS.FILTER_OPTIONS));
     const data = isRecord(response.data) ? response.data : {};
-    const places = Array.isArray(data.places) ? data.places : [];
+    const countries = Array.isArray(data.countries) ? data.countries : [];
+    // During a rolling deployment, accept the former `places` payload as city
+    // options. New servers return scoped cities and areas explicitly.
+    const cities = Array.isArray(data.cities)
+      ? data.cities
+      : Array.isArray(data.places)
+        ? data.places
+        : [];
+    const areas = Array.isArray(data.areas) ? data.areas : [];
     const types = Array.isArray(data.types) ? data.types : [];
     const businessTypes = Array.isArray(data.businessTypes) ? data.businessTypes : [];
     return {
-      places: places.flatMap((value) => {
-        if (!isRecord(value) || typeof value.city !== 'string' || !value.city.trim()) return [];
+      countries: countries.flatMap((value) => {
+        if (!isRecord(value) || typeof value.value !== 'string' || !value.value.trim()) return [];
+        return [{ value: value.value, count: toNumber(value.count) }];
+      }),
+      cities: cities.flatMap((value) => {
+        if (!isRecord(value)) return [];
+        const city = typeof value.value === 'string' ? value.value : value.city;
+        if (typeof city !== 'string' || !city.trim()) return [];
         return [{
-          city: value.city,
-          cantons: toStringArray(value.cantons),
+          value: city,
+          country: typeof value.country === 'string' && value.country.trim() ? value.country : null,
+          count: toNumber(value.count),
+        }];
+      }),
+      areas: areas.flatMap((value) => {
+        if (!isRecord(value) || typeof value.value !== 'string' || !value.value.trim()) return [];
+        return [{
+          value: value.value,
+          city: typeof value.city === 'string' && value.city.trim() ? value.city : null,
+          country: typeof value.country === 'string' && value.country.trim() ? value.country : null,
           count: toNumber(value.count),
         }];
       }),

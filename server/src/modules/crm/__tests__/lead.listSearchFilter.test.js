@@ -64,18 +64,33 @@ async function makeLead(overrides = {}) {
 }
 
 describe('leadRepository.getFilterOptions', () => {
-  it('dedupes places that differ only by case / whitespace and sums their counts', async () => {
-    await makeLead({ address: { city: 'Lahore' } });
-    await makeLead({ address: { city: 'lahore ' } });
-    await makeLead({ address: { city: '  LAHORE' } });
-    await makeLead({ address: { city: 'Zurich' } });
+  it('returns separate country, city and area facets and scopes duplicate names by their parent location', async () => {
+    await makeLead({ address: { country: 'PK', city: 'Lahore', area: 'Gulberg' } });
+    await makeLead({ address: { country: 'PK', city: 'lahore ', area: 'gulberg ' } });
+    await makeLead({ address: { country: 'FR', city: 'Paris', area: 'Centre' } });
+    await makeLead({ address: { country: 'CH', city: 'Lausanne', area: 'Centre' } });
+    await makeLead({ address: { country: 'CH', city: '8001', area: '8001' } });
 
-    const { places } = await leadRepository.getFilterOptions();
+    const { countries, cities, areas } = await leadRepository.getFilterOptions();
 
-    const lahore = places.filter((p) => p.city.toLocaleLowerCase('en') === 'lahore');
-    expect(lahore).toHaveLength(1); // three spellings collapse into one row
-    expect(lahore[0].count).toBe(3);
-    expect(places.some((p) => p.city === 'Zurich')).toBe(true);
+    expect(countries).toEqual([
+      { value: 'CH', count: 2 },
+      { value: 'FR', count: 1 },
+      { value: 'PK', count: 2 },
+    ]);
+    expect(cities).toEqual(expect.arrayContaining([
+      { value: 'Lahore', country: 'PK', count: 2 },
+      { value: 'Paris', country: 'FR', count: 1 },
+      { value: 'Lausanne', country: 'CH', count: 1 },
+    ]));
+    expect(cities.some((option) => option.value === '8001')).toBe(false);
+    // The same area label in two cities stays as two scoped options.
+    expect(areas).toEqual(expect.arrayContaining([
+      { value: 'Centre', city: 'Paris', country: 'FR', count: 1 },
+      { value: 'Centre', city: 'Lausanne', country: 'CH', count: 1 },
+      { value: 'Gulberg', city: 'Lahore', country: 'PK', count: 2 },
+    ]));
+    expect(areas.some((option) => option.value === '8001')).toBe(false);
   });
 
   it('returns distinct business categories with counts, separate from the business/private type facet', async () => {
@@ -127,5 +142,43 @@ describe('leadService.list — business-type filter', () => {
     const result = await leadService.list({ businessType: 'Chinese restaurant', limit: 25 });
 
     expect(result.data.map((l) => l.name)).toEqual(['ChineseOne']);
+  });
+});
+
+describe('leadService.list — address geography filters', () => {
+  it('combines country, city and area using normalized exact matches', async () => {
+    await makeLead({
+      name: 'Paris Centre Hotel',
+      address: { country: 'FR', city: 'Paris', area: '1er arrondissement' },
+    });
+    await makeLead({
+      name: 'Paris Outer Hotel',
+      address: { country: 'FR', city: 'Paris', area: 'Montmartre' },
+    });
+    await makeLead({
+      name: 'Lahore Hotel',
+      address: { country: 'PK', city: 'Lahore', area: 'Gulberg' },
+      sourceMetadata: { discoveryLocation: { city: 'Paris', countryCode: 'FR' } },
+    });
+
+    const result = await leadService.list({
+      country: ' fr ', city: ' paris ', area: '1ER ARRONDISSEMENT', limit: 25,
+    });
+
+    expect(result.data.map((lead) => lead.name)).toEqual(['Paris Centre Hotel']);
+  });
+
+  it('does not treat the discovery search location as the business city', async () => {
+    await makeLead({
+      name: 'Actually Lahore',
+      address: { country: 'PK', city: 'Lahore', area: 'Gulberg' },
+      sourceMetadata: { discoveryLocation: { name: 'Paris', city: 'Paris', countryCode: 'FR' } },
+    });
+
+    const paris = await leadService.list({ country: 'FR', city: 'Paris', limit: 25 });
+    const lahore = await leadService.list({ country: 'PK', city: 'Lahore', limit: 25 });
+
+    expect(paris.data).toEqual([]);
+    expect(lahore.data.map((lead) => lead.name)).toEqual(['Actually Lahore']);
   });
 });

@@ -176,9 +176,9 @@ describe('business type + location helpers', () => {
     expect(getLeadBusinessTypeLabel(withType(null))).toBeNull();
   });
 
-  it('area label prefers the neighborhood, falls back to city, never a postal code', () => {
+  it('area label uses only the neighborhood and never substitutes city or postal code', () => {
     expect(getLeadAreaLabel(addr({ area: 'Johar Town', city: 'Lahore' }))).toBe('Johar Town');
-    expect(getLeadAreaLabel(addr({ area: null, city: 'Lahore' }))).toBe('Lahore');
+    expect(getLeadAreaLabel(addr({ area: null, city: 'Lahore' }))).toBeNull();
     expect(getLeadAreaLabel(addr({ area: '54000', city: '54000' }))).toBeNull();
   });
 

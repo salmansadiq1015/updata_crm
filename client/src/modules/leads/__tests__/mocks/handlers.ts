@@ -8,10 +8,12 @@ export const handlers = [
   http.get(L, () => HttpResponse.json(okPage([makeLeadDTO(), makeLeadDTO()]))),
 
   http.get(`${L}/filter-options`, () => HttpResponse.json(ok({
-    places: [
-      { city: 'Basel', cantons: ['BS'], count: 1 },
-      { city: 'Zürich', cantons: ['ZH'], count: 2 },
+    countries: [{ value: 'CH', count: 3 }],
+    cities: [
+      { value: 'Basel', country: 'CH', count: 1 },
+      { value: 'Zürich', country: 'CH', count: 2 },
     ],
+    areas: [{ value: 'Altstadt', city: 'Zürich', country: 'CH', count: 1 }],
     types: [
       { value: 'business', count: 2 },
       { value: 'private', count: 1 },

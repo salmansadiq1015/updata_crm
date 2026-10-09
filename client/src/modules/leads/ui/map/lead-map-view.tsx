@@ -133,7 +133,10 @@ export function LeadMapView({ open, onClose, users, currentUserId }: LeadMapView
     filters.status !== FILTER_ALL ||
     filters.source !== FILTER_ALL ||
     filters.type !== FILTER_ALL ||
-    filters.place !== FILTER_ALL ||
+    filters.country !== FILTER_ALL ||
+    filters.city !== FILTER_ALL ||
+    filters.area !== FILTER_ALL ||
+    filters.businessType !== FILTER_ALL ||
     filters.assignedTo !== FILTER_ALL;
 
   // ── Reset on open, and when the filtered set changes ────────────────────────
@@ -551,8 +554,14 @@ export function LeadMapView({ open, onClose, users, currentUserId }: LeadMapView
             onSourceChange={(source) => setFilters({ source })}
             type={filters.type}
             onTypeChange={(type) => setFilters({ type })}
-            place={filters.place}
-            onPlaceChange={(place) => setFilters({ place })}
+            country={filters.country}
+            onCountryChange={(country) => setFilters({ country, city: FILTER_ALL, area: FILTER_ALL })}
+            city={filters.city}
+            onCityChange={(city) => setFilters({ city, area: FILTER_ALL })}
+            area={filters.area}
+            onAreaChange={(area) => setFilters({ area })}
+            businessType={filters.businessType}
+            onBusinessTypeChange={(businessType) => setFilters({ businessType })}
             filterOptions={filterOptionsQuery.data}
             filterOptionsLoading={filterOptionsQuery.isLoading}
             assignedTo={filters.assignedTo}

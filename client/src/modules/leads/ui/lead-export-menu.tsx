@@ -32,7 +32,10 @@ function buildExportFilters(filters: LeadsFilters, currentUserId: string | null)
     ...(filters.status !== 'ALL' ? { status: filters.status } : {}),
     ...(filters.source !== 'ALL' ? { source: filters.source } : {}),
     ...(filters.type !== 'ALL' ? { type: filters.type } : {}),
-    ...(filters.place !== 'ALL' ? { city: filters.place } : {}),
+    ...(filters.country !== 'ALL' ? { country: filters.country } : {}),
+    ...(filters.city !== 'ALL' ? { city: filters.city } : {}),
+    ...(filters.area !== 'ALL' ? { area: filters.area } : {}),
+    ...(filters.businessType !== 'ALL' ? { businessType: filters.businessType } : {}),
     ...(assignedTo ? { assignedTo } : {}),
     ...(q ? { q } : {}),
   };

@@ -221,6 +221,9 @@ const leadSchema = new mongoose.Schema(
 leadSchema.index({ createdBy: 1, createdAt: -1 }); // lists
 leadSchema.index({ status: 1 }); // pipeline
 leadSchema.index({ assignedTo: 1 }); // "my leads"
+// Cascading Leads filters use the actual address hierarchy. Keeping soft-delete
+// first also helps the filter-options facet, which only exposes live leads.
+leadSchema.index({ isDeleted: 1, 'address.country': 1, 'address.city': 1, 'address.area': 1 });
 // Import idempotency: a google-sourced place may back at most one lead.
 leadSchema.index(
   { 'sourceMetadata.googlePlaceId': 1 },

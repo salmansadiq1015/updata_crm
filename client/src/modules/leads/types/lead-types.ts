@@ -180,15 +180,25 @@ export type LeadFilters = {
   assignedTo?: string;
   source?: LeadSource;
   type?: LeadType;
+  country?: string;
   city?: string;
+  area?: string;
   businessType?: string;
   q?: string;
 };
 
-export type LeadPlaceFilterOption = {
-  city: string;
-  cantons: string[];
+export type LeadCountryFilterOption = {
+  value: string;
   count: number;
+};
+
+export type LeadCityFilterOption = LeadCountryFilterOption & {
+  country: string | null;
+};
+
+export type LeadAreaFilterOption = LeadCountryFilterOption & {
+  city: string | null;
+  country: string | null;
 };
 
 export type LeadTypeFilterOption = {
@@ -205,7 +215,9 @@ export type LeadBusinessTypeFilterOption = {
 };
 
 export type LeadFilterOptions = {
-  places: LeadPlaceFilterOption[];
+  countries: LeadCountryFilterOption[];
+  cities: LeadCityFilterOption[];
+  areas: LeadAreaFilterOption[];
   types: LeadTypeFilterOption[];
   businessTypes: LeadBusinessTypeFilterOption[];
 };
@@ -231,7 +243,7 @@ export type CursorPage<T> = {
 export type LeadPage = CursorPage<Lead>;
 
 /** Filters the map view accepts — the list filters minus cursor pagination. */
-export type LeadMapParams = Pick<LeadFilters, 'status' | 'assignedTo' | 'source' | 'type' | 'city' | 'q'> & {
+export type LeadMapParams = Pick<LeadFilters, 'status' | 'assignedTo' | 'source' | 'type' | 'country' | 'city' | 'area' | 'businessType' | 'q'> & {
   limit?: number;
 };
 

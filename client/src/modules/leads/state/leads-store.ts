@@ -8,8 +8,10 @@ export type LeadsFilters = {
   status: LeadStatus | 'ALL';
   source: LeadSource | 'ALL';
   type: LeadType | 'ALL';
-  /** A city returned by the database-backed lead filter-options endpoint. */
-  place: string;
+  /** Address geography returned by the database-backed filter-options endpoint. */
+  country: string;
+  city: string;
+  area: string;
   /** A business category (e.g. "Chinese restaurant") from filter-options, or 'ALL'. */
   businessType: string;
   // 'ALL' = everyone, 'ME' = current user, or a specific user id.
@@ -26,7 +28,9 @@ const INITIAL_FILTERS: LeadsFilters = {
   status: 'ALL',
   source: 'ALL',
   type: 'ALL',
-  place: 'ALL',
+  country: 'ALL',
+  city: 'ALL',
+  area: 'ALL',
   businessType: 'ALL',
   assignedTo: 'ALL',
   search: '',

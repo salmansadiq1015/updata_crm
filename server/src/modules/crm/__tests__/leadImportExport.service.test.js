@@ -538,7 +538,12 @@ describe('leadImportExportService.exportLeads', () => {
   it('exports CSV with a header and rows, paging the repository by filters', async () => {
     mockList.mockResolvedValueOnce({ data: SAMPLE_LEADS, pagination: { hasNext: false, nextCursor: null } });
 
-    const out = await service.exportLeads({ format: 'csv', filters: { status: 'new', search: 'alpha' } }, 'user-1');
+    const out = await service.exportLeads({
+      format: 'csv',
+      filters: {
+        status: 'new', country: 'CH', city: 'Zürich', area: 'Altstadt', businessType: 'Bakery', search: 'alpha',
+      },
+    }, 'user-1');
 
     expect(out.filename).toMatch(/^leads-\d{4}-\d{2}-\d{2}\.csv$/);
     expect(out.contentType).toContain('text/csv');
@@ -548,7 +553,10 @@ describe('leadImportExportService.exportLeads', () => {
     expect(text).toContain('Gamma AG');
     // search is lifted out of the filter set and passed separately.
     expect(mockList).toHaveBeenCalledWith(expect.objectContaining({
-      filters: { status: 'new' }, search: 'alpha',
+      filters: {
+        status: 'new', country: 'CH', city: 'Zürich', area: 'Altstadt', businessType: 'Bakery',
+      },
+      search: 'alpha',
     }));
   });
 

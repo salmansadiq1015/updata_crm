@@ -103,7 +103,9 @@ const LEAD_A = makeLeadDTO({
     keyword: 'sourdough',
     discoveredAt: '2026-09-28T09:30:00.000Z',
   },
-  address: { street: 'Bahnhofstrasse 1', postalCode: '8001', city: 'Zürich', canton: 'ZH', country: 'CH' },
+  address: {
+    street: 'Bahnhofstrasse 1', area: 'Altstadt', postalCode: '8001', city: 'Zürich', canton: 'ZH', country: 'CH',
+  },
 });
 // No phone, e-mail, website or coordinates: the drawer must not invent any.
 const LEAD_B = makeLeadDTO({
@@ -165,9 +167,15 @@ beforeEach(() => {
   server.use(
     http.get(L, () => HttpResponse.json(okPage(LEADS))),
     http.get(`${L}/filter-options`, () => HttpResponse.json(ok({
-      places: [
-        { city: 'Basel', cantons: ['BS'], count: 1 },
-        { city: 'Zürich', cantons: ['ZH'], count: 1 },
+      countries: [{ value: 'CH', count: 2 }, { value: 'FR', count: 1 }],
+      cities: [
+        { value: 'Basel', country: 'CH', count: 1 },
+        { value: 'Zürich', country: 'CH', count: 1 },
+        { value: 'Paris', country: 'FR', count: 1 },
+      ],
+      areas: [
+        { value: 'Altstadt', city: 'Zürich', country: 'CH', count: 1 },
+        { value: 'Bercy', city: 'Paris', country: 'FR', count: 1 },
       ],
       types: [
         { value: 'business', count: 3 },
@@ -220,8 +228,8 @@ describe('LeadListView', () => {
 
     // The real business category is the primary Type value (not the generic kind).
     expect(within(await findRow('Alpine Bakery AG')).getByText('Bakery')).toBeInTheDocument();
-    // "Zürich" shows in both the Area (fallback) and City columns now.
-    expect(within(await findRow('Alpine Bakery AG')).getAllByText('Zürich').length).toBeGreaterThan(0);
+    expect(within(await findRow('Alpine Bakery AG')).getByText('Altstadt')).toBeInTheDocument();
+    expect(within(await findRow('Alpine Bakery AG')).getByText('Zürich')).toBeInTheDocument();
 
     // Status is a labelled badge, never colour alone.
     expect(within(table).getByText('New')).toBeInTheDocument();
@@ -267,7 +275,7 @@ describe('LeadListView', () => {
     await waitFor(() => expect(requests[requests.length - 1].searchParams.get('q')).toBe('bakery'));
   });
 
-  it('uses database-backed place options and sends area and type filters to the API', async () => {
+  it('cascades database-backed country, city and area options and sends all exact filters to the API', async () => {
     const requests: URL[] = [];
     server.use(
       http.get(L, ({ request }) => {
@@ -278,19 +286,28 @@ describe('LeadListView', () => {
     const { user } = renderLeadList();
     await screen.findByText('Alpine Bakery AG');
 
+    await user.click(screen.getByRole('combobox', { name: 'Country' }));
+    await user.click(await screen.findByRole('option', { name: /CH/ }));
+
+    await user.click(screen.getByRole('combobox', { name: 'City' }));
+    expect(await screen.findByRole('option', { name: /Zürich/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Paris/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Zürich/ }));
+
+    await user.click(screen.getByRole('combobox', { name: 'Area' }));
+    expect(await screen.findByRole('option', { name: /Altstadt/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Bercy/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Altstadt/ }));
+
     await user.click(screen.getByRole('combobox', { name: 'Lead type' }));
     await user.click(await screen.findByRole('option', { name: /Private/ }));
-    await waitFor(() => expect(requests[requests.length - 1].searchParams.get('type')).toBe('private'));
-
-    await user.click(screen.getByRole('combobox', { name: 'Place' }));
-    expect(await screen.findByRole('option', { name: /Zürich · ZH/ })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /Lugano/ })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('option', { name: /Zürich · ZH/ }));
 
     await waitFor(() => {
       const last = requests[requests.length - 1];
       expect(last.searchParams.get('type')).toBe('private');
+      expect(last.searchParams.get('country')).toBe('CH');
       expect(last.searchParams.get('city')).toBe('Zürich');
+      expect(last.searchParams.get('area')).toBe('Altstadt');
     });
   });
 

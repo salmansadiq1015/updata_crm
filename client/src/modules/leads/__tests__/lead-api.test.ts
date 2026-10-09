@@ -27,11 +27,15 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 describe('leadApi', () => {
-  it('getFilterOptions normalizes database-backed place and type facets', async () => {
+  it('getFilterOptions normalizes database-backed country, city, area and type facets', async () => {
     const options = await leadApi.getFilterOptions();
-    expect(options.places).toEqual([
-      { city: 'Basel', cantons: ['BS'], count: 1 },
-      { city: 'Zürich', cantons: ['ZH'], count: 2 },
+    expect(options.countries).toEqual([{ value: 'CH', count: 3 }]);
+    expect(options.cities).toEqual([
+      { value: 'Basel', country: 'CH', count: 1 },
+      { value: 'Zürich', country: 'CH', count: 2 },
+    ]);
+    expect(options.areas).toEqual([
+      { value: 'Altstadt', city: 'Zürich', country: 'CH', count: 1 },
     ]);
     expect(options.types).toEqual([
       { value: 'business', count: 2 },

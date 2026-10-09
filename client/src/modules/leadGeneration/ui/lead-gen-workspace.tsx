@@ -122,7 +122,10 @@ export function LeadGenWorkspace() {
   const clearSelection = useLeadGenStore((state) => state.clearSelection);
 
   const drawer = useDrawer('detail');
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return window.sessionStorage.getItem('updata-leadgen-active-session');
+  });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pageSize, setPageSize] = useState(DISCOVERY_PAGE_SIZE);
   const [importDialog, setImportDialog] = useState<{ open: boolean; selection: ImportSelection }>({
@@ -139,6 +142,14 @@ export function LeadGenWorkspace() {
   const sessionQuery = useDiscoverySession(sessionId, { poll: true, pollInterval: 5000 });
   const importResult = useImportResult(sessionId ?? '');
   const usersQuery = useWorkspaceUsers();
+
+  useEffect(() => {
+    if (sessionId) {
+      window.sessionStorage.setItem('updata-leadgen-active-session', sessionId);
+    } else {
+      window.sessionStorage.removeItem('updata-leadgen-active-session');
+    }
+  }, [sessionId]);
 
   // Results query params derived from store filters + sort (search debounced).
   const debouncedSearch = useDebounce(filters.search, 300);
@@ -164,7 +175,9 @@ export function LeadGenWorkspace() {
     ?? session?.counts.discovered
     ?? results.length;
 
-  const inResults = step === 3 && Boolean(sessionId);
+  // A persisted session restores directly into results after a page refresh;
+  // newly-created sessions still move the wizard to step 3 explicitly.
+  const inResults = Boolean(sessionId);
   const discoveredCount = session?.counts.discovered ?? 0;
   const hasResults = discoveredCount > 0 || results.length > 0;
   const markersQuery = useDiscoveryMarkers(sessionId, { enabled: Boolean(sessionId && hasResults) });
@@ -410,7 +423,16 @@ export function LeadGenWorkspace() {
 
       {/* Body */}
       <div className="min-h-0 flex-1">
-        {showResults && session ? (
+        {inResults && sessionQuery.isError ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center" role="alert">
+            <p className="font-medium text-foreground">{t('leadgen.session.restoreError', 'The saved discovery session could not be loaded.')}</p>
+            <p className="max-w-md text-sm text-muted-foreground">{t('leadgen.session.restoreErrorHint', 'Check your connection and retry. Your saved search and CRM data have not been deleted.')}</p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => void sessionQuery.refetch()}>{t('common.retry', 'Retry')}</Button>
+              <Button onClick={handleNewSearch}>{t('leadgen.import.summary.newSearch', 'New search')}</Button>
+            </div>
+          </div>
+        ) : showResults && session ? (
           <ResultsPanel
             sessionId={sessionId!}
             session={session}

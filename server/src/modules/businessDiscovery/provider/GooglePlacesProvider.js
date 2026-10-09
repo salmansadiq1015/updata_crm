@@ -205,10 +205,11 @@ export class GooglePlacesProvider extends PlacesProvider {
     return { place: data, raw: data };
   }
 
-  async autocomplete({ input, sessionToken, center, radiusMeters } = {}) {
+  async autocomplete({ input, countryCode, sessionToken, center, radiusMeters } = {}) {
     this._assertPlacesConfigured();
 
     const body = { input };
+    if (/^[A-Z]{2}$/.test(countryCode ?? '')) body.includedRegionCodes = [countryCode.toLowerCase()];
     if (sessionToken) body.sessionToken = sessionToken;
     if (hasFiniteCenter(center)) {
       body.locationBias = {
@@ -231,9 +232,11 @@ export class GooglePlacesProvider extends PlacesProvider {
 
   // ─────────────────────────── Geocoding (classic) ───────────────────────────
 
-  async geocode(address) {
+  async geocode(address, { countryCode } = {}) {
     this._assertGeocodingConfigured();
-    const data = await this._geocodeRequest({ address: String(address ?? '') });
+    const params = { address: String(address ?? '') };
+    if (/^[A-Z]{2}$/.test(countryCode ?? '')) params.components = `country:${countryCode}`;
+    const data = await this._geocodeRequest(params);
     return this._toGeocodeResult(data);
   }
 

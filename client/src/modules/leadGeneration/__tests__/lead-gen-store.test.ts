@@ -59,6 +59,10 @@ describe('lead-gen-store', () => {
   });
 
   describe('location / area drafts', () => {
+    it('starts without a country bias so worldwide searches are neutral', () => {
+      expect(store().locationDraft.countryCode).toBeNull();
+    });
+
     it('setLocationDraft merges partial updates', () => {
       store().setLocationDraft({ name: 'Zürich', center: { lat: 47.37, lng: 8.54 } });
       expect(store().locationDraft.name).toBe('Zürich');

@@ -135,7 +135,7 @@ describe('discoveryService.createDiscovery', () => {
       formattedAddress: 'Zurich, Switzerland',
     });
     expect(doc.config.maxSearchRequests).toBeNull();
-    expect(doc.config.initialResultLimit).toBe(300);
+    expect(doc.config.initialResultLimit).toBeNull();
     // Area normalized to a polygon for coverage / filtering
     expect(doc.area.type).toBe('radius');
     expect(doc.area.radiusMeters).toBe(1000);

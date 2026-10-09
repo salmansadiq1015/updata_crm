@@ -114,10 +114,12 @@ export class DiscoveryRunWorker extends BaseWorker {
         ? session.config.maxSearchRequests
         : undefined;
       const concurrency = session.config?.concurrency ?? config.discovery.concurrency;
-      const configuredInitialLimit = session.config?.initialResultLimit ?? config.discovery.initialResultLimit;
+      // Only legacy sessions that explicitly persisted a finite window retain
+      // that behaviour. New sessions store null and exhaust planned coverage.
+      const configuredInitialLimit = session.config?.initialResultLimit;
       const initialResultLimit = Number.isFinite(configuredInitialLimit) && configuredInitialLimit > 0
         ? Math.floor(configuredInitialLimit)
-        : 300;
+        : Infinity;
 
       // ── Plan coverage from the stored normalized polygon ──
       const plan = planCoverage({ type: 'polygon', geometry: session.area?.geometry }, {
@@ -180,8 +182,8 @@ export class DiscoveryRunWorker extends BaseWorker {
       const seededPlaceIds = (existingPlaceIds || []).filter(Boolean).map(String);
       const seenPlaceIds = new Set(seededPlaceIds);
       const inAreaPlaceIds = new Set(seededPlaceIds);
-      const seenPhones = new Set();
-      const seenDomains = new Set();
+      const namesByPhone = new Map();
+      const namesByDomain = new Map();
       const seenNamesAndAddresses = new Set();
       const locationsByName = new Map();
       // Seed the live match counters from what is already persisted so a "load
@@ -209,16 +211,25 @@ export class DiscoveryRunWorker extends BaseWorker {
         const nameAddress = name && address ? `${name}|${address}` : null;
         const coords = business.location?.coordinates;
 
-        if (phone && seenPhones.has(phone)) return true;
-        if (domain && seenDomains.has(domain)) return true;
+        // A phone number or domain alone is not a safe business identity: a
+        // hotel group, hospital network, or multi-location franchise can share
+        // one contact. Require the normalized business name as corroboration.
+        if (phone && name && namesByPhone.get(phone)?.has(name)) return true;
+        if (domain && name && namesByDomain.get(domain)?.has(name)) return true;
         if (nameAddress && seenNamesAndAddresses.has(nameAddress)) return true;
         if (name && Array.isArray(coords)) {
           const sameNameLocations = locationsByName.get(name) || [];
           if (sameNameLocations.some((location) => haversineMeters(coords, location) <= 30)) return true;
         }
 
-        if (phone) seenPhones.add(phone);
-        if (domain) seenDomains.add(domain);
+        if (phone && name) {
+          if (!namesByPhone.has(phone)) namesByPhone.set(phone, new Set());
+          namesByPhone.get(phone).add(name);
+        }
+        if (domain && name) {
+          if (!namesByDomain.has(domain)) namesByDomain.set(domain, new Set());
+          namesByDomain.get(domain).add(name);
+        }
         if (nameAddress) seenNamesAndAddresses.add(nameAddress);
         if (name && Array.isArray(coords)) {
           if (!locationsByName.has(name)) locationsByName.set(name, []);
@@ -489,7 +500,7 @@ export class DiscoveryRunWorker extends BaseWorker {
           discovered: counts.discovered,
           searchRequests: state.searchRequests,
           errors: state.errors,
-          initialResultLimit,
+          initialResultLimit: Number.isFinite(initialResultLimit) ? initialResultLimit : null,
           initialResultLimitReached: state.stoppedEarly || resultLimitReached,
         },
         module: 'discovery',

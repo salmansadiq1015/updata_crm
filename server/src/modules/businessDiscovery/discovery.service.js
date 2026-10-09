@@ -152,11 +152,12 @@ class DiscoveryService {
       areaSqKm: normalized.areaSqKm,
     };
 
-    // 5. Per-session provider-call/load guards. The first run returns quickly
-    //    with a bounded result window; the UI loads saved rows by cursor.
+    // 5. Per-session provider-call guards. New runs exhaust the planned
+    //    provider coverage; cursor pagination belongs at the read API and must
+    //    never truncate what the discovery worker persists.
     const sessionConfig = {
       maxResults: null,
-      initialResultLimit: config.discovery.initialResultLimit,
+      initialResultLimit: null,
       maxSearchRequests: null,
       maxCoverageCells: config.discovery.maxCoverageCells,
       concurrency: config.discovery.concurrency,
@@ -294,9 +295,13 @@ class DiscoveryService {
 
     const currentLimit = Number.isFinite(session.config?.initialResultLimit)
       ? Number(session.config.initialResultLimit)
-      : config.discovery.initialResultLimit;
+      : null;
     const currentCount = session.counts?.discovered ?? 0;
-    const nextLimit = Math.max(currentLimit || 0, currentCount) + config.discovery.initialResultLimit;
+    // A retry/load-more request for an unlimited session must stay unlimited;
+    // otherwise clicking it reintroduces the old artificial 300-row cutoff.
+    const nextLimit = currentLimit === null
+      ? null
+      : Math.max(currentLimit, currentCount) + config.discovery.initialResultLimit;
 
     const updated = await DiscoverySession.findOneAndUpdate(
       { _id: id, createdBy },

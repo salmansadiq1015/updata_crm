@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -340,7 +340,12 @@ async function findExtensionId(connection, unpackedPath) {
     if (id) return id;
     await delay(100);
   }
-  const hash = createHash('sha256').update(unpackedPath).digest('hex').slice(0, 32);
+  // A manifest `key` pins the unpacked extension ID. Falling back to a hash of
+  // the build path points Chrome at a nonexistent extension whenever the MV3
+  // worker has not woken yet, producing chrome-error:// ERR_BLOCKED_BY_CLIENT.
+  const manifest = JSON.parse(await readFile(path.join(unpackedPath, 'manifest.json'), 'utf8'));
+  const identity = manifest.key ? Buffer.from(manifest.key, 'base64') : unpackedPath;
+  const hash = createHash('sha256').update(identity).digest('hex').slice(0, 32);
   return [...hash].map((character) => String.fromCharCode(97 + Number.parseInt(character, 16))).join('');
 }
 

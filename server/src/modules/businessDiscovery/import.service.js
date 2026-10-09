@@ -74,7 +74,8 @@ class ImportService {
       else if (matchingStatus === RESULT_MATCHING_STATUS.EXISTING) counts.existing += 1;
       else if (matchingStatus === RESULT_MATCHING_STATUS.POSSIBLE_DUPLICATE) counts.possibleDuplicates += 1;
 
-      const notYetImported = importStatus === RESULT_IMPORT_STATUS.NOT_IMPORTED;
+      const notYetImported = importStatus === RESULT_IMPORT_STATUS.NOT_IMPORTED
+        || importStatus === RESULT_IMPORT_STATUS.FAILED;
       const isEligible = mode === LEAD_IMPORT_MODE.UPDATE
         ? ((matchingStatus === RESULT_MATCHING_STATUS.NEW
             || matchingStatus === RESULT_MATCHING_STATUS.EXISTING) && notYetImported)
@@ -201,7 +202,11 @@ class ImportService {
         claimed = await discoveryRepository.updateResultImportStatus(
           result._id,
           RESULT_IMPORT_STATUS.QUEUED,
-          { expectedStatus: RESULT_IMPORT_STATUS.NOT_IMPORTED, createdBy },
+          {
+            expectedStatus: [RESULT_IMPORT_STATUS.NOT_IMPORTED, RESULT_IMPORT_STATUS.FAILED],
+            set: { 'import.error': null },
+            createdBy,
+          },
         );
       } catch (err) {
         summary.failed += 1;

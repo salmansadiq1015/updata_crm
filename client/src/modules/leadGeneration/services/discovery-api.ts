@@ -246,7 +246,13 @@ export const discoveryApi = {
 
   async autocomplete(input: AutocompleteInput): Promise<AutocompletePrediction[]> {
     const response = toApiResponse<unknown>(
-      await apiClient.post(ENDPOINTS.DISCOVERY.AUTOCOMPLETE, input),
+      // The server/provider contract calls this field `input`; the public UI
+      // type calls it `query`. Sending the latter used to fail Joi validation
+      // before autocomplete ever reached a provider.
+      await apiClient.post(ENDPOINTS.DISCOVERY.AUTOCOMPLETE, {
+        input: input.query,
+        ...(input.countryCode ? { countryCode: input.countryCode } : {}),
+      }),
     );
     const list = extractList(
       isRecord(response.data) && Array.isArray(response.data.predictions)

@@ -165,6 +165,12 @@ export const importBody = {
 export const importPreview = {
   query: Joi.object({
     mode: Joi.string().valid(...IMPORT_MODES).required(),
+    selectionKind: Joi.string().valid(...SELECTION_KINDS).default(LEAD_IMPORT_SELECTION_KIND.ALL_NEW),
+    resultIds: Joi.array().items(objectId).max(1000).when('selectionKind', {
+      is: LEAD_IMPORT_SELECTION_KIND.SELECTED,
+      then: Joi.array().min(1).required(),
+      otherwise: Joi.forbidden(),
+    }),
   }),
 };
 

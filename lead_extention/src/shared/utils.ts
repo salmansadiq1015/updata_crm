@@ -157,3 +157,18 @@ export function effectiveRequestDelay(
   const safeBackoff = Number.isFinite(backoff) && backoff >= 1 ? backoff : 1;
   return Math.min(max, Math.max(0, Math.round(baseMs)) * safeBackoff);
 }
+
+// True when a place-page detail read belongs to the business card it is about to
+// be merged into. A detail tab that is still showing the PREVIOUS place (Maps →
+// Maps navigation) must never lend that place's phone/website/coordinates to the
+// next business — the "every lead has its neighbour's website" bug.
+export function detailMatchesRecord(
+  detail: { placeIdentifier?: string | null; businessName?: string | null },
+  record: { placeIdentifier?: string | null; businessName?: string | null },
+): boolean {
+  if (detail.placeIdentifier && record.placeIdentifier && detail.placeIdentifier === record.placeIdentifier) return true;
+  const a = normalizeText(detail.businessName);
+  const b = normalizeText(record.businessName);
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}

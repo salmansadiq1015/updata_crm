@@ -190,6 +190,19 @@ describe('discoveryApi', () => {
     expect(results[0]).toMatchObject({ name: 'Zürich', center: { lat: 47.37, lng: 8.54 } });
   });
 
+  it('maps the UI autocomplete query to the server input contract', async () => {
+    let requestBody: unknown;
+    server.use(
+      http.post(`${D}/location/autocomplete`, async ({ request }) => {
+        requestBody = await request.json();
+        return HttpResponse.json(ok({ predictions: [] }));
+      }),
+    );
+
+    await discoveryApi.autocomplete({ query: 'Paris' });
+    expect(requestBody).toEqual({ input: 'Paris' });
+  });
+
   it('autocomplete normalizes predictions', async () => {
     const predictions = await discoveryApi.autocomplete({ query: 'Zür' });
     expect(predictions[0]).toMatchObject({ placeId: 'ac-1', description: 'Zürich, Switzerland' });

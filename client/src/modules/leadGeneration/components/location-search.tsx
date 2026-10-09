@@ -127,6 +127,7 @@ export function LocationSearch() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resolveRequestRef = useRef(0);
   const debouncedQuery = useDebounce(query, 300);
 
   useEffect(() => {
@@ -184,10 +185,14 @@ export function LocationSearch() {
     async (value: string) => {
       const label = value.trim();
       if (!label) return;
+      const requestId = ++resolveRequestRef.current;
       setShowSuggestions(false);
       setQuery(label);
       try {
         const results = await resolveMutation.mutateAsync(label);
+        // A slower response for an older location must never replace a newer
+        // choice (e.g. Lahore resolving after the user already picked Paris).
+        if (requestId !== resolveRequestRef.current) return;
         const geo = results[0];
         if (!geo?.center) {
           showError(t('leadgen.location.search.noResults', 'No matching places'));
@@ -206,6 +211,7 @@ export function LocationSearch() {
         setRecent(next);
         writeRecent(next);
       } catch (error) {
+        if (requestId !== resolveRequestRef.current) return;
         showError(error);
       }
     },
@@ -281,7 +287,26 @@ export function LocationSearch() {
           <Input
             value={query}
             onChange={(event) => {
-              setQuery(event.target.value);
+              const value = event.target.value;
+              resolveRequestRef.current += 1;
+              setQuery(value);
+              // Text and coordinates are one configuration. Once the text no
+              // longer names the resolved place, invalidate all old metadata
+              // and the old area so Start cannot combine Paris text with a
+              // Lahore/previous-city center.
+              if (value.trim() !== locationDraft.name.trim()) {
+                setLocationDraft({
+                  name: value,
+                  center: null,
+                  formattedAddress: null,
+                  placeId: null,
+                  countryCode: null,
+                  country: null,
+                  region: null,
+                  city: null,
+                });
+                setAreaDraft({ type: null, geometry: null, radiusMeters: null, bounds: null });
+              }
               setShowSuggestions(true);
             }}
             onFocus={() => setShowSuggestions(true)}
@@ -301,7 +326,13 @@ export function LocationSearch() {
           {query && !predictionsQuery.isFetching && !isResolving && (
             <button
               type="button"
-              onClick={() => { setQuery(''); setShowSuggestions(false); }}
+              onClick={() => {
+                resolveRequestRef.current += 1;
+                setQuery('');
+                setShowSuggestions(false);
+                setLocationDraft({ name: '', center: null, formattedAddress: null, placeId: null, countryCode: null, country: null, region: null, city: null });
+                setAreaDraft({ type: null, geometry: null, radiusMeters: null, bounds: null });
+              }}
               className="absolute end-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
               aria-label={t('leadgen.location.clear', 'Clear')}
             >

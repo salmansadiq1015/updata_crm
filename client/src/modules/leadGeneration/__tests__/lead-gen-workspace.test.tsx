@@ -73,6 +73,7 @@ beforeEach(() => {
     /* ignore */
   }
   useLeadGenStore.getState().reset();
+  window.sessionStorage.removeItem('updata-leadgen-active-session');
   pushMock.mockClear();
   // The workspace fetches the workspace-user directory for the assignee picker.
   server.use(http.get(`${BASE}/users/directory`, () => HttpResponse.json(ok([]))));
@@ -101,6 +102,14 @@ function seedLocationAndArea() {
 }
 
 describe('LeadGenWorkspace', () => {
+  it('restores the active discovery session after a page remount', async () => {
+    window.sessionStorage.setItem('updata-leadgen-active-session', 'sess-1');
+    renderWorkspace();
+
+    expect(await screen.findByText('Results')).toBeInTheDocument();
+    expect(window.sessionStorage.getItem('updata-leadgen-active-session')).toBe('sess-1');
+  });
+
   it('fetches contact details when a result opens instead of treating the contact-free list row as fresh detail data', async () => {
     const base = makeResultDTO({ id: 'res-four-points', placeId: 'place-four-points' });
     const listResult = {

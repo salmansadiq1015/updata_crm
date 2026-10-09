@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dedupeKey, isSameLead, makeLead } from '../src/shared/normalize';
+import { dedupeKey, isSameLead, makeLead, mergeLead } from '../src/shared/normalize';
 import { cleanPhone, haversineDistanceMeters, normalizeEmail, normalizePhone, normalizeText } from '../src/shared/utils';
 import { createXlsx, escapeCsv, summaryFor, toCsv } from '../src/export/exporters';
 import { extractEmails } from '../src/enrichment/website-discovery';
@@ -45,6 +45,17 @@ describe('normalization and distance', () => {
     const distant = lead({ id: '3', placeIdentifier: null, googleMapsUrl: 'https://www.google.com/maps/place/C', address: null, phone: null, latitude: 31.5404, longitude: 74.3587 });
     expect(isSameLead(nearby, sameNearby)).toBe(true);
     expect(isSameLead(nearby, distant)).toBe(false);
+  });
+
+  it('upgrades an unverified duplicate when later extraction exposes valid coordinates', () => {
+    const partial = lead({ latitude: null, longitude: null, distanceMeters: null, distanceKm: null, geographicValidation: 'unverified' });
+    const verified = lead({ id: '2', distanceMeters: 900, distanceKm: 0.9, geographicValidation: 'inside' });
+    const merged = mergeLead(partial, verified);
+
+    expect(merged.latitude).toBe(31.5204);
+    expect(merged.longitude).toBe(74.3587);
+    expect(merged.geographicValidation).toBe('inside');
+    expect(merged.distanceKm).toBe(0.9);
   });
 });
 

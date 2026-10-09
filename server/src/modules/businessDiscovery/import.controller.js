@@ -11,7 +11,13 @@ class ImportController {
       const query = req._validatedQuery || req.query;
       const counts = await importService.preview(
         req.params.id,
-        { mode: query.mode },
+        {
+          mode: query.mode,
+          selection: {
+            kind: query.selectionKind,
+            ...(query.selectionKind === 'SELECTED' ? { resultIds: query.resultIds } : {}),
+          },
+        },
         req.user._id,
       );
       return res.success({ data: counts });

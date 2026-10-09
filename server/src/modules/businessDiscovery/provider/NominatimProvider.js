@@ -101,16 +101,18 @@ export class NominatimProvider extends PlacesProvider {
     return Boolean(this.enabled && this.apiUrl);
   }
 
-  async geocode(address) {
+  async geocode(address, { countryCode } = {}) {
     this._assertConfigured();
     const q = String(address ?? '').trim();
     if (!q) return { result: null, results: [], raw: [] };
-    const data = await this._execute('/search', {
+    const params = {
       q,
       format: 'jsonv2',
       addressdetails: 1,
       limit: 5,
-    });
+    };
+    if (/^[A-Z]{2}$/.test(countryCode ?? '')) params.countrycodes = countryCode.toLowerCase();
+    const data = await this._execute('/search', params);
     const results = (Array.isArray(data) ? data : []).map(toGoogleLikeResult).filter(Boolean);
     return { result: results[0] || null, results, raw: data };
   }
@@ -127,9 +129,9 @@ export class NominatimProvider extends PlacesProvider {
     return { result, results: result ? [result] : [], raw: data };
   }
 
-  async autocomplete({ input } = {}) {
+  async autocomplete({ input, countryCode } = {}) {
     if (!this.allowAutocomplete) return { predictions: [], raw: [] };
-    const { results, raw } = await this.geocode(input);
+    const { results, raw } = await this.geocode(input, { countryCode });
     return {
       predictions: results.map((result, index) => toPrediction(Array.isArray(raw) ? raw[index] : result)).filter(Boolean),
       raw,

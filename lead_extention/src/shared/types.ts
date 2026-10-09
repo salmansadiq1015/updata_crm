@@ -64,6 +64,7 @@ export interface Lead {
   longitude: number | null;
   distanceMeters: number | null;
   distanceKm: number | null;
+  geographicValidation?: 'inside' | 'outside' | 'unverified';
   rating: number | null;
   reviewCount: number | null;
   ratingBreakdown: RatingBreakdown | null;
@@ -154,6 +155,10 @@ export interface SearchRecord {
   updatedAt?: string;
   stopRequested?: boolean;
   error?: string | null;
+  /** Immutable center resolved for this search; never reconstructed from a later tab location. */
+  resolvedCenter?: { latitude: number; longitude: number } | null;
+  rejectedOutOfAreaCount?: number;
+  unverifiedLocationCount?: number;
   config?: DiscoveryConfig;
 }
 
@@ -166,9 +171,8 @@ export interface DiscoveryConfig {
   enableEnrichment: boolean;
   maxPagesPerWebsite: number;
   safetyLimit?: number;
-  // Sweep the whole selected area as an adaptive grid so Google's ~120-per-search
-  // ceiling cannot hide businesses. On by default; the single-feed flow is kept
-  // as a fallback when no area/centre can be resolved.
+  // Sweep the selected area as an adaptive grid to improve coverage around
+  // Google's per-query ceiling. Providers can still cap or omit listings.
   areaSweep?: boolean;
   // Open each business's place page for phone/website/opening hours. Off by
   // default so a large area sweep stays fast; card-level data is still captured.
@@ -179,6 +183,8 @@ export interface DiscoveryConfig {
   // navigations (each new area/tile + query variation). Read live each tile so
   // a change in Settings applies to a running sweep without restarting it.
   requestDelayMs?: number;
+  /** Captured only when the user explicitly chooses the current Maps context. */
+  selectedCenter?: { latitude: number; longitude: number } | null;
 }
 
 export interface DiscoveryProgress {
@@ -202,6 +208,8 @@ export interface DiscoveryProgress {
   error?: string | null;
   tilesScanned?: number;
   tilesPlanned?: number;
+  rejectedOutOfArea?: number;
+  unverifiedLocation?: number;
 }
 
 export interface MapsScrollState {

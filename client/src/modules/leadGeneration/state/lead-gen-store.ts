@@ -60,7 +60,9 @@ const INITIAL_LOCATION: LocationDraft = {
   country: null,
   region: null,
   city: null,
-  countryCode: 'CH',
+  // Worldwide by default. A country code is populated only by the selected
+  // geocoder result; a product-level default would silently bias other cities.
+  countryCode: null,
   formattedAddress: null,
   placeId: null,
 };

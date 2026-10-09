@@ -335,6 +335,18 @@ describe('GooglePlacesProvider — geocoding', () => {
     expect(res.results).toHaveLength(1);
   });
 
+  test('forwards country restrictions to autocomplete and geocoding', async () => {
+    const placesHttp = okHttp({ suggestions: [] });
+    const placesProvider = makeProvider(placesHttp);
+    await placesProvider.autocomplete({ input: 'Paris', countryCode: 'FR' });
+    expect(placesHttp.request.mock.calls[0][0].data.includedRegionCodes).toEqual(['fr']);
+
+    const geocodeHttp = okHttp({ status: 'ZERO_RESULTS', results: [] });
+    const geocodeProvider = makeProvider(geocodeHttp);
+    await geocodeProvider.geocode('Paris', { countryCode: 'FR' });
+    expect(geocodeHttp.request.mock.calls[0][0].params.components).toBe('country:FR');
+  });
+
   test('OVER_QUERY_LIMIT body status → retryable DISCOVERY_QUOTA_EXCEEDED', async () => {
     const provider = makeProvider(okHttp({ status: 'OVER_QUERY_LIMIT' }));
     await expect(provider.geocode('x')).rejects.toMatchObject({

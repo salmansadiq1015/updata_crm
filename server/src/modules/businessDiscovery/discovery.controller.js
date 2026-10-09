@@ -95,15 +95,16 @@ class DiscoveryController {
 
   async geocode(req, res, next) {
     try {
-      const data = await locationService.resolveLocation(req.body.query);
+      const { query, countryCode } = req.body;
+      const data = await locationService.resolveLocation(query, { countryCode });
       return res.success({ data });
     } catch (err) { next(err); }
   }
 
   async autocomplete(req, res, next) {
     try {
-      const { input, sessionToken, center } = req.body;
-      const result = await locationService.autocomplete(input, { sessionToken, center });
+      const { input, countryCode, sessionToken, center } = req.body;
+      const result = await locationService.autocomplete(input, { countryCode, sessionToken, center });
       return res.success({ data: result.predictions });
     } catch (err) { next(err); }
   }

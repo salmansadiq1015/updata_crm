@@ -148,6 +148,14 @@ describe('computeEligibility / preview — counts by mode', () => {
     expect(counts.willImport).toBe(2); // r1 (NEW) + r2 (EXISTING), both NOT_IMPORTED
   });
 
+  it('treats a previously failed row as retryable and eligible', async () => {
+    mockFindResultsForImport.mockResolvedValue([
+      makeResult({ _id: 'retry-me', matching: 'NEW', import: 'FAILED' }),
+    ]);
+    const counts = await importService.preview('sess-1', { mode: 'new' }, 'user-1');
+    expect(counts.willImport).toBe(1);
+  });
+
   it('scopes results by createdBy and passes selection ids when SELECTED', async () => {
     mockFindResultsForImport.mockResolvedValue([]);
     await importService.preview('sess-1', { mode: 'new', selection: { kind: 'SELECTED', resultIds: ['a', 'b'] } }, 'user-7');
@@ -166,7 +174,9 @@ describe('processBatch — sync import flips result status + maps the DTO', () =
 
     expect(summary).toMatchObject({ imported: 1, failed: 0, total: 1 });
     expect(mockUpdateResultImportStatus).toHaveBeenNthCalledWith(1, 'res-1', 'QUEUED', {
-      expectedStatus: 'NOT_IMPORTED', createdBy: 'user-1',
+      expectedStatus: ['NOT_IMPORTED', 'FAILED'],
+      set: { 'import.error': null },
+      createdBy: 'user-1',
     });
     expect(mockUpdateResultImportStatus).toHaveBeenNthCalledWith(2, 'res-1', 'IMPORTED', expect.objectContaining({
       set: expect.objectContaining({ 'import.leadId': 'lead-9' }),
@@ -194,6 +204,18 @@ describe('processBatch — sync import flips result status + maps the DTO', () =
     });
     expect(dto.location).toEqual({ type: 'Point', coordinates: [8.54, 47.37] });
     expect(mockMetricInc).toHaveBeenCalledWith({ result: 'imported' });
+  });
+
+  it('atomically reclaims FAILED rows when retrying an import', async () => {
+    const r = makeResult({ _id: 'retry-me', matching: 'NEW', import: 'FAILED' });
+    await importService.processBatch([r], { mode: 'new' }, 'user-1');
+
+    expect(mockUpdateResultImportStatus).toHaveBeenNthCalledWith(1, 'retry-me', 'QUEUED', {
+      expectedStatus: ['NOT_IMPORTED', 'FAILED'],
+      set: { 'import.error': null },
+      createdBy: 'user-1',
+    });
+    expect(mockLeadServiceCreate).toHaveBeenCalledTimes(1);
   });
 
   it('fetches Place Details (DETAILS_IMPORT) for a result missing them before creating the lead', async () => {

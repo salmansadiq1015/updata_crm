@@ -82,7 +82,7 @@ describe('locationService.resolveLocation', () => {
     });
     expect(dto.bounds.northeast).toEqual({ lat: 47.43, lng: 8.63 });
     expect(dto.components).toHaveLength(3);
-    expect(geocodeMock).toHaveBeenCalledWith('Zürich');
+    expect(geocodeMock).toHaveBeenCalledWith('Zürich', { countryCode: null });
   });
 
   test('caches: a second call for the same (normalized) query does not re-hit the provider', async () => {
@@ -103,7 +103,23 @@ describe('locationService.resolveLocation', () => {
     expect(first).toEqual(second);
     expect(geocodeMock).toHaveBeenCalledTimes(1);
     expect(cacheManager.getOrSet).toHaveBeenCalledTimes(2);
-    expect(cacheManager.getOrSet.mock.calls[0][0]).toBe('discovery:geocode:bern');
+    expect(cacheManager.getOrSet.mock.calls[0][0]).toBe('discovery:geocode:bern:world');
+    expect(geocodeMock).toHaveBeenCalledWith('Bern', { countryCode: null });
+  });
+
+  test('keeps country-constrained geocodes in separate cache entries', async () => {
+    const { service, cacheManager } = await loadService();
+    geocodeMock.mockResolvedValue({ result: null, results: [] });
+
+    await service.resolveLocation('Paris', { countryCode: 'fr' });
+    await service.resolveLocation('Paris', { countryCode: 'us' });
+
+    expect(cacheManager.getOrSet.mock.calls.map((call) => call[0])).toEqual([
+      'discovery:geocode:paris:FR',
+      'discovery:geocode:paris:US',
+    ]);
+    expect(geocodeMock).toHaveBeenNthCalledWith(1, 'Paris', { countryCode: 'FR' });
+    expect(geocodeMock).toHaveBeenNthCalledWith(2, 'Paris', { countryCode: 'US' });
   });
 
   test('throws a ValidationError on an empty query (no provider call)', async () => {
@@ -147,6 +163,7 @@ describe('locationService.autocomplete', () => {
     });
     expect(autocompleteMock).toHaveBeenCalledWith({
       input: 'Zur',
+      countryCode: null,
       sessionToken: 'tok-1',
       center: undefined,
     });
@@ -161,7 +178,20 @@ describe('locationService.autocomplete', () => {
 
     expect(autocompleteMock).toHaveBeenCalledTimes(1);
     // Cache key is session-token-independent.
-    expect(cacheManager.getOrSet.mock.calls[0][0]).toBe('discovery:autocomplete:cof:nobias');
+    expect(cacheManager.getOrSet.mock.calls[0][0]).toBe('discovery:autocomplete:cof:world:nobias');
+  });
+
+  test('keeps country-constrained suggestions in separate cache entries', async () => {
+    const { service, cacheManager } = await loadService();
+    autocompleteMock.mockResolvedValue({ predictions: [] });
+
+    await service.autocomplete('Paris', { countryCode: 'fr' });
+    await service.autocomplete('Paris', { countryCode: 'us' });
+
+    expect(cacheManager.getOrSet.mock.calls.map((call) => call[0])).toEqual([
+      'discovery:autocomplete:paris:FR:nobias',
+      'discovery:autocomplete:paris:US:nobias',
+    ]);
   });
 
   test('returns an empty prediction list for blank input without calling the provider', async () => {

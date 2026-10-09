@@ -33,6 +33,7 @@ export function makeLead(raw: RawBusinessRecord, searchId: string, searchLocatio
     longitude: coordinates?.longitude ?? null,
     distanceMeters: null,
     distanceKm: null,
+    geographicValidation: 'unverified',
     rating: raw.rating ?? null,
     reviewCount: raw.reviewCount ?? null,
     ratingBreakdown: raw.ratingBreakdown ?? null,
@@ -89,6 +90,11 @@ export function mergeLead(existing: Lead, incoming: Lead): Lead {
   if (!merged.ratingBreakdown && incoming.ratingBreakdown) merged.ratingBreakdown = incoming.ratingBreakdown;
   if (merged.latitude === null && incoming.latitude !== null) merged.latitude = incoming.latitude;
   if (merged.longitude === null && incoming.longitude !== null) merged.longitude = incoming.longitude;
+  if ((merged.geographicValidation ?? 'unverified') === 'unverified' && incoming.geographicValidation !== 'unverified') {
+    merged.geographicValidation = incoming.geographicValidation;
+    merged.distanceMeters = incoming.distanceMeters;
+    merged.distanceKm = incoming.distanceKm;
+  }
   merged.categories = [...new Set([...merged.categories, ...incoming.categories])];
   merged.openingHours = [...new Set([...merged.openingHours, ...incoming.openingHours])];
   merged.photos = [...new Set([...(merged.photos ?? []), ...(incoming.photos ?? [])])];

@@ -35,6 +35,11 @@ function centerKey(center) {
   return `${center.lat.toFixed(2)},${center.lng.toFixed(2)}`;
 }
 
+function normalizeCountryCode(countryCode) {
+  const value = typeof countryCode === 'string' ? countryCode.trim().toUpperCase() : '';
+  return /^[A-Z]{2}$/.test(value) ? value : null;
+}
+
 /** Map one classic-Geocoding result → a provider-agnostic location DTO. */
 function toLocationDto(result) {
   if (!result || typeof result !== 'object') return null;
@@ -83,15 +88,19 @@ class LocationService {
    * @param {string} query
    * @returns {Promise<object|null>} location DTO, or null when nothing matched.
    */
-  async resolveLocation(query) {
+  async resolveLocation(query, { countryCode } = {}) {
     const q = typeof query === 'string' ? query.trim() : '';
     if (!q) throw new ValidationError('A location query is required');
 
-    const cacheKey = `discovery:geocode:${normalizeQuery(q)}`;
+    const country = normalizeCountryCode(countryCode);
+
+    // Country constraints are part of both the provider request and cache
+    // identity. Otherwise e.g. Paris, Texas can reuse Paris, France's entry.
+    const cacheKey = `discovery:geocode:${normalizeQuery(q)}:${country ?? 'world'}`;
     return cacheManager.getOrSet(
       cacheKey,
       async () => {
-        const { result } = await getGeocodingProvider().geocode(q);
+        const { result } = await getGeocodingProvider().geocode(q, { countryCode: country });
         return toLocationDto(result);
       },
       GEOCODE_TTL,
@@ -106,17 +115,20 @@ class LocationService {
    * @param {{lat:number,lng:number}} [opts.center] - optional location bias.
    * @returns {Promise<{ predictions: object[] }>}
    */
-  async autocomplete(input, { sessionToken, center } = {}) {
+  async autocomplete(input, { countryCode, sessionToken, center } = {}) {
     const q = typeof input === 'string' ? input.trim() : '';
     if (!q) return { predictions: [] };
 
+    const country = normalizeCountryCode(countryCode);
+
     // Session-token-independent key: suggestions are shared across sessions.
-    const cacheKey = `discovery:autocomplete:${normalizeQuery(q)}:${centerKey(center)}`;
+    const cacheKey = `discovery:autocomplete:${normalizeQuery(q)}:${country ?? 'world'}:${centerKey(center)}`;
     return cacheManager.getOrSet(
       cacheKey,
       async () => {
         const { predictions } = await getGeocodingProvider().autocomplete({
           input: q,
+          countryCode: country,
           sessionToken,
           center,
         });

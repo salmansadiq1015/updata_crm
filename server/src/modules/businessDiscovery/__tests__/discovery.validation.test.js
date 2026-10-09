@@ -1,5 +1,6 @@
 import { describe, expect, test } from '@jest/globals';
-import { createSession, listResults } from '../discovery.validation.js';
+import mongoose from 'mongoose';
+import { createSession, importPreview, listResults } from '../discovery.validation.js';
 
 describe('business discovery validation', () => {
   test('defaults result cursor pages to the 300-row initial load size', () => {
@@ -59,5 +60,16 @@ describe('business discovery validation', () => {
     expect(error).toBeUndefined();
     expect(value.location.countryCode).toBeUndefined();
     expect(value.location.country).toBe('France');
+  });
+
+  test('accepts selected result ids for an import preview', () => {
+    const ids = [new mongoose.Types.ObjectId().toString(), new mongoose.Types.ObjectId().toString()];
+    const { error, value } = importPreview.query.validate({
+      mode: 'new', selectionKind: 'SELECTED', resultIds: ids,
+    }, { convert: true });
+
+    expect(error).toBeUndefined();
+    expect(value.selectionKind).toBe('SELECTED');
+    expect(value.resultIds.map(String)).toEqual(ids);
   });
 });

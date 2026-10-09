@@ -267,6 +267,69 @@ describe('DiscoveryRunWorker.process', () => {
     }));
   });
 
+  test('new sessions with no result window persist the full provider batch', async () => {
+    repo.getSessionById.mockResolvedValue(makeSession({
+      _id: 'sess-unbounded',
+      config: { initialResultLimit: null, maxSearchRequests: null, maxCoverageCells: 25, concurrency: 1 },
+    }));
+    mockPlanCoverage.mockReturnValue(oneCellPlan());
+    mockResolveProviderQuery.mockReturnValue({ includedType: 'restaurant' });
+    const rawPlaces = Array.from({ length: 301 }, (_, index) => ({
+      id: `unbounded-${index + 1}`,
+      displayName: { text: `Business ${index + 1}` },
+    }));
+    mockProvider.searchNearby.mockResolvedValue({ places: rawPlaces });
+    mockNormalizeBusiness.mockImplementation((raw) => ({
+      name: raw.displayName.text,
+      normalizedName: raw.displayName.text.toLowerCase(),
+      location: { type: 'Point', coordinates: [8.54, 47.37] },
+    }));
+    mockPointInArea.mockReturnValue(true);
+    mockClassifyBatch.mockImplementation(async (businesses) =>
+      businesses.map(() => ({ status: 'NEW', matchedBy: [] })));
+    repo.bulkUpsertResults.mockImplementation(async (docs) => ({ upsertedCount: docs.length, modifiedCount: 0 }));
+    repo.countsForSession.mockResolvedValue({
+      discovered: 301, new: 301, existing: 0, possibleDuplicates: 0, imported: 0, skipped: 0, failed: 0,
+    });
+
+    const out = await new DiscoveryRunWorker().process({ data: { sessionId: 'sess-unbounded', createdBy: 'user-1' } });
+    const persistedDocs = repo.bulkUpsertResults.mock.calls.flatMap(([docs]) => docs);
+    expect(persistedDocs).toHaveLength(301);
+    expect(out.discovered).toBe(301);
+  });
+
+  test('does not collapse distinct businesses merely because they share a phone or domain', async () => {
+    repo.getSessionById.mockResolvedValue(makeSession({
+      _id: 'sess-shared-contact',
+      config: { initialResultLimit: null, maxSearchRequests: null, maxCoverageCells: 25, concurrency: 1 },
+    }));
+    mockPlanCoverage.mockReturnValue(oneCellPlan());
+    mockResolveProviderQuery.mockReturnValue({ includedType: 'restaurant' });
+    mockProvider.searchNearby.mockResolvedValue({
+      places: [
+        { id: 'branch-a', displayName: { text: 'Alpha Hotel' } },
+        { id: 'branch-b', displayName: { text: 'Beta Hotel' } },
+      ],
+    });
+    mockNormalizeBusiness.mockImplementation((raw) => ({
+      name: raw.displayName.text,
+      normalizedName: raw.displayName.text.toLowerCase(),
+      normalizedPhone: '+33123456789',
+      websiteDomain: 'hotel-group.example',
+      location: { type: 'Point', coordinates: [8.54, 47.37] },
+    }));
+    mockPointInArea.mockReturnValue(true);
+    mockClassifyBatch.mockImplementation(async (businesses) =>
+      businesses.map(() => ({ status: 'NEW', matchedBy: [] })));
+    repo.bulkUpsertResults.mockResolvedValue({ upsertedCount: 2, modifiedCount: 0 });
+    repo.countsForSession.mockResolvedValue({
+      discovered: 2, new: 2, existing: 0, possibleDuplicates: 0, imported: 0, skipped: 0, failed: 0,
+    });
+
+    await new DiscoveryRunWorker().process({ data: { sessionId: 'sess-shared-contact', createdBy: 'user-1' } });
+    expect(repo.bulkUpsertResults.mock.calls[0][0]).toHaveLength(2);
+  });
+
   test('cancellation detected between cells → CANCELLED, provider not hit', async () => {
     const notCancelled = makeSession({ _id: 'sess-3', config: { maxResults: 200, maxSearchRequests: 50, maxCoverageCells: 25, concurrency: 1 } });
     const cancelled = { ...notCancelled, cancelRequested: true };
